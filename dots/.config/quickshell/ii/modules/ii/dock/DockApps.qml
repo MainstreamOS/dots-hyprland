@@ -66,6 +66,10 @@ Item {
     function openContextMenu(button, appToplevelData) {
         contextMenu.open(button, appToplevelData);
     }
+    
+    property int hoveredIndex: -1
+    property real maxScale: 1.5
+    property real influenceRadius: 2  
 
     Layout.fillHeight: true
     Layout.topMargin: Appearance.sizes.hyprlandGapsOut
@@ -76,7 +80,44 @@ Item {
             return 0;
         return root.QsWindow.mapFromItem(button, button.width / 2, 0).x;
     }
-
+    
+    function calculateScale(index) {
+        if (hoveredIndex < 0) return 1.0;
+        
+        const distance = Math.abs(index - hoveredIndex);
+        if (distance === 0) return maxScale;
+        if (distance > influenceRadius) return 1.0;
+        
+        const ratio = 1 - (distance / (influenceRadius + 1));
+        return 1.0 + (maxScale - 1.0) * Math.pow(ratio, 2);
+    }
+    
+    MouseArea {
+        anchors.fill: listView
+        hoverEnabled: true
+        propagateComposedEvents: true
+        z: -1  
+        
+        onPositionChanged: {
+            const item = listView.itemAt(mouseX + listView.contentX, mouseY);
+            if (item && item.buttonIndex !== undefined) {
+                root.hoveredIndex = item.buttonIndex;
+            } else {
+                root.hoveredIndex = -1;
+            }
+        }
+        
+        onExited: {
+            root.hoveredIndex = -1;
+        }
+        
+        onPressed: mouse.accepted = false
+        onReleased: mouse.accepted = false
+        onClicked: mouse.accepted = false
+        onDoubleClicked: mouse.accepted = false
+        onEntered: mouse.accepted = false
+    }
+    
     StyledListView {
         id: listView
         spacing: 2
@@ -104,9 +145,49 @@ Item {
             appToplevel: modelData
             appListRoot: root
             delegateIndex: index
+            buttonIndex: index
 
             topInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
             bottomInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
+            
+            hoverScale: root.calculateScale(index)
+            
+            Loader {
+                anchors.fill: parent
+                active: true
+                z: 100  
+                sourceComponent: MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    propagateComposedEvents: true
+                    
+                    onEntered: {
+                        root.lastHoveredButton = parent.parent;
+                        root.buttonHovered = true;
+                        root.hoveredIndex = parent.parent.buttonIndex;
+                    }
+                    
+                    onExited: {
+                        if (root.lastHoveredButton === parent.parent) {
+                            root.buttonHovered = false;
+                        }
+                        Qt.callLater(() => {
+                            if (!root.buttonHovered) {
+                                root.hoveredIndex = -1;
+                            }
+                        });
+                    }
+                    
+                    onPositionChanged: {
+                        root.hoveredIndex = parent.parent.buttonIndex;
+                    }
+                    
+                    onPressed: mouse.accepted = false
+                    onReleased: mouse.accepted = false
+                    onClicked: mouse.accepted = false
+                    onDoubleClicked: mouse.accepted = false
+                }
+            }
         }
     }
 
@@ -163,7 +244,13 @@ Item {
             implicitHeight: root.maxWindowPreviewHeight + root.windowControlsHeight + Appearance.sizes.elevationMargin * 2
             hoverEnabled: true
             x: previewPopup.cachedCenterX - width / 2
-
+            
+            onExited: {
+                if (!root.buttonHovered) {
+                    root.hoveredIndex = -1;
+                }
+            }
+            
             StyledRectangularShadow {
                 target: popupBackground
                 opacity: previewPopup.show ? 1 : 0
