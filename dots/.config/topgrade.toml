@@ -1,0 +1,2 @@
+[misc]
+sudo_command = "pkexec"

@@ -123,3 +123,6 @@ patterns:
   - from: "dots/.config/thorium-flags.conf"
     to: "$XDG_CONFIG_HOME/thorium-flags.conf"
     mode: "soft"
+  - from: "dots/.config/topgrade.toml"
+    to: "$XDG_CONFIG_HOME/topgrade.toml"
+    mode: "soft"

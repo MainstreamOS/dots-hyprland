@@ -65,6 +65,11 @@ ApplicationWindow {
             component: "modules/settings/ServicesConfig.qml"
         },
         {
+            name: Translation.tr("Update"),
+            icon: "system_update_alt",
+            component: "modules/settings/UpdateConfig.qml"
+        },
+        {
             name: Translation.tr("Advanced"),
             icon: "construction",
             component: "modules/settings/AdvancedConfig.qml"
@@ -226,9 +231,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Services, Advanced (Indices 7, 8)
+                    // Group 3: Services, Update, Advanced (Indices 7, 8, 9)
                     Repeater {
-                        model: root.pages.slice(7, 9)
+                        model: root.pages.slice(7, 10)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -243,14 +248,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: About (Index 9)
+                    // Group 4: About (Index 10)
                     Repeater {
-                        model: root.pages.slice(9, 10)
+                        model: root.pages.slice(10, 11)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 9)
-                            onPressed: root.currentPage = (index + 9)
+                            toggled: root.currentPage === (index + 10)
+                            onPressed: root.currentPage = (index + 10)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
