@@ -1142,7 +1142,7 @@ ContentPage {
                                         id: pill
                                         anchors.fill: parent
                                         implicitWidth: pillTxt.implicitWidth + 20
-                                        radius: Appearance.rounding.small
+                                        radius: Appearance.rounding.full
                                         color: parent.active
                                             ? Appearance.colors.colPrimary
                                             : (parent.containsMouse && root.perWorkspace

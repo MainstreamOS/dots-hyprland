@@ -973,7 +973,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                             anchors.centerIn: parent
                             anchors.verticalCenterOffset: parent.height * 0.18
                             color: Qt.alpha(Appearance.m3colors.m3error, 0.8)
-                            radius: Appearance.rounding.full
+                            radius: Appearance.rounding.small
                             implicitWidth: disabledLabel.implicitWidth + 8
                             implicitHeight: disabledLabel.implicitHeight + 4
                             StyledText {
@@ -1001,6 +1001,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
 
         RippleButtonWithIcon {
             Layout.alignment: Qt.AlignRight
+            buttonRadius: Appearance.rounding.full
             nerdIcon: ""
             mainText: Translation.tr("Refresh")
             onClicked: displayConfigPage.refreshMonitors()
@@ -1913,7 +1914,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                         id: cmPill
                                         anchors.fill: parent
                                         implicitWidth: cmPillTxt.implicitWidth + 20
-                                        radius: Appearance.rounding.small
+                                        radius: Appearance.rounding.full
                                         color: cmPillArea.isActive
                                             ? monitorSection.monColor
                                             : (cmPillArea.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer2)
@@ -3035,6 +3036,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                 RippleButton {
                     implicitHeight: 30
                     implicitWidth: 140
+                    buttonRadius: Appearance.rounding.full
                     colBackground: monitorSection.monColor
                     colBackgroundHover: Qt.lighter(monitorSection.monColor, 1.1)
                     colRipple: Qt.lighter(monitorSection.monColor, 1.2)
