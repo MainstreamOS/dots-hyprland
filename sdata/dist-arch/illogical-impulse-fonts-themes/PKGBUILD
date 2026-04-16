@@ -7,9 +7,7 @@ arch=(any)
 license=(None)
 depends=(
   adw-gtk-theme-git
-  breeze
-  breeze-plus
-  darkly-bin
+  papirus-icon-theme
   eza
   fish
   fontconfig

@@ -118,7 +118,7 @@ quickshell, home_attrs, ... }:
       #gnome-keyring #gnome-keyring (TODO: Install via system PM instead; should install via nix in future when authentication problem fixed)
       networkmanager #networkmanager
       kdePackages.plasma-nm #plasma-nm
-      #polkit-kde-agent (TODO: Install via system PM instead; should install via nix in future when authentication problem fixed)
+      #hyprpolkitagent (TODO: Install via system PM instead; should install via nix in future when authentication problem fixed)
       kdePackages.dolphin #dolphin
       kdePackages.systemsettings #systemsettings
 

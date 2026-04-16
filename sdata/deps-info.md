@@ -113,8 +113,8 @@ Tips:
   - Basic component.
 - `plasma-nm`
   - Provide command `kcmshell6 kcm_networkmanagement` used by Quickshell network functionality.
-- `polkit-kde-agent`
-  - Basic component.
+- `hyprpolkitagent`
+  - Polkit authentication agent fallback for when Quickshell is not running.
 - `dolphin`
   - Used in Hyprland and Quickshell config.
 - `systemsettings`

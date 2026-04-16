@@ -96,7 +96,7 @@ packages = [
   "gnome-keyring",
   "NetworkManager",
   "plasma-nm",
-  "polkit-kde",
+  "hyprpolkitagent",
   "dolphin",
   "plasma-systemsettings"
 ]

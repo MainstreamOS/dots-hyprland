@@ -17,7 +17,7 @@ RDEPEND="
 	gnome-base/gnome-keyring
 	net-misc/networkmanager
 	kde-plasma/plasma-nm
-	kde-plasma/polkit-kde-agent
+	gui-apps/hyprpolkitagent
 	kde-apps/dolphin
 	kde-plasma/systemsettings
 "

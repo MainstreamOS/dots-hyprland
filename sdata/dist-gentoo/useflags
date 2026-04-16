@@ -56,7 +56,7 @@ kde-plasma/bluedevil -handbook
 gnome-base/gnome-keyring pam ssh-agent 
 net-misc/networkmanager concheck introspection nss ppp tools wifi -wext -modemmanager
 #kde-plasma/plasma-nm (nothing needed)
-#kde-plasma/polkit-kde-agent (nothing needed)
+#gui-apps/hyprpolkitagent (nothing needed)
 kde-apps/dolphin -handbook
 kde-plasma/systemsettings -handbook
 
