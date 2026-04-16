@@ -100,7 +100,7 @@ Singleton {
 
         // Quickshell's desktop entry lookup
         const entry = DesktopEntries.byId(str);
-        if (entry) return entry.icon;
+        if (entry && iconExists(entry.icon)) return entry.icon;
 
         // Normal substitutions
         if (substitutions[str]) return substitutions[str];
@@ -156,7 +156,7 @@ Singleton {
 
         // Quickshell's desktop entry lookup
         const heuristicEntry = DesktopEntries.heuristicLookup(str);
-        if (heuristicEntry) return heuristicEntry.icon;
+        if (heuristicEntry && iconExists(heuristicEntry.icon)) return heuristicEntry.icon;
 
         // Give up
         return "application-x-executable";
