@@ -12,27 +12,44 @@ DockButton {
     property var appToplevel
     property var appListRoot
     property int delegateIndex: -1
-    property int lastFocused: -1
     property real iconSize: 35
     property real countDotWidth: 10
     property real countDotHeight: 4
     property bool appIsActive: appToplevel.toplevels.find(t => (t.activated == true)) !== undefined
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
-    property var desktopEntry: DesktopEntries.heuristicLookup(appToplevel.appId)
-    enabled: !isSeparator
-    
-    property real hoverScale: 1.0
-    property real maxScale: 2.2  
-    property int buttonIndex: 0  
-    
-    implicitWidth: isSeparator ? 1 : (implicitHeight - topInset - bottomInset) * hoverScale
+    readonly property bool isFolder: appToplevel.isFolder === true
+    property var desktopEntry: isFolder ? null : DesktopEntries.heuristicLookup(appToplevel.appId)
 
-    Behavior on implicitWidth {
-        NumberAnimation { 
-            duration: 200
-            easing.type: Easing.OutCubic
+    Timer {
+        // Retry looking up the desktop entry if it failed (e.g. database not loaded yet)
+        property int retryCount: 5
+        interval: 1000
+        running: !root.isSeparator && !root.isFolder && root.desktopEntry === null && retryCount > 0
+        repeat: true
+        onTriggered: {
+            retryCount--;
+            root.desktopEntry = DesktopEntries.heuristicLookup(root.appToplevel.appId);
         }
+    }
+
+    // Folder icon data — resolved imperatively to avoid reactive dependency
+    // on AppFolderManager.folders which would rebuild the entire dock model.
+    property var folderAppIds: []
+
+    function refreshFolderData() {
+        if (!root.isFolder) return;
+        const folderId = appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
+        const folder = AppFolderManager.getFolder(folderId);
+        root.folderAppIds = folder ? folder.appIds.slice(0, 4) : [];
+    }
+
+    Component.onCompleted: refreshFolderData()
+
+    Connections {
+        target: AppFolderManager
+        enabled: root.isFolder
+        function onFoldersChanged() { root.refreshFolderData(); }
     }
 
     // Drag-to-reorder
@@ -49,22 +66,19 @@ DockButton {
         return 0;
     }
     z: isDragged ? 100 : 0
-    opacity: isDragged ? 0.85 : (enabled ? 1 : 0.4)
     scale: isDragged ? 1.05 : 1
+
+    enabled: !isSeparator
+    property real hoverScale: 1.0
+    property int buttonIndex: 0
+
+    implicitWidth: isSeparator ? 1 : (implicitHeight - topInset - bottomInset)
 
     transform: Translate {
         x: root.dragTranslateX
         Behavior on x {
             enabled: !root.isDragged && !appListRoot._suppressTranslateAnim
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-        }
-    }
-
-    Connections {
-        target: DesktopEntries
-
-        function onApplicationsChanged() {
-            root.desktopEntry = DesktopEntries.heuristicLookup(appToplevel.appId);
         }
     }
 
@@ -78,98 +92,101 @@ DockButton {
         sourceComponent: DockSeparator {}
     }
 
-    Loader {
-        anchors.fill: parent
-        active: appToplevel.toplevels.length > 0
-        sourceComponent: MouseArea {
-            id: mouseArea
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-            onEntered: {
-                appListRoot.lastHoveredButton = root
-                appListRoot.buttonHovered = true
-                lastFocused = appToplevel.toplevels.length - 1
-            }
-            onExited: {
-                if (appListRoot.lastHoveredButton === root) {
-                    appListRoot.buttonHovered = false
-                }
-            }
-        }
-    }
-
     // Drag overlay for pinned non-separator items
-    Loader {
+    MouseArea {
+        id: dragOverlay
         anchors.fill: parent
         z: 10
-        active: appToplevel.pinned && !isSeparator
-        sourceComponent: MouseArea {
-            id: dragOverlay
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            preventStealing: true
-            property real pressX: 0
-            property bool dragActive: false
+        enabled: appToplevel.pinned && !isSeparator
+        acceptedButtons: Qt.LeftButton
+        preventStealing: true
+        property real pressX: 0
+        property bool dragActive: false
 
-            onPressed: (event) => {
-                pressX = event.x;
-                root.down = true;
-                root.startRipple(event.x, event.y);
+        onPressed: (event) => {
+            pressX = event.x;
+            root.down = true;
+            root.startRipple(event.x, event.y);
+        }
+        onPositionChanged: (event) => {
+            if (!pressed) return;
+            var dist = Math.abs(event.x - pressX);
+            if (!dragActive && dist > 5) {
+                dragActive = true;
+                root.cancelRipple();
+                root.down = false;
+                appListRoot.dragSourceIndex = root.delegateIndex;
+                var mapped = mapToItem(appListRoot, event.x, event.y);
+                appListRoot.dragStartCursorX = mapped.x;
+                appListRoot.dragCursorX = mapped.x;
+                appListRoot.slotWidth = root.width + 2;
+                appListRoot.dragging = true;
             }
-            onPositionChanged: (event) => {
-                if (!pressed) return;
-                var dist = Math.abs(event.x - pressX);
-                if (!dragActive && dist > 5) {
-                    dragActive = true;
-                    root.cancelRipple();
-                    root.down = false;
-                    appListRoot.buttonHovered = false;
-                    // Set all state BEFORE enabling drag to avoid stale computations
-                    appListRoot.dragSourceIndex = root.delegateIndex;
-                    var mapped = mapToItem(appListRoot, event.x, event.y);
-                    appListRoot.dragStartCursorX = mapped.x;
-                    appListRoot.dragCursorX = mapped.x;
-                    appListRoot.slotWidth = root.width + 2; // width + listView spacing
-                    appListRoot.dragging = true;
-                }
-                if (dragActive) {
-                    var mapped = mapToItem(appListRoot, event.x, event.y);
-                    appListRoot.dragCursorX = mapped.x;
-                }
+            if (dragActive) {
+                var mapped = mapToItem(appListRoot, event.x, event.y);
+                appListRoot.dragCursorX = mapped.x;
             }
-            onReleased: (event) => {
-                if (dragActive) {
-                    dragActive = false;
-                    appListRoot.finishDrag();
-                } else {
-                    root.down = false;
-                    root.cancelRipple();
-                    root.click();
-                }
-            }
-            onCanceled: {
-                if (dragActive) {
-                    dragActive = false;
-                    appListRoot.cancelDrag();
-                }
+        }
+        onReleased: (event) => {
+            if (dragActive) {
+                dragActive = false;
+                appListRoot.finishDrag();
+            } else {
                 root.down = false;
                 root.cancelRipple();
+                root.click();
             }
+        }
+        onCanceled: {
+            if (dragActive) {
+                dragActive = false;
+                appListRoot.cancelDrag();
+            }
+            root.down = false;
+            root.cancelRipple();
         }
     }
 
     onClicked: {
-        if (appToplevel.toplevels.length === 0) {
+        if (root.isFolder) {
+            // Toggle folder popup directly above this icon
+            if (appListRoot.folderPopupShow && appListRoot.clickedButton === root) {
+                appListRoot.hideFolderPopup();
+            } else {
+                const folderId = appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
+                const folder = AppFolderManager.getFolder(folderId);
+                if (folder) appListRoot.showFolderPopup(root, folder);
+            }
+        } else if (appToplevel.toplevels.length > 0) {
+            // Toggle preview
+            if (appListRoot.clickedButton === root) {
+                appListRoot.hidePreview();
+            } else {
+                appListRoot.showPreview(root);
+            }
+        } else {
             root.desktopEntry?.execute();
-            return;
         }
-        lastFocused = (lastFocused + 1) % appToplevel.toplevels.length
-        appToplevel.toplevels[lastFocused].activate()
+    }
+
+    // Hover tracker — magnification only
+    MouseArea {
+        id: hoverTracker
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        z: 1
+        onPositionChanged: mouse => {
+            appListRoot.listHovered = true;
+            const mapped = mapToItem(appListRoot.listViewRef, mouse.x, mouse.y);
+            appListRoot.mouseXInList = mapped.x + appListRoot.listViewRef.contentX;
+        }
+        onEntered: appListRoot.listHovered = true
+        onExited: Qt.callLater(() => { appListRoot.listHovered = false; })
     }
 
     middleClickAction: () => {
-        root.desktopEntry?.execute();
+        if (!root.isFolder) root.desktopEntry?.execute();
     }
 
     altAction: () => {
@@ -180,16 +197,16 @@ DockButton {
         active: !isSeparator
         sourceComponent: Item {
             anchors.centerIn: parent
+            width: root.iconSize
+            height: root.iconSize
             scale: root.hoverScale
             transformOrigin: Item.Bottom
 
             Behavior on scale {
-                NumberAnimation { 
-                    duration: 200
-                    easing.type: Easing.OutCubic
-                }
+                NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
             }
 
+            // Regular app icon
             Loader {
                 id: iconImageLoader
                 anchors {
@@ -197,15 +214,50 @@ DockButton {
                     right: parent.right
                     verticalCenter: parent.verticalCenter
                 }
-                active: !root.isSeparator
+                active: !root.isSeparator && !root.isFolder
                 sourceComponent: IconImage {
-                    source: Quickshell.iconPath(AppSearch.guessIcon(appToplevel.appId), "image-missing")
+                    source: Quickshell.iconPath(root.desktopEntry?.icon ?? AppSearch.guessIcon(appToplevel.appId), "image-missing")
                     implicitSize: root.iconSize
                 }
             }
 
+            // Folder icon — 2x2 mini-icon grid
             Loader {
-                active: Config.options.dock.monochromeIcons
+                id: folderIconLoader
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    verticalCenter: parent.verticalCenter
+                }
+                active: root.isFolder
+                sourceComponent: Rectangle {
+                    implicitWidth: root.iconSize
+                    implicitHeight: root.iconSize
+                    radius: Appearance.rounding.small
+                    color: Appearance.colors.colLayer1
+                    border.width: 1
+                    border.color: Appearance.colors.colLayer0Border
+
+                    Grid {
+                        anchors.centerIn: parent
+                        columns: 2
+                        spacing: 1
+
+                        Repeater {
+                            model: root.folderAppIds
+
+                            IconImage {
+                                required property var modelData
+                                source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
+                                implicitSize: root.iconSize * 0.4
+                            }
+                        }
+                    }
+                }
+            }
+
+            Loader {
+                active: Config.options.dock.monochromeIcons && !root.isFolder
                 anchors.fill: iconImageLoader
                 sourceComponent: Item {
                     Desaturate {
@@ -226,10 +278,11 @@ DockButton {
             RowLayout {
                 spacing: 3
                 anchors {
-                    top: iconImageLoader.bottom
+                    top: root.isFolder ? folderIconLoader.bottom : iconImageLoader.bottom
                     topMargin: 2
                     horizontalCenter: parent.horizontalCenter
                 }
+                visible: !root.isFolder
                 Repeater {
                     model: Math.min(appToplevel.toplevels.length, 3)
                     delegate: Rectangle {

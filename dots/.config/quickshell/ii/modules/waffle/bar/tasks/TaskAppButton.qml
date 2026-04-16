@@ -34,7 +34,7 @@ AppButton {
 
     multiple: appEntry.toplevels.length > 1
     checked: active
-    iconName: AppSearch.guessIcon(appEntry.appId)
+    iconName: root.desktopEntry?.icon ?? AppSearch.guessIcon(appEntry.appId)
     tryCustomIcon: false
     
     onHoverTimedOut: {

@@ -13,9 +13,10 @@ Item {
     property var appToplevel
     property Item targetButton
     property alias isOpen: menuLoader.active
-    readonly property var desktopEntry: appToplevel ? DesktopEntries.heuristicLookup(appToplevel.appId) : null
+    readonly property bool isFolder: appToplevel?.isFolder === true
+    readonly property var desktopEntry: (!isFolder && appToplevel) ? DesktopEntries.heuristicLookup(appToplevel.appId) : null
     readonly property bool hasWindows: (appToplevel?.toplevels.length ?? 0) > 0
-    readonly property bool hasDesktopActions: (desktopEntry?.actions.length ?? 0) > 0
+    readonly property bool hasDesktopActions: (!isFolder && desktopEntry?.actions.length) ?? false
 
     function open(button, appToplevelData) {
         if (menuLoader.active) {
@@ -80,6 +81,72 @@ Item {
                     }
                     spacing: 0
 
+                    // ── Folder-specific options ──────────────
+                    // Rename folder (opens popup in rename mode)
+                    Loader {
+                        active: root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuItem {
+                            iconName: "edit"
+                            label: "Rename folder"
+                            onClicked: {
+                                root.close();
+                                const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
+                                const folder = AppFolderManager.getFolder(folderId);
+                                if (folder && root.targetButton) {
+                                    root.targetButton.appListRoot.showFolderPopup(
+                                        root.targetButton, folder, true);
+                                }
+                            }
+                        }
+                    }
+
+                    // Separator
+                    Loader {
+                        active: root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuSeparator {}
+                    }
+
+                    // Unpin folder
+                    Loader {
+                        active: root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuItem {
+                            iconName: "keep_off"
+                            label: "Unpin from dock"
+                            onClicked: {
+                                const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
+                                TaskbarApps.toggleFolderPin(folderId);
+                                root.close();
+                            }
+                        }
+                    }
+
+                    // Separator
+                    Loader {
+                        active: root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuSeparator {}
+                    }
+
+                    // Delete folder
+                    Loader {
+                        active: root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuItem {
+                            iconName: "delete"
+                            label: "Delete folder"
+                            onClicked: {
+                                const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
+                                AppFolderManager.deleteFolder(folderId);
+                                root.close();
+                            }
+                        }
+                    }
+
+                    // ── Regular app options ──────────────────
+
                     // Desktop entry actions
                     Repeater {
                         model: root.hasDesktopActions ? root.desktopEntry.actions : []
@@ -105,6 +172,7 @@ Item {
                     // Open new instance
                     ContextMenuItem {
                         Layout.fillWidth: true
+                        visible: !root.isFolder
                         iconName: "open_in_new"
                         label: "Open new instance"
                         enabled: root.desktopEntry !== null
@@ -117,11 +185,12 @@ Item {
                     // Separator
                     ContextMenuSeparator {
                         Layout.fillWidth: true
+                        visible: !root.isFolder
                     }
 
                     // Move to workspace (only when has windows)
                     Loader {
-                        active: root.hasWindows
+                        active: root.hasWindows && !root.isFolder
                         Layout.fillWidth: true
                         sourceComponent: ColumnLayout {
                             spacing: 0
@@ -169,9 +238,10 @@ Item {
                         }
                     }
 
-                    // Pin / Unpin
+                    // Pin / Unpin (apps only)
                     ContextMenuItem {
                         Layout.fillWidth: true
+                        visible: !root.isFolder
                         iconName: TaskbarApps.isPinned(root.appToplevel?.appId ?? "") ? "keep_off" : "keep"
                         label: TaskbarApps.isPinned(root.appToplevel?.appId ?? "") ? "Unpin" : "Pin to dock"
                         onClicked: {
@@ -182,14 +252,14 @@ Item {
 
                     // Separator before close (only when has windows)
                     Loader {
-                        active: root.hasWindows
+                        active: root.hasWindows && !root.isFolder
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuSeparator {}
                     }
 
                     // Close window(s) (only when has windows)
                     Loader {
-                        active: root.hasWindows
+                        active: root.hasWindows && !root.isFolder
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuItem {
                             iconName: "close"

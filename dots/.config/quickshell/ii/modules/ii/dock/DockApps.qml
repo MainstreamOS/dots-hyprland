@@ -6,6 +6,8 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Wayland
+import Quickshell.Hyprland
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -18,9 +20,47 @@ Item {
     property real windowControlsHeight: 30
     property real buttonPadding: 5
 
-    property Item lastHoveredButton: null
-    property bool buttonHovered: false
-    property bool requestDockShow: previewPopup.show || contextMenu.isOpen
+    property Item clickedButton: null
+    property bool previewShow: false
+    property bool previewFading: false
+    property bool folderPopupShow: false
+    property var folderPopupData: null  // {id, name, appIds}
+    property bool requestDockShow: previewShow || folderPopupShow || contextMenu.isOpen
+
+    function showPreview(button) {
+        hideFolderPopup(); // tear down folder popup first
+        clickedButton = button;
+        previewFading = false;
+        previewLoader.active = true;
+        previewShow = true;
+        dismissTimer.restart();
+    }
+    function hidePreview() {
+        previewFading = true;
+        fadeTimer.restart();
+    }
+
+    property bool folderPopupStartRenaming: false
+
+    function showFolderPopup(button, folderData, startRenaming) {
+        // Tear down preview first — two PopupWindows crash Quickshell
+        dismissTimer.stop();
+        fadeTimer.stop();
+        previewShow = false;
+        previewFading = false;
+        previewLoader.active = false;
+
+        clickedButton = button;
+        folderPopupData = folderData;
+        folderPopupStartRenaming = startRenaming || false;
+        folderPopupLoader.active = true;
+        folderPopupShow = true;
+    }
+    function hideFolderPopup() {
+        folderPopupShow = false;
+        folderPopupLoader.active = false;
+        folderPopupData = null;
+    }
 
     // Drag-to-reorder state
     property bool dragging: false
@@ -38,20 +78,33 @@ Item {
         return Math.max(0, Math.min(dragSourceIndex + slots, pinnedCount - 1));
     }
 
+    // Timer to re-enable animations after the model has fully settled.
+    // Qt.callLater can race with deferred model updates, causing transitions
+    // to fire on items that are still being added/removed (the flicker).
+    Timer {
+        id: reorderSettleTimer
+        interval: 50
+        onTriggered: {
+            root._reordering = false;
+            root._suppressTranslateAnim = false;
+        }
+    }
+
     function finishDrag() {
         _suppressTranslateAnim = true;
         if (dragging && dragSourceIndex !== dragTargetIndex) {
             _reordering = true;
             TaskbarApps.reorderPinned(dragSourceIndex, dragTargetIndex);
+            // Process the model change synchronously while transitions are disabled
+            listViewRef.forceLayout();
         }
         dragging = false;
         dragSourceIndex = -1;
         dragCursorX = 0;
         dragStartCursorX = 0;
-        Qt.callLater(function() {
-            _reordering = false;
-            _suppressTranslateAnim = false;
-        });
+        // Allow the ListView to fully process delegate changes before
+        // re-enabling transitions, preventing the opacity-flicker on add.
+        reorderSettleTimer.restart();
     }
 
     function cancelDrag() {
@@ -64,60 +117,67 @@ Item {
     }
 
     function openContextMenu(button, appToplevelData) {
+        // Immediately tear down any popup — two PopupWindows crash Quickshell.
+        dismissTimer.stop();
+        fadeTimer.stop();
+        previewShow = false;
+        previewFading = false;
+        previewLoader.active = false;
+        hideFolderPopup();
+        clickedButton = null;
         contextMenu.open(button, appToplevelData);
     }
-    
-    property int hoveredIndex: -1
-    property real maxScale: 1.5
-    property real influenceRadius: 2  
+
+    property alias listViewRef: listView
+    property real mouseXInList: -9999
+    property bool listHovered: false
+    property real maxScale: 2.2
+    property real sigma: 60
+
+    function scaleForX(itemCenterX) {
+        if (!listHovered || previewShow) return 1.0;
+        const dist = itemCenterX - mouseXInList;
+        return 1.0 + (maxScale - 1.0) * Math.exp(-(dist * dist) / (2 * sigma * sigma));
+    }
+
+    // Hover-only overlay — acceptedButtons: Qt.NoButton means it never steals clicks
+    // but still receives hover position changes independently of dragEater
+    MouseArea {
+        id: listHoverArea
+        anchors.fill: listView
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        z: 1
+        onPositionChanged: mouse => {
+            root.mouseXInList = mouse.x + listView.contentX;
+        }
+        onEntered:  root.listHovered = true
+        onExited:   root.listHovered = false
+    }
 
     Layout.fillHeight: true
     Layout.topMargin: Appearance.sizes.hyprlandGapsOut
     implicitWidth: listView.implicitWidth
 
-    function popupCenterXForButton(button) {
-        if (!button || !root.QsWindow)
-            return 0;
-        return root.QsWindow.mapFromItem(button, button.width / 2, 0).x;
-    }
-    
-    function calculateScale(index) {
-        if (hoveredIndex < 0) return 1.0;
-        
-        const distance = Math.abs(index - hoveredIndex);
-        if (distance === 0) return maxScale;
-        if (distance > influenceRadius) return 1.0;
-        
-        const ratio = 1 - (distance / (influenceRadius + 1));
-        return 1.0 + (maxScale - 1.0) * Math.pow(ratio, 2);
-    }
-    
-    MouseArea {
-        anchors.fill: listView
-        hoverEnabled: true
-        propagateComposedEvents: true
-        z: -1  
-        
-        onPositionChanged: {
-            const item = listView.itemAt(mouseX + listView.contentX, mouseY);
-            if (item && item.buttonIndex !== undefined) {
-                root.hoveredIndex = item.buttonIndex;
-            } else {
-                root.hoveredIndex = -1;
-            }
+    Timer {
+        id: dismissTimer
+        interval: 3000
+        onTriggered: {
+            root.hidePreview();
         }
-        
-        onExited: {
-            root.hoveredIndex = -1;
-        }
-        
-        onPressed: mouse.accepted = false
-        onReleased: mouse.accepted = false
-        onClicked: mouse.accepted = false
-        onDoubleClicked: mouse.accepted = false
-        onEntered: mouse.accepted = false
     }
-    
+
+    Timer {
+        id: fadeTimer
+        interval: Appearance.animation.elementMoveFast.duration
+        onTriggered: {
+            root.previewShow = false;
+            root.previewFading = false;
+            previewLoader.active = false;
+            root.clickedButton = null;
+        }
+    }
+
     StyledListView {
         id: listView
         spacing: 2
@@ -140,120 +200,186 @@ Item {
             values: TaskbarApps.apps
         }
         delegate: DockAppButton {
+            id: delegateButton
             required property var modelData
             required property int index
             appToplevel: modelData
             appListRoot: root
-            delegateIndex: index
+            delegateIndex: {
+                // Index within pinnedApps only (not the full list)
+                var pinnedApps = Config.options?.dock.pinnedApps ?? [];
+                return pinnedApps.findIndex(id => id.toLowerCase() === modelData.appId.toLowerCase());
+            }
             buttonIndex: index
 
             topInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
             bottomInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
-            
-            hoverScale: root.calculateScale(index)
-            
-            Loader {
+            hoverScale: root.scaleForX(x + width / 2)
+        }
+    }
+
+    Loader {
+        id: previewLoader
+        active: false
+        sourceComponent: PopupWindow {
+            id: previewPopup
+            visible: true
+
+            anchor {
+                item: root.clickedButton
+                gravity: Edges.Top
+                edges: Edges.Top
+                adjustment: PopupAdjustment.SlideX
+            }
+            color: "transparent"
+            implicitWidth: popupBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
+            implicitHeight: popupBackground.implicitHeight + Appearance.sizes.elevationMargin * 2
+
+            MouseArea {
+                id: popupMouseArea
                 anchors.fill: parent
-                active: true
-                z: 100  
-                sourceComponent: MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    propagateComposedEvents: true
-                    
-                    onEntered: {
-                        root.lastHoveredButton = parent.parent;
-                        root.buttonHovered = true;
-                        root.hoveredIndex = parent.parent.buttonIndex;
+                hoverEnabled: true
+
+                StyledRectangularShadow {
+                    target: popupBackground
+                    opacity: (root.previewShow && !root.previewFading) ? 1 : 0
+                    visible: opacity > 0
+                    Behavior on opacity {
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                     }
-                    
-                    onExited: {
-                        if (root.lastHoveredButton === parent.parent) {
-                            root.buttonHovered = false;
-                        }
-                        Qt.callLater(() => {
-                            if (!root.buttonHovered) {
-                                root.hoveredIndex = -1;
+                }
+                Rectangle {
+                    id: popupBackground
+                    property real padding: 5
+                    opacity: (root.previewShow && !root.previewFading) ? 1 : 0
+                    visible: opacity > 0
+                    Behavior on opacity {
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                    }
+                    clip: true
+                    color: Appearance.m3colors.m3surfaceContainer
+                    radius: Appearance.rounding.normal
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: Appearance.sizes.elevationMargin
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    implicitHeight: previewRowLayout.implicitHeight + padding * 2
+                    implicitWidth: previewRowLayout.implicitWidth + padding * 2
+
+                    RowLayout {
+                        id: previewRowLayout
+                        anchors.centerIn: parent
+                        Repeater {
+                            model: ScriptModel {
+                                values: root.clickedButton?.appToplevel?.toplevels ?? []
                             }
-                        });
+                            RippleButton {
+                                id: windowButton
+                                required property var modelData
+                                padding: 0
+                                middleClickAction: () => {
+                                    windowButton.modelData?.close();
+                                }
+                                onClicked: {
+                                    root.hidePreview();
+                                    windowButton.modelData?.activate();
+                                }
+                                contentItem: ColumnLayout {
+                                    implicitWidth: screencopyView.implicitWidth
+                                    implicitHeight: screencopyView.implicitHeight
+
+                                    ButtonGroup {
+                                        contentWidth: parent.width - anchors.margins * 2
+                                        StyledText {
+                                            Layout.margins: 5
+                                            Layout.fillWidth: true
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            text: windowButton.modelData?.title
+                                            elide: Text.ElideRight
+                                            color: Appearance.m3colors.m3onSurface
+                                        }
+                                        GroupButton {
+                                            id: closeButton
+                                            colBackground: ColorUtils.transparentize(Appearance.colors.colSurfaceContainer)
+                                            baseWidth: windowControlsHeight
+                                            baseHeight: windowControlsHeight
+                                            buttonRadius: Appearance.rounding.full
+                                            contentItem: MaterialSymbol {
+                                                anchors.centerIn: parent
+                                                horizontalAlignment: Text.AlignHCenter
+                                                text: "close"
+                                                iconSize: Appearance.font.pixelSize.normal
+                                                color: Appearance.m3colors.m3onSurface
+                                            }
+                                            onClicked: {
+                                                root.hidePreview();
+                                                windowButton.modelData?.close();
+                                            }
+                                        }
+                                    }
+                                    Item {
+                                        implicitWidth: screencopyView.implicitWidth
+                                        implicitHeight: screencopyView.implicitHeight
+                                        layer.enabled: true
+                                        layer.effect: OpacityMask {
+                                            maskSource: Rectangle {
+                                                width: screencopyView.implicitWidth
+                                                height: screencopyView.implicitHeight
+                                                radius: Appearance.rounding.small
+                                            }
+                                        }
+
+                                        ScreencopyView {
+                                            id: screencopyView
+                                            anchors.fill: parent
+                                            captureSource: windowButton.modelData
+                                            live: true
+                                            paintCursor: true
+                                            constraintSize: Qt.size(root.maxWindowPreviewWidth, root.maxWindowPreviewHeight)
+                                            // PQ-to-sRGB tone-mapping when HDR Always On
+                                            layer.enabled: GlobalStates.hdrActive
+                                            layer.effect: ShaderEffect {
+                                                property real sdrPaperWhite: 203.0
+                                                fragmentShader: "file://" + Quickshell.env("HOME") + "/.config/quickshell/ii/shaders/pq_to_srgb.frag.qsb"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    
-                    onPositionChanged: {
-                        root.hoveredIndex = parent.parent.buttonIndex;
-                    }
-                    
-                    onPressed: mouse.accepted = false
-                    onReleased: mouse.accepted = false
-                    onClicked: mouse.accepted = false
-                    onDoubleClicked: mouse.accepted = false
                 }
             }
         }
     }
 
-    PopupWindow {
-        id: previewPopup
-        property var appTopLevel: root.lastHoveredButton?.appToplevel
+    // ── Folder popup (PopupWindow above clicked folder icon) ──
+    Loader {
+        id: folderPopupLoader
+        active: false
+        sourceComponent: PopupWindow {
+            id: folderPopup
+            visible: true
 
-        property bool shouldShow: (popupMouseArea.containsMouse || root.buttonHovered) && appTopLevel && appTopLevel.toplevels && appTopLevel.toplevels.length > 0
-
-        property bool show: false
-        property real cachedCenterX: 0
-
-        Connections {
-            target: root
-            function onLastHoveredButtonChanged() {
-                if (root.lastHoveredButton && root.QsWindow)
-                    previewPopup.cachedCenterX = root.popupCenterXForButton(root.lastHoveredButton);
+            anchor {
+                item: root.clickedButton
+                gravity: Edges.Top
+                edges: Edges.Top
+                adjustment: PopupAdjustment.SlideX
             }
-            function onButtonHoveredChanged() {
-                if (root.buttonHovered && root.lastHoveredButton && root.QsWindow)
-                    previewPopup.cachedCenterX = root.popupCenterXForButton(root.lastHoveredButton);
-                updateTimer.restart();
+
+            HyprlandFocusGrab {
+                active: true
+                windows: [folderPopup]
+                onCleared: root.hideFolderPopup()
             }
-        }
 
-        onShouldShowChanged: {
-            updateTimer.restart();
-        }
+            color: "transparent"
+            implicitWidth: folderBg.implicitWidth + Appearance.sizes.elevationMargin * 2
+            implicitHeight: folderBg.implicitHeight + Appearance.sizes.elevationMargin * 2
 
-        Timer {
-            id: updateTimer
-            interval: 100
-            onTriggered: {
-                previewPopup.show = previewPopup.shouldShow;
-            }
-        }
-
-        anchor {
-            window: root.QsWindow.window
-            adjustment: PopupAdjustment.None
-            gravity: Edges.Top | Edges.Right
-            edges: Edges.Top | Edges.Left
-        }
-
-        visible: popupBackground.opacity > 0
-        color: "transparent"
-        implicitWidth: root.QsWindow.window?.width ?? 1
-        implicitHeight: popupMouseArea.implicitHeight + root.windowControlsHeight + Appearance.sizes.elevationMargin * 2
-
-        MouseArea {
-            id: popupMouseArea
-            anchors.bottom: parent.bottom
-            implicitWidth: popupBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
-            implicitHeight: root.maxWindowPreviewHeight + root.windowControlsHeight + Appearance.sizes.elevationMargin * 2
-            hoverEnabled: true
-            x: previewPopup.cachedCenterX - width / 2
-            
-            onExited: {
-                if (!root.buttonHovered) {
-                    root.hoveredIndex = -1;
-                }
-            }
-            
             StyledRectangularShadow {
-                target: popupBackground
-                opacity: previewPopup.show ? 1 : 0
+                target: folderBg
+                opacity: root.folderPopupShow ? 1 : 0
                 visible: opacity > 0
                 Behavior on opacity {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -261,99 +387,205 @@ Item {
             }
 
             Rectangle {
-                id: popupBackground
-                property real padding: 5
-                opacity: previewPopup.show ? 1 : 0
+                id: folderBg
+                property real padding: 12
+
+                opacity: root.folderPopupShow ? 1 : 0
                 visible: opacity > 0
                 Behavior on opacity {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                 }
-                clip: true
+
+                anchors {
+                    bottom: parent.bottom
+                    horizontalCenter: parent.horizontalCenter
+                    bottomMargin: Appearance.sizes.elevationMargin
+                }
                 color: Appearance.m3colors.m3surfaceContainer
                 radius: Appearance.rounding.normal
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: Appearance.sizes.elevationMargin
-                anchors.horizontalCenter: parent.horizontalCenter
-                implicitHeight: previewRowLayout.implicitHeight + padding * 2
-                implicitWidth: previewRowLayout.implicitWidth + padding * 2
-                Behavior on implicitWidth {
-                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                }
-                Behavior on implicitHeight {
-                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                }
+                implicitWidth: folderColumn.implicitWidth + padding * 2
+                implicitHeight: folderColumn.implicitHeight + padding * 2
 
-                RowLayout {
-                    id: previewRowLayout
-                    anchors.centerIn: parent
-                    Repeater {
-                        model: ScriptModel {
-                            values: previewPopup.appTopLevel?.toplevels ?? []
+                ColumnLayout {
+                    id: folderColumn
+                    anchors {
+                        fill: parent
+                        margins: parent.padding
+                    }
+                    spacing: 8
+
+                    // Folder header
+                    property bool renaming: root.folderPopupStartRenaming
+
+                    Component.onCompleted: {
+                        if (folderColumn.renaming) {
+                            folderRenameField.text = root.folderPopupData ? root.folderPopupData.name : "";
+                            folderRenameField.forceActiveFocus();
+                            folderRenameField.selectAll();
                         }
-                        RippleButton {
-                            id: windowButton
-                            Layout.fillHeight: true
-                            required property var modelData
-                            padding: 0
-                            middleClickAction: () => {
-                                windowButton.modelData?.close();
-                            }
-                            onClicked: {
-                                windowButton.modelData?.activate();
-                            }
-                            contentItem: ColumnLayout {
-                                implicitWidth: screencopyView.implicitWidth
-                                implicitHeight: screencopyView.implicitHeight
+                    }
 
-                                ButtonGroup {
-                                    contentWidth: parent.width - anchors.margins * 2
-                                    StyledText {
-                                        Layout.margins: 5
-                                        Layout.fillWidth: true
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        text: windowButton.modelData?.title
-                                        elide: Text.ElideRight
-                                        color: Appearance.m3colors.m3onSurface
-                                    }
-                                    GroupButton {
-                                        id: closeButton
-                                        colBackground: ColorUtils.transparentize(Appearance.colors.colSurfaceContainer)
-                                        baseWidth: root.windowControlsHeight
-                                        baseHeight: root.windowControlsHeight
-                                        buttonRadius: Appearance.rounding.full
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            horizontalAlignment: Text.AlignHCenter
-                                            text: "close"
-                                            iconSize: Appearance.font.pixelSize.normal
-                                            color: Appearance.m3colors.m3onSurface
-                                        }
-                                        onClicked: {
-                                            windowButton.modelData?.close();
-                                        }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        MaterialSymbol {
+                            text: "folder"
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: Appearance.colors.colPrimary
+                        }
+
+                        // Static name
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: !folderColumn.renaming
+                            text: root.folderPopupData ? root.folderPopupData.name : ""
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.weight: Font.Medium
+                            color: Appearance.m3colors.m3onSurface
+                            elide: Text.ElideRight
+                        }
+
+                        // Editable name (shown when renaming)
+                        TextField {
+                            id: folderRenameField
+                            Layout.fillWidth: true
+                            visible: folderColumn.renaming
+                            padding: 4
+                            font {
+                                family: Appearance.font.family.main
+                                pixelSize: Appearance.font.pixelSize.normal
+                                weight: Font.Medium
+                            }
+                            color: Appearance.m3colors.m3onSurface
+                            selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
+                            selectionColor: Appearance.colors.colSecondaryContainer
+                            background: Rectangle {
+                                radius: Appearance.rounding.verysmall
+                                color: "transparent"
+                                border.width: 2
+                                border.color: folderRenameField.activeFocus
+                                    ? Appearance.colors.colPrimary
+                                    : Appearance.m3colors.m3outline
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            cursorDelegate: Rectangle {
+                                width: 1
+                                color: Appearance.colors.colPrimary
+                                radius: 1
+                            }
+                            Keys.onReturnPressed: {
+                                const name = folderRenameField.text.trim();
+                                if (name.length > 0 && root.folderPopupData) {
+                                    AppFolderManager.renameFolder(root.folderPopupData.id, name);
+                                    root.folderPopupData = Object.assign({}, root.folderPopupData, { name: name });
+                                }
+                                folderColumn.renaming = false;
+                            }
+                            Keys.onEscapePressed: folderColumn.renaming = false
+                        }
+
+                        // Confirm button (only visible when renaming)
+                        RippleButton {
+                            visible: folderColumn.renaming
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            buttonRadius: Appearance.rounding.full
+                            onClicked: {
+                                const name = folderRenameField.text.trim();
+                                if (name.length > 0 && root.folderPopupData) {
+                                    AppFolderManager.renameFolder(root.folderPopupData.id, name);
+                                    root.folderPopupData = Object.assign({}, root.folderPopupData, { name: name });
+                                }
+                                folderColumn.renaming = false;
+                            }
+                            contentItem: MaterialSymbol {
+                                anchors.centerIn: parent
+                                text: "check"
+                                iconSize: Appearance.font.pixelSize.small
+                                color: Appearance.m3colors.m3onSurface
+                            }
+                        }
+                    }
+
+                    // Separator
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 1
+                        color: ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.7)
+                    }
+
+                    // App grid
+                    GridLayout {
+                        id: folderAppsGrid
+                        columns: Math.min(4, folderAppsRepeater.count)
+                        columnSpacing: 4
+                        rowSpacing: 4
+
+                        Repeater {
+                            id: folderAppsRepeater
+                            model: {
+                                if (!root.folderPopupData || !root.folderPopupData.appIds) return [];
+                                const apps = [];
+                                for (let i = 0; i < root.folderPopupData.appIds.length; i++) {
+                                    const appId = root.folderPopupData.appIds[i];
+                                    const entry = DesktopEntries.heuristicLookup(appId);
+                                    if (entry) {
+                                        apps.push({ id: appId, entry: entry });
                                     }
                                 }
-                                Item {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    implicitHeight: screencopyView.height
-                                    implicitWidth: screencopyView.width
-                                    ScreencopyView {
-                                        id: screencopyView
-                                        anchors.centerIn: parent
-                                        captureSource: windowButton.modelData
-                                        live: true
-                                        paintCursor: true
-                                        constraintSize: Qt.size(root.maxWindowPreviewWidth, root.maxWindowPreviewHeight)
-                                        layer.enabled: true
-                                        layer.effect: OpacityMask {
-                                            maskSource: Rectangle {
-                                                width: screencopyView.width
-                                                height: screencopyView.height
-                                                radius: Appearance.rounding.small
-                                            }
-                                        }
+                                return apps;
+                            }
+
+                            RippleButton {
+                                id: folderAppBtn
+                                required property var modelData
+                                required property int index
+
+                                implicitWidth: 80
+                                implicitHeight: 90
+                                buttonRadius: Appearance.rounding.small
+
+                                PointingHandInteraction {}
+
+                                onClicked: {
+                                    root.hideFolderPopup();
+                                    folderAppBtn.modelData.entry.execute();
+                                }
+
+                                contentItem: ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    spacing: 4
+
+                                    IconImage {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        source: Quickshell.iconPath(
+                                            folderAppBtn.modelData.entry.icon ?? AppSearch.guessIcon(folderAppBtn.modelData.id),
+                                            "image-missing")
+                                        implicitSize: 40
                                     }
+
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: folderAppBtn.modelData.entry.name
+                                        font.pixelSize: Appearance.font.pixelSize.smaller
+                                        color: Appearance.m3colors.m3onSurface
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                    }
+                                }
+
+                                StyledToolTip {
+                                    text: folderAppBtn.modelData.entry.name
+                                        + (folderAppBtn.modelData.entry.description
+                                            ? "\n" + folderAppBtn.modelData.entry.description
+                                            : "")
                                 }
                             }
                         }

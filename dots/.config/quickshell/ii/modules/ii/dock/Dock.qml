@@ -27,7 +27,7 @@ Scope { // Scope
             screen: modelData
             visible: !GlobalStates.screenLocked
 
-            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated)
+            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || GlobalStates.overviewOpen
 
             anchors {
                 bottom: true
@@ -35,13 +35,21 @@ Scope { // Scope
                 right: true
             }
 
-            exclusiveZone: root.pinned ? implicitHeight - (Appearance.sizes.hyprlandGapsOut) - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut) : 0
+            exclusiveZone: root.pinned ? implicitHeight - 60 - (Appearance.sizes.hyprlandGapsOut) - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut) : 0
+
+            Component.onCompleted: {
+                GlobalFocusGrab.addPersistent(dockRoot);
+            }
+            Component.onDestruction: {
+                GlobalFocusGrab.removePersistent(dockRoot);
+            }
 
             implicitWidth: dockBackground.implicitWidth
             WlrLayershell.namespace: "quickshell:dock"
+            WlrLayershell.layer: GlobalStates.overviewOpen ? WlrLayer.Overlay : WlrLayer.Top
             color: "transparent"
 
-            implicitHeight: (Config.options?.dock.height ?? 70) + Appearance.sizes.elevationMargin + Appearance.sizes.hyprlandGapsOut
+            implicitHeight: (Config.options?.dock.height ?? 70) + Appearance.sizes.elevationMargin + Appearance.sizes.hyprlandGapsOut + 60
 
             mask: Region {
                 item: dockMouseArea
@@ -49,18 +57,18 @@ Scope { // Scope
 
             MouseArea {
                 id: dockMouseArea
-                height: parent.height
+                height: (Config.options?.dock.height ?? 70) + Appearance.sizes.elevationMargin + Appearance.sizes.hyprlandGapsOut
                 anchors {
                     top: parent.top
-                    topMargin: dockRoot.reveal ? 0 : Config.options?.dock.hoverToReveal ? (dockRoot.implicitHeight - Config.options.dock.hoverRegionHeight) : (dockRoot.implicitHeight + 1)
+                    topMargin: 60 + (dockRoot.reveal ? 1 : Config.options?.dock.hoverToReveal ? (dockRoot.implicitHeight - 60 - Config.options.dock.hoverRegionHeight) : (dockRoot.implicitHeight - 60 + 1))
                     horizontalCenter: parent.horizontalCenter
                 }
-                implicitWidth: dockHoverRegion.implicitWidth + Appearance.sizes.elevationMargin * 2
-                hoverEnabled: true
 
                 Behavior on anchors.topMargin {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                 }
+                implicitWidth: dockHoverRegion.implicitWidth + Appearance.sizes.elevationMargin * 2
+                hoverEnabled: true
 
                 Item {
                     id: dockHoverRegion
