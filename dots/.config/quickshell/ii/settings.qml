@@ -226,14 +226,31 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Services, Advanced, About (Indices 7, 8, 9)
+                    // Group 3: Services, Advanced (Indices 7, 8)
                     Repeater {
-                        model: root.pages.slice(7, 10)
+                        model: root.pages.slice(7, 9)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
                             toggled: root.currentPage === (index + 7)
                             onPressed: root.currentPage = (index + 7)
+                            buttonIcon: modelData.icon
+                            buttonText: modelData.name
+                        }
+                    }
+
+                    // Separator 3
+                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
+                                color: Appearance.m3colors.m3outlineVariant }
+
+                    // Group 4: About (Index 9)
+                    Repeater {
+                        model: root.pages.slice(9, 10)
+                        SettingsNavButton {
+                            required property var index
+                            required property var modelData
+                            toggled: root.currentPage === (index + 9)
+                            onPressed: root.currentPage = (index + 9)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
