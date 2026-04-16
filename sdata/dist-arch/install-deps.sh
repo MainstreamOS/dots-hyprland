@@ -6,7 +6,7 @@ install-yay(){
   x git clone https://aur.archlinux.org/yay-bin.git /tmp/buildyay
   x cd /tmp/buildyay
   x makepkg -o
-  x makepkg -se
+  x makepkg -se --noconfirm
   x makepkg -i --noconfirm
   x cd ${REPO_ROOT}
   rm -rf /tmp/buildyay
@@ -55,7 +55,7 @@ v remove_deprecated_dependencies
 # Issue #363
 case $SKIP_SYSUPDATE in
   true) sleep 0;;
-  *) v sudo pacman -Syu;;
+  *) v sudo pacman -Syu --noconfirm;;
 esac
 
 # Use yay. Because paru does not support cleanbuild.
@@ -78,7 +78,28 @@ install-local-pkgbuild() {
   x pushd $location
 
   source ./PKGBUILD
-  x yay -S --sudoloop $installflags --asdeps "${depends[@]}"
+  # Install dependencies one-by-one so a single package failure doesn't block the rest
+  local failed_deps=()
+  for dep in "${depends[@]}"; do
+    if ! yay -S --sudoloop $installflags --asdeps "$dep"; then
+      printf "${STY_YELLOW}[$0]: WARNING: Failed to install dependency '$dep', will retry after others.${STY_RST}\n"
+      failed_deps+=("$dep")
+    fi
+  done
+  # Also install optdepends (strip description after colon) so they're present initially but removable
+  for dep in "${optdepends[@]}"; do
+    local pkg="${dep%%:*}"
+    if ! yay -S --sudoloop $installflags --asdeps "$pkg"; then
+      printf "${STY_YELLOW}[$0]: WARNING: Failed to install optional dependency '$pkg', will retry after others.${STY_RST}\n"
+      failed_deps+=("$pkg")
+    fi
+  done
+  # Retry failed deps once (they may have failed due to ordering/transient issues)
+  for dep in "${failed_deps[@]}"; do
+    if ! yay -S --sudoloop $installflags --asdeps "$dep"; then
+      printf "${STY_RED}[$0]: ERROR: Failed to install dependency '$dep'. You may need to install it manually.${STY_RST}\n"
+    fi
+  done
   # man makepkg:
   # -A, --ignorearch: Ignore a missing or incomplete arch field in the build script.
   # -s, --syncdeps: Install missing dependencies using pacman. When build-time or run-time dependencies are not found, pacman will try to resolve them.
@@ -90,9 +111,12 @@ install-local-pkgbuild() {
 }
 
 # Install core dependencies from the meta-packages
+metapkgs=(./sdata/dist-arch/illogical-impulse-{audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
 metapkgs+=(./sdata/dist-arch/illogical-impulse-hyprland)
 metapkgs+=(./sdata/dist-arch/illogical-impulse-microtex-git)
 metapkgs+=(./sdata/dist-arch/illogical-impulse-quickshell-git)
+metapkgs+=(./sdata/dist-arch/illogical-impulse-extras)
+# metapkgs+=(./sdata/dist-arch/packages/illogical-impulse-oneui4-icons-git)
 metapkgs+=(./sdata/dist-arch/illogical-impulse-bibata-modern-classic-bin)
 
 for i in "${metapkgs[@]}"; do

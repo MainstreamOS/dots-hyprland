@@ -1,0 +1,33 @@
+pkgname=illogical-impulse-extras
+pkgver=1.0
+pkgrel=6
+pkgdesc='Illogical Impulse Extra Software'
+arch=(any)
+license=(None)
+depends=()
+optdepends=(
+  'google-chrome: Web browser'
+  'resources: System monitor'
+  'gnome-disk-utility: Disk management'
+  'gnome-software: App store'
+  'appstream: App metadata'
+  'appstream-glib: App metadata library'
+  'flatpak: Flatpak support'
+  'gnome-calculator: Calculator'
+  'gnome-calendar: Calendar'
+  'simple-scan: Document scanner'
+  'gnome-font-viewer: Font viewer'
+  'impression: ISO disk image writer'
+  'libreoffice-fresh: Office suite'
+  'gnome-text-editor: Text editor'
+  'mpv: Video player'
+  'mpv-modernz: Modern mpv UI'
+  'mpv-thumbfast: mpv thumbnail support'
+  'spotify: Music streaming'
+  'satty: Screenshot annotation'
+  'snapper: Btrfs snapshot manager'
+  'steam: Gaming launcher'
+  'gimp: Image editor'
+  'fastfetch: System info'
+  'topgrade: System updater'
+)

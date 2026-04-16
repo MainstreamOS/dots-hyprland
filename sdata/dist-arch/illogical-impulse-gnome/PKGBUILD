@@ -1,0 +1,15 @@
+pkgname=illogical-impulse-gnome
+pkgver=1.0
+pkgrel=2
+pkgdesc='Illogical Impulse Gnome Dependencies'
+arch=(any)
+license=(None)
+depends=(
+  qt6ct
+  nautilus
+  gvfs
+  gvfs-smb
+  gvfs-mtp
+  fuse2
+  ffmpegthumbnailer
+)
