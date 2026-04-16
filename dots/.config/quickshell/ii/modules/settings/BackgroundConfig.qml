@@ -9,7 +9,7 @@ ContentPage {
 
     ContentSection {
         icon: "sync_alt"
-        title: Translation.tr("Parallax")
+        title: Translation.tr("Wallpaper panning")
 
         ConfigSwitch {
             buttonIcon: "unfold_more_double"
