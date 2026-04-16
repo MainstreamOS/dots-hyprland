@@ -52,7 +52,7 @@ WindowDialog {
             buttonText: Translation.tr("Details")
             onClicked: {
                 const settingsPath = CF.FileUtils.trimFileProtocol(Directories.config) + "/quickshell/ii/settings.qml";
-                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=1 QS_SETTINGS_TAB=0 quickshell -p '" + settingsPath + "'"]);
+                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=1 quickshell -p '" + settingsPath + "'"]);
                 GlobalStates.sidebarRightOpen = false;
             }
         }
