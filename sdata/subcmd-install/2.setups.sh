@@ -39,6 +39,63 @@ EOF
 }
 #####################################################################################
 # These python packages are installed using uv into the venv (virtual environment). Once the folder of the venv gets deleted, they are all gone cleanly. So it's considered as setups, not dependencies.
+
+function setup_gamescope(){
+  # Install python-evdev — required for the input proxy in toggle_gamescope.sh.
+  # jq and seatd are pulled in by other packages on Arch but listed explicitly
+  # as a safety net. --needed makes this a no-op if already installed.
+  case "$OS_GROUP_ID" in
+    arch)
+      x sudo pacman -S --needed --noconfirm gamescope python-evdev jq seatd
+      ;;
+    fedora)
+      x sudo dnf install -y gamescope python3-evdev jq seatd
+      ;;
+    *)
+      echo -e "${STY_YELLOW}[$0]: Unsupported OS for gamescope setup. Install gamescope, python-evdev, jq, and seatd manually.${STY_RST}"
+      ;;
+  esac
+
+  # Sudoers file — allows toggle_gamescope.sh to stop/start sddm, chvt,
+  # seatd, python3, setcap, and systemd-run without a password prompt.
+  # chmod 440 is required — sudo refuses world-readable sudoers files.
+  local _user
+  _user=$(whoami)
+  sudo bash -c "cat > /etc/sudoers.d/gamescope << EOF
+Defaults:${_user} !requiretty
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop sddm
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start sddm
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/chvt
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemd-run
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/python3
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/seatd
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/setcap
+EOF"
+  x sudo chmod 440 /etc/sudoers.d/gamescope
+
+  # udev rule — allows the input proxy to create a UInput virtual device.
+  # On Arch this is not added elsewhere in this script so we add it here.
+  # On Fedora it is already handled in the systemd block above.
+  if [[ "$OS_GROUP_ID" != "fedora" ]]; then
+    x sudo bash -c 'echo KERNEL=="uinput", MODE="0660", GROUP="input" | tee /etc/udev/rules.d/99-uinput.rules'
+    x sudo udevadm control --reload-rules
+    x sudo udevadm trigger || true
+  fi
+
+  # Enable linger so the user's systemd session persists independently
+  # of SDDM being stopped. Safe to call here since we are on a live system.
+  x loginctl enable-linger "$_user"
+
+  # Ensure the toggle script is executable — safety net in case permissions
+  # were lost during dotfile deployment.
+  local _toggle="$HOME/.config/hypr/hyprland/scripts/toggle_gamescope.sh"
+  if [[ -f "$_toggle" ]]; then
+    x chmod +x "$_toggle"
+  else
+    echo -e "${STY_YELLOW}[$0]: toggle_gamescope.sh not found at $_toggle — skipping chmod.${STY_RST}"
+  fi
+}
+
 showfun install-python-packages
 v install-python-packages
 
@@ -125,3 +182,5 @@ function setup_default_video_player(){
 showfun setup_default_video_player
 v setup_default_video_player
 
+showfun setup_gamescope
+v setup_gamescope
