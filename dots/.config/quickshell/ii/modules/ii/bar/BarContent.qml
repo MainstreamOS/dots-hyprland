@@ -318,6 +318,15 @@ Item { // Bar content region
                         iconSize: Appearance.font.pixelSize.larger
                         color: rightSidebarButton.colText
                     }
+                    MaterialSymbol {
+                        Layout.leftMargin: indicatorsRowLayout.realSpacing
+                        text: "settings"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: rightSidebarButton.colText
+                    }
+                }
+            }
+
                 }
             }
 
