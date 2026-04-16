@@ -246,7 +246,10 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.device?.connect()  // connect() on unpaired device pairs it
+                        onClicked: {
+                            root.device.trusted = true;
+                            root.device?.connect();  // connect() on unpaired device pairs it
+                        }
                     }
                 }
                 
@@ -285,10 +288,13 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.device?.connect()
+                        onClicked: {
+                            root.device.trusted = true;
+                            root.device?.connect();
+                        }
                     }
                 }
-                
+
                 StyledText {
                     visible: root.isPaired && !root.isConnected
                     text: Translation.tr("Tap to connect")
