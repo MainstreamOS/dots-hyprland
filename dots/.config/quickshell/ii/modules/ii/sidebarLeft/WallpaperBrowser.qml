@@ -110,9 +110,15 @@ Item {
         }  
     }  
   
+    property real padding: 4
+
     ColumnLayout {  
         id: columnLayout  
-        anchors.fill: parent  
+        anchors {
+            fill: parent
+            margins: root.padding
+        }
+        spacing: root.padding
   
         Item {  
             Layout.fillWidth: true  
@@ -287,14 +293,12 @@ Item {
             id: tagInputContainer  
             property real columnSpacing: 5  
             Layout.fillWidth: true  
-            radius: Appearance.rounding.small  
-            color: Appearance.colors.colLayer1  
+            radius: Appearance.rounding.normal - 4  
+            color: Appearance.colors.colLayer2  
             implicitWidth: tagInputField.implicitWidth  
             implicitHeight: Math.max(inputFieldRowLayout.implicitHeight + inputFieldRowLayout.anchors.topMargin   
                 + commandButtonsRow.implicitHeight + commandButtonsRow.anchors.bottomMargin + columnSpacing, 45)  
             clip: true  
-            border.color: Appearance.colors.colOutlineVariant  
-            border.width: 1  
   
             Behavior on implicitHeight {  
                 animation: Appearance.animation.elementMove.numberAnimation.createObject(this)  
@@ -404,9 +408,9 @@ Item {
                     contentItem: MaterialSymbol {  
                         anchors.centerIn: parent  
                         horizontalAlignment: Text.AlignHCenter  
-                        iconSize: Appearance.font.pixelSize.larger  
+                        iconSize: 22  
                         color: sendButton.enabled ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer2Disabled  
-                        text: "send"  
+                        text: "arrow_upward"  
                     }  
                 }  
             }  
