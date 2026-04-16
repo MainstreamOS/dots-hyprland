@@ -91,3 +91,5 @@ fi
 
 v gsettings set org.gnome.desktop.interface font-name 'Google Sans Flex Medium 11 @opsz=11,wght=500'
 v gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+v gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+v gsettings set org.gnome.desktop.wm.preferences button-layout ":"
