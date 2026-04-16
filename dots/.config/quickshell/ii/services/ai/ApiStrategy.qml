@@ -8,5 +8,6 @@ QtObject {
     function onRequestFinished(message: AiMessageData): var { return {} } // Default: no special handling
     function reset() { } // Reset any internal state if needed
     function buildScriptFileSetup(filePath) { return "" } // Default: no setup
+    function buildScriptRequestContent(model: AiModel, messages, systemPrompt: string, temperature: real): string { return "" } // Override to replace the default curl command
     function finalizeScriptContent(scriptContent: string): string { return scriptContent } // Optionally modify/finalize script
 }

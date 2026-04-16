@@ -23,6 +23,7 @@ Singleton {
     property Component geminiApiStrategy: GeminiApiStrategy {}
     property Component openaiApiStrategy: OpenAiApiStrategy {}
     property Component mistralApiStrategy: MistralApiStrategy {}
+    property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -233,6 +234,11 @@ Singleton {
             ],
             "search": [],
             "none": [],
+        },
+        "claude-code": {
+            "functions": [],
+            "search": [],
+            "none": []
         }
     }
     property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format])
@@ -294,6 +300,19 @@ Singleton {
             "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
             "api_format": "mistral",
         }),
+        "claude-code": aiModelComponent.createObject(this, {
+            "name": "Claude Code",
+            "icon": "terminal",
+            "description": Translation.tr("Online | Anthropic's Claude via the Claude Code CLI\nRequires the claude CLI to be installed"),
+            "homepage": "https://docs.anthropic.com/en/docs/claude-code",
+            "endpoint": "",
+            "model": "claude-code",
+            "requires_key": true,
+            "key_id": "anthropic",
+            "key_get_link": "https://console.anthropic.com/settings/keys",
+            "key_get_description": Translation.tr("**Instructions**: Log into your Anthropic account, go to API Keys, click Create Key"),
+            "api_format": "claude-code",
+        }),
     }
     property var modelList: Object.keys(root.models)
     property var currentModelId: Persistent.states?.ai?.model || modelList[0]
@@ -302,6 +321,7 @@ Singleton {
         "openai": openaiApiStrategy.createObject(this),
         "gemini": geminiApiStrategy.createObject(this),
         "mistral": mistralApiStrategy.createObject(this),
+        "claude-code": claudeCodeApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -571,6 +591,10 @@ Singleton {
         root.tokenCount.input = -1;
         root.tokenCount.output = -1;
         root.tokenCount.total = -1;
+        // Reset Claude Code session so next message starts fresh
+        if (root.apiStrategies["claude-code"]) {
+            root.apiStrategies["claude-code"].sessionId = "";
+        }
     }
 
     FileView {
@@ -654,11 +678,16 @@ Singleton {
 
             /* Create command string */
             let scriptRequestContent = ""
-            scriptRequestContent += `curl --no-buffer "${endpoint}"`
-                + ` ${headerString}`
-                + (authHeader ? ` ${authHeader}` : "")
-                + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
-                + "\n"
+            if (model.api_format === "claude-code") {
+                scriptRequestContent = requester.currentStrategy.buildScriptRequestContent(
+                    model, filteredMessageArray, root.systemPrompt, root.temperature);
+            } else {
+                scriptRequestContent += `curl --no-buffer "${endpoint}"`
+                    + ` ${headerString}`
+                    + (authHeader ? ` ${authHeader}` : "")
+                    + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
+                    + "\n"
+            }
             
             /* Send the request */
             const scriptContent = requester.currentStrategy.finalizeScriptContent(scriptShebang + scriptFileSetupContent + scriptRequestContent)
@@ -861,14 +890,19 @@ Singleton {
         blockLoading: true // Prevent race conditions
     }
 
+    FileView {
+        id: chatWriter
+    }
+
     /**
      * Saves chat to a JSON list of message objects.
      * @param chatName name of the chat
      */
     function saveChat(chatName) {
-        chatSaveFile.chatName = chatName.trim()
+        const filePath = `${Directories.aiChats}/${chatName.trim()}.json`
+        chatWriter.path = filePath
         const saveContent = JSON.stringify(root.chatToJson())
-        chatSaveFile.setText(saveContent)
+        chatWriter.setText(saveContent)
         getSavedChats.running = true;
     }
 

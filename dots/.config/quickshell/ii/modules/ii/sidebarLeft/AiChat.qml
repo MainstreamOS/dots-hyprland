@@ -120,6 +120,13 @@ Item {
             }
         },
         {
+            name: "continue",
+            description: Translation.tr("Continue the last conversation"),
+            execute: () => {
+                Ai.loadChat("lastSession");
+            }
+        },
+        {
             name: "clear",
             description: Translation.tr("Clear chat history"),
             execute: () => {
@@ -400,6 +407,50 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 title: Translation.tr("Large language models")
                 description: Translation.tr("Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar")
                 shape: MaterialShape.Shape.PixelCircle
+            }
+
+            // Saved conversations in empty state
+            Item {
+                z: 2
+                anchors.fill: parent
+                visible: Ai.messageIDs.length === 0 && Ai.savedChats.length > 0
+                opacity: visible ? 1 : 0
+                Behavior on opacity {
+                    animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
+                }
+
+                ColumnLayout {
+                    anchors {
+                        horizontalCenter: parent.horizontalCenter
+                        bottom: parent.bottom
+                        bottomMargin: 10
+                    }
+                    width: Math.min(parent.width - 20, 400)
+                    spacing: 6
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: Translation.tr("Continue a conversation")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.m3colors.m3outline
+                    }
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 5
+
+                        Repeater {
+                            model: Ai.savedChats.slice(0, 8)
+                            delegate: ApiCommandButton {
+                                property string chatName: FileUtils.trimFileExt(FileUtils.fileNameForPath(modelData)).trim()
+                                buttonText: chatName === "lastSession" ? Translation.tr("Last session") : chatName
+                                downAction: () => {
+                                    Ai.loadChat(chatName);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             ScrollToBottomButton {
