@@ -29,6 +29,22 @@ function setup_sddm_bg_polkit(){
   x sudo cp "${REPO_ROOT}/sdata/polkit/50-sddm-bg.rules" /usr/share/polkit-1/rules.d/
 }
 
+function setup_power_key_polkit(){
+  # Install helper script and polkit policy/rule so the settings panel can change HandlePowerKey without a password
+  x sudo cp "${REPO_ROOT}/sdata/polkit/power-key-helper.sh" /usr/local/bin/power-key-helper
+  x sudo chmod 755 /usr/local/bin/power-key-helper
+  x sudo cp "${REPO_ROOT}/sdata/polkit/org.illogicalimpulse.power-key.policy" /usr/share/polkit-1/actions/
+  x sudo cp "${REPO_ROOT}/sdata/polkit/50-power-key.rules" /usr/share/polkit-1/rules.d/
+  # Create default logind drop-in if it doesn't exist yet
+  if [[ ! -f "/etc/systemd/logind.conf.d/10-power-key.conf" ]]; then
+    x sudo mkdir -p /etc/systemd/logind.conf.d
+    x sudo tee /etc/systemd/logind.conf.d/10-power-key.conf > /dev/null << 'EOF'
+[Login]
+HandlePowerKey=suspend
+EOF
+  fi
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -286,6 +302,9 @@ if [[ ! -z $(systemctl --version) ]]; then
     v sudo sed -i 's/^#\?AutoEnable\s*=.*/AutoEnable=true/' /etc/bluetooth/main.conf
     grep -q '^AutoEnable' /etc/bluetooth/main.conf || v sudo sed -i '/^\[Policy\]/a AutoEnable=true' /etc/bluetooth/main.conf
   fi
+  # Install power button helper and polkit policy
+  showfun setup_power_key_polkit
+  v setup_power_key_polkit
   # Fix fingerprint bug when sleeping by killing fprintd before sleep
   showfun setup_kill_fprintd_service
   v setup_kill_fprintd_service

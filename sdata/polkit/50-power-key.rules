@@ -1,0 +1,7 @@
+// Allow active local users to change power button action without a password
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.illogicalimpulse.power-key" &&
+        subject.isInGroup("users") && subject.active) {
+        return polkit.Result.YES;
+    }
+});

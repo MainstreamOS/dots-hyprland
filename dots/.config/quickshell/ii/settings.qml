@@ -60,6 +60,11 @@ ApplicationWindow {
             component: "modules/settings/InterfaceConfig.qml"
         },
         {
+            name: Translation.tr("Power"),
+            icon: "bolt",
+            component: "modules/settings/PowerConfig.qml"
+        },
+        {
             name: Translation.tr("Accounts"),
             icon: "manage_accounts",
             component: "modules/settings/AccountsConfig.qml"
@@ -236,9 +241,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Accounts, Services, Update, Advanced (Indices 7, 8, 9, 10)
+                    // Group 3: Power (Index 7)
                     Repeater {
-                        model: root.pages.slice(7, 11)
+                        model: root.pages.slice(7, 8)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -253,14 +258,31 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: About (Index 11)
+                    // Group 4: Accounts, Services, Update, Advanced (Indices 8, 9, 10, 11)
                     Repeater {
-                        model: root.pages.slice(11, 12)
+                        model: root.pages.slice(8, 12)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 11)
-                            onPressed: root.currentPage = (index + 11)
+                            toggled: root.currentPage === (index + 8)
+                            onPressed: root.currentPage = (index + 8)
+                            buttonIcon: modelData.icon
+                            buttonText: modelData.name
+                        }
+                    }
+
+                    // Separator 4
+                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
+                                color: Appearance.m3colors.m3outlineVariant }
+
+                    // Group 5: About (Index 12)
+                    Repeater {
+                        model: root.pages.slice(12, 13)
+                        SettingsNavButton {
+                            required property var index
+                            required property var modelData
+                            toggled: root.currentPage === (index + 12)
+                            onPressed: root.currentPage = (index + 12)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
