@@ -1,12 +1,14 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 
 ContentPage {
     forceWidth: true
-
+    /*
     ContentSection {
         icon: "notifications"
         title: Translation.tr("Notifications")
@@ -19,7 +21,60 @@ ContentPage {
             }
         }
     }
+    */
     
+    // ── Time & Date ───────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "nest_clock_farsight_analog"
+        title: Translation.tr("Time & Date")
+
+        ConfigRow {
+            ContentSubsection {
+                title: Translation.tr("Time Format")
+
+                ConfigSelectionArray {
+                    currentValue: Config.options.time.format
+                    onSelected: newValue => {
+                        if (newValue === "hh:mm") {
+                            Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME12\\b/TIME/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
+                        } else {
+                            Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME\\b/TIME12/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
+                        }
+                        Config.options.time.format = newValue;
+                    }
+                    options: [
+                        { displayName: Translation.tr("24h"),       value: "hh:mm"   },
+                        { displayName: Translation.tr("12h am/pm"), value: "h:mm ap" },
+                        { displayName: Translation.tr("12h AM/PM"), value: "h:mm AP" },
+                    ]
+                }
+            }
+
+            ContentSubsection {
+                title: Translation.tr("Date Format")
+
+                ConfigSelectionArray {
+                    currentValue: Config.options.time.dateFormat
+                    onSelected: newValue => {
+                        Config.options.time.dateFormat = newValue;
+                        // Sync related date formats to match the selected order
+                        if (newValue === "ddd, dd/MM") {
+                            Config.options.time.shortDateFormat = "dd/MM";
+                            Config.options.time.dateWithYearFormat = "dd/MM/yyyy";
+                        } else {
+                            Config.options.time.shortDateFormat = "MM/dd";
+                            Config.options.time.dateWithYearFormat = "MM/dd/yyyy";
+                        }
+                    }
+                    options: [
+                        { displayName: Translation.tr("Date First dd/MM"),  value: "ddd, dd/MM" },
+                        { displayName: Translation.tr("Month First MM/dd"), value: "ddd, MM/dd" },
+                    ]
+                }
+            }
+        }
+    }
+
     ContentSection {
         icon: "spoke"
         title: Translation.tr("Positioning")
@@ -142,26 +197,101 @@ ContentPage {
     }
 
     ContentSection {
-        icon: "shelf_auto_hide"
-        title: Translation.tr("Tray")
+        icon: "monitor_heart"
+        title: Translation.tr("Resource usage")
+        ConfigSwitch {
+            buttonIcon: "check"
+            text: Translation.tr("Enable")
+            checked: Config.options.bar.resources.enable
+            onCheckedChanged: {
+                Config.options.bar.resources.enable = checked;
+            }
+        }
+    }
+
+    ContentSection {
+        icon: "workspaces"
+        title: Translation.tr("Workspaces")
 
         ConfigSwitch {
-            buttonIcon: "keep"
-            text: Translation.tr('Make icons pinned by default')
-            checked: Config.options.tray.invertPinnedItems
+            buttonIcon: "counter_1"
+            text: Translation.tr('Always show numbers')
+            checked: Config.options.bar.workspaces.alwaysShowNumbers
             onCheckedChanged: {
-                Config.options.tray.invertPinnedItems = checked;
+                Config.options.bar.workspaces.alwaysShowNumbers = checked;
             }
         }
-        
+
+        ConfigSwitch {
+            buttonIcon: "award_star"
+            text: Translation.tr('Show app icons')
+            checked: Config.options.bar.workspaces.showAppIcons
+            onCheckedChanged: {
+                Config.options.bar.workspaces.showAppIcons = checked;
+            }
+        }
+
         ConfigSwitch {
             buttonIcon: "colors"
-            text: Translation.tr('Tint icons')
-            checked: Config.options.tray.monochromeIcons
+            text: Translation.tr('Tint app icons')
+            checked: Config.options.bar.workspaces.monochromeIcons
             onCheckedChanged: {
-                Config.options.tray.monochromeIcons = checked;
+                Config.options.bar.workspaces.monochromeIcons = checked;
             }
         }
+
+        ConfigSpinBox {
+            icon: "view_column"
+            text: Translation.tr("Workspaces shown")
+            value: Config.options.bar.workspaces.shown
+            from: 1
+            to: 30
+            stepSize: 1
+            onValueChanged: {
+                Config.options.bar.workspaces.shown = value;
+            }
+        }
+
+        ConfigSpinBox {
+            icon: "touch_long"
+            text: Translation.tr("Number show delay when pressing Super (ms)")
+            value: Config.options.bar.workspaces.showNumberDelay
+            from: 0
+            to: 1000
+            stepSize: 50
+            onValueChanged: {
+                Config.options.bar.workspaces.showNumberDelay = value;
+            }
+        }
+        /*
+        ContentSubsection {
+            title: Translation.tr("Number style")
+
+            ConfigSelectionArray {
+                currentValue: JSON.stringify(Config.options.bar.workspaces.numberMap)
+                onSelected: newValue => {
+                    Config.options.bar.workspaces.numberMap = JSON.parse(newValue)
+                }
+                options: [
+                    {
+                        displayName: Translation.tr("Normal"),
+                        icon: "timer_10",
+                        value: '[]'
+                    },
+                    {
+                        displayName: Translation.tr("Han chars"),
+                        icon: "square_dot",
+                        value: '["一","二","三","四","五","六","七","八","九","十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十"]'
+                    },
+                    {
+                        displayName: Translation.tr("Roman"),
+                        icon: "account_balance",
+                        value: '["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]'
+                    }
+                ]
+            }
+        }
+        */
     }
 
     ContentSection {
@@ -249,92 +379,88 @@ ContentPage {
                 Config.options.bar.weather.enable = checked;
             }
         }
+        ConfigRow {
+            ConfigSwitch {
+                buttonIcon: "assistant_navigation"
+                text: Translation.tr("Enable GPS based location")
+                checked: Config.options.bar.weather.enableGPS
+                onCheckedChanged: {
+                    Config.options.bar.weather.enableGPS = checked;
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "thermometer"
+                text: Translation.tr("Fahrenheit unit")
+                checked: Config.options.bar.weather.useUSCS
+                onCheckedChanged: {
+                    Config.options.bar.weather.useUSCS = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("It may take a few seconds to update")
+                }
+            }
+        }
+        
+        MaterialTextArea {
+            Layout.fillWidth: true
+            placeholderText: Translation.tr("City name")
+            text: Config.options.bar.weather.city
+            wrapMode: TextEdit.Wrap
+            onTextChanged: {
+                Config.options.bar.weather.city = text;
+            }
+        }
+        ConfigSpinBox {
+            icon: "av_timer"
+            text: Translation.tr("Polling interval (m)")
+            value: Config.options.bar.weather.fetchInterval
+            from: 5
+            to: 50
+            stepSize: 5
+            onValueChanged: {
+                Config.options.bar.weather.fetchInterval = value;
+            }
+        }
     }
 
     ContentSection {
-        icon: "workspaces"
-        title: Translation.tr("Workspaces")
+        icon: "shelf_auto_hide"
+        title: Translation.tr("Tray")
 
         ConfigSwitch {
-            buttonIcon: "counter_1"
-            text: Translation.tr('Always show numbers')
-            checked: Config.options.bar.workspaces.alwaysShowNumbers
+            buttonIcon: "keep"
+            text: Translation.tr('Make icons pinned by default')
+            checked: Config.options.tray.invertPinnedItems
             onCheckedChanged: {
-                Config.options.bar.workspaces.alwaysShowNumbers = checked;
+                Config.options.tray.invertPinnedItems = checked;
             }
         }
-
-        ConfigSwitch {
-            buttonIcon: "award_star"
-            text: Translation.tr('Show app icons')
-            checked: Config.options.bar.workspaces.showAppIcons
-            onCheckedChanged: {
-                Config.options.bar.workspaces.showAppIcons = checked;
-            }
-        }
-
+        
         ConfigSwitch {
             buttonIcon: "colors"
-            text: Translation.tr('Tint app icons')
-            checked: Config.options.bar.workspaces.monochromeIcons
+            text: Translation.tr('Tint icons')
+            checked: Config.options.tray.monochromeIcons
             onCheckedChanged: {
-                Config.options.bar.workspaces.monochromeIcons = checked;
-            }
-        }
-
-        ConfigSpinBox {
-            icon: "view_column"
-            text: Translation.tr("Workspaces shown")
-            value: Config.options.bar.workspaces.shown
-            from: 1
-            to: 30
-            stepSize: 1
-            onValueChanged: {
-                Config.options.bar.workspaces.shown = value;
-            }
-        }
-
-        ConfigSpinBox {
-            icon: "touch_long"
-            text: Translation.tr("Number show delay when pressing Super (ms)")
-            value: Config.options.bar.workspaces.showNumberDelay
-            from: 0
-            to: 1000
-            stepSize: 50
-            onValueChanged: {
-                Config.options.bar.workspaces.showNumberDelay = value;
-            }
-        }
-
-        ContentSubsection {
-            title: Translation.tr("Number style")
-
-            ConfigSelectionArray {
-                currentValue: JSON.stringify(Config.options.bar.workspaces.numberMap)
-                onSelected: newValue => {
-                    Config.options.bar.workspaces.numberMap = JSON.parse(newValue)
-                }
-                options: [
-                    {
-                        displayName: Translation.tr("Normal"),
-                        icon: "timer_10",
-                        value: '[]'
-                    },
-                    {
-                        displayName: Translation.tr("Han chars"),
-                        icon: "square_dot",
-                        value: '["一","二","三","四","五","六","七","八","九","十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十"]'
-                    },
-                    {
-                        displayName: Translation.tr("Roman"),
-                        icon: "account_balance",
-                        value: '["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]'
-                    }
-                ]
+                Config.options.tray.monochromeIcons = checked;
             }
         }
     }
 
+    ContentSection {
+        icon: "volume_up"
+        title: Translation.tr("Volume Control")
+
+        ConfigSwitch {
+            buttonIcon: "volume_up"
+            text: Translation.tr('Show volume icon in bar')
+            checked: Config.options.bar.volumeControl.enable
+            onCheckedChanged: {
+                Config.options.bar.volumeControl.enable = checked;
+            }
+        }
+    }
+
+    /*
     ContentSection {
         icon: "tooltip"
         title: Translation.tr("Tooltips")
@@ -347,4 +473,5 @@ ContentPage {
             }
         }
     }
+    */
 }

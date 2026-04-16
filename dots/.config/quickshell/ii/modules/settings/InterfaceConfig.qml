@@ -1,12 +1,188 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions as CF
 import qs.modules.common.widgets
 
 ContentPage {
+    id: root
     forceWidth: true
 
+    // ── Decorations state ──────────────────────────────────────────────────────
+    readonly property string generalConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/general.conf`
+    readonly property string customGeneralConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/general.conf`
+    property bool animationsEnabled: true
+    property bool blurEnabled: true
+    property bool shadowsEnabled: true
+    property bool bordersEnabled: true
+    property bool roundCornersEnabled: true
+    property bool titleBarsEnabled: false
+    property int previousCornerStyle: Config.options.bar.cornerStyle
+    property bool _decoReady: false
+
+    // ── Lock timeout ─────────────────────────────────────────────────────────
+    property bool lockEnabled: true
+    property int lockSecs: 300
+    property bool _lockReaderFinished: false
+
+    readonly property string hyprIdleConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hypridle.conf`
+
+    Component.onCompleted: {
+        lockTimeoutReader.running = true
+        decoReader.running = true
+        titleBarReader.running = true
+    }
+
+    Process {
+        id: titleBarReader
+        command: ["cat", root.customGeneralConf]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => titleBarReader.buf += data + "\n" }
+        onExited: {
+            // Enabled when the plugin = .../hyprbars.so line exists and is NOT commented out
+            root.titleBarsEnabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(titleBarReader.buf);
+        }
+    }
+
+    Process {
+        id: decoReader
+        command: ["cat", root.generalConf]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => decoReader.buf += data + "\n" }
+        onExited: {
+            let text = decoReader.buf;
+            let animMatch = text.match(/animations\s*\{[\s\S]*?enabled\s*=\s*(\w+)/);
+            if (animMatch) root.animationsEnabled = animMatch[1] === "true" || animMatch[1] === "1";
+            let blurMatch = text.match(/blur\s*\{[\s\S]*?enabled\s*=\s*(\w+)/);
+            if (blurMatch) root.blurEnabled = blurMatch[1] === "true" || blurMatch[1] === "1";
+            let shadowMatch = text.match(/shadow\s*\{[\s\S]*?enabled\s*=\s*(\w+)/);
+            if (shadowMatch) root.shadowsEnabled = shadowMatch[1] === "true" || shadowMatch[1] === "1";
+            let borderMatch = text.match(/^(\s*)(#\s*)?border_size\s*=/m);
+            root.bordersEnabled = borderMatch ? !borderMatch[2] : false;
+            let roundMatch = text.match(/^\s*rounding\s*=\s*(\d+)/m);
+            if (roundMatch) root.roundCornersEnabled = parseInt(roundMatch[1]) > 0;
+            root._decoReady = true;
+        }
+    }
+
+    function decoSetBlockEnabled(blockName, enabled) {
+        let val = enabled ? "true" : "false";
+        let py =
+            "import sys, re\n" +
+            "block, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
+            "text = open(conf).read()\n" +
+            "pattern = r'(' + re.escape(block) + r'\\s*' + chr(123) + r'[^' + chr(125) + r']*?)(enabled\\s*=\\s*)\\w+'\n" +
+            "text = re.sub(pattern, r'\\1\\2' + val, text, count=1)\n" +
+            "open(conf, 'w').write(text)\n";
+        Quickshell.execDetached(["python3", "-c", py, blockName, val, root.generalConf]);
+    }
+
+    function decoSetBordersEnabled(enabled) {
+        let fields = ["border_size", "col.active_border", "col.inactive_border", "resize_on_border"];
+        let py =
+            "import sys, re\n" +
+            "enable = sys.argv[1] == '1'\n" +
+            "conf = sys.argv[2]\n" +
+            "fields = sys.argv[3].split(',')\n" +
+            "lines = open(conf).readlines()\n" +
+            "result = []\n" +
+            "for line in lines:\n" +
+            "    stripped = line.lstrip()\n" +
+            "    for f in fields:\n" +
+            "        if enable:\n" +
+            "            if stripped.startswith('# ' + f + ' ') or stripped.startswith('#' + f + ' ') or stripped.startswith('# ' + f + '=') or stripped.startswith('#' + f + '='):\n" +
+            "                indent = line[:len(line) - len(line.lstrip())]\n" +
+            "                line = indent + stripped.lstrip('# ')\n" +
+            "                break\n" +
+            "        else:\n" +
+            "            if stripped.startswith(f + ' ') or stripped.startswith(f + '='):\n" +
+            "                indent = line[:len(line) - len(line.lstrip())]\n" +
+            "                line = indent + '# ' + stripped\n" +
+            "                break\n" +
+            "    if stripped.startswith('gaps_in'):\n" +
+            "        indent = line[:len(line) - len(line.lstrip())]\n" +
+            "        line = indent + 'gaps_in = ' + ('4' if enable else '0') + '\\n'\n" +
+            "    elif stripped.startswith('gaps_out'):\n" +
+            "        indent = line[:len(line) - len(line.lstrip())]\n" +
+            "        line = indent + 'gaps_out = ' + ('5' if enable else '0') + '\\n'\n" +
+            "    result.append(line)\n" +
+            "open(conf, 'w').writelines(result)\n";
+        Quickshell.execDetached(["python3", "-c", py, enabled ? "1" : "0", root.generalConf, fields.join(",")]);
+        if (enabled) {
+            Quickshell.execDetached(["hyprctl", "keyword", "general:border_size", "4"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:col.active_border", "rgba(0DB7D455)"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:col.inactive_border", "rgba(31313600)"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:resize_on_border", "true"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_in", "4"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_out", "5"]);
+        } else {
+            Quickshell.execDetached(["hyprctl", "keyword", "general:border_size", "0"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:resize_on_border", "false"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_in", "0"]);
+            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_out", "0"]);
+        }
+    }
+
+    function decoSetRoundCornersEnabled(enabled) {
+        let val = enabled ? "10" : "0";
+        let py =
+            "import sys, re\n" +
+            "val, conf = sys.argv[1], sys.argv[2]\n" +
+            "text = open(conf).read()\n" +
+            "text = re.sub(r'(rounding\\s*=\\s*)\\d+', r'\\g<1>' + val, text, count=1)\n" +
+            "open(conf, 'w').write(text)\n";
+        Quickshell.execDetached(["python3", "-c", py, val, root.generalConf]);
+        Quickshell.execDetached(["hyprctl", "keyword", "decoration:rounding", val]);
+        if (!enabled) {
+            root.previousCornerStyle = Config.options.bar.cornerStyle;
+            Config.options.bar.cornerStyle = 2;
+        } else {
+            Config.options.bar.cornerStyle = root.previousCornerStyle;
+        }
+    }
+
+    Process {
+        id: lockTimeoutReader
+        command: ["awk",
+            "/timeout[[:space:]]*=/{for(i=1;i<=NF;i++)if($i~/^[0-9]+$/){t=$i;break}} /on-timeout.*lock-session/{print t; exit}",
+            hyprIdleConf
+        ]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => lockTimeoutReader.buf += data }
+        onExited: (code) => {
+            const v = parseInt(lockTimeoutReader.buf.trim())
+            if (!isNaN(v)) {
+                if (v === 0 || v >= 599940) {
+                    lockEnabled = false
+                } else {
+                    lockEnabled = true
+                    lockSecs = v
+                }
+            }
+            _lockReaderFinished = true
+        }
+    }
+
+    function applyLockTimeout(enabled, secs) {
+        const timeout = enabled ? secs : 599940
+        const awkProg = [
+            "BEGIN{il=0; m=0}",
+            "/^listener/ && /\\{/{il=1; m=0; block=$0; next}",
+            "il{block=block\"\\n\"$0; if($0 ~ /on-timeout.*lock-session/){m=1}; if($0 ~ /\\}/){if(m){sub(/timeout[ \\t]*=[ \\t]*[0-9]+/,\"timeout = " + timeout + "\",block)}; print block; il=0; next}}",
+            "il==0{print}",
+        ].join("; ")
+        Quickshell.execDetached(["bash", "-c",
+            "awk '" + awkProg + "' '" + hyprIdleConf + "' > '" + hyprIdleConf + ".tmp' && mv '" + hyprIdleConf + ".tmp' '" + hyprIdleConf + "' && pkill -x hypridle; hypridle &"
+        ])
+    }
+
+    /*
     ContentSection {
         icon: "keyboard"
         title: Translation.tr("Cheat sheet")
@@ -99,6 +275,123 @@ ContentPage {
             }
         }
     }
+    */
+
+    // ── Decorations ──────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "auto_awesome"
+        title: Translation.tr("Decorations")
+
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "animation"
+                text: Translation.tr("Animations")
+                checked: root.animationsEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.animationsEnabled = checked;
+                    root.decoSetBlockEnabled("animations", checked);
+                    Quickshell.execDetached(["hyprctl", "keyword", "animations:enabled", checked ? "true" : "false"]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Window open/close and workspace transition effects")
+                }
+            }
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "blur_on"
+                text: Translation.tr("Blur")
+                checked: root.blurEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.blurEnabled = checked;
+                    root.decoSetBlockEnabled("blur", checked);
+                    Quickshell.execDetached(["hyprctl", "keyword", "decoration:blur:enabled", checked ? "true" : "false"]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Background blur behind transparent windows and layers")
+                }
+            }
+        }
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "ev_shadow"
+                text: Translation.tr("Shadows")
+                checked: root.shadowsEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.shadowsEnabled = checked;
+                    root.decoSetBlockEnabled("shadow", checked);
+                    Quickshell.execDetached(["hyprctl", "keyword", "decoration:shadow:enabled", checked ? "true" : "false"]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Drop shadows underneath windows")
+                }
+            }
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "border_style"
+                text: Translation.tr("Borders")
+                checked: root.bordersEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.bordersEnabled = checked;
+                    root.decoSetBordersEnabled(checked);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Colored borders around active and inactive windows")
+                }
+            }
+        }
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "rounded_corner"
+                text: Translation.tr("Rounded Corners")
+                checked: root.roundCornersEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.roundCornersEnabled = checked;
+                    root.decoSetRoundCornersEnabled(checked);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Rounded corners on windows and the bar")
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "title"
+                text: Translation.tr("Title Bars")
+                checked: root.titleBarsEnabled
+                onCheckedChanged: {
+                    if (!root._decoReady) return;
+                    root.titleBarsEnabled = checked;
+                    // Toggle by commenting/uncommenting the plugin = .../hyprbars.so line
+                    // in custom/general.conf. No hyprpm needed — Hyprland loads the .so
+                    // directly when the directive is present and uncommented.
+                    let py =
+                        "import re, sys\n" +
+                        "enable = sys.argv[1] == '1'\n" +
+                        "conf = sys.argv[2]\n" +
+                        "text = open(conf).read()\n" +
+                        "if enable:\n" +
+                        "    text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
+                        "else:\n" +
+                        "    text = re.sub(r'^([ \\t]*)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
+                        "open(conf, 'w').write(text)\n";
+                    Quickshell.execDetached(["python3", "-c", py, checked ? "1" : "0", root.customGeneralConf]);
+                    Quickshell.execDetached(["hyprctl", "reload"]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Show title bars on windows")
+                }
+            }
+        }
+    }
+
     ContentSection {
         icon: "call_to_action"
         title: Translation.tr("Dock")
@@ -141,115 +434,7 @@ ContentPage {
         }
     }
 
-    ContentSection {
-        icon: "lock"
-        title: Translation.tr("Lock screen")
-
-        ConfigSwitch {
-            buttonIcon: "water_drop"
-            text: Translation.tr('Use Hyprlock (instead of Quickshell)')
-            checked: Config.options.lock.useHyprlock
-            onCheckedChanged: {
-                Config.options.lock.useHyprlock = checked;
-            }
-            StyledToolTip {
-                text: Translation.tr("If you want to somehow use fingerprint unlock...")
-            }
-        }
-
-        ConfigSwitch {
-            buttonIcon: "account_circle"
-            text: Translation.tr('Launch on startup')
-            checked: Config.options.lock.launchOnStartup
-            onCheckedChanged: {
-                Config.options.lock.launchOnStartup = checked;
-            }
-        }
-
-        ContentSubsection {
-            title: Translation.tr("Security")
-
-            ConfigSwitch {
-                buttonIcon: "settings_power"
-                text: Translation.tr('Require password to power off/restart')
-                checked: Config.options.lock.security.requirePasswordToPower
-                onCheckedChanged: {
-                    Config.options.lock.security.requirePasswordToPower = checked;
-                }
-                StyledToolTip {
-                    text: Translation.tr("Remember that on most devices one can always hold the power button to force shutdown\nThis only makes it a tiny bit harder for accidents to happen")
-                }
-            }
-
-            ConfigSwitch {
-                buttonIcon: "key_vertical"
-                text: Translation.tr('Also unlock keyring')
-                checked: Config.options.lock.security.unlockKeyring
-                onCheckedChanged: {
-                    Config.options.lock.security.unlockKeyring = checked;
-                }
-                StyledToolTip {
-                    text: Translation.tr("This is usually safe and needed for your browser and AI sidebar anyway\nMostly useful for those who use lock on startup instead of a display manager that does it (GDM, SDDM, etc.)")
-                }
-            }
-        }
-
-        ContentSubsection {
-            title: Translation.tr("Style: general")
-
-            ConfigSwitch {
-                buttonIcon: "center_focus_weak"
-                text: Translation.tr('Center clock')
-                checked: Config.options.lock.centerClock
-                onCheckedChanged: {
-                    Config.options.lock.centerClock = checked;
-                }
-            }
-
-            ConfigSwitch {
-                buttonIcon: "info"
-                text: Translation.tr('Show "Locked" text')
-                checked: Config.options.lock.showLockedText
-                onCheckedChanged: {
-                    Config.options.lock.showLockedText = checked;
-                }
-            }
-
-            ConfigSwitch {
-                buttonIcon: "shapes"
-                text: Translation.tr('Use varying shapes for password characters')
-                checked: Config.options.lock.materialShapeChars
-                onCheckedChanged: {
-                    Config.options.lock.materialShapeChars = checked;
-                }
-            }
-        }
-        ContentSubsection {
-            title: Translation.tr("Style: Blurred")
-
-            ConfigSwitch {
-                buttonIcon: "blur_on"
-                text: Translation.tr('Enable blur')
-                checked: Config.options.lock.blur.enable
-                onCheckedChanged: {
-                    Config.options.lock.blur.enable = checked;
-                }
-            }
-
-            ConfigSpinBox {
-                icon: "loupe"
-                text: Translation.tr("Extra wallpaper zoom (%)")
-                value: Config.options.lock.blur.extraZoom * 100
-                from: 1
-                to: 150
-                stepSize: 2
-                onValueChanged: {
-                    Config.options.lock.blur.extraZoom = value / 100;
-                }
-            }
-        }
-    }
-
+    /*
     ContentSection {
         icon: "notifications"
         title: Translation.tr("Notifications")
@@ -436,11 +621,68 @@ ContentPage {
             }
         }
     }
-
+    */
+    // ── Left Sidebar ──────────────────────────────────────────────────────────
     ContentSection {
         icon: "side_navigation"
-        title: Translation.tr("Sidebars")
+        mirrorIcon: true
+        title: Translation.tr("Left Sidebar")
 
+        ConfigRow {
+            ColumnLayout {
+                ContentSubsectionLabel {
+                    text: Translation.tr("AI")
+                }
+                ConfigSelectionArray {
+                    currentValue: Config.options.policies.ai
+                    onSelected: newValue => {
+                        Config.options.policies.ai = newValue;
+                    }
+                    options: [
+                        { displayName: Translation.tr("No"),         icon: "close",              value: 0 },
+                        { displayName: Translation.tr("Yes"),        icon: "check",              value: 1 },
+                        { displayName: Translation.tr("Local only"), icon: "sync_saved_locally", value: 2 }
+                    ]
+                }
+            }
+            ColumnLayout {
+                ContentSubsectionLabel {
+                    text: Translation.tr("Wallpaper Browser")
+                }
+                ConfigSelectionArray {
+                    currentValue: Config.options.policies.wallpaperBrowser
+                    onSelected: newValue => {
+                        Config.options.policies.wallpaperBrowser = newValue;
+                    }
+                    options: [
+                        { displayName: Translation.tr("No"),  icon: "close", value: 0 },
+                        { displayName: Translation.tr("Yes"), icon: "check", value: 1 }
+                    ]
+                }
+            }
+            ColumnLayout {
+                ContentSubsectionLabel {
+                    text: Translation.tr("Translator")
+                }
+                ConfigSelectionArray {
+                    currentValue: Config.options.sidebar.translator.enable ? 1 : 0
+                    onSelected: newValue => {
+                        Config.options.sidebar.translator.enable = (newValue === 1);
+                    }
+                    options: [
+                        { displayName: Translation.tr("No"),  icon: "close", value: 0 },
+                        { displayName: Translation.tr("Yes"), icon: "check", value: 1 }
+                    ]
+                }
+            }
+        }
+    }
+
+    // ── Right Sidebar ─────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "side_navigation"
+        title: Translation.tr("Right Sidebar")
+        /*
         ConfigSwitch {
             buttonIcon: "memory"
             text: Translation.tr('Keep right sidebar loaded')
@@ -461,7 +703,7 @@ ContentPage {
                 Config.options.sidebar.translator.enable = checked;
             }
         }
-
+        */
         ContentSubsection {
             title: Translation.tr("Quick toggles")
             
@@ -541,7 +783,7 @@ ContentPage {
                 }
             }
         }
-
+        /*
         ContentSubsection {
             title: Translation.tr("Corner open")
             tooltip: Translation.tr("Allows you to open sidebars by clicking or hovering screen corners regardless of bar position")
@@ -664,8 +906,231 @@ ContentPage {
                 }
             }
         }
+        */
+
+        ContentSubsection {
+            title: Translation.tr("Timer")
+
+            ConfigSpinBox {
+                icon: "target"
+                text: Translation.tr("Focus (min)")
+                value: Config.options.time.pomodoro.focus / 60
+                from: 1
+                to: 120
+                stepSize: 5
+                onValueChanged: {
+                    Config.options.time.pomodoro.focus = value * 60;
+                }
+            }
+            ConfigSpinBox {
+                icon: "coffee"
+                text: Translation.tr("Break (min)")
+                value: Config.options.time.pomodoro.breakTime / 60
+                from: 1
+                to: 60
+                stepSize: 1
+                onValueChanged: {
+                    Config.options.time.pomodoro.breakTime = value * 60;
+                }
+            }
+            ConfigSpinBox {
+                icon: "weekend"
+                text: Translation.tr("Long break (min)")
+                value: Config.options.time.pomodoro.longBreak / 60
+                from: 1
+                to: 60
+                stepSize: 5
+                onValueChanged: {
+                    Config.options.time.pomodoro.longBreak = value * 60;
+                }
+            }
+            ConfigSpinBox {
+                icon: "repeat"
+                text: Translation.tr("Cycles before long break")
+                value: Config.options.time.pomodoro.cyclesBeforeLongBreak
+                from: 1
+                to: 10
+                stepSize: 1
+                onValueChanged: {
+                    Config.options.time.pomodoro.cyclesBeforeLongBreak = value;
+                }
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Alarms")
+
+            ConfigSwitch {
+                buttonIcon: "av_timer"
+                text: Translation.tr("Pomodoro")
+                checked: Config.options.sounds.pomodoro
+                onCheckedChanged: {
+                    Config.options.sounds.pomodoro = checked;
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "timer"
+                text: Translation.tr("Timer")
+                checked: Config.options.sounds.timer
+                onCheckedChanged: {
+                    Config.options.sounds.timer = checked;
+                }
+            }
+        }
     }
 
+    // ── Lock screen ───────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "lock"
+        title: Translation.tr("Lock screen")
+        /*
+        ConfigSwitch {
+            buttonIcon: "water_drop"
+            text: Translation.tr('Use Hyprlock (instead of Quickshell)')
+            checked: Config.options.lock.useHyprlock
+            onCheckedChanged: {
+                Config.options.lock.useHyprlock = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("If you want to somehow use fingerprint unlock...")
+            }
+        }
+        */
+        ConfigSwitch {
+            Layout.fillWidth: true
+            buttonIcon: "timer"
+            text: Translation.tr("Automatic Lock")
+            checked: lockEnabled
+            onCheckedChanged: {
+                lockEnabled = checked
+                if (_lockReaderFinished) applyLockTimeout(checked, lockSecs)
+            }
+        }
+        ConfigRow {
+            enabled: lockEnabled
+            StyledText {
+                text: Translation.tr("Delay")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: lockEnabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
+                Layout.fillWidth: true
+            }
+            StyledComboBox {
+                enabled: lockEnabled
+                textRole: "displayName"
+                model: [
+                    { displayName: Translation.tr("1 minute"),   seconds: 60   },
+                    { displayName: Translation.tr("2 minutes"),  seconds: 120  },
+                    { displayName: Translation.tr("5 minutes"),  seconds: 300  },
+                    { displayName: Translation.tr("10 minutes"), seconds: 600  },
+                    { displayName: Translation.tr("15 minutes"), seconds: 900  },
+                    { displayName: Translation.tr("30 minutes"), seconds: 1800 }
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.seconds === lockSecs)
+                    return idx !== -1 ? idx : 2
+                }
+                onActivated: index => {
+                    lockSecs = model[index].seconds
+                    applyLockTimeout(lockEnabled, model[index].seconds)
+                }
+            }
+        }
+
+        ConfigSwitch {
+            buttonIcon: "account_circle"
+            text: Translation.tr('Launch on startup')
+            checked: Config.options.lock.launchOnStartup
+            onCheckedChanged: {
+                Config.options.lock.launchOnStartup = checked;
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Security")
+
+            ConfigSwitch {
+                buttonIcon: "settings_power"
+                text: Translation.tr('Require password to power off/restart')
+                checked: Config.options.lock.security.requirePasswordToPower
+                onCheckedChanged: {
+                    Config.options.lock.security.requirePasswordToPower = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("Remember that on most devices one can always hold the power button to force shutdown\nThis only makes it a tiny bit harder for accidents to happen")
+                }
+            }
+
+            ConfigSwitch {
+                buttonIcon: "key_vertical"
+                text: Translation.tr('Also unlock keyring')
+                checked: Config.options.lock.security.unlockKeyring
+                onCheckedChanged: {
+                    Config.options.lock.security.unlockKeyring = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("This is usually safe and needed for your browser and AI sidebar anyway\nMostly useful for those who use lock on startup instead of a display manager that does it (GDM, SDDM, etc.)")
+                }
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Style: general")
+            /*
+            ConfigSwitch {
+                buttonIcon: "center_focus_weak"
+                text: Translation.tr('Center clock')
+                checked: Config.options.lock.centerClock
+                onCheckedChanged: {
+                    Config.options.lock.centerClock = checked;
+                }
+            }
+
+            ConfigSwitch {
+                buttonIcon: "info"
+                text: Translation.tr('Show "Locked" text')
+                checked: Config.options.lock.showLockedText
+                onCheckedChanged: {
+                    Config.options.lock.showLockedText = checked;
+                }
+            }
+            */
+            ConfigSwitch {
+                buttonIcon: "shapes"
+                text: Translation.tr('Use varying shapes for password characters')
+                checked: Config.options.lock.materialShapeChars
+                onCheckedChanged: {
+                    Config.options.lock.materialShapeChars = checked;
+                }
+            }
+        }
+        ContentSubsection {
+            title: Translation.tr("Style: Blurred")
+
+            ConfigSwitch {
+                buttonIcon: "blur_on"
+                text: Translation.tr('Enable blur')
+                checked: Config.options.lock.blur.enable
+                onCheckedChanged: {
+                    Config.options.lock.blur.enable = checked;
+                }
+            }
+            /*
+            ConfigSpinBox {
+                icon: "loupe"
+                text: Translation.tr("Extra wallpaper zoom (%)")
+                value: Config.options.lock.blur.extraZoom * 100
+                from: 1
+                to: 150
+                stepSize: 2
+                onValueChanged: {
+                    Config.options.lock.blur.extraZoom = value / 100;
+                }
+            }
+            */
+        }
+    }
+
+    /*
     ContentSection {
         icon: "voting_chip"
         title: Translation.tr("On-screen display")
@@ -793,7 +1258,7 @@ ContentPage {
             }
         }
     }
-
+    */
     ContentSection {
         icon: "text_format"
         title: Translation.tr("Fonts")

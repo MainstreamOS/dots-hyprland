@@ -39,25 +39,20 @@ ApplicationWindow {
             component: "modules/settings/BluetoothConfig.qml"
         },
         {
-            name: Translation.tr("General"),
-            icon: "browse",
-            component: "modules/settings/GeneralConfig.qml"
-        },
-        {
             name: Translation.tr("Bar"),
             icon: "toast",
             iconRotation: 180,
             component: "modules/settings/BarConfig.qml"
         },
         {
-            name: Translation.tr("Background"),
-            icon: "texture",
-            component: "modules/settings/BackgroundConfig.qml"
-        },
-        {
             name: Translation.tr("Interface"),
             icon: "bottom_app_bar",
             component: "modules/settings/InterfaceConfig.qml"
+        },
+        {
+            name: Translation.tr("Background"),
+            icon: "texture",
+            component: "modules/settings/BackgroundConfig.qml"
         },
         {
             name: Translation.tr("Display"),
@@ -98,11 +93,6 @@ ApplicationWindow {
             name: Translation.tr("Recovery"),
             icon: "healing",
             component: "modules/settings/RecoverConfig.qml"
-        },
-        {
-            name: Translation.tr("Advanced"),
-            icon: "construction",
-            component: "modules/settings/AdvancedConfig.qml"
         },
         {
             name: Translation.tr("About"),
@@ -227,9 +217,9 @@ ApplicationWindow {
                     width: navRailFlickable.width
                     spacing: 0
 
-                    // Group 1: Quick, Wi-Fi, Bluetooth, General (Indices 0, 1, 2, 3)
+                    // Group 1: Quick, Wi-Fi, Bluetooth (Indices 0, 1, 2)
                     Repeater {
-                        model: root.pages.slice(0, 4)
+                        model: root.pages.slice(0, 3)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -244,14 +234,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 2: Bar, Background, Interface (Indices 4, 5, 6)
+                    // Group 2: Bar, Interface, Background (Indices 3, 4, 5)
                     Repeater {
-                        model: root.pages.slice(4, 7)
+                        model: root.pages.slice(3, 6)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 4)
-                            onPressed: root.currentPage = (index + 4)
+                            toggled: root.currentPage === (index + 3)
+                            onPressed: root.currentPage = (index + 3)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -261,14 +251,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Display, Layouts, Mouse, Power (Indices 7, 8, 9, 10)
+                    // Group 3: Display, Layouts, Mouse, Power (Indices 6, 7, 8, 9)
                     Repeater {
-                        model: root.pages.slice(7, 11)
+                        model: root.pages.slice(6, 10)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 7)
-                            onPressed: root.currentPage = (index + 7)
+                            toggled: root.currentPage === (index + 6)
+                            onPressed: root.currentPage = (index + 6)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -278,14 +268,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: Accounts, Services, Update, Recovery, Advanced (Indices 11, 12, 13, 14, 15)
+                    // Group 4: Accounts, Services, Update, Recovery (Indices 10, 11, 12, 13)
                     Repeater {
-                        model: root.pages.slice(11, 16)
+                        model: root.pages.slice(10, 14)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 11)
-                            onPressed: root.currentPage = (index + 11)
+                            toggled: root.currentPage === (index + 10)
+                            onPressed: root.currentPage = (index + 10)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -295,14 +285,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 5: About (Index 16)
+                    // Group 5: About (Index 14)
                     Repeater {
-                        model: root.pages.slice(16, 17)
+                        model: root.pages.slice(14)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 16)
-                            onPressed: root.currentPage = (index + 16)
+                            toggled: root.currentPage === (index + 14)
+                            onPressed: root.currentPage = (index + 14)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
