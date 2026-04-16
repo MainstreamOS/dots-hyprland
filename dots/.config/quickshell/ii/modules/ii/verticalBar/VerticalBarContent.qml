@@ -88,9 +88,18 @@ Item { // Bar content region
         Bar.BarGroup {
             vertical: true
             padding: 8
-            Resources {
+            Loader {
+                active: Config.options.bar.resources.enable
+                visible: active
                 Layout.fillWidth: true
-                Layout.fillHeight: false
+                sourceComponent: Resources {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: false
+                }
+            }
+
+            HorizontalBarSeparator {
+                visible: Config.options.bar.resources.enable
             }
             
             HorizontalBarSeparator {}

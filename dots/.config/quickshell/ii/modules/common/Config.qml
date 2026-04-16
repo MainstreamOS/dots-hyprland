@@ -243,6 +243,7 @@ Singleton {
                 property bool verbose: true
                 property bool vertical: false
                 property JsonObject resources: JsonObject {
+                    property bool enable: false
                     property bool alwaysShowSwap: true
                     property bool alwaysShowCpu: false
                     property bool alwaysShowGPU: false
