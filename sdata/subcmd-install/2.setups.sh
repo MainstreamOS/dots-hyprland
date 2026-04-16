@@ -20,6 +20,15 @@ function setup_user_group(){
   fi
 }
 
+function setup_sddm_bg_polkit(){
+  # Install polkit policy and rule so wallpaper changes can update SDDM background without a password
+  local helper_src="${REPO_ROOT}/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh"
+  x sudo cp "$helper_src" /usr/local/bin/sddm-bg-helper
+  x sudo chmod 755 /usr/local/bin/sddm-bg-helper
+  x sudo cp "${REPO_ROOT}/sdata/polkit/org.illogicalimpulse.sddm-bg.policy" /usr/share/polkit-1/actions/
+  x sudo cp "${REPO_ROOT}/sdata/polkit/50-sddm-bg.rules" /usr/share/polkit-1/rules.d/
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -37,8 +46,148 @@ WantedBy=sleep.target
 EOF
   fi
 }
-#####################################################################################
-# These python packages are installed using uv into the venv (virtual environment). Once the folder of the venv gets deleted, they are all gone cleanly. So it's considered as setups, not dependencies.
+function detect_gpu_vendors(){
+  # Returns space-separated list of: nvidia amd intel vm
+  local vendors=()
+
+  # Check for VM/virtual GPU first
+  if [[ -d /sys/class/dmi/id ]]; then
+    local sys_vendor
+    sys_vendor=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo "")
+    case "$sys_vendor" in
+      *QEMU*|*VirtualBox*|*VMware*|*Microsoft*|*Parallels*|*Xen*)
+        vendors+=(vm)
+        ;;
+    esac
+  fi
+
+  # Check PCI devices for GPU vendors
+  if command -v lspci >/dev/null 2>&1; then
+    local gpu_lines
+    gpu_lines=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
+    if echo "$gpu_lines" | grep -qi 'nvidia'; then
+      vendors+=(nvidia)
+    fi
+    if echo "$gpu_lines" | grep -qi 'amd\|ati\|radeon'; then
+      vendors+=(amd)
+    fi
+    if echo "$gpu_lines" | grep -qi 'intel'; then
+      vendors+=(intel)
+    fi
+  else
+    # Fallback: check sysfs vendor IDs
+    for d in /sys/class/drm/card*/device; do
+      [[ -r "$d/vendor" ]] || continue
+      local vid
+      vid=$(<"$d/vendor")
+      case "$vid" in
+        0x10de) [[ ! " ${vendors[*]} " =~ " nvidia " ]] && vendors+=(nvidia);;
+        0x1002) [[ ! " ${vendors[*]} " =~ " amd " ]] && vendors+=(amd);;
+        0x8086) [[ ! " ${vendors[*]} " =~ " intel " ]] && vendors+=(intel);;
+      esac
+    done
+  fi
+
+  echo "${vendors[*]}"
+}
+
+function setup_gpu_drivers(){
+  local vendors
+  vendors=$(detect_gpu_vendors)
+
+  if [[ -z "$vendors" ]]; then
+    echo -e "${STY_YELLOW}[$0]: No GPU detected. Skipping driver installation.${STY_RST}"
+    return 0
+  fi
+
+  echo -e "${STY_CYAN}[$0]: Detected GPU vendor(s): ${vendors}${STY_RST}"
+
+  for vendor in $vendors; do
+    case "$vendor" in
+      nvidia)
+        echo -e "${STY_CYAN}[$0]: Installing NVIDIA drivers...${STY_RST}"
+        case "$OS_GROUP_ID" in
+          arch)
+            # nvidia-dkms works across kernels; nvidia-utils for OpenGL, nvidia-settings for GUI config.
+            # modprobe options + cmdline + mkinitcpio modules are handled by setup_gpu_autoconfig later.
+            x sudo pacman -S --needed --noconfirm nvidia-dkms nvidia-utils nvidia-settings egl-wayland
+            ;;
+          fedora)
+            # Use RPM Fusion for NVIDIA on Fedora
+            if ! rpm -q rpmfusion-nonfree-release >/dev/null 2>&1; then
+              echo -e "${STY_YELLOW}[$0]: RPM Fusion (nonfree) is needed for NVIDIA drivers.${STY_RST}"
+              x sudo dnf install -y "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+            fi
+            x sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-vaapi-driver
+            ;;
+          gentoo)
+            echo -e "${STY_YELLOW}[$0]: For NVIDIA on Gentoo, please ensure your kernel config and USE flags are set.${STY_RST}"
+            echo -e "${STY_YELLOW}[$0]: See: https://wiki.gentoo.org/wiki/NVIDIA/nvidia-drivers${STY_RST}"
+            x sudo emerge --noreplace x11-drivers/nvidia-drivers
+            ;;
+          *)
+            echo -e "${STY_YELLOW}[$0]: NVIDIA detected but no automatic driver install for OS_GROUP_ID=${OS_GROUP_ID}.${STY_RST}"
+            echo -e "${STY_YELLOW}[$0]: Please install NVIDIA drivers manually.${STY_RST}"
+            ;;
+        esac
+        ;;
+      amd)
+        echo -e "${STY_CYAN}[$0]: Installing AMD GPU drivers...${STY_RST}"
+        case "$OS_GROUP_ID" in
+          arch)
+            x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-mesa-driver
+            ;;
+          fedora)
+            x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers mesa-va-drivers
+            ;;
+          gentoo)
+            echo -e "${STY_YELLOW}[$0]: For AMD on Gentoo, ensure VIDEO_CARDS=\"amdgpu radeonsi\" in make.conf.${STY_RST}"
+            x sudo emerge --noreplace media-libs/mesa
+            ;;
+          *)
+            echo -e "${STY_YELLOW}[$0]: AMD GPU detected but no automatic driver install for OS_GROUP_ID=${OS_GROUP_ID}.${STY_RST}"
+            ;;
+        esac
+        ;;
+      intel)
+        echo -e "${STY_CYAN}[$0]: Installing Intel GPU drivers...${STY_RST}"
+        case "$OS_GROUP_ID" in
+          arch)
+            x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver
+            ;;
+          fedora)
+            x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers intel-media-driver
+            ;;
+          gentoo)
+            echo -e "${STY_YELLOW}[$0]: For Intel on Gentoo, ensure VIDEO_CARDS=\"intel\" in make.conf.${STY_RST}"
+            x sudo emerge --noreplace media-libs/mesa
+            ;;
+          *)
+            echo -e "${STY_YELLOW}[$0]: Intel GPU detected but no automatic driver install for OS_GROUP_ID=${OS_GROUP_ID}.${STY_RST}"
+            ;;
+        esac
+        ;;
+      vm)
+        echo -e "${STY_CYAN}[$0]: Virtual machine detected. Installing VM display drivers...${STY_RST}"
+        case "$OS_GROUP_ID" in
+          arch)
+            x sudo pacman -S --needed --noconfirm mesa xf86-video-vmware
+            ;;
+          fedora)
+            x sudo dnf install -y mesa-dri-drivers xorg-x11-drv-vmware
+            ;;
+          gentoo)
+            x sudo emerge --noreplace media-libs/mesa
+            ;;
+          *)
+            echo -e "${STY_YELLOW}[$0]: VM detected but no automatic driver install for OS_GROUP_ID=${OS_GROUP_ID}.${STY_RST}"
+            ;;
+        esac
+        ;;
+    esac
+  done
+}
+
 
 function setup_gamescope(){
   # Install python-evdev — required for the input proxy in toggle_gamescope.sh.
@@ -96,11 +245,20 @@ EOF"
   fi
 }
 
+
+if [[ "${SKIP_GPUDRIVERS}" != true ]]; then
+  showfun setup_gpu_drivers
+  v setup_gpu_drivers
+fi
+
 showfun install-python-packages
 v install-python-packages
 
 showfun setup_user_group
 v setup_user_group
+
+showfun setup_sddm_bg_polkit
+v setup_sddm_bg_polkit
 
 if [[ ! -z $(systemctl --version) ]]; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.
@@ -181,6 +339,587 @@ function setup_default_video_player(){
 }
 showfun setup_default_video_player
 v setup_default_video_player
+
+# Optional: Limine + Snapper automatic backup setup (Arch, btrfs, UEFI only)
+function setup_limine_snapper(){
+  local ROOT_FSTYPE
+  ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || echo "")
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: Limine + Snapper setup is only supported on Arch Linux. Skipping.${STY_RST}"
+    return 0
+  fi
+  if [[ ! -d /sys/firmware/efi ]]; then
+    echo -e "${STY_YELLOW}[$0]: System is not booted in UEFI mode. Skipping limine + snapper setup.${STY_RST}"
+    return 0
+  fi
+  if [[ "$ROOT_FSTYPE" != "btrfs" ]]; then
+    echo -e "${STY_YELLOW}[$0]: Root filesystem is not btrfs (found: ${ROOT_FSTYPE:-unknown}). Skipping limine + snapper setup.${STY_RST}"
+    return 0
+  fi
+  echo -e "${STY_CYAN}[$0]: Your system qualifies for limine + snapper automatic backup setup.${STY_RST}"
+  echo "  This will:"
+  echo "    - Replace your current bootloader with limine"
+  echo "    - Configure snapper for automatic btrfs snapshots (20% space, max 5)"
+  echo "    - Add snapshot entries to the limine boot menu"
+  echo ""
+  local p
+  if $ask; then
+    read -rp "Set up limine + snapper? [y/N] " p
+  else
+    p=y
+  fi
+  if [[ "$p" =~ ^[Yy]$ ]]; then
+    x sudo bash "${REPO_ROOT}/scripts/limine-snapper/setup-limine-snapper.sh" --yes
+    # Deploy the non-interactive restore wrapper used by the settings recovery page.
+    # Uses expect to handle /dev/tty prompts that pipe-based automation cannot reach.
+    if [[ -f "${REPO_ROOT}/scripts/limine-snapper/limine-restore-auto" ]]; then
+      x sudo install -m 755 "${REPO_ROOT}/scripts/limine-snapper/limine-restore-auto" /usr/local/bin/limine-restore-auto
+      echo -e "${STY_CYAN}[$0]: limine-restore-auto installed to /usr/local/bin/${STY_RST}"
+    else
+      echo -e "${STY_YELLOW}[$0]: scripts/limine-snapper/limine-restore-auto not found — skipping. Recovery page restore button will not work.${STY_RST}"
+    fi
+  else
+    echo -e "${STY_BLUE}[$0]: Skipping limine + snapper setup.${STY_RST}"
+  fi
+}
+function setup_pacman_nopasswd(){
+  # Grant NOPASSWD for pacman so yay/makepkg can install AUR packages
+  # (e.g. limine-snapper-sync) without prompting mid-install.
+  # Removed again by teardown_pacman_nopasswd after the relevant installs.
+  local _user; _user="$(whoami)"
+  x sudo bash -c "cat > /etc/sudoers.d/install-pacman-nopasswd << EOF
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/pacman
+EOF"
+  x sudo chmod 440 /etc/sudoers.d/install-pacman-nopasswd
+}
+
+function teardown_pacman_nopasswd(){
+  x sudo rm -f /etc/sudoers.d/install-pacman-nopasswd
+}
+
+# Upsert args into every kernel_cmdline/cmdline line of /boot/limine.conf.
+# Strips existing tokens whose key (the part before '=') matches one of the new
+# args, then appends the new args. Idempotent across reruns; returns non-zero
+# (without writing) if /boot/limine.conf is missing so callers can warn.
+function _limine_cmdline_upsert(){
+  local limine_conf="/boot/limine.conf"
+  [[ -f "$limine_conf" ]] || return 1
+  local -a new_args=("$@")
+  (( ${#new_args[@]} == 0 )) && return 0
+  local -a _keys=()
+  local _a
+  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
+  local _tmp; _tmp=$(mktemp)
+  local _line
+  while IFS= read -r _line || [[ -n "$_line" ]]; do
+    if [[ "$_line" =~ ^([[:space:]]*)(kernel_cmdline|cmdline):[[:space:]]*(.*)$ ]]; then
+      local _indent="${BASH_REMATCH[1]}" _key="${BASH_REMATCH[2]}" _val="${BASH_REMATCH[3]}"
+      local -a _toks _kept=()
+      read -r -a _toks <<< "$_val"
+      local _t _tk _k _skip
+      for _t in "${_toks[@]}"; do
+        [[ -z "$_t" ]] && continue
+        _tk="${_t%%=*}"
+        _skip=false
+        for _k in "${_keys[@]}"; do
+          if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
+        done
+        $_skip || _kept+=("$_t")
+      done
+      _kept+=("${new_args[@]}")
+      printf '%s%s: %s\n' "$_indent" "$_key" "${_kept[*]}"
+    else
+      printf '%s\n' "$_line"
+    fi
+  done < "$limine_conf" > "$_tmp"
+  sudo install -m 644 "$_tmp" "$limine_conf"
+  rm -f "$_tmp"
+}
+
+# Persist kernel cmdline args in /etc/limine-entry-tool.d/10-dots-hyprland.conf
+# so they survive regenerations by `limine-update` / `limine-mkinitcpio` (which
+# rebuild /boot/limine.conf from scratch and would otherwise wipe direct edits).
+# The drop-in uses `+=` to append to whatever base cmdline is configured via
+# /etc/kernel/cmdline or /proc/cmdline. Idempotent: reads existing +=... lines,
+# strips tokens whose keys match the new args, and writes back a single
+# consolidated += line. Returns 1 (no-op) if limine-mkinitcpio-hook isn't
+# installed — callers should fall back to /boot/limine.conf direct edits.
+function _limine_dropin_cmdline_upsert(){
+  local dropin_dir="/etc/limine-entry-tool.d"
+  local dropin_file="${dropin_dir}/10-dots-hyprland.conf"
+  [[ -d "$dropin_dir" ]] || return 1
+  local -a new_args=("$@")
+  (( ${#new_args[@]} == 0 )) && return 0
+  local -a existing=()
+  if [[ -f "$dropin_file" ]]; then
+    local _line _val
+    while IFS= read -r _line || [[ -n "$_line" ]]; do
+      if [[ "$_line" =~ ^[[:space:]]*KERNEL_CMDLINE\[default\]\+=(.*)$ ]]; then
+        _val="${BASH_REMATCH[1]}"
+        local -a _toks; read -r -a _toks <<< "$_val"
+        existing+=("${_toks[@]}")
+      fi
+    done < "$dropin_file"
+  fi
+  local -a _keys=() kept=()
+  local _a
+  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
+  local _t _tk _k _skip
+  for _t in "${existing[@]}"; do
+    [[ -z "$_t" ]] && continue
+    _tk="${_t%%=*}"
+    _skip=false
+    for _k in "${_keys[@]}"; do
+      if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
+    done
+    $_skip || kept+=("$_t")
+  done
+  kept+=("${new_args[@]}")
+  local _tmp; _tmp=$(mktemp)
+  {
+    printf '# Managed by dots-hyprland install scripts.\n'
+    printf '# Keeps kernel cmdline additions (plymouth, GPU, resume=, etc.) across\n'
+    printf '# limine-update regenerations of /boot/limine.conf.\n'
+    printf 'KERNEL_CMDLINE[default]+=%s\n' "${kept[*]}"
+  } > "$_tmp"
+  sudo install -m 644 "$_tmp" "$dropin_file"
+  rm -f "$_tmp"
+}
+
+# Upsert args into /etc/kernel/cmdline (single-line canonical kernel cmdline on
+# Arch). This is the source-of-truth consumed by mkinitcpio when building UKIs
+# (Unified Kernel Images) — UKIs embed the cmdline into the .efi at build time,
+# so neither /boot/limine.conf edits nor /etc/limine-entry-tool.d/ drop-ins
+# reach UKI boot entries. limine-entry-tool also reads this file first for
+# protocol: linux entries, so writing here covers both paths.
+# Seeds the file from the existing primary cmdline in /boot/limine.conf (or
+# /proc/cmdline, stripped of BOOT_IMAGE=/initrd=) when absent, then upserts by
+# key-dedup like the other helpers.
+function _kernel_cmdline_upsert(){
+  local cmdline_file="/etc/kernel/cmdline"
+  local -a new_args=("$@")
+  (( ${#new_args[@]} == 0 )) && return 0
+  local -a existing=()
+  if [[ -f "$cmdline_file" ]]; then
+    local _base; _base=$(tr '\n' ' ' < "$cmdline_file")
+    read -r -a existing <<< "$_base"
+  else
+    local _seed=""
+    if [[ -f /boot/limine.conf ]]; then
+      _seed=$(awk '/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/ {
+        sub(/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/, "");
+        print; exit
+      }' /boot/limine.conf)
+    fi
+    if [[ -z "$_seed" && -r /proc/cmdline ]]; then
+      _seed=$(cat /proc/cmdline)
+    fi
+    local -a _toks; read -r -a _toks <<< "$_seed"
+    local _t
+    for _t in "${_toks[@]}"; do
+      [[ "$_t" == BOOT_IMAGE=* ]] && continue
+      [[ "$_t" == initrd=* ]] && continue
+      existing+=("$_t")
+    done
+  fi
+  local -a _keys=() kept=()
+  local _a
+  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
+  local _t _tk _k _skip
+  for _t in "${existing[@]}"; do
+    [[ -z "$_t" ]] && continue
+    _tk="${_t%%=*}"
+    _skip=false
+    for _k in "${_keys[@]}"; do
+      if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
+    done
+    $_skip || kept+=("$_t")
+  done
+  kept+=("${new_args[@]}")
+  local _tmp; _tmp=$(mktemp)
+  printf '%s\n' "${kept[*]}" > "$_tmp"
+  sudo install -m 644 -D "$_tmp" "$cmdline_file"
+  rm -f "$_tmp"
+}
+
+# Apply kernel cmdline args across every place that needs them:
+#   - /etc/kernel/cmdline (UKI build input + limine-entry-tool primary source)
+#   - /etc/limine-entry-tool.d/ drop-in (appended via += for protocol: linux
+#     entries; survives limine-update regenerations)
+#   - /boot/limine.conf (direct edit for immediate effect pre-rebuild)
+# Returns 1 only if /boot/limine.conf is missing; the other writes are
+# best-effort.
+function _limine_apply_cmdline_args(){
+  local -a args=("$@")
+  (( ${#args[@]} == 0 )) && return 0
+  _kernel_cmdline_upsert "${args[@]}" || true
+  _limine_dropin_cmdline_upsert "${args[@]}" || true
+  _limine_cmdline_upsert "${args[@]}"
+}
+
+# Rebuild initramfs. On systems with limine-mkinitcpio-hook installed, prefers
+# `limine-mkinitcpio` which regenerates both the initramfs AND /boot/limine.conf
+# boot entries in one pass (and silences the "use limine-mkinitcpio instead"
+# warning that plain `mkinitcpio -P` would emit). Falls back to `mkinitcpio -P`
+# when the hook isn't installed.
+function _initramfs_rebuild(){
+  if command -v limine-mkinitcpio >/dev/null 2>&1; then
+    echo -e "${STY_CYAN}[$0]: Running limine-mkinitcpio (rebuilds initramfs + limine boot entries)...${STY_RST}"
+    sudo limine-mkinitcpio
+  else
+    echo -e "${STY_CYAN}[$0]: Running mkinitcpio -P...${STY_RST}"
+    sudo mkinitcpio -P
+  fi
+}
+
+function setup_plymouth(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: Plymouth setup is only supported on Arch Linux. Skipping.${STY_RST}"
+    return 0
+  fi
+  echo -e "${STY_CYAN}[$0]: Installing Plymouth boot splash with BGRT theme...${STY_RST}"
+  # sudo pacman is NOPASSWD within this install window; --noconfirm suppresses
+  # pacman's "Proceed with installation? [Y/n]" prompt
+  if ! sudo pacman -S --needed --noconfirm plymouth; then
+    echo -e "${STY_YELLOW}[$0]: Plymouth failed to install — boot splash will be skipped.${STY_RST}"
+    return 0
+  fi
+  # Non-interactive — writes to /etc/plymouth/plymouthd.conf
+  sudo plymouth-set-default-theme bgrt
+  # Add the plymouth hook after udev in HOOKS — idempotent, skipped if already present
+  if ! grep -q '\bplymouth\b' /etc/mkinitcpio.conf; then
+    sudo sed -i 's/\(HOOKS=([^)]*\budev\b\)/\1 plymouth/' /etc/mkinitcpio.conf
+    echo -e "${STY_CYAN}[$0]: Added plymouth hook to /etc/mkinitcpio.conf${STY_RST}"
+  else
+    echo -e "${STY_BLUE}[$0]: plymouth hook already present in /etc/mkinitcpio.conf${STY_RST}"
+  fi
+
+  # Patch limine cmdline to enable plymouth splash and silence boot. Writes to
+  # both /etc/limine-entry-tool.d/ (persists across limine-update regenerations)
+  # and /boot/limine.conf directly (immediate + fallback for non-hook systems).
+  # Runs after setup_limine_snapper so /boot/limine.conf exists.
+  echo -e "${STY_CYAN}[$0]: Adding plymouth + silencing args to limine kernel cmdline...${STY_RST}"
+  if ! _limine_apply_cmdline_args quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0; then
+    echo -e "${STY_YELLOW}[$0]: /boot/limine.conf not found — skipping kernel_cmdline patch. Re-run setup_plymouth after setting up limine if you add it later.${STY_RST}"
+  fi
+
+  # Rebuild initramfs so plymouth is active on next boot. On systems with
+  # limine-mkinitcpio-hook installed, this also regenerates /boot/limine.conf
+  # boot entries from our drop-in, keeping everything in sync. When
+  # setup_gpu_autoconfig also runs, it rebuilds again after adding MODULES —
+  # that's a small cost for keeping plymouth working standalone.
+  _initramfs_rebuild
+  echo -e "${STY_GREEN}[$0]: Plymouth BGRT theme configured.${STY_RST}"
+}
+
+# Idempotent helper: add kernel modules to /etc/mkinitcpio.conf MODULES=(...).
+# Does nothing if the module is already present.
+function _mkinitcpio_add_modules(){
+  local mod
+  for mod in "$@"; do
+    if ! grep -qE "\bMODULES=\([^)]*\b${mod}\b" /etc/mkinitcpio.conf; then
+      sudo sed -i "s/^MODULES=(/MODULES=(${mod} /" /etc/mkinitcpio.conf
+      echo -e "${STY_CYAN}[$0]: Added initramfs module: ${mod}${STY_RST}"
+    fi
+  done
+}
+
+# Idempotent helper: remove a hook from /etc/mkinitcpio.conf HOOKS=(...).
+# Only operates on the HOOKS line so we don't accidentally touch MODULES etc.
+function _mkinitcpio_remove_hook(){
+  local hook="$1"
+  if grep -qE "^HOOKS=\([^)]*\b${hook}\b" /etc/mkinitcpio.conf; then
+    sudo sed -i -E "/^HOOKS=\(/ s/\b${hook}\b *//" /etc/mkinitcpio.conf
+    echo -e "${STY_CYAN}[$0]: Removed initramfs hook: ${hook}${STY_RST}"
+  fi
+}
+
+# Append an 'env = KEY,VALUE' line into the user's hypr custom env.conf if the
+# key isn't already set. Prints a warning (and returns 1) if the file doesn't
+# exist, which is the normal case on first install before dotfiles are deployed.
+function _hypr_env_upsert(){
+  local _key="$1" _val="$2"
+  local _env_conf="$HOME/.config/hypr/custom/env.conf"
+  [[ -f "$_env_conf" ]] || return 1
+  if ! grep -q "^env = ${_key}" "$_env_conf"; then
+    printf 'env = %s,%s\n' "$_key" "$_val" >> "$_env_conf"
+    echo -e "${STY_CYAN}[$0]: Added hypr env: ${_key}=${_val}${STY_RST}"
+  fi
+}
+
+# Inject short sleeps before 'hyprctl dispatch dpms on' in hypridle.conf so
+# NVIDIA DRM/KMS has time to finish reinit after resume, avoiding the session
+# recover prompt. AMD/Intel don't need this (i915/amdgpu resume synchronously).
+function _hypr_fix_hypridle_for_nvidia(){
+  local _hypridle="$HOME/.config/hypr/hypridle.conf"
+  [[ -f "$_hypridle" ]] || return 1
+  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch dpms on' "$_hypridle" \
+      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch dpms on' "$_hypridle"; then
+    sed -i '/after_sleep_cmd/s|hyprctl dispatch dpms on|sleep 2 \&\& hyprctl dispatch dpms on|' "$_hypridle"
+    echo -e "${STY_CYAN}[$0]: Added 2s dpms-on delay to after_sleep_cmd (NVIDIA resume fix).${STY_RST}"
+  fi
+  if grep -qE 'on-resume\s*=.*hyprctl dispatch dpms on' "$_hypridle" \
+      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch dpms on' "$_hypridle"; then
+    sed -i '/on-resume/s|hyprctl dispatch dpms on|sleep 1 \&\& hyprctl dispatch dpms on|' "$_hypridle"
+    echo -e "${STY_CYAN}[$0]: Added 1s dpms-on delay to on-resume (NVIDIA resume fix).${STY_RST}"
+  fi
+}
+
+# Detect GPUs by PCI vendor ID and export state flags used by setup_gpu_autoconfig
+# and setup_gpu_hypr_tweaks. Safe to call multiple times.
+#   HAS_NVIDIA / HAS_AMD / HAS_INTEL — booleans
+#   IS_HYBRID                         — true if >1 discrete vendor present
+#   NVIDIA_PCI_DEC                    — decimal PCI device ID of first NVIDIA card (0 if none)
+function _gpu_detect(){
+  HAS_NVIDIA=false; HAS_AMD=false; HAS_INTEL=false; IS_HYBRID=false
+  NVIDIA_PCI_DEC=0
+  command -v lspci >/dev/null 2>&1 || { echo -e "${STY_YELLOW}[$0]: lspci not found — cannot detect GPU.${STY_RST}"; return 1; }
+  local gpu_lines; gpu_lines=$(lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' || true)
+  [[ -z "$gpu_lines" ]] && return 1
+  echo "$gpu_lines" | grep -q '\[10de:' && HAS_NVIDIA=true || true
+  echo "$gpu_lines" | grep -q '\[1002:' && HAS_AMD=true    || true
+  echo "$gpu_lines" | grep -q '\[8086:' && HAS_INTEL=true  || true
+  local _count=0
+  $HAS_NVIDIA && ((_count++)) || true
+  $HAS_AMD    && ((_count++)) || true
+  $HAS_INTEL  && ((_count++)) || true
+  [[ $_count -gt 1 ]] && IS_HYBRID=true || true
+  if $HAS_NVIDIA; then
+    local _id
+    _id=$(echo "$gpu_lines" | grep -oE '\[10de:[0-9a-fA-F]{4}\]' | head -1 | grep -oE '[0-9a-fA-F]{4}' | head -1)
+    [[ -n "$_id" ]] && NVIDIA_PCI_DEC=$((16#$_id)) || NVIDIA_PCI_DEC=0
+  fi
+  return 0
+}
+
+# Configure system-level bits for the detected GPU(s): kernel modules in the
+# initramfs, modprobe options, kernel cmdline args in /boot/limine.conf, and
+# NVIDIA power-management systemd services. Ported from the archiso post-install
+# script but adapted for a running (non-chroot) system — DKMS modules build
+# against the live kernel so the initramfs rebuild runs in the same pass. Skips hypr
+# dotfile edits here; those are handled by setup_gpu_hypr_tweaks after dotfiles
+# are deployed in 3.files.sh.
+function setup_gpu_autoconfig(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: GPU autoconfig is only implemented for Arch Linux. Skipping.${STY_RST}"
+    return 0
+  fi
+  if ! _gpu_detect; then
+    echo -e "${STY_YELLOW}[$0]: No GPU detected — skipping autoconfig.${STY_RST}"
+    return 0
+  fi
+  echo -e "${STY_CYAN}[$0]: GPU autoconfig — Intel=$HAS_INTEL AMD=$HAS_AMD NVIDIA=$HAS_NVIDIA Hybrid=$IS_HYBRID${STY_RST}"
+
+  local -a cmdline_args=()
+
+  # --- Intel (runs first so i915 appears before NVIDIA in MODULES) ---
+  if $HAS_INTEL; then
+    local _intel_line _is_arc=false
+    _intel_line=$(lspci 2>/dev/null | grep -iE "Intel.*(Graphics|UHD|HD|Iris|Arc|Xe)" | head -1 || true)
+    echo "$_intel_line" | grep -iqE "Arc|Xe|A[3-7][0-9]{2}" && _is_arc=true || true
+    if $_is_arc; then
+      echo -e "${STY_CYAN}[$0]: Intel Arc/Xe detected — using xe driver.${STY_RST}"
+      _mkinitcpio_add_modules xe
+    else
+      echo -e "${STY_CYAN}[$0]: Intel (i915) detected.${STY_RST}"
+      _mkinitcpio_add_modules i915
+      $IS_HYBRID || cmdline_args+=("i915.modeset=1")
+    fi
+  fi
+
+  # --- AMD ---
+  if $HAS_AMD; then
+    local _amd_line _is_old_amd=false _is_rdna4=false
+    _amd_line=$(lspci 2>/dev/null | grep -iE "VGA|3D|Display" | grep -iE "AMD|ATI|Radeon" | head -1 || true)
+    # Pre-GCN naming patterns → legacy radeon path
+    echo "$_amd_line" | grep -iqE "\bHD [2-6][0-9]{3}\b|\bRS[0-9]+\b|\bRV[0-9]+\b|\bR[67][0-9]{2}\b" && _is_old_amd=true || true
+    lspci 2>/dev/null | grep -iqE "Navi 4[0-9]|RX 9[0-9]{3}|gfx12" && _is_rdna4=true || true
+    if $_is_rdna4; then _is_old_amd=false; fi
+
+    if $_is_old_amd; then
+      echo -e "${STY_CYAN}[$0]: Pre-GCN AMD — enabling SI/CIK on amdgpu.${STY_RST}"
+      sudo mkdir -p /etc/modprobe.d
+      sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null << 'AMDEOF'
+options amdgpu si_support=1
+options amdgpu cik_support=1
+options radeon si_support=0
+options radeon cik_support=0
+AMDEOF
+      _mkinitcpio_add_modules amdgpu radeon
+      cmdline_args+=("amdgpu.si_support=1" "amdgpu.cik_support=1")
+    else
+      echo -e "${STY_CYAN}[$0]: GCN/RDNA AMD — configuring amdgpu.${STY_RST}"
+      _mkinitcpio_add_modules amdgpu
+      cmdline_args+=("amdgpu.modeset=1")
+      if $_is_rdna4; then
+        echo -e "${STY_CYAN}[$0]: RDNA 4 — adding sg_display=0 and mem_sleep_default=deep.${STY_RST}"
+        # s2idle is broken on Navi 48 through at least 6.17.x; force S3 deep sleep.
+        cmdline_args+=("amdgpu.sg_display=0" "mem_sleep_default=deep")
+      fi
+    fi
+  fi
+
+  # --- NVIDIA ---
+  if $HAS_NVIDIA; then
+    echo -e "${STY_CYAN}[$0]: NVIDIA PCI device ID: $(printf '0x%04x' "$NVIDIA_PCI_DEC") ($NVIDIA_PCI_DEC)${STY_RST}"
+    if (( NVIDIA_PCI_DEC >= 1728 )); then
+      # Fermi or newer — proprietary nvidia stack. Pre-Fermi stays on nouveau
+      # (the default kms hook handles it).
+      _mkinitcpio_remove_hook kms
+      _mkinitcpio_add_modules nvidia nvidia_modeset nvidia_uvm nvidia_drm
+      sudo mkdir -p /etc/modprobe.d
+      sudo tee /etc/modprobe.d/nvidia.conf > /dev/null << 'NVIDIAEOF'
+options nvidia-drm modeset=1 fbdev=1
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_TemporaryFilePath=/var/tmp
+NVIDIAEOF
+      cmdline_args+=("nvidia_drm.modeset=1")
+      local svc
+      for svc in nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service; do
+        sudo systemctl enable "$svc" >/dev/null 2>&1 \
+          && echo -e "${STY_CYAN}[$0]: Enabled $svc${STY_RST}" \
+          || echo -e "${STY_YELLOW}[$0]: $svc not found (driver version may not ship it).${STY_RST}"
+      done
+      sudo systemctl enable nvidia-powerd.service >/dev/null 2>&1 || true
+    else
+      echo -e "${STY_BLUE}[$0]: Pre-Fermi NVIDIA — keeping nouveau (kms hook kept).${STY_RST}"
+    fi
+  fi
+
+  # --- PRIME (only when we have multiple vendors) ---
+  if $IS_HYBRID; then
+    echo -e "${STY_CYAN}[$0]: Hybrid GPU detected — configuring PRIME.${STY_RST}"
+    if $HAS_NVIDIA && $HAS_INTEL; then
+      _mkinitcpio_add_modules i915
+      cmdline_args+=("i915.modeset=1")
+    elif $HAS_NVIDIA && $HAS_AMD; then
+      _mkinitcpio_add_modules amdgpu
+    fi
+  fi
+
+  # --- Generic S3 deep sleep preference when available ---
+  if [[ -f /sys/power/mem_sleep ]] && grep -q 'deep' /sys/power/mem_sleep; then
+    cmdline_args+=("mem_sleep_default=deep")
+  fi
+
+  # --- resume= for hibernation, if a swap partition exists ---
+  local swap_partuuid
+  swap_partuuid=$(blkid -t TYPE=swap -o export 2>/dev/null | awk -F= '/^PARTUUID=/{print $2; exit}' || true)
+  if [[ -n "$swap_partuuid" ]]; then
+    if [[ -f /boot/limine.conf ]] && grep -q '\bresume=' /boot/limine.conf; then
+      echo -e "${STY_BLUE}[$0]: resume= already present in limine.conf — skipping.${STY_RST}"
+    else
+      cmdline_args+=("resume=PARTUUID=$swap_partuuid")
+      echo -e "${STY_CYAN}[$0]: Will set hibernation resume= to swap PARTUUID=$swap_partuuid.${STY_RST}"
+    fi
+  else
+    echo -e "${STY_BLUE}[$0]: No swap partition found — skipping resume= injection.${STY_RST}"
+  fi
+
+  # --- Apply collected kernel cmdline args in a single pass ---
+  # Writes to both /etc/limine-entry-tool.d/ (persists across limine-update
+  # regenerations) and /boot/limine.conf directly (immediate + fallback).
+  if (( ${#cmdline_args[@]} > 0 )); then
+    echo -e "${STY_CYAN}[$0]: Applying limine kernel cmdline args: ${cmdline_args[*]}${STY_RST}"
+    if ! _limine_apply_cmdline_args "${cmdline_args[@]}"; then
+      echo -e "${STY_YELLOW}[$0]: /boot/limine.conf not found — skipping cmdline patch. Set up limine first, then re-run setup_gpu_autoconfig.${STY_RST}"
+    fi
+  fi
+
+  # --- Rebuild initramfs so new MODULES/HOOKS take effect on next boot ---
+  # Also regenerates /boot/limine.conf boot entries from our drop-in on systems
+  # with limine-mkinitcpio-hook installed.
+  _initramfs_rebuild
+
+  # --- Apply dotfile-level tweaks if the target files already exist
+  #     (reinstall case). For first install, 3.files.sh calls this again after
+  #     the dotfiles are deployed.
+  setup_gpu_hypr_tweaks
+
+  echo -e "${STY_GREEN}[$0]: GPU autoconfig complete.${STY_RST}"
+}
+
+# Apply dotfile-level GPU tweaks (NVIDIA Wayland env vars in hypr custom
+# env.conf, dpms delays in hypridle.conf, AQ_DRM_DEVICES for hybrid NVIDIA).
+# Separated from setup_gpu_autoconfig because these files only exist after
+# 3.files.sh deploys dotfiles. Safe to call more than once — each insertion is
+# idempotent and skips silently when the target file is missing.
+function setup_gpu_hypr_tweaks(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then return 0; fi
+  # Re-detect in case flags aren't set (when called from 3.files.sh directly).
+  if [[ -z "${HAS_NVIDIA:-}" ]]; then
+    _gpu_detect >/dev/null 2>&1 || return 0
+  fi
+  local _env_conf="$HOME/.config/hypr/custom/env.conf"
+  if [[ ! -f "$_env_conf" ]]; then
+    echo -e "${STY_YELLOW}[$0]: $_env_conf not found — deferring hypr GPU tweaks until after dotfiles are deployed.${STY_RST}"
+    return 0
+  fi
+
+  if $HAS_NVIDIA && (( NVIDIA_PCI_DEC >= 1728 )); then
+    # NVIDIA Wayland env vars. NVD_BACKEND=direct is a VA-API perf hint safe
+    # on Turing+; harmless on older Fermi/Kepler so we set it unconditionally
+    # within the Fermi+ branch.
+    _hypr_env_upsert "LIBVA_DRIVER_NAME"         "nvidia"         || true
+    _hypr_env_upsert "GBM_BACKEND"               "nvidia-drm"     || true
+    _hypr_env_upsert "__GLX_VENDOR_LIBRARY_NAME" "nvidia"         || true
+    _hypr_env_upsert "NVD_BACKEND"               "direct"         || true
+    _hypr_env_upsert "WLR_NO_HARDWARE_CURSORS"   "1"              || true
+    _hypr_fix_hypridle_for_nvidia || true
+  fi
+
+  # Hybrid with NVIDIA: pin the Aquamarine DRM device to the NVIDIA card via
+  # the stable by-path symlink. card0/card1 enumeration is non-deterministic
+  # across reboots, but /dev/dri/by-path/pci-<addr>-card follows the PCIe slot.
+  if $IS_HYBRID && $HAS_NVIDIA; then
+    local _nvidia_pciaddr
+    _nvidia_pciaddr=$(lspci -D 2>/dev/null | grep -iE "NVIDIA|GeForce|Quadro|Tesla" | head -1 | awk '{print $1}')
+    if [[ -n "$_nvidia_pciaddr" ]]; then
+      _hypr_env_upsert "AQ_DRM_DEVICES" "/dev/dri/by-path/pci-${_nvidia_pciaddr}-card" || true
+    fi
+  fi
+}
+
+showfun setup_pacman_nopasswd
+v setup_pacman_nopasswd
+
+showfun setup_limine_snapper
+v setup_limine_snapper
+
+# setup_plymouth runs after setup_limine_snapper so /boot/limine.conf exists
+# when we patch kernel_cmdline with splash/silencing args.
+showfun setup_plymouth
+v setup_plymouth
+
+# setup_gpu_autoconfig runs after setup_plymouth so its cmdline additions
+# accumulate on top of the plymouth/silencing args already in limine.conf, and
+# its initramfs rebuild picks up both the plymouth hook and any new GPU modules.
+showfun setup_gpu_autoconfig
+v setup_gpu_autoconfig
+
+# SDDM + pixie-sddm theme
+function setup_sddm_pixie(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: SDDM + pixie theme setup is only supported on Arch Linux. Skipping.${STY_RST}"
+    return 0
+  fi
+  local p
+  if $ask; then
+    read -rp "Install SDDM with pixie theme? [y/N] " p
+  else
+    p=y
+  fi
+  if [[ "$p" =~ ^[Yy]$ ]]; then
+    x sudo bash "${REPO_ROOT}/scripts/setup-sddm-pixie.sh"
+  else
+    echo -e "${STY_BLUE}[$0]: Skipping SDDM + pixie theme setup.${STY_RST}"
+  fi
+}
+showfun setup_sddm_pixie
+v setup_sddm_pixie
+
+showfun teardown_pacman_nopasswd
+v teardown_pacman_nopasswd
 
 showfun setup_gamescope
 v setup_gamescope

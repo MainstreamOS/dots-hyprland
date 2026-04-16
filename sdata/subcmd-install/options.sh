@@ -16,6 +16,7 @@ Options for install:
       --skip-allfiles       Skip the whole process copying configuration files
       --ignore-outdate      Ignore outdate checking for community supported \"dist-*\".
   -s, --skip-sysupdate      Skip system package upgrade e.g. \"sudo pacman -Syu\"
+      --skip-gpudrivers     Skip automatic GPU driver detection and installation
       --skip-plasmaintg     Skip installing plasma-browser-integration
       --skip-backup         Skip backup conflicting files
       --skip-quickshell     Skip installing the config for Quickshell
@@ -47,7 +48,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-plasmaintg,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-plasmaintg,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -79,6 +80,7 @@ while true ; do
     --skip-allfiles) SKIP_ALLFILES=true;shift;;
     -s|--skip-sysupdate) SKIP_SYSUPDATE=true;shift;;
     --ignore-outdate) IGNORE_OUTDATE_CHECK=true;shift;;
+    --skip-gpudrivers) SKIP_GPUDRIVERS=true;shift;;
     --skip-plasmaintg) SKIP_PLASMAINTG=true;shift;;
     --skip-backup) SKIP_BACKUP=true;shift;;
     --skip-hyprland) SKIP_HYPRLAND=true;shift;;

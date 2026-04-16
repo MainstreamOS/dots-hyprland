@@ -1,0 +1,29 @@
+#!/usr/bin/expect -f
+# limine-restore-auto
+# Non-interactive wrapper for limine-snapper-sync --restore.
+# Answers the three interactive prompts automatically:
+#   1. Confirm restore        → y
+#   2. Snapshot description   → (blank, Enter) — reads from /dev/tty, requires expect
+#   3. Reboot after restore   → n  (caller handles reboot)
+# SUDO_ASKPASS must be set in the calling environment before invoking this script.
+# Exit code is propagated from the spawned process so the QML Process.onExited
+# handler can distinguish success (0) from failure reliably.
+
+log_user 1
+
+spawn sudo -A /usr/lib/limine/limine-snapper-sync --restore
+
+expect "Your input: "
+send "y\r"
+
+expect "Enter snapshot description*"
+send "\r"
+
+expect "Do you want to reboot*"
+send "n\r"
+
+# Wait for the process to fully exit and capture its exit code.
+# Without this, expect exits 0 on eof regardless of the child's status.
+catch wait result
+set exit_code [lindex $result 3]
+exit $exit_code
