@@ -268,7 +268,16 @@ ContentPage {
             currentValue: Config.options.appearance.palette.type
             onSelected: newValue => {
                 Config.options.appearance.palette.type = newValue;
-                Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --noswitch`]);
+                paletteApplyTimer.restart();
+            }
+
+            Timer {
+                id: paletteApplyTimer
+                interval: 150
+                repeat: false
+                onTriggered: {
+                    Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --noswitch`]);
+                }
             }
             options: [
                 {
