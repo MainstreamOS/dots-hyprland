@@ -66,6 +66,11 @@ if [[ ! -z $(systemctl --version) ]]; then
     fi
   fi
   v sudo systemctl enable bluetooth --now
+  # Enable Bluetooth autoconnect for paired devices
+  if [ -f /etc/bluetooth/main.conf ]; then
+    v sudo sed -i 's/^#\?AutoEnable\s*=.*/AutoEnable=true/' /etc/bluetooth/main.conf
+    grep -q '^AutoEnable' /etc/bluetooth/main.conf || v sudo sed -i '/^\[Policy\]/a AutoEnable=true' /etc/bluetooth/main.conf
+  fi
   # Fix fingerprint bug when sleeping by killing fprintd before sleep
   showfun setup_kill_fprintd_service
   v setup_kill_fprintd_service
