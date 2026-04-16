@@ -90,6 +90,7 @@ quickshell, home_attrs, ... }:
 
       ### illogical-impulse-fonts-themes
       adw-gtk3 #adw-gtk-theme-git
+      papirus-icon-theme #papirus-icon-theme
       kdePackages.breeze kdePackages.breeze-icons #breeze
       #breeze-plus (TODO: Not available as nixpkg)
       darkly darkly-qt5 #darkly-bin

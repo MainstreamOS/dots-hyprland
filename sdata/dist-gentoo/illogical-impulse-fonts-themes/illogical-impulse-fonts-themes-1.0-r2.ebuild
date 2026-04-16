@@ -16,6 +16,7 @@ RDEPEND="
 	kde-plasma/breeze
 	kde-plasma/breeze-plus
 	x11-themes/darkly
+	x11-themes/papirus-icon-theme
 	sys-apps/eza
 	app-shells/fish
 	media-libs/fontconfig
