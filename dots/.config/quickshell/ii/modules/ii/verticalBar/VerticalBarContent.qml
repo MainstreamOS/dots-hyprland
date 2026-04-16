@@ -101,8 +101,6 @@ Item { // Bar content region
             HorizontalBarSeparator {
                 visible: Config.options.bar.resources.enable
             }
-            
-            HorizontalBarSeparator {}
 
             VerticalMedia {
                 Layout.fillWidth: true
