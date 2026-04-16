@@ -28,7 +28,7 @@ Scope {
         color: "transparent"
 
         mask: Region {
-            item: GlobalStates.overviewOpen ? columnLayout : null
+            item: GlobalStates.overviewOpen ? flickable : null
         }
 
         anchors {
@@ -44,11 +44,16 @@ Scope {
                 if (!GlobalStates.overviewOpen) {
                     searchWidget.disableExpandAnimation();
                     overviewScope.dontAutoCancelSearch = false;
+                    appDrawer.expanded = false;
+                    appDrawer.searchText = "";
+                    flickable.contentY = 0;
                     GlobalFocusGrab.dismiss();
                 } else {
                     if (!overviewScope.dontAutoCancelSearch) {
                         searchWidget.cancelSearch();
                     }
+                    appDrawer.expanded = false;
+                    appDrawer.searchText = "";
                     GlobalFocusGrab.addDismissable(panelWindow);
                 }
             }
@@ -60,50 +65,232 @@ Scope {
                 GlobalStates.overviewOpen = false;
             }
         }
-        implicitWidth: columnLayout.implicitWidth
-        implicitHeight: columnLayout.implicitHeight
+        implicitWidth: flickable.contentWidth
+        implicitHeight: flickable.contentHeight
 
         function setSearchingText(text) {
             searchWidget.setSearchingText(text);
             searchWidget.focusFirstItem();
         }
 
-        Column {
-            id: columnLayout
+        StyledFlickable {
+            id: flickable
+            anchors.fill: parent
+            contentWidth: columnLayout.implicitWidth
+            contentHeight: columnLayout.implicitHeight
+            clip: true
             visible: GlobalStates.overviewOpen
-            anchors {
-                horizontalCenter: parent.horizontalCenter
-                top: parent.top
-            }
-            spacing: -8
+            boundsBehavior: Flickable.DragAndOvershootBounds
 
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
-                    GlobalStates.overviewOpen = false;
-                } else if (event.key === Qt.Key_Left) {
-                    if (!panelWindow.searchingText)
-                        Hyprland.dispatch("workspace r-1");
-                } else if (event.key === Qt.Key_Right) {
-                    if (!panelWindow.searchingText)
-                        Hyprland.dispatch("workspace r+1");
+            property real lastContentY: 0
+            property bool isScrollingUp: false
+            property int scrollUpAttempts: 0
+
+            onMovementStarted: {
+                scrollUpAttempts = 0;
+            }
+
+            onMovementEnded: {
+                if (appDrawer.expanded && scrollUpAttempts > 0 && contentY < 50) {
+                    appDrawer.expanded = false;
+                    appDrawer.searchText = "";
+                    Qt.callLater(() => {
+                        flickable.contentY = 0;
+                    });
+                }
+                scrollUpAttempts = 0;
+                isScrollingUp = false;
+            }
+
+            WheelHandler {
+                id: wheelHandler
+                target: null
+                onWheel: (event) => {
+                    if (appDrawer.expanded && flickable.contentY < 50 && event.angleDelta.y > 0) {
+                        appDrawer.expanded = false;
+                        appDrawer.searchText = "";
+                        Qt.callLater(() => {
+                            flickable.contentY = 0;
+                        });
+                    }
                 }
             }
 
-            SearchWidget {
-                id: searchWidget
-                anchors.horizontalCenter: parent.horizontalCenter
-                Synchronizer on searchingText {
-                    property alias source: panelWindow.searchingText
+            onContentYChanged: {
+                if (contentY < lastContentY) {
+                    isScrollingUp = true;
+                    if (appDrawer.expanded && contentY < 50) {
+                        scrollUpAttempts++;
+                    }
+                } else {
+                    isScrollingUp = false;
+                }
+
+                if (appDrawer.expanded && contentY < -10) {
+                    appDrawer.expanded = false;
+                    appDrawer.searchText = "";
+                    Qt.callLater(() => {
+                        flickable.contentY = 0;
+                    });
+                    lastContentY = contentY;
+                    return;
+                }
+
+                lastContentY = contentY;
+
+                const searchWidgetHeight = appDrawer.expanded ? 0 : (searchWidget.implicitHeight || 0);
+                const overviewWidgetHeight = (appDrawer.expanded || !overviewLoader.item || !overviewLoader.item.visible) ?
+                    0 : (overviewLoader.item.implicitHeight || 0);
+                const spacing = 20;
+                const topContentHeight = searchWidgetHeight + overviewWidgetHeight + (searchWidgetHeight > 0 || overviewWidgetHeight > 0 ? spacing : 0);
+
+                const scrollThreshold = Math.max(100, topContentHeight * 0.4);
+                const distanceFromBottom = contentHeight - contentY - height;
+                const nearBottom = distanceFromBottom < 250;
+
+                const shouldExpand = (contentY > scrollThreshold) || nearBottom;
+
+                if (shouldExpand !== appDrawer.expanded) {
+                    appDrawer.expanded = shouldExpand;
+                    if (shouldExpand && topContentHeight > 0) {
+                        Qt.callLater(() => {
+                            const targetY = topContentHeight + spacing;
+                            flickable.contentY = Math.max(0, Math.min(targetY, flickable.contentHeight - flickable.height));
+                        });
+                    } else if (!shouldExpand) {
+                        Qt.callLater(() => {
+                            flickable.contentY = 0;
+                        });
+                    }
                 }
             }
 
-            Loader {
-                id: overviewLoader
-                anchors.horizontalCenter: parent.horizontalCenter
-                active: GlobalStates.overviewOpen && (Config?.options.overview.enable ?? true)
-                sourceComponent: OverviewWidget {
-                    screen: panelWindow.screen
+            onContentHeightChanged: {
+                Qt.callLater(() => {
+                    if (appDrawer.expanded) {
+                        const searchWidgetHeight = searchWidget.implicitHeight || 0;
+                        const overviewWidgetHeight = (overviewLoader.item && overviewLoader.item.visible) ?
+                            (overviewLoader.item.implicitHeight || 0) : 0;
+                        const spacing = 20;
+                        const topContentHeight = searchWidgetHeight + overviewWidgetHeight;
+
+                        const targetY = topContentHeight + spacing;
+                        const tolerance = 5;
+                        if (Math.abs(contentY - targetY) > tolerance) {
+                            flickable.contentY = Math.max(0, Math.min(targetY, flickable.contentHeight - flickable.height));
+                        }
+                    }
+                });
+            }
+
+            ColumnLayout {
+                id: columnLayout
+                width: flickable.width
+                spacing: 20
+
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Escape) {
+                        GlobalStates.overviewOpen = false;
+                    } else if (event.key === Qt.Key_Left) {
+                        if (!panelWindow.searchingText)
+                            Hyprland.dispatch("workspace r-1");
+                    } else if (event.key === Qt.Key_Right) {
+                        if (!panelWindow.searchingText)
+                            Hyprland.dispatch("workspace r+1");
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: appDrawer.expanded ? 10 : 0
+                    visible: appDrawer.expanded
+
+                    Behavior on Layout.preferredHeight {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementResize.duration
+                            easing.type: Appearance.animation.elementResize.type
+                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
+                        }
+                    }
+                }
+
+                SearchWidget {
+                    id: searchWidget
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: !appDrawer.expanded
+                    Layout.maximumHeight: appDrawer.expanded ? 0 : implicitHeight
+                    opacity: appDrawer.expanded ? 0 : 1
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementMoveFast.duration
+                            easing.type: Appearance.animation.elementMoveFast.type
+                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                        }
+                    }
+                    Behavior on Layout.maximumHeight {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementResize.duration
+                            easing.type: Appearance.animation.elementResize.type
+                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
+                        }
+                    }
+                    Synchronizer on searchingText {
+                        property alias source: panelWindow.searchingText
+                    }
+                }
+
+                Loader {
+                    id: overviewLoader
+                    Layout.alignment: Qt.AlignHCenter
+                    active: GlobalStates.overviewOpen && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
+                    Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
+                    opacity: appDrawer.expanded ? 0 : 1
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementMoveFast.duration
+                            easing.type: Appearance.animation.elementMoveFast.type
+                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                        }
+                    }
+                    Behavior on Layout.maximumHeight {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementResize.duration
+                            easing.type: Appearance.animation.elementResize.type
+                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
+                        }
+                    }
+                    sourceComponent: OverviewWidget {
+                        screen: panelWindow.screen
+                        visible: (panelWindow.searchingText == "")
+                    }
+                }
+
+                ApplicationDrawer {
+                    id: appDrawer
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: appDrawer.expanded
+                    Layout.preferredWidth: appDrawer.expanded ? flickable.width - 40 : Math.min(1200, flickable.width - 40)
                     visible: (panelWindow.searchingText == "")
+                    opacity: (panelWindow.searchingText != "" && !appDrawer.expanded) ? 0 : 1
+                    Layout.maximumHeight: (panelWindow.searchingText != "" && !appDrawer.expanded) ? 0 : implicitHeight
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementMoveFast.duration
+                            easing.type: Appearance.animation.elementMoveFast.type
+                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                        }
+                    }
+                    Behavior on Layout.maximumHeight {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementResize.duration
+                            easing.type: Appearance.animation.elementResize.type
+                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
+                        }
+                    }
+
+                    availableHeight: flickable.height
+                    availableWidth: flickable.width - 40
                 }
             }
         }
