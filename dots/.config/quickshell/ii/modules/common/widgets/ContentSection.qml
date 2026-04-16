@@ -8,6 +8,7 @@ ColumnLayout {
     id: root
     property string title
     property string icon: ""
+    property bool mirrorIcon: false
     property alias headerExtra: headerExtraContainer.data
     default property alias contentData: sectionContent.data
 
@@ -21,6 +22,7 @@ ColumnLayout {
         OptionalMaterialSymbol {
             icon: root.icon
             iconSize: Appearance.font.pixelSize.hugeass
+            transform: Scale { xScale: root.mirrorIcon ? -1 : 1; origin.x: Appearance.font.pixelSize.hugeass / 2 }
         }
         StyledText {
             text: root.title
