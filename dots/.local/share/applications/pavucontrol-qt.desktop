@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Audio Settings
+GenericName=Audio Mixer
+Comment=Adjust audio volume levels and settings
+Exec=pavucontrol-qt
+Icon=multimedia-volume-control
+Categories=AudioVideo;Audio;Mixer;Settings;
+StartupNotify=false

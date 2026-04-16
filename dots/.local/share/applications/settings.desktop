@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Settings
+GenericName=Desktop Settings
+Comment=Configure the desktop
+Exec=sh -c 'qs -p ~/.config/quickshell/ii/settings.qml'
+Icon=preferences-system
+Type=Application
+Categories=Settings;
+Keywords=settings;preferences;configure;desktop;appearance;power;display;
+StartupNotify=false

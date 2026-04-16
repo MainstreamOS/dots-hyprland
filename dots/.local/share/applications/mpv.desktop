@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Videos
+GenericName=Video Player
+Comment=Play videos and movies
+Exec=mpv --player-operation-mode=pseudo-gui -- %U
+Icon=org.gnome.Totem
+Categories=AudioVideo;Video;Player;
+MimeType=video/*;
+StartupNotify=false

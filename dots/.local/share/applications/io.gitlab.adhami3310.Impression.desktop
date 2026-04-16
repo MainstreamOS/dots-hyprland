@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ISO Imager
+GenericName=Disk Image Writer
+Comment=Write disk images to your drives
+Exec=impression
+Icon=io.gitlab.adhami3310.Impression
+Categories=Utility;
+StartupNotify=true
