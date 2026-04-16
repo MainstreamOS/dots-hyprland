@@ -52,10 +52,15 @@ Scope {
                 }
                 property bool superShow: false
                 property bool mustShow: hoverRegion.containsMouse || superShow
+                readonly property HyprlandMonitor monitor: Hyprland.monitorFor(barRoot.screen)
+                property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor && w.monitor.name === monitor.name)
+                property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
+                visible: !hasFullscreenWindow
                 exclusionMode: ExclusionMode.Ignore
                 exclusiveZone: (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
+                WlrLayershell.layer: WlrLayer.Overlay
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
                 mask: Region {
                     item: hoverMaskRegion

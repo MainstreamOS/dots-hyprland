@@ -106,11 +106,18 @@ RowLayout {
         Layout.bottomMargin: 4
         onClicked: {
             GlobalStates.overviewOpen = false;
-            Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "region", "search"]);
+            lensDelayTimer.start();
         }
         text: "image_search"
         StyledToolTip {
             text: Translation.tr("Google Lens")
+        }
+
+        Timer {
+            id: lensDelayTimer
+            interval: 125
+            repeat: false
+            onTriggered: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "region", "search"])
         }
     }
 
@@ -118,7 +125,6 @@ RowLayout {
         id: songRecButton
         Layout.topMargin: 4
         Layout.bottomMargin: 4
-        Layout.rightMargin: 4
         toggled: SongRec.running
         onClicked: SongRec.toggleRunning()
         text: "music_cast"
@@ -154,6 +160,20 @@ RowLayout {
             Behavior on color {
                 animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
             }
+        }
+    }
+
+    IconToolbarButton {
+        Layout.topMargin: 4
+        Layout.bottomMargin: 4
+        Layout.rightMargin: 4
+        onClicked: {
+            GlobalStates.overviewOpen = false;
+            GlobalStates.sessionOpen = true;
+        }
+        text: "power_settings_new"
+        StyledToolTip {
+            text: Translation.tr("Session")
         }
     }
 }

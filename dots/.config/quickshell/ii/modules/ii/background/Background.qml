@@ -264,8 +264,9 @@ Variants {
 
             Loader {
                 id: blurLoader
-                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running)
+                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running || GlobalStates.overviewOpen)
                 anchors.fill: wallpaper
+                // extraZoom only applies to the lock screen, not the overview
                 scale: GlobalStates.screenLocked ? Config.options.lock.blur.extraZoom : 1
                 Behavior on scale {
                     NumberAnimation {
@@ -277,13 +278,31 @@ Variants {
                 }
                 sourceComponent: GaussianBlur {
                     source: wallpaper
-                    radius: GlobalStates.screenLocked ? Config.options.lock.blur.radius : 0
+                    // Full lock radius when locked; slightly lighter blur for overview
+                    radius: GlobalStates.screenLocked
+                        ? Config.options.lock.blur.radius
+                        : (GlobalStates.overviewOpen ? Config.options.lock.blur.radius : 0)
                     samples: radius * 2 + 1
+                    Behavior on radius {
+                        NumberAnimation {
+                            duration: Appearance.animation.elementMoveFast.duration
+                            easing.type: Appearance.animation.elementMoveFast.type
+                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                        }
+                    }
 
                     Rectangle {
-                        opacity: GlobalStates.screenLocked ? 1 : 0
                         anchors.fill: parent
+                        // Lock screen: full dim; overview: lighter dim
+                        opacity: GlobalStates.screenLocked ? 1 : (GlobalStates.overviewOpen ? 0.85 : 0)
                         color: CF.ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: Appearance.animation.elementMoveFast.duration
+                                easing.type: Appearance.animation.elementMoveFast.type
+                                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                            }
+                        }
                     }
                 }
             }

@@ -9,6 +9,7 @@ pragma ComponentBehavior: Bound
 
 Singleton {
     id: root
+    property bool hdrActive: false
     property bool barOpen: true
     property bool crosshairOpen: false
     property bool sidebarLeftOpen: false
@@ -30,6 +31,7 @@ Singleton {
     property bool superReleaseMightTrigger: true
     property bool wallpaperSelectorOpen: false
     property bool workspaceShowNumbers: false
+    property string openFolderId: ""  // Set by dock to open a folder in the app drawer
 
     onSidebarRightOpenChanged: {
         if (GlobalStates.sidebarRightOpen) {
@@ -37,6 +39,37 @@ Singleton {
             Notifications.markAllRead();
         }
     }
+
+    // ── HDR detection: poll hyprctl for active HDR color management ──
+    Process {
+        id: hdrCheckProc
+        command: ["hyprctl", "monitors", "-j"]
+        property string output: ""
+        stdout: SplitParser {
+            onRead: data => hdrCheckProc.output += data
+        }
+        onExited: {
+            try {
+                let monitors = JSON.parse(hdrCheckProc.output);
+                root.hdrActive = monitors.some(m =>
+                    m.colorManagementPreset === "hdr" || m.colorManagementPreset === "hdredid"
+                );
+            } catch(e) {
+                root.hdrActive = false;
+            }
+            hdrCheckProc.output = "";
+        }
+    }
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "configreloaded" || event.name === "monitoraddedv2" || event.name === "monitorremoved")
+                hdrCheckProc.running = true;
+        }
+    }
+
+    Component.onCompleted: hdrCheckProc.running = true
 
     GlobalShortcut {
         name: "workspaceNumber"

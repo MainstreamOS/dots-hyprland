@@ -47,6 +47,21 @@ Item {
     property int draggingFromWorkspace: -1
     property int draggingTargetWorkspace: -1
 
+    // Set by Overview.qml during an app-drawer drag to highlight the hovered workspace
+    property int appDragHoverWorkspace: -1
+
+    // Returns the 1-indexed workspace number at the given scene coordinates, or -1 if none.
+    function workspaceAtScenePoint(sceneX, sceneY) {
+        const lp = workspaceColumnLayout.mapFromItem(null, sceneX, sceneY)
+        const cellW = root.workspaceImplicitWidth + workspaceSpacing
+        const cellH = root.workspaceImplicitHeight + workspaceSpacing
+        const col = Math.floor(lp.x / cellW)
+        const row = Math.floor(lp.y / cellH)
+        if (col < 0 || col >= Config.options.overview.columns) return -1
+        if (row < 0 || row >= Config.options.overview.rows) return -1
+        return root.workspaceGroup * root.workspacesShown + getWsInCell(row, col)
+    }
+
     implicitWidth: overviewBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
     implicitHeight: overviewBackground.implicitHeight + Appearance.sizes.elevationMargin * 2
 
@@ -107,10 +122,11 @@ Item {
                             property color hoveredWorkspaceColor: ColorUtils.mix(defaultWorkspaceColor, Appearance.colors.colLayer1Hover, 0.1)
                             property color hoveredBorderColor: Appearance.colors.colLayer2Hover
                             property bool hoveredWhileDragging: false
+                            property bool appDragHovered: root.appDragHoverWorkspace === workspaceValue
 
                             implicitWidth: root.workspaceImplicitWidth
                             implicitHeight: root.workspaceImplicitHeight
-                            color: hoveredWhileDragging ? hoveredWorkspaceColor : defaultWorkspaceColor
+                            color: (hoveredWhileDragging || appDragHovered) ? hoveredWorkspaceColor : defaultWorkspaceColor
                             property bool workspaceAtLeft: colIndex === 0
                             property bool workspaceAtRight: colIndex === Config.options.overview.columns - 1
                             property bool workspaceAtTop: row.index === 0
@@ -120,7 +136,7 @@ Item {
                             bottomLeftRadius: (workspaceAtLeft && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
                             bottomRightRadius: (workspaceAtRight && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
                             border.width: 2
-                            border.color: hoveredWhileDragging ? hoveredBorderColor : "transparent"
+                            border.color: (hoveredWhileDragging || appDragHovered) ? hoveredBorderColor : "transparent"
 
                             StyledText {
                                 anchors.centerIn: parent
