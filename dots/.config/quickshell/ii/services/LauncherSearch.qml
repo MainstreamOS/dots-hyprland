@@ -208,22 +208,39 @@ Singleton {
                 });
             }).filter(Boolean);
         } else if (root.query.startsWith(Config.options.search.prefix.emojis)) {
-            // Clipboard
             const searchString = StringUtils.cleanPrefix(root.query, Config.options.search.prefix.emojis);
-            return Emojis.fuzzyQuery(searchString).map(entry => {
+
+            function makeEmojiResult(entry, typeLabel) {
                 const emoji = entry.match(/^\s*(\S+)/)?.[1] || "";
                 return resultComp.createObject(null, {
                     rawValue: entry,
                     name: entry.replace(/^\s*\S+\s+/, ""),
                     iconName: emoji,
                     iconType: LauncherSearchResult.IconType.Text,
-                    verb: Translation.tr("Copy"),
-                    type: Translation.tr("Emoji"),
+                    verb: Translation.tr("Paste"),
+                    type: typeLabel,
                     execute: () => {
-                        Quickshell.clipboardText = entry.match(/^\s*(\S+)/)?.[1];
+                        Emojis.recordUsage(emoji);
+                        Quickshell.clipboardText = emoji;
+                        Quickshell.execDetached(["bash", "-c", `sleep ${Cliphist.pasteDelay} && ${Cliphist.pressPasteCommand}`]);
                     }
                 });
-            }).filter(Boolean);
+            }
+
+            // No search text: show recently used emojis first, with divider
+            if (searchString.trim() === "") {
+                const recent = Emojis.recentEmojis.map(entry => makeEmojiResult(entry, Translation.tr("Recently Used")));
+                if (recent.length > 0) {
+                    const separator = resultComp.createObject(null, { isSeparator: true });
+                    const all = Emojis.list.map(entry => makeEmojiResult(entry, Translation.tr("Emoji")));
+                    return recent.concat([separator]).concat(all).filter(Boolean);
+                }
+                const all = Emojis.list.map(entry => makeEmojiResult(entry, Translation.tr("Emoji")));
+                return all.filter(Boolean);
+            }
+
+            // With search text: fuzzy search (already boosted by frequency in Emojis.fuzzyQuery)
+            return Emojis.fuzzyQuery(searchString).map(entry => makeEmojiResult(entry, Translation.tr("Emoji"))).filter(Boolean);
         }
 
         ////////////////// Init ///////////////////

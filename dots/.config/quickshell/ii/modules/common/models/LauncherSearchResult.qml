@@ -29,4 +29,5 @@ QtObject {
 
     // Extra stuff to allow for more flexibility
     property string category: type
+    property bool isSeparator: false
 }
