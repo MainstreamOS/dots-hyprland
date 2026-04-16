@@ -29,9 +29,14 @@ ApplicationWindow {
             component: "modules/settings/QuickConfig.qml"
         },
         {
-            name: Translation.tr("Connectivity"),
-            icon: "settings_ethernet",
-            component: "modules/settings/ConnectivityConfig.qml"
+            name: Translation.tr("Wi-Fi"),
+            icon: "wifi",
+            component: "modules/settings/WifiConfig.qml"
+        },
+        {
+            name: Translation.tr("Bluetooth"),
+            icon: "bluetooth",
+            component: "modules/settings/BluetoothConfig.qml"
         },
         {
             name: Translation.tr("General"),
@@ -187,9 +192,9 @@ ApplicationWindow {
                     width: navRailFlickable.width
                     spacing: 0
 
-                    // Group 1: Quick, Connectivity, General (Indices 0, 1, 2)
+                    // Group 1: Quick, Wi-Fi, Bluetooth, General (Indices 0, 1, 2, 3)
                     Repeater {
-                        model: root.pages.slice(0, 3)
+                        model: root.pages.slice(0, 4)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -204,14 +209,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 2: Bar, Background, Interface (Indices 3, 4, 5)
+                    // Group 2: Bar, Background, Interface (Indices 4, 5, 6)
                     Repeater {
-                        model: root.pages.slice(3, 6)
+                        model: root.pages.slice(4, 7)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 3)
-                            onPressed: root.currentPage = (index + 3)
+                            toggled: root.currentPage === (index + 4)
+                            onPressed: root.currentPage = (index + 4)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -221,14 +226,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Services, Advanced, About (Indices 6, 7, 8)
+                    // Group 3: Services, Advanced, About (Indices 7, 8, 9)
                     Repeater {
-                        model: root.pages.slice(6, 9)
+                        model: root.pages.slice(7, 10)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 6)
-                            onPressed: root.currentPage = (index + 6)
+                            toggled: root.currentPage === (index + 7)
+                            onPressed: root.currentPage = (index + 7)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
