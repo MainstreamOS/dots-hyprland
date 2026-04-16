@@ -142,7 +142,6 @@ Item { // Player instance
             live: root.player?.isPlaying
             points: root.visualizerPoints
             maxVisualizerValue: root.maxVisualizerValue
-            smoothing: root.visualizerSmoothing
             color: blendedColors.colPrimary
         }
         
