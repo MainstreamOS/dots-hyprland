@@ -338,6 +338,9 @@ Singleton {
                 property JsonObject tooltips: JsonObject {
                     property bool clickToShow: false
                 }
+                property JsonObject volumeControl: JsonObject {
+                    property bool enable: true
+                }
             }
 
             property JsonObject battery: JsonObject {

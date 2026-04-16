@@ -327,6 +327,50 @@ Item { // Bar content region
                 }
             }
 
+            // Volume control icon
+            Loader {
+                id: volumeIconLoader
+                active: Config.options.bar.volumeControl.enable
+                visible: active && root.useShortenedForm === 0
+                Layout.fillHeight: true
+
+                sourceComponent: Item {
+                    implicitWidth: volumeIconButton.implicitWidth
+                    implicitHeight: volumeIconButton.implicitHeight
+
+                    RippleButton {
+                        id: volumeIconButton
+                        anchors.centerIn: parent
+                        implicitWidth: 32
+                        implicitHeight: 32
+                        buttonRadius: Appearance.rounding.full
+                        toggled: volumeBarPopup.shown
+                        colBackground: barRightSideMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+                        colBackgroundHover: Appearance.colors.colLayer1Hover
+                        colRipple: Appearance.colors.colLayer1Active
+                        colBackgroundToggled: Appearance.colors.colSecondaryContainer
+                        colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
+                        colRippleToggled: Appearance.colors.colSecondaryContainerActive
+                        onClicked: volumeBarPopup.shown = !volumeBarPopup.shown
+
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent
+                            text: {
+                                if (Audio.sink?.audio?.muted) return "volume_off";
+                                let vol = Audio.sink?.audio?.volume ?? 0;
+                                if (vol <= 0) return "volume_mute";
+                                if (vol < 0.5) return "volume_down";
+                                return "volume_up";
+                            }
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: volumeIconButton.toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer0
+                        }
+                    }
+
+                    VolumeBarPopup {
+                        id: volumeBarPopup
+                        anchorTarget: volumeIconButton
+                    }
                 }
             }
 
