@@ -13,9 +13,22 @@ depends=(
   curl
   wget
   ripgrep
+  expect
   jq
   xdg-user-dirs
-  # Used in install script
+  ntfs-3g
+  dosfstools
+  libxcrypt-compat
+  fuse2
+  less
+  clinfo
+  power-profiles-daemon
+  topgrade
+  cpio
   rsync
   go-yq # https://github.com/mikefarah/yq
+  blueman
+  networkmanager
+  hyprpolkitagent
+  kdialog
 )
