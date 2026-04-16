@@ -497,9 +497,13 @@ Item {
                             IconImage {
                                 Layout.alignment: Qt.AlignHCenter
                                 source: !modelData._isFolder
-                                    ? Quickshell.iconPath(AppSearch.guessIcon(modelData.id || modelData.icon), "image-missing")
+                                    ? Quickshell.iconPath(AppSearch.guessIcon(modelData.id || modelData.icon), "application-x-executable")
                                     : ""
                                 implicitSize: root.iconSize
+                                onStatusChanged: {
+                                    if (status === Image.Error)
+                                        source = Quickshell.iconPath("application-x-executable", "")
+                                }
                             }
 
                             StyledText {
