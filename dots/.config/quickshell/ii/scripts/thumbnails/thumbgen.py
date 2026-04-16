@@ -30,6 +30,15 @@ logger.remove()
 logger.add(sys.stdout, level="INFO")
 logger.add("/tmp/thumbgen.log", level="DEBUG", rotation="100 MB")
 
+
+def _init_worker(size: str) -> None:
+    # Initialize the factory in each worker process. Required since Python 3.14's
+    # default multiprocessing start method on Linux is "forkserver", which does
+    # not inherit the parent's module-level globals.
+    global factory
+    factory = GnomeDesktop.DesktopThumbnailFactory.new(thumbnail_size_map[size])
+
+
 def make_thumbnail(fpath: str) -> bool:
     mtime = os.path.getmtime(fpath)
     # Use Gio to determine the URI and mime type
@@ -57,7 +66,7 @@ def make_thumbnail(fpath: str) -> bool:
 
 
 @logger.catch()
-def thumbnail_folder(*, dir_path: Path, workers: int, only_images: bool, recursive: bool, machine_progress: bool = False) -> None:
+def thumbnail_folder(*, dir_path: Path, workers: int, only_images: bool, recursive: bool, size: str, machine_progress: bool = False) -> None:
     all_files = get_all_files(dir_path=dir_path, recursive=recursive)
     if only_images:
         all_files = get_all_images(all_files=all_files)
@@ -65,13 +74,13 @@ def thumbnail_folder(*, dir_path: Path, workers: int, only_images: bool, recursi
     if machine_progress:
         completed = 0
         total = len(all_files)
-        with Pool(processes=workers) as p:
+        with Pool(processes=workers, initializer=_init_worker, initargs=(size,)) as p:
             for result in p.imap(make_thumbnail, all_files):
                 completed += 1
                 print(f"PROGRESS {completed}/{total} FILE {all_files[completed-1]}")
                 sys.stdout.flush()
     else:
-        with Pool(processes=workers) as p:
+        with Pool(processes=workers, initializer=_init_worker, initargs=(size,)) as p:
             list(tqdm(p.imap(make_thumbnail, all_files), total=len(all_files)))
 
 
@@ -111,7 +120,7 @@ def main(img_dirs: str, size: str, workers: str, only_images: bool, recursive: b
     global factory
     factory = GnomeDesktop.DesktopThumbnailFactory.new(thumbnail_size_map[size])
     for img_dir in img_dirs:
-        thumbnail_folder(dir_path=img_dir, workers=workers, only_images=only_images, recursive=recursive, machine_progress=machine_progress)
+        thumbnail_folder(dir_path=img_dir, workers=workers, only_images=only_images, recursive=recursive, size=size, machine_progress=machine_progress)
     print("Thumbnail Generation Completed!")
 
 
