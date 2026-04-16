@@ -170,6 +170,102 @@ function install_dir__sync_exclude(){
   fi
   v rsync_dir__sync_exclude $s $t "$@"
 }
+function setup_hyprland_plugins(){
+  # Build hyprbars from source into a user-owned plugin directory and load it
+  # with a `plugin = ...` directive. No hyprpm, no systemd service, no sudoers
+  # grant — the .so is owned by the user and Hyprland loads it as the user.
+  echo -e "${STY_CYAN}[$0]: Building hyprbars plugin from source...${STY_RST}"
+
+  # Remove artifacts from earlier hyprpm-based approaches if they exist. Doing
+  # this unconditionally means a reinstall always lands in a clean state.
+  try systemctl --user stop hyprland-plugins-setup.service 2>/dev/null
+  try rm -f "$HOME/.config/systemd/user/hyprland-plugins-setup.service"
+  try systemctl --user daemon-reload 2>/dev/null
+  try sudo rm -f /usr/local/bin/hyprland-plugins-setup
+  try sudo rm -f /etc/sudoers.d/hyprpm
+  local EXECS_CONF="$HOME/.config/hypr/custom/execs.conf"
+  if [[ -f "$EXECS_CONF" ]] && grep -q 'hyprland-plugins-setup' "$EXECS_CONF"; then
+    sed -i '/# Defer hyprpm to first login/d; /hyprland-plugins-setup/d' "$EXECS_CONF"
+    echo -e "${STY_BLUE}[$0]: Removed old hyprland-plugins-setup trigger from $EXECS_CONF${STY_RST}"
+  fi
+
+  # Fail fast if the build deps aren't there — hyprbars' Makefile depends on
+  # pkg-config finding each of these. `hyprland` itself ships the headers +
+  # hyprland.pc on Arch via the main package.
+  local _missing=()
+  for pc in hyprland pixman-1 libdrm pangocairo libinput libudev wayland-server xkbcommon; do
+    pkg-config --exists "$pc" 2>/dev/null || _missing+=("$pc")
+  done
+  if (( ${#_missing[@]} > 0 )); then
+    echo -e "${STY_RED}[$0]: Missing pkg-config deps for hyprbars: ${_missing[*]}${STY_RST}"
+    echo -e "${STY_RED}[$0]: Install the corresponding dev packages and re-run the installer.${STY_RST}"
+    return 1
+  fi
+
+  # Clone/update into the repo cache dir (same pattern as install_google_sans_flex).
+  local src_dir="$REPO_ROOT/cache/hyprland-plugins"
+  x mkdir -p "$src_dir"
+  x cd "$src_dir"
+  try git init -b main
+  try git remote add origin https://github.com/hyprwm/hyprland-plugins
+  x git pull origin main
+
+  # Persist build output to a log so failures can be diffed across Hyprland
+  # updates — the real install still prints everything to the terminal too.
+  local build_log="$HOME/.local/share/hyprland/plugins/hyprbars-build.log"
+  x mkdir -p "$(dirname "$build_log")"
+  local _hv="(hyprctl unavailable)"
+  hyprctl version &>/dev/null && _hv=$(hyprctl version | head -n1)
+  {
+    echo "=== hyprbars build @ $(date '+%Y-%m-%d %H:%M:%S') ==="
+    echo "Hyprland:      $_hv"
+    echo "Plugin commit: $(git -C "$src_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "---"
+  } > "$build_log"
+  echo -e "${STY_CYAN}[$0]: Build log: $build_log${STY_RST}"
+
+  x cd "$src_dir/hyprbars"
+  try make clean
+  # Process substitution preserves make's exit code (unlike `| tee`) so the `x`
+  # wrapper still catches build failures instead of seeing tee's success.
+  x make all -j"$(nproc)" > >(tee -a "$build_log") 2>&1
+  x cd "$REPO_ROOT"
+
+  # Drop the .so under the user's data dir. Absolute path required by the
+  # `plugin = ` directive; Hyprland doesn't expand ~ there.
+  local plugin_dir="$HOME/.local/share/hyprland/plugins"
+  local plugin_path="$plugin_dir/hyprbars.so"
+  x mkdir -p "$plugin_dir"
+  x cp -f "$src_dir/hyprbars/hyprbars.so" "$plugin_path"
+  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
+  realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
+  echo -e "${STY_GREEN}[$0]: Installed hyprbars.so to $plugin_path${STY_RST}"
+
+  # The plugin { hyprbars { ... } } settings block already lives in
+  # custom/general.conf (shipped with the dots). We prepend the load directive
+  # to the same file — Hyprland requires the .so to be loaded before its
+  # settings block is parsed, otherwise the config is silently ignored.
+  local _general_conf="$HOME/.config/hypr/custom/general.conf"
+  if [[ -f "$_general_conf" ]]; then
+    if ! grep -q 'plugin *= *.*hyprbars\.so' "$_general_conf"; then
+      local _tmp; _tmp=$(mktemp)
+      {
+        echo "# hyprbars plugin load directive (built from source at install time)"
+        echo "# plugin = ${plugin_path}"
+        echo ""
+        cat "$_general_conf"
+      } > "$_tmp"
+      mv "$_tmp" "$_general_conf"
+      echo -e "${STY_CYAN}[$0]: Added '# plugin = ${plugin_path}' to $_general_conf (commented out — enable via Title Bars toggle)${STY_RST}"
+    else
+      echo -e "${STY_BLUE}[$0]: $_general_conf already loads hyprbars; skipping.${STY_RST}"
+    fi
+  else
+    echo -e "${STY_YELLOW}[$0]: $_general_conf missing — add this line to a sourced hypr config manually:${STY_RST}"
+    echo -e "${STY_YELLOW}  plugin = ${plugin_path}${STY_RST}"
+  fi
+}
+
 function install_google_sans_flex(){
   local font_name="Google Sans Flex"
   local src_name="google-sans-flex"
@@ -226,6 +322,19 @@ esac
 if [[ ! "$OS_GROUP_ID" == "fedora" ]]; then
   showfun install_google_sans_flex
   v install_google_sans_flex
+fi
+
+showfun setup_hyprland_plugins
+v setup_hyprland_plugins
+
+# Apply GPU-dependent hypr dotfile tweaks (NVIDIA Wayland env vars, hypridle
+# dpms delays, AQ_DRM_DEVICES for hybrid NVIDIA) now that custom/env.conf and
+# hypridle.conf exist on disk. Safe no-op on non-NVIDIA systems and re-runs.
+# Defined in 2.setups.sh; still in scope here because both files are sourced
+# by ./setup in the same shell.
+if declare -F setup_gpu_hypr_tweaks >/dev/null 2>&1; then
+  showfun setup_gpu_hypr_tweaks
+  v setup_gpu_hypr_tweaks
 fi
 
 #####################################################################################
