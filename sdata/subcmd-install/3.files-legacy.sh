@@ -73,4 +73,23 @@ case "${SKIP_HYPRLAND}" in
     ;;
 esac
 
+# Nautilus bookmarks
+BOOKMARKS_FILE="${XDG_CONFIG_HOME}/gtk-3.0/bookmarks"
+if [ ! -f "$BOOKMARKS_FILE" ]; then
+    x mkdir -p "$(dirname "$BOOKMARKS_FILE")"
+    cat > "$BOOKMARKS_FILE" <<EOF
+file://${HOME}/Downloads Downloads
+file://${HOME}/Documents Documents
+file://${HOME}/Music Music
+file://${HOME}/Pictures Pictures
+file://${HOME}/Videos Videos
+EOF
+    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
+    realpath -se "$BOOKMARKS_FILE" >> "${INSTALLED_LISTFILE}"
+fi
+
+# Set Nautilus as default file manager and ensure XDG user dirs exist
+xdg-mime default org.gnome.Nautilus.desktop inode/directory
+xdg-user-dirs-update
+
 install_file "dots/.local/share/icons/illogical-impulse.svg" "${XDG_DATA_HOME}"/icons/illogical-impulse.svg
