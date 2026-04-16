@@ -95,6 +95,11 @@ ApplicationWindow {
             component: "modules/settings/UpdateConfig.qml"
         },
         {
+            name: Translation.tr("Recovery"),
+            icon: "healing",
+            component: "modules/settings/RecoverConfig.qml"
+        },
+        {
             name: Translation.tr("Advanced"),
             icon: "construction",
             component: "modules/settings/AdvancedConfig.qml"
@@ -273,9 +278,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: Accounts, Services, Update, Advanced (Indices 11, 12, 13, 14)
+                    // Group 4: Accounts, Services, Update, Recovery, Advanced (Indices 11, 12, 13, 14, 15)
                     Repeater {
-                        model: root.pages.slice(11, 15)
+                        model: root.pages.slice(11, 16)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -290,14 +295,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 5: About (Index 15)
+                    // Group 5: About (Index 16)
                     Repeater {
-                        model: root.pages.slice(15, 16)
+                        model: root.pages.slice(16, 17)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 15)
-                            onPressed: root.currentPage = (index + 15)
+                            toggled: root.currentPage === (index + 16)
+                            onPressed: root.currentPage = (index + 16)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
