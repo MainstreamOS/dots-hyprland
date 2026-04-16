@@ -60,6 +60,11 @@ ApplicationWindow {
             component: "modules/settings/InterfaceConfig.qml"
         },
         {
+            name: Translation.tr("Accounts"),
+            icon: "manage_accounts",
+            component: "modules/settings/AccountsConfig.qml"
+        },
+        {
             name: Translation.tr("Services"),
             icon: "settings",
             component: "modules/settings/ServicesConfig.qml"
@@ -231,9 +236,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Services, Update, Advanced (Indices 7, 8, 9)
+                    // Group 3: Accounts, Services, Update, Advanced (Indices 7, 8, 9, 10)
                     Repeater {
-                        model: root.pages.slice(7, 10)
+                        model: root.pages.slice(7, 11)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -248,14 +253,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: About (Index 10)
+                    // Group 4: About (Index 11)
                     Repeater {
-                        model: root.pages.slice(10, 11)
+                        model: root.pages.slice(11, 12)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 10)
-                            onPressed: root.currentPage = (index + 10)
+                            toggled: root.currentPage === (index + 11)
+                            onPressed: root.currentPage = (index + 11)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
