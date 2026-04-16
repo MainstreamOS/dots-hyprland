@@ -112,8 +112,11 @@ Item {
                 Repeater {
                     model: Array(7).fill(modelData)
                     delegate: CalendarDayButton {
-                        day: calendarLayout[modelData][index].day
-                        isToday: calendarLayout[modelData][index].today
+                        property var cellData: calendarLayout[modelData][index]
+                        day: cellData.day
+                        isToday: cellData.today
+                        hasTasks: Todo.list.length >= 0 && cellData.year !== undefined && Todo.hasTasksForDate(cellData.year, cellData.month, cellData.monthDay)
+                        tasksForDay: Todo.list.length >= 0 && cellData.year !== undefined ? Todo.getTasksForDate(cellData.year, cellData.month, cellData.monthDay) : []
                     }
                 }
             }
