@@ -327,6 +327,8 @@ Item { // Bar content region
                 }
             }
 
+            TimersTray {}
+
             // Volume control icon
             Loader {
                 id: volumeIconLoader

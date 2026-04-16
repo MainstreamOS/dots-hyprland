@@ -11,11 +11,13 @@ BarGroup {
 
     readonly property bool pRunning: TimerService.pomodoroRunning ?? false
     readonly property bool sRunning: TimerService.stopwatchRunning ?? false
+    readonly property bool cRunning: TimerService.countdownRunning ?? false
     readonly property bool hasStop: TimerService.stopwatchTime > 0
     readonly property bool hasPomo: TimerService.pomodoroSecondsLeft > 0 &&
     (TimerService.pomodoroSecondsLeft < TimerService.pomodoroLapDuration || pRunning)
+    readonly property bool hasCountdown: cRunning || (TimerService.countdownSecondsLeft > 0 && TimerService.countdownSecondsLeft < TimerService.countdownDuration)
 
-    property bool shouldShow: hasStop || hasPomo
+    property bool shouldShow: hasStop || hasPomo || hasCountdown
 
     visible: shouldShow
 
@@ -59,7 +61,7 @@ BarGroup {
 
         // --- STOPWATCH SECTION ---
         RowLayout {
-            visible: root.sRunning || (root.hasStop && !root.hasPomo)
+            visible: root.sRunning || (root.hasStop && !root.hasPomo && !root.hasCountdown)
             spacing: 5
 
             MaterialSymbol {
@@ -75,6 +77,28 @@ BarGroup {
                     return Math.floor(sec/60).toString().padStart(2,'0') + ":" +
                     (sec%60).toString().padStart(2,'0') + "." +
                     (t%100).toString().padStart(2,'0')
+                }
+                color: Appearance.colors.colOnLayer1
+                font.pixelSize: Appearance.font.pixelSize.small
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+
+        // --- COUNTDOWN SECTION ---
+        RowLayout {
+            visible: (root.cRunning && root.sRunning) || (!root.sRunning && root.hasCountdown)
+            spacing: 5
+
+            MaterialSymbol {
+                text: "hourglass_top"
+                iconSize: Appearance.font.pixelSize.large
+                color: Appearance.colors.colOnLayer1
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                text: {
+                    const t = TimerService.countdownSecondsLeft
+                    return Math.floor(t/60).toString().padStart(2,'0') + ":" + (t%60).toString().padStart(2,'0')
                 }
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small

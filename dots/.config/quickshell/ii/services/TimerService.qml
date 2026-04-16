@@ -22,7 +22,8 @@ Singleton {
     property bool pomodoroRunning: Persistent.states.timer.pomodoro.running
     property bool pomodoroBreak: Persistent.states.timer.pomodoro.isBreak
     property bool pomodoroLongBreak: Persistent.states.timer.pomodoro.isBreak && (pomodoroCycle + 1 == cyclesBeforeLongBreak);
-    property int pomodoroLapDuration: pomodoroLongBreak ? longBreakTime : pomodoroBreak ? breakTime : focusTime // This is a binding that's to be kept
+    property int pomodoroTimeAdjustment: 0
+    property int pomodoroLapDuration: (pomodoroLongBreak ? longBreakTime : pomodoroBreak ? breakTime : focusTime) + pomodoroTimeAdjustment
     property int pomodoroSecondsLeft: pomodoroLapDuration // Reasonable init value, to be changed
     property int pomodoroCycle: Persistent.states.timer.pomodoro.cycle
 
@@ -30,6 +31,10 @@ Singleton {
     property int stopwatchTime: 0
     property int stopwatchStart: Persistent.states.timer.stopwatch.start
     property var stopwatchLaps: Persistent.states.timer.stopwatch.laps
+
+    property bool countdownRunning: Persistent.states.timer.countdown.running
+    property int countdownDuration: Persistent.states.timer.countdown.duration
+    property int countdownSecondsLeft: countdownDuration
 
     // General
     Component.onCompleted: {
@@ -52,6 +57,7 @@ Singleton {
             // Reset counts
             Persistent.states.timer.pomodoro.isBreak = !Persistent.states.timer.pomodoro.isBreak;
             Persistent.states.timer.pomodoro.start = getCurrentTimeInSeconds();
+            pomodoroTimeAdjustment = 0;
 
             // Send notification
             let notificationMessage;
@@ -97,7 +103,25 @@ Singleton {
         Persistent.states.timer.pomodoro.isBreak = false;
         Persistent.states.timer.pomodoro.start = getCurrentTimeInSeconds();
         Persistent.states.timer.pomodoro.cycle = 0;
+        pomodoroTimeAdjustment = 0;
         refreshPomodoro();
+    }
+
+    function adjustPomodoroTime(seconds) {
+        let baseDuration = pomodoroLongBreak ? longBreakTime : pomodoroBreak ? breakTime : focusTime;
+        let newAdjustment = pomodoroTimeAdjustment + seconds;
+        let newLapDuration = baseDuration + newAdjustment;
+        let newSecondsLeft = pomodoroSecondsLeft + seconds;
+
+        // Don't allow time to go negative or to zero
+        if (newLapDuration >= 1 && newSecondsLeft > 0) {
+            pomodoroTimeAdjustment = newAdjustment;
+            if (pomodoroRunning) {
+                refreshPomodoro();
+            } else {
+                pomodoroSecondsLeft = newSecondsLeft;
+            }
+        }
     }
 
     // Stopwatch
@@ -138,5 +162,48 @@ Singleton {
 
     function stopwatchRecordLap() {
         Persistent.states.timer.stopwatch.laps.push(stopwatchTime);
+    }
+
+    // Countdown
+    function refreshCountdown() {
+        let elapsed = getCurrentTimeInSeconds() - Persistent.states.timer.countdown.start;
+        let left = countdownDuration - elapsed;
+        if (left <= 0) {
+            if (Config.options.sounds.timer) {
+                Audio.playSystemSound("alarm-clock-elapsed");
+            }
+            Quickshell.execDetached(["notify-send", "Timer", Translation.tr("Timer finished!"), "-a", "Shell"]);
+            resetCountdown();
+        } else {
+            countdownSecondsLeft = left;
+        }
+    }
+
+    Timer {
+        id: countdownTimer
+        interval: 200
+        running: root.countdownRunning
+        repeat: true
+        onTriggered: refreshCountdown()
+    }
+
+    function toggleCountdown() {
+        Persistent.states.timer.countdown.running = !countdownRunning;
+        if (Persistent.states.timer.countdown.running) {
+            Persistent.states.timer.countdown.start = getCurrentTimeInSeconds() - (countdownDuration - countdownSecondsLeft);
+        }
+    }
+
+    function resetCountdown() {
+        Persistent.states.timer.countdown.running = false;
+        countdownSecondsLeft = countdownDuration;
+    }
+
+    function setCountdownTime(seconds) {
+        let newSeconds = Math.max(1, seconds);
+        Persistent.states.timer.countdown.duration = newSeconds;
+        countdownDuration = newSeconds;
+        countdownSecondsLeft = newSeconds;
+        Persistent.states.timer.countdown.running = false;
     }
 }
