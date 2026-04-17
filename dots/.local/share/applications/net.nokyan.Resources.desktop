@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Task Manager
-GenericName=System Monitor
-Comment=Monitor system resources and processes
-Exec=resources
-Icon=net.nokyan.Resources
-Categories=System;Monitor;
-StartupNotify=true
