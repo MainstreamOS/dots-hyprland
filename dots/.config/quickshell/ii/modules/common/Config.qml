@@ -13,6 +13,24 @@ Singleton {
     property int readWriteDelay: 50 // milliseconds
     property bool blockWrites: false
 
+    // True while apply-theme.sh is mid-run. Read from a shared state file so
+    // the settings window (a separate quickshell process) also blocks its own
+    // writeAdapter() — otherwise it races the script's jq/mv writes and
+    // reverts wallpaperPath or other just-applied fields.
+    property bool themeApplyInProgress: false
+
+    // Guard to suppress the self-echo: FileView.reload() mutates adapter
+    // properties which fires adapterUpdated, which would otherwise schedule a
+    // writeAdapter() of content we *just read from disk*. Harmless in isolation
+    // but the resulting write generates an fs-event that races concurrent
+    // writers like switchwall.sh.
+    property bool _reloading: false
+
+    readonly property string _applyStatePath: {
+        const runtime = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+        return `${runtime}/quickshell-theme-apply.state`
+    }
+
     function setNestedValue(nestedKey, value) {
         let keys = nestedKey.split(".");
         let obj = root.options;
@@ -48,7 +66,29 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
+            root._reloading = true
             configFileView.reload()
+            Qt.callLater(() => { root._reloading = false })
+        }
+    }
+
+    // Watcher for the shared theme-apply state file written by apply-theme.sh.
+    // QFileSystemWatcher (used by FileView) can only watch existing files, so
+    // onLoadFailed creates it with "idle" on first run to bootstrap watching.
+    FileView {
+        id: applyStateView
+        path: root._applyStatePath
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            const s = applyStateView.text().trim()
+            root.themeApplyInProgress = (s === "applying")
+        }
+        onLoadFailed: error => {
+            if (error == FileViewError.FileNotFound) {
+                applyStateView.setText("idle")
+                root.themeApplyInProgress = false
+            }
         }
     }
 
@@ -57,6 +97,7 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
+            if (root.blockWrites || root.themeApplyInProgress) return
             configFileView.writeAdapter()
         }
     }
@@ -65,9 +106,12 @@ Singleton {
         id: configFileView
         path: root.filePath
         watchChanges: true
-        blockWrites: root.blockWrites
+        blockWrites: root.blockWrites || root.themeApplyInProgress
         onFileChanged: fileReloadTimer.restart()
-        onAdapterUpdated: fileWriteTimer.restart()
+        onAdapterUpdated: {
+            if (root._reloading) return
+            fileWriteTimer.restart()
+        }
         onLoaded: root.ready = true
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {

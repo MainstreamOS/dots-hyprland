@@ -166,6 +166,12 @@ switch() {
     type_flag="$3"
     color_flag="$4"
     color="$5"
+    # When called via apply-theme.sh (--noswitch), the caller has already
+    # staged wallpaperPath atomically via its own jq/mv. Rewriting it here
+    # adds an extra fs-event that quickshell processes reload from, which
+    # worsens the write race. Skip the in-script set_wallpaper_path in that
+    # case.
+    local skip_config_writes="${noswitch_flag:-}"
 
     # Start Gemini auto-categorization if enabled
     aiStylingEnabled=$(jq -r '.background.widgets.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
@@ -221,8 +227,10 @@ switch() {
                 exit 0
             fi
 
-            # Set wallpaper path
-            set_wallpaper_path "$imgpath"
+            # Set wallpaper path (skip if apply-theme.sh already staged it)
+            if [[ -z "$skip_config_writes" ]]; then
+                set_wallpaper_path "$imgpath"
+            fi
 
             # Set video wallpaper
             local video_path="$imgpath"
@@ -236,8 +244,10 @@ switch() {
             thumbnail="$THUMBNAIL_DIR/$(basename "$imgpath").jpg"
             ffmpeg -y -i "$imgpath" -vframes 1 "$thumbnail" 2>/dev/null
 
-            # Set thumbnail path
-            set_thumbnail_path "$thumbnail"
+            # Set thumbnail path (skip if apply-theme.sh already staged it)
+            if [[ -z "$skip_config_writes" ]]; then
+                set_thumbnail_path "$thumbnail"
+            fi
 
             if [ -f "$thumbnail" ]; then
                 matugen_args+=(image "$thumbnail")
@@ -251,8 +261,10 @@ switch() {
         else
             matugen_args+=(image "$imgpath")
             generate_colors_material_args=(--path "$imgpath")
-            # Update wallpaper path in config
-            set_wallpaper_path "$imgpath"
+            # Update wallpaper path in config (skip if apply-theme.sh already staged it)
+            if [[ -z "$skip_config_writes" ]]; then
+                set_wallpaper_path "$imgpath"
+            fi
             remove_restore
         fi
     fi

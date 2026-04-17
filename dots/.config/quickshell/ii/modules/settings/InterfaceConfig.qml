@@ -23,6 +23,13 @@ ContentPage {
     property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
 
+    function runPy(py, args) {
+        Quickshell.execDetached(["python3", "-c", py, ...args])
+    }
+    function setHyprKeyword(keyword, value) {
+        Quickshell.execDetached(["hyprctl", "keyword", keyword, value])
+    }
+
     // ── Lock timeout ─────────────────────────────────────────────────────────
     property bool lockEnabled: true
     property int lockSecs: 300
@@ -36,6 +43,20 @@ ContentPage {
         titleBarReader.running = true
     }
 
+    // When a theme apply finishes, the shared state file flips back to "idle"
+    // and Config.themeApplyInProgress goes false. Re-read the hypr confs so the
+    // decoration switches reflect whatever the applied theme restored.
+    Connections {
+        target: Config
+        function onThemeApplyInProgressChanged() {
+            if (Config.themeApplyInProgress) return
+            decoReader.running = false
+            decoReader.running = true
+            titleBarReader.running = false
+            titleBarReader.running = true
+        }
+    }
+
     Process {
         id: titleBarReader
         command: ["cat", root.customGeneralConf]
@@ -43,7 +64,6 @@ ContentPage {
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => titleBarReader.buf += data + "\n" }
         onExited: {
-            // Enabled when the plugin = .../hyprbars.so line exists and is NOT commented out
             root.titleBarsEnabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(titleBarReader.buf);
         }
     }
@@ -79,7 +99,7 @@ ContentPage {
             "pattern = r'(' + re.escape(block) + r'\\s*' + chr(123) + r'[^' + chr(125) + r']*?)(enabled\\s*=\\s*)\\w+'\n" +
             "text = re.sub(pattern, r'\\1\\2' + val, text, count=1)\n" +
             "open(conf, 'w').write(text)\n";
-        Quickshell.execDetached(["python3", "-c", py, blockName, val, root.generalConf]);
+        runPy(py, [blockName, val, root.generalConf])
     }
 
     function decoSetBordersEnabled(enabled) {
@@ -112,19 +132,19 @@ ContentPage {
             "        line = indent + 'gaps_out = ' + ('5' if enable else '0') + '\\n'\n" +
             "    result.append(line)\n" +
             "open(conf, 'w').writelines(result)\n";
-        Quickshell.execDetached(["python3", "-c", py, enabled ? "1" : "0", root.generalConf, fields.join(",")]);
+        runPy(py, [enabled ? "1" : "0", root.generalConf, fields.join(",")])
         if (enabled) {
-            Quickshell.execDetached(["hyprctl", "keyword", "general:border_size", "4"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:col.active_border", "rgba(0DB7D455)"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:col.inactive_border", "rgba(31313600)"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:resize_on_border", "true"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_in", "4"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_out", "5"]);
+            setHyprKeyword("general:border_size", "4");
+            setHyprKeyword("general:col.active_border", "rgba(0DB7D455)");
+            setHyprKeyword("general:col.inactive_border", "rgba(31313600)");
+            setHyprKeyword("general:resize_on_border", "true");
+            setHyprKeyword("general:gaps_in", "4");
+            setHyprKeyword("general:gaps_out", "5");
         } else {
-            Quickshell.execDetached(["hyprctl", "keyword", "general:border_size", "0"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:resize_on_border", "false"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_in", "0"]);
-            Quickshell.execDetached(["hyprctl", "keyword", "general:gaps_out", "0"]);
+            setHyprKeyword("general:border_size", "0");
+            setHyprKeyword("general:resize_on_border", "false");
+            setHyprKeyword("general:gaps_in", "0");
+            setHyprKeyword("general:gaps_out", "0");
         }
     }
 
@@ -136,8 +156,8 @@ ContentPage {
             "text = open(conf).read()\n" +
             "text = re.sub(r'(rounding\\s*=\\s*)\\d+', r'\\g<1>' + val, text, count=1)\n" +
             "open(conf, 'w').write(text)\n";
-        Quickshell.execDetached(["python3", "-c", py, val, root.generalConf]);
-        Quickshell.execDetached(["hyprctl", "keyword", "decoration:rounding", val]);
+        runPy(py, [val, root.generalConf])
+        setHyprKeyword("decoration:rounding", val);
         if (!enabled) {
             root.previousCornerStyle = Config.options.bar.cornerStyle;
             Config.options.bar.cornerStyle = 2;
@@ -293,7 +313,7 @@ ContentPage {
                     if (!root._decoReady) return;
                     root.animationsEnabled = checked;
                     root.decoSetBlockEnabled("animations", checked);
-                    Quickshell.execDetached(["hyprctl", "keyword", "animations:enabled", checked ? "true" : "false"]);
+                    root.setHyprKeyword("animations:enabled", checked ? "true" : "false");
                 }
                 StyledToolTip {
                     text: Translation.tr("Window open/close and workspace transition effects")
@@ -308,7 +328,7 @@ ContentPage {
                     if (!root._decoReady) return;
                     root.blurEnabled = checked;
                     root.decoSetBlockEnabled("blur", checked);
-                    Quickshell.execDetached(["hyprctl", "keyword", "decoration:blur:enabled", checked ? "true" : "false"]);
+                    root.setHyprKeyword("decoration:blur:enabled", checked ? "true" : "false");
                 }
                 StyledToolTip {
                     text: Translation.tr("Background blur behind transparent windows and layers")
@@ -326,7 +346,7 @@ ContentPage {
                     if (!root._decoReady) return;
                     root.shadowsEnabled = checked;
                     root.decoSetBlockEnabled("shadow", checked);
-                    Quickshell.execDetached(["hyprctl", "keyword", "decoration:shadow:enabled", checked ? "true" : "false"]);
+                    root.setHyprKeyword("decoration:shadow:enabled", checked ? "true" : "false");
                 }
                 StyledToolTip {
                     text: Translation.tr("Drop shadows underneath windows")
@@ -370,8 +390,8 @@ ContentPage {
                     if (!root._decoReady) return;
                     root.titleBarsEnabled = checked;
                     // Toggle by commenting/uncommenting the plugin = .../hyprbars.so line
-                    // in custom/general.conf. No hyprpm needed — Hyprland loads the .so
-                    // directly when the directive is present and uncommented.
+                    // in custom/general.conf. Hyprland loads the .so directly when the
+                    // directive is present and uncommented, so `hyprctl reload` is enough.
                     let py =
                         "import re, sys\n" +
                         "enable = sys.argv[1] == '1'\n" +
@@ -382,8 +402,8 @@ ContentPage {
                         "else:\n" +
                         "    text = re.sub(r'^([ \\t]*)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
                         "open(conf, 'w').write(text)\n";
-                    Quickshell.execDetached(["python3", "-c", py, checked ? "1" : "0", root.customGeneralConf]);
-                    Quickshell.execDetached(["hyprctl", "reload"]);
+                    root.runPy(py, [checked ? "1" : "0", root.customGeneralConf])
+                    Quickshell.execDetached(["hyprctl", "reload"])
                 }
                 StyledToolTip {
                     text: Translation.tr("Show title bars on windows")

@@ -55,6 +55,11 @@ ApplicationWindow {
             component: "modules/settings/BackgroundConfig.qml"
         },
         {
+            name: Translation.tr("Themes"),
+            icon: "style",
+            component: "modules/settings/ThemesConfig.qml"
+        },
+        {
             name: Translation.tr("Display"),
             icon: "monitor",
             component: "modules/settings/DisplayConfig.qml"
@@ -234,9 +239,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 2: Bar, Interface, Background (Indices 3, 4, 5)
+                    // Group 2: Bar, Interface, Background, Themes (Indices 3, 4, 5, 6)
                     Repeater {
-                        model: root.pages.slice(3, 6)
+                        model: root.pages.slice(3, 7)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -251,14 +256,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Display, Layouts, Mouse, Power (Indices 6, 7, 8, 9)
+                    // Group 3: Display, Layouts, Mouse, Power (Indices 7, 8, 9, 10)
                     Repeater {
-                        model: root.pages.slice(6, 10)
+                        model: root.pages.slice(7, 11)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 6)
-                            onPressed: root.currentPage = (index + 6)
+                            toggled: root.currentPage === (index + 7)
+                            onPressed: root.currentPage = (index + 7)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -268,14 +273,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: Accounts, Services, Update, Recovery (Indices 10, 11, 12, 13)
+                    // Group 4: Accounts, Services, Update, Recovery (Indices 11, 12, 13, 14)
                     Repeater {
-                        model: root.pages.slice(10, 14)
+                        model: root.pages.slice(11, 15)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 10)
-                            onPressed: root.currentPage = (index + 10)
+                            toggled: root.currentPage === (index + 11)
+                            onPressed: root.currentPage = (index + 11)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -285,14 +290,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 5: About (Index 14)
+                    // Group 5: About (Index 15)
                     Repeater {
-                        model: root.pages.slice(14)
+                        model: root.pages.slice(15)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 14)
-                            onPressed: root.currentPage = (index + 14)
+                            toggled: root.currentPage === (index + 15)
+                            onPressed: root.currentPage = (index + 15)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
