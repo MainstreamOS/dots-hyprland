@@ -22,7 +22,8 @@ ProgressBar {
         height: valueBarHeight
         StyledText {
             anchors.centerIn: parent
-            font: root.font
+            font.pixelSize: root.font.pixelSize
+            font.weight: root.font.weight
             text: root.text
         }
     }
