@@ -51,7 +51,6 @@ implicitize_old_dependencies(){
 #   - kdialog          : small standalone utility, no Plasma chain risk
 #   - plasma-browser-integration : handled separately below (hard skip)
 KDE_PLASMA_BLOCKLIST=(
-  kio
   kio-extras
   dolphin
   konsole
