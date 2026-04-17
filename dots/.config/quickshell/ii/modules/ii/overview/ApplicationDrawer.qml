@@ -367,7 +367,6 @@ Item {
                 GridView {
                     id: appGrid
                     anchors.fill: parent
-                    anchors.bottomMargin: gridContainer.hasOverflow ? 36 : 0
                     cellWidth: Math.max(root.expanded ? 120 : 80, (parent.width - (root.columns - 1) * root.spacing - 30) / root.columns)
                     cellHeight: cellWidth * 1.3
                     interactive: false
@@ -683,52 +682,6 @@ Item {
                         _dragging = false
                         root._isDraggingApp = false
                         root._dragHoverIndex = -1
-                    }
-                }
-
-                // "Show more" indicator — visible when collapsed and more apps exist below
-                Rectangle {
-                    anchors {
-                        left: parent.left
-                        right: parent.right
-                        bottom: parent.bottom
-                    }
-                    height: 36
-                    visible: gridContainer.hasOverflow
-                    color: "transparent"
-
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "transparent" }
-                            GradientStop { position: 0.4; color: Appearance.colors.colLayer0 }
-                        }
-                    }
-
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 4
-
-                        StyledText {
-                            text: gridContainer.itemsBelowFold + " more"
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colPrimary
-                        }
-
-                        MaterialSymbol {
-                            text: "expand_more"
-                            iconSize: Appearance.font.pixelSize.normal
-                            color: Appearance.colors.colPrimary
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        z: 10
-                        onClicked: {
-                            root.expanded = true
-                        }
                     }
                 }
             }
