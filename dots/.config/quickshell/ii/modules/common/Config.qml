@@ -389,7 +389,7 @@ Singleton {
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
                 property list<string> pinnedApps: [ // IDs of pinned entries
-                    "google-chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "gimp", "mpv", "spotify", "kitty", "org.gnome.Software",]
+                    "google-chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
             }
 
