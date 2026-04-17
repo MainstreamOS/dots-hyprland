@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Spotify Music
-GenericName=Music Player
-Comment=Listen to music on Spotify
-Exec=spotify
-Icon=spotify
-Categories=Audio;Music;Player;AudioVideo;
-StartupNotify=false
