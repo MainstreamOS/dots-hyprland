@@ -359,6 +359,37 @@ function setup_default_video_player(){
 showfun setup_default_video_player
 v setup_default_video_player
 
+# Set GNOME Text Editor as default for plain-text and common text-ish MIME types.
+# Skipped if the desktop entry isn't present (e.g. gnome-text-editor not installed).
+function setup_default_text_editor(){
+  local desktop=org.gnome.TextEditor.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping text editor defaults.${STY_RST}"
+    return 0
+  fi
+  local text_types=(
+    text/plain
+    text/markdown
+    text/csv
+    text/x-log
+    text/x-readme
+    text/x-changelog
+    text/x-copying
+    text/x-makefile
+    text/x-patch
+    text/x-diff
+    text/x-qml
+    text/xml
+    application/xml
+    application/json
+  )
+  for mime in "${text_types[@]}"; do
+    v xdg-mime default "$desktop" "$mime"
+  done
+}
+showfun setup_default_text_editor
+v setup_default_text_editor
+
 # Optional: Limine + Snapper automatic backup setup (Arch, btrfs, UEFI only)
 function setup_limine_snapper(){
   local ROOT_FSTYPE
