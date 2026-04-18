@@ -16,7 +16,7 @@ Item {
 
         ContentSection {
             icon: "wifi"
-            title: Translation.tr("Wi-Fi")
+            title: "Wi-Fi"
 
             headerExtra: [
                 RippleButton {

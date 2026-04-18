@@ -114,7 +114,7 @@ StyledOverlayWidget {
     property list<var> resources: [
         {
             icon: "planner_review",
-            name: Translation.tr("CPU"),
+            name: "CPU",
             history: ResourceUsage.cpuUsageHistory,
             maxAvailableString: ResourceUsage.maxAvailableCpuString,
             available: true,
@@ -139,7 +139,7 @@ StyledOverlayWidget {
         },
         {
             icon: "memory",
-            name: Translation.tr("RAM"),
+            name: "RAM",
             history: ResourceUsage.memoryUsageHistory,
             maxAvailableString: ResourceUsage.maxAvailableMemoryString,
             available: true,
@@ -188,7 +188,7 @@ StyledOverlayWidget {
         },
         {
             icon: "empty_dashboard",
-            name: Translation.tr("IGPU"),
+            name: "IGPU",
             history: (Config.options?.resources?.enableGpu !== false) ? GpuUsage.iGpuUsageHistory : [],
             maxAvailableString: GpuUsage.maxAvailableIGpuString,
             available: (Config.options?.resources?.enableGpu === false && Config.options?.resources?.gpu?.overlay?.showIGpu !== false) ||
@@ -200,7 +200,7 @@ StyledOverlayWidget {
         },
         {
             icon: "empty_dashboard",
-            name: Translation.tr("DGPU"),
+            name: "DGPU",
             history: (Config.options?.resources?.enableGpu !== false) ? GpuUsage.dGpuUsageHistory : [],
             maxAvailableString: GpuUsage.maxAvailableDGpuString,
             available: (Config.options?.resources?.enableGpu === false && Config.options?.resources?.gpu?.overlay?.showDGpu !== false) ||

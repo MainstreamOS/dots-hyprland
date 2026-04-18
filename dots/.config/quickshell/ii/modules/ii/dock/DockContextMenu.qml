@@ -98,7 +98,7 @@ Item {
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuItem {
                             iconName: "edit"
-                            label: "Rename folder"
+                            label: Translation.tr("Rename folder")
                             onClicked: {
                                 root.close();
                                 const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
@@ -124,7 +124,7 @@ Item {
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuItem {
                             iconName: "keep_off"
-                            label: "Unpin from dock"
+                            label: Translation.tr("Unpin from dock")
                             onClicked: {
                                 const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
                                 TaskbarApps.toggleFolderPin(folderId);
@@ -146,7 +146,7 @@ Item {
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuItem {
                             iconName: "delete"
-                            label: "Delete folder"
+                            label: Translation.tr("Delete folder")
                             onClicked: {
                                 const folderId = root.appToplevel.appId.substring(TaskbarApps.folderPrefix.length);
                                 AppFolderManager.deleteFolder(folderId);
@@ -184,7 +184,7 @@ Item {
                         Layout.fillWidth: true
                         visible: !root.isFolder
                         iconName: "open_in_new"
-                        label: "Open new instance"
+                        label: Translation.tr("Open new instance")
                         enabled: root.desktopEntry !== null
                         onClicked: {
                             root.desktopEntry?.execute();
@@ -232,7 +232,7 @@ Item {
                             ContextMenuItem {
                                 Layout.fillWidth: true
                                 iconName: "move_item"
-                                label: "Move to workspace"
+                                label: Translation.tr("Move to workspace")
                                 enabled: false
                                 pointingHandCursor: false
                             }
@@ -277,7 +277,7 @@ Item {
                         Layout.fillWidth: true
                         visible: !root.isFolder
                         iconName: TaskbarApps.isPinned(root.appToplevel?.appId ?? "") ? "keep_off" : "keep"
-                        label: TaskbarApps.isPinned(root.appToplevel?.appId ?? "") ? "Unpin" : "Pin to dock"
+                        label: TaskbarApps.isPinned(root.appToplevel?.appId ?? "") ? Translation.tr("Unpin") : Translation.tr("Pin to dock")
                         onClicked: {
                             TaskbarApps.togglePin(root.appToplevel.appId);
                             root.close();
@@ -297,7 +297,7 @@ Item {
                         Layout.fillWidth: true
                         sourceComponent: ContextMenuItem {
                             iconName: "close"
-                            label: (root.appToplevel?.toplevels.length ?? 0) > 1 ? "Close all windows" : "Close window"
+                            label: (root.appToplevel?.toplevels.length ?? 0) > 1 ? Translation.tr("Close all windows") : Translation.tr("Close window")
                             onClicked: {
                                 for (const toplevel of root.appToplevel.toplevels) {
                                     toplevel.close();

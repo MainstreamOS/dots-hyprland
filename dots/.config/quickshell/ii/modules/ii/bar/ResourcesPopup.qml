@@ -56,7 +56,7 @@ StyledPopup {
 
             StyledPopupHeaderRow {
                 icon: "swap_horiz"
-                label: "Swap"
+                label: Translation.tr("Swap")
             }
 
             Column {

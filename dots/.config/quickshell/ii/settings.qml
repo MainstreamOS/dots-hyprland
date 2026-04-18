@@ -29,7 +29,7 @@ ApplicationWindow {
             component: "modules/settings/QuickConfig.qml"
         },
         {
-            name: Translation.tr("Wi-Fi"),
+            name: "Wi-Fi",
             icon: "wifi",
             component: "modules/settings/WifiConfig.qml"
         },
@@ -119,7 +119,7 @@ ApplicationWindow {
 
     visible: true
     onClosing: Qt.quit()
-    title: "illogical-impulse Settings"
+    title: Translation.tr("illogical-impulse Settings")
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()

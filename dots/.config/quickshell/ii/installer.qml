@@ -23,7 +23,7 @@ ApplicationWindow {
     height: 800
     minimumWidth: 500
     minimumHeight: 600
-    title: "Welcome"
+    title: Translation.tr("Welcome")
     color: Appearance.m3colors.m3surfaceContainerLow
 
     // ── Monitor data ──
@@ -478,7 +478,7 @@ ApplicationWindow {
                     // ── Wi-Fi section ──
                     ContentSection {
                         icon: "wifi"
-                        title: Translation.tr("Wi-Fi")
+                        title: "Wi-Fi"
 
                         headerExtra: [
                             RippleButton {

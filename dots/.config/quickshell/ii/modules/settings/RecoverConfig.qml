@@ -99,13 +99,7 @@ ContentPage {
                     Layout.leftMargin: 8
                     wrapMode: Text.Wrap
                     textFormat: Text.RichText
-                    text: Translation.tr("1. Use the <b>arrow keys</b> to find <b>\"Snapshots\"</b> in the boot menu<br>" +
-                          "2. Press <b>Enter</b> to expand the list of available snapshots<br>" +
-                          "3. Choose the snapshot taken <b>before the update</b><br>" +
-                          "4. Press <b>Enter</b> to boot into that snapshot<br>" +
-                          "5. Test your system — if issues persist, try an earlier snapshot<br>" +
-                          "6. When satisfied, return here and run <b>Restore Snapshot</b> to make it permanent<br>" +
-                          "7. Reboot and boot as normal")
+                    text: Translation.tr(`1. Use the <b>arrow keys</b> to find <b>"Snapshots"</b> in the boot menu<br>2. Press <b>Enter</b> to expand the list of available snapshots<br>3. Choose the snapshot taken <b>before the update</b><br>4. Press <b>Enter</b> to boot into that snapshot<br>5. Test your system — if issues persist, try an earlier snapshot<br>6. When satisfied, return here and run <b>Restore Snapshot</b> to make it permanent<br>7. Reboot and boot as normal`)
                     font.pixelSize: Appearance.font.pixelSize.normal
                     color: Appearance.colors.colOnLayer1
                     lineHeight: 1.4

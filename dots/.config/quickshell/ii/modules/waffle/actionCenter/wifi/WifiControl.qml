@@ -41,7 +41,7 @@ Item {
                         HeaderRow {
                             id: headerRow
                             Layout.fillWidth: true
-                            title: Translation.tr("Wi-Fi")
+                            title: "Wi-Fi"
                         }
                         WSwitch {
                             id: toggleSwitch

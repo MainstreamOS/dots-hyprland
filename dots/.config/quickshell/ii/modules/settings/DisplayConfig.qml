@@ -1049,19 +1049,19 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
             readonly property var supportedColorModes: {
                 let modes = [
                     { key: "auto",   label: Translation.tr("Auto")      },
-                    { key: "srgb",   label: Translation.tr("sRGB")      },
-                    { key: "dcip3",  label: Translation.tr("DCI P3")    },
-                    { key: "adobe",  label: Translation.tr("Adobe RGB") },
-                    { key: "dp3",    label: Translation.tr("Apple RGB") },
-                    { key: "wide",   label: Translation.tr("BT2020")    },
+                    { key: "srgb",   label: "sRGB"      },
+                    { key: "dcip3",  label: "DCI P3"    },
+                    { key: "adobe",  label: "Adobe RGB" },
+                    { key: "dp3",    label: "Apple RGB" },
+                    { key: "wide",   label: "BT2020"    },
                 ];
                 if (monitorSection.hdrSupported)
-                    modes.push({ key: "hdr", label: Translation.tr("HDR") });
+                    modes.push({ key: "hdr", label: "HDR" });
                 return modes;
             }
 
             icon: "tv"
-            title: `${mon.name}  —  ${mon.make} ${mon.model}${displayConfigPage.defaultMonitor === mon.name ? " (Default)" : ""}`
+            title: `${mon.name}  —  ${mon.make} ${mon.model}${displayConfigPage.defaultMonitor === mon.name ? ` (${Translation.tr("Default")})` : ""}`
 
             // Enable / disable + Set Default
             RowLayout {
@@ -1502,7 +1502,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                             anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
                             spacing: 8
                             StyledText {
-                                text: Translation.tr("VRR")
+                                text: "VRR"
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnLayer2
                             }
@@ -1612,7 +1612,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                             anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
                             spacing: 8
                             StyledText {
-                                text: Translation.tr("10-bit")
+                                text: "10-bit"
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnLayer2
                             }
@@ -2255,7 +2255,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                         }
                         StyledText {
                             anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: 16 }
-                            text: Translation.tr("SDR")
+                            text: "SDR"
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: Appearance.colors.colSubtext
                         }
@@ -2359,7 +2359,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                         }
                         StyledText {
                             anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: 16 }
-                            text: Translation.tr("HDR")
+                            text: "HDR"
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: Appearance.colors.colSubtext
                         }

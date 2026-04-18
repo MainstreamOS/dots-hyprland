@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Window
+import qs.services
 
 // HDR Calibration Wizard
 // Opened fullscreen by DisplayConfig when the user clicks "Calibrate Monitor for HDR".
@@ -34,16 +35,16 @@ Window {
 
     // Quick presets — pre-fill all values from a known panel type
     readonly property var presets: [
-        { label: "OLED / QD-OLED",  icon: "✦", desc: "True black, high peak",
+        { label: Translation.tr("OLED / QD-OLED"),  icon: "✦", desc: Translation.tr("True black, high peak"),
           v: { maxLuminance: 1000, maxAvgLuminance: 600, minLuminance: 0,
                sdrMaxLuminance: 280, sdrMinLuminance: 0.003, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
-        { label: "LCD HDR 600",     icon: "◧", desc: "Mid-range HDR LCD",
+        { label: Translation.tr("LCD HDR 600"),     icon: "◧", desc: Translation.tr("Mid-range HDR LCD"),
           v: { maxLuminance: 600, maxAvgLuminance: 400, minLuminance: 0.05,
                sdrMaxLuminance: 250, sdrMinLuminance: 0.008, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
-        { label: "LCD HDR 1000",    icon: "◨", desc: "High-end HDR LCD",
+        { label: Translation.tr("LCD HDR 1000"),    icon: "◨", desc: Translation.tr("High-end HDR LCD"),
           v: { maxLuminance: 1000, maxAvgLuminance: 600, minLuminance: 0.03,
                sdrMaxLuminance: 300, sdrMinLuminance: 0.005, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
-        { label: "Custom",          icon: "◇", desc: "Start from current values",
+        { label: Translation.tr("Custom"),          icon: "◇", desc: Translation.tr("Start from current values"),
           v: null },
     ]
 
@@ -63,7 +64,7 @@ Window {
     }
 
     // ── Window setup ───────────────────────────────────────────────────────
-    title: "HDR Calibration — " + root.monitorName
+    title: Translation.tr("HDR Calibration") + " — " + root.monitorName
     color: "#000000"
     // Caller uses showFullScreen(); this is the fallback visibility
     minimumWidth:  900
@@ -78,9 +79,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "peak",
-            title:       "Peak Brightness",
+            title:       Translation.tr("Peak Brightness"),
             setting:     "max_luminance",
-            hint:        "Set this to your display's rated peak brightness in nits.\n\nThe small centre patch represents a brief HDR highlight — on a real HDR display it would be blindingly bright. Look up your monitor's Peak Luminance specification (often listed as HDR400 / HDR600 / HDR1000 / HDR1400).\n\nThe reference bar at the bottom shows common display tiers.",
+            hint:        Translation.tr("Set this to your display's rated peak brightness in nits.\n\nThe small centre patch represents a brief HDR highlight — on a real HDR display it would be blindingly bright. Look up your monitor's Peak Luminance specification (often listed as HDR400 / HDR600 / HDR1000 / HDR1400).\n\nThe reference bar at the bottom shows common display tiers."),
             propName:    "valMaxLuminance",
             minVal: 100, maxVal: 2000, sliderStep: 10, decimals: 0, unit: " nits",
             recMin: 400, recMax: 1400,
@@ -88,9 +89,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "avg",
-            title:       "Sustained Brightness",
+            title:       Translation.tr("Sustained Brightness"),
             setting:     "max_avg_luminance",
-            hint:        "Monitors reduce brightness when large bright areas are displayed for extended periods (ABL / APL limiting). Set this to 60–70 % of your peak brightness.\n\nThe large patch simulates a bright scene. Typical values: 300–600 nits.",
+            hint:        Translation.tr("Monitors reduce brightness when large bright areas are displayed for extended periods (ABL / APL limiting). Set this to 60–70 % of your peak brightness.\n\nThe large patch simulates a bright scene. Typical values: 300–600 nits."),
             propName:    "valMaxAvgLuminance",
             minVal: 100, maxVal: 1600, sliderStep: 10, decimals: 0, unit: " nits",
             recMin: 300, recMax: 600,
@@ -98,9 +99,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "blackFloor",
-            title:       "Black Floor",
+            title:       Translation.tr("Black Floor"),
             setting:     "min_luminance",
-            hint:        "The absolute minimum brightness your panel can produce. OLED and QD-OLED panels can reach true 0; LCD panels typically fall between 0.02 and 0.1 nits.\n\nIncrease until the second-lightest shadow bar is just barely visible. Leave at 0 for OLED/QD-OLED.",
+            hint:        Translation.tr("The absolute minimum brightness your panel can produce. OLED and QD-OLED panels can reach true 0; LCD panels typically fall between 0.02 and 0.1 nits.\n\nIncrease until the second-lightest shadow bar is just barely visible. Leave at 0 for OLED/QD-OLED."),
             propName:    "valMinLuminance",
             minVal: 0, maxVal: 0.5, sliderStep: 0.001, decimals: 3, unit: " nits",
             recMin: 0, recMax: 0.1,
@@ -108,9 +109,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "sdrWhite",
-            title:       "SDR Paper White",
+            title:       Translation.tr("SDR Paper White"),
             setting:     "sdr_max_luminance",
-            hint:        "The brightness of 100 % white in SDR applications (the 'paper white' reference). The broadcast standard is 203 nits; a comfortable desktop value is 250–350 nits.\n\nRaise if SDR windows look too dim next to HDR content. Lower if SDR feels too harsh.",
+            hint:        Translation.tr("The brightness of 100 % white in SDR applications (the 'paper white' reference). The broadcast standard is 203 nits; a comfortable desktop value is 250–350 nits.\n\nRaise if SDR windows look too dim next to HDR content. Lower if SDR feels too harsh."),
             propName:    "valSdrMaxLuminance",
             minVal: 80, maxVal: 1000, sliderStep: 5, decimals: 0, unit: " nits",
             recMin: 203, recMax: 350,
@@ -118,9 +119,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "sdrBlack",
-            title:       "SDR Shadow Detail",
+            title:       Translation.tr("SDR Shadow Detail"),
             setting:     "sdr_min_luminance",
-            hint:        "Lifts the black floor for SDR content only, recovering shadow detail that can be crushed during the SDR→HDR conversion. Values of 0.003–0.01 suit most displays.\n\nIncrease until the checkerboard texture in the dark area becomes just visible.",
+            hint:        Translation.tr("Lifts the black floor for SDR content only, recovering shadow detail that can be crushed during the SDR→HDR conversion. Values of 0.003–0.01 suit most displays.\n\nIncrease until the checkerboard texture in the dark area becomes just visible."),
             propName:    "valSdrMinLuminance",
             minVal: 0, maxVal: 0.1, sliderStep: 0.001, decimals: 3, unit: " nits",
             recMin: 0.003, recMax: 0.01,
@@ -128,9 +129,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "brightness",
-            title:       "SDR Brightness",
+            title:       Translation.tr("SDR Brightness"),
             setting:     "sdrbrightness",
-            hint:        "Scales the overall brightness of SDR content in HDR mode. 1.0 is the reference level; increase if SDR applications look dim compared to native HDR content.\n\nThe grey ramp updates in real time to show how all SDR tones shift.",
+            hint:        Translation.tr("Scales the overall brightness of SDR content in HDR mode. 1.0 is the reference level; increase if SDR applications look dim compared to native HDR content.\n\nThe grey ramp updates in real time to show how all SDR tones shift."),
             propName:    "valSdrBrightness",
             minVal: 0.5, maxVal: 3.0, sliderStep: 0.05, decimals: 2, unit: "×",
             recMin: 0.9, recMax: 1.3,
@@ -138,9 +139,9 @@ Window {
         {
             stepType:    "slider",
             patternType: "saturation",
-            title:       "SDR Saturation",
+            title:       Translation.tr("SDR Saturation"),
             setting:     "sdrsaturation",
-            hint:        "Adjusts the colour saturation of SDR content. 1.0 is accurate sRGB; increase slightly if SDR apps look desaturated next to HDR, or decrease if they look over-vivid.\n\nThe colour swatches update in real time.",
+            hint:        Translation.tr("Adjusts the colour saturation of SDR content. 1.0 is accurate sRGB; increase slightly if SDR apps look desaturated next to HDR, or decrease if they look over-vivid.\n\nThe colour swatches update in real time."),
             propName:    "valSdrSaturation",
             minVal: 0.5, maxVal: 2.0, sliderStep: 0.05, decimals: 2, unit: "×",
             recMin: 0.9, recMax: 1.1,
@@ -271,7 +272,7 @@ Window {
                             Text {
                                 id: cancelTxt
                                 anchors.centerIn: parent
-                                text: "✕  Cancel"
+                                text: "✕  " + Translation.tr("Cancel")
                                 color: "#666666"
                                 font.pixelSize: 13
                             }
@@ -306,14 +307,14 @@ Window {
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: "HDR Calibration"
+                            text: Translation.tr("HDR Calibration")
                             color: "#ffffff"
                             font.pixelSize: 34
                             font.weight: Font.Light
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: "This wizard guides you through calibrating the HDR luminance settings for\n\n    " + root.monitorName + "\n\nFor best results:\n\n  •  Dim the room — avoid bright light falling on the screen\n  •  Let the monitor warm up for 20–30 minutes\n  •  Disable auto-brightness and ambient light sensors"
+                            text: Translation.tr("This wizard guides you through calibrating the HDR luminance settings for\n\n    %1\n\nFor best results:\n\n  •  Dim the room — avoid bright light falling on the screen\n  •  Let the monitor warm up for 20–30 minutes\n  •  Disable auto-brightness and ambient light sensors").arg(root.monitorName)
                             color: "#666666"
                             font.pixelSize: 14
                             lineHeight: 1.65
@@ -323,7 +324,7 @@ Window {
 
                         Text {
                             Layout.topMargin: 8
-                            text: "Choose a starting preset, then fine-tune each value:"
+                            text: Translation.tr("Choose a starting preset, then fine-tune each value:")
                             color: "#555555"
                             font.pixelSize: 13
                         }
@@ -402,7 +403,7 @@ Window {
                         Text {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.bottomMargin: 28
-                            text: "Review Settings"
+                            text: Translation.tr("Review Settings")
                             color: "#ffffff"
                             font.pixelSize: 26
                             font.weight: Font.Light
@@ -414,10 +415,10 @@ Window {
                             Layout.fillWidth: true
                             Layout.bottomMargin: 4
                             anchors { leftMargin: 12; rightMargin: 12 }
-                            Text { text: "setting"; color: "#333333"; font.pixelSize: 11; font.family: "monospace"; Layout.fillWidth: true }
-                            Text { text: "previous"; color: "#333333"; font.pixelSize: 11; font.family: "monospace"; horizontalAlignment: Text.AlignRight; Layout.minimumWidth: 80 }
+                            Text { text: Translation.tr("setting"); color: "#333333"; font.pixelSize: 11; font.family: "monospace"; Layout.fillWidth: true }
+                            Text { text: Translation.tr("previous"); color: "#333333"; font.pixelSize: 11; font.family: "monospace"; horizontalAlignment: Text.AlignRight; Layout.minimumWidth: 80 }
                             Text { text: "→"; color: "#222222"; font.pixelSize: 11; Layout.minimumWidth: 20; horizontalAlignment: Text.AlignHCenter }
-                            Text { text: "new"; color: "#333333"; font.pixelSize: 11; font.family: "monospace"; horizontalAlignment: Text.AlignRight; Layout.minimumWidth: 80 }
+                            Text { text: Translation.tr("new"); color: "#333333"; font.pixelSize: 11; font.family: "monospace"; horizontalAlignment: Text.AlignRight; Layout.minimumWidth: 80 }
                         }
 
                         // Value rows
@@ -493,7 +494,7 @@ Window {
                         Text {
                             Layout.topMargin: 24
                             Layout.alignment: Qt.AlignHCenter
-                            text: "Clicking Apply will save these values to monitors.conf\nand reload Hyprland immediately."
+                            text: Translation.tr("Clicking Apply will save these values to monitors.conf\nand reload Hyprland immediately.")
                             color: "#444444"
                             font.pixelSize: 12
                             lineHeight: 1.6
@@ -590,7 +591,7 @@ Window {
                         ctx.fillStyle = "#333333";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("10 % window  ·  " + nits.toFixed(0) + " nits", w / 2, py - 18);
+                        ctx.fillText(Translation.tr("10 % window  ·  %1 nits").arg(nits.toFixed(0)), w / 2, py - 18);
                     }
 
                     // ── Pattern: 50% APL — sustained brightness ────────────
@@ -606,7 +607,7 @@ Window {
                         ctx.fillStyle = "#2a2a2a";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("50 % APL  ·  " + nits.toFixed(0) + " nits", w / 2, areaY + areaH + 26);
+                        ctx.fillText(Translation.tr("50 % APL  ·  %1 nits").arg(nits.toFixed(0)), w / 2, areaY + areaH + 26);
                     }
 
                     // ── Pattern: PLUGE — black floor ───────────────────────
@@ -654,7 +655,7 @@ Window {
                         ctx.fillStyle = "#333333";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("Black floor  ·  " + nits.toFixed(3) + " nits — raise until lightest shadow bar becomes just visible", w / 2, startY - 22);
+                        ctx.fillText(Translation.tr("Black floor  ·  %1 nits — raise until lightest shadow bar becomes just visible").arg(nits.toFixed(3)), w / 2, startY - 22);
                     }
 
                     // ── Pattern: white reference — SDR paper white ─────────
@@ -675,16 +676,16 @@ Window {
                         ctx.font = "bold 14px sans-serif";
                         ctx.textAlign = "center";
                         ctx.textBaseline = "middle";
-                        ctx.fillText("SDR White", bx + bw / 2, by + bh / 2 - 12);
+                        ctx.fillText(Translation.tr("SDR White"), bx + bw / 2, by + bh / 2 - 12);
                         ctx.font = "12px monospace";
-                        ctx.fillText(nits.toFixed(0) + " nits", bx + bw / 2, by + bh / 2 + 14);
+                        ctx.fillText(Translation.tr("%1 nits").arg(nits.toFixed(0)), bx + bw / 2, by + bh / 2 + 14);
                         ctx.textBaseline = "alphabetic";
 
                         // Reference marker
                         ctx.fillStyle = "#2a2a2a";
                         ctx.font = "11px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("← 203 nits (broadcast standard)    250–350 nits (desktop comfortable) →", w / 2, by + bh + 30);
+                        ctx.fillText(Translation.tr("← 203 nits (broadcast standard)    250–350 nits (desktop comfortable) →"), w / 2, by + bh + 30);
                     }
 
                     // ── Pattern: near-black checkerboard — SDR shadow ──────
@@ -715,7 +716,7 @@ Window {
                         ctx.fillStyle = "#282828";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("Shadow detail  ·  " + nits.toFixed(3) + " nits — raise until checkerboard becomes just visible", w / 2, areaY + areaH + 24);
+                        ctx.fillText(Translation.tr("Shadow detail  ·  %1 nits — raise until checkerboard becomes just visible").arg(nits.toFixed(3)), w / 2, areaY + areaH + 24);
                     }
 
                     // ── Pattern: grey ramp — SDR brightness ────────────────
@@ -749,12 +750,12 @@ Window {
                         ctx.fillStyle = "#333333";
                         ctx.font = "10px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("ref white", refX, sy - 24);
+                        ctx.fillText(Translation.tr("ref white"), refX, sy - 24);
 
                         ctx.fillStyle = "#303030";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("SDR brightness  ·  " + mult.toFixed(2) + "×", w / 2, sy - 36);
+                        ctx.fillText(Translation.tr("SDR brightness  ·  %1×").arg(mult.toFixed(2)), w / 2, sy - 36);
                     }
 
                     // ── Pattern: colour swatches — SDR saturation ──────────
@@ -779,12 +780,12 @@ Window {
                         ctx.fillStyle = "#333333";
                         ctx.font = "10px monospace";
                         ctx.textAlign = "right";
-                        ctx.fillText("neutral ref", sx - 6, sy + sh + gsh + 2);
+                        ctx.fillText(Translation.tr("neutral ref"), sx - 6, sy + sh + gsh + 2);
 
                         ctx.fillStyle = "#303030";
                         ctx.font = "12px monospace";
                         ctx.textAlign = "center";
-                        ctx.fillText("SDR saturation  ·  " + sat.toFixed(2) + "×  (effective: " + satPct + " %)", w / 2, sy - 20);
+                        ctx.fillText(Translation.tr("SDR saturation  ·  %1×  (effective: %2 %)").arg(sat.toFixed(2)).arg(satPct), w / 2, sy - 20);
                     }
                 }
             }
@@ -921,7 +922,7 @@ Window {
                         text: {
                             if (!root.step || root.step.recMin === undefined) return "";
                             let dec = root.step.decimals ?? 0;
-                            return "▪ Recommended range: " + root.step.recMin.toFixed(dec) + " – " + root.step.recMax.toFixed(dec) + (root.step.unit ?? "");
+                            return Translation.tr("▪ Recommended range: %1 – %2%3").arg(root.step.recMin.toFixed(dec)).arg(root.step.recMax.toFixed(dec)).arg(root.step.unit ?? "");
                         }
                         color: "#2a5a2a"
                         font.pixelSize: 11
@@ -955,7 +956,7 @@ Window {
                                 Text {
                                     id: backTxt
                                     anchors.centerIn: parent
-                                    text: "← Back"
+                                    text: "← " + Translation.tr("Back")
                                     color: "#666666"
                                     font.pixelSize: 14
                                 }
@@ -986,7 +987,7 @@ Window {
                                 Text {
                                     id: skipTxt
                                     anchors.centerIn: parent
-                                    text: "Skip"
+                                    text: Translation.tr("Skip")
                                     color: "#484848"
                                     font.pixelSize: 14
                                 }
@@ -1026,7 +1027,7 @@ Window {
                                 Text {
                                     id: nextTxt
                                     anchors.centerIn: parent
-                                    text: root.currentStep < root.lastStep ? "Next →" : "✓  Apply"
+                                    text: root.currentStep < root.lastStep ? (Translation.tr("Next") + " →") : ("✓  " + Translation.tr("Apply"))
                                     color: "#000000"
                                     font.pixelSize: 14
                                     font.weight: Font.Medium

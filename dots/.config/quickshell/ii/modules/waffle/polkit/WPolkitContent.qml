@@ -192,7 +192,7 @@ Rectangle {
                 Layout.topMargin: 20
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignLeft
-                text: Translation.tr("Polkit")
+                text: "Polkit"
             }
             WText {
                 Layout.fillWidth: true

@@ -406,7 +406,7 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Dwindle (default)"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { text: "Dwindle (default)"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
                                 StyledText { text: Translation.tr("Each new window splits the last in half"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
@@ -489,7 +489,7 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Master"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { text: "Master"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
                                 StyledText { text: Translation.tr("One main window with a side stack"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
@@ -576,7 +576,7 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Scrolling"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { text: "Scrolling"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
                                 StyledText { text: Translation.tr("Horizontally scrollable window columns"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
@@ -657,7 +657,7 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Monocle"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { text: "Monocle"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
                                 StyledText { text: Translation.tr("One focused fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
@@ -746,7 +746,7 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Float"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { text: "Float"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
                                 StyledText { text: Translation.tr("All windows float freely on the desktop"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
