@@ -19,7 +19,7 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
     readonly property bool isFolder: appToplevel.isFolder === true
-    property var desktopEntry: isFolder ? null : DesktopEntries.heuristicLookup(appToplevel.appId)
+    property var desktopEntry: isFolder ? null : AppSearch.guessDesktopEntry(appToplevel.appId)
 
     Timer {
         // Retry looking up the desktop entry if it failed (e.g. database not loaded yet)
@@ -29,7 +29,7 @@ DockButton {
         repeat: true
         onTriggered: {
             retryCount--;
-            root.desktopEntry = DesktopEntries.heuristicLookup(root.appToplevel.appId);
+            root.desktopEntry = AppSearch.guessDesktopEntry(root.appToplevel.appId);
         }
     }
 

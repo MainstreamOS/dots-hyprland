@@ -95,6 +95,45 @@ Singleton {
         return str.toLowerCase().replace(/_/g, "-");
     }
 
+    // Resolve a string (window class, pinned id, or display name) to a DesktopEntry.
+    // Mirrors guessIcon's fallback chain so pins like "GitHub Desktop" still resolve
+    // when the user enters the display name instead of the desktop-entry id.
+    function guessDesktopEntry(str) {
+        if (!str || str.length == 0) return null;
+
+        const direct = DesktopEntries.byId(str);
+        if (direct) return direct;
+
+        const lowercased = str.toLowerCase();
+        const lowered = DesktopEntries.byId(lowercased);
+        if (lowered) return lowered;
+
+        const kebab = getKebabNormalizedAppName(str);
+        const kebabEntry = DesktopEntries.byId(kebab);
+        if (kebabEntry) return kebabEntry;
+
+        const underscoreKebab = getUndescoreToKebabAppName(str);
+        if (underscoreKebab !== kebab) {
+            const underscoreEntry = DesktopEntries.byId(underscoreKebab);
+            if (underscoreEntry) return underscoreEntry;
+        }
+
+        const reverseDomain = getReverseDomainNameAppName(str);
+        if (reverseDomain !== str) {
+            const reverseEntry = DesktopEntries.byId(reverseDomain)
+                ?? DesktopEntries.byId(reverseDomain.toLowerCase());
+            if (reverseEntry) return reverseEntry;
+        }
+
+        const heuristic = DesktopEntries.heuristicLookup(str);
+        if (heuristic) return heuristic;
+
+        const nameMatches = root.fuzzyQuery(str);
+        if (nameMatches.length > 0) return nameMatches[0];
+
+        return null;
+    }
+
     function guessIcon(str) {
         if (!str || str.length == 0) return "image-missing";
 
