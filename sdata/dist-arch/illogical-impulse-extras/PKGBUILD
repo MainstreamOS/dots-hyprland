@@ -17,7 +17,6 @@ optdepends=(
   'gnome-calendar: Calendar'
   'simple-scan: Document scanner'
   'gnome-font-viewer: Font viewer'
-  'libreoffice-fresh: Office suite'
   'gnome-text-editor: Text editor'
   'loupe: Image viewer'
   'mpv: Video player'
