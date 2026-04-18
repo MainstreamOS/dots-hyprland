@@ -154,14 +154,34 @@ Scope {
             color: Appearance.colors.colSecondaryContainer
             opacity: 0.92
             property var app: null
+            readonly property bool isFolder: app && app._isFolder === true
 
             IconImage {
                 anchors.centerIn: parent
-                source: dragFloatIcon.app
+                visible: dragFloatIcon.app && !dragFloatIcon.isFolder
+                source: dragFloatIcon.app && !dragFloatIcon.isFolder
                     ? Quickshell.iconPath(AppSearch.guessIcon(
                           dragFloatIcon.app.id || dragFloatIcon.app.icon), "image-missing")
                     : ""
                 implicitSize: 40
+            }
+
+            // Folder ghost — mini 2x2 grid of contained app icons,
+            // mirroring the folder visual in the drawer.
+            Grid {
+                anchors.centerIn: parent
+                columns: 2
+                spacing: 2
+                visible: dragFloatIcon.isFolder
+
+                Repeater {
+                    model: dragFloatIcon.isFolder ? dragFloatIcon.app.appIds.slice(0, 4) : []
+                    IconImage {
+                        required property var modelData
+                        source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
+                        implicitSize: 18
+                    }
+                }
             }
         }
 
@@ -194,14 +214,35 @@ Scope {
                 const ws = overviewLoader.item
                     ? overviewLoader.item.workspaceAtScenePoint(sceneX, sceneY)
                     : -1
-                if (ws > 0 && app) {
-                    // Use the parsed command array from DesktopEntry so the
-                    // command is reliable (app.exec is raw and not runnable).
-                    const parts = app.command
-                    if (parts && parts.length > 0) {
-                        const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
-                        Hyprland.dispatch(`exec [workspace ${ws} silent] ${cmd}`)
+                if (ws <= 0 || !app) return
+
+                // Folder drop → launch every contained app on the target workspace.
+                // [workspace N silent] is per-spawn-PID and misses windows from
+                // DBus-activated apps (GNOME Nautilus, Text Editor, etc.), which
+                // are spawned by the long-running service rather than the binary
+                // we exec. Focus the target workspace first so the service's new
+                // windows land on it regardless of activation style.
+                if (app._isFolder === true) {
+                    const ids = app.appIds || []
+                    if (ids.length === 0) return
+                    Hyprland.dispatch(`workspace ${ws}`)
+                    for (let i = 0; i < ids.length; i++) {
+                        const entry = AppSearch.guessDesktopEntry(ids[i])
+                        const parts = entry ? entry.command : null
+                        if (parts && parts.length > 0) {
+                            const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
+                            Hyprland.dispatch(`exec ${cmd}`)
+                        }
                     }
+                    return
+                }
+
+                // Use the parsed command array from DesktopEntry so the
+                // command is reliable (app.exec is raw and not runnable).
+                const parts = app.command
+                if (parts && parts.length > 0) {
+                    const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
+                    Hyprland.dispatch(`exec [workspace ${ws} silent] ${cmd}`)
                 }
             }
 

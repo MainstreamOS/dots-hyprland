@@ -592,11 +592,6 @@ Item {
                         const dx = mouse.x - _startX
                         const dy = mouse.y - _startY
                         if (!_dragging && (dx * dx + dy * dy) > _threshold * _threshold) {
-                            // Don't allow dragging folders themselves
-                            if (_app._isFolder) {
-                                _app = null
-                                return
-                            }
                             _dragging = true
                             root._isDraggingApp = true
                             const sp = dragOverlay.mapToItem(null, mouse.x, mouse.y)
@@ -606,11 +601,13 @@ Item {
                             const sp = dragOverlay.mapToItem(null, mouse.x, mouse.y)
                             root.appDragUpdate(sp.x, sp.y)
 
-                            // Track which grid cell we're hovering over
+                            // Track which grid cell we're hovering over.
+                            // Folders can't be merged into anything, so skip the
+                            // merge-target highlight when dragging a folder.
                             const hoverItem = appGrid.itemAt(
                                 mouse.x + appGrid.contentX,
                                 mouse.y + appGrid.contentY)
-                            if (hoverItem && hoverItem.index !== _appIndex) {
+                            if (!_app._isFolder && hoverItem && hoverItem.index !== _appIndex) {
                                 root._dragHoverIndex = hoverItem.index
                             } else {
                                 root._dragHoverIndex = -1
@@ -625,7 +622,7 @@ Item {
                                 mouse.x + appGrid.contentX,
                                 mouse.y + appGrid.contentY)
 
-                            if (hoverItem && hoverItem.index !== _appIndex && hoverItem.modelData) {
+                            if (!_app._isFolder && hoverItem && hoverItem.index !== _appIndex && hoverItem.modelData) {
                                 const target = hoverItem.modelData
                                 const draggedApp = _app
 
@@ -643,7 +640,7 @@ Item {
                                     root.folderNameDialogVisible = true
                                 }
                             } else {
-                                // Not over another item → workspace drop
+                                // Not over another item, or dragged item is a folder → workspace drop
                                 const sp = dragOverlay.mapToItem(null, mouse.x, mouse.y)
                                 root.appDropped(_app, sp.x, sp.y)
                             }
