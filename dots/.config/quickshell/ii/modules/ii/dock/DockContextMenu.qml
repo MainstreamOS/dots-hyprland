@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Services.Pipewire
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -17,6 +18,15 @@ Item {
     readonly property var desktopEntry: (!isFolder && appToplevel) ? DesktopEntries.heuristicLookup(appToplevel.appId) : null
     readonly property bool hasWindows: (appToplevel?.toplevels.length ?? 0) > 0
     readonly property bool hasDesktopActions: (!isFolder && desktopEntry?.actions.length) ?? false
+    readonly property bool volumeFeatureEnabled: Config.options.dock.contextMenuVolume.enable
+    readonly property string volumeGrouping: Config.options.dock.contextMenuVolume.grouping
+    readonly property var audioStreams: (volumeFeatureEnabled && !isFolder && appToplevel) ? Audio.streamsForAppId(appToplevel.appId) : []
+    readonly property bool hasAudioStreams: audioStreams.length > 0
+    readonly property var audioGroups: {
+        if (!hasAudioStreams) return [];
+        if (volumeGrouping === "perApp") return [audioStreams];
+        return audioStreams.map(n => [n]);
+    }
 
     function open(button, appToplevelData) {
         if (menuLoader.active) {
@@ -188,6 +198,30 @@ Item {
                         visible: !root.isFolder
                     }
 
+                    // Per-app volume slider + mute (only when app has active audio streams)
+                    Loader {
+                        active: root.hasAudioStreams && !root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ColumnLayout {
+                            spacing: 0
+                            Repeater {
+                                model: ScriptModel { values: root.audioGroups }
+                                delegate: ContextMenuVolumeRow {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    nodes: modelData
+                                }
+                            }
+                        }
+                    }
+
+                    // Separator after volume controls
+                    Loader {
+                        active: root.hasAudioStreams && !root.isFolder
+                        Layout.fillWidth: true
+                        sourceComponent: ContextMenuSeparator {}
+                    }
+
                     // Move to workspace (only when has windows)
                     Loader {
                         active: root.hasWindows && !root.isFolder
@@ -310,6 +344,121 @@ Item {
                 color: menuItemRoot.enabled ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3outline
                 elide: Text.ElideRight
             }
+        }
+    }
+
+    component ContextMenuVolumeRow: Item {
+        id: volRow
+        required property var nodes
+        readonly property var primaryNode: (nodes && nodes.length > 0) ? nodes[0] : null
+        readonly property bool allMuted: {
+            if (!nodes || nodes.length === 0) return false;
+            for (const n of nodes) if (!n?.audio?.muted) return false;
+            return true;
+        }
+        readonly property real aggregateVolume: {
+            if (!nodes || nodes.length === 0) return 0;
+            let sum = 0, count = 0;
+            for (const n of nodes) { if (n?.audio) { sum += n.audio.volume; count++; } }
+            return count > 0 ? sum / count : 0;
+        }
+        readonly property string streamTitle: {
+            if (!primaryNode) return "";
+            if (nodes.length > 1) {
+                return `${Audio.appNodeDisplayName(primaryNode)} (${nodes.length})`;
+            }
+            const media = primaryNode.properties["media.name"];
+            if (media) return media;
+            return Audio.appNodeDisplayName(primaryNode);
+        }
+        function setVolumeAll(v) {
+            for (const n of nodes) if (n?.audio) n.audio.volume = v;
+        }
+        function setMutedAll(m) {
+            for (const n of nodes) if (n?.audio) n.audio.muted = m;
+        }
+        implicitHeight: volColumn.implicitHeight + 6
+        implicitWidth: Math.max(rowLayout.implicitWidth + 20, 180)
+
+        PwObjectTracker { objects: volRow.nodes ?? [] }
+
+        ColumnLayout {
+            id: volColumn
+            anchors {
+                fill: parent
+                leftMargin: 10
+                rightMargin: 10
+                topMargin: 3
+                bottomMargin: 3
+            }
+            spacing: 0
+
+            Item {
+                Layout.fillWidth: true
+                Layout.leftMargin: 2
+                Layout.preferredWidth: 0
+                implicitHeight: titleText.implicitHeight
+                clip: true
+                StyledText {
+                    id: titleText
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    text: volRow.streamTitle
+                    horizontalAlignment: Text.AlignLeft
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.m3colors.m3onSurface
+                    elide: Text.ElideRight
+                }
+            }
+
+        RowLayout {
+            id: rowLayout
+            Layout.fillWidth: true
+            spacing: 6
+
+            RippleButton {
+                id: muteBtn
+                implicitWidth: 30
+                implicitHeight: 30
+                buttonRadius: Appearance.rounding.small
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: volRow.setMutedAll(!volRow.allMuted)
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: volRow.allMuted
+                        ? "volume_off"
+                        : (volRow.aggregateVolume < 0.01 ? "volume_mute"
+                            : (volRow.aggregateVolume < 0.5 ? "volume_down" : "volume_up"))
+                    iconSize: Appearance.font.pixelSize.normal
+                    color: volRow.allMuted ? Appearance.m3colors.m3outline : Appearance.m3colors.m3onSurface
+                }
+                StyledToolTip {
+                    text: volRow.allMuted ? Translation.tr("Click to unmute") : Translation.tr("Click to mute")
+                }
+            }
+
+            StyledSlider {
+                id: volSlider
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                configuration: StyledSlider.Configuration.XS
+                from: 0
+                to: 1
+                value: volRow.aggregateVolume
+                onMoved: volRow.setVolumeAll(value)
+                opacity: volRow.allMuted ? 0.5 : 1.0
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 34
+                horizontalAlignment: Text.AlignRight
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                color: Appearance.m3colors.m3onSurface
+                text: `${Math.round(volRow.aggregateVolume * 100)}%`
+            }
+        }
         }
     }
 

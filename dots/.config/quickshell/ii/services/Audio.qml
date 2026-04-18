@@ -26,6 +26,35 @@ Singleton {
         return (node.properties["application.name"] || node.description || node.name)
     }
 
+    // Find output stream nodes that belong to a given window/dock appId.
+    // Matches against application.name, application.process.binary, node.name etc.
+    function streamsForAppId(appId) {
+        if (!appId) return [];
+        const normalize = (s) => (s || "").toString().toLowerCase().replace(/[^a-z0-9]+/g, "");
+        const target = normalize(appId);
+        if (!target) return [];
+        return root.outputAppNodes.filter(node => {
+            if (!node) return false;
+            const props = node.properties || ({});
+            const candidates = [
+                props["application.name"],
+                props["application.process.binary"],
+                props["application.process.name"],
+                props["application.icon-name"],
+                props["node.name"],
+                node.name,
+                node.description,
+            ];
+            return candidates.some(c => {
+                const n = normalize(c);
+                if (!n) return false;
+                if (n === target) return true;
+                if (n.length >= 3 && target.length >= 3 && (n.includes(target) || target.includes(n))) return true;
+                return false;
+            });
+        });
+    }
+
     // Lists
     function correctType(node, isSink) {
         return (node.isSink === isSink) && node.audio

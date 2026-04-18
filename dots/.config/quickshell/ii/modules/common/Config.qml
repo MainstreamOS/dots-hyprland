@@ -435,6 +435,10 @@ Singleton {
                 property list<string> pinnedApps: [ // IDs of pinned entries
                     "google-chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
+                property JsonObject contextMenuVolume: JsonObject {
+                    property bool enable: true
+                    property string grouping: "perApp" // "perApp" (one bar controlling all of the app's streams) | "perStream" (one bar per audio stream/window)
+                }
             }
 
             property JsonObject interactions: JsonObject {

@@ -444,6 +444,46 @@ ContentPage {
                 }
             }
         }
+
+        ConfigRow {
+            uniform: true
+            Layout.fillWidth: true
+            ConfigSwitch {
+                buttonIcon: "volume_up"
+                text: Translation.tr("Right-click volume control")
+                checked: Config.options.dock.contextMenuVolume.enable
+                onCheckedChanged: {
+                    Config.options.dock.contextMenuVolume.enable = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("Shows a volume slider and mute toggle in the dock context menu for apps currently outputting audio.")
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                implicitHeight: groupingSelector.implicitHeight
+
+                ConfigSelectionArray {
+                    id: groupingSelector
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    enabled: Config.options.dock.contextMenuVolume.enable
+                    opacity: enabled ? 1.0 : 0.4
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                    currentValue: Config.options.dock.contextMenuVolume.grouping
+                    onSelected: newValue => {
+                        Config.options.dock.contextMenuVolume.grouping = newValue;
+                    }
+                    options: [
+                        { displayName: Translation.tr("Per app"),    value: "perApp"    },
+                        { displayName: Translation.tr("Per window"), value: "perStream" },
+                    ]
+                }
+            }
+        }
+
         ConfigSwitch {
             buttonIcon: "colors"
             text: Translation.tr("Tint app icons")
