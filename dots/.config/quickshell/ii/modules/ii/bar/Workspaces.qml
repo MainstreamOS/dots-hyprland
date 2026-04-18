@@ -101,7 +101,83 @@ Item {
         onPressed: (event) => {
             if (event.button === Qt.BackButton) {
                 Hyprland.dispatch(`togglespecialworkspace`);
-            } 
+            }
+        }
+    }
+
+    // Drag-to-scroll: hover a dragged file over the widget to cycle workspaces.
+    // Position within the widget determines direction and speed; center is a dead zone.
+    DropArea {
+        id: dragScrollArea
+        anchors.fill: parent
+        anchors.leftMargin: root.vertical ? 0 : -dragExtension
+        anchors.rightMargin: root.vertical ? 0 : -dragExtension
+        anchors.topMargin: root.vertical ? -dragExtension : 0
+        anchors.bottomMargin: root.vertical ? -dragExtension : 0
+        z: 10
+
+        property int dragExtension: 50    // extra px of catch area on each side
+        property real deadZone: 0.18
+        property real minSpeed: 1.5       // workspaces per second just outside dead zone
+        property real maxSpeed: 2.0       // workspaces per second at the edge
+        property real normalizedOffset: 0 // -1 (far start) to +1 (far end), 0 = center
+        property bool dragActive: false
+
+        function updateFromDrag(drag) {
+            const size = root.vertical ? height : width;
+            const pos = root.vertical ? drag.y : drag.x;
+            if (size <= 0) {
+                normalizedOffset = 0;
+                return;
+            }
+            // Map [0, size] to [-1, +1]
+            normalizedOffset = Math.max(-1, Math.min(1, (pos / size) * 2 - 1));
+        }
+
+        onEntered: (drag) => {
+            dragActive = true;
+            updateFromDrag(drag);
+        }
+        onPositionChanged: (drag) => {
+            updateFromDrag(drag);
+        }
+        onExited: {
+            dragActive = false;
+            normalizedOffset = 0;
+        }
+        onDropped: {
+            dragActive = false;
+            normalizedOffset = 0;
+        }
+
+        Timer {
+            id: dragScrollTimer
+            interval: 16
+            repeat: true
+            running: dragScrollArea.dragActive
+                     && Math.abs(dragScrollArea.normalizedOffset) > dragScrollArea.deadZone
+
+            property real accumulator: 0
+
+            onRunningChanged: if (!running) accumulator = 0
+
+            onTriggered: {
+                const offset = dragScrollArea.normalizedOffset;
+                const absOffset = Math.abs(offset);
+                if (absOffset <= dragScrollArea.deadZone) {
+                    accumulator = 0;
+                    return;
+                }
+                const t = (absOffset - dragScrollArea.deadZone) / (1 - dragScrollArea.deadZone);
+                const speed = dragScrollArea.minSpeed
+                              + (dragScrollArea.maxSpeed - dragScrollArea.minSpeed) * t * t;
+                accumulator += speed * (interval / 1000);
+                if (accumulator >= 1) {
+                    accumulator -= 1;
+                    if (offset > 0) Hyprland.dispatch(`workspace r+1`);
+                    else Hyprland.dispatch(`workspace r-1`);
+                }
+            }
         }
     }
 
