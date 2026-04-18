@@ -19,6 +19,7 @@ optdepends=(
   'gnome-font-viewer: Font viewer'
   'libreoffice-fresh: Office suite'
   'gnome-text-editor: Text editor'
+  'loupe: Image viewer'
   'mpv: Video player'
   'mpv-modernz: Modern mpv UI'
   'mpv-thumbfast: mpv thumbnail support'
