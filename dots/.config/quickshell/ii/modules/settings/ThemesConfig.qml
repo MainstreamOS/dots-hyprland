@@ -203,7 +203,6 @@ ContentPage {
         const name = (root.saveThemeName || slug).trim() || slug
         const wp = Config.options.background.wallpaperPath || ""
         const wpTrimmed = FileUtils.trimFileProtocol(wp)
-        const keepPreview = root.pendingUpdateSlug !== ""
         const modeStr = Appearance.m3colors.darkmode ? "dark" : "light"
         root.lastSavedSlug = slug
         // Build bash payload
@@ -222,10 +221,8 @@ ContentPage {
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
             // Screenshot of primary focused monitor
-            (keepPreview
-                ? `# Keep existing preview on update\n`
-                : `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
-                  `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n`) +
+            `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
+            `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
             `CREATED=$(date +%s)\n` +
             `cat > "$DIR/meta.json" <<EOF\n` +
             `{"slug":"$SLUG","name":"$NAME","wallpaperFile":"$WP_FILE","mode":"$MODE","created":$CREATED}\n` +
@@ -466,7 +463,7 @@ ContentPage {
                                 anchors.fill: parent
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
-                                source: "file://" + root.themesDir + "/" + themeCard.modelData.slug + "/preview.png"
+                                source: "file://" + root.themesDir + "/" + themeCard.modelData.slug + "/preview.png?v=" + (themeCard.modelData.created || 0)
                                 sourceSize.width: parent.width
                                 sourceSize.height: parent.height
                                 layer.enabled: true
@@ -675,9 +672,7 @@ ContentPage {
                         }
                     }
                     StyledText {
-                        text: root.pendingUpdateSlug
-                            ? Translation.tr("Update keeps the existing screenshot")
-                            : Translation.tr("Settings window hides during delay so the shot doesn't include it")
+                        text: Translation.tr("Settings window hides during delay so the shot doesn't include it")
                         color: Appearance.colors.colSubtext
                         font.pixelSize: Appearance.font.pixelSize.smaller
                         wrapMode: Text.WordWrap
