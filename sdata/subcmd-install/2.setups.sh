@@ -390,6 +390,49 @@ function setup_default_text_editor(){
 showfun setup_default_text_editor
 v setup_default_text_editor
 
+# Set GNOME Loupe as default for the image MIME types it supports.
+# Skipped if the desktop entry isn't installed.
+function setup_default_image_viewer(){
+  local desktop=org.gnome.Loupe.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping image viewer defaults.${STY_RST}"
+    return 0
+  fi
+  local image_types=(
+    image/apng
+    image/bmp
+    image/gif
+    image/jp2
+    image/jpeg
+    image/png
+    image/qoi
+    image/tiff
+    image/vnd.microsoft.icon
+    image/webp
+    image/x-dds
+    image/x-exr
+    image/x-portable-anymap
+    image/x-portable-bitmap
+    image/x-portable-graymap
+    image/x-portable-pixmap
+    image/x-qoi
+    image/x-tga
+    image/x-win-bitmap
+    image/x-xbitmap
+    image/x-xpixmap
+    image/svg+xml
+    image/svg+xml-compressed
+    image/avif
+    image/heic
+    image/jxl
+  )
+  for mime in "${image_types[@]}"; do
+    v xdg-mime default "$desktop" "$mime"
+  done
+}
+showfun setup_default_image_viewer
+v setup_default_image_viewer
+
 # Optional: Limine + Snapper automatic backup setup (Arch, btrfs, UEFI only)
 function setup_limine_snapper(){
   local ROOT_FSTYPE
