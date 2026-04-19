@@ -168,14 +168,14 @@ fi
 info "Writing limine.conf..."
 LIMINE_CONF_CONTENT="timeout: 5
 
-# Catppuccin Frappe theme
-term_background: 303446
-term_foreground: c6d0f5
-term_background_bright: 626880
-term_foreground_bright: c6d0f5
-term_palette: 303446;e78284;a6d189;e5c890;8caaee;f4b8e4;81c8be;c6d0f5
-term_palette_bright: 626880;e78284;a6d189;e5c890;8caaee;f4b8e4;81c8be;c6d0f5
-backdrop: 303446"
+# Mainstream brand theme (night palette, continuity with plymouth splash)
+term_background: 0b0d12
+term_foreground: c9ccd4
+term_background_bright: 2a2b32
+term_foreground_bright: ffffff
+term_palette: 20222a;d98888;a3d099;d9c485;008dc3;c799e6;009ca5;c9ccd4
+term_palette_bright: 5b5e66;ea9b9b;b7dfac;e5d29f;2aabdf;d6b2f0;1fbac3;ffffff
+backdrop: 0b0d12"
 
 if $USE_UKI; then
     # UKI mode: cmdline and initramfs are embedded in the .efi bundle
