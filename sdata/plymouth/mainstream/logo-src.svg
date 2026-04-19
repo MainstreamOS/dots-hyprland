@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mainstream MS mark, night variant.
+     Replicates: .boot .mark { width:120px; height:120px; filter: drop-shadow(0 0 40px rgba(32,130,200,.4)); }
+     Inside: <svg viewBox="0 0 240 120"><use href="#ms-primary"/></svg> with default preserveAspectRatio=xMidYMid meet
+     -> mark scales 0.5 to fit 120-wide container, letterboxed vertically (y=30..90).
+
+     Canvas: 120x120 container + 40px glow padding on all sides = 200x200 visual region.
+     Image pixel size 1600x1600 -> 8x oversample.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="-40 -40 200 200" width="1600" height="1600">
+  <defs>
+    <linearGradient id="streamGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"  stop-color="#009ca5"/>
+      <stop offset="100%" stop-color="#008dc3"/>
+    </linearGradient>
+    <!-- CSS drop-shadow(0 0 40px) -> stdDeviation ~= blur-radius/2 = 20 -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20" result="b"/>
+      <feFlood flood-color="#2082c8" flood-opacity="0.4"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" transform="translate(0 30) scale(0.5)">
+    <path d="M14 100 L14 20 L40 20 L70 72 L100 20 L126 20 L126 100 L108 100 L108 48 L84 92 L56 92 L32 48 L32 100 Z"
+          fill="#c9ccd4"/>
+    <g fill="none" stroke-linecap="round" stroke-width="14">
+      <path d="M152 38 C 168 22, 210 22, 224 36" stroke="url(#streamGrad)"/>
+      <path d="M222 54 C 206 70, 168 50, 152 66" stroke="url(#streamGrad)"/>
+      <path d="M150 82 C 164 98, 206 98, 224 82" stroke="url(#streamGrad)"/>
+    </g>
+  </g>
+</svg>

@@ -627,15 +627,33 @@ function setup_plymouth(){
     echo -e "${STY_YELLOW}[$0]: Plymouth setup is only supported on Arch Linux. Skipping.${STY_RST}"
     return 0
   fi
-  echo -e "${STY_CYAN}[$0]: Installing Plymouth boot splash with BGRT theme...${STY_RST}"
+  echo -e "${STY_CYAN}[$0]: Installing Plymouth boot splash with Mainstream theme...${STY_RST}"
   # sudo pacman is NOPASSWD within this install window; --noconfirm suppresses
   # pacman's "Proceed with installation? [Y/n]" prompt
   if ! sudo pacman -S --needed --noconfirm plymouth; then
     echo -e "${STY_YELLOW}[$0]: Plymouth failed to install — boot splash will be skipped.${STY_RST}"
     return 0
   fi
+  # Deploy the Mainstream theme bundled in the repo. Overwrites any previously
+  # installed copy so updates to assets/script flow through on reinstall.
+  local theme_src="${REPO_ROOT}/sdata/plymouth/mainstream"
+  local theme_dst="/usr/share/plymouth/themes/mainstream"
+  if [[ -d "$theme_src" ]]; then
+    sudo rm -rf "$theme_dst"
+    sudo cp -r "$theme_src" "$theme_dst"
+    sudo chown -R root:root "$theme_dst"
+    sudo find "$theme_dst" -type d -exec chmod 755 {} +
+    sudo find "$theme_dst" -type f -exec chmod 644 {} +
+    echo -e "${STY_CYAN}[$0]: Installed Mainstream theme to ${theme_dst}${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: ${theme_src} not found — falling back to bgrt theme.${STY_RST}"
+  fi
   # Non-interactive — writes to /etc/plymouth/plymouthd.conf
-  sudo plymouth-set-default-theme bgrt
+  if [[ -d "$theme_dst" ]]; then
+    sudo plymouth-set-default-theme mainstream
+  else
+    sudo plymouth-set-default-theme bgrt
+  fi
   # Add the plymouth hook after udev in HOOKS — idempotent, skipped if already present
   if ! grep -q '\bplymouth\b' /etc/mkinitcpio.conf; then
     sudo sed -i 's/\(HOOKS=([^)]*\budev\b\)/\1 plymouth/' /etc/mkinitcpio.conf

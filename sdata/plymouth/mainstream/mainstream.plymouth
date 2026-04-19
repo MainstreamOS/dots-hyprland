@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Mainstream
+Description=Mainstream OS boot splash. Graphite M + stream S, with animated scan.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/mainstream
+ScriptFile=/usr/share/plymouth/themes/mainstream/mainstream.script
