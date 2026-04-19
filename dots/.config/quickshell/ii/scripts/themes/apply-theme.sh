@@ -196,8 +196,57 @@ fi
 mkdir -p "$THEMES_DIR"
 printf '%s' "$SLUG" > "$LAST_APPLIED.tmp" && mv -f "$LAST_APPLIED.tmp" "$LAST_APPLIED"
 
-# ── 7. Reload hyprland so matugen's hypr color template output and any
-#        decoration edits above are picked up by the running session. ─────
-command -v hyprctl >/dev/null 2>&1 && hyprctl reload >/dev/null 2>&1 || true
+# ── 7. Apply decorations live, reload hyprland, then restore kitty ──────────
+if command -v hyprctl >/dev/null 2>&1; then
+
+    # Apply every keyword-settable decoration flag live right now via
+    # hyprctl keyword. This gives immediate visual feedback before the
+    # reload below finishes, and means the reload is only strictly needed
+    # for matugen's hyprland color templates and the titlebar plugin.
+    if [ -f "$DECO_JSON" ]; then
+        python3 - "$DECO_JSON" <<'PY2' || true
+import json, subprocess, sys
+try:
+    flags = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+def kw(k, v):
+    subprocess.run(["hyprctl", "keyword", k, str(v)], capture_output=True)
+if "animations"   in flags: kw("animations:enabled",          "true"  if flags["animations"]   else "false")
+if "blur"         in flags: kw("decoration:blur:enabled",     "true"  if flags["blur"]         else "false")
+if "shadow"       in flags: kw("decoration:shadow:enabled",   "true"  if flags["shadow"]       else "false")
+if "roundCorners" in flags: kw("decoration:rounding",         "10"    if flags["roundCorners"] else "0")
+if "borders" in flags:
+    if flags["borders"]:
+        kw("general:border_size", "4");   kw("general:resize_on_border", "true")
+        kw("general:gaps_in",     "4");   kw("general:gaps_out",         "5")
+    else:
+        kw("general:border_size", "0");   kw("general:resize_on_border", "false")
+        kw("general:gaps_in",     "0");   kw("general:gaps_out",         "0")
+PY2
+    fi
+
+    # Full reload is still needed for matugen's hyprland color templates
+    # (sourced files) and the titlebar plugin (hyprbars.so can't be toggled
+    # live). hyprctl reload is synchronous -- it returns only after Hyprland
+    # has finished re-parsing everything.
+    hyprctl reload >/dev/null 2>&1 || true
+
+    # hyprctl reload briefly disrupts every Wayland client's surface state.
+    # kitty ends up in a stuck configure handshake: it receives input again
+    # only after the compositor sends it a new configure event, which normally
+    # only happens on move/resize. Without intervention the terminal also stays
+    # on the previous colour scheme because the SIGUSR1 sent earlier by
+    # applycolor.sh fired before the reload wiped the rendered state.
+    #
+    # Fix: wait for Hyprland's surfaces to settle, then SIGUSR1 every kitty
+    # process. SIGUSR1 tells kitty to reload its config -- it picks up the
+    # freshly generated kitty-theme.conf AND issues a new Wayland surface
+    # commit that clears the stuck state and restores input responsiveness.
+    # No kitty process is killed; the signal is handled gracefully by kitty.
+    sleep 0.3
+    pkill -SIGUSR1 -x kitty 2>/dev/null || true
+
+fi
 
 echo "OK"
