@@ -308,11 +308,53 @@ ContentPage {
     }
 
     // ── Delete theme ────────────────────────────────────────────────────────
-    Process { id: deleteProc }
+    Process {
+        id: deleteProc
+        // Track which slug is in-flight so onExited can clear lastAppliedSlug
+        // if the user just deleted the currently active theme.
+        property string deletingSlug: ""
+    }
     function deleteTheme(theme) {
+        // Block the QML config adapter from racing with our config.json patch
+        // below — same pattern used by ThemeManager / apply-theme.sh.
+        Config.blockWrites = true
+        deleteProc.deletingSlug = theme.slug
+
+        const safeSlug = String(theme.slug).replace(/'/g, "\\'\\''")
         const bash =
             `set -e\n` +
-            `rm -rf -- '${root.themesDir}/${theme.slug}'\n` +
+            `SLUG='${safeSlug}'\n` +
+            `THEME_DIR='${root.themesDir}'/"$SLUG"\n` +
+            `CONF='${root.shellConfigPath}'\n` +
+            // ── Preserve wallpaper before delete ─────────────────────────────
+            // When a theme is applied, config.json's wallpaperPath is set to
+            // the bundled copy inside the theme dir.  Deleting the dir without
+            // relocating that file leaves a dead path in config.json, causing
+            // blank previews everywhere and no wallpaper after reboot.
+            `LIVE_WP=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('background',{}).get('wallpaperPath',''))" "$CONF" 2>/dev/null || true)\n` +
+            `case "$LIVE_WP" in\n` +
+            `    "$THEME_DIR"/*)\n` +
+            `        EXT="\${LIVE_WP##*.}"\n` +
+            `        SAVED_WP='${root.themesDir}'/last-wallpaper."$EXT"\n` +
+            `        cp -f "$LIVE_WP" "$SAVED_WP"\n` +
+            // Atomically patch wallpaperPath in config.json to the safe copy
+            `        python3 - "$CONF" "$SAVED_WP" <<'PY'\n` +
+            `import json, os, sys\n` +
+            `conf, new_wp = sys.argv[1], sys.argv[2]\n` +
+            `with open(conf) as f: data = json.load(f)\n` +
+            `data.setdefault('background', {})['wallpaperPath'] = new_wp\n` +
+            `tmp = conf + '.tmp'\n` +
+            `with open(tmp, 'w') as f: json.dump(data, f, indent=2)\n` +
+            `os.replace(tmp, conf)\n` +
+            `PY\n` +
+            `        ;;\n` +
+            `esac\n` +
+            // ── Clear last-applied marker if it pointed to this theme ─────────
+            `if [ -f '${root.lastAppliedPath}' ] && [ "$(cat '${root.lastAppliedPath}')" = "$SLUG" ]; then\n` +
+            `    rm -f '${root.lastAppliedPath}'\n` +
+            `fi\n` +
+            // ── Remove theme dir and rebuild index ────────────────────────────
+            `rm -rf -- "$THEME_DIR"\n` +
             `python3 - '${root.themesDir}' <<'PY'\n` +
             `import json, os, sys\n` +
             `themes_dir = sys.argv[1]\n` +
@@ -331,7 +373,18 @@ ContentPage {
     }
     Connections {
         target: deleteProc
-        function onExited() { root.refreshThemes(); root.showStatus(Translation.tr("Theme deleted")) }
+        function onExited() {
+            // Unblock the config adapter — the file watcher will now pick up
+            // any wallpaperPath change we wrote and reload Config automatically.
+            Config.blockWrites = false
+            // If the deleted theme was the one marked as active, clear the
+            // in-memory marker so no ghost "active" highlight lingers.
+            if (deleteProc.deletingSlug === root.lastAppliedSlug) {
+                root.lastAppliedSlug = ""
+            }
+            root.refreshThemes()
+            root.showStatus(Translation.tr("Theme deleted"))
+        }
     }
 
     // ── UI ───────────────────────────────────────────────────────────────────
