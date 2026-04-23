@@ -42,6 +42,7 @@ AbstractWidget {
 
     property bool needsColText: false
     property color dominantColor: Appearance.colors.colPrimary
+    property string dominantColorSourceWallpaperPath: ""
     property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
     property color colText: {
         const onNormalBackground = (GlobalStates.screenLocked && Config.options.lock.blur.enable)
@@ -91,7 +92,10 @@ AbstractWidget {
                 // console.log("[Background] Least busy region output:", output)
                 if (output.length === 0) return;
                 const parsedContent = JSON.parse(output);
-                root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
+                if (root.dominantColorSourceWallpaperPath !== root.wallpaperPath) {
+                    root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
+                    root.dominantColorSourceWallpaperPath = root.wallpaperPath;
+                }
                 if (root.placementStrategy === "free") return;
                 root.targetX = parsedContent.center_x * root.wallpaperScale - root.width / 2;
                 root.targetY  = parsedContent.center_y * root.wallpaperScale - root.height / 2;
