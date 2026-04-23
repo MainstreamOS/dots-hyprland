@@ -2832,7 +2832,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
             ContentSubsection {
                 id: wsSubsection
                 visible: displayConfigPage.monitors.length > 1
-                title: Translation.tr("Workspaces")
+                title: Translation.tr("Custom Workspaces")
                 tooltip: Translation.tr("Assign workspaces to this monitor")
 
                 // How many 10-workspace rows this monitor currently shows
@@ -2901,7 +2901,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                     StyledText {
                                         id: customPillTxt
                                         anchors.centerIn: parent
-                                        text: Translation.tr("Custom")
+                                        text: Translation.tr("Enable")
                                         font.pixelSize: Appearance.font.pixelSize.small
                                         color: parent.parent.active
                                             ? Appearance.colors.colOnPrimary
