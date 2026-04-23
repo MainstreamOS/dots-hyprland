@@ -34,7 +34,7 @@ ContentPage {
     }
     property bool saveDialogOpen: false
     property bool countingDown: false
-    property int  countdownMax: 5      // slider value 0–30
+    property int  countdownMax: 1      // slider value 1–30
     property int  countdownLeft: 0
     property string saveThemeName: ""
     property string pendingUpdateSlug: ""   // when non-empty, save flow updates that slug
@@ -109,7 +109,7 @@ ContentPage {
         root.saveThemeName = updateSlug
             ? (root.themes.find(t => t.slug === updateSlug)?.name || "")
             : ""
-        root.countdownMax = 5
+        root.countdownMax = 1
         root.countdownLeft = 0
         root.countingDown = false
         root.saveDialogOpen = true
@@ -701,7 +701,7 @@ ContentPage {
                     Slider {
                         id: countdownSlider
                         Layout.fillWidth: true
-                        from: 0; to: 30; stepSize: 1
+                        from: 1; to: 30; stepSize: 1
                         value: root.countdownMax
                         enabled: !root.countingDown
                         onMoved: root.countdownMax = Math.round(value)
