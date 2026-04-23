@@ -1,6 +1,6 @@
 //
 // Mainstream OS boot splash — mirrors the CSS .boot element:
-//   background #0b0d12, centered MS mark with blue glow, "Mainstream" below,
+//   background #191A1F, centered MS mark with blue glow, "Mainstream" below,
 //   120x2 progress bar + "BOOTING KERNEL" at bottom with an animated blue
 //   gradient scan sweeping across the bar on a 2s loop.
 //
@@ -13,7 +13,7 @@ W = Window.GetWidth();
 H = Window.GetHeight();
 s = W / 600.0;
 
-// --- Background #0b0d12 -------------------------------------------------
+// --- Background #191A1F -------------------------------------------------
 bg_r = 11  / 255.0;
 bg_g = 13  / 255.0;
 bg_b = 18  / 255.0;
