@@ -237,12 +237,14 @@ Scope {
                     return
                 }
 
-                // Use the parsed command array from DesktopEntry so the
-                // command is reliable (app.exec is raw and not runnable).
+                // Launch single apps the same way as folder drops:
+                // focus the target workspace first, then exec. This keeps
+                // DBus-activated apps consistent with folder launches.
                 const parts = app.command
                 if (parts && parts.length > 0) {
                     const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
-                    Hyprland.dispatch(`exec [workspace ${ws} silent] ${cmd}`)
+                    Hyprland.dispatch(`workspace ${ws}`)
+                    Hyprland.dispatch(`exec ${cmd}`)
                 }
             }
 
