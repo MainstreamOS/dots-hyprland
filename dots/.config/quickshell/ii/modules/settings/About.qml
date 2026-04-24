@@ -41,11 +41,12 @@ ContentPage {
             }
         }
 
-        Flow {
+        RowLayout {
             Layout.fillWidth: true
             spacing: 5
 
             RippleButtonWithIcon {
+                visible: SystemInfo.documentationUrl.trim().length > 0
                 materialIcon: "auto_stories"
                 mainText: Translation.tr("Documentation")
                 onClicked: {
@@ -53,17 +54,20 @@ ContentPage {
                 }
             }
             RippleButtonWithIcon {
-                materialIcon: "support"
-                mainText: Translation.tr("Help & Support")
+                visible: SystemInfo.bugReportUrl.trim().length > 0
+                materialIcon: "adjust"
+                materialIconFill: false
+                mainText: Translation.tr("Issues")
                 onClicked: {
-                    Qt.openUrlExternally(SystemInfo.supportUrl)
+                    Qt.openUrlExternally(SystemInfo.bugReportUrl)
                 }
             }
             RippleButtonWithIcon {
-                materialIcon: "bug_report"
-                mainText: Translation.tr("Report a Bug")
+                visible: SystemInfo.supportUrl.trim().length > 0
+                materialIcon: "forum"
+                mainText: Translation.tr("Discussions")
                 onClicked: {
-                    Qt.openUrlExternally(SystemInfo.bugReportUrl)
+                    Qt.openUrlExternally(SystemInfo.supportUrl)
                 }
             }
             RippleButtonWithIcon {
@@ -74,7 +78,15 @@ ContentPage {
                     Qt.openUrlExternally(SystemInfo.privacyPolicyUrl)
                 }
             }
-            
+            RippleButtonWithIcon {
+                visible: SystemInfo.donateUrl.trim().length > 0
+                materialIcon: "favorite"
+                mainText: Translation.tr("Donate")
+                onClicked: {
+                    Qt.openUrlExternally(SystemInfo.donateUrl)
+                }
+            }
+
         }
 
     }

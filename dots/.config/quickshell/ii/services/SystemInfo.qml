@@ -19,6 +19,7 @@ Singleton {
     property string supportUrl: ""
     property string bugReportUrl: ""
     property string privacyPolicyUrl: ""
+    property string donateUrl: ""
     property string logo: ""
     property string desktopEnvironment: ""
     property string windowingSystem: ""
@@ -53,11 +54,14 @@ Singleton {
             bugReportUrl = bugReportUrlMatch ? bugReportUrlMatch[1] : ""
             const privacyPolicyUrlMatch = textOsRelease.match(/^PRIVACY_POLICY_URL="(.+?)"/m)
             privacyPolicyUrl = privacyPolicyUrlMatch ? privacyPolicyUrlMatch[1] : ""
+            const donateUrlMatch = textOsRelease.match(/^DONATE_URL="(.+?)"/m)
+            donateUrl = donateUrlMatch ? donateUrlMatch[1] : ""
             const logoFieldMatch = textOsRelease.match(/^LOGO="?(.+?)"?$/m)
             logo = logoFieldMatch ? logoFieldMatch[1] : ""
 
             // Update the distroIcon property based on distroId
             switch (distroId) {
+                case "mainstream": distroIcon = "mainstream-logo"; break;
                 case "artix":
                 case "arch": distroIcon = "arch-symbolic"; break;
                 case "endeavouros": distroIcon = "endeavouros-symbolic"; break;

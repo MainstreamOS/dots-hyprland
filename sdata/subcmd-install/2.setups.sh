@@ -20,6 +20,61 @@ function setup_user_group(){
   fi
 }
 
+function setup_mainstream_release(){
+  # Merge the Mainstream branding fields (NAME, PRETTY_NAME, ANSI_COLOR, URLs,
+  # LOGO) into the existing /etc/os-release. Leaves distro-identity fields
+  # alone — ID, ID_LIKE, BUILD_ID, VERSION_*, VARIANT_*, etc. stay whatever
+  # the user's actual distro sets them to, so pacman/dnf/package-manager
+  # behavior and anything else keyed off ID is unchanged.
+  #
+  # On Arch, /etc/os-release is a symlink to /usr/lib/os-release owned by the
+  # `filesystem` package. We dereference it for the read, break the symlink
+  # before writing, and keep a timestamped backup so a package update can't
+  # silently revert us and the user can roll back if they need to.
+  local src="${REPO_ROOT}/sdata/os-release"
+  local dst="/etc/os-release"
+  if [[ ! -f "$src" ]]; then
+    ms_warn "${src} not found — skipping os-release merge."
+    return 0
+  fi
+  # Fields we overlay. Order matches sdata/os-release; anything else the file
+  # contains is intentionally ignored.
+  local -a overlay_keys=(NAME PRETTY_NAME ANSI_COLOR HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL PRIVACY_POLICY_URL DONATE_URL LOGO)
+  local tmp; tmp=$(mktemp)
+  # Start from the current /etc/os-release (dereferenced) so we keep every
+  # distro-identity line the user already has.
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    sudo cat "$dst" > "$tmp"
+  else
+    : > "$tmp"
+  fi
+  # For each overlay key, replace the matching line in-place, or append if absent.
+  local key line new_line
+  for key in "${overlay_keys[@]}"; do
+    new_line=$(grep -E "^${key}=" "$src" | head -n1)
+    [[ -z "$new_line" ]] && continue
+    if grep -qE "^${key}=" "$tmp"; then
+      # Use | as sed delimiter since URLs contain / heavily.
+      sed -i "s|^${key}=.*|${new_line//|/\\|}|" "$tmp"
+    else
+      printf '%s\n' "$new_line" >> "$tmp"
+    fi
+  done
+  # Skip write if nothing changed.
+  if sudo cmp -s "$tmp" "$dst" 2>/dev/null; then
+    ms_note "/etc/os-release already has the mainstream overlay."
+    rm -f "$tmp"
+    return 0
+  fi
+  if [[ -e "$dst" || -L "$dst" ]]; then
+    local ts; ts=$(date +%Y%m%d-%H%M%S)
+    x sudo cp --dereference "$dst" "${dst}.bak.${ts}"
+  fi
+  x sudo rm -f "$dst"
+  x sudo install -m 644 "$tmp" "$dst"
+  rm -f "$tmp"
+}
+
 function setup_sddm_bg_polkit(){
   # Install polkit policy and rule so wallpaper changes can update SDDM background without a password
   local helper_src="${REPO_ROOT}/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh"
@@ -272,6 +327,9 @@ v install-python-packages
 
 showfun setup_user_group
 v setup_user_group
+
+showfun setup_mainstream_release
+v setup_mainstream_release
 
 showfun setup_sddm_bg_polkit
 v setup_sddm_bg_polkit

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" aria-hidden="true">
+  <defs>
+    <linearGradient id="streamGradPrimary" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#009ca5"/>
+      <stop offset="100%" stop-color="#008dc3"/>
+    </linearGradient>
+  </defs>
+  <path d="M14 100 L14 20 L40 20 L70 72 L100 20 L126 20 L126 100 L108 100 L108 48 L84 92 L56 92 L32 48 L32 100 Z"
+        fill="#c9ccd4"/>
+  <g fill="none" stroke-linecap="round" stroke-width="14">
+    <path d="M152 38 C 168 22, 210 22, 224 36" stroke="url(#streamGradPrimary)"/>
+    <path d="M222 54 C 206 70, 168 50, 152 66" stroke="url(#streamGradPrimary)"/>
+    <path d="M150 82 C 164 98, 206 98, 224 82" stroke="url(#streamGradPrimary)"/>
+  </g>
+</svg>

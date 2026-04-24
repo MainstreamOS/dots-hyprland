@@ -1,0 +1,17 @@
+# Mainstream branding overlay for /etc/os-release.
+# Only fields the About panel (and other consumers) read for Mainstream identity
+# live here. ID, ID_LIKE, BUILD_ID, VERSION_* and other distro-identity fields
+# are intentionally NOT overridden — the installer merges these lines into the
+# existing os-release so a user on Arch/Fedora/etc. keeps their real distro ID
+# (which pacman/dnf/package managers rely on) while still getting the Mainstream
+# name, logo, and URLs in the UI.
+NAME="Mainstream"
+PRETTY_NAME="Mainstream OS\\"
+ANSI_COLOR="38;2;0;141;195"
+HOME_URL="https://mainstreamos.org/"
+DOCUMENTATION_URL="https://mainstreamos.org/docs"
+SUPPORT_URL="https://github.com/MainstreamOS/discussions"
+BUG_REPORT_URL="https://github.com/MainstreamOS/dots-hyprland/issues"
+PRIVACY_POLICY_URL="https://mainstreamos.org/privacy"
+DONATE_URL="https://mainstreamos.org/donate"
+LOGO=mainstream-logo
