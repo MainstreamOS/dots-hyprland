@@ -428,21 +428,10 @@ function setup_fonts(){
   done
 
   # --- System-wide install of the main font ---
-  # End-4's illogical-impulse-fonts drop Google Sans Flex into
-  # ~/.local/share/fonts which is unreadable to `sddm` (login screen runs as
-  # a different user) and to any non-session process (system polkit dialogs
-  # etc.). Copying the TTF into /usr/share/fonts makes the family resolvable
-  # everywhere. Idempotent via `install`.
-  local _gsf_user
-  _gsf_user=$(find "$HOME/.local/share/fonts/illogical-impulse-google-sans-flex" \
-                -maxdepth 1 -iname 'GoogleSansFlex*.ttf' 2>/dev/null | head -n1)
-  if [[ -n "$_gsf_user" ]]; then
-    x sudo install -d -m 755 /usr/share/fonts/google-sans-flex
-    x sudo install -m 644 "$_gsf_user" /usr/share/fonts/google-sans-flex/
-    x sudo fc-cache -f /usr/share/fonts/google-sans-flex >/dev/null 2>&1 || true
-  else
-    echo -e "${STY_YELLOW}[$0]: Google Sans Flex TTF not found under ~/.local/share/fonts — system-wide install skipped. SDDM may fall back to a default sans.${STY_RST}"
-  fi
+  # End-4's illogical-impulse-fonts drop Google Sans Flex into the user font
+  # dir, which `sddm` and other non-session processes cannot read. The sync is
+  # safe to re-run after 3.files.sh installs or updates the user copy.
+  sync_google_sans_flex_systemwide
 
   # --- User fontconfig cache refresh ---
   # The dots/.config/fontconfig/fonts.conf (deployed by 3.files.sh) rewrites

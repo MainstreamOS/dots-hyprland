@@ -322,6 +322,13 @@ esac
 if [[ ! "$OS_GROUP_ID" == "fedora" ]]; then
   showfun install_google_sans_flex
   v install_google_sans_flex
+
+  # 2.setups.sh runs before this file, so retry the system-wide sync now that
+  # the user font install has been created or refreshed.
+  if declare -F sync_google_sans_flex_systemwide >/dev/null 2>&1; then
+    showfun sync_google_sans_flex_systemwide
+    v sync_google_sans_flex_systemwide
+  fi
 fi
 
 showfun setup_hyprland_plugins

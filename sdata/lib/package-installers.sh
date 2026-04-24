@@ -62,6 +62,25 @@ install-MicroTeX(){
   x cd $REPO_ROOT
 }
 
+sync_google_sans_flex_systemwide(){
+  local user_font_dir="${XDG_DATA_HOME}/fonts/illogical-impulse-google-sans-flex"
+  local system_font_dir="/usr/share/fonts/google-sans-flex"
+  local _gsf_user
+  local _gsf_system
+
+  _gsf_user=$(find "$user_font_dir" -maxdepth 1 -iname 'GoogleSansFlex*.ttf' 2>/dev/null | head -n1)
+  if [[ -z "$_gsf_user" ]]; then
+    _gsf_system=$(find "$system_font_dir" -maxdepth 1 -iname 'GoogleSansFlex*.ttf' 2>/dev/null | head -n1)
+    if [[ -n "$_gsf_system" ]]; then return 0; fi
+    echo -e "${STY_YELLOW}[$0]: Google Sans Flex TTF not found under ${user_font_dir} — system-wide install skipped. SDDM may fall back to a default sans.${STY_RST}"
+    return 0
+  fi
+
+  x sudo install -d -m 755 "$system_font_dir"
+  x sudo install -m 644 "$_gsf_user" "$system_font_dir/"
+  x sudo fc-cache -f "$system_font_dir" >/dev/null 2>&1 || true
+}
+
 install-uv(){
   x bash <(curl -LJs "https://astral.sh/uv/install.sh")
 }
