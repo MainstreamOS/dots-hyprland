@@ -764,6 +764,73 @@ function _limine_apply_cmdline_args(){
   _limine_cmdline_upsert "${args[@]}"
 }
 
+function _limine_prune_legacy_primary_entries(){
+  local limine_conf="/boot/limine.conf"
+  local machine_id
+  local _tmp
+  [[ -f "$limine_conf" ]] || return 0
+  machine_id=$(tr -d '\n' < /etc/machine-id 2>/dev/null || true)
+  [[ -n "$machine_id" ]] || return 0
+
+  # Only prune the old top-level Arch Linux entries once limine-entry-tool has
+  # created a proper machine-id-targeted OS entry. That keeps the initial
+  # hand-written entry as a safe fallback until the generated Mainstream entry
+  # exists, while removing the duplicate menu item afterwards.
+  if ! grep -q "machine-id=${machine_id}" "$limine_conf"; then
+    return 0
+  fi
+
+  _tmp=$(mktemp)
+  awk -v machine_id="$machine_id" '
+    function flush_block(remove) {
+      if (!have_block) return
+      remove = 0
+      if ((title == "/Arch Linux" || title == "/Arch Linux (Fallback)") &&
+          !has_machine_id && !has_entry_tool_comment) {
+        remove = 1
+      }
+      if (!remove) printf "%s", block
+      block = ""
+      have_block = 0
+      title = ""
+      has_machine_id = 0
+      has_entry_tool_comment = 0
+    }
+    BEGIN {
+      have_block = 0
+      block = ""
+      title = ""
+      has_machine_id = 0
+      has_entry_tool_comment = 0
+    }
+    /^\/[^\/]/ {
+      flush_block()
+      have_block = 1
+      title = $0
+      block = $0 ORS
+      next
+    }
+    {
+      if (!have_block) {
+        print
+        next
+      }
+      block = block $0 ORS
+      if (index($0, "machine-id=" machine_id) > 0) has_machine_id = 1
+      if (index($0, "limine-entry-tool") > 0) has_entry_tool_comment = 1
+    }
+    END {
+      flush_block()
+    }
+  ' "$limine_conf" > "$_tmp"
+
+  if ! cmp -s "$_tmp" "$limine_conf"; then
+    sudo install -m 644 "$_tmp" "$limine_conf"
+    echo -e "${STY_CYAN}[$0]: Removed legacy top-level Limine Arch Linux entries now that generated Mainstream entries exist.${STY_RST}"
+  fi
+  rm -f "$_tmp"
+}
+
 # Rebuild initramfs. On systems with limine-mkinitcpio-hook installed, prefers
 # `limine-mkinitcpio` which regenerates both the initramfs AND /boot/limine.conf
 # boot entries in one pass (and silences the "use limine-mkinitcpio instead"
@@ -777,6 +844,7 @@ function _initramfs_rebuild(){
     echo -e "${STY_CYAN}[$0]: Running mkinitcpio -P...${STY_RST}"
     sudo mkinitcpio -P
   fi
+  _limine_prune_legacy_primary_entries || true
 }
 
 function setup_plymouth(){

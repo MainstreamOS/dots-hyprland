@@ -27,6 +27,67 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+prune_legacy_limine_entries() {
+    local limine_conf="$ESP/limine.conf"
+    local machine_id
+    local tmpfile
+
+    [[ -f "$limine_conf" ]] || return 0
+    machine_id=$(tr -d '\n' < /etc/machine-id 2>/dev/null || true)
+    [[ -n "$machine_id" ]] || return 0
+    grep -q "machine-id=${machine_id}" "$limine_conf" || return 0
+
+    tmpfile=$(mktemp)
+    awk -v machine_id="$machine_id" '
+        function flush_block(remove) {
+            if (!have_block) return
+            remove = 0
+            if ((title == "/Arch Linux" || title == "/Arch Linux (Fallback)") &&
+                !has_machine_id && !has_entry_tool_comment) {
+                remove = 1
+            }
+            if (!remove) printf "%s", block
+            block = ""
+            have_block = 0
+            title = ""
+            has_machine_id = 0
+            has_entry_tool_comment = 0
+        }
+        BEGIN {
+            have_block = 0
+            block = ""
+            title = ""
+            has_machine_id = 0
+            has_entry_tool_comment = 0
+        }
+        /^\/[^\/]/ {
+            flush_block()
+            have_block = 1
+            title = $0
+            block = $0 ORS
+            next
+        }
+        {
+            if (!have_block) {
+                print
+                next
+            }
+            block = block $0 ORS
+            if (index($0, "machine-id=" machine_id) > 0) has_machine_id = 1
+            if (index($0, "limine-entry-tool") > 0) has_entry_tool_comment = 1
+        }
+        END {
+            flush_block()
+        }
+    ' "$limine_conf" > "$tmpfile"
+
+    if ! cmp -s "$tmpfile" "$limine_conf"; then
+        install -m 644 "$tmpfile" "$limine_conf"
+        info "Removed legacy top-level Arch Linux Limine entries after generating machine-id-targeted entries."
+    fi
+    rm -f "$tmpfile"
+}
+
 # --- Checks ---
 [[ $EUID -eq 0 ]] || error "This script must be run as root"
 [[ -d /sys/firmware/efi ]] || error "System must be booted in UEFI mode"
@@ -315,6 +376,15 @@ else
     warn "No AUR helper (yay/paru) found. Please install limine-snapper-sync and limine-mkinitcpio-hook manually."
 fi
 systemctl enable --now limine-snapper-sync.service
+
+if command -v limine-mkinitcpio >/dev/null 2>&1; then
+    info "Regenerating Limine entries through limine-mkinitcpio..."
+    if limine-mkinitcpio; then
+        prune_legacy_limine_entries || true
+    else
+        warn "limine-mkinitcpio failed — keeping the initial Arch Linux Limine entry for safety."
+    fi
+fi
 
 # --- Step 5: Create initial snapshot ---
 info "Creating initial snapshot..."
