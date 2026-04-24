@@ -186,6 +186,10 @@ command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not
 info "Seeding Limine header and generator config..."
 write_limine_header
 upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
+# Suppress auto-generated top-level entries for systemd-boot, rEFInd, and the
+# default EFI loader ($ESP/EFI/BOOT/BOOTX64.EFI is Limine itself here, so the
+# "EFI fallback" entry would just chainload Limine back into itself).
+upsert_shell_setting "/etc/default/limine" "FIND_BOOTLOADERS" "no"
 
 ROOT_TOKEN="root=UUID=$ROOT_UUID"
 if [[ -n "$ROOT_PARTUUID" ]]; then
