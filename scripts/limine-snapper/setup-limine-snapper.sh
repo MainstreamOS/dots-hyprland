@@ -27,64 +27,108 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-prune_legacy_limine_entries() {
+upsert_shell_setting() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    local tmpfile
+    local line
+    local found=false
+
+    tmpfile=$(mktemp)
+    if [[ -f "$file" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" =~ ^[[:space:]]*#?[[:space:]]*${key}[[:space:]]*= ]]; then
+                printf '%s=%s\n' "$key" "$value" >> "$tmpfile"
+                found=true
+            else
+                printf '%s\n' "$line" >> "$tmpfile"
+            fi
+        done < "$file"
+    fi
+    if ! $found; then
+        [[ -s "$tmpfile" ]] && printf '\n' >> "$tmpfile"
+        printf '%s=%s\n' "$key" "$value" >> "$tmpfile"
+    fi
+    install -D -m 644 "$tmpfile" "$file"
+    rm -f "$tmpfile"
+}
+
+upsert_kernel_cmdline_args() {
+    local cmdline_file="/etc/kernel/cmdline"
+    local -a new_args=("$@")
+    local -a existing=()
+    local -a keys=()
+    local -a kept=()
+    local tmpfile
+    local token key skip existing_line
+
+    if [[ -f "$cmdline_file" ]]; then
+        existing_line=$(tr '\n' ' ' < "$cmdline_file")
+        read -r -a existing <<< "$existing_line"
+    elif [[ -r /proc/cmdline ]]; then
+        read -r -a existing <<< "$(cat /proc/cmdline)"
+    fi
+
+    for token in "${new_args[@]}"; do
+        keys+=("${token%%=*}")
+    done
+
+    for token in "${existing[@]}"; do
+        [[ -z "$token" ]] && continue
+        [[ "$token" == BOOT_IMAGE=* ]] && continue
+        [[ "$token" == initrd=* ]] && continue
+        key="${token%%=*}"
+        skip=false
+        for existing_key in "${keys[@]}"; do
+            if [[ "$key" == "$existing_key" ]]; then
+                skip=true
+                break
+            fi
+        done
+        $skip || kept+=("$token")
+    done
+
+    kept+=("${new_args[@]}")
+    tmpfile=$(mktemp)
+    printf '%s\n' "${kept[*]}" > "$tmpfile"
+    install -D -m 644 "$tmpfile" "$cmdline_file"
+    rm -f "$tmpfile"
+}
+
+print_limine_header() {
+    cat <<'EOF'
+timeout: 5
+
+# Mainstream brand theme (night palette, continuity with plymouth splash)
+term_background: 191A1F
+term_foreground: c9ccd4
+term_background_bright: 2a2b32
+term_foreground_bright: ffffff
+interface_branding: Mainstream Bootloader
+interface_branding_color: 7
+term_palette: 20222a;d98888;a3d099;d9c485;008dc3;c799e6;009ca5;c9ccd4
+term_palette_bright: 5b5e66;ea9b9b;b7dfac;e5d29f;2aabdf;d6b2f0;1fbac3;ffffff
+backdrop: 191A1F
+EOF
+}
+
+write_limine_header() {
+    print_limine_header > "$ESP/limine.conf"
+}
+
+ensure_limine_header() {
     local limine_conf="$ESP/limine.conf"
-    local machine_id
     local tmpfile
 
     [[ -f "$limine_conf" ]] || return 0
-    machine_id=$(tr -d '\n' < /etc/machine-id 2>/dev/null || true)
-    [[ -n "$machine_id" ]] || return 0
-    grep -q "machine-id=${machine_id}" "$limine_conf" || return 0
+    grep -q '^interface_branding: Mainstream Bootloader$' "$limine_conf" && return 0
 
     tmpfile=$(mktemp)
-    awk -v machine_id="$machine_id" '
-        function flush_block(remove) {
-            if (!have_block) return
-            remove = 0
-            if ((title == "/Arch Linux" || title == "/Arch Linux (Fallback)") &&
-                !has_machine_id && !has_entry_tool_comment) {
-                remove = 1
-            }
-            if (!remove) printf "%s", block
-            block = ""
-            have_block = 0
-            title = ""
-            has_machine_id = 0
-            has_entry_tool_comment = 0
-        }
-        BEGIN {
-            have_block = 0
-            block = ""
-            title = ""
-            has_machine_id = 0
-            has_entry_tool_comment = 0
-        }
-        /^\/[^\/]/ {
-            flush_block()
-            have_block = 1
-            title = $0
-            block = $0 ORS
-            next
-        }
-        {
-            if (!have_block) {
-                print
-                next
-            }
-            block = block $0 ORS
-            if (index($0, "machine-id=" machine_id) > 0) has_machine_id = 1
-            if (index($0, "limine-entry-tool") > 0) has_entry_tool_comment = 1
-        }
-        END {
-            flush_block()
-        }
-    ' "$limine_conf" > "$tmpfile"
-
-    if ! cmp -s "$tmpfile" "$limine_conf"; then
-        install -m 644 "$tmpfile" "$limine_conf"
-        info "Removed legacy top-level Arch Linux Limine entries after generating machine-id-targeted entries."
-    fi
+    print_limine_header > "$tmpfile"
+    printf '\n' >> "$tmpfile"
+    cat "$limine_conf" >> "$tmpfile"
+    install -m 644 "$tmpfile" "$limine_conf"
     rm -f "$tmpfile"
 }
 
@@ -100,6 +144,7 @@ ROOT_FSTYPE=$(findmnt -n -o FSTYPE /)
 ROOT_DEV=$(findmnt -n -o SOURCE /)
 ROOT_PART=$(findmnt -n -o SOURCE -T / | sed 's/\[.*\]//')
 ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART")
+ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART")
 ROOT_SUBVOL=$(findmnt -n -o OPTIONS / | grep -oP 'subvol=\K[^,]+')
 
 info "Root device: $ROOT_PART"
@@ -123,187 +168,48 @@ fi
 info "Installing limine..."
 pacman -S --needed --noconfirm limine
 
-# Verify limine EFI binary exists
-LIMINE_EFI="/usr/share/limine/BOOTX64.EFI"
-if [[ ! -f "$LIMINE_EFI" ]]; then
-    error "Limine EFI binary not found at $LIMINE_EFI. The limine package may have changed its file layout."
-fi
-
-# Detect boot mode: UKI (Unified Kernel Image) or traditional kernel + initramfs
-USE_UKI=false
-UKI_PATH=""
-UKI_FB_PATH=""
-KERNEL=""
-INITRAMFS=""
-INITRAMFS_FB=""
-
-# Check for UKIs first — mkinitcpio on this system may produce .efi bundles
-# instead of separate vmlinuz + initramfs files.
-# Use direct -f tests instead of ls|head to avoid SIGPIPE/pipefail false negatives.
-UKI_PATH=""
-UKI_FB_PATH=""
-if [[ -f "$ESP/EFI/Linux/arch-linux.efi" ]]; then
-    UKI_PATH="$ESP/EFI/Linux/arch-linux.efi"
-elif [[ -d "$ESP/EFI/Linux" ]]; then
-    while IFS= read -r -d '' _f; do
-        [[ "$_f" != *fallback* ]] && { UKI_PATH="$_f"; break; }
-    done < <(find "$ESP/EFI/Linux" -maxdepth 1 -name "*.efi" -print0 2>/dev/null)
-fi
-if [[ -d "$ESP/EFI/Linux" ]]; then
-    while IFS= read -r -d '' _f; do
-        UKI_FB_PATH="$_f"; break
-    done < <(find "$ESP/EFI/Linux" -maxdepth 1 -name "*fallback*.efi" -print0 2>/dev/null)
-fi
-
-if [[ -n "$UKI_PATH" ]] && [[ -f "$UKI_PATH" ]]; then
-    USE_UKI=true
-    info "Unified Kernel Image detected at $UKI_PATH — using EFI boot protocol."
-else
-    # Traditional: separate kernel + initramfs
-    KERNEL=""
-    INITRAMFS=""
-    INITRAMFS_FB=""
-    if [[ -f "$ESP/vmlinuz-linux" ]]; then
-        KERNEL="$ESP/vmlinuz-linux"
+# Configure the generator-owned Limine setup before we touch any old bootloader.
+info "Installing limine entry automation packages..."
+if ! command -v limine-mkinitcpio >/dev/null 2>&1 || ! command -v limine-snapper-sync >/dev/null 2>&1; then
+    if command -v yay &>/dev/null; then
+        sudo -u "${SUDO_USER:-$USER}" yay -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
+    elif command -v paru &>/dev/null; then
+        sudo -u "${SUDO_USER:-$USER}" paru -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
     else
-        KERNEL=$(find "$ESP" -maxdepth 1 -name "vmlinuz-linux*" -print -quit 2>/dev/null || true)
-    fi
-    INITRAMFS=$(find "$ESP" -maxdepth 1 -name "initramfs-linux*.img" ! -name "*fallback*" -print -quit 2>/dev/null || true)
-    INITRAMFS_FB=$(find "$ESP" -maxdepth 1 -name "initramfs-linux*-fallback.img" -print -quit 2>/dev/null || true)
-
-    if [[ -z "$KERNEL" ]]; then
-        # Kernel might be at /boot inside root, not on ESP
-        if [[ "$ESP" == "/boot" ]] && [[ -f "/boot/vmlinuz-linux" ]]; then
-            KERNEL="/boot/vmlinuz-linux"
-            INITRAMFS="/boot/initramfs-linux.img"
-            INITRAMFS_FB="/boot/initramfs-linux-fallback.img"
-        else
-            error "Cannot find kernel at $ESP/vmlinuz-linux*. Aborting before any bootloader changes."
-        fi
-    fi
-
-    [[ -f "$KERNEL" ]] || error "Kernel not found at $KERNEL. Aborting before any bootloader changes."
-
-    # If initramfs is missing, mkinitcpio likely has not run yet — generate it now
-    if [[ ! -f "$INITRAMFS" ]]; then
-        warn "Initramfs not found at ${INITRAMFS:-<empty>}. Running mkinitcpio -P to generate it..."
-        if ! mkinitcpio -P; then
-            error "mkinitcpio -P failed. Cannot continue without an initramfs."
-        fi
-        # Re-detect after generation — use direct -f tests, not ls|head,
-        # to avoid SIGPIPE/pipefail false negatives.
-        if [[ -f "$ESP/EFI/Linux/arch-linux.efi" ]]; then
-            UKI_PATH="$ESP/EFI/Linux/arch-linux.efi"
-        elif [[ -d "$ESP/EFI/Linux" ]]; then
-            while IFS= read -r -d '' _f; do
-                [[ "$_f" != *fallback* ]] && { UKI_PATH="$_f"; break; }
-            done < <(find "$ESP/EFI/Linux" -maxdepth 1 -name "*.efi" -print0 2>/dev/null)
-        fi
-        if [[ -d "$ESP/EFI/Linux" ]]; then
-            while IFS= read -r -d '' _f; do
-                UKI_FB_PATH="$_f"; break
-            done < <(find "$ESP/EFI/Linux" -maxdepth 1 -name "*fallback*.efi" -print0 2>/dev/null)
-        fi
-        if [[ -n "$UKI_PATH" ]] && [[ -f "$UKI_PATH" ]]; then
-            USE_UKI=true
-            info "mkinitcpio produced a Unified Kernel Image at $UKI_PATH — switching to EFI boot protocol."
-        else
-            INITRAMFS=$(find "$ESP" -maxdepth 1 -name "initramfs-linux*.img" ! -name "*fallback*" -print -quit 2>/dev/null || true)
-            INITRAMFS_FB=$(find "$ESP" -maxdepth 1 -name "initramfs-linux*-fallback.img" -print -quit 2>/dev/null || true)
-            [[ -f "$INITRAMFS" ]] || error "Initramfs still not found after mkinitcpio. Aborting."
-            info "Initramfs generated successfully."
-        fi
+        error "limine-mkinitcpio-hook and limine-snapper-sync are required for the managed Limine setup, but no AUR helper (yay/paru) is available."
     fi
 fi
+command -v limine-update >/dev/null 2>&1 || error "limine-update not found after installing limine-mkinitcpio-hook."
+command -v limine-mkinitcpio >/dev/null 2>&1 || error "limine-mkinitcpio not found after installing limine-mkinitcpio-hook."
+command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not found after installation."
 
-# Determine kernel cmdline - silent boot (no text on boot/reboot/shutdown)
-# Only used in traditional mode; UKI embeds its own cmdline
-CMDLINE="root=UUID=$ROOT_UUID rootflags=subvol=$ROOT_SUBVOL rw quiet loglevel=0 systemd.show_status=false rd.systemd.show_status=false rd.udev.log_level=0 vt.global_cursor_default=0"
+info "Seeding Limine header and generator config..."
+write_limine_header
+upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
 
-if [[ -f /etc/kernel/cmdline ]]; then
-    EXTRA_ARGS=$(cat /etc/kernel/cmdline | sed "s|root=[^ ]*||g; s|rootflags=[^ ]*||g; s|rw||g; s|quiet||g; s|loglevel=[^ ]*||g; s|systemd\.show_status=[^ ]*||g; s|rd\.systemd\.show_status=[^ ]*||g; s|rd\.udev\.log_level=[^ ]*||g; s|vt\.global_cursor_default=[^ ]*||g" | xargs)
-    [[ -n "$EXTRA_ARGS" ]] && CMDLINE="$CMDLINE $EXTRA_ARGS"
+ROOT_TOKEN="root=UUID=$ROOT_UUID"
+if [[ -n "$ROOT_PARTUUID" ]]; then
+    ROOT_TOKEN="root=PARTUUID=$ROOT_PARTUUID"
 fi
+upsert_kernel_cmdline_args \
+    "$ROOT_TOKEN" \
+    "rootflags=subvol=$ROOT_SUBVOL" \
+    "rw" \
+    "rootfstype=btrfs" \
+    "quiet" \
+    "loglevel=0" \
+    "systemd.show_status=false" \
+    "rd.systemd.show_status=false" \
+    "rd.udev.log_level=0" \
+    "vt.global_cursor_default=0"
 
-# Write limine.conf
-info "Writing limine.conf..."
-LIMINE_CONF_CONTENT="timeout: 5
+info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
+limine-update
+ensure_limine_header
+[[ -f "$ESP/limine.conf" ]] || error "Failed to generate $ESP/limine.conf"
+grep -q "machine-id=$(tr -d '\n' < /etc/machine-id)" "$ESP/limine.conf" || error "limine-update did not generate a machine-id-targeted OS entry."
 
-# Mainstream brand theme (night palette, continuity with plymouth splash)
-term_background: 191A1F
-term_foreground: c9ccd4
-term_background_bright: 2a2b32
-term_foreground_bright: ffffff
-interface_branding: Mainstream Bootloader
-interface_branding_color: 7
-term_palette: 20222a;d98888;a3d099;d9c485;008dc3;c799e6;009ca5;c9ccd4
-term_palette_bright: 5b5e66;ea9b9b;b7dfac;e5d29f;2aabdf;d6b2f0;1fbac3;ffffff
-backdrop: 191A1F"
-
-if $USE_UKI; then
-    # UKI mode: cmdline and initramfs are embedded in the .efi bundle
-    UKI_REL="${UKI_PATH#$ESP/}"
-    LIMINE_CONF_CONTENT+="
-
-/Arch Linux
-    protocol: efi
-    path: boot():///$UKI_REL"
-
-    if [[ -n "$UKI_FB_PATH" ]] && [[ -f "$UKI_FB_PATH" ]]; then
-        UKI_FB_REL="${UKI_FB_PATH#$ESP/}"
-        LIMINE_CONF_CONTENT+="
-
-/Arch Linux (Fallback)
-    protocol: efi
-    path: boot():///$UKI_FB_REL"
-    fi
-else
-    # Traditional mode: separate kernel + initramfs
-    KERNEL_BASENAME=$(basename "$KERNEL")
-    INITRAMFS_BASENAME=$(basename "$INITRAMFS")
-    INITRAMFS_FB_BASENAME=""
-    if [[ -n "$INITRAMFS_FB" ]] && [[ -f "$INITRAMFS_FB" ]]; then
-        INITRAMFS_FB_BASENAME=$(basename "$INITRAMFS_FB")
-    fi
-
-    LIMINE_CONF_CONTENT+="
-
-/Arch Linux
-    protocol: linux
-    kernel_path: boot():///$KERNEL_BASENAME
-    kernel_cmdline: $CMDLINE
-    module_path: boot():///$INITRAMFS_BASENAME"
-
-    if [[ -n "$INITRAMFS_FB_BASENAME" ]]; then
-        LIMINE_CONF_CONTENT+="
-
-/Arch Linux (Fallback)
-    protocol: linux
-    kernel_path: boot():///$KERNEL_BASENAME
-    kernel_cmdline: $CMDLINE
-    module_path: boot():///$INITRAMFS_FB_BASENAME"
-    fi
-fi
-
-LIMINE_CONF_CONTENT+="
-
-# --- Snapper Snapshots (auto-generated below) ---
-# SNAPPER_ENTRIES_START
-# SNAPPER_ENTRIES_END"
-
-echo "$LIMINE_CONF_CONTENT" > "$ESP/limine.conf"
-
-# Verify config was written
-[[ -f "$ESP/limine.conf" ]] || error "Failed to write limine.conf"
-
-# Install limine EFI binary
-install -Dm644 "$LIMINE_EFI" "$ESP/EFI/BOOT/BOOTX64.EFI"
-install -Dm644 "$LIMINE_EFI" "$ESP/EFI/limine/BOOTX64.EFI"
-
-# Verify EFI binary was installed
-[[ -f "$ESP/EFI/BOOT/BOOTX64.EFI" ]] || error "Failed to install limine EFI binary"
-
-info "Limine installed and configured"
+info "Limine installed and boot entries generated"
 
 # --- Step 2: Now safe to remove old bootloaders ---
 info "Removing old bootloaders..."
@@ -366,29 +272,13 @@ systemctl enable --now snapper-cleanup.timer
 
 info "Snapper configured"
 
-# --- Step 4: Install limine-snapper sync and mkinitcpio hook ---
-info "Installing limine-snapper-sync and limine-mkinitcpio-hook..."
-if command -v yay &>/dev/null; then
-    sudo -u "${SUDO_USER:-$USER}" yay -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
-elif command -v paru &>/dev/null; then
-    sudo -u "${SUDO_USER:-$USER}" paru -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
-else
-    warn "No AUR helper (yay/paru) found. Please install limine-snapper-sync and limine-mkinitcpio-hook manually."
-fi
+# --- Step 4: Enable snapshot sync now that Limine is generator-managed ---
 systemctl enable --now limine-snapper-sync.service
-
-if command -v limine-mkinitcpio >/dev/null 2>&1; then
-    info "Regenerating Limine entries through limine-mkinitcpio..."
-    if limine-mkinitcpio; then
-        prune_legacy_limine_entries || true
-    else
-        warn "limine-mkinitcpio failed — keeping the initial Arch Linux Limine entry for safety."
-    fi
-fi
 
 # --- Step 5: Create initial snapshot ---
 info "Creating initial snapshot..."
 snapper -c root create --description "Fresh install" --type single
+limine-snapper-sync || warn "limine-snapper-sync failed after creating the initial snapshot. You can rerun it manually once the system is up."
 
 info "Setup complete!"
 echo ""

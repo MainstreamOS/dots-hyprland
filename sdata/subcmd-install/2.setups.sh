@@ -604,104 +604,52 @@ function teardown_pacman_nopasswd(){
   x sudo rm -f /etc/sudoers.d/install-pacman-nopasswd
 }
 
-# Upsert args into every kernel_cmdline/cmdline line of /boot/limine.conf.
-# Strips existing tokens whose key (the part before '=') matches one of the new
-# args, then appends the new args. Idempotent across reruns; returns non-zero
-# (without writing) if /boot/limine.conf is missing so callers can warn.
-function _limine_cmdline_upsert(){
-  local limine_conf="/boot/limine.conf"
-  [[ -f "$limine_conf" ]] || return 1
-  local -a new_args=("$@")
-  (( ${#new_args[@]} == 0 )) && return 0
-  local -a _keys=()
-  local _a
-  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
-  local _tmp; _tmp=$(mktemp)
+function _limine_default_upsert(){
+  local key="$1"
+  local value="$2"
+  local config_file="/etc/default/limine"
+  local _tmp
   local _line
-  while IFS= read -r _line || [[ -n "$_line" ]]; do
-    if [[ "$_line" =~ ^([[:space:]]*)(kernel_cmdline|cmdline):[[:space:]]*(.*)$ ]]; then
-      local _indent="${BASH_REMATCH[1]}" _key="${BASH_REMATCH[2]}" _val="${BASH_REMATCH[3]}"
-      local -a _toks _kept=()
-      read -r -a _toks <<< "$_val"
-      local _t _tk _k _skip
-      for _t in "${_toks[@]}"; do
-        [[ -z "$_t" ]] && continue
-        _tk="${_t%%=*}"
-        _skip=false
-        for _k in "${_keys[@]}"; do
-          if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
-        done
-        $_skip || _kept+=("$_t")
-      done
-      _kept+=("${new_args[@]}")
-      printf '%s%s: %s\n' "$_indent" "$_key" "${_kept[*]}"
-    else
-      printf '%s\n' "$_line"
-    fi
-  done < "$limine_conf" > "$_tmp"
-  sudo install -m 644 "$_tmp" "$limine_conf"
+  local _found=false
+
+  _tmp=$(mktemp)
+  if [[ -f "$config_file" ]]; then
+    while IFS= read -r _line || [[ -n "$_line" ]]; do
+      if [[ "$_line" =~ ^[[:space:]]*#?[[:space:]]*${key}[[:space:]]*= ]]; then
+        printf '%s=%s\n' "$key" "$value" >> "$_tmp"
+        _found=true
+      else
+        printf '%s\n' "$_line" >> "$_tmp"
+      fi
+    done < "$config_file"
+  fi
+  if ! $_found; then
+    [[ -s "$_tmp" ]] && printf '\n' >> "$_tmp"
+    printf '%s=%s\n' "$key" "$value" >> "$_tmp"
+  fi
+  sudo install -m 644 -D "$_tmp" "$config_file"
   rm -f "$_tmp"
 }
 
-# Persist kernel cmdline args in /etc/limine-entry-tool.d/10-dots-hyprland.conf
-# so they survive regenerations by `limine-update` / `limine-mkinitcpio` (which
-# rebuild /boot/limine.conf from scratch and would otherwise wipe direct edits).
-# The drop-in uses `+=` to append to whatever base cmdline is configured via
-# /etc/kernel/cmdline or /proc/cmdline. Idempotent: reads existing +=... lines,
-# strips tokens whose keys match the new args, and writes back a single
-# consolidated += line. Returns 1 (no-op) if limine-mkinitcpio-hook isn't
-# installed — callers should fall back to /boot/limine.conf direct edits.
-function _limine_dropin_cmdline_upsert(){
-  local dropin_dir="/etc/limine-entry-tool.d"
-  local dropin_file="${dropin_dir}/10-dots-hyprland.conf"
-  [[ -d "$dropin_dir" ]] || return 1
-  local -a new_args=("$@")
-  (( ${#new_args[@]} == 0 )) && return 0
-  local -a existing=()
-  if [[ -f "$dropin_file" ]]; then
-    local _line _val
-    while IFS= read -r _line || [[ -n "$_line" ]]; do
-      if [[ "$_line" =~ ^[[:space:]]*KERNEL_CMDLINE\[default\]\+=(.*)$ ]]; then
-        _val="${BASH_REMATCH[1]}"
-        local -a _toks; read -r -a _toks <<< "$_val"
-        existing+=("${_toks[@]}")
-      fi
-    done < "$dropin_file"
+function _limine_configure_generator_defaults(){
+  # Keep Limine entry naming explicit instead of implicitly following
+  # /etc/os-release PRETTY_NAME. This makes the boot menu stable even if
+  # branding overlays change later.
+  if command -v limine-update >/dev/null 2>&1 || command -v limine-mkinitcpio >/dev/null 2>&1 || [[ -f /etc/default/limine ]]; then
+    _limine_default_upsert "TARGET_OS_NAME" '"Mainstream OS\\"'
   fi
-  local -a _keys=() kept=()
-  local _a
-  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
-  local _t _tk _k _skip
-  for _t in "${existing[@]}"; do
-    [[ -z "$_t" ]] && continue
-    _tk="${_t%%=*}"
-    _skip=false
-    for _k in "${_keys[@]}"; do
-      if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
-    done
-    $_skip || kept+=("$_t")
-  done
-  kept+=("${new_args[@]}")
-  local _tmp; _tmp=$(mktemp)
-  {
-    printf '# Managed by dots-hyprland install scripts.\n'
-    printf '# Keeps kernel cmdline additions (plymouth, GPU, resume=, etc.) across\n'
-    printf '# limine-update regenerations of /boot/limine.conf.\n'
-    printf 'KERNEL_CMDLINE[default]+=%s\n' "${kept[*]}"
-  } > "$_tmp"
-  sudo install -m 644 "$_tmp" "$dropin_file"
-  rm -f "$_tmp"
 }
 
 # Upsert args into /etc/kernel/cmdline (single-line canonical kernel cmdline on
 # Arch). This is the source-of-truth consumed by mkinitcpio when building UKIs
 # (Unified Kernel Images) — UKIs embed the cmdline into the .efi at build time,
-# so neither /boot/limine.conf edits nor /etc/limine-entry-tool.d/ drop-ins
-# reach UKI boot entries. limine-entry-tool also reads this file first for
-# protocol: linux entries, so writing here covers both paths.
-# Seeds the file from the existing primary cmdline in /boot/limine.conf (or
-# /proc/cmdline, stripped of BOOT_IMAGE=/initrd=) when absent, then upserts by
-# key-dedup like the other helpers.
+# so direct edits to generated Limine entries would never reach UKI boot
+# entries. limine-entry-tool also reads this file first for protocol: linux
+# entries, so writing here covers both paths.
+# Seeds the file from the currently configured cmdline when absent, preferring
+# /boot/limine.conf as a compatibility fallback and otherwise /proc/cmdline
+# stripped of BOOT_IMAGE=/initrd=. Then upserts by key-dedup like the other
+# helpers.
 function _kernel_cmdline_upsert(){
   local cmdline_file="/etc/kernel/cmdline"
   local -a new_args=("$@")
@@ -749,86 +697,13 @@ function _kernel_cmdline_upsert(){
   rm -f "$_tmp"
 }
 
-# Apply kernel cmdline args across every place that needs them:
-#   - /etc/kernel/cmdline (UKI build input + limine-entry-tool primary source)
-#   - /etc/limine-entry-tool.d/ drop-in (appended via += for protocol: linux
-#     entries; survives limine-update regenerations)
-#   - /boot/limine.conf (direct edit for immediate effect pre-rebuild)
-# Returns 1 only if /boot/limine.conf is missing; the other writes are
-# best-effort.
+# Persist kernel cmdline args in the canonical limine-entry-tool source file.
+# `limine-update` / `limine-mkinitcpio` regenerate /boot/limine.conf from
+# /etc/kernel/cmdline, so we avoid patching the generated config directly.
 function _limine_apply_cmdline_args(){
   local -a args=("$@")
   (( ${#args[@]} == 0 )) && return 0
-  _kernel_cmdline_upsert "${args[@]}" || true
-  _limine_dropin_cmdline_upsert "${args[@]}" || true
-  _limine_cmdline_upsert "${args[@]}"
-}
-
-function _limine_prune_legacy_primary_entries(){
-  local limine_conf="/boot/limine.conf"
-  local machine_id
-  local _tmp
-  [[ -f "$limine_conf" ]] || return 0
-  machine_id=$(tr -d '\n' < /etc/machine-id 2>/dev/null || true)
-  [[ -n "$machine_id" ]] || return 0
-
-  # Only prune the old top-level Arch Linux entries once limine-entry-tool has
-  # created a proper machine-id-targeted OS entry. That keeps the initial
-  # hand-written entry as a safe fallback until the generated Mainstream entry
-  # exists, while removing the duplicate menu item afterwards.
-  if ! grep -q "machine-id=${machine_id}" "$limine_conf"; then
-    return 0
-  fi
-
-  _tmp=$(mktemp)
-  awk -v machine_id="$machine_id" '
-    function flush_block(remove) {
-      if (!have_block) return
-      remove = 0
-      if ((title == "/Arch Linux" || title == "/Arch Linux (Fallback)") &&
-          !has_machine_id && !has_entry_tool_comment) {
-        remove = 1
-      }
-      if (!remove) printf "%s", block
-      block = ""
-      have_block = 0
-      title = ""
-      has_machine_id = 0
-      has_entry_tool_comment = 0
-    }
-    BEGIN {
-      have_block = 0
-      block = ""
-      title = ""
-      has_machine_id = 0
-      has_entry_tool_comment = 0
-    }
-    /^\/[^\/]/ {
-      flush_block()
-      have_block = 1
-      title = $0
-      block = $0 ORS
-      next
-    }
-    {
-      if (!have_block) {
-        print
-        next
-      }
-      block = block $0 ORS
-      if (index($0, "machine-id=" machine_id) > 0) has_machine_id = 1
-      if (index($0, "limine-entry-tool") > 0) has_entry_tool_comment = 1
-    }
-    END {
-      flush_block()
-    }
-  ' "$limine_conf" > "$_tmp"
-
-  if ! cmp -s "$_tmp" "$limine_conf"; then
-    sudo install -m 644 "$_tmp" "$limine_conf"
-    echo -e "${STY_CYAN}[$0]: Removed legacy top-level Limine Arch Linux entries now that generated Mainstream entries exist.${STY_RST}"
-  fi
-  rm -f "$_tmp"
+  _kernel_cmdline_upsert "${args[@]}"
 }
 
 # Rebuild initramfs. On systems with limine-mkinitcpio-hook installed, prefers
@@ -838,13 +713,13 @@ function _limine_prune_legacy_primary_entries(){
 # when the hook isn't installed.
 function _initramfs_rebuild(){
   if command -v limine-mkinitcpio >/dev/null 2>&1; then
+    _limine_configure_generator_defaults || true
     echo -e "${STY_CYAN}[$0]: Running limine-mkinitcpio (rebuilds initramfs + limine boot entries)...${STY_RST}"
     sudo limine-mkinitcpio
   else
     echo -e "${STY_CYAN}[$0]: Running mkinitcpio -P...${STY_RST}"
     sudo mkinitcpio -P
   fi
-  _limine_prune_legacy_primary_entries || true
 }
 
 function setup_plymouth(){
@@ -887,20 +762,18 @@ function setup_plymouth(){
     echo -e "${STY_BLUE}[$0]: plymouth hook already present in /etc/mkinitcpio.conf${STY_RST}"
   fi
 
-  # Patch limine cmdline to enable plymouth splash and silence boot. Writes to
-  # both /etc/limine-entry-tool.d/ (persists across limine-update regenerations)
-  # and /boot/limine.conf directly (immediate + fallback for non-hook systems).
-  # Runs after setup_limine_snapper so /boot/limine.conf exists.
-  echo -e "${STY_CYAN}[$0]: Adding plymouth + silencing args to limine kernel cmdline...${STY_RST}"
+  # Persist the desired boot flags in /etc/kernel/cmdline so future
+  # limine-mkinitcpio regenerations keep the splash/silencing settings.
+  echo -e "${STY_CYAN}[$0]: Adding plymouth + silencing args to the managed kernel cmdline...${STY_RST}"
   if ! _limine_apply_cmdline_args quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0; then
-    echo -e "${STY_YELLOW}[$0]: /boot/limine.conf not found — skipping kernel_cmdline patch. Re-run setup_plymouth after setting up limine if you add it later.${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]: Failed to update /etc/kernel/cmdline for plymouth.${STY_RST}"
   fi
 
   # Rebuild initramfs so plymouth is active on next boot. On systems with
-  # limine-mkinitcpio-hook installed, this also regenerates /boot/limine.conf
-  # boot entries from our drop-in, keeping everything in sync. When
-  # setup_gpu_autoconfig also runs, it rebuilds again after adding MODULES —
-  # that's a small cost for keeping plymouth working standalone.
+# limine-mkinitcpio-hook installed, this also regenerates /boot/limine.conf
+# boot entries from /etc/kernel/cmdline, keeping everything in sync. When
+# setup_gpu_autoconfig also runs, it rebuilds again after adding MODULES —
+# that's a small cost for keeping plymouth working standalone.
   _initramfs_rebuild
   echo -e "${STY_GREEN}[$0]: Plymouth BGRT theme configured.${STY_RST}"
 }
@@ -986,7 +859,7 @@ function _gpu_detect(){
 }
 
 # Configure system-level bits for the detected GPU(s): kernel modules in the
-# initramfs, modprobe options, kernel cmdline args in /boot/limine.conf, and
+# initramfs, modprobe options, kernel cmdline args in /etc/kernel/cmdline, and
 # NVIDIA power-management systemd services. Ported from the archiso post-install
 # script but adapted for a running (non-chroot) system — DKMS modules build
 # against the live kernel so the initramfs rebuild runs in the same pass. Skips hypr
@@ -1099,8 +972,20 @@ NVIDIAEOF
   local swap_partuuid
   swap_partuuid=$(blkid -t TYPE=swap -o export 2>/dev/null | awk -F= '/^PARTUUID=/{print $2; exit}' || true)
   if [[ -n "$swap_partuuid" ]]; then
-    if [[ -f /boot/limine.conf ]] && grep -q '\bresume=' /boot/limine.conf; then
-      echo -e "${STY_BLUE}[$0]: resume= already present in limine.conf — skipping.${STY_RST}"
+    local _current_cmdline=""
+    if [[ -f /etc/kernel/cmdline ]]; then
+      _current_cmdline=$(tr '\n' ' ' < /etc/kernel/cmdline)
+    elif [[ -f /boot/limine.conf ]]; then
+      _current_cmdline=$(awk '/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/ {
+        sub(/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/, "")
+        print
+        exit
+      }' /boot/limine.conf)
+    elif [[ -r /proc/cmdline ]]; then
+      _current_cmdline=$(cat /proc/cmdline)
+    fi
+    if grep -Eq '(^|[[:space:]])resume=' <<< "$_current_cmdline"; then
+      echo -e "${STY_BLUE}[$0]: resume= already present in the managed kernel cmdline — skipping.${STY_RST}"
     else
       cmdline_args+=("resume=PARTUUID=$swap_partuuid")
       echo -e "${STY_CYAN}[$0]: Will set hibernation resume= to swap PARTUUID=$swap_partuuid.${STY_RST}"
@@ -1110,17 +995,17 @@ NVIDIAEOF
   fi
 
   # --- Apply collected kernel cmdline args in a single pass ---
-  # Writes to both /etc/limine-entry-tool.d/ (persists across limine-update
-  # regenerations) and /boot/limine.conf directly (immediate + fallback).
+  # Persist them in /etc/kernel/cmdline and let limine-mkinitcpio regenerate
+  # the boot entries from that single source of truth.
   if (( ${#cmdline_args[@]} > 0 )); then
     echo -e "${STY_CYAN}[$0]: Applying limine kernel cmdline args: ${cmdline_args[*]}${STY_RST}"
     if ! _limine_apply_cmdline_args "${cmdline_args[@]}"; then
-      echo -e "${STY_YELLOW}[$0]: /boot/limine.conf not found — skipping cmdline patch. Set up limine first, then re-run setup_gpu_autoconfig.${STY_RST}"
+      echo -e "${STY_YELLOW}[$0]: Failed to update /etc/kernel/cmdline for GPU boot flags.${STY_RST}"
     fi
   fi
 
   # --- Rebuild initramfs so new MODULES/HOOKS take effect on next boot ---
-  # Also regenerates /boot/limine.conf boot entries from our drop-in on systems
+  # Also regenerates /boot/limine.conf boot entries from /etc/kernel/cmdline on systems
   # with limine-mkinitcpio-hook installed.
   _initramfs_rebuild
 
