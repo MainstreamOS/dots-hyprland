@@ -6,3 +6,12 @@ ModuleName=script
 [script]
 ImageDir=/usr/share/plymouth/themes/mainstream
 ScriptFile=/usr/share/plymouth/themes/mainstream/mainstream.script
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false

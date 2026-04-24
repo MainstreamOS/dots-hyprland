@@ -2,7 +2,11 @@
 // Mainstream OS boot splash — mirrors the CSS .boot element:
 //   background #191A1F, centered MS mark with blue glow, "Mainstream" below,
 //   120x2 progress bar + "BOOTING KERNEL" at bottom with an animated blue
-//   gradient scan sweeping across the bar on a 2s loop.
+//   gradient scan sweeping across the bar.
+//
+// Phase 1: paint only the background immediately so the splash can appear
+//          with minimal work while early userspace is still settling.
+// Phase 2: fade in the Mainstream overlay (logo, text, status row, scan).
 //
 // Layout reference: the mockup's .boot element is 600 x 375 CSS px
 // (16:10 at the mockup column width). All CSS pixel values below are
@@ -50,10 +54,12 @@ group_top_y     = (H - group_h) / 2;
 logo_img_x = (W - logo_display_w) / 2;
 logo_img_y = group_top_y - 40.0 * s;
 logo_sprite.SetPosition(logo_img_x, logo_img_y, 1);
+logo_sprite.SetOpacity(0.0);
 
 name_x = (W - name_display_w) / 2;
 name_y = group_top_y + container_h + gap_logo_name;
 name_sprite.SetPosition(name_x, name_y, 1);
+name_sprite.SetOpacity(0.0);
 
 // --- Bottom status row: [120x2 bar]  [BOOTING KERNEL] -------------------
 bar_img        = Image("bar.png");
@@ -85,6 +91,8 @@ bar_y          = row_top_y + (status_display_h - bar_display_h) / 2;
 status_y       = row_top_y;
 bar_sprite.SetPosition(row_x, bar_y, 1);
 status_sprite.SetPosition(row_x + bar_display_w + gap_bar_text, status_y, 1);
+bar_sprite.SetOpacity(0.0);
+status_sprite.SetOpacity(0.0);
 
 // --- Scan highlight (animated sweep across the bar) ---------------------
 // Source scan.png is a horizontal linear-gradient: transparent -> #00a1ca
@@ -97,16 +105,38 @@ scan_display_h = bar_display_h;
 scan_scaled    = scan_img.Scale(scan_display_w, scan_display_h);
 scan_sprite    = Sprite(scan_scaled);
 scan_sprite.SetPosition(row_x - scan_display_w, bar_y, 2);
+scan_sprite.SetOpacity(0.0);
 
 scan_x_start = row_x - scan_display_w;           // left: -40% of bar
 scan_x_end   = row_x + bar_display_w + scan_display_w; // left: 140% of bar
 
-scan_tick   = 0;
-scan_period = 200;   // 4s at 50 Hz refresh
+frame_tick        = 0;
+fade_delay_ticks  = 20;   // ~0.4s at 50 Hz
+fade_ticks        = 30;   // ~0.6s fade-in
+scan_period       = 200;  // 4s at 50 Hz refresh
+
+fun overlay_opacity() {
+    if (frame_tick <= fade_delay_ticks)
+        return 0.0;
+
+    fade_phase = frame_tick - fade_delay_ticks;
+    if (fade_phase >= fade_ticks)
+        return 1.0;
+
+    return fade_phase / fade_ticks;
+}
 
 fun refresh_cb() {
-    scan_tick++;
-    phase = scan_tick - Math.Int(scan_tick / scan_period) * scan_period;
+    frame_tick++;
+
+    opacity = overlay_opacity();
+    logo_sprite.SetOpacity(opacity);
+    name_sprite.SetOpacity(opacity);
+    bar_sprite.SetOpacity(opacity);
+    status_sprite.SetOpacity(0.55 * opacity);
+    scan_sprite.SetOpacity(opacity);
+
+    phase = frame_tick - Math.Int(frame_tick / scan_period) * scan_period;
     t = phase / scan_period;
     scan_sprite.SetX(scan_x_start + t * (scan_x_end - scan_x_start));
 }
