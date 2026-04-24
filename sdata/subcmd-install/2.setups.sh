@@ -328,7 +328,74 @@ if [[ "$OS_GROUP_ID" == "gentoo" ]]; then
   v sudo chown -R $(whoami):$(whoami) ~/.local/
 fi
 
-v gsettings set org.gnome.desktop.interface font-name 'Google Sans Flex Medium 11 @opsz=11,wght=500'
+# Font setup — single source of truth for everything font-related that
+# doesn't flow through the shell's own config.json (appearance.fonts.*).
+# Covers: GTK defaults (gsettings + settings.ini), system-wide font install
+# for non-user-session consumers (SDDM, polkit dialogs, …), and a fontconfig
+# cache refresh so the rules deployed by 3.files.sh
+# (dots/.config/fontconfig/fonts.conf) take effect immediately.
+function setup_fonts(){
+  local main_family="Google Sans Flex"
+  local mono_family="JetBrains Mono NF"
+  local reading_family="Readex Pro"
+  local main_pango="${main_family} Medium 11 @opsz=11,wght=500"
+  local gtk_font="${main_family} Medium 11"
+
+  # --- GNOME/GTK interface fonts (gsettings) ---
+  # font-name is the UI default, document-font-name is used for text-body
+  # views (some GTK apps fall back to it for large-text regions), and
+  # monospace-font-name drives terminal/code widgets. @opsz/wght are pango
+  # 1.52+ variable-font axis overrides.
+  v gsettings set org.gnome.desktop.interface font-name            "${main_pango}"
+  v gsettings set org.gnome.desktop.interface document-font-name   "${reading_family} 11"
+  v gsettings set org.gnome.desktop.interface monospace-font-name  "${mono_family} 11"
+
+  # --- GTK3 / GTK4 settings.ini ---
+  # Belt-and-suspenders with gsettings: some GTK3 apps (and some sandboxed
+  # launch paths) read settings.ini but not the DConf schema.
+  local _gtk3="$HOME/.config/gtk-3.0/settings.ini"
+  local _gtk4="$HOME/.config/gtk-4.0/settings.ini"
+  mkdir -p "$(dirname "$_gtk3")" "$(dirname "$_gtk4")"
+  local _f
+  for _f in "$_gtk3" "$_gtk4"; do
+    if [[ -f "$_f" ]] && grep -q '^\[Settings\]' "$_f"; then
+      if grep -q '^gtk-font-name=' "$_f"; then
+        sed -i "s|^gtk-font-name=.*|gtk-font-name=${gtk_font}|" "$_f"
+      else
+        sed -i "/^\[Settings\]/a gtk-font-name=${gtk_font}" "$_f"
+      fi
+    else
+      printf '[Settings]\ngtk-font-name=%s\n' "${gtk_font}" > "$_f"
+    fi
+  done
+
+  # --- System-wide install of the main font ---
+  # End-4's illogical-impulse-fonts drop Google Sans Flex into
+  # ~/.local/share/fonts which is unreadable to `sddm` (login screen runs as
+  # a different user) and to any non-session process (system polkit dialogs
+  # etc.). Copying the TTF into /usr/share/fonts makes the family resolvable
+  # everywhere. Idempotent via `install`.
+  local _gsf_user
+  _gsf_user=$(find "$HOME/.local/share/fonts/illogical-impulse-google-sans-flex" \
+                -maxdepth 1 -iname 'GoogleSansFlex*.ttf' 2>/dev/null | head -n1)
+  if [[ -n "$_gsf_user" ]]; then
+    x sudo install -d -m 755 /usr/share/fonts/google-sans-flex
+    x sudo install -m 644 "$_gsf_user" /usr/share/fonts/google-sans-flex/
+    x sudo fc-cache -f /usr/share/fonts/google-sans-flex >/dev/null 2>&1 || true
+  else
+    echo -e "${STY_YELLOW}[$0]: Google Sans Flex TTF not found under ~/.local/share/fonts — system-wide install skipped. SDDM may fall back to a default sans.${STY_RST}"
+  fi
+
+  # --- User fontconfig cache refresh ---
+  # The dots/.config/fontconfig/fonts.conf (deployed by 3.files.sh) rewrites
+  # sans-serif/Sans/system-ui to Google Sans Flex and biases the default
+  # weight to Medium. fc-cache ensures pango/cairo consumers pick it up on
+  # next app launch without waiting for the per-dir mtime timer.
+  v fc-cache -f >/dev/null 2>&1 || true
+}
+showfun setup_fonts
+v setup_fonts
+
 v gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 v gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
 v gsettings set org.gnome.desktop.wm.preferences button-layout ":"
