@@ -96,6 +96,67 @@ upsert_kernel_cmdline_args() {
     rm -f "$tmpfile"
 }
 
+relabel_limine_nvram_entry() {
+    # Rename the NVRAM boot entry that `limine-install` registers (hardcoded
+    # label "Limine") to a custom label. Scoped to entries whose device path
+    # references this ESP's PARTUUID AND our limine_x64.efi loader, so we
+    # never touch entries pointing to other disks / partitions.
+    #
+    # Persistent across upgrades: `limine-install` checks for an existing
+    # entry by PARTUUID + loader path, not label, so future runs will leave
+    # the renamed entry alone.
+    local new_label="$1"
+    local esp_path="$2"
+    local loader_path="/EFI/limine/limine_x64.efi"
+
+    command -v efibootmgr >/dev/null 2>&1 || { warn "efibootmgr not found — skipping NVRAM relabel."; return 0; }
+
+    local source part_uuid disk part
+    source=$(findmnt -n -o SOURCE "$esp_path" 2>/dev/null) || { warn "findmnt failed for $esp_path — skipping NVRAM relabel."; return 0; }
+    part_uuid=$(findmnt -n -o PARTUUID "$esp_path" 2>/dev/null) || { warn "PARTUUID lookup failed for $esp_path — skipping NVRAM relabel."; return 0; }
+    [[ -n "$part_uuid" ]] || { warn "Empty PARTUUID for $esp_path — skipping NVRAM relabel."; return 0; }
+
+    if [[ "$source" =~ ^(/dev/nvme[0-9]+n[0-9]+)p([0-9]+)$ ]]; then
+        disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    elif [[ "$source" =~ ^(/dev/mmcblk[0-9]+)p([0-9]+)$ ]]; then
+        disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    elif [[ "$source" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
+        disk="${BASH_REMATCH[1]}"; part="${BASH_REMATCH[2]}"
+    else
+        warn "Could not parse disk/partition from $source — skipping NVRAM relabel."
+        return 0
+    fi
+
+    local efibootmgr_output
+    efibootmgr_output=$(efibootmgr -v 2>/dev/null) || { warn "efibootmgr read failed — skipping NVRAM relabel."; return 0; }
+
+    # If an entry with the target label already points at our PARTUUID, we're done.
+    if grep -E "^Boot[0-9A-Fa-f]{4}\*? ${new_label}[[:space:]]" <<< "$efibootmgr_output" | grep -Fqi "$part_uuid"; then
+        return 0
+    fi
+
+    # Delete any existing entries on this partition that point at our limine loader.
+    local line bootnum
+    while IFS= read -r line; do
+        [[ "$line" =~ ^Boot([0-9A-Fa-f]{4})\* ]] || continue
+        bootnum="${BASH_REMATCH[1]}"
+        if grep -Fqi "$part_uuid" <<< "$line" && grep -Fqi "limine_x64.efi" <<< "$line"; then
+            efibootmgr -b "$bootnum" -B >/dev/null 2>&1 || true
+        fi
+    done <<< "$efibootmgr_output"
+
+    if efibootmgr --create \
+        --disk "$disk" \
+        --part "$part" \
+        --label "$new_label" \
+        --loader "$loader_path" \
+        --unicode >/dev/null 2>&1; then
+        info "Renamed NVRAM entry to '$new_label' (PARTUUID=$part_uuid)."
+    else
+        warn "Failed to create '$new_label' NVRAM entry — leaving default 'Limine' label in place."
+    fi
+}
+
 print_limine_header() {
     cat <<'EOF'
 timeout: 5
@@ -212,6 +273,8 @@ limine-update
 ensure_limine_header
 [[ -f "$ESP/limine.conf" ]] || error "Failed to generate $ESP/limine.conf"
 grep -q "machine-id=$(tr -d '\n' < /etc/machine-id)" "$ESP/limine.conf" || error "limine-update did not generate a machine-id-targeted OS entry."
+
+relabel_limine_nvram_entry "Mainstream OS" "$ESP"
 
 info "Limine installed and boot entries generated"
 
