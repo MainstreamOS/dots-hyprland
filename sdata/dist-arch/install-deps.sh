@@ -222,6 +222,9 @@ metapkgs+=(./sdata/dist-arch/illogical-impulse-bibata-modern-classic-bin)
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"
   $ask && showfun install-local-pkgbuild || metainstallflags="$metainstallflags --noconfirm"
+  if declare -F ms_step >/dev/null 2>&1; then
+    ms_step installing "$(basename "$i")"
+  fi
   v install-local-pkgbuild "$i" "$metainstallflags"
 done
 

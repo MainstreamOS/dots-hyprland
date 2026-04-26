@@ -1,6 +1,7 @@
 # This script is meant to be sourced.
 # It's not for directly running.
-printf "${STY_CYAN}[$0]: 1. Install dependencies\n${STY_RST}"
+printf "\n"
+ms_section "Installing..."
 
 function outdate_detect(){
   # Shallow clone prevent latest_commit_timestamp() from working.
@@ -103,6 +104,6 @@ elif [[ "$OS_GROUP_ID" =~ ^(arch|gentoo|fedora)$ ]]; then
       fi
     fi
   fi
-  printf "./sdata/dist-${TARGET_ID}/install-deps.sh will be used.\n"
+  ms_hint "using ./sdata/dist-${TARGET_ID}/install-deps.sh"
   source ./sdata/dist-${TARGET_ID}/install-deps.sh
 fi

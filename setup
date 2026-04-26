@@ -6,6 +6,7 @@ source ./sdata/lib/environment-variables.sh
 source ./sdata/lib/functions.sh
 source ./sdata/lib/package-installers.sh
 source ./sdata/lib/dist-determine.sh
+source ./sdata/lib/presentation.sh
 
 prevent_sudo_or_root
 set -e
@@ -61,6 +62,32 @@ case $1 in
   # Wrong subcommand
   *)printf "${STY_RED}Unknown subcommand \"$1\".${STY_RST}\n";showhelp_global;exit 1;;
 esac
+
+# Mainstream visual installer (centered banner with live log tail).
+# Default ON for the install family; pass --verbose (or set MS_VISUAL=0)
+# to fall back to the legacy uncentered prompts. Auto-disabled when
+# stdout is not a tty (CI, piped runs).
+case "${SUBCMD_NAME}" in
+  install|install-deps|install-setups|install-files)
+    if [[ -t 1 ]] && [[ "${MS_VISUAL:-1}" != "0" ]]; then
+      _ms_verbose=0
+      for _arg in "$@"; do
+        [[ "$_arg" == "--verbose" ]] && _ms_verbose=1
+      done
+      if (( _ms_verbose == 0 )); then
+        export MS_VISUAL=1
+      fi
+    fi
+    # Strip --verbose so it doesn't reach the subcommand options parser.
+    _ms_filtered=()
+    for _arg in "$@"; do
+      [[ "$_arg" == "--verbose" ]] && continue
+      _ms_filtered+=("$_arg")
+    done
+    set -- "${_ms_filtered[@]}"
+    unset _ms_verbose _ms_filtered _arg
+    ;;
+esac
 #####################################################################################
 if [[ -f "${SUBCMD_DIR}/options.sh" ]];
   then source "${SUBCMD_DIR}/options.sh"
@@ -74,10 +101,12 @@ case ${SUBCMD_NAME} in
     # Initialize sudo keepalive for the entire install process
     sudo_init_keepalive
     # Set trap to cleanup when this subcommand exits
-    trap sudo_stop_keepalive EXIT INT TERM
+    trap 'sudo_stop_keepalive; ms_visual_end' EXIT INT TERM
     if [[ "${SKIP_ALLGREETING}" != true ]]; then
       source ${SUBCMD_DIR}/0.greeting.sh
     fi
+    ms_preflight_network
+    ms_visual_begin
     if [[ "${SKIP_ALLDEPS}" != true ]]; then
       source ${SUBCMD_DIR}/1.deps-router.sh
     fi
@@ -87,6 +116,7 @@ case ${SUBCMD_NAME} in
     if [[ "${SKIP_ALLFILES}" != true ]]; then
       source ${SUBCMD_DIR}/3.files.sh
     fi
+    ms_visual_end
     ;;
   install-deps)
     for function in ${print_os_group_id_functions[@]}; do
@@ -96,10 +126,15 @@ case ${SUBCMD_NAME} in
     # Initialize sudo keepalive for dependency installation
     sudo_init_keepalive
     # Set trap to cleanup when this subcommand exits
-    trap sudo_stop_keepalive EXIT INT TERM
+    trap 'sudo_stop_keepalive; ms_visual_end' EXIT INT TERM
+    ms_logo
+    ms_section "Mainstream installer · dependencies"
+    ms_preflight_network
+    ms_visual_begin
     if [[ "${SKIP_ALLDEPS}" != true ]]; then
       source ${SUBCMD_DIR}/1.deps-router.sh
     fi
+    ms_visual_end
     ;;
   install-setups)
     for function in ${print_os_group_id_functions[@]}; do
@@ -109,19 +144,28 @@ case ${SUBCMD_NAME} in
     # Initialize sudo keepalive for setup steps
     sudo_init_keepalive
     # Set trap to cleanup when this subcommand exits
-    trap sudo_stop_keepalive EXIT INT TERM
+    trap 'sudo_stop_keepalive; ms_visual_end' EXIT INT TERM
+    ms_logo
+    ms_section "Mainstream installer · setup"
+    ms_visual_begin
     if [[ "${SKIP_ALLSETUPS}" != true ]]; then
       source ${SUBCMD_DIR}/2.setups.sh
     fi
+    ms_visual_end
     ;;
   install-files)
     for function in ${print_os_group_id_functions[@]}; do
       $function
     done
     pause
+    trap 'ms_visual_end' EXIT INT TERM
+    ms_logo
+    ms_section "Mainstream installer · files"
+    ms_visual_begin
     if [[ "${SKIP_ALLFILES}" != true ]]; then
       source ${SUBCMD_DIR}/3.files.sh
     fi
+    ms_visual_end
     ;;
   *)
     source ${SUBCMD_DIR}/0.run.sh

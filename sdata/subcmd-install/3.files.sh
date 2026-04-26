@@ -1,6 +1,7 @@
 # This script is meant to be sourced.
 # It's not for directly running.
-printf "${STY_CYAN}[$0]: 3. Copying config files\n${STY_RST}"
+printf "\n"
+ms_section "Copying config files..."
 
 # shellcheck shell=bash
 
@@ -355,18 +356,11 @@ try hyprctl reload
 
 #####################################################################################
 printf "\n"
+ms_step_raw "finalizing install..."
 printf "\n"
+ms_ready "reboot to enter Mainstream."
 printf "\n"
-printf "${STY_CYAN}[$0]: Finished${STY_RST}\n"
-printf "\n"
-printf "${STY_CYAN}When starting Hyprland from your display manager (login screen) ${STY_RED} DO NOT SELECT UWSM ${STY_RST}\n"
-printf "\n"
-printf "${STY_CYAN}If you are already running Hyprland,${STY_RST}\n"
-printf "${STY_CYAN}Press ${STY_INVERT} Ctrl+Super+T ${STY_RST}${STY_CYAN} to select a wallpaper${STY_RST}\n"
-printf "${STY_CYAN}Press ${STY_INVERT} Super+/ ${STY_RST}${STY_CYAN} for a list of keybinds${STY_RST}\n"
-printf "\n"
-printf "${STY_CYAN}For suggestions/hints after installation:${STY_RST}\n"
-printf "${STY_CYAN}${STY_UNDERLINE} https://ii.clsty.link/en/ii-qs/01setup/#post-installation ${STY_RST}\n"
+ms_hint "in Hyprland: Super+W = wallpaper · Super+Tab = keybinds"
 printf "\n"
 
 if [[ -z "${ILLOGICAL_IMPULSE_VIRTUAL_ENV}" ]]; then

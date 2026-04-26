@@ -1,6 +1,9 @@
 # This script is meant to be sourced.
 # It's not for directly running.
 
+printf "\n"
+ms_section "Configuring..."
+
 function prepare_systemd_user_service(){
   if [[ ! -e "/usr/lib/systemd/user/ydotool.service" ]]; then
     x sudo ln -s /usr/lib/systemd/{system,user}/ydotool.service
