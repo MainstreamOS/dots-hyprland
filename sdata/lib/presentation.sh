@@ -30,6 +30,7 @@ MS_COL_MUTED='\e[38;5;245m'     # graphite-soft #9397a0
 MS_COL_DIM='\e[2;38;5;240m'     # tail line color (dim)
 MS_COL_OK='\e[38;5;79m'         # mint
 MS_COL_ERR='\e[38;5;203m'       # error red
+MS_COL_WARN='\e[38;5;214m'      # warn amber
 MS_COL_ACCENT='\e[38;5;80m'     # heading = stream-a
 MS_RST='\e[0m'
 MS_BOLD='\e[1m'
@@ -252,6 +253,20 @@ ms_hint() {
   local cw; cw=$(_ms_col_width)
   local text; text=$(_ms_clip "$1" "$cw")
   _ms_emit_above_tail "${pad}${MS_COL_MUTED}${text}${MS_RST}"
+}
+
+ms_note() {
+  local pad; pad=$(_ms_pad "$(_ms_left_pad)")
+  local cw; cw=$(_ms_col_width)
+  local text; text=$(_ms_clip "$1" "$cw")
+  _ms_emit_above_tail "${pad}${MS_COL_BODY}${text}${MS_RST}"
+}
+
+ms_warn() {
+  local pad; pad=$(_ms_pad "$(_ms_left_pad)")
+  local cw; cw=$(_ms_col_width)
+  local text; text=$(_ms_clip "$1" "$cw")
+  _ms_emit_above_tail "${pad}${MS_COL_WARN}${text}${MS_RST}"
 }
 
 ms_line() {
