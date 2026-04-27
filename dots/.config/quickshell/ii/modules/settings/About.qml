@@ -12,7 +12,12 @@ ContentPage {
     ContentSection {
         icon: "box"
         title: Translation.tr("Distro")
-        
+
+        // Mainstream branding is inlined here rather than overlaying
+        // /etc/os-release so the About panel renders the same info on any
+        // distro without an installer step. SystemInfo stays generic so
+        // anything else keyed off os-release (package managers, tools that
+        // read ID/ID_LIKE) keeps working.
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 20
@@ -20,18 +25,18 @@ ContentPage {
             Layout.bottomMargin: 10
             IconImage {
                 implicitSize: 80
-                source: Quickshell.iconPath(SystemInfo.logo)
+                source: Quickshell.iconPath("mainstream-logo")
             }
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
-                // spacing: 10
                 StyledText {
-                    text: SystemInfo.distroName
+                    // Two literal backslashes are part of the brand name.
+                    text: "Mainstream OS\\\\"
                     font.pixelSize: Appearance.font.pixelSize.title
                 }
                 StyledText {
                     font.pixelSize: Appearance.font.pixelSize.normal
-                    text: SystemInfo.homeUrl
+                    text: "https://mainstreamos.org/"
                     textFormat: Text.MarkdownText
                     onLinkActivated: (link) => {
                         Qt.openUrlExternally(link)
@@ -46,47 +51,32 @@ ContentPage {
             spacing: 5
 
             RippleButtonWithIcon {
-                visible: SystemInfo.documentationUrl.trim().length > 0
                 materialIcon: "auto_stories"
                 mainText: Translation.tr("Documentation")
-                onClicked: {
-                    Qt.openUrlExternally(SystemInfo.documentationUrl)
-                }
+                onClicked: Qt.openUrlExternally("https://mainstreamos.org/docs")
             }
             RippleButtonWithIcon {
-                visible: SystemInfo.bugReportUrl.trim().length > 0
                 materialIcon: "adjust"
                 materialIconFill: false
                 mainText: Translation.tr("Issues")
-                onClicked: {
-                    Qt.openUrlExternally(SystemInfo.bugReportUrl)
-                }
+                onClicked: Qt.openUrlExternally("https://github.com/MainstreamOS/dots-hyprland/issues")
             }
             RippleButtonWithIcon {
-                visible: SystemInfo.supportUrl.trim().length > 0
                 materialIcon: "forum"
                 mainText: Translation.tr("Discussions")
-                onClicked: {
-                    Qt.openUrlExternally(SystemInfo.supportUrl)
-                }
+                onClicked: Qt.openUrlExternally("https://github.com/MainstreamOS/discussions")
             }
             RippleButtonWithIcon {
                 materialIcon: "policy"
                 materialIconFill: false
                 mainText: Translation.tr("Privacy Policy")
-                onClicked: {
-                    Qt.openUrlExternally(SystemInfo.privacyPolicyUrl)
-                }
+                onClicked: Qt.openUrlExternally("https://mainstreamos.org/privacy")
             }
             RippleButtonWithIcon {
-                visible: SystemInfo.donateUrl.trim().length > 0
                 materialIcon: "favorite"
                 mainText: Translation.tr("Donate")
-                onClicked: {
-                    Qt.openUrlExternally(SystemInfo.donateUrl)
-                }
+                onClicked: Qt.openUrlExternally("https://mainstreamos.org/donate")
             }
-
         }
 
     }
