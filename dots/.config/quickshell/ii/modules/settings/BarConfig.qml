@@ -40,10 +40,10 @@ ContentPage {
                         } else {
                             Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME\\b/TIME12/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
                         }
-                        // Sync to pixie-sddm if installed. The state dir is sticky-bit
-                        // world-writable (created by pixie-sddm's install.sh); the
-                        // redirect silently no-ops when pixie-sddm isn't installed.
-                        Quickshell.execDetached(["bash", "-c", `[ -d /var/lib/pixie-sddm ] && printf 'clockFormat=%s\\n' ${JSON.stringify(newValue)} > /var/lib/pixie-sddm/state.conf || true`]);
+                        // Sync to pixie-sddm if installed (helper upserts a single
+                        // key without clobbering other state). Silently no-ops on
+                        // boxes that don't have the helper on $PATH.
+                        Quickshell.execDetached(["bash", "-c", `command -v pixie-sddm-set-state >/dev/null 2>&1 && pixie-sddm-set-state clockFormat ${JSON.stringify(newValue)} || true`]);
                         Config.options.time.format = newValue;
                     }
                     options: [
@@ -69,6 +69,8 @@ ContentPage {
                             Config.options.time.shortDateFormat = "MM/dd";
                             Config.options.time.dateWithYearFormat = "MM/dd/yyyy";
                         }
+                        // Sync to pixie-sddm if installed.
+                        Quickshell.execDetached(["bash", "-c", `command -v pixie-sddm-set-state >/dev/null 2>&1 && pixie-sddm-set-state dateFormat ${JSON.stringify(newValue)} || true`]);
                     }
                     options: [
                         { displayName: Translation.tr("Date First dd/MM"),  value: "ddd, dd/MM" },
