@@ -95,3 +95,4 @@ xdg-user-dirs-update
 
 install_file "dots/.local/share/icons/illogical-impulse.svg" "${XDG_DATA_HOME}"/icons/illogical-impulse.svg
 install_file "dots/.local/share/icons/hicolor/scalable/apps/mainstream-logo.svg" "${XDG_DATA_HOME}"/icons/hicolor/scalable/apps/mainstream-logo.svg
+install_file "dots/.local/share/icons/xcaptain09.png" "${XDG_DATA_HOME}"/icons/xcaptain09.png

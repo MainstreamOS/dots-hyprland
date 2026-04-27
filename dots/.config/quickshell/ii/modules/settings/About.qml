@@ -81,73 +81,102 @@ ContentPage {
 
     }
     ContentSection {
-        icon: "folder_managed"
-        title: Translation.tr("Dotfiles")
+        Layout.topMargin: 40
+        icon: "fork_right"
+        title: Translation.tr("Forked Projects")
 
         RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 20
+            Layout.fillWidth: true
+            spacing: 60
             Layout.topMargin: 10
             Layout.bottomMargin: 10
-            Image {
-                sourceSize.width: 80
-                sourceSize.height: 80
-                source: `${Directories.home}/.local/share/icons/illogical-impulse.svg`
-            }
-            ColumnLayout {
-                Layout.alignment: Qt.AlignVCenter
-                // spacing: 10
-                StyledText {
-                    text: Translation.tr("illogical-impulse")
-                    font.pixelSize: Appearance.font.pixelSize.title
-                }
-                StyledText {
-                    text: "https://github.com/end-4/dots-hyprland"
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    textFormat: Text.MarkdownText
-                    onLinkActivated: (link) => {
-                        Qt.openUrlExternally(link)
+
+            // illogical-impulse (left). Wrapped in an Item that splits the
+            // row evenly; the inner Column is anchor-centered so the icon,
+            // name, subtitle and buttons all align on the column's vertical
+            // axis instead of left-edge of a stretched ColumnLayout.
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: leftCol.implicitHeight
+                ColumnLayout {
+                    id: leftCol
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    Image {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 80
+                        Layout.preferredHeight: 80
+                        sourceSize.width: 80
+                        sourceSize.height: 80
+                        fillMode: Image.PreserveAspectFit
+                        source: `${Directories.home}/.local/share/icons/illogical-impulse.svg`
                     }
-                    PointingHandLinkHover {}
-                }
-            }
-        }
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: 5
-
-            RippleButtonWithIcon {
-                materialIcon: "auto_stories"
-                mainText: Translation.tr("Documentation")
-                onClicked: {
-                    Qt.openUrlExternally("https://end-4.github.io/dots-hyprland-wiki/en/ii-qs/02usage/")
-                }
-            }
-            RippleButtonWithIcon {
-                materialIcon: "adjust"
-                materialIconFill: false
-                mainText: Translation.tr("Issues")
-                onClicked: {
-                    Qt.openUrlExternally("https://github.com/end-4/dots-hyprland/issues")
-                }
-            }
-            RippleButtonWithIcon {
-                materialIcon: "forum"
-                mainText: Translation.tr("Discussions")
-                onClicked: {
-                    Qt.openUrlExternally("https://github.com/end-4/dots-hyprland/discussions")
-                }
-            }
-            RippleButtonWithIcon {
-                materialIcon: "favorite"
-                mainText: Translation.tr("Donate")
-                onClicked: {
-                    Qt.openUrlExternally("https://github.com/sponsors/end-4")
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Translation.tr("illogical-impulse")
+                        font.pixelSize: Appearance.font.pixelSize.title
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Translation.tr("Dotfiles")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                    }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 8
+                        RippleButtonWithIcon {
+                            materialIcon: "code"
+                            mainText: Translation.tr("Original Project")
+                            onClicked: Qt.openUrlExternally("https://github.com/end-4/dots-hyprland")
+                        }
+                        RippleButtonWithIcon {
+                            materialIcon: "favorite"
+                            mainText: Translation.tr("Donate")
+                            onClicked: Qt.openUrlExternally("https://github.com/sponsors/end-4")
+                        }
+                    }
                 }
             }
 
-            
+            // xCaptaiN09 (right)
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: rightCol.implicitHeight
+                ColumnLayout {
+                    id: rightCol
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    Image {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 80
+                        Layout.preferredHeight: 80
+                        sourceSize.width: 80
+                        sourceSize.height: 80
+                        fillMode: Image.PreserveAspectFit
+                        source: `${Directories.home}/.local/share/icons/xcaptain09.png`
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "xCaptaiN09"
+                        font.pixelSize: Appearance.font.pixelSize.title
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "Pixie - SDDM Theme"
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                    }
+                    RippleButtonWithIcon {
+                        Layout.alignment: Qt.AlignHCenter
+                        materialIcon: "code"
+                        mainText: Translation.tr("Original Project")
+                        onClicked: Qt.openUrlExternally("https://github.com/xCaptaiN09/pixie-sddm")
+                    }
+                }
+            }
         }
     }
 }
