@@ -1,11 +1,13 @@
-groups=(illogical-impulse)
-pkgname=illogical-impulse-bibata-modern-classic-bin
+groups=(mainstream)
+pkgname=mainstream-bibata-modern-classic-bin
 pkgver=2.0.6
-pkgrel=2
-pkgdesc="Material Based Cursor Theme, installed for illogical-impulse dotfiles"
+pkgrel=3
+pkgdesc="Material Based Cursor Theme, packaged for Mainstream OS dotfiles"
 arch=('any')
 url="https://github.com/ful1e5/Bibata_Cursor"
 license=('GPL-3.0-or-later')
+provides=('illogical-impulse-bibata-modern-classic-bin')
+replaces=('illogical-impulse-bibata-modern-classic-bin')
 conflicts=("bibata-cursor-theme" "bibata-cursor-theme-bin")
 options=('!strip')
 _variant=Bibata-Modern-Classic

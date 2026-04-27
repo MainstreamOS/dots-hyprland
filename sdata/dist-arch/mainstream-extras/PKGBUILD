@@ -1,9 +1,12 @@
-pkgname=illogical-impulse-extras
+groups=(mainstream)
+pkgname=mainstream-extras
 pkgver=1.0
-pkgrel=6
-pkgdesc='Illogical Impulse Extra Software'
+pkgrel=7
+pkgdesc='Mainstream OS Extra Software'
 arch=(any)
 license=(None)
+provides=('illogical-impulse-extras')
+replaces=('illogical-impulse-extras')
 depends=()
 optdepends=(
   'google-chrome: Web browser'

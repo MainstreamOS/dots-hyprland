@@ -1,8 +1,10 @@
-groups=(illogical-impulse)
-pkgname=illogical-impulse-basic
+groups=(mainstream)
+pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=3
-pkgdesc='Illogical Impulse Basic Dependencies'
+pkgrel=4
+pkgdesc='Mainstream OS Basic Dependencies'
+provides=('illogical-impulse-basic')
+replaces=('illogical-impulse-basic')
 arch=(any)
 license=(None)
 depends=(

@@ -211,13 +211,12 @@ install-local-pkgbuild() {
 }
 
 # Install core dependencies from the meta-packages
-metapkgs=(./sdata/dist-arch/illogical-impulse-{audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
-metapkgs+=(./sdata/dist-arch/illogical-impulse-hyprland)
-metapkgs+=(./sdata/dist-arch/illogical-impulse-microtex-git)
-metapkgs+=(./sdata/dist-arch/illogical-impulse-quickshell-git)
-metapkgs+=(./sdata/dist-arch/illogical-impulse-extras)
-# metapkgs+=(./sdata/dist-arch/packages/illogical-impulse-oneui4-icons-git)
-metapkgs+=(./sdata/dist-arch/illogical-impulse-bibata-modern-classic-bin)
+metapkgs=(./sdata/dist-arch/mainstream-{audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
+metapkgs+=(./sdata/dist-arch/mainstream-hyprland)
+metapkgs+=(./sdata/dist-arch/mainstream-microtex-git)
+metapkgs+=(./sdata/dist-arch/mainstream-quickshell-git)
+metapkgs+=(./sdata/dist-arch/mainstream-extras)
+metapkgs+=(./sdata/dist-arch/mainstream-bibata-modern-classic-bin)
 
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"

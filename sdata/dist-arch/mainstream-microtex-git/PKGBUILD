@@ -1,9 +1,11 @@
-groups=(illogical-impulse)
-pkgname=illogical-impulse-microtex-git
+groups=(mainstream)
+pkgname=mainstream-microtex-git
 _pkgname=MicroTeX
 pkgver=r494.0e3707f
-pkgrel=3
-pkgdesc='MicroTeX for illogical-impulse dotfiles.'
+pkgrel=4
+pkgdesc='MicroTeX for Mainstream OS dotfiles.'
+provides=('illogical-impulse-microtex-git')
+replaces=('illogical-impulse-microtex-git')
 #pkgdesc="A dynamic, cross-platform, and embeddable LaTeX rendering library"
 arch=("x86_64")
 url="https://github.com/NanoMichael/${_pkgname}"

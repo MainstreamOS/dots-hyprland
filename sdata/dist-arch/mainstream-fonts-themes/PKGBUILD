@@ -1,8 +1,10 @@
-groups=(illogical-impulse)
-pkgname=illogical-impulse-fonts-themes
+groups=(mainstream)
+pkgname=mainstream-fonts-themes
 pkgver=1.0
-pkgrel=6
-pkgdesc='Illogical Impulse Fonts and Theming Dependencies'
+pkgrel=7
+pkgdesc='Mainstream OS Fonts and Theming Dependencies'
+provides=('illogical-impulse-fonts-themes')
+replaces=('illogical-impulse-fonts-themes')
 arch=(any)
 license=(None)
 depends=(
