@@ -208,7 +208,7 @@ function setup_hyprland_plugins(){
   x mkdir -p "$src_dir"
   x cd "$src_dir"
   try git init -b main
-  try git remote add origin https://github.com/hyprwm/hyprland-plugins
+  try git remote add origin https://github.com/MainstreamOS/hyprland-plugins
   x git pull origin main
 
   # Persist build output to a log so failures can be diffed across Hyprland

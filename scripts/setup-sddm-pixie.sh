@@ -30,7 +30,7 @@ PIXIE_TMPDIR=$(mktemp -d)
 cleanup() { rm -rf "$PIXIE_TMPDIR"; }
 trap cleanup EXIT
 
-if git clone https://github.com/gregorytrentmartinjr/pixie-sddm.git "$PIXIE_TMPDIR" 2>/dev/null; then
+if git clone https://github.com/MainstreamOS/pixie-sddm.git "$PIXIE_TMPDIR" 2>/dev/null; then
     PIXIE_THEME_DIR="/usr/share/sddm/themes/pixie"
     rm -rf "$PIXIE_THEME_DIR" 2>/dev/null || true
     mkdir -p "$PIXIE_THEME_DIR"
@@ -44,7 +44,7 @@ if git clone https://github.com/gregorytrentmartinjr/pixie-sddm.git "$PIXIE_TMPD
     info "Pixie SDDM theme installed and applied"
 else
     warn "Failed to clone pixie-sddm theme. Skipping theme installation."
-    warn "You can install it later from: https://github.com/gregorytrentmartinjr/pixie-sddm"
+    warn "You can install it later from: https://github.com/MainstreamOS/pixie-sddm"
 fi
 
 # --- Step 3: Configure silent boot/reboot/shutdown ---
