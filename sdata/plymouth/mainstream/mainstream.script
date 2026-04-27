@@ -1,119 +1,118 @@
 //
-// Mainstream OS boot splash — mirrors the CSS .boot element:
-//   background #191A1F, centered MS mark with blue glow, "Mainstream" below,
-//   120x2 progress bar + "BOOTING KERNEL" at bottom with an animated blue
-//   gradient scan sweeping across the bar.
+// Mainstream OS boot splash
+// Layout based on the design ground-truth screenshot:
 //
-// Phase 1: paint only the background immediately so the splash can appear
-//          with minimal work while early userspace is still settling.
-// Phase 2: fade in the Mainstream overlay (logo, text, status row, scan).
+//   1. Big MS mark      -- centered, fills ~52% of screen height
+//   2. Status row       -- bar + "BOOTING KERNEL", centered, just above bottom
+//   3. "Mainstream"     -- centered, at the very bottom
 //
-// Layout reference: the mockup's .boot element is 600 x 375 CSS px
-// (16:10 at the mockup column width). All CSS pixel values below are
-// translated to screen pixels via:     s = Window.GetWidth() / 600
-//
+// Coordinate scale: s = screenHeight / 800   (height-based so the mark
+// keeps its intended footprint regardless of aspect ratio)
 
 W = Window.GetWidth();
 H = Window.GetHeight();
-s = W / 600.0;
+s = H / 800.0;
 
-// --- Background #191A1F -------------------------------------------------
-bg_r = 11  / 255.0;
-bg_g = 13  / 255.0;
-bg_b = 18  / 255.0;
+// -- background (Night) -------------------------------------------------
+bg_r = 25  / 255.0;
+bg_g = 26  / 255.0;
+bg_b = 31  / 255.0;
 Window.SetBackgroundTopColor(bg_r, bg_g, bg_b);
 Window.SetBackgroundBottomColor(bg_r, bg_g, bg_b);
 
-// --- Logo (MS mark + blue glow) ----------------------------------------
-// logo.png represents a 200x200 CSS region: a 120x120 container with
-// 40px glow padding on each side. The mark itself is 120x60 centered.
+// -- logo mark ----------------------------------------------------------
+// Target: large mark roughly filling the upper-middle of the screen.
+// logo.png contains the mark plus a generous transparent glow border.
+// We scale the whole image to ~1.5x screen height so the visible mark
+// (the non-padding portion) lands at roughly half the screen height.
 logo_img        = Image("logo.png");
-logo_display_w  = 200.0 * s;
-logo_display_h  = 200.0 * s;
+logo_src_w      = logo_img.GetWidth();
+logo_src_h      = logo_img.GetHeight();
+
+logo_display_h  = H * 1.5;
+logo_display_w  = logo_src_w * (logo_display_h / logo_src_h);
 logo_scaled     = logo_img.Scale(logo_display_w, logo_display_h);
 logo_sprite     = Sprite(logo_scaled);
 
-// The 120x120 container sits at image-center. Compose the stacked group
-// (logo container + 28px gap + name) and vertically center it.
-name_img           = Image("name.png");
-name_src_h         = name_img.GetHeight();
-name_src_w         = name_img.GetWidth();
-// name.png was rendered at pointsize 240 -> trimmed height 179 ~= 0.745em cap.
-// Target visible height for 22px CSS font-size: (22/240) * 179 ~= 16.4 CSS px.
-name_display_h     = 16.4 * s;
-name_display_w     = name_src_w * (name_display_h / name_src_h);
-name_scaled        = name_img.Scale(name_display_w, name_display_h);
-name_sprite        = Sprite(name_scaled);
-
-container_h     = 120.0 * s;
-gap_logo_name   = 28.0  * s;
-group_h         = container_h + gap_logo_name + name_display_h;
-group_top_y     = (H - group_h) / 2;
-
-// logo image top edge = container top - 40 CSS px (glow padding)
-logo_img_x = (W - logo_display_w) / 2;
-logo_img_y = group_top_y - 40.0 * s;
-logo_sprite.SetPosition(logo_img_x, logo_img_y, 1);
+// Center the logo near the upper-middle of the screen.
+// Place its visual center at ~42% of the screen height.
+logo_visual_cy  = H * 0.42;
+logo_x          = (W - logo_display_w) / 2;
+logo_y          = logo_visual_cy - logo_display_h / 2;
+logo_sprite.SetPosition(logo_x, logo_y, 1);
 logo_sprite.SetOpacity(0.0);
 
+// -- status row (bar + BOOTING KERNEL) ----------------------------------
+bar_img    = Image("bar.png");
+bar_w      = 180.0 * s;
+bar_h      = 3.0   * s;
+if (bar_h < 1.0) bar_h = 1.0;
+bar_scaled = bar_img.Scale(bar_w, bar_h);
+bar_sprite = Sprite(bar_scaled);
+
+status_img       = Image("status.png");
+status_src_w     = status_img.GetWidth();
+status_src_h     = status_img.GetHeight();
+status_display_h = 14.0 * s;
+status_display_w = status_src_w * (status_display_h / status_src_h);
+status_scaled    = status_img.Scale(status_display_w, status_display_h);
+status_sprite    = Sprite(status_scaled);
+
+gap_bar_status   = 14.0 * s;
+row_w            = bar_w + gap_bar_status + status_display_w;
+row_x            = (W - row_w) / 2;
+
+// -- name text ----------------------------------------------------------
+name_img       = Image("name.png");
+name_src_w     = name_img.GetWidth();
+name_src_h     = name_img.GetHeight();
+name_display_h = 28.0 * s;
+name_display_w = name_src_w * (name_display_h / name_src_h);
+name_scaled    = name_img.Scale(name_display_w, name_display_h);
+name_sprite    = Sprite(name_scaled);
+
+// -- vertical placement of bottom block ---------------------------------
+// Order from top to bottom: status row, gap, "Mainstream" text.
+// The whole block sits with `bottom_pad` below the name baseline.
+gap_status_name = 18.0 * s;
+bottom_pad      = 56.0 * s;
+
+name_y          = H - bottom_pad - name_display_h;
+row_top_y       = name_y - gap_status_name - status_display_h;
+
+// align-items:center -- bar is vertically centered on the text height
+bar_y    = row_top_y + (status_display_h - bar_h) / 2;
+status_y = row_top_y;
+
+bar_sprite.SetPosition(row_x, bar_y, 1);
+bar_sprite.SetOpacity(0.0);
+status_sprite.SetPosition(row_x + bar_w + gap_bar_status, status_y, 1);
+status_sprite.SetOpacity(0.0);
+
 name_x = (W - name_display_w) / 2;
-name_y = group_top_y + container_h + gap_logo_name;
 name_sprite.SetPosition(name_x, name_y, 1);
 name_sprite.SetOpacity(0.0);
 
-// --- Bottom status row: [120x2 bar]  [BOOTING KERNEL] -------------------
-bar_img        = Image("bar.png");
-bar_display_w  = 120.0 * s;
-bar_display_h  = 2.0   * s;
-if (bar_display_h < 1.0) bar_display_h = 1.0;
-bar_scaled     = bar_img.Scale(bar_display_w, bar_display_h);
-bar_sprite     = Sprite(bar_scaled);
-
-status_img        = Image("status.png");
-status_src_h      = status_img.GetHeight();
-status_src_w      = status_img.GetWidth();
-// status rendered at pointsize 120 -> trimmed 90 high; target CSS 11px => (11/120)*90 = 8.25
-status_display_h  = 8.25 * s;
-status_display_w  = status_src_w * (status_display_h / status_src_h);
-status_scaled     = status_img.Scale(status_display_w, status_display_h);
-status_sprite     = Sprite(status_scaled);
-status_sprite.SetOpacity(0.55);
-
-gap_bar_text   = 10.0 * s;
-bottom_pad     = 28.0 * s;
-row_w          = bar_display_w + gap_bar_text + status_display_w;
-row_x          = (W - row_w) / 2;
-
-// vertically align bar and text to the bottom reference line
-row_bottom_y   = H - bottom_pad;
-row_top_y      = row_bottom_y - status_display_h;
-bar_y          = row_top_y + (status_display_h - bar_display_h) / 2;
-status_y       = row_top_y;
-bar_sprite.SetPosition(row_x, bar_y, 1);
-status_sprite.SetPosition(row_x + bar_display_w + gap_bar_text, status_y, 1);
-bar_sprite.SetOpacity(0.0);
-status_sprite.SetOpacity(0.0);
-
-// --- Scan highlight (animated sweep across the bar) ---------------------
-// Source scan.png is a horizontal linear-gradient: transparent -> #00a1ca
-// -> transparent, with rounded caps. We scale it to 40% of the bar width
-// and animate its x from just-left-of-bar to just-right-of-bar on a 2s
-// linear loop, matching the CSS @keyframes scan { to { left: 140% } }.
+// -- scan highlight (animated sweep across the bar) ---------------------
+// CSS uses overflow:hidden to clip the scan within the bar. Plymouth
+// sprites can't be clipped, so we constrain the travel range so the
+// scan never extends beyond the bar's left or right edges.
 scan_img       = Image("scan.png");
-scan_display_w = bar_display_w * 0.4;
-scan_display_h = bar_display_h;
+scan_display_w = bar_w * 0.4;
+scan_display_h = bar_h;
 scan_scaled    = scan_img.Scale(scan_display_w, scan_display_h);
 scan_sprite    = Sprite(scan_scaled);
-scan_sprite.SetPosition(row_x - scan_display_w, bar_y, 2);
+scan_sprite.SetPosition(row_x, bar_y, 2);
 scan_sprite.SetOpacity(0.0);
 
-scan_x_start = row_x - scan_display_w;           // left: -40% of bar
-scan_x_end   = row_x + bar_display_w + scan_display_w; // left: 140% of bar
+scan_x_start = row_x;
+scan_x_end   = row_x + bar_w - scan_display_w;
 
-frame_tick        = 0;
-fade_delay_ticks  = 20;   // ~0.4s at 50 Hz
-fade_ticks        = 30;   // ~0.6s fade-in
-scan_period       = 200;  // 4s at 50 Hz refresh
+// -- animation timing ---------------------------------------------------
+frame_tick       = 0;
+fade_delay_ticks = 20;   // ~0.4s at 50 Hz
+fade_ticks       = 30;   // ~0.6s fade-in
+scan_period      = 100;  // 2s at 50 Hz
 
 fun overlay_opacity() {
     if (frame_tick <= fade_delay_ticks)
@@ -134,15 +133,27 @@ fun refresh_cb() {
     name_sprite.SetOpacity(opacity);
     bar_sprite.SetOpacity(opacity);
     status_sprite.SetOpacity(0.55 * opacity);
-    scan_sprite.SetOpacity(opacity);
 
     phase = frame_tick - Math.Int(frame_tick / scan_period) * scan_period;
     t = phase / scan_period;
     scan_sprite.SetX(scan_x_start + t * (scan_x_end - scan_x_start));
+
+    // Fade scan in at the start of each cycle and out at the end,
+    // mimicking the CSS overflow:hidden clip on the bar.
+    scan_fade_in  = 0.15;
+    scan_fade_out = 0.85;
+    if (t < scan_fade_in)
+        scan_alpha = t / scan_fade_in;
+    else if (t > scan_fade_out)
+        scan_alpha = (1.0 - t) / (1.0 - scan_fade_out);
+    else
+        scan_alpha = 1.0;
+
+    scan_sprite.SetOpacity(opacity * scan_alpha);
 }
 Plymouth.SetRefreshFunction(refresh_cb);
 
-// --- Unused hooks: keep the splash stable across plymouth events --------
+// -- unused hooks (keep splash stable) ----------------------------------
 fun noop () { }
 Plymouth.SetBootProgressFunction (noop);
 Plymouth.SetRootMountedFunction  (noop);
