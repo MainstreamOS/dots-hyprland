@@ -40,6 +40,10 @@ ContentPage {
                         } else {
                             Quickshell.execDetached(["bash", "-c", `sed -i 's/\\TIME\\b/TIME12/' '${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprlock.conf'`]);
                         }
+                        // Sync to pixie-sddm if installed. The state dir is sticky-bit
+                        // world-writable (created by pixie-sddm's install.sh); the
+                        // redirect silently no-ops when pixie-sddm isn't installed.
+                        Quickshell.execDetached(["bash", "-c", `[ -d /var/lib/pixie-sddm ] && printf 'clockFormat=%s\\n' ${JSON.stringify(newValue)} > /var/lib/pixie-sddm/state.conf || true`]);
                         Config.options.time.format = newValue;
                     }
                     options: [
