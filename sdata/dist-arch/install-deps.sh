@@ -144,7 +144,7 @@ install-local-pkgbuild() {
   source ./PKGBUILD
 
   # Install depends[] one-by-one so a single failure doesn't block the rest.
-  # optdepends[] is only installed for illogical-impulse-extras (default apps).
+  # optdepends[] is only installed for mainstream-extras (default apps).
   # For all other packages optdepends are intentionally skipped.
   local failed_deps=()
   for dep in "${depends[@]}"; do
@@ -160,12 +160,12 @@ install-local-pkgbuild() {
     fi
   done
 
-  # For illogical-impulse-extras specifically, also install its optdepends —
+  # For mainstream-extras specifically, also install its optdepends —
   # these are the default apps (calculator, office, media player, etc.) that
   # should be present on every installation. The KDE blocklist and --ignore
   # flag still apply, so no Plasma packages can sneak in via this path.
-  if [[ "$pkgname" == "illogical-impulse-extras" ]]; then
-    printf "${STY_CYAN}[$0]: Installing default apps from illogical-impulse-extras optdepends...${STY_RST}\n"
+  if [[ "$pkgname" == "mainstream-extras" ]]; then
+    printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     for dep in "${optdepends[@]}"; do
       local pkg="${dep%%:*}"
       if _is_kde_blocked "$pkg"; then
