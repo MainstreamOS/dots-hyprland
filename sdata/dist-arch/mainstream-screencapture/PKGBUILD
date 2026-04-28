@@ -1,3 +1,4 @@
+# Maintainer: mainstreamos <https://github.com/MainstreamOS>
 groups=(mainstream)
 pkgname=mainstream-screencapture
 pkgver=1.0
