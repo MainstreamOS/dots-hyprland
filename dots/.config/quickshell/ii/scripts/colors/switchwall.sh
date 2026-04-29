@@ -315,8 +315,17 @@ switch() {
 
     matugen "${matugen_args[@]}"
     source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
-    python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" \
-        > "$STATE_DIR"/user/generated/material_colors.scss
+    mkdir -p "$STATE_DIR"/user/generated
+    generated_colors_tmp=$(mktemp "$STATE_DIR"/user/generated/material_colors.scss.XXXXXX)
+    if python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" \
+        && grep -Eq '^\$onBackground: #[[:xdigit:]]{6};$' "$generated_colors_tmp"; then
+        mv "$generated_colors_tmp" "$STATE_DIR"/user/generated/material_colors.scss
+    else
+        rm -f "$generated_colors_tmp"
+        echo "[switchwall] Failed to generate material_colors.scss; keeping the previous colors." >&2
+        deactivate
+        return 1
+    fi
     "$SCRIPT_DIR"/applycolor.sh
     deactivate
 
