@@ -54,24 +54,47 @@ AbstractWidget {
     property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
     
     onWallpaperPathChanged: refreshPlacementIfNeeded()
-    onPlacementStrategyChanged: refreshPlacementIfNeeded()
+    onPlacementStrategyChanged: {
+        if (placementStrategy !== "free") {
+            root.targetX = Qt.binding(() => Math.max(0, Math.min(configEntry.x, scaledScreenWidth - width)));
+            root.targetY = Qt.binding(() => Math.max(0, Math.min(configEntry.y, scaledScreenHeight - height)));
+        }
+        refreshPlacementIfNeeded();
+    }
+    onImplicitWidthChanged: refreshPlacementIfNeeded()
+    onImplicitHeightChanged: refreshPlacementIfNeeded()
     Connections {
         target: Config
         function onReadyChanged() { refreshPlacementIfNeeded() }
     }
+
+    Timer {
+        id: placementDebounce
+        interval: 150
+        repeat: false
+        onTriggered: {
+            if (!Config.ready) return;
+            if (root.implicitWidth <= 0 || root.implicitHeight <= 0) return;
+            if (root.placementStrategy === "free" && !root.needsColText) return;
+            leastBusyRegionProc.wallpaperPath = root.wallpaperPath;
+            leastBusyRegionProc.contentWidth = Math.ceil(root.implicitWidth);
+            leastBusyRegionProc.contentHeight = Math.ceil(root.implicitHeight);
+            leastBusyRegionProc.running = false;
+            leastBusyRegionProc.running = true;
+        }
+    }
+
     function refreshPlacementIfNeeded() {
         if (!Config.ready) return;
+        if (root.implicitWidth <= 0 || root.implicitHeight <= 0) return;
         if (root.placementStrategy === "free" && !root.needsColText) return;
-        leastBusyRegionProc.wallpaperPath = root.wallpaperPath;
-        leastBusyRegionProc.running = false;
-        leastBusyRegionProc.running = true;
+        placementDebounce.restart();
     }
     Process {
         id: leastBusyRegionProc
         property string wallpaperPath: root.wallpaperPath
-        // TODO: make these less arbitrary
-        property int contentWidth: 300
-        property int contentHeight: 300
+        property int contentWidth: Math.ceil(root.implicitWidth) || 300
+        property int contentHeight: Math.ceil(root.implicitHeight) || 300
         property int horizontalPadding: 200
         property int verticalPadding: 200
         command: [Quickshell.shellPath("scripts/images/least-busy-region-venv.sh") // Comments to force the formatter to break lines
