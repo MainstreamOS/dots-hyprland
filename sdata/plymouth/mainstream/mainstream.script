@@ -50,7 +50,11 @@ if (bar_h < 1.0) bar_h = 1.0;
 bar_scaled = bar_img.Scale(bar_w, bar_h);
 bar_sprite = Sprite(bar_scaled);
 
-status_img       = Image("status.png");
+if (Plymouth.GetMode() == "boot") {
+    status_img = Image("status.png");
+} else {
+    status_img = Image("status_shutdown.png");
+}
 status_src_w     = status_img.GetWidth();
 status_src_h     = status_img.GetHeight();
 status_display_h = 14.0 * s;
