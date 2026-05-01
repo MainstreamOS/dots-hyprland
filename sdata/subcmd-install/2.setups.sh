@@ -655,12 +655,43 @@ function _limine_apply_cmdline_args(){
   _kernel_cmdline_upsert "${args[@]}"
 }
 
+MKINITCPIO_SYSTEMD_HOOKS=(base systemd plymouth autodetect microcode modconf kms keyboard sd-vconsole block filesystems fsck)
+
+function _mkinitcpio_ensure_systemd_stack(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  sudo pacman -S --needed --noconfirm systemd plymouth
+}
+
+function _mkinitcpio_enforce_systemd_hooks(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  local hook_line="HOOKS=(${MKINITCPIO_SYSTEMD_HOOKS[*]})"
+
+  if [[ ! -f /etc/mkinitcpio.conf ]]; then
+    echo -e "${STY_YELLOW}[$0]: /etc/mkinitcpio.conf not found — cannot set systemd initramfs hooks.${STY_RST}"
+    return 1
+  fi
+
+  if grep -qxF "$hook_line" /etc/mkinitcpio.conf; then
+    echo -e "${STY_BLUE}[$0]: systemd mkinitcpio hooks already configured.${STY_RST}"
+    return 0
+  fi
+
+  if grep -qE '^HOOKS=\(' /etc/mkinitcpio.conf; then
+    sudo sed -i -E "s|^HOOKS=\([^)]*\).*|${hook_line}|" /etc/mkinitcpio.conf
+  else
+    printf '%s\n' "$hook_line" | sudo tee -a /etc/mkinitcpio.conf > /dev/null
+  fi
+  echo -e "${STY_CYAN}[$0]: Set mkinitcpio hooks to: ${MKINITCPIO_SYSTEMD_HOOKS[*]}${STY_RST}"
+}
+
 # Rebuild initramfs. On systems with limine-mkinitcpio-hook installed, prefers
 # `limine-mkinitcpio` which regenerates both the initramfs AND /boot/limine.conf
 # boot entries in one pass (and silences the "use limine-mkinitcpio instead"
 # warning that plain `mkinitcpio -P` would emit). Falls back to `mkinitcpio -P`
 # when the hook isn't installed.
 function _initramfs_rebuild(){
+  _mkinitcpio_ensure_systemd_stack || return 1
+  _mkinitcpio_enforce_systemd_hooks || return 1
   if command -v limine-mkinitcpio >/dev/null 2>&1; then
     _limine_configure_generator_defaults || true
     echo -e "${STY_CYAN}[$0]: Running limine-mkinitcpio (rebuilds initramfs + limine boot entries)...${STY_RST}"
@@ -679,8 +710,8 @@ function setup_plymouth(){
   echo -e "${STY_CYAN}[$0]: Installing Plymouth boot splash with Mainstream theme...${STY_RST}"
   # sudo pacman is NOPASSWD within this install window; --noconfirm suppresses
   # pacman's "Proceed with installation? [Y/n]" prompt
-  if ! sudo pacman -S --needed --noconfirm plymouth; then
-    echo -e "${STY_YELLOW}[$0]: Plymouth failed to install — boot splash will be skipped.${STY_RST}"
+  if ! _mkinitcpio_ensure_systemd_stack; then
+    echo -e "${STY_YELLOW}[$0]: systemd/Plymouth failed to install — boot splash and systemd initramfs hooks will be skipped.${STY_RST}"
     return 0
   fi
   # Deploy the Mainstream theme bundled in the repo. Overwrites any previously
@@ -703,14 +734,6 @@ function setup_plymouth(){
   else
     sudo plymouth-set-default-theme bgrt
   fi
-  # Add the plymouth hook after udev in HOOKS — idempotent, skipped if already present
-  if ! grep -q '\bplymouth\b' /etc/mkinitcpio.conf; then
-    sudo sed -i 's/\(HOOKS=([^)]*\budev\b\)/\1 plymouth/' /etc/mkinitcpio.conf
-    echo -e "${STY_CYAN}[$0]: Added plymouth hook to /etc/mkinitcpio.conf${STY_RST}"
-  else
-    echo -e "${STY_BLUE}[$0]: plymouth hook already present in /etc/mkinitcpio.conf${STY_RST}"
-  fi
-
   # Persist the desired boot flags in /etc/kernel/cmdline so future
   # limine-mkinitcpio regenerations keep the splash/silencing settings.
   echo -e "${STY_CYAN}[$0]: Adding plymouth + silencing args to the managed kernel cmdline...${STY_RST}"
@@ -879,8 +902,9 @@ AMDEOF
     echo -e "${STY_CYAN}[$0]: NVIDIA PCI device ID: $(printf '0x%04x' "$NVIDIA_PCI_DEC") ($NVIDIA_PCI_DEC)${STY_RST}"
     if (( NVIDIA_PCI_DEC >= 1728 )); then
       # Fermi or newer — proprietary nvidia stack. Pre-Fermi stays on nouveau
-      # (the default kms hook handles it).
-      _mkinitcpio_remove_hook kms
+      # (the default kms hook handles it). Keep kms in HOOKS; NVIDIA is loaded
+      # early through MODULES below while the canonical systemd hook order remains
+      # intact.
       _mkinitcpio_add_modules nvidia nvidia_modeset nvidia_uvm nvidia_drm
       sudo mkdir -p /etc/modprobe.d
       sudo tee /etc/modprobe.d/nvidia.conf > /dev/null << 'NVIDIAEOF'
