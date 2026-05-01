@@ -198,61 +198,6 @@ ensure_limine_header() {
     rm -f "$tmpfile"
 }
 
-install_limine_theme_hook() {
-    install -d -m 755 /etc/boot/hooks/post.d
-    cat > /etc/boot/hooks/post.d/90-mainstream-limine-theme <<'HOOK'
-#!/usr/bin/env bash
-set -euo pipefail
-
-print_mainstream_limine_header() {
-    cat <<'EOF'
-timeout: 15
-
-# Mainstream OS brand palette (continuity with live ISO bootloader)
-# Base: Night. Abyss is intentionally not used as the bootloader backdrop.
-term_background:        191A1F
-term_foreground:        C9CCD4
-term_background_bright: 2A2B32
-term_foreground_bright: ECE9E3
-interface_branding:       Mainstream OS
-interface_branding_color: 7
-term_palette:          191A1F;D98888;7FA88C;D9B373;008DC3;8A7FB2;009CA5;C9CCD4
-term_palette_bright:   40434A;EAA0A0;9EC9AA;EFCB94;00B3D4;A99DC9;00B3D4;ECE9E3
-backdrop:              191A1F
-EOF
-}
-
-apply_mainstream_limine_header() {
-    local config="$1"
-    local tmp
-
-    [[ -f "$config" ]] || return 0
-    tmp=$(mktemp)
-    print_mainstream_limine_header > "$tmp"
-    printf '\n' >> "$tmp"
-    awk '
-        BEGIN { in_header = 1 }
-        in_header && /^[[:space:]]*$/ { next }
-        in_header && /^#/ { next }
-        in_header && /^(timeout:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_color:|term_palette:|term_palette_bright:|backdrop:)/ { next }
-        { in_header = 0; print }
-    ' "$config" >> "$tmp"
-    install -m 644 "$tmp" "$config"
-    rm -f "$tmp"
-}
-
-declare -a candidates=()
-[[ -n "${LIMINE_CONFIG_PATH:-}" ]] && candidates+=("$LIMINE_CONFIG_PATH")
-[[ -n "${ESP_PATH:-}" ]] && candidates+=("$ESP_PATH/limine.conf")
-candidates+=("/boot/efi/limine.conf" "/boot/limine.conf" "/efi/limine.conf")
-
-for config in "${candidates[@]}"; do
-    apply_mainstream_limine_header "$config"
-done
-HOOK
-    chmod 755 /etc/boot/hooks/post.d/90-mainstream-limine-theme
-}
-
 # --- Checks ---
 [[ $EUID -eq 0 ]] || error "This script must be run as root"
 [[ -d /sys/firmware/efi ]] || error "System must be booted in UEFI mode"
@@ -305,7 +250,6 @@ command -v limine-mkinitcpio >/dev/null 2>&1 || error "limine-mkinitcpio not fou
 command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not found after installation."
 
 info "Seeding Limine header and generator config..."
-install_limine_theme_hook
 write_limine_header
 upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
 # Suppress auto-generated top-level entries for systemd-boot, rEFInd, and the
@@ -332,7 +276,6 @@ upsert_kernel_cmdline_args \
 info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
 limine-update
 ensure_limine_header
-/etc/boot/hooks/post.d/90-mainstream-limine-theme
 [[ -f "$ESP/limine.conf" ]] || error "Failed to generate $ESP/limine.conf"
 grep -q "machine-id=$(tr -d '\n' < /etc/machine-id)" "$ESP/limine.conf" || error "limine-update did not generate a machine-id-targeted OS entry."
 

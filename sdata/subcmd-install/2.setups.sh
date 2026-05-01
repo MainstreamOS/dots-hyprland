@@ -576,61 +576,6 @@ function _limine_default_upsert(){
   rm -f "$_tmp"
 }
 
-function _limine_install_theme_hook(){
-  x sudo install -d -m 755 /etc/boot/hooks/post.d
-  x sudo tee /etc/boot/hooks/post.d/90-mainstream-limine-theme > /dev/null << 'HOOK'
-#!/usr/bin/env bash
-set -euo pipefail
-
-print_mainstream_limine_header() {
-    cat <<'EOF'
-timeout: 15
-
-# Mainstream OS brand palette (continuity with live ISO bootloader)
-# Base: Night. Abyss is intentionally not used as the bootloader backdrop.
-term_background:        191A1F
-term_foreground:        C9CCD4
-term_background_bright: 2A2B32
-term_foreground_bright: ECE9E3
-interface_branding:       Mainstream OS
-interface_branding_color: 7
-term_palette:          191A1F;D98888;7FA88C;D9B373;008DC3;8A7FB2;009CA5;C9CCD4
-term_palette_bright:   40434A;EAA0A0;9EC9AA;EFCB94;00B3D4;A99DC9;00B3D4;ECE9E3
-backdrop:              191A1F
-EOF
-}
-
-apply_mainstream_limine_header() {
-    local config="$1"
-    local tmp
-
-    [[ -f "$config" ]] || return 0
-    tmp=$(mktemp)
-    print_mainstream_limine_header > "$tmp"
-    printf '\n' >> "$tmp"
-    awk '
-        BEGIN { in_header = 1 }
-        in_header && /^[[:space:]]*$/ { next }
-        in_header && /^#/ { next }
-        in_header && /^(timeout:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_color:|term_palette:|term_palette_bright:|backdrop:)/ { next }
-        { in_header = 0; print }
-    ' "$config" >> "$tmp"
-    install -m 644 "$tmp" "$config"
-    rm -f "$tmp"
-}
-
-declare -a candidates=()
-[[ -n "${LIMINE_CONFIG_PATH:-}" ]] && candidates+=("$LIMINE_CONFIG_PATH")
-[[ -n "${ESP_PATH:-}" ]] && candidates+=("$ESP_PATH/limine.conf")
-candidates+=("/boot/efi/limine.conf" "/boot/limine.conf" "/efi/limine.conf")
-
-for config in "${candidates[@]}"; do
-    apply_mainstream_limine_header "$config"
-done
-HOOK
-  x sudo chmod 755 /etc/boot/hooks/post.d/90-mainstream-limine-theme
-}
-
 function _limine_configure_generator_defaults(){
   # Keep Limine entry naming explicit instead of implicitly following
   # /etc/os-release PRETTY_NAME. This makes the boot menu stable even if
@@ -641,8 +586,6 @@ function _limine_configure_generator_defaults(){
     # rEFInd) top-level entry. $ESP/EFI/BOOT/BOOTX64.EFI is Limine itself on
     # this install, so that entry would just chainload Limine into itself.
     _limine_default_upsert "FIND_BOOTLOADERS" "no"
-    _limine_install_theme_hook
-    x sudo /etc/boot/hooks/post.d/90-mainstream-limine-theme
   fi
 }
 
@@ -753,7 +696,6 @@ function _initramfs_rebuild(){
     _limine_configure_generator_defaults || true
     echo -e "${STY_CYAN}[$0]: Running limine-mkinitcpio (rebuilds initramfs + limine boot entries)...${STY_RST}"
     sudo limine-mkinitcpio
-    x sudo /etc/boot/hooks/post.d/90-mainstream-limine-theme
   else
     echo -e "${STY_CYAN}[$0]: Running mkinitcpio -P...${STY_RST}"
     sudo mkinitcpio -P
