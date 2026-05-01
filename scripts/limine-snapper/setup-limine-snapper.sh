@@ -161,14 +161,25 @@ print_limine_header() {
     cat <<'EOF'
 timeout: 15
 
-# Mainstream OS brand palette (continuity with live ISO bootloader)
-# Base: Night. Abyss is intentionally not used as the bootloader backdrop.
+# ── Mainstream OS brand palette (see brand.html) ──────────────────────────
+# Background: Night (#191A1F, Surface/01).
+# interface_branding_colour / interface_help_colour now take RRGGBB hex
+# (breaking change in Limine 12.0.0 — old 0-7 index removed).
+# interface_help_colour_bright controls the auto-boot countdown digit accent
+# (new in Limine 12.0.0).
+#
+# Stream A  oklch(0.62 0.13 200)  ≈  #18A0BE  (cyan-teal accent)
+# Stream B  oklch(0.60 0.14 230)  ≈  #2196C5  (ocean blue accent)
+# Bone      #C9CCD4               — primary foreground / branding text
+# Mist      #9397A0               — secondary / help text
 term_background:        191A1F
 term_foreground:        C9CCD4
 term_background_bright: 2A2B32
 term_foreground_bright: ECE9E3
-interface_branding:       Mainstream OS
-interface_branding_color: 7
+interface_branding:            Mainstream OS
+interface_branding_colour:     18A0BE
+interface_help_colour:         9397A0
+interface_help_colour_bright:  2196C5
 term_palette:          191A1F;D98888;7FA88C;D9B373;008DC3;8A7FB2;009CA5;C9CCD4
 term_palette_bright:   40434A;EAA0A0;9EC9AA;EFCB94;00B3D4;A99DC9;00B3D4;ECE9E3
 backdrop:              191A1F
@@ -191,7 +202,7 @@ ensure_limine_header() {
         BEGIN { in_header = 1 }
         in_header && /^[[:space:]]*$/ { next }
         in_header && /^#/ { next }
-        in_header && /^(timeout:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_color:|term_palette:|term_palette_bright:|backdrop:)/ { next }
+        in_header && /^(timeout:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_colou?r:|interface_help_colou?r:|interface_help_colou?r_bright:|term_palette:|term_palette_bright:|backdrop:)/ { next }
         { in_header = 0; print }
     ' "$limine_conf" >> "$tmpfile"
     install -m 644 "$tmpfile" "$limine_conf"
