@@ -707,21 +707,6 @@ ContentPage {
             }
             ColumnLayout {
                 ContentSubsectionLabel {
-                    text: Translation.tr("Wallpaper Browser")
-                }
-                ConfigSelectionArray {
-                    currentValue: Config.options.policies.wallpaperBrowser
-                    onSelected: newValue => {
-                        Config.options.policies.wallpaperBrowser = newValue;
-                    }
-                    options: [
-                        { displayName: Translation.tr("No"),  icon: "close", value: 0 },
-                        { displayName: Translation.tr("Yes"), icon: "check", value: 1 }
-                    ]
-                }
-            }
-            ColumnLayout {
-                ContentSubsectionLabel {
                     text: Translation.tr("Translator")
                 }
                 ConfigSelectionArray {
