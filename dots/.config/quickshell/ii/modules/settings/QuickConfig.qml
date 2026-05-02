@@ -24,6 +24,19 @@ ContentPage {
         }
     }
 
+    Process {
+        id: themeApplyProc
+        onExited: MaterialThemeLoader.reapplyTheme()
+    }
+
+    function applyTheme(args) {
+        if (themeApplyProc.running)
+            return;
+
+        themeApplyProc.command = ["bash", "-c", `${Directories.wallpaperSwitchScriptPath} ${args}`];
+        themeApplyProc.running = true;
+    }
+
     component SmallLightDarkPreferenceButton: RippleButton {
         id: smallLightDarkPreferenceButton
         required property bool dark
@@ -33,7 +46,7 @@ ContentPage {
         toggled: Appearance.m3colors.darkmode === dark
         colBackground: Appearance.colors.colLayer2
         onClicked: {
-            Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --mode ${dark ? "dark" : "light"} --noswitch`]);
+            applyTheme(`--mode ${dark ? "dark" : "light"} --noswitch`);
         }
         contentItem: Item {
             anchors.centerIn: parent
@@ -276,7 +289,7 @@ ContentPage {
                 interval: 150
                 repeat: false
                 onTriggered: {
-                    Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} --noswitch`]);
+                    applyTheme("--noswitch");
                 }
             }
             options: [

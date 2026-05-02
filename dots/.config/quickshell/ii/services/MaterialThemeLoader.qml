@@ -30,6 +30,7 @@ Singleton {
         }
         
         Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
+        Appearance.themeRevision += 1
     }
 
     function resetFilePathNextTime() {
@@ -70,5 +71,13 @@ Singleton {
             root.applyColors(fileContent)
         }
         onLoadFailed: root.resetFilePathNextTime();
+    }
+
+    IpcHandler {
+        target: "theme"
+
+        function reload(): void {
+            root.reapplyTheme()
+        }
     }
 }

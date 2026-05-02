@@ -319,6 +319,22 @@ ApplicationWindow {
                     active: Config.ready
                     source: Config.ready ? root.pages[root.currentPage].component : ""
 
+                    function reloadCurrentPage() {
+                        if (!Config.ready)
+                            return;
+
+                        const currentSource = root.pages[root.currentPage].component;
+                        source = "";
+                        source = currentSource;
+                    }
+
+                    Connections {
+                        target: Appearance
+                        function onThemeRevisionChanged() {
+                            pageLoader.reloadCurrentPage();
+                        }
+                    }
+
                     Connections {
                         target: root
                         function onCurrentPageChanged() {
