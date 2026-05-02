@@ -32,4 +32,8 @@ output_path = '~/.local/state/quickshell/user/generated/color.txt'
 [templates.wallpaper]
 input_path = '~/.config/matugen/templates/wallpaper.txt'
 output_path = '~/.local/state/quickshell/user/generated/wallpaper/path.txt'
-post_hook = '~/.config/matugen/hooks/papirus-folders.sh'
+
+[templates.papirus_folders]
+input_path = '~/.config/matugen/templates/papirus-folders/papirus-folder-color.sh'
+output_path = '~/.local/state/quickshell/user/generated/papirus-folder-color.sh'
+post_hook = "bash ~/.local/state/quickshell/user/generated/papirus-folder-color.sh"

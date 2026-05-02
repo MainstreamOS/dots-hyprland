@@ -10,21 +10,56 @@ import qs.modules.common.functions
 Image {
     id: root
     required property var fileModelData
+    property int currentFallbackIndex: 0
+    property var sourceFallbacks: []
     asynchronous: true
+    cache: false
     fillMode: Image.PreserveAspectFit
 
-    source: {
-        if (!fileModelData.fileIsDir)
-            return Quickshell.iconPath("application-x-zerosize");
-
-        if ([Directories.documents, Directories.downloads, Directories.music, Directories.pictures, Directories.videos].some(dir => FileUtils.trimFileProtocol(dir) === fileModelData.filePath))
-            return Quickshell.iconPath(`folder-${fileModelData.fileName.toLowerCase()}`);
-
-        return Quickshell.iconPath("inode-directory");
+    function papirusIcon(iconName) {
+        return `file://${FileUtils.trimFileProtocol(Directories.home)}/.local/share/icons/Papirus-Matugen/48x48/places/${iconName}.svg`;
     }
 
+    function directoryIconName() {
+        if ([Directories.documents, Directories.downloads, Directories.music, Directories.pictures, Directories.videos].some(dir => FileUtils.trimFileProtocol(dir) === fileModelData.filePath))
+            return `folder-${fileModelData.fileName.toLowerCase()}`;
+
+        return "folder";
+    }
+
+    function systemDirectoryIconName() {
+        if ([Directories.documents, Directories.downloads, Directories.music, Directories.pictures, Directories.videos].some(dir => FileUtils.trimFileProtocol(dir) === fileModelData.filePath))
+            return `folder-${fileModelData.fileName.toLowerCase()}`;
+
+        return "inode-directory";
+    }
+
+    function rebuildSourceFallbacks() {
+        currentFallbackIndex = 0;
+        if (!fileModelData.fileIsDir) {
+            sourceFallbacks = [Quickshell.iconPath("application-x-zerosize")];
+        } else {
+            sourceFallbacks = [
+                papirusIcon(directoryIconName()),
+                papirusIcon("folder"),
+                Quickshell.iconPath(systemDirectoryIconName()),
+                Quickshell.iconPath("inode-directory")
+            ];
+        }
+        source = sourceFallbacks[0];
+    }
+
+    Component.onCompleted: rebuildSourceFallbacks()
+    onFileModelDataChanged: rebuildSourceFallbacks()
+
     onStatusChanged: {
-        if (status === Image.Error)
+        if (status !== Image.Error)
+            return;
+
+        currentFallbackIndex += 1;
+        if (currentFallbackIndex < sourceFallbacks.length)
+            source = sourceFallbacks[currentFallbackIndex];
+        else
             source = Quickshell.iconPath("error");
     }
 

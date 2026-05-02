@@ -1,31 +1,59 @@
 #!/usr/bin/env bash
-# Maps matugen's primary color to the nearest Papirus folder color.
-set -eu
-COLORS_JSON="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/user/generated/colors.json"
-THEME="Papirus-Dark"
+set -u
 
-command -v papirus-folders >/dev/null || exit 0
-[ -f "$COLORS_JSON" ] || exit 0
+generated="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/user/generated/papirus-folder-color.sh"
 
-hex=$(jq -r '.. | objects | .primary? // empty' "$COLORS_JSON" | head -n1 | tr -d '#')
-[ -n "$hex" ] || exit 0
+if [ -f "$generated" ]; then
+  bash "$generated"
+  exit 0
+fi
 
-r=$((16#${hex:0:2})); g=$((16#${hex:2:2})); b=$((16#${hex:4:2}))
+colors_json="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/user/generated/colors.json"
+if [ ! -f "$colors_json" ]; then
+  exit 0
+fi
 
-declare -A P=(
-  [red]="229 57 53"       [pink]="216 27 96"       [violet]="142 36 170"
-  [indigo]="57 73 171"    [blue]="30 136 229"      [cyan]="0 172 193"
-  [teal]="0 137 123"      [green]="67 160 71"      [yellow]="253 216 53"
-  [orange]="251 140 0"    [deeporange]="244 81 30" [brown]="109 76 65"
-  [grey]="117 117 117"    [bluegrey]="84 110 122"  [black]="48 48 48"
-  [nordic]="129 161 193"  [magenta]="211 47 103"
-)
+hex=""
+if command -v jq >/dev/null 2>&1; then
+  hex="$(jq -r '.source_color // .primary // empty' "$colors_json" | tr -d '#')"
+fi
 
-best="blue"; bestd=99999999
-for name in "${!P[@]}"; do
-  read -r pr pg pb <<<"${P[$name]}"
-  d=$(( (r-pr)*(r-pr) + (g-pg)*(g-pg) + (b-pb)*(b-pb) ))
-  (( d < bestd )) && bestd=$d && best=$name
-done
+case "$hex" in
+  ??????) ;;
+  *) exit 0 ;;
+esac
 
-papirus-folders -C "$best" -t "$THEME" >/dev/null 2>&1 || true
+r=$((16#${hex:0:2}))
+g=$((16#${hex:2:2}))
+b=$((16#${hex:4:2}))
+
+best="blue"
+bestd=99999999
+
+while read -r name pr pg pb; do
+  d=$(( (r - pr) * (r - pr) + (g - pg) * (g - pg) + (b - pb) * (b - pb) ))
+  if [ "$d" -lt "$bestd" ]; then
+    bestd="$d"
+    best="$name"
+  fi
+done <<'COLORS'
+red 226 82 82
+yellow 249 189 48
+green 135 177 88
+teal 22 160 133
+cyan 0 188 212
+blue 82 148 226
+indigo 92 107 192
+violet 126 87 194
+magenta 202 113 223
+pink 240 98 146
+orange 238 146 58
+deeporange 235 102 55
+brown 174 142 108
+grey 142 142 142
+bluegrey 96 125 139
+carmine 163 0 2
+black 79 79 79
+COLORS
+
+PAPIRUS_FOLDER_COLOR="$best" PAPIRUS_SOURCE_HEX="#$hex" bash "$HOME/.config/matugen/templates/papirus-folders/papirus-folder-color.sh"

@@ -34,6 +34,7 @@
   "secondary_fixed": "{{colors.secondary_fixed.default.hex}}",
   "secondary_fixed_dim": "{{colors.secondary_fixed_dim.default.hex}}",
   "shadow": "{{colors.shadow.default.hex}}",
+  "source_color": "{{colors.source_color.default.hex}}",
   "surface": "{{colors.surface.default.hex}}",
   "surface_bright": "{{colors.surface_bright.default.hex}}",
   "surface_container": "{{colors.surface_container.default.hex}}",
