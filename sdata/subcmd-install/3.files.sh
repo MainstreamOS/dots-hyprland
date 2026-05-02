@@ -288,6 +288,164 @@ function install_google_sans_flex(){
   realpath -se "$target_dir" >> "${INSTALLED_LISTFILE}"
 }
 
+function setup_proton_ge(){
+  # Download the latest GE-Proton release into ~/.steam/root/compatibilitytools.d
+  # and preseed Steam's global compat-tool default to that version.
+  #
+  # Safe to re-run: skips the download when the latest tag is already installed,
+  # and never clobbers existing per-game compat-tool overrides in config.vdf.
+
+  echo -e "${STY_CYAN}[$0]: Checking for latest GE-Proton release...${STY_RST}"
+
+  local _missing=()
+  for cmd in curl tar python3; do
+    command -v "$cmd" &>/dev/null || _missing+=("$cmd")
+  done
+  if (( ${#_missing[@]} > 0 )); then
+    echo -e "${STY_RED}[$0]: Missing required tools: ${_missing[*]} — skipping Proton GE install.${STY_RST}"
+    return 1
+  fi
+
+  # ── Resolve latest release tag (e.g. "GE-Proton10-5") ─────────────────────
+  local api_url="https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
+  local release_json
+  release_json=$(curl -fsSL "$api_url") || {
+    echo -e "${STY_RED}[$0]: GitHub API query failed — check network.${STY_RST}"
+    return 1
+  }
+
+  local tag
+  if command -v jq &>/dev/null; then
+    tag=$(echo "$release_json" | jq -r '.tag_name')
+  else
+    tag=$(echo "$release_json" | python3 -c \
+      "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+  fi
+
+  if [[ -z "$tag" || "$tag" == "null" ]]; then
+    echo -e "${STY_RED}[$0]: Could not determine latest Proton GE tag.${STY_RST}"
+    return 1
+  fi
+  echo -e "${STY_CYAN}[$0]: Latest GE-Proton: $tag${STY_RST}"
+
+  # ── Download + extract (skip if already present) ───────────────────────────
+  local compat_dir="$HOME/.steam/root/compatibilitytools.d"
+  local install_dir="$compat_dir/$tag"
+
+  if [[ -d "$install_dir" ]]; then
+    echo -e "${STY_BLUE}[$0]: $tag already installed — skipping download.${STY_RST}"
+  else
+    local tarball_url
+    if command -v jq &>/dev/null; then
+      tarball_url=$(echo "$release_json" | \
+        jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url')
+    else
+      tarball_url=$(echo "$release_json" | python3 -c "
+import sys, json
+for a in json.load(sys.stdin)['assets']:
+    if a['name'].endswith('.tar.gz'):
+        print(a['browser_download_url']); break
+")
+    fi
+
+    if [[ -z "$tarball_url" ]]; then
+      echo -e "${STY_RED}[$0]: No .tar.gz asset found for $tag.${STY_RST}"
+      return 1
+    fi
+
+    echo -e "${STY_CYAN}[$0]: Downloading $tag...${STY_RST}"
+    x mkdir -p "$compat_dir"
+    local tmp_tar; tmp_tar=$(mktemp --suffix=.tar.gz)
+    x curl -fL --progress-bar -o "$tmp_tar" "$tarball_url"
+    echo -e "${STY_CYAN}[$0]: Extracting to $compat_dir...${STY_RST}"
+    x tar -xzf "$tmp_tar" -C "$compat_dir"
+    rm -f "$tmp_tar"
+    echo -e "${STY_GREEN}[$0]: Installed $tag to $install_dir${STY_RST}"
+    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
+    realpath -se "$install_dir" >> "${INSTALLED_LISTFILE}"
+  fi
+
+  # ── Preseed Steam config ───────────────────────────────────────────────────
+  # Sets the "0" (global default) CompatToolMapping entry only.
+  # Existing per-game overrides and all other Steam settings are left alone.
+  local config_dir="$HOME/.steam/root/config"
+  local config_vdf="$config_dir/config.vdf"
+  x mkdir -p "$config_dir"
+
+  if [[ ! -f "$config_vdf" ]]; then
+    # No config yet — write a minimal seed file Steam will extend on first launch.
+    echo -e "${STY_CYAN}[$0]: Creating $config_vdf seeded with $tag...${STY_RST}"
+    cat > "$config_vdf" <<EOF
+"InstallConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"CompatToolMapping"
+				{
+					"0"
+					{
+						"name"		"$tag"
+						"config"	""
+						"priority"	"1"
+					}
+				}
+			}
+		}
+	}
+}
+EOF
+    echo -e "${STY_GREEN}[$0]: Created $config_vdf — global Proton default: $tag.${STY_RST}"
+    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
+    realpath -se "$config_vdf" >> "${INSTALLED_LISTFILE}"
+  else
+    # config.vdf already exists — surgically patch only the "0" block inside
+    # CompatToolMapping so we never clobber per-game overrides or other settings.
+    echo -e "${STY_CYAN}[$0]: Patching $config_vdf → global default: $tag...${STY_RST}"
+    python3 - "$config_vdf" "$tag" <<'PYEOF'
+import sys, re
+
+vdf_path, tag = sys.argv[1], sys.argv[2]
+
+with open(vdf_path) as f:
+    content = f.read()
+
+zero_block = (
+    '\n\t\t\t\t\t"0"\n'
+    '\t\t\t\t\t{\n'
+    f'\t\t\t\t\t\t"name"\t\t"{tag}"\n'
+    '\t\t\t\t\t\t"config"\t""\n'
+    '\t\t\t\t\t\t"priority"\t"1"\n'
+    '\t\t\t\t\t}\n\t\t\t\t'
+)
+
+ctm_re = re.compile(r'("CompatToolMapping"\s*\{)(.*?)(\})', re.DOTALL)
+m = ctm_re.search(content)
+
+if m:
+    # Strip any existing "0" entry, then prepend our block.
+    body = re.sub(r'\s*"0"\s*\{[^}]*\}', '', m.group(2), flags=re.DOTALL)
+    new_content = content[:m.start()] + m.group(1) + zero_block + body + m.group(3) + content[m.end():]
+else:
+    sys.stderr.write("Warning: CompatToolMapping not found in config.vdf — skipping patch.\n")
+    sys.exit(0)
+
+with open(vdf_path, 'w') as f:
+    f.write(new_content)
+
+print(f"Patched: global Proton default → {tag}")
+PYEOF
+    if [[ $? -eq 0 ]]; then
+      echo -e "${STY_GREEN}[$0]: $config_vdf updated.${STY_RST}"
+    else
+      echo -e "${STY_YELLOW}[$0]: Could not patch $config_vdf — set Proton version manually in Steam.${STY_RST}"
+    fi
+  fi
+}
+
 #####################################################################################
 # In case some dirs does not exists
 for i in "$XDG_BIN_HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"; do
@@ -344,6 +502,9 @@ if declare -F setup_gpu_hypr_tweaks >/dev/null 2>&1; then
   showfun setup_gpu_hypr_tweaks
   v setup_gpu_hypr_tweaks
 fi
+
+showfun setup_proton_ge
+v setup_proton_ge
 
 #####################################################################################
 
