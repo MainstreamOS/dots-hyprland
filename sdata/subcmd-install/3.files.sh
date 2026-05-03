@@ -277,10 +277,16 @@ function setup_hyprland_plugins(){
   # ---------------------------------------------------------------------------
   local _rebuild_src="$REPO_ROOT/sdata/hyprbars/rebuild.sh"
   local _hook_src="$REPO_ROOT/sdata/hyprbars/95-hyprbars-rebuild.hook"
+  local _conf_src="$REPO_ROOT/sdata/hyprbars/hyprbars.conf"
   if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
     echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for hyprbars...${STY_RST}"
     try sudo install -Dm755 "$_rebuild_src" /usr/local/lib/hyprbars/rebuild.sh
     try sudo install -Dm644 "$_hook_src"    /etc/pacman.d/hooks/95-hyprbars-rebuild.hook
+    # Only drop the config file if the user hasn't customized one already —
+    # they may have pinned a different commit/fork than the shipped default.
+    if [[ -f "$_conf_src" && ! -f /etc/hyprbars.conf ]]; then
+      try sudo install -Dm644 "$_conf_src" /etc/hyprbars.conf
+    fi
     echo -e "${STY_GREEN}[$0]: Hook installed — hyprbars will auto-rebuild on hyprland upgrades.${STY_RST}"
   else
     echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/hyprbars/ — skipping auto-rebuild setup.${STY_RST}"
