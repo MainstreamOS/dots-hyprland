@@ -116,7 +116,7 @@ AbstractWidget {
                 if (output.length === 0) return;
                 const parsedContent = JSON.parse(output);
                 if (root.dominantColorSourceWallpaperPath !== root.wallpaperPath) {
-                    root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
+                    root.dominantColor = parsedContent.dominant_color || Appearance.colors.colLayer0;
                     root.dominantColorSourceWallpaperPath = root.wallpaperPath;
                 }
                 if (root.placementStrategy === "free") return;

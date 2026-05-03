@@ -195,7 +195,7 @@ Variants {
                     const parsedContent = JSON.parse(output);
                     bgRoot.clockX = parsedContent.center_x * bgRoot.effectiveWallpaperScale;
                     bgRoot.clockY = parsedContent.center_y * bgRoot.effectiveWallpaperScale;
-                    bgRoot.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
+                    bgRoot.dominantColor = parsedContent.dominant_color || Appearance.colors.colLayer0;
                 }
             }
         }
