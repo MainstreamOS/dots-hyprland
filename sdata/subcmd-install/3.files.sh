@@ -265,6 +265,27 @@ function setup_hyprland_plugins(){
     echo -e "${STY_YELLOW}[$0]: $_general_conf missing — add this line to a sourced hypr config manually:${STY_RST}"
     echo -e "${STY_YELLOW}  plugin = ${plugin_path}${STY_RST}"
   fi
+
+  # ---------------------------------------------------------------------------
+  # Install rebuild hook so future `pacman -Syu` keeps hyprbars in sync.
+  # Hyprland's plugin ABI is pinned to the exact compositor version, so a
+  # plugin built today stops loading the moment hyprland gets a patch bump
+  # (the "headers ver is not equal to running hyprland ver" error). The
+  # pacman hook re-runs the build whenever the `hyprland` package is
+  # installed/upgraded; the script is shared by archiso so the same logic
+  # ships on freshly-installed systems too.
+  # ---------------------------------------------------------------------------
+  local _rebuild_src="$REPO_ROOT/sdata/hyprbars/rebuild.sh"
+  local _hook_src="$REPO_ROOT/sdata/hyprbars/95-hyprbars-rebuild.hook"
+  if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for hyprbars...${STY_RST}"
+    try sudo install -Dm755 "$_rebuild_src" /usr/local/lib/hyprbars/rebuild.sh
+    try sudo install -Dm644 "$_hook_src"    /etc/pacman.d/hooks/95-hyprbars-rebuild.hook
+    echo -e "${STY_GREEN}[$0]: Hook installed — hyprbars will auto-rebuild on hyprland upgrades.${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/hyprbars/ — skipping auto-rebuild setup.${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild hyprbars after each hyprland upgrade.${STY_RST}"
+  fi
 }
 
 function install_google_sans_flex(){
