@@ -159,7 +159,9 @@ relabel_limine_nvram_entry() {
 
 print_limine_header() {
     cat <<'EOF'
-timeout: 15
+timeout: 5
+remember_last_entry: yes
+default_entry: 1/1
 
 # ── Mainstream OS brand palette (see brand.html) ──────────────────────────
 # Background: Night (#191A1F, Surface/01).
