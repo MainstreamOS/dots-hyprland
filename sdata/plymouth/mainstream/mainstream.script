@@ -112,6 +112,73 @@ scan_sprite.SetOpacity(0.0);
 scan_x_start = row_x;
 scan_x_end   = row_x + bar_w - scan_display_w;
 
+// -- password entry overlay --------------------------------------------
+// Shown instead of the bar/scan/status row when systemd-cryptsetup (or
+// any other plymouth client) asks for a passphrase. Layout (top-down):
+//
+//   prompt label           "Enter passphrase to unlock"
+//   bullets row            "• • • • • •"
+//   underline              re-uses bar.png stretched wider, sits at bar_y
+//
+// Vertically anchored on the same bar_y as the boot bar so the layout
+// doesn't shift when the prompt appears mid-boot.
+prompt_color_r = 0.79;     // off-white, matches the boot status row
+prompt_color_g = 0.80;
+prompt_color_b = 0.83;
+prompt_font    = "Sans 11";
+bullets_font   = "Sans 18";
+field_width    = 360.0 * s;
+
+// Stretch the bar art to field width to act as the text-input underline.
+field_underline = bar_img.Scale(field_width, bar_h);
+field_sprite    = Sprite(field_underline);
+field_x         = (W - field_width) / 2;
+field_sprite.SetPosition(field_x, bar_y, 2);
+field_sprite.SetOpacity(0.0);
+
+// Empty placeholder sprites for the prompt/bullets text -- their images
+// get assigned the first time DisplayPassword fires.
+prompt_sprite  = Sprite();
+bullets_sprite = Sprite();
+prompt_sprite.SetOpacity(0.0);
+bullets_sprite.SetOpacity(0.0);
+
+password_mode  = 0;   // 1 while a passphrase prompt is active
+last_bullets   = -1;
+last_prompt    = "";
+
+fun render_prompt(text) {
+    if (text == last_prompt) return;
+    last_prompt = text;
+    img = Image.Text(text, prompt_color_r, prompt_color_g, prompt_color_b, 1.0, prompt_font);
+    prompt_sprite.SetImage(img);
+    pw = img.GetWidth();
+    ph = img.GetHeight();
+    // Place 24 px (scaled) above the underline.
+    prompt_sprite.SetPosition((W - pw) / 2, bar_y - ph - 24.0 * s, 2);
+}
+
+fun render_bullets(n) {
+    if (n == last_bullets) return;
+    last_bullets = n;
+    txt = "";
+    i = 0;
+    while (i < n) {
+        if (i > 0) txt += " ";
+        txt += "•";
+        i++;
+    }
+    // Plymouth sprites need at least one glyph for sane width metrics;
+    // a single space keeps the sprite present but invisible while empty.
+    if (n == 0) txt = " ";
+    img = Image.Text(txt, prompt_color_r, prompt_color_g, prompt_color_b, 1.0, bullets_font);
+    bullets_sprite.SetImage(img);
+    bw = img.GetWidth();
+    bh = img.GetHeight();
+    // Bullets sit 6 px (scaled) above the underline.
+    bullets_sprite.SetPosition((W - bw) / 2, bar_y - bh - 6.0 * s, 2);
+}
+
 // -- animation timing ---------------------------------------------------
 frame_tick       = 0;
 fade_delay_ticks = 20;   // ~0.4s at 50 Hz
@@ -135,6 +202,24 @@ fun refresh_cb() {
     opacity = overlay_opacity();
     logo_sprite.SetOpacity(opacity);
     name_sprite.SetOpacity(opacity);
+
+    if (password_mode == 1) {
+        // Hide the boot row, show the password UI.
+        bar_sprite.SetOpacity(0.0);
+        status_sprite.SetOpacity(0.0);
+        scan_sprite.SetOpacity(0.0);
+
+        field_sprite.SetOpacity(opacity);
+        prompt_sprite.SetOpacity(opacity);
+        bullets_sprite.SetOpacity(opacity);
+        return;
+    }
+
+    // Normal boot animation.
+    field_sprite.SetOpacity(0.0);
+    prompt_sprite.SetOpacity(0.0);
+    bullets_sprite.SetOpacity(0.0);
+
     bar_sprite.SetOpacity(opacity);
     status_sprite.SetOpacity(0.55 * opacity);
 
@@ -157,14 +242,31 @@ fun refresh_cb() {
 }
 Plymouth.SetRefreshFunction(refresh_cb);
 
+// -- password / normal display hooks ------------------------------------
+fun display_password_cb(prompt, bullets) {
+    password_mode = 1;
+    // Plymouth sometimes hands us its raw "Password: " — substitute a
+    // friendlier label. A non-empty client-supplied prompt wins.
+    if (prompt == "" || prompt == "Password: " || prompt == "Password:") {
+        prompt = "Enter passphrase to unlock";
+    }
+    render_prompt(prompt);
+    render_bullets(bullets);
+}
+
+fun display_normal_cb() {
+    password_mode = 0;
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_cb);
+Plymouth.SetDisplayNormalFunction(display_normal_cb);
+
 // -- unused hooks (keep splash stable) ----------------------------------
 fun noop () { }
 Plymouth.SetBootProgressFunction (noop);
 Plymouth.SetRootMountedFunction  (noop);
 Plymouth.SetKeyboardInputFunction(noop);
 Plymouth.SetUpdateStatusFunction (noop);
-Plymouth.SetDisplayNormalFunction(noop);
-Plymouth.SetDisplayPasswordFunction(noop);
 Plymouth.SetDisplayQuestionFunction(noop);
 Plymouth.SetMessageFunction      (noop);
 Plymouth.SetQuitFunction         (noop);
