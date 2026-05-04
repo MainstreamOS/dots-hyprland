@@ -220,15 +220,26 @@ Variants {
                 smooth: true
                 mipmap: true
 
-                property int workspaceIndex: (bgRoot.monitor.activeWorkspace?.id ?? 1) - 1
+                property int effectiveWorkspaceId: GlobalStates.screenLocked ? 1 : (bgRoot.monitor.activeWorkspace?.id ?? 1)
+                property int workspaceIndex: effectiveWorkspaceId - 1
                 property real middleFraction: 0.5
                 property real fraction: {
-                    // 0 - start of the picture
+                    // middleFraction (0.5) - centered
                     // 1 - end of the picture
-                    if (bgRoot.totalWorkspaces <= 1) {
+                    // Cycle every `workspaceChunkSize` (the visible group size,
+                    // typically 10) so that ws 1, 1+N, 1+2N, ... all start
+                    // centered, then pan rightward across the remaining
+                    // (1 - middleFraction) range until the end of the chunk,
+                    // at which point the next chunk re-centers. We deliberately
+                    // anchor on chunkSize rather than totalWorkspaces because
+                    // totalWorkspaces grows with the highest used workspace id.
+                    let cycleSize = bgRoot.workspaceChunkSize;
+                    if (cycleSize <= 1) {
                         return middleFraction;
                     }
-                    return Math.max(0, Math.min(1, workspaceIndex / (bgRoot.totalWorkspaces - 1)));
+                    let cycleIdx = ((workspaceIndex % cycleSize) + cycleSize) % cycleSize;
+                    return Math.max(0, Math.min(1,
+                        middleFraction + (1 - middleFraction) * cycleIdx / (cycleSize - 1)));
                 }
 
                 property real usedFractionX: {
@@ -236,7 +247,7 @@ Variants {
                     if (Config.options.background.parallax.enableWorkspace && !bgRoot.verticalParallax) {
                         usedFraction = fraction;
                     }
-                    if (Config.options.background.parallax.enableSidebar) {
+                    if (!GlobalStates.screenLocked && Config.options.background.parallax.enableSidebar) {
                         let sidebarFraction = bgRoot.parallaxRation / bgRoot.workspaceChunkSize / 2;
                         usedFraction += (sidebarFraction * GlobalStates.sidebarRightOpen - sidebarFraction * GlobalStates.sidebarLeftOpen);
                     }
