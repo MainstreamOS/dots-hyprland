@@ -210,7 +210,15 @@ Variants {
                 visible: opacity > 0 && !blurLoader.active
                 opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
                 cache: false
-                smooth: false
+                // Bilinear filtering + mipmap chain. The wallpaper is
+                // continuously resampled by parallax animation and per-monitor
+                // scaling, so nearest-neighbor sampling (smooth: false) with
+                // no mip chain produced the visible "diminished quality" look
+                // even on 4K source images. mipmap costs ~33% extra VRAM on
+                // the wallpaper texture only, which is trivial on any current
+                // GPU and gives correct trilinear downscale during parallax.
+                smooth: true
+                mipmap: true
 
                 property int workspaceIndex: (bgRoot.monitor.activeWorkspace?.id ?? 1) - 1
                 property real middleFraction: 0.5
@@ -272,8 +280,13 @@ Variants {
                     }
                 }
                 sourceSize {
-                    width: bgRoot.scaledWallpaperWidth
-                    height: bgRoot.scaledWallpaperHeight
+                    // Decode at physical pixels on HiDPI displays. The Image's
+                    // width/height (logical px) and all parallax math stay
+                    // unchanged — only the pixel buffer gets denser, which
+                    // costs proportional VRAM but keeps detail when the GPU
+                    // resamples during pan.
+                    width: bgRoot.scaledWallpaperWidth * Math.max(1, bgRoot.monitor?.scale ?? 1)
+                    height: bgRoot.scaledWallpaperHeight * Math.max(1, bgRoot.monitor?.scale ?? 1)
                 }
                 width: bgRoot.scaledWallpaperWidth
                 height: bgRoot.scaledWallpaperHeight
