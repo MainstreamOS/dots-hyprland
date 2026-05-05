@@ -8,13 +8,14 @@
 case "${SKIP_MISCCONF}" in
   true) sleep 0;;
   *)
-    for i in $(find dots/.config/ -mindepth 1 -maxdepth 1 ! -name 'quickshell' ! -name 'fish' ! -name 'hypr' ! -name 'fontconfig' -exec basename {} \;); do
+    for i in $(find dots/.config/ -mindepth 1 -maxdepth 1 ! -name 'quickshell' ! -name 'fish' ! -name 'hypr' ! -name 'fontconfig' ! -name 'mainstream' -exec basename {} \;); do
 #      i="dots/.config/$i"
       echo "[$0]: Found target: dots/.config/$i"
       if [ -d "dots/.config/$i" ];then install_dir__sync "dots/.config/$i" "$XDG_CONFIG_HOME/$i"
       elif [ -f "dots/.config/$i" ];then install_file "dots/.config/$i" "$XDG_CONFIG_HOME/$i"
       fi
     done
+    install_dir "dots/.config/mainstream" "$XDG_CONFIG_HOME/mainstream"
     install_dir "dots/.local/share/konsole" "${XDG_DATA_HOME}"/konsole
     install_dir "dots/.local/share/applications" "${XDG_DATA_HOME}"/applications
     ;;

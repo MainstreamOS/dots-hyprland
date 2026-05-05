@@ -24,6 +24,9 @@ if status is-interactive
     alias claer "printf '\033[2J\033[3J\033[1;1H'"
     alias pamcan pacman
     alias q 'qs -c ii'
+    if test -x "$HOME/.config/mainstream/mainstream-fetch.sh"
+        alias fastfetch "$HOME/.config/mainstream/mainstream-fetch.sh"
+    end
     if test "$TERM" != "linux"
         alias ls 'eza --icons'
     end
