@@ -30,10 +30,82 @@ ApplicationWindow {
     property var monitors: []
     property var pendingChanges: ({})
     property string monitorsConfPath: `${Quickshell.env("HOME")}/.config/hypr/monitors.conf`
+    // Set true when "Start Install" is pressed; the writeProc → reloadProc
+    // chain consumes it once the apply has fully landed and then launches
+    // Calamares. Keeps the install button behaviour atomic without racing
+    // hyprctl reload.
+    property bool startInstallQueued: false
 
     function refreshMonitors() {
         monitorProc.running = true;
     }
+
+    // Re-center on the active screen after a monitor scale apply.
+    //
+    // Why hyprctl instead of Screen.*: on Hyprland/Wayland the QScreen
+    // attached properties don't reliably notify when the compositor changes
+    // a per-monitor scale at runtime, so reading Screen.width/height after a
+    // reload returns the *previous* logical size. hyprctl monitors -j is the
+    // source of truth — pixel width/height + scale give the logical
+    // compositor size, and x/y give the monitor origin in the virtual
+    // desktop (matters for multi-monitor).
+    function recenter() {
+        recenterProc.running = false;
+        recenterProc.running = true;
+    }
+
+    Process {
+        id: recenterProc
+        command: ["hyprctl", "monitors", "-j"]
+        stdout: SplitParser {
+            splitMarker: ""
+            onRead: data => {
+                try {
+                    let mons = JSON.parse(data);
+                    if (!mons || mons.length === 0) return;
+                    let mon = mons.find(m => m.focused) || mons[0];
+                    let scale = mon.scale || 1.0;
+                    // Hyprland transforms 1/3/5/7 are 90°/270° rotations.
+                    let rot = (mon.transform || 0) % 2 === 1;
+                    let pxW = rot ? mon.height : mon.width;
+                    let pxH = rot ? mon.width  : mon.height;
+                    let logicalW = pxW / scale;
+                    let logicalH = pxH / scale;
+                    let tx = Math.round(mon.x + (logicalW - root.width)  / 2);
+                    let ty = Math.round(mon.y + (logicalH - root.height) / 2);
+                    // Wayland xdg-shell does not allow clients to set their
+                    // own x/y after creation — assigning root.x/root.y is a
+                    // no-op on Hyprland. Ask the compositor to move us via
+                    // a hyprctl dispatch keyed on our (translated) title.
+                    let titleRegex = (root.title || "")
+                        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    if (!titleRegex) return;
+                    recenterMoveProc.command = [
+                        "hyprctl", "dispatch", "movewindowpixel",
+                        `exact ${tx} ${ty},title:^${titleRegex}$`
+                    ];
+                    recenterMoveProc.running = false;
+                    recenterMoveProc.running = true;
+                } catch (e) {}
+            }
+        }
+    }
+
+    Process { id: recenterMoveProc; command: [] }
+
+    // Debounce — give hyprctl reload a beat to land before we query so we
+    // don't read the pre-apply geometry.
+    Timer {
+        id: recenterTimer
+        interval: 220
+        repeat: false
+        onTriggered: root.recenter()
+    }
+
+    Screen.onWidthChanged:  recenterTimer.restart()
+    Screen.onHeightChanged: recenterTimer.restart()
+    onWidthChanged:  recenterTimer.restart()
+    onHeightChanged: recenterTimer.restart()
 
     function parseMode(modeStr) {
         let match = modeStr.match(/^(\d+)x(\d+)@([\d.]+)Hz$/);
@@ -125,10 +197,21 @@ ApplicationWindow {
     Process {
         id: reloadProc
         command: ["hyprctl", "reload"]
-        onExited: Qt.callLater(root.refreshMonitors)
+        onExited: {
+            Qt.callLater(root.refreshMonitors);
+            recenterTimer.restart();
+            // Launch Calamares only after the apply chain has completed, so
+            // the new scale/mode is in effect before the installer takes the
+            // foreground.
+            if (root.startInstallQueued) {
+                root.startInstallQueued = false;
+                Quickshell.execDetached(["sudo", "-E", "calamares"]);
+                Qt.quit();
+            }
+        }
     }
 
-    Component.onCompleted: refreshMonitors()
+    Component.onCompleted: { refreshMonitors(); recenterTimer.restart(); }
 
     // ── Main content ──
     ColumnLayout {
@@ -618,8 +701,14 @@ ApplicationWindow {
         colBackgroundHover: Appearance.colors.colPrimaryHover
 
         onClicked: {
-            Quickshell.execDetached(["sudo", "-E", "calamares"]);
-            Qt.quit();
+            // Apply every monitor's pending settings (mode + scale) before
+            // handing off to Calamares. applyMonitorChanges already iterates
+            // over all monitors and writes the full monitors.conf, so the
+            // monitorName arg is irrelevant — we just need the file written
+            // and hyprctl reloaded. The reloadProc onExited handler then
+            // launches Calamares once startInstallQueued is set.
+            root.startInstallQueued = true;
+            root.applyMonitorChanges("");
         }
 
         contentItem: RowLayout {

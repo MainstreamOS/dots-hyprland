@@ -12,6 +12,12 @@ ContentPage {
     id: displayConfigPage
     forceWidth: true
 
+    // Emitted after the apply chain (writeProc → reloadProc) has finished —
+    // the parent settings.qml listens for this and recenters its window so
+    // the user doesn't have to drag it back to true centre after every
+    // scale change. Wayland's QScreen change signals aren't reliable here.
+    signal scaleApplied()
+
     property var monitors: []
     property var pendingChanges: ({})
 
@@ -863,7 +869,10 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
     Process {
         id: reloadProc
         command: ["hyprctl", "reload"]
-        onExited: displayConfigPage.parseMonitorsConf()
+        onExited: {
+            displayConfigPage.parseMonitorsConf();
+            displayConfigPage.scaleApplied();
+        }
     }
 
     Component.onCompleted: {
