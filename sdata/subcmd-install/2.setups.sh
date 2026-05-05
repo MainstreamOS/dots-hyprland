@@ -65,6 +65,23 @@ WantedBy=sleep.target
 EOF
   fi
 }
+
+function setup_pwfeedback(){
+  # Show '*' for each typed character at sudo password prompts. By default
+  # sudo gives no visual feedback, which catches new users out — they can't
+  # tell whether the keyboard is being read. Drop-in lives under sudoers.d
+  # so package upgrades to /etc/sudoers can never clobber it. visudo -cf
+  # validates before install so a syntax error never leaves the system in
+  # an unsudoable state.
+  local tmp; tmp=$(mktemp)
+  printf 'Defaults pwfeedback\n' > "$tmp"
+  if sudo visudo -cf "$tmp" >/dev/null 2>&1; then
+    x sudo install -m 0440 -o root -g root "$tmp" /etc/sudoers.d/pwfeedback
+  else
+    echo -e "${STY_RED}[$0]: pwfeedback drop-in failed visudo validation; not installing.${STY_RST}"
+  fi
+  rm -f "$tmp"
+}
 function detect_gpu_vendors(){
   # Returns space-separated list of: nvidia amd intel vm
   local vendors=()
@@ -312,6 +329,9 @@ if [[ ! -z $(systemctl --version) ]]; then
   showfun setup_kill_fprintd_service
   v setup_kill_fprintd_service
   v sudo systemctl enable kill-fprintd.service
+  # Visual feedback ('*' per keystroke) at sudo prompts.
+  showfun setup_pwfeedback
+  v setup_pwfeedback
 elif [[ ! -z $(openrc --version) ]]; then
   v bash -c "echo 'modules=i2c-dev' | sudo tee -a /etc/conf.d/modules"
   v sudo rc-update add modules boot
