@@ -37,7 +37,6 @@ function install_RPMS() {
   packages=(
     "cpptrace"
     "quickshell-git"
-    "hyprland-qt-support"
     "matugen"
   )
   for package in "${packages[@]}"; do
@@ -46,7 +45,9 @@ function install_RPMS() {
     spec="$rpm_specs/$package.spec"
     installed_rpm_stamp=$(rpm -q --qf '%{NVRA}\n' "$package" 2>/dev/null || true)
     spec_stamp=$(rpmspec -q --qf '%{NVRA}\n' "$spec")
-    
+    arch=$(rpm --eval "%_arch") # if we somehow want aarch64??
+    built_rpm_path="$rpmbuildroot/RPMS/$arch/$spec_stamp.rpm"
+
     [[ -f "$spec" ]] || {
       echo "Missing spec: $spec"
       continue
@@ -70,13 +71,12 @@ function install_RPMS() {
       sudo dnf install -y $(basename "$spec" .spec)
       nolock_qs=true
     fi
-  done
 
-  mapfile -t -d '' local_rpms < <(find "$rpmbuildroot/RPMS" -maxdepth 2 -type f -name '*.rpm' -not -name '*debug*' -print0)
-  if [[ ${#local_rpms[@]} -ge 1 ]]; then
-    echo -e "${STY_BLUE}Next command:${STY_RST} sudo dnf install ${local_rpms[@]} -y"
-    r x sudo dnf install "${local_rpms[@]}" -y
-  fi
+    if [[ -f "$rpmbuildroot/RPMS/x86_64/$spec_stamp.rpm" ]]; then
+	echo -e "${STY_BLUE}Next command:${STY_RST} sudo dnf install $rpmbuildroot/RPMS/x86_64/$spec_stamp.rpm -y"
+    	r x sudo dnf install "$rpmbuildroot/RPMS/x86_64/$spec_stamp.rpm" -y
+    fi
+  done
   x cd ${REPO_ROOT}
 }
 

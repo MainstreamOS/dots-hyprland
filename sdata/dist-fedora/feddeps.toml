@@ -85,6 +85,7 @@ packages = [
 packages = [
   "hyprland",
   "hyprland-guiutils",
+  "hyprland-qt-support",
   "hyprsunset",
   "wl-clipboard"
 ]
@@ -206,4 +207,3 @@ packages = [
   "unzip"
 ]
 install_opts = ["--setopt=install_weak_deps=False"]
-
