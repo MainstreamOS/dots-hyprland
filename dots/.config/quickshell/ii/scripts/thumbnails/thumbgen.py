@@ -104,7 +104,7 @@ def get_all_files(*, dir_path: Path, recursive: bool) -> List[Path]:
 
 @click.command()
 @click.option(
-    "-d", "--img_dirs", required=True, help='directories to generate thumbnails seperated by space, eg: "dir1/dir2 dir3"'
+    "-d", "--img_dirs", required=True, multiple=True, help='Directory to generate thumbnails for. Pass -d multiple times for multiple directories. Whitespace-splitting was removed because it broke on paths containing spaces.'
 )
 @click.option(
     "-s", "--size", default="normal", type=click.Choice(["normal", "large", "x-large", "xx-large"]), help="Thumbnail size: normal, large, x-large, xx-large"
@@ -115,8 +115,8 @@ def get_all_files(*, dir_path: Path, recursive: bool) -> List[Path]:
 )
 @click.option("-r", "--recursive", is_flag=True, default=False, help="Whether to recursively look for files")
 @click.option("--machine_progress", is_flag=True, default=False, help="Print machine-readable progress lines instead of a progress bar")
-def main(img_dirs: str, size: str, workers: str, only_images: bool, recursive: bool, machine_progress: bool) -> None:
-    img_dirs = [Path(img_dir) for img_dir in img_dirs.split()]
+def main(img_dirs: tuple, size: str, workers: str, only_images: bool, recursive: bool, machine_progress: bool) -> None:
+    img_dirs = [Path(img_dir) for img_dir in img_dirs]
     global factory
     factory = GnomeDesktop.DesktopThumbnailFactory.new(thumbnail_size_map[size])
     for img_dir in img_dirs:

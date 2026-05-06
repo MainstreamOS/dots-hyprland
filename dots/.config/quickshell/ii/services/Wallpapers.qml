@@ -164,9 +164,22 @@ Singleton {
         if (!["normal", "large", "x-large", "xx-large"].includes(size)) throw new Error("Invalid thumbnail size");
         thumbgenProc.directory = root.directory
         thumbgenProc.running = false
+        // Pass interpolated values as positional arguments to bash -c so that
+        // directory paths containing spaces (e.g. "Mainstream Wallpaper SVGs")
+        // survive intact: bash receives them as a single argv element through
+        // QuickShell's Process.command array, then we expand them with double
+        // quotes inside the script body. The previous form interpolated the
+        // raw paths into the -c string and bash word-split on the spaces, so
+        // the thumb-gen scripts saw `-d /home/.../Mainstream` and bailed —
+        // which is why files in those directories never got `large` thumbnails
+        // and rendered as transparent tiles in the picker.
         thumbgenProc.command = [
             "bash", "-c",
-            `${thumbgenScriptPath} --size ${size} --machine_progress -d ${FileUtils.trimFileProtocol(root.directory)} || ${generateThumbnailsMagickScriptPath} --size ${size} -d ${FileUtils.trimFileProtocol(root.directory)}`,
+            '"$0" --size "$1" --machine_progress -d "$2" || "$3" --size "$1" -d "$2"',
+            thumbgenScriptPath,
+            size,
+            FileUtils.trimFileProtocol(root.directory),
+            generateThumbnailsMagickScriptPath
         ]
         // console.log("[Wallpapers] Updating thumbnails with command ", thumbgenProc.command.join(" "))
         root.thumbnailGenerationProgress = 0
