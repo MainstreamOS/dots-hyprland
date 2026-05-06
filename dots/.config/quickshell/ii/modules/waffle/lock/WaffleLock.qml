@@ -33,7 +33,7 @@ LockScreen {
             interactables.switchToFocusedView();
         }
 
-        StyledImage {
+        Image {
             id: bg
             z: 0
             width: parent.width
@@ -46,6 +46,7 @@ LockScreen {
                     openAnim.restart();
                 }
             }
+            sourceSize: Qt.size(lockSurfaceItem.width, lockSurfaceItem.height)
             source: Config.options.background.wallpaperPath
             fillMode: Image.PreserveAspectCrop
 

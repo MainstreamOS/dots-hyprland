@@ -3,7 +3,6 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
-import qs.modules.common.widgets
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
@@ -110,7 +109,7 @@ Item { // Window
             border.width : 1
         }
 
-        StyledImage {
+        Image {
             id: windowIcon
             property real baseSize: Math.min(root.targetWindowWidth, root.targetWindowHeight)
             anchors {
@@ -127,11 +126,12 @@ Item { // Window
                 // console.log("Final:", Math.min(targetWindowWidth, targetWindowHeight) * (root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio) / root.monitorData.scale)
                 return baseSize * (root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio);
             }
-            mipmap: true
+            // mipmap: true
             Layout.alignment: Qt.AlignHCenter
             source: root.iconPath
             width: iconSize
             height: iconSize
+            sourceSize: Qt.size(iconSize, iconSize)
 
             Behavior on width {
                 animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
