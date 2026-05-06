@@ -17,9 +17,16 @@ StyledImage {
     property string thumbnailSizeName: Images.thumbnailSizeNameForDimensions(sourceSize.width, sourceSize.height)
     property string thumbnailPath: {
         if (sourcePath.length == 0) return;
-        const resolvedUrlWithoutFileProtocol = FileUtils.trimFileProtocol(`${Qt.resolvedUrl(sourcePath)}`);
-        const encodedUrlWithoutFileProtocol = resolvedUrlWithoutFileProtocol.split("/").map(part => encodeURIComponent(part)).join("/");
-        const md5Hash = Qt.md5(`file://${encodedUrlWithoutFileProtocol}`);
+        // sourcePath is already a raw filesystem path (e.g. fileModelData.filePath
+        // from FolderListModel — literal spaces, no percent-encoding). Wrapping it
+        // in Qt.resolvedUrl() yields a URL with `%20` etc. already in place, after
+        // which the per-segment encodeURIComponent below double-encodes (`%` → `%25`)
+        // and the resulting md5 no longer matches what generate-thumbnails-magick.sh
+        // wrote, so files in directories with whitespace render as transparent
+        // tiles in the wallpaper picker. Encode straight from the raw path.
+        const rawPath = FileUtils.trimFileProtocol(sourcePath);
+        const encodedPath = rawPath.split("/").map(part => encodeURIComponent(part)).join("/");
+        const md5Hash = Qt.md5(`file://${encodedPath}`);
         return `${Directories.genericCache}/thumbnails/${thumbnailSizeName}/${md5Hash}.png`;
     }
     source: thumbnailPath
