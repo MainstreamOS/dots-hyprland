@@ -16,7 +16,11 @@ Flickable {
     ScrollBar.vertical: StyledScrollBar {}
 
     MouseArea {
-        visible: Config?.options.interactions.scrolling.fasterTouchpadScroll
+        // Respect the parent Flickable's `interactive` flag — if it's been
+        // disabled (e.g. by a child that wants to handle wheel events for
+        // its own nested ListView), our fast-scroll override should also
+        // step aside so wheel events reach the inner item.
+        visible: root.interactive && Config?.options.interactions.scrolling.fasterTouchpadScroll
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
         onWheel: function(wheelEvent) {

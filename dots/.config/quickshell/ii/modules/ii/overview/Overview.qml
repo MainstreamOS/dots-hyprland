@@ -436,6 +436,26 @@ Scope {
                 const scrollingDown = event.angleDelta.y < 0;
                 const scrollingUp   = event.angleDelta.y > 0;
 
+                // Searching: route wheel events into the search result list
+                // (SearchWidget.appResults) instead of the outer flickable.
+                // Without this branch, the fallback at the bottom of this
+                // handler scrolls `flickable.contentY`, which moves the whole
+                // overview slightly and never scrolls the actual results.
+                if (panelWindow.searchingText !== "" && !appDrawer.expanded
+                        && searchWidget.appResults && searchWidget.appResults.visible) {
+                    const list         = searchWidget.appResults;
+                    const threshold    = flickable.mouseScrollDeltaThreshold;
+                    const delta        = event.angleDelta.y / threshold;
+                    const scrollFactor = Math.abs(event.angleDelta.y) >= threshold
+                                         ? flickable.mouseScrollFactor
+                                         : flickable.touchpadScrollFactor;
+                    const maxY    = Math.max(0, list.contentHeight - list.height);
+                    const targetY = Math.max(0, Math.min(list.contentY - delta * scrollFactor, maxY));
+                    list.contentY = targetY;
+                    event.accepted = true;
+                    return;
+                }
+
                 // Collapsed: route wheel events through the grid first.
                 // Scroll down → scroll grid, or expand once at the bottom.
                 // Scroll up   → scroll grid back up, or fall through once at the top.

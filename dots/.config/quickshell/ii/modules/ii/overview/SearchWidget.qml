@@ -19,6 +19,10 @@ Item { // Wrapper
     readonly property int typingDebounceInterval: 200
     readonly property int typingResultLimit: 15 // Should be enough to cover the whole view
 
+    // Exposed so the panel-level wheelOverlay (Overview.qml) can route wheel
+    // events into the result list instead of scrolling the outer Flickable.
+    property alias appResults: appResults
+
     property string searchingText: LauncherSearch.query
     property bool showResults: searchingText != ""
     implicitWidth: searchWidgetContent.implicitWidth + Appearance.sizes.elevationMargin * 2
