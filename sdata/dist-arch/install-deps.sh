@@ -231,5 +231,5 @@ done
 ## It pulls ~600MiB of KDE/Plasma packages on a system without KDE present.
 ## We use firefox-mpris-hyprland instead (per-tab MPRIS bridge, ~2MB binary,
 ## no KDE deps) — set up automatically by `setup_firefox_mpris_hyprland` in
-## the next step. To opt out: pass --skip-firefox-mpris.
+## the next step.
 printf "${STY_CYAN}[$0]: Skipping plasma-browser-integration (using firefox-mpris-hyprland instead).${STY_RST}\n"

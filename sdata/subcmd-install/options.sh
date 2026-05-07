@@ -17,8 +17,6 @@ Options for install:
       --ignore-outdate      Ignore outdate checking for community supported \"dist-*\".
   -s, --skip-sysupdate      Skip system package upgrade e.g. \"sudo pacman -Syu\"
       --skip-gpudrivers     Skip automatic GPU driver detection and installation
-      --skip-plasmaintg     Skip installing plasma-browser-integration
-      --skip-firefox-mpris  Skip setting up firefox-mpris-hyprland (per-tab MPRIS bridge for Firefox-based browsers — full media-control panel support inc. YouTube thumbnails)
       --skip-backup         Skip backup conflicting files
       --skip-quickshell     Skip installing the config for Quickshell
       --skip-hyprland       Skip installing the config for Hyprland
@@ -27,7 +25,7 @@ Options for install:
       --skip-fontconfig     Skip installing the config for fontconfig
       --skip-miscconf       Skip copying the dirs and files to \".configs\" except for
                             Quickshell, Fish and Hyprland
-      --core                Alias of --skip-{plasmaintg,fish,miscconf,fontconfig}
+      --core                Alias of --skip-{fish,miscconf,fontconfig}
       --fontset <set>       Use a set of pre-defined font and config (currently only fontconfig).
                             Possible values of <set>: $(ls -A ${REPO_ROOT}/dots-extra/fontsets)
 ${STY_CYAN}
@@ -49,7 +47,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-plasmaintg,skip-firefox-mpris,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -82,8 +80,6 @@ while true ; do
     -s|--skip-sysupdate) SKIP_SYSUPDATE=true;shift;;
     --ignore-outdate) IGNORE_OUTDATE_CHECK=true;shift;;
     --skip-gpudrivers) SKIP_GPUDRIVERS=true;shift;;
-    --skip-plasmaintg) SKIP_PLASMAINTG=true;shift;;
-    --skip-firefox-mpris) SKIP_FIREFOX_MPRIS=true;shift;;
     --skip-backup) SKIP_BACKUP=true;shift;;
     --skip-hyprland) SKIP_HYPRLAND=true;shift;;
     --skip-hyprland-entry) SKIP_HYPRLAND_ENTRY=true;shift;;
@@ -91,7 +87,7 @@ while true ; do
     --skip-quickshell) SKIP_QUICKSHELL=true;shift;;
     --skip-fontconfig) SKIP_FONTCONFIG=true;shift;;
     --skip-miscconf) SKIP_MISCCONF=true;shift;;
-    --core) SKIP_PLASMAINTG=true;SKIP_FISH=true;SKIP_FONTCONFIG=true;SKIP_MISCCONF=true;shift;;
+    --core) SKIP_FISH=true;SKIP_FONTCONFIG=true;SKIP_MISCCONF=true;shift;;
     --exp-files) EXPERIMENTAL_FILES_SCRIPT=true;shift;;
     --via-nix) INSTALL_VIA_NIX=true;shift;;
     

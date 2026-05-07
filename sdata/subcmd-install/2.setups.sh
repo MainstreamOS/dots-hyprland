@@ -1096,29 +1096,19 @@ showfun setup_sddm_pixie
 v setup_sddm_pixie
 
 # firefox-mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
-# Lightweight alternative to plasma-browser-integration that doesn't drag in
-# the KDE chain. Auto-detects which Firefox-family browsers are installed.
+# Replaces plasma-browser-integration with a lightweight (~2MB binary)
+# alternative that doesn't drag in the KDE chain. Always installed —
+# the media-control panel needs this to show track info, position,
+# YouTube thumbnails, and a working seek bar for any Firefox-based
+# browser. Auto-detects which forks are installed and writes per-fork
+# native-messaging manifests for each.
 function setup_firefox_mpris_hyprland(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
     echo -e "${STY_YELLOW}[$0]: firefox-mpris-hyprland setup is currently Arch-only. Skipping.${STY_RST}"
     return 0
   fi
-  if [[ "${SKIP_FIREFOX_MPRIS:-false}" == "true" ]]; then
-    echo -e "${STY_BLUE}[$0]: Skipping firefox-mpris-hyprland setup (--skip-firefox-mpris).${STY_RST}"
-    return 0
-  fi
-  local p
-  if $ask; then
-    read -rp "Install firefox-mpris-hyprland (per-tab MPRIS for Firefox-based browsers — full media-control panel inc. YouTube thumbnails)? [Y/n] " p
-  else
-    p=y
-  fi
-  if [[ ! "$p" =~ ^[Nn]$ ]]; then
-    x bash "${REPO_ROOT}/scripts/setup-firefox-mpris-hyprland.sh" \
-      || echo -e "${STY_YELLOW}[$0]: firefox-mpris-hyprland install hit an error — see above. Continuing with the rest of setup.${STY_RST}"
-  else
-    echo -e "${STY_BLUE}[$0]: Skipping firefox-mpris-hyprland setup.${STY_RST}"
-  fi
+  x bash "${REPO_ROOT}/scripts/setup-firefox-mpris-hyprland.sh" \
+    || echo -e "${STY_YELLOW}[$0]: firefox-mpris-hyprland install hit an error — see above. Continuing with the rest of setup.${STY_RST}"
 }
 showfun setup_firefox_mpris_hyprland
 v setup_firefox_mpris_hyprland
