@@ -229,6 +229,7 @@ done
 
 ## plasma-browser-integration is intentionally not installed.
 ## It pulls ~600MiB of KDE/Plasma packages on a system without KDE present.
-## If you need browser media integration, install it manually after setup:
-##   sudo pacman -S plasma-browser-integration
-printf "${STY_CYAN}[$0]: Skipping plasma-browser-integration (KDE chain risk — install manually if needed).${STY_RST}\n"
+## We use firefox-mpris-hyprland instead (per-tab MPRIS bridge, ~2MB binary,
+## no KDE deps) — set up automatically by `setup_firefox_mpris_hyprland` in
+## the next step. To opt out: pass --skip-firefox-mpris.
+printf "${STY_CYAN}[$0]: Skipping plasma-browser-integration (using firefox-mpris-hyprland instead).${STY_RST}\n"
