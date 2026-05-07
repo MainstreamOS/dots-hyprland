@@ -13,7 +13,12 @@ Scope {
     id: screenCorners
     readonly property Toplevel activeWindow: ToplevelManager.activeToplevel
     property var actionForCorner: ({
-        [RoundCorner.CornerEnum.TopLeft]: () => GlobalStates.sidebarLeftOpen = !GlobalStates.sidebarLeftOpen,
+        // TopLeft is owned by the scroll-overview hot corner in Bar.qml —
+        // this screen-corner widget intentionally no-ops there so a single
+        // cursor approach to that corner doesn't double-trigger (sidebar +
+        // overview). BottomLeft and both right corners still toggle their
+        // respective sidebars.
+        [RoundCorner.CornerEnum.TopLeft]: () => {},
         [RoundCorner.CornerEnum.BottomLeft]: () => GlobalStates.sidebarLeftOpen = !GlobalStates.sidebarLeftOpen,
         [RoundCorner.CornerEnum.TopRight]: () => GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen,
         [RoundCorner.CornerEnum.BottomRight]: () => GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen
@@ -65,6 +70,14 @@ Scope {
                 active: {
                     if (!Config.options.sidebar.cornerOpen.enable) return false;
                     if (cornerPanelWindow.fullscreen) return false;
+                    // Top-left is owned by the bar's scroll-overview hot corner.
+                    // Even though we made actionForCorner[TopLeft] a no-op, the
+                    // loader's MouseArea still grabs input here and starves the
+                    // bar's MouseArea — the cursor reaching the screen edge gets
+                    // captured by ScreenCorners and the hot corner never sees it.
+                    // Disabling the loader for TopLeft drops its mask region so
+                    // events fall through to the bar.
+                    if (cornerWidget.isTopLeft) return false;
                     return (Config.options.sidebar.cornerOpen.bottom == cornerWidget.isBottom);
                 }
                 anchors {
