@@ -241,8 +241,11 @@ function setup_gamescope(){
       ;;
   esac
 
-  # Sudoers file — allows toggle_gamescope.sh to stop/start sddm, chvt,
-  # seatd, python3, setcap, and systemd-run without a password prompt.
+  # Sudoers file — allows toggle_gamescope.sh to stop/start sddm, start
+  # bluetooth.service, chvt, seatd, python3, setcap, systemd-run, kill,
+  # and rfkill without a password prompt. The last two are needed for
+  # cleanup at exit and for unblocking the BT radio so Steam's Deck UI
+  # Bluetooth menu works inside the gamescope session.
   # chmod 440 is required — sudo refuses world-readable sudoers files.
   local _user
   _user=$(whoami)
@@ -250,11 +253,14 @@ function setup_gamescope(){
 Defaults:${_user} !requiretty
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop sddm
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start sddm
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start bluetooth.service
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/chvt
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemd-run
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/python3
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/seatd
 ${_user} ALL=(ALL) NOPASSWD: /usr/bin/setcap
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/kill
+${_user} ALL=(ALL) NOPASSWD: /usr/bin/rfkill
 EOF"
   x sudo chmod 440 /etc/sudoers.d/gamescope
 

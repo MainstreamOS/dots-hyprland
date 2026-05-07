@@ -7,11 +7,13 @@
 # Required sudoers entries (NOPASSWD):
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop sddm
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/systemctl start sddm
+#   %wheel ALL=(ALL) NOPASSWD: /usr/bin/systemctl start bluetooth.service
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/seatd
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/chvt
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/setcap
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/python3
 #   %wheel ALL=(ALL) NOPASSWD: /usr/bin/kill
+#   %wheel ALL=(ALL) NOPASSWD: /usr/bin/rfkill
 # -------------------------------------------------------
 
 LOG="$HOME/.gamescope_toggle.log"
@@ -72,6 +74,7 @@ if [ -z "$GAMESCOPE_ESCAPED" ]; then
         -E HOME="$HOME" \
         -E USER="$USER" \
         -E XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        -E DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}" \
         -E PATH="$PATH" \
         -E GAMESCOPE_ESCAPED=1 \
         --uid="$(id -u)" --gid="$(id -g)" \
@@ -281,16 +284,51 @@ echo "Input proxy started (PID $PROXY_PID)"
 sleep 1
 
 # -------------------------------------------------------
+# Bring Bluetooth up so Steam's Deck UI menu (Steam ->
+# Settings -> Bluetooth) can pair and manage devices from
+# inside the gamescope session. bluez is a system service
+# that talks over the system DBus, which is reachable from
+# this scope without extra env wiring.
+# -------------------------------------------------------
+echo "Checking Bluetooth..."
+if command -v rfkill > /dev/null 2>&1; then
+    if rfkill list bluetooth 2>/dev/null | grep -q "Soft blocked: yes"; then
+        echo "Bluetooth soft-blocked, unblocking..."
+        sudo -n rfkill unblock bluetooth 2>/dev/null \
+            || echo "Could not unblock bluetooth (sudo permission missing?)."
+    fi
+fi
+if systemctl is-active --quiet bluetooth.service; then
+    echo "bluetooth.service already running."
+else
+    echo "Starting bluetooth.service..."
+    if sudo -n systemctl start bluetooth.service 2>/dev/null; then
+        echo "bluetooth.service started."
+    else
+        echo "Could not start bluetooth.service — Bluetooth menu may not work."
+    fi
+fi
+
+# -------------------------------------------------------
 # Build gamescope command.
+# Steam flags (Deck-style session):
+#   -steamos3   : SteamOS 3 (Deck) mode
+#   -steamdeck  : present hardware as Steam Deck — this is
+#                 what enables Steam's in-session Bluetooth,
+#                 Wi-Fi, and power menus
+#   -steampal   : Deck-style gamepad UI elements
+#   -gamepadui  : GamePadUI / Big Picture
 # --adaptive-sync must be before -- steam.
 # STEAM_GAMESCOPE_VRR_SUPPORTED=1 must be before gamescope.
 # -------------------------------------------------------
+STEAM_FLAGS="-steamos3 -steamdeck -steampal -gamepadui --force-grab-cursor"
+
 if [ "$VRR_CAPABLE" = "1" ]; then
     echo "VRR supported — enabling adaptive sync."
-    GAMESCOPE_CMD="STEAM_GAMESCOPE_VRR_SUPPORTED=1 gamescope -W $WIDTH -H $HEIGHT -r $REFRESH --adaptive-sync -e --backend drm -- steam -gamepadui --force-grab-cursor"
+    GAMESCOPE_CMD="STEAM_GAMESCOPE_VRR_SUPPORTED=1 gamescope -W $WIDTH -H $HEIGHT -r $REFRESH --adaptive-sync -e --backend drm -- steam $STEAM_FLAGS"
 else
     echo "VRR not supported — skipping adaptive sync."
-    GAMESCOPE_CMD="gamescope -W $WIDTH -H $HEIGHT -r $REFRESH -e --backend drm -- steam -gamepadui --force-grab-cursor"
+    GAMESCOPE_CMD="gamescope -W $WIDTH -H $HEIGHT -r $REFRESH -e --backend drm -- steam $STEAM_FLAGS"
 fi
 
 # -------------------------------------------------------
