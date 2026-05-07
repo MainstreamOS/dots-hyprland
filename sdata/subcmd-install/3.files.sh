@@ -171,6 +171,149 @@ function install_dir__sync_exclude(){
   fi
   v rsync_dir__sync_exclude $s $t "$@"
 }
+# _build_hyprland_plugin_fresh: clone/update + build a Hyprland plugin
+# from source against the *running* hyprland, install the produced .so
+# to its plugin path. Returns 0 on success, 1 on any failure (missing
+# deps, network, build error, etc.). Caller decides what to do with
+# a failure.
+#
+# Args:
+#   $1 plugin name (used for cache dir + log filename)
+#   $2 repo URL
+#   $3 branch
+#   $4 path within the repo where the Makefile lives ("" for repo root)
+#   $5 .so filename produced by the build
+#
+# Side effects on success:
+#   - $HOME/.local/share/hyprland/plugins/$5 is created/replaced
+#   - $HOME/.local/share/hyprland/plugins/${1}-build.log is written
+function _build_hyprland_plugin_fresh(){
+  local name="$1"
+  local repo_url="$2"
+  local branch="$3"
+  local subdir="$4"
+  local so_filename="$5"
+
+  # Pkg-config sanity. hyprland itself ships hyprland.pc + headers on
+  # Arch via the main package; the others come in transitively but we
+  # double-check so a missing one fails clearly instead of as a cryptic
+  # build error.
+  local _missing=()
+  for pc in hyprland pixman-1 libdrm pangocairo libinput libudev wayland-server xkbcommon; do
+    pkg-config --exists "$pc" 2>/dev/null || _missing+=("$pc")
+  done
+  if (( ${#_missing[@]} > 0 )); then
+    echo -e "${STY_YELLOW}[$0]: $name: cannot build (missing pkg-config: ${_missing[*]})${STY_RST}"
+    return 1
+  fi
+
+  # Build toolchain.
+  local _need_tools=()
+  for t in g++ make git pkg-config; do
+    command -v "$t" >/dev/null 2>&1 || _need_tools+=("$t")
+  done
+  if (( ${#_need_tools[@]} > 0 )); then
+    echo -e "${STY_YELLOW}[$0]: $name: cannot build (missing tools: ${_need_tools[*]})${STY_RST}"
+    return 1
+  fi
+
+  # Clone/update the source.
+  local src_dir="$REPO_ROOT/cache/$name"
+  mkdir -p "$src_dir"
+  if ! (
+    cd "$src_dir"
+    if [[ ! -d .git ]]; then
+      git init -b "$branch" >/dev/null 2>&1
+      git remote add origin "$repo_url" >/dev/null 2>&1
+    fi
+    git pull origin "$branch"
+  ); then
+    echo -e "${STY_YELLOW}[$0]: $name: cannot build (clone/pull failed — network issue?)${STY_RST}"
+    return 1
+  fi
+
+  local build_dir="$src_dir"
+  [[ -n "$subdir" ]] && build_dir="$src_dir/$subdir"
+
+  # Build with logging. Process substitution preserves make's exit code
+  # (unlike `| tee`).
+  local plugin_dir="$HOME/.local/share/hyprland/plugins"
+  mkdir -p "$plugin_dir"
+  local build_log="$plugin_dir/${name}-build.log"
+  local _hv="(hyprctl unavailable)"
+  hyprctl version &>/dev/null && _hv=$(hyprctl version | head -n1)
+  {
+    echo "=== $name build @ $(date '+%Y-%m-%d %H:%M:%S') ==="
+    echo "Hyprland:      $_hv"
+    echo "pkg-config:    hyprland $(pkg-config --modversion hyprland 2>/dev/null || echo unknown)"
+    echo "Plugin commit: $(git -C "$src_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "---"
+  } > "$build_log"
+  echo -e "${STY_CYAN}[$0]: $name: build log → $build_log${STY_RST}"
+
+  if ! (
+    cd "$build_dir"
+    make clean 2>/dev/null || true
+    make all -j"$(nproc)"
+  ) > >(tee -a "$build_log") 2>&1 ; then
+    echo -e "${STY_YELLOW}[$0]: $name: build failed (see $build_log)${STY_RST}"
+    return 1
+  fi
+
+  if [[ ! -f "$build_dir/$so_filename" ]]; then
+    echo -e "${STY_YELLOW}[$0]: $name: build succeeded but $so_filename not found at $build_dir${STY_RST}"
+    return 1
+  fi
+
+  cp -f "$build_dir/$so_filename" "$plugin_dir/$so_filename"
+  echo -e "${STY_GREEN}[$0]: $name: built freshly against current hyprland → $plugin_dir/$so_filename${STY_RST}"
+  return 0
+}
+
+# _ensure_hyprland_plugin: bulletproof installer for a Hyprland plugin.
+# Always *tries* to build fresh against the installed hyprland — that's
+# the only way to guarantee ABI match. If the fresh build fails AND a
+# prebuilt .so was shipped via /etc/skel (archiso path), keep the
+# prebuilt as a best-effort fallback and warn the user. If neither path
+# works, hard error.
+#
+# Same signature as _build_hyprland_plugin_fresh.
+# Returns 0 if a usable .so is in place, 1 if not.
+function _ensure_hyprland_plugin(){
+  local name="$1"
+  local repo_url="$2"
+  local branch="$3"
+  local subdir="$4"
+  local so_filename="$5"
+
+  local plugin_dir="$HOME/.local/share/hyprland/plugins"
+  local plugin_path="$plugin_dir/$so_filename"
+  local _had_prebuilt=false
+  [[ -f "$plugin_path" ]] && _had_prebuilt=true
+
+  if [[ "$_had_prebuilt" == true ]]; then
+    echo -e "${STY_BLUE}[$0]: $name: prebuilt $so_filename present at $plugin_path${STY_RST}"
+    echo -e "${STY_BLUE}[$0]:   Will rebuild against current hyprland to guarantee ABI match.${STY_RST}"
+  fi
+
+  if _build_hyprland_plugin_fresh "$name" "$repo_url" "$branch" "$subdir" "$so_filename"; then
+    return 0
+  fi
+
+  if [[ "$_had_prebuilt" == true ]]; then
+    echo -e "${STY_YELLOW}[$0]: $name: keeping prebuilt $so_filename as fallback.${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   This .so may not load if the build host's hyprland version differs${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   from yours. The pacman rebuild hook installed below will retry${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   from source on the next \`pacman -Syu\` that touches hyprland.${STY_RST}"
+    return 0
+  fi
+
+  echo -e "${STY_RED}[$0]: $name: install failed — fresh build failed and no prebuilt fallback.${STY_RST}"
+  echo -e "${STY_RED}[$0]:   Verify network connectivity and that the hyprland package + base-devel${STY_RST}"
+  echo -e "${STY_RED}[$0]:   are installed, then re-run the installer.${STY_RST}"
+  return 1
+}
+
 function setup_hyprland_plugins(){
   # Build hyprbars from source into a user-owned plugin directory and load it
   # with a `plugin = ...` directive. No hyprpm, no systemd service, no sudoers
@@ -291,6 +434,90 @@ function setup_hyprland_plugins(){
   else
     echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/hyprbars/ — skipping auto-rebuild setup.${STY_RST}"
     echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild hyprbars after each hyprland upgrade.${STY_RST}"
+  fi
+}
+
+function setup_scrolloverview_plugin(){
+  # Set up hyprland-scroll-overview: the .so lives at
+  # ~/.local/share/hyprland/plugins/scrolloverview.so loaded via a
+  # `plugin = ...` directive. No hyprpm, no systemd service, no
+  # sudoers — the .so is owned by the user and Hyprland loads it as
+  # the user.
+  #
+  # Bulletproof flow (handled by _ensure_hyprland_plugin):
+  #   1. archiso may have shipped a prebuilt scrolloverview.so via
+  #      /etc/skel
+  #   2. Always try to rebuild fresh against the installed hyprland —
+  #      that's the only way to guarantee ABI match for first-load
+  #   3. If the rebuild succeeds, the freshly-built .so replaces the
+  #      prebuilt
+  #   4. If the rebuild fails and a prebuilt is in place, keep the
+  #      prebuilt as a best-effort fallback and let the pacman rebuild
+  #      hook fix it on the next hyprland upgrade
+  #   5. If the rebuild fails and no prebuilt exists, hard error
+  echo -e "${STY_CYAN}[$0]: Setting up scrolloverview plugin...${STY_RST}"
+
+  if ! _ensure_hyprland_plugin \
+        "scrolloverview" \
+        "https://github.com/MainstreamOS/hyprland-scroll-overview" \
+        "mainstream" \
+        "" \
+        "scrolloverview.so"; then
+    return 1
+  fi
+
+  local plugin_dir="$HOME/.local/share/hyprland/plugins"
+  local plugin_path="$plugin_dir/scrolloverview.so"
+  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
+  realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
+
+  # Add the load directive (active, not commented) to custom/general.conf so
+  # the bar's top-left hot corner — which dispatches `scrolloverview:overview
+  # on` — actually has a plugin to talk to. This is a deliberate deviation
+  # from the hyprbars install, which keeps the directive commented because
+  # there's a separate UI toggle for hyprbars; scroll-overview has no such
+  # toggle and the hot corner depends on the plugin being loaded.
+  local _general_conf="$HOME/.config/hypr/custom/general.conf"
+  if [[ -f "$_general_conf" ]]; then
+    if ! grep -q 'plugin *= *.*scrolloverview\.so' "$_general_conf"; then
+      local _tmp; _tmp=$(mktemp)
+      {
+        echo "# scrolloverview plugin load directive (built from source at install time)"
+        echo "plugin = ${plugin_path}"
+        echo ""
+        cat "$_general_conf"
+      } > "$_tmp"
+      mv "$_tmp" "$_general_conf"
+      echo -e "${STY_CYAN}[$0]: Added 'plugin = ${plugin_path}' to $_general_conf${STY_RST}"
+    else
+      echo -e "${STY_BLUE}[$0]: $_general_conf already loads scrolloverview; skipping.${STY_RST}"
+    fi
+  else
+    echo -e "${STY_YELLOW}[$0]: $_general_conf missing — add this line to a sourced hypr config manually:${STY_RST}"
+    echo -e "${STY_YELLOW}  plugin = ${plugin_path}${STY_RST}"
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Install rebuild hook so future `pacman -Syu` keeps scrolloverview in sync.
+  # Same rationale as hyprbars: Hyprland's plugin ABI is pinned to the exact
+  # compositor version, so a plugin built today stops loading the moment
+  # hyprland gets a patch bump. The pacman hook re-runs the build whenever
+  # the `hyprland` package is installed/upgraded.
+  # ---------------------------------------------------------------------------
+  local _rebuild_src="$REPO_ROOT/sdata/scrolloverview/rebuild.sh"
+  local _hook_src="$REPO_ROOT/sdata/scrolloverview/95-scrolloverview-rebuild.hook"
+  local _conf_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview.conf"
+  if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for scrolloverview...${STY_RST}"
+    try sudo install -Dm755 "$_rebuild_src" /usr/local/lib/scrolloverview/rebuild.sh
+    try sudo install -Dm644 "$_hook_src"    /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
+    if [[ -f "$_conf_src" && ! -f /etc/scrolloverview.conf ]]; then
+      try sudo install -Dm644 "$_conf_src" /etc/scrolloverview.conf
+    fi
+    echo -e "${STY_GREEN}[$0]: Hook installed — scrolloverview will auto-rebuild on hyprland upgrades.${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/scrolloverview/ — skipping auto-rebuild setup.${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild scrolloverview after each hyprland upgrade.${STY_RST}"
   fi
 }
 
@@ -519,6 +746,9 @@ fi
 
 showfun setup_hyprland_plugins
 v setup_hyprland_plugins
+
+showfun setup_scrolloverview_plugin
+v setup_scrolloverview_plugin
 
 # Apply GPU-dependent hypr dotfile tweaks (NVIDIA Wayland env vars, hypridle
 # dpms delays, AQ_DRM_DEVICES for hybrid NVIDIA) now that custom/env.conf and

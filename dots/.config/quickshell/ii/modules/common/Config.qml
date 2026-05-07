@@ -280,6 +280,30 @@ Singleton {
                 property bool bottom: false // Instead of top
                 property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle
                 property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle == 1 (Float)
+                // Hot-corner-related settings. Currently only the
+                // top-left trigger uses this.
+                property JsonObject hotCorners: JsonObject {
+                    // What the top-left hot corner opens. Recognized values:
+                    //   "scrolloverview" — the niri-style scrolling overview
+                    //                      plugin (default; only fires the
+                    //                      ripple cascade for this option,
+                    //                      and only when the plugin is
+                    //                      actually loaded)
+                    //   "default"        — the built-in dots overview
+                    //                      (workspaces + app drawer + search,
+                    //                      driven by GlobalStates.overviewOpen)
+                    //   "off"            — the corner is disabled entirely;
+                    //                      left-clicks fall through to the
+                    //                      bar's left-side area
+                    property string trigger: "off"
+                    // Whether the ripple animation plays at all (only
+                    // relevant when trigger == "scrolloverview"). When
+                    // false the hot-corner cascade is suppressed and
+                    // Bar.qml's pre-overview delay collapses to 0ms, so
+                    // the corner-trigger dispatches the overview
+                    // immediately.
+                    property bool animationEnabled: true
+                }
                 property bool borderless: false // true for no grouping of items
                 property string topLeftIcon: "spark" // Options: "distro" or any icon name in ~/.config/quickshell/ii/assets/icons
                 property bool showBackground: true

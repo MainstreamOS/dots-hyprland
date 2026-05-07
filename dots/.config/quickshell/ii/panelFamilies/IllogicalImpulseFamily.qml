@@ -25,6 +25,11 @@ import qs.modules.ii.wallpaperSelector
 
 Scope {
     PanelLoader { extraCondition: !Config.options.bar.vertical; component: Bar {} }
+    // After Bar so most compositors stack the ripple above the bar within
+    // the Overlay layer (creation-order tiebreak). Loads regardless of
+    // bar orientation since HotCornerRipple anchors itself to the screen's
+    // top-left and works without a horizontal bar present.
+    PanelLoader { component: HotCornerRipple {} }
     PanelLoader { component: Background {} }
     PanelLoader { component: Cheatsheet {} }
     PanelLoader { extraCondition: Config.options.dock.enable; component: Dock {} }

@@ -1,0 +1,23 @@
+# Rebuild hyprland-scroll-overview whenever hyprland is installed/upgraded.
+# Hyprland enforces strict plugin ABI matching, so a previously-built
+# scrolloverview.so stops loading the moment the hyprland package changes
+# (even for a patch bump). The hook re-runs the source build and updates
+# every ~/.local/share/hyprland/plugins/scrolloverview.so on the system.
+#
+# rebuild.sh exits cleanly when no user has the plugin installed, so this
+# hook is harmless on systems that don't use hyprland-scroll-overview.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = hyprland
+
+[Action]
+Description = Rebuilding scrolloverview plugin for new Hyprland version...
+When = PostTransaction
+Depends = git
+Depends = make
+Depends = gcc
+Depends = pkgconf
+Exec = /usr/local/lib/scrolloverview/rebuild.sh

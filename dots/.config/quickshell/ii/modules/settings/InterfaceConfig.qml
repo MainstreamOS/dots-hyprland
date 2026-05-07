@@ -14,12 +14,24 @@ ContentPage {
     // ── Decorations state ──────────────────────────────────────────────────────
     readonly property string generalConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/general.conf`
     readonly property string customGeneralConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/general.conf`
+    readonly property string customKeybindsConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/keybinds.conf`
     property bool animationsEnabled: true
     property bool blurEnabled: true
     property bool shadowsEnabled: true
     property bool bordersEnabled: true
     property bool roundCornersEnabled: true
     property bool titleBarsEnabled: false
+    // Mirrors whether scrolloverview is currently loaded into Hyprland.
+    // Source of truth is `hyprctl plugin list` (read by scrollOverviewStateReader),
+    // not the conf file — Hyprland only re-reads `plugin = ...` directives at
+    // startup, so the conf and the live state can diverge. The toggle keeps
+    // both in sync by calling `hyprctl plugin load/unload` AND editing the conf.
+    property bool scrollOverviewEnabled: false
+    // Layout values for the scroll-overview, also persisted in the
+    // scrolloverview block of custom/general.conf. Defaults match the
+    // plugin's compiled-in defaults.
+    property int scrollOverviewWorkspaceGap: 100     // pixels between workspace previews
+    property real scrollOverviewWorkspaceScale: 0.5  // 0.0–1.0 — overview shrink factor
     property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
 
@@ -41,6 +53,7 @@ ContentPage {
         lockTimeoutReader.running = true
         decoReader.running = true
         titleBarReader.running = true
+        scrollOverviewStateReader.running = true
     }
 
     // When a theme apply finishes, the shared state file flips back to "idle"
@@ -54,6 +67,8 @@ ContentPage {
             decoReader.running = true
             titleBarReader.running = false
             titleBarReader.running = true
+            scrollOverviewStateReader.running = false
+            scrollOverviewStateReader.running = true
         }
     }
 
@@ -65,6 +80,56 @@ ContentPage {
         stdout: SplitParser { onRead: data => titleBarReader.buf += data + "\n" }
         onExited: {
             root.titleBarsEnabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(titleBarReader.buf);
+            // Pull current scrolloverview values from the plugin config
+            // block. Match is scoped under `scrolloverview { ... }` (lazy
+            // [\s\S]*? skips through nested blocks like `shadow {}`).
+            // If a value isn't present we leave the default in place —
+            // the plugin uses the same defaults internally.
+            let gapMatch = titleBarReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bworkspace_gap\s*=\s*(\d+)/);
+            if (gapMatch) root.scrollOverviewWorkspaceGap = parseInt(gapMatch[1]);
+            // scale is a float (e.g. 0.5) — accept optional decimal part
+            let scaleMatch = titleBarReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bscale\s*=\s*(\d+(?:\.\d+)?)/);
+            if (scaleMatch) root.scrollOverviewWorkspaceScale = parseFloat(scaleMatch[1]);
+        }
+    }
+
+    // Update one scrolloverview value. Live effect via `hyprctl keyword`
+    // (the plugin re-reads its config pointer on every overview construction,
+    // so the next open picks up the new value). Persistence via Python regex
+    // on custom/general.conf — replaces an existing line in the
+    // scrolloverview block, or inserts one right after `scrolloverview {` if
+    // no line exists yet. Handles both integers and floats (the regex
+    // `[\d.]+` matches `48`, `0.5`, `100.25`, etc.).
+    function setScrollOverviewKey(key, value) {
+        setHyprKeyword(`plugin:scrolloverview:${key}`, value.toString())
+        let py =
+            "import re, sys\n" +
+            "key, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
+            "try:\n" +
+            "    text = open(conf).read()\n" +
+            "except FileNotFoundError:\n" +
+            "    sys.exit(0)\n" +
+            "pattern = r'(scrolloverview[ \\t]*\\{[\\s\\S]*?[ \\t]*)' + re.escape(key) + r'([ \\t]*=[ \\t]*)[\\d.]+'\n" +
+            "new_text, count = re.subn(pattern, r'\\1' + key + r'\\g<2>' + val, text, count=1)\n" +
+            "if count == 0:\n" +
+            "    new_text = re.sub(r'(scrolloverview[ \\t]*\\{)', r'\\1\\n        ' + key + ' = ' + val, text, count=1)\n" +
+            "open(conf, 'w').write(new_text)\n";
+        runPy(py, [key, value.toString(), root.customGeneralConf])
+    }
+
+    // Live source of truth for whether scrolloverview is loaded into Hyprland.
+    // Plugins persist in custom/general.conf via a `plugin = ...` directive,
+    // but Hyprland only re-reads that at startup, so checking the conf alone
+    // can lie (e.g. directive removed but plugin still loaded from a previous
+    // session, or vice versa). hyprctl is canonical.
+    Process {
+        id: scrollOverviewStateReader
+        command: ["hyprctl", "plugin", "list"]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => scrollOverviewStateReader.buf += data + "\n" }
+        onExited: {
+            root.scrollOverviewEnabled = /^Plugin\s+scrolloverview\b/m.test(scrollOverviewStateReader.buf);
         }
     }
 
@@ -422,6 +487,152 @@ ContentPage {
                 }
             }
         }
+    }
+
+    // ── Left Hot Corner ──────────────────────────────────────────────────────
+    ContentSection {
+        icon: "ads_click"
+        title: Translation.tr("Left Hot Corner")
+
+        // Ripple Animation — top-level toggle for the corner ripple cascade.
+        // Applies to both the "Scrolling Overview" and "Default Overview"
+        // trigger paths (both fire the ripple before opening). Hidden only
+        // when trigger is "Off" since the corner is disabled entirely there.
+        // Visible regardless of whether the scroll-overview plugin is loaded
+        // so the toggle can be pre-configured.
+        ConfigSwitch {
+            Layout.fillWidth: true
+            visible: Config.options.bar.hotCorners.trigger !== "off"
+            buttonIcon: "blur_circular"
+            text: Translation.tr("Ripple Animation")
+            checked: Config.options.bar.hotCorners.animationEnabled
+            onCheckedChanged: {
+                if (checked === Config.options.bar.hotCorners.animationEnabled) return;
+                Config.options.bar.hotCorners.animationEnabled = checked;
+            }
+        }
+
+        // Master picker for what the top-left hot corner opens.
+        // "Scrolling Overview" runs the ripple-then-dispatch flow for the
+        // scroll-overview plugin; "Default Overview" toggles the built-in
+        // dots overview directly (no ripple — it has its own animation);
+        // "Off" disables the MouseArea so left-clicks fall through to the
+        // bar's left-side area like any normal part of the bar.
+        ConfigRow {
+            // Match the icon left-edge of sibling ConfigSwitch rows in
+            // this section. ConfigSwitch wraps its content in a
+            // RippleButton (Button), which adds Qt's default left
+            // padding (~6px) before the icon. A bare ConfigRow doesn't,
+            // so without these margins the trigger row's icon would
+            // sit flush against the left edge while the Ripple
+            // Animation icon directly above is offset by Button's
+            // leftPadding.
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "drag_click"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6   // match ConfigSwitch's contentItem RowLayout spacing (10) minus ConfigRow's default (4)
+                text: Translation.tr("Trigger overview")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                id: hotCornerTriggerCombo
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
+                    { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
+                    { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.bar.hotCorners.trigger);
+                    return idx !== -1 ? idx : 0; // default to "off"
+                }
+                onActivated: index => {
+                    Config.options.bar.hotCorners.trigger = model[index].value;
+                }
+            }
+        }
+
+        // Scrolling Overview — workspace gap and scale tuning. The previous
+        // master Enable switch here is gone: the plugin = directive ships
+        // active in dots/.config/hypr/custom/general.conf, the post-install
+        // builds + installs the .so on every install path, and the corner
+        // Trigger overview dropdown above already handles whether the
+        // plugin is the active hot-corner action. Whether to *use* the
+        // overview is up to the dropdown; once trigger == "scrolloverview"
+        // is selected, the plugin's tuning knobs below are exposed.
+        ContentSubsection {
+            visible: Config.options.bar.hotCorners.trigger === "scrolloverview"
+            title: Translation.tr("Scrolling Overview")
+
+        // Workspace gap and scale — only render once the plugin is
+        // actually loaded (driven by `hyprctl -i 0 plugin list` via
+        // scrollOverviewStateReader). Hides during the brief gap on
+        // first install before the .so loads, and stays hidden if the
+        // user has manually unloaded the plugin out-of-band.
+        ConfigRow {
+            visible: root.scrollOverviewEnabled
+            uniform: true
+            ConfigSpinBox {
+                Layout.fillWidth: true
+                icon: "space_bar"
+                text: Translation.tr("Workspace gap")
+                value: root.scrollOverviewWorkspaceGap
+                from: 0
+                to: 500
+                stepSize: 10
+                onValueChanged: {
+                    if (value === root.scrollOverviewWorkspaceGap) return;
+                    root.scrollOverviewWorkspaceGap = value;
+                    root.setScrollOverviewKey("workspace_gap", value);
+                }
+                MouseArea {
+                    id: workspaceGapHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                    StyledToolTip {
+                        extraVisibleCondition: workspaceGapHover.containsMouse
+                        text: Translation.tr("Pixels between workspace previews in the overview. Default 100.")
+                    }
+                }
+            }
+            ConfigSpinBox {
+                Layout.fillWidth: true
+                icon: "aspect_ratio"
+                text: Translation.tr("Workspace scale")
+                suffix: "%"
+                value: Math.round(root.scrollOverviewWorkspaceScale * 100)
+                from: 10
+                to: 100
+                stepSize: 5
+                onValueChanged: {
+                    const newScale = value / 100;
+                    if (Math.abs(newScale - root.scrollOverviewWorkspaceScale) < 0.001) return;
+                    root.scrollOverviewWorkspaceScale = newScale;
+                    // Pass with 2-decimal precision; toFixed gives "0.50" / "1.00"
+                    root.setScrollOverviewKey("scale", newScale.toFixed(2));
+                }
+                MouseArea {
+                    id: workspaceScaleHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                    StyledToolTip {
+                        extraVisibleCondition: workspaceScaleHover.containsMouse
+                        text: Translation.tr("How much each workspace preview shrinks in the overview. Lower = more workspaces fit on screen. Default 50%.")
+                    }
+                }
+            }
+        }
+        } // end of Scrolling Overview ContentSubsection
     }
 
     ContentSection {
