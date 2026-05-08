@@ -12,6 +12,11 @@ SpinBox {
     property real baseHeight: 35
     property real radius: Appearance.rounding.small
     property real innerButtonRadius: Appearance.rounding.unsharpen
+    // Optional unit string shown after the numeric value (e.g. "%").
+    // parseFloat in onTextChanged transparently strips it on edit so
+    // typing "75%" parses to 75 and "75" parses to 75 — both round-trip
+    // to "75%" via the binding.
+    property string suffix: ""
     editable: true
 
     opacity: root.enabled ? 1 : 0.4
@@ -28,7 +33,7 @@ SpinBox {
         StyledTextInput {
             id: labelText
             anchors.centerIn: parent
-            text: root.value // displayText would make the numbers weird like 1,000 instead of 1000
+            text: root.value + root.suffix // displayText would make the numbers weird like 1,000 instead of 1000
             color: Appearance.colors.colOnLayer2
             font.family: Appearance.font.family.numbers
             font.variableAxes: Appearance.font.variableAxes.numbers
