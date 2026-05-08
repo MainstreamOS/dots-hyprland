@@ -15,6 +15,8 @@ Singleton {
     property bool sidebarLeftOpen: false
     property bool sidebarRightOpen: false
     property bool mediaControlsOpen: false
+    property bool mediaTransferActive: false
+    property var mediaTransferUrls: []
     property bool osdBrightnessOpen: false
     property bool osdVolumeOpen: false
     property bool oskOpen: false
@@ -37,6 +39,20 @@ Singleton {
         if (GlobalStates.sidebarRightOpen) {
             Notifications.timeoutAll();
             Notifications.markAllRead();
+        }
+    }
+
+    onMediaControlsOpenChanged: {
+        if (!GlobalStates.mediaControlsOpen) {
+            // Keep transfer state while a send is in flight so the user can
+            // reopen the popup to check progress. Other states (idle / sent /
+            // error) clear so the next bar click goes back to the player and
+            // a stale Error doesn't bleed into the next session.
+            if (LocalSend.state !== LocalSend.stateSending) {
+                GlobalStates.mediaTransferActive = false;
+                GlobalStates.mediaTransferUrls = [];
+                LocalSend.reset();
+            }
         }
     }
 

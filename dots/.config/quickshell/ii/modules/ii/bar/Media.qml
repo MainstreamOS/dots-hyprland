@@ -42,6 +42,31 @@ Item {
         }
     }
 
+    // Drag a file (or files) from a file manager onto the bar widget to open
+    // the media controls popup in LocalSend transfer mode. The popup's own
+    // DropArea finalizes the drop; we just open it on hover so the user has
+    // a visible target to release on.
+    DropArea {
+        id: transferDropArea
+        anchors.fill: parent
+        z: 5
+        onEntered: (drag) => {
+            if (!drag.hasUrls) return;
+            // While a send is in flight, ignore new drags so the running
+            // upload isn't disturbed; the user can finish the current send
+            // (or wait for it) before starting another.
+            if (LocalSend.state === LocalSend.stateSending) return;
+            GlobalStates.mediaTransferActive = true;
+            GlobalStates.mediaControlsOpen = true;
+        }
+        onDropped: (drop) => {
+            if (LocalSend.state === LocalSend.stateSending) return;
+            const urls = (drop.urls ?? []).map(u => String(u));
+            if (urls.length > 0) GlobalStates.mediaTransferUrls = urls;
+            drop.accept(Qt.CopyAction);
+        }
+    }
+
     RowLayout { // Real content
         id: rowLayout
 

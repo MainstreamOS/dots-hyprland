@@ -71,6 +71,30 @@ Scope {
         }
     }
 
+    // Centralized post-send revert: once a transfer reaches Sent state
+    // (whether the popup is open or not), wait 3 seconds, then close the
+    // popup and clear the transfer state so the bar reverts to the player.
+    Timer {
+        id: postSendRevertTimer
+        interval: 3000
+        repeat: false
+        onTriggered: {
+            GlobalStates.mediaControlsOpen = false;
+            GlobalStates.mediaTransferActive = false;
+            GlobalStates.mediaTransferUrls = [];
+            LocalSend.reset();
+        }
+    }
+
+    Connections {
+        target: LocalSend
+        function onStateChanged() {
+            if (LocalSend.state === LocalSend.stateSent) {
+                postSendRevertTimer.restart();
+            }
+        }
+    }
+
     Loader {
         id: mediaControlsLoader
         active: GlobalStates.mediaControlsOpen
@@ -87,7 +111,9 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             exclusiveZone: 0
             implicitWidth: root.widgetWidth
-            implicitHeight: playerColumnLayout.implicitHeight
+            implicitHeight: GlobalStates.mediaTransferActive
+                ? transferPanel.height
+                : playerColumnLayout.implicitHeight
             color: "transparent"
             WlrLayershell.namespace: "quickshell:mediaControls"
 
@@ -105,7 +131,7 @@ Scope {
             }
 
             mask: Region {
-                item: playerColumnLayout
+                item: GlobalStates.mediaTransferActive ? transferPanel : playerColumnLayout
             }
 
             Component.onCompleted: {
@@ -138,9 +164,36 @@ Scope {
                 }
             }
 
+            // Drop zone covering the popup window so files dragged onto the
+            // popup (after the bar's DropArea opened it) are captured here.
+            DropArea {
+                id: popupDropArea
+                anchors.fill: parent
+                visible: GlobalStates.mediaTransferActive
+                z: 5
+                onDropped: (drop) => {
+                    if (LocalSend.state === LocalSend.stateSending) return;
+                    const urls = (drop.urls ?? []).map(u => String(u));
+                    if (urls.length > 0) GlobalStates.mediaTransferUrls = urls;
+                    drop.accept(Qt.CopyAction);
+                }
+            }
+
+            FileTransferPanel {
+                id: transferPanel
+                visible: GlobalStates.mediaTransferActive
+                anchors.top: parent.top
+                anchors.left: parent.left
+                fileUrls: GlobalStates.mediaTransferUrls
+                radius: root.popupRounding
+                targetWidth: root.widgetWidth
+                targetHeight: root.widgetHeight
+            }
+
             ColumnLayout {
                 id: playerColumnLayout
                 anchors.fill: parent
+                visible: !GlobalStates.mediaTransferActive
                 spacing: -Appearance.sizes.elevationMargin // Shadow overlap okay
 
                 Repeater {
