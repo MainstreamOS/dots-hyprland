@@ -389,18 +389,30 @@ ContentPage {
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.titleBarsEnabled = checked;
-                    // Toggle by commenting/uncommenting the plugin = .../hyprbars.so line
-                    // in custom/general.conf. Hyprland loads the .so directly when the
-                    // directive is present and uncommented, so `hyprctl reload` is enough.
+                    // Toggle the plugin = .../hyprbars.so directive in
+                    // custom/general.conf. If the line already exists
+                    // (commented or not) we just flip its comment state;
+                    // if it's missing entirely we prepend a fresh
+                    // directive on enable. Mirrors the scrolloverview
+                    // toggle's self-healing pattern so a user whose
+                    // custom/general.conf predates the install hook
+                    // adding the line can still flip the toggle on
+                    // and have it just work. Hyprland loads the .so
+                    // directly when the directive is uncommented, so
+                    // `hyprctl reload` is enough.
                     let py =
-                        "import re, sys\n" +
+                        "import re, sys, os\n" +
                         "enable = sys.argv[1] == '1'\n" +
                         "conf = sys.argv[2]\n" +
+                        "plugin_path = os.path.expanduser('~/.local/share/hyprland/plugins/hyprbars.so')\n" +
                         "text = open(conf).read()\n" +
-                        "if enable:\n" +
-                        "    text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
-                        "else:\n" +
-                        "    text = re.sub(r'^([ \\t]*)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
+                        "if re.search(r'^[ \\t]*#?[ \\t]*plugin[ \\t]*=[ \\t]*.*hyprbars\\.so', text, flags=re.M):\n" +
+                        "    if enable:\n" +
+                        "        text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
+                        "    else:\n" +
+                        "        text = re.sub(r'^([ \\t]*)(?!#)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
+                        "elif enable:\n" +
+                        "    text = '# hyprbars plugin load directive\\nplugin = ' + plugin_path + '\\n\\n' + text\n" +
                         "open(conf, 'w').write(text)\n";
                     root.runPy(py, [checked ? "1" : "0", root.customGeneralConf])
                     Quickshell.execDetached(["hyprctl", "reload"])
