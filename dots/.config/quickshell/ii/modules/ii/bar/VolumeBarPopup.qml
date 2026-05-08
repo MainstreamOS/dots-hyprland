@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import Qt5Compat.GraphicalEffects
 
@@ -70,6 +71,12 @@ LazyLoader {
         WlrLayershell.namespace: "quickshell:popup"
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
+        HyprlandFocusGrab {
+            active: root.shown
+            windows: [popupWindow]
+            onCleared: root.shown = false
+        }
 
         StyledRectangularShadow {
             target: popupBackground
@@ -250,24 +257,6 @@ LazyLoader {
                     }
                 }
 
-                // Done button
-                RowLayout {
-                    Layout.fillWidth: true
-                    Item { Layout.fillWidth: true }
-                    RippleButton {
-                        implicitWidth: doneText.implicitWidth + 32
-                        implicitHeight: 32
-                        buttonRadius: Appearance.rounding.small
-                        onClicked: root.shown = false
-                        contentItem: StyledText {
-                            id: doneText
-                            anchors.centerIn: parent
-                            text: Translation.tr("Done")
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colOnLayer1
-                        }
-                    }
-                }
             }
         }
     }
