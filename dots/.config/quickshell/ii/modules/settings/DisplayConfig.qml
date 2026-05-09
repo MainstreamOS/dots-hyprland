@@ -1070,10 +1070,33 @@ print(json.dumps(result))
     Repeater {
         model: displayConfigPage.monitors
 
-        delegate: ContentSection {
-            id: monitorSection
+        delegate: Loader {
+            id: monitorLoader
             required property var modelData
             required property int index
+            Layout.fillWidth: true
+            // Build the per-monitor section asynchronously on a worker
+            // thread so the page swap doesn't freeze while QML
+            // instantiates ~400 widgets per monitor (sub-Repeaters for
+            // modes / scales / rotations / VRR / 10-bit / position /
+            // colour modes / EDID / HDR / fine-tune sliders / workspace
+            // pills). The page itself stays sync so Flow-style layouts
+            // on sibling settings pages see their final width before
+            // first binding evaluation — that was the regression we
+            // hit when we tried Loader.asynchronous on the page-level
+            // pageLoader.
+            asynchronous: true
+
+            sourceComponent: ContentSection {
+            id: monitorSection
+            // Forward Repeater delegate properties from the wrapping
+            // Loader so the delegate body's many monitorSection.modelData
+            // / monitorSection.index reads keep resolving the same value.
+            // Plain `property` (not `required`) because Loader sets these
+            // via these bindings, which evaluate after construction;
+            // `required` would error before the binding resolves.
+            property var modelData: monitorLoader.modelData
+            property int index: monitorLoader.index
 
             property var mon: modelData
             property string monName: mon.name
@@ -2854,6 +2877,7 @@ print(json.dumps(result))
                 }
             }
         }
+        }   // close Loader wrapping the delegate (sourceComponent above)
     }
 
     // ── Night Light ────────────────────────────────────────────────────────
