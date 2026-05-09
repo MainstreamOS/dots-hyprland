@@ -315,13 +315,28 @@ function _ensure_hyprland_plugin(){
 }
 
 function setup_hyprland_plugins(){
-  # Build hyprbars from source into a user-owned plugin directory and load it
-  # with a `plugin = ...` directive. No hyprpm, no systemd service, no sudoers
-  # grant — the .so is owned by the user and Hyprland loads it as the user.
-  echo -e "${STY_CYAN}[$0]: Building hyprbars plugin from source...${STY_RST}"
+  # Set up hyprbars: the .so lives at
+  # ~/.local/share/hyprland/plugins/hyprbars.so loaded via a
+  # `plugin = ...` directive (commented out by default — enable via
+  # the Title Bars toggle in Settings). No hyprpm, no systemd service,
+  # no sudoers — the .so is owned by the user and Hyprland loads it as
+  # the user.
+  #
+  # Bulletproof flow (handled by _ensure_hyprland_plugin):
+  #   1. archiso may have shipped a prebuilt hyprbars.so via /etc/skel
+  #   2. Always try to rebuild fresh against the installed hyprland —
+  #      that's the only way to guarantee ABI match for first-load
+  #   3. If the rebuild succeeds, the freshly-built .so replaces the
+  #      prebuilt
+  #   4. If the rebuild fails and a prebuilt is in place, keep the
+  #      prebuilt as a best-effort fallback and let the pacman rebuild
+  #      hook fix it on the next hyprland upgrade
+  #   5. If the rebuild fails and no prebuilt exists, hard error
+  echo -e "${STY_CYAN}[$0]: Setting up hyprbars plugin...${STY_RST}"
 
-  # Remove artifacts from earlier hyprpm-based approaches if they exist. Doing
-  # this unconditionally means a reinstall always lands in a clean state.
+  # Remove artifacts from earlier hyprpm-based approaches if they exist.
+  # Doing this unconditionally means a reinstall always lands in a
+  # clean state.
   try systemctl --user stop hyprland-plugins-setup.service 2>/dev/null
   try rm -f "$HOME/.config/systemd/user/hyprland-plugins-setup.service"
   try systemctl --user daemon-reload 2>/dev/null
@@ -333,57 +348,19 @@ function setup_hyprland_plugins(){
     echo -e "${STY_BLUE}[$0]: Removed old hyprland-plugins-setup trigger from $EXECS_CONF${STY_RST}"
   fi
 
-  # Fail fast if the build deps aren't there — hyprbars' Makefile depends on
-  # pkg-config finding each of these. `hyprland` itself ships the headers +
-  # hyprland.pc on Arch via the main package.
-  local _missing=()
-  for pc in hyprland pixman-1 libdrm pangocairo libinput libudev wayland-server xkbcommon; do
-    pkg-config --exists "$pc" 2>/dev/null || _missing+=("$pc")
-  done
-  if (( ${#_missing[@]} > 0 )); then
-    echo -e "${STY_RED}[$0]: Missing pkg-config deps for hyprbars: ${_missing[*]}${STY_RST}"
-    echo -e "${STY_RED}[$0]: Install the corresponding dev packages and re-run the installer.${STY_RST}"
+  if ! _ensure_hyprland_plugin \
+        "hyprbars" \
+        "https://github.com/MainstreamOS/hyprland-plugins" \
+        "main" \
+        "hyprbars" \
+        "hyprbars.so"; then
     return 1
   fi
 
-  # Clone/update into the repo cache dir (same pattern as install_google_sans_flex).
-  local src_dir="$REPO_ROOT/cache/hyprland-plugins"
-  x mkdir -p "$src_dir"
-  x cd "$src_dir"
-  try git init -b main
-  try git remote add origin https://github.com/MainstreamOS/hyprland-plugins
-  x git pull origin main
-
-  # Persist build output to a log so failures can be diffed across Hyprland
-  # updates — the real install still prints everything to the terminal too.
-  local build_log="$HOME/.local/share/hyprland/plugins/hyprbars-build.log"
-  x mkdir -p "$(dirname "$build_log")"
-  local _hv="(hyprctl unavailable)"
-  hyprctl version &>/dev/null && _hv=$(hyprctl version | head -n1)
-  {
-    echo "=== hyprbars build @ $(date '+%Y-%m-%d %H:%M:%S') ==="
-    echo "Hyprland:      $_hv"
-    echo "Plugin commit: $(git -C "$src_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    echo "---"
-  } > "$build_log"
-  echo -e "${STY_CYAN}[$0]: Build log: $build_log${STY_RST}"
-
-  x cd "$src_dir/hyprbars"
-  try make clean
-  # Process substitution preserves make's exit code (unlike `| tee`) so the `x`
-  # wrapper still catches build failures instead of seeing tee's success.
-  x make all -j"$(nproc)" > >(tee -a "$build_log") 2>&1
-  x cd "$REPO_ROOT"
-
-  # Drop the .so under the user's data dir. Absolute path required by the
-  # `plugin = ` directive; Hyprland doesn't expand ~ there.
   local plugin_dir="$HOME/.local/share/hyprland/plugins"
   local plugin_path="$plugin_dir/hyprbars.so"
-  x mkdir -p "$plugin_dir"
-  x cp -f "$src_dir/hyprbars/hyprbars.so" "$plugin_path"
   x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
   realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
-  echo -e "${STY_GREEN}[$0]: Installed hyprbars.so to $plugin_path${STY_RST}"
 
   # The plugin { hyprbars { ... } } settings block already lives in
   # custom/general.conf (shipped with the dots). We prepend the load directive
