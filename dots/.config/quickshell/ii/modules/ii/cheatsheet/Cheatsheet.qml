@@ -18,10 +18,6 @@ Scope { // Scope
             "icon": "keyboard",
             "name": Translation.tr("Keybinds")
         },
-        {
-            "icon": "experiment",
-            "name": Translation.tr("Elements")
-        },
     ]
 
     Loader {
@@ -152,7 +148,11 @@ Scope { // Scope
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         spacing: 10
-                        currentIndex: Persistent.states.cheatsheet.tabIndex
+                        // Clamp the persisted tabIndex against the current
+                        // tab count so a stale value (e.g. "1" left over
+                        // from when the Elements tab existed) doesn't
+                        // render an empty SwipeView page on first open.
+                        currentIndex: Math.max(0, Math.min(Persistent.states.cheatsheet.tabIndex, root.tabButtonList.length - 1))
                         onCurrentIndexChanged: {
                             Persistent.states.cheatsheet.tabIndex = currentIndex;
                         }
@@ -171,7 +171,6 @@ Scope { // Scope
                         }
 
                         CheatsheetKeybinds {}
-                        CheatsheetPeriodicTable {}
                     }
                 }
             }
