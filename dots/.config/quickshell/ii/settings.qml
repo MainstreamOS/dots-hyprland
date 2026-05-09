@@ -71,6 +71,11 @@ ApplicationWindow {
             component: "modules/settings/LayoutsConfig.qml"
         },
         {
+            name: Translation.tr("Keybinds"),
+            icon: "keyboard",
+            component: "modules/settings/KeybindsConfig.qml"
+        },
+        {
             name: Translation.tr("Mouse"),
             icon: "mouse",
             component: "modules/settings/MouseConfig.qml"
@@ -340,9 +345,9 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 3: Display, Layouts, Mouse, Power (Indices 7, 8, 9, 10)
+                    // Group 3: Display, Layouts, Keybinds, Mouse, Power (Indices 7, 8, 9, 10, 11)
                     Repeater {
-                        model: root.pages.slice(7, 11)
+                        model: root.pages.slice(7, 12)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
@@ -357,14 +362,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 4: Accounts, Services, Update, Recovery (Indices 11, 12, 13, 14)
+                    // Group 4: Accounts, Services, Update, Recovery (Indices 12, 13, 14, 15)
                     Repeater {
-                        model: root.pages.slice(11, 15)
+                        model: root.pages.slice(12, 16)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 11)
-                            onPressed: root.currentPage = (index + 11)
+                            toggled: root.currentPage === (index + 12)
+                            onPressed: root.currentPage = (index + 12)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }
@@ -374,14 +379,14 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
                                 color: Appearance.m3colors.m3outlineVariant }
 
-                    // Group 5: About (Index 15)
+                    // Group 5: About (Index 16)
                     Repeater {
-                        model: root.pages.slice(15)
+                        model: root.pages.slice(16)
                         SettingsNavButton {
                             required property var index
                             required property var modelData
-                            toggled: root.currentPage === (index + 15)
-                            onPressed: root.currentPage = (index + 15)
+                            toggled: root.currentPage === (index + 16)
+                            onPressed: root.currentPage = (index + 16)
                             buttonIcon: modelData.icon
                             buttonText: modelData.name
                         }

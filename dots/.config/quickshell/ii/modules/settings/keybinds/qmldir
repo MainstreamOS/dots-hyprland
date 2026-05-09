@@ -1,0 +1,4 @@
+module qs.modules.settings.keybinds
+Dispatchers 1.0 Dispatchers.qml
+KeybindCaptureItem 1.0 KeybindCaptureItem.qml
+KeybindEditDialog 1.0 KeybindEditDialog.qml
