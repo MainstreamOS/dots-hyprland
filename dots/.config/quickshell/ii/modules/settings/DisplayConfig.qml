@@ -33,7 +33,7 @@ ContentPage {
     property string revertSnapshot: ""
     property bool revertPending: false
     property int revertSecondsRemaining: 0
-    // Set true in applyMonitorChanges, consumed by reloadProc.onExited
+    // Set true in applyAllChanges, consumed by reloadProc.onExited
     // to know whether the reload it just observed was an Apply (banner)
     // or a side-effect (no banner — e.g., the revertChanges() write,
     // setDefaultMonitor's hyprland.conf rewrite).
@@ -291,7 +291,7 @@ print(json.dumps(result))
             onRead: data => readConfProc.output += data + "\n"
         }
         onExited: {
-            // Cache the raw file content so applyMonitorChanges can
+            // Cache the raw file content so applyAllChanges can
             // snapshot it for the revert-after-apply banner. Stored
             // before any parsing so a revert restores the file byte-
             // for-byte (preserving comments, ordering, etc.).
@@ -469,9 +469,14 @@ print(json.dumps(result))
         return lines.join("\n");
     }
 
-    function applyMonitorChanges(monitorName) {
-        let m = pendingChanges[monitorName];
-        if (!m) return;
+    // Writes the entire monitors.conf from current pendingChanges for
+    // every monitor at once. The page now exposes a single Apply
+    // button (rather than one per monitor) — this matches the
+    // function's actual behavior (it's always written every monitor
+    // every time anyway) and avoids the multi-screen flash users got
+    // when clicking Apply on each monitor in turn.
+    function applyAllChanges() {
+        if (monitors.length === 0) return;
         // Snapshot the file's pre-apply content so the revert banner can
         // restore it. lastReadMonitorsConf is updated whenever
         // readConfProc finishes (page load + every successful apply
@@ -509,7 +514,7 @@ print(json.dumps(result))
     }
 
     // User clicked "Keep" on the revert banner — accept the new config.
-    // The next applyMonitorChanges() call will snapshot the now-current
+    // The next applyAllChanges() call will snapshot the now-current
     // file contents (lastReadMonitorsConf was already refreshed by the
     // Apply chain's parseMonitorsConf), so subsequent reverts go to
     // *this* state, not the older one.
@@ -2644,8 +2649,11 @@ print(json.dumps(result))
                         let cal = Object.assign({}, displayConfigPage.hdrCalibratedMonitors);
                         cal[monitorSection.monName] = true;
                         displayConfigPage.hdrCalibratedMonitors = cal;
-                        // Auto-apply: write to monitors.conf and reload Hyprland
-                        displayConfigPage.applyMonitorChanges(monitorSection.monName);
+                        // Auto-apply: write to monitors.conf and reload Hyprland.
+                        // applyAllChanges always serialises every monitor's
+                        // pendingChanges, so the just-calibrated values land
+                        // in the file alongside any other in-progress edits.
+                        displayConfigPage.applyAllChanges();
                         hdrCalLoader.active = false;
                     });
                     item.cancelled.connect(function() { hdrCalLoader.active = false; });
@@ -2849,35 +2857,44 @@ print(json.dumps(result))
                 }
             }
 
-            // Apply button — standalone row, clearly separated from workspace assignment
-            Item { implicitHeight: 4 }
-
-            RowLayout {
-                Layout.fillWidth: true
-
-                Item { Layout.fillWidth: true }
-
-                RippleButton {
-                    implicitHeight: 30
-                    implicitWidth: 140
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: monitorSection.monColor
-                    colBackgroundHover: Qt.lighter(monitorSection.monColor, 1.1)
-                    colRipple: Qt.lighter(monitorSection.monColor, 1.2)
-
-                    contentItem: StyledText {
-                        anchors.centerIn: parent
-                        horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        text: Translation.tr("Apply %1").arg(monitorSection.monName)
-                        color: Appearance.colors.colOnPrimary
-                    }
-
-                    onClicked: displayConfigPage.applyMonitorChanges(monitorSection.monName)
-                }
-            }
+            // Per-monitor Apply button removed — replaced by the
+            // single page-level "Apply" below the Repeater. The
+            // function always wrote every monitor anyway; the
+            // per-monitor click just caused N reloads for one
+            // logical change.
         }
         }   // close Loader wrapping the delegate (sourceComponent above)
+    }
+
+    // ── Apply changes ──────────────────────────────────────────────────────
+    // Single Apply for the whole page. applyAllChanges() loops every
+    // monitor's pendingChanges and writes one full monitors.conf, then
+    // reloads once — versus the old behavior of clicking Apply per
+    // monitor and triggering N reloads in sequence (each flashing the
+    // outputs).
+    RowLayout {
+        Layout.fillWidth: true
+
+        Item { Layout.fillWidth: true }
+
+        RippleButton {
+            implicitHeight: 36
+            implicitWidth: 160
+            buttonRadius: Appearance.rounding.full
+            colBackground: Appearance.colors.colPrimary
+            colBackgroundHover: Qt.lighter(Appearance.colors.colPrimary, 1.1)
+            colRipple: Qt.lighter(Appearance.colors.colPrimary, 1.2)
+
+            contentItem: StyledText {
+                anchors.centerIn: parent
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: Appearance.font.pixelSize.normal
+                text: Translation.tr("Apply changes")
+                color: Appearance.colors.colOnPrimary
+            }
+
+            onClicked: displayConfigPage.applyAllChanges()
+        }
     }
 
     // ── Night Light ────────────────────────────────────────────────────────
