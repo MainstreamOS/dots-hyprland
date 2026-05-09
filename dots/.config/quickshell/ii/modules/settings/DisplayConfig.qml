@@ -54,7 +54,6 @@ ContentPage {
     property var confVrr: ({})
     property var confPositionMode: ({})
     property var confColorMode: ({})
-    property var confIccProfile: ({})
     property var confMaxLuminance:    ({})
     property var confMaxAvgLuminance: ({})
     property var confMinLuminance:    ({})
@@ -66,10 +65,6 @@ ContentPage {
     // Set to true for a monitor name once the calibration wizard has been completed
     // (either this session via the wizard, or previously — detected from confMaxLuminance)
     property var hdrCalibratedMonitors: ({})
-
-    property string iccProfileDir: `${Quickshell.env("HOME")}/.icc-profiles`
-    // List of { name, path } objects — one per file in iccProfileDir
-    property var iccProfiles: []
 
     // Workspace-to-monitor bindings
     // "default" = Hyprland decides, "custom" = user assigns workspaces to monitors
@@ -305,7 +300,6 @@ print(json.dumps(result))
             let vrrResult = {};
             let positionModeResult = {};
             let colorModeResult = {};
-            let iccProfileResult = {};
             let maxLuminanceResult    = {};
             let maxAvgLuminanceResult = {};
             let minLuminanceResult    = {};
@@ -335,7 +329,6 @@ print(json.dumps(result))
                             if (currentBlock["bitdepth"])  bitdepthResult[name]    = parseInt(currentBlock["bitdepth"]);
                             if (currentBlock["vrr"])       vrrResult[name]         = parseInt(currentBlock["vrr"]);
                             if (currentBlock["cm"])        colorModeResult[name]   = currentBlock["cm"];
-                            if (currentBlock["icc"])       iccProfileResult[name]  = currentBlock["icc"];
                             if (currentBlock["max_luminance"])     maxLuminanceResult[name]    = parseFloat(currentBlock["max_luminance"]);
                             if (currentBlock["max_avg_luminance"]) maxAvgLuminanceResult[name] = parseFloat(currentBlock["max_avg_luminance"]);
                             if (currentBlock["min_luminance"])     minLuminanceResult[name]    = parseFloat(currentBlock["min_luminance"]);
@@ -363,8 +356,6 @@ print(json.dumps(result))
                 if (mp) positionModeResult[mp[1]] = mp[2];
                 let mc = line.match(/^monitor=([^,]+),.+,cm,(\w+)/);
                 if (mc) colorModeResult[mc[1]] = mc[2];
-                let mi = line.match(/^monitor=([^,]+),.+,icc,([^,\n]+)/);
-                if (mi) iccProfileResult[mi[1]] = mi[2].trim();
 
                 // ── HDR mode metadata (persisted as comment) ─────────────
                 let mh = trimmed.match(/^#\s*ii_hdr_mode:(\S+)\s*=\s*(\d+)/);
@@ -382,7 +373,6 @@ print(json.dumps(result))
             displayConfigPage.confVrr            = vrrResult;
             displayConfigPage.confPositionMode   = positionModeResult;
             displayConfigPage.confColorMode      = colorModeResult;
-            displayConfigPage.confIccProfile     = iccProfileResult;
             displayConfigPage.confMaxLuminance    = maxLuminanceResult;
             displayConfigPage.confMaxAvgLuminance = maxAvgLuminanceResult;
             displayConfigPage.confMinLuminance    = minLuminanceResult;
@@ -474,8 +464,6 @@ print(json.dumps(result))
                 }
                 lines.push(`    sdr_eotf = srgb`);
             }
-            let icc = m.iccProfile ?? "";
-            if (icc && !isHdr)           lines.push(`    icc = ${icc}`);
         }
         lines.push(`}`);
         return lines.join("\n");
@@ -617,7 +605,6 @@ print(json.dumps(result))
                 colorMode: (confHdrMode[name] === 2 && !confColorMode[name])
                     ? "hdr" : (confColorMode[name] ?? "auto"),
                 hdrMode: confHdrMode[name] ?? 0,
-                iccProfile: confIccProfile[name] ?? "",
                 maxLuminance:    confMaxLuminance[name]    ?? hdrDefaults.maxLuminance,
                 maxAvgLuminance: confMaxAvgLuminance[name] ?? hdrDefaults.maxAvgLuminance,
                 minLuminance:    confMinLuminance[name]    ?? hdrDefaults.minLuminance,
@@ -810,156 +797,6 @@ print(json.dumps(result))
         }
     }
 
-    // ── ICC profile management ─────────────────────────────────────────────
-
-    // Ensure ~/.icc-profiles/ exists and scan it for profiles
-    Process {
-        id: iccScanProc
-        property string output: ""
-        command: ["bash", "-c",
-            `mkdir -p '${displayConfigPage.iccProfileDir}' && ` +
-            `find '${displayConfigPage.iccProfileDir}' -maxdepth 1 -type f \\( -iname '*.icc' -o -iname '*.icm' \\) -print0 | ` +
-            `xargs -0 -r ls`]
-        stdout: SplitParser {
-            onRead: data => iccScanProc.output += data + "\n"
-        }
-        onExited: {
-            let profiles = [];
-            iccScanProc.output.split("\n").forEach(line => {
-                let p = line.trim();
-                if (!p) return;
-                let filename = p.split("/").pop();
-                let name = filename.replace(/\.[^.]+$/, "");
-                profiles.push({ name: name, path: p });
-            });
-            displayConfigPage.iccProfiles = profiles;
-            iccScanProc.output = "";
-        }
-    }
-
-    // Pick a new ICC file using a multi-method fallback chain:
-    //   zenity → kdialog → yad → python3 tkinter
-    // This avoids the python3-gi / xdg-desktop-portal dependency that caused
-    // the original D-Bus implementation to silently fail on many setups.
-    Process {
-        id: iccPickerProc
-        property string targetMonitor: ""
-        property string output: ""
-        command: ["python3", "-c", `
-import subprocess, sys, os
-
-def try_zenity():
-    r = subprocess.run(
-        ['zenity', '--file-selection',
-         '--title=Import ICC Profile',
-         '--file-filter=ICC Profiles (*.icc *.icm) | *.icc *.icm'],
-        capture_output=True, text=True, timeout=300)
-    if r.returncode == 0:
-        return r.stdout.strip() or None
-    return None
-
-def try_kdialog():
-    r = subprocess.run(
-        ['kdialog', '--getopenfilename',
-         os.path.expanduser('~'), '*.icc *.icm|ICC Profiles'],
-        capture_output=True, text=True, timeout=300)
-    if r.returncode == 0:
-        return r.stdout.strip() or None
-    return None
-
-def try_yad():
-    r = subprocess.run(
-        ['yad', '--file-selection', '--title=Import ICC Profile',
-         '--file-filter=*.icc|ICC Profile', '--file-filter=*.icm|ICM Profile'],
-        capture_output=True, text=True, timeout=300)
-    if r.returncode == 0:
-        p = r.stdout.strip().rstrip('|')
-        return p or None
-    return None
-
-def try_tkinter():
-    import tkinter as tk
-    from tkinter import filedialog
-    root = tk.Tk()
-    root.withdraw()
-    root.wm_attributes('-topmost', True)
-    p = filedialog.askopenfilename(
-        title='Import ICC Profile',
-        filetypes=[('ICC Profiles', '*.icc *.icm'), ('All Files', '*')])
-    root.destroy()
-    return p or None
-
-for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
-    try:
-        path = fn()
-        if path:
-            print(path)
-            sys.exit(0)
-    except Exception:
-        pass
-`]
-        stdout: SplitParser {
-            onRead: data => iccPickerProc.output += data
-        }
-        stderr: SplitParser {
-            onRead: data => console.warn("iccPickerProc stderr:", data)
-        }
-        onExited: (code) => {
-            let src = iccPickerProc.output.trim();
-            let mon = iccPickerProc.targetMonitor;
-            // Clear state immediately so a quick re-click starts fresh
-            iccPickerProc.output = "";
-            iccPickerProc.targetMonitor = "";
-            if (src !== "" && mon !== "") {
-                let filename = src.split("/").pop();
-                iccCopyProc.targetMonitor = mon;
-                iccCopyProc.destPath = `${displayConfigPage.iccProfileDir}/${filename}`;
-                iccCopyProc.command = ["cp", "--", src, iccCopyProc.destPath];
-                iccCopyProc.running = false;
-                iccCopyProc.running = true;
-            }
-        }
-    }
-
-    // Copy the chosen file then rescan and auto-select it
-    Process {
-        id: iccCopyProc
-        property string targetMonitor: ""
-        property string destPath: ""
-        command: []
-        onExited: (code) => {
-            if (code === 0 && iccCopyProc.targetMonitor !== "") {
-                displayConfigPage.updatePending(iccCopyProc.targetMonitor, "iccProfile", iccCopyProc.destPath);
-            }
-            iccCopyProc.targetMonitor = "";
-            iccCopyProc.destPath = "";
-            // Rescan library
-            iccScanProc.running = false;
-            iccScanProc.running = true;
-        }
-    }
-
-    // Delete a profile file (called after user confirms)
-    Process {
-        id: iccDeleteProc
-        property string deletedPath: ""
-        property string targetMonitor: ""
-        command: []
-        onExited: {
-            // If the deleted profile was active for any monitor, clear it
-            let mon = iccDeleteProc.targetMonitor;
-            if (mon) {
-                let cur = displayConfigPage.pendingChanges[mon]?.iccProfile ?? "";
-                if (cur === iccDeleteProc.deletedPath)
-                    displayConfigPage.updatePending(mon, "iccProfile", "");
-            }
-            iccDeleteProc.deletedPath = "";
-            iccDeleteProc.targetMonitor = "";
-            iccScanProc.running = false;
-            iccScanProc.running = true;
-        }
-    }
-
     Process {
         id: reloadProc
         command: ["hyprctl", "reload"]
@@ -990,7 +827,6 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
     Component.onCompleted: {
         capabilitiesProc.running = true;
         readHyprlandConfProc.running = true;
-        iccScanProc.running = true;
         parseMonitorsConf();
     }
 
@@ -1432,46 +1268,57 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: modeBg }
                                 Rectangle { id: modeBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: Math.min(contentHeight, 300)
-                                clip: true
-                                spacing: 2
-                                model: modeRow.modeModel
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: {
-                                        let p = monitorSection.pending;
-                                        let m = monitorSection.mon;
-                                        return modelData.width === (p.width ?? m.width) &&
-                                               modelData.height === (p.height ?? m.height) &&
-                                               Math.abs(modelData.refreshRate - (p.refreshRate ?? m.refreshRate)) < 0.1;
-                                    }
-                                    color: modeDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: modeDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePendingBatch(monitorSection.monName, {
-                                                width: modelData.width,
-                                                height: modelData.height,
-                                                refreshRate: modelData.refreshRate,
-                                            });
-                                            modePopup.close();
+                            // ListView is wrapped in a Loader so the
+                            // delegate-Rectangle for each available
+                            // mode (often 30+ entries) only instantiates
+                            // when the popup actually opens — the page's
+                            // first-paint cost was dominated by these
+                            // never-visible delegates being built up
+                            // front. Same pattern repeats for the other
+                            // 7 popups in this file.
+                            contentItem: Loader {
+                                active: modePopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: Math.min(contentHeight, 300)
+                                    clip: true
+                                    spacing: 2
+                                    model: modeRow.modeModel
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: {
+                                            let p = monitorSection.pending;
+                                            let m = monitorSection.mon;
+                                            return modelData.width === (p.width ?? m.width) &&
+                                                   modelData.height === (p.height ?? m.height) &&
+                                                   Math.abs(modelData.refreshRate - (p.refreshRate ?? m.refreshRate)) < 0.1;
+                                        }
+                                        color: modeDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: modeDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePendingBatch(monitorSection.monName, {
+                                                    width: modelData.width,
+                                                    height: modelData.height,
+                                                    refreshRate: modelData.refreshRate,
+                                                });
+                                                modePopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -1489,7 +1336,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
 
                         property bool popupOpen: scalePopup.visible
 
-                        property var scaleOptions: [
+                        readonly property var scaleOptions: [
                             { label: "100%", value: 1.0   },
                             { label: "125%", value: 1.25  },
                             { label: "150%", value: 1.5   },
@@ -1546,36 +1393,39 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: scaleBg }
                                 Rectangle { id: scaleBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: scaleRow.scaleOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: Math.abs((monitorSection.pending.scale ?? monitorSection.mon.scale) - modelData.value) < 0.001
-                                    color: scaleDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: scaleDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePending(monitorSection.monName, "scale", modelData.value);
-                                            scalePopup.close();
+                            contentItem: Loader {
+                                active: scalePopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: scaleRow.scaleOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: Math.abs((monitorSection.pending.scale ?? monitorSection.mon.scale) - modelData.value) < 0.001
+                                        color: scaleDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: scaleDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "scale", modelData.value);
+                                                scalePopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -1593,7 +1443,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
 
                         property bool popupOpen: rotationPopup.visible
 
-                        property var rotationOptions: [
+                        readonly property var rotationOptions: [
                             { label: Translation.tr("Landscape"),          value: 0 },
                             { label: Translation.tr("Portrait"),           value: 1 },
                             { label: Translation.tr("Landscape (Flipped)"), value: 2 },
@@ -1654,36 +1504,39 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: rotBg }
                                 Rectangle { id: rotBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: rotationRow.rotationOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: (monitorSection.pending.transform ?? monitorSection.mon.transform) === modelData.value
-                                    color: rotDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: rotDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePending(monitorSection.monName, "transform", modelData.value);
-                                            rotationPopup.close();
+                            contentItem: Loader {
+                                active: rotationPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: rotationRow.rotationOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.transform ?? monitorSection.mon.transform) === modelData.value
+                                        color: rotDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: rotDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "transform", modelData.value);
+                                                rotationPopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -1702,7 +1555,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
 
                         property bool popupOpen: vrrPopup.visible
 
-                        property var vrrOptions: [
+                        readonly property var vrrOptions: [
                             { label: Translation.tr("Off"),              value: 0 },
                             { label: Translation.tr("Always On"),        value: 1 },
                             { label: Translation.tr("Fullscreen Only"),  value: 2 },
@@ -1768,36 +1621,39 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: vrrBg }
                                 Rectangle { id: vrrBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: vrrRow.vrrOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: (monitorSection.pending.vrr ?? 0) === modelData.value
-                                    color: vrrDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: vrrDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePending(monitorSection.monName, "vrr", modelData.value);
-                                            vrrPopup.close();
+                            contentItem: Loader {
+                                active: vrrPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: vrrRow.vrrOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.vrr ?? 0) === modelData.value
+                                        color: vrrDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: vrrDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "vrr", modelData.value);
+                                                vrrPopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -1817,7 +1673,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                         property bool popupOpen: tenBitPopup.visible
                         property bool is10bit: (displayConfigPage.pendingChanges[monitorSection.monName]?.bitdepth ?? 8) === 10
 
-                        property var tenBitOptions: [
+                        readonly property var tenBitOptions: [
                             { label: Translation.tr("Off"), value: false },
                             { label: Translation.tr("On"),  value: true  },
                         ]
@@ -1878,38 +1734,41 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: tenBitBg }
                                 Rectangle { id: tenBitBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: tenBitRow.tenBitOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: tenBitRow.is10bit === modelData.value
-                                    color: tenBitDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: tenBitDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            let current10bit = (displayConfigPage.pendingChanges[monitorSection.monName]?.bitdepth ?? 8) === 10;
-                                            if (current10bit === modelData.value) { tenBitPopup.close(); return; }
-                                            displayConfigPage.updatePending(monitorSection.monName, "bitdepth", modelData.value ? 10 : 8);
-                                            tenBitPopup.close();
+                            contentItem: Loader {
+                                active: tenBitPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: tenBitRow.tenBitOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: tenBitRow.is10bit === modelData.value
+                                        color: tenBitDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: tenBitDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                let current10bit = (displayConfigPage.pendingChanges[monitorSection.monName]?.bitdepth ?? 8) === 10;
+                                                if (current10bit === modelData.value) { tenBitPopup.close(); return; }
+                                                displayConfigPage.updatePending(monitorSection.monName, "bitdepth", modelData.value ? 10 : 8);
+                                                tenBitPopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -1944,7 +1803,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
 
                         property bool popupOpen: positionPopup.visible
 
-                        property var positionOptions: [
+                        readonly property var positionOptions: [
                             { label: Translation.tr("To Right of Default Display"), value: "auto-center-right" },
                             { label: Translation.tr("To Left of Default Display"),  value: "auto-center-left"  },
                             { label: Translation.tr("Above Default Display"),       value: "auto-center-up"    },
@@ -2009,36 +1868,39 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: posBg }
                                 Rectangle { id: posBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: positionRow.positionOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: (monitorSection.pending.positionMode ?? "auto-center-right") === modelData.value
-                                    color: posDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: posDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePending(monitorSection.monName, "positionMode", modelData.value);
-                                            positionPopup.close();
+                            contentItem: Loader {
+                                active: positionPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: positionRow.positionOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.positionMode ?? "auto-center-right") === modelData.value
+                                        color: posDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: posDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "positionMode", modelData.value);
+                                                positionPopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -2057,15 +1919,6 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                 radius: Appearance.rounding.normal
                 clip: true
                 implicitHeight: colorMgmtCol.implicitHeight
-                opacity: (monitorSection.pending.iccProfile ?? "") !== "" ? 0.38 : 1.0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                // Block interaction when ICC profile is active
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: (monitorSection.pending.iccProfile ?? "") !== ""
-                    propagateComposedEvents: false
-                }
 
                 ColumnLayout {
                     id: colorMgmtCol
@@ -2177,7 +2030,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                         visible: { let cm = monitorSection.pending.colorMode ?? "srgb"; return cm === "hdr" || cm === "hdredid"; }
 
                         property bool popupOpen: hdrModePopup.visible
-                        property var hdrModeOptions: [
+                        readonly property var hdrModeOptions: [
                             { label: Translation.tr("Always On"),      value: 1 },
                             { label: Translation.tr("Fullscreen Only"), value: 2 },
                         ]
@@ -2235,39 +2088,42 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: hdrModeBg }
                                 Rectangle { id: hdrModeBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: hdrModeRow.hdrModeOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: (monitorSection.pending.hdrMode || 1) === modelData.value
-                                    color: hdrModeDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: hdrModeDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePendingBatch(monitorSection.monName, {
-                                                hdrMode: modelData.value,
-                                                bitdepth: 10,  // force 10-bit for HDR
-                                            });
-                                            hdrModePopup.close();
+                            contentItem: Loader {
+                                active: hdrModePopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: hdrModeRow.hdrModeOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.hdrMode || 1) === modelData.value
+                                        color: hdrModeDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: hdrModeDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePendingBatch(monitorSection.monName, {
+                                                    hdrMode: modelData.value,
+                                                    bitdepth: 10,  // force 10-bit for HDR
+                                                });
+                                                hdrModePopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -2286,7 +2142,7 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                         }
 
                         property bool popupOpen: edidPopup.visible
-                        property var edidOptions: [
+                        readonly property var edidOptions: [
                             { label: Translation.tr("No"),  value: "hdr" },
                             { label: Translation.tr("Yes"), value: "hdredid" },
                         ]
@@ -2350,36 +2206,39 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                                 StyledRectangularShadow { target: edidBg }
                                 Rectangle { id: edidBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
                             }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                clip: true
-                                spacing: 2
-                                model: edidRow.edidOptions
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: ListView.view.width
-                                    height: 36
-                                    radius: Appearance.rounding.small
-                                    property bool isCurrent: (monitorSection.pending.colorMode ?? "srgb") === modelData.value
-                                    color: edidDelegate.containsMouse
-                                        ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                        : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                    StyledText {
-                                        anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                        text: modelData.label
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                    }
-                                    MouseArea {
-                                        id: edidDelegate
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            displayConfigPage.updatePending(monitorSection.monName, "colorMode", modelData.value);
-                                            edidPopup.close();
+                            contentItem: Loader {
+                                active: edidPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: edidRow.edidOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.colorMode ?? "srgb") === modelData.value
+                                        color: edidDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: edidDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "colorMode", modelData.value);
+                                                edidPopup.close();
+                                            }
                                         }
                                     }
                                 }
@@ -2771,286 +2630,6 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
                 }
             }
 
-            // ── ICC Profile card (disabled — to be re-enabled later) ─────
-            /* Rectangle {
-                id: iccCard
-                Layout.fillWidth: true
-                Layout.topMargin: 8
-                color: Appearance.colors.colLayer2
-                radius: Appearance.rounding.normal
-                clip: true
-                implicitHeight: iccCardCol.implicitHeight
-
-                ColumnLayout {
-                    id: iccCardCol
-                    anchors { left: parent.left; right: parent.right; top: parent.top }
-                    spacing: 0
-
-                    // ── Header row with Add button ────────────────────────
-                    Item {
-                        Layout.fillWidth: true
-                        implicitHeight: 52
-
-                        Rectangle {
-                            anchors.fill: parent
-                            topLeftRadius: Appearance.rounding.normal
-                            topRightRadius: Appearance.rounding.normal
-                            color: iccImportArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
-                            Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                        }
-
-                        RowLayout {
-                            anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
-                            spacing: 10
-
-                            MaterialSymbol {
-                                text: "upload_file"
-                                iconSize: Appearance.font.pixelSize.larger
-                                color: monitorSection.monColor
-                            }
-                            StyledText {
-                                text: Translation.tr("Import ICC Profile")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer2
-                            }
-
-                            // Tooltip badge — to the right of the text
-                            MouseArea {
-                                id: iccInfoArea
-                                implicitWidth: 22
-                                implicitHeight: 22
-                                hoverEnabled: true
-                                cursorShape: Qt.ArrowCursor
-
-                                MaterialSymbol {
-                                    anchors.centerIn: parent
-                                    text: "info"
-                                    iconSize: Appearance.font.pixelSize.normal
-                                    color: Appearance.colors.colSubtext
-                                }
-                                StyledToolTip {
-                                    visible: iccInfoArea.containsMouse
-                                    text: Translation.tr("An active ICC profile disables all other color management")
-                                }
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            MaterialSymbol {
-                                text: "chevron_right"
-                                iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.colors.colSubtext
-                            }
-                        }
-
-                        MouseArea {
-                            id: iccImportArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                iccPickerProc.targetMonitor = monitorSection.monName;
-                                iccPickerProc.running = false;
-                                iccPickerProc.running = true;
-                            }
-                        }
-                    }
-
-                    // ── Profile list ──────────────────────────────────────
-                    Repeater {
-                        model: displayConfigPage.iccProfiles
-
-                        delegate: Item {
-                            id: iccProfileRow
-                            required property var modelData
-                            required property int index
-
-                            property bool isActive: monitorSection.pending.iccProfile === modelData.path
-                            property bool isLast: index === displayConfigPage.iccProfiles.length - 1
-
-                            Layout.fillWidth: true
-                            implicitWidth: parent ? parent.width : 0
-                            implicitHeight: 40
-
-                            // Delete confirmation state
-                            property bool confirmingDelete: false
-
-                            Rectangle {
-                                anchors.fill: parent
-                                topLeftRadius: 0
-                                topRightRadius: 0
-                                bottomLeftRadius: iccProfileRow.isLast ? Appearance.rounding.normal : 0
-                                bottomRightRadius: iccProfileRow.isLast ? Appearance.rounding.normal : 0
-                                color: iccRowHover.containsMouse && !iccProfileRow.confirmingDelete
-                                    ? Appearance.colors.colLayer3 : "transparent"
-                                Behavior on color { ColorAnimation { duration: 100 } }
-                            }
-
-                            Rectangle {
-                                anchors { left: parent.left; right: parent.right; top: parent.top }
-                                implicitHeight: 1
-                                color: Appearance.m3colors.m3outlineVariant
-                                opacity: 0.5
-                            }
-
-                            // Normal row content
-                            RowLayout {
-                                anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
-                                spacing: 8
-                                visible: !iccProfileRow.confirmingDelete
-
-                                // Radio indicator
-                                MouseArea {
-                                    id: iccRowHover
-                                    implicitWidth: 20
-                                    implicitHeight: 20
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: displayConfigPage.updatePending(monitorSection.monName, "iccProfile", iccProfileRow.isActive ? "" : iccProfileRow.modelData.path)
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        width: 16; height: 16
-                                        radius: 8
-                                        color: "transparent"
-                                        border.width: 2
-                                        border.color: iccProfileRow.isActive
-                                            ? monitorSection.monColor
-                                            : Appearance.colors.colOutlineVariant
-                                        Behavior on border.color { ColorAnimation { duration: 100 } }
-                                        Rectangle {
-                                            anchors.centerIn: parent
-                                            width: 8; height: 8
-                                            radius: 4
-                                            color: monitorSection.monColor
-                                            visible: iccProfileRow.isActive
-                                        }
-                                    }
-                                }
-
-                                // Profile name — clicking also toggles
-                                StyledText {
-                                    text: iccProfileRow.modelData.name
-                                    font.pixelSize: Appearance.font.pixelSize.normal
-                                    color: iccProfileRow.isActive
-                                        ? monitorSection.monColor
-                                        : Appearance.colors.colOnLayer2
-                                    Layout.fillWidth: true
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: displayConfigPage.updatePending(monitorSection.monName, "iccProfile", iccProfileRow.isActive ? "" : iccProfileRow.modelData.path)
-                                    }
-                                }
-
-                                // Delete button
-                                MouseArea {
-                                    implicitWidth: 22
-                                    implicitHeight: 22
-                                    cursorShape: Qt.PointingHandCursor
-                                    hoverEnabled: true
-                                    onClicked: iccProfileRow.confirmingDelete = true
-                                    MaterialSymbol {
-                                        anchors.centerIn: parent
-                                        text: "remove"
-                                        iconSize: Appearance.font.pixelSize.normal
-                                        color: Appearance.colors.colSubtext
-                                    }
-                                }
-                            }
-
-                            // Confirmation row
-                            RowLayout {
-                                anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
-                                spacing: 8
-                                visible: iccProfileRow.confirmingDelete
-
-                                MaterialSymbol {
-                                    text: "warning"
-                                    iconSize: Appearance.font.pixelSize.normal
-                                    color: Appearance.m3colors.m3error
-                                }
-                                StyledText {
-                                    text: Translation.tr("Delete \"%1\"?").arg(iccProfileRow.modelData?.name ?? "")
-                                    font.pixelSize: Appearance.font.pixelSize.small
-                                    color: Appearance.colors.colOnLayer2
-                                    Layout.fillWidth: true
-                                }
-                                // Confirm delete
-                                MouseArea {
-                                    implicitWidth: 52
-                                    implicitHeight: 24
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        let path = iccProfileRow.modelData.path;
-                                        iccDeleteProc.deletedPath = path;
-                                        iccDeleteProc.targetMonitor = monitorSection.monName;
-                                        iccDeleteProc.command = ["rm", "--", path];
-                                        iccDeleteProc.running = false;
-                                        iccDeleteProc.running = true;
-                                        iccProfileRow.confirmingDelete = false;
-                                    }
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: Appearance.rounding.small
-                                        color: Appearance.m3colors.m3error
-                                        StyledText {
-                                            anchors.centerIn: parent
-                                            text: Translation.tr("Delete")
-                                            font.pixelSize: Appearance.font.pixelSize.small
-                                            color: Appearance.m3colors.m3onError
-                                        }
-                                    }
-                                }
-                                // Cancel
-                                MouseArea {
-                                    implicitWidth: 52
-                                    implicitHeight: 24
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: iccProfileRow.confirmingDelete = false
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: Appearance.rounding.small
-                                        color: Appearance.colors.colLayer3
-                                        border.width: 1
-                                        border.color: Appearance.colors.colOutlineVariant
-                                        StyledText {
-                                            anchors.centerIn: parent
-                                            text: Translation.tr("Cancel")
-                                            font.pixelSize: Appearance.font.pixelSize.small
-                                            color: Appearance.colors.colOnLayer2
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Empty state
-                    Item {
-                        Layout.fillWidth: true
-                        implicitHeight: 40
-                        visible: displayConfigPage.iccProfiles.length === 0
-
-                        Rectangle {
-                            anchors.fill: parent
-                            bottomLeftRadius: Appearance.rounding.normal
-                            bottomRightRadius: Appearance.rounding.normal
-                            color: "transparent"
-                        }
-                        Rectangle {
-                            anchors { left: parent.left; right: parent.right; top: parent.top }
-                            implicitHeight: 1
-                            color: Appearance.m3colors.m3outlineVariant
-                            opacity: 0.5
-                        }
-                        StyledText {
-                            anchors.centerIn: parent
-                            text: Translation.tr("No profiles imported")
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                        }
-                    }
-                }
-            } */
             ContentSubsection {
                 id: wsSubsection
                 visible: displayConfigPage.monitors.length > 1
