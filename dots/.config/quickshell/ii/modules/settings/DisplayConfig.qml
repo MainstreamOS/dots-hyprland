@@ -243,8 +243,25 @@ for card in sorted(glob.glob('/sys/class/drm/card[0-9]')):
             except Exception:
                 ten_bit = False
 
-        # HDR: check EDID for CTA-861 HDR Static Metadata Data Block (tag 7, ext-tag 6)
+        # HDR: check EDID for CTA-861 HDR Static Metadata Data Block
+        # (tag 7, ext-tag 6). When present and long enough, also extract
+        # the manufacturer-suggested luminance values so we can use them
+        # as defaults instead of the hardcoded 600/400/0. Per CTA-861-G
+        # § 7.5.13:
+        #   desired_max_luminance     = 50 * 2 ** (byte / 32)   cd/m²
+        #   desired_max_frame_avg     = 50 * 2 ** (byte / 32)   cd/m²
+        #   desired_min_luminance     = (max * (byte/255)**2) / 100
+        # The block layout after the tag/length byte is:
+        #   pos+1: ext_tag = 6
+        #   pos+2: eotf flags
+        #   pos+3: SM descriptor type flags
+        #   pos+4: max_luminance      (only if ln >= 4)
+        #   pos+5: max_avg_luminance  (only if ln >= 5)
+        #   pos+6: min_luminance      (only if ln >= 6, depends on max)
         hdr = False
+        hdr_max = None
+        hdr_avg = None
+        hdr_min = None
         try:
             edid = open(os.path.join(conn_dir, 'edid'), 'rb').read()
             for blk in range(1, len(edid) // 128):
@@ -260,11 +277,24 @@ for card in sorted(glob.glob('/sys/class/drm/card[0-9]')):
                         break
                     if t == 7 and ln >= 2 and b[pos+1] == 6:
                         hdr = True
+                        if ln >= 4:
+                            hdr_max = round(50 * (2 ** (b[pos+4] / 32.0)))
+                        if ln >= 5:
+                            hdr_avg = round(50 * (2 ** (b[pos+5] / 32.0)))
+                        if ln >= 6 and hdr_max is not None:
+                            hdr_min = round(hdr_max * ((b[pos+6] / 255.0) ** 2) / 100, 4)
                     pos += 1 + ln
         except Exception:
             pass
 
-        result[name] = {'vrr': vrr, 'tenBit': ten_bit, 'hdr': hdr}
+        result[name] = {
+            'vrr': vrr,
+            'tenBit': ten_bit,
+            'hdr': hdr,
+            'hdrMaxLuminance':    hdr_max,
+            'hdrMaxAvgLuminance': hdr_avg,
+            'hdrMinLuminance':    hdr_min,
+        }
 
 print(json.dumps(result))
 `]
@@ -610,9 +640,16 @@ print(json.dumps(result))
                 colorMode: (confHdrMode[name] === 2 && !confColorMode[name])
                     ? "hdr" : (confColorMode[name] ?? "auto"),
                 hdrMode: confHdrMode[name] ?? 0,
-                maxLuminance:    confMaxLuminance[name]    ?? hdrDefaults.maxLuminance,
-                maxAvgLuminance: confMaxAvgLuminance[name] ?? hdrDefaults.maxAvgLuminance,
-                minLuminance:    confMinLuminance[name]    ?? hdrDefaults.minLuminance,
+                // HDR luminance fallback chain: existing user value
+                // from monitors.conf → manufacturer-suggested defaults
+                // from EDID (CTA-861 HDR Static Metadata block, parsed
+                // by capabilitiesProc) → hardcoded fallback. Means most
+                // HDR users won't need to run the calibration wizard
+                // at all to get sensible starting values; the wizard
+                // becomes "fine-tune" rather than "set up from scratch".
+                maxLuminance:    confMaxLuminance[name]    ?? monitorCapabilities[name]?.hdrMaxLuminance    ?? hdrDefaults.maxLuminance,
+                maxAvgLuminance: confMaxAvgLuminance[name] ?? monitorCapabilities[name]?.hdrMaxAvgLuminance ?? hdrDefaults.maxAvgLuminance,
+                minLuminance:    confMinLuminance[name]    ?? monitorCapabilities[name]?.hdrMinLuminance    ?? hdrDefaults.minLuminance,
                 sdrMaxLuminance: confSdrMaxLuminance[name] ?? hdrDefaults.sdrMaxLuminance,
                 sdrMinLuminance: confSdrMinLuminance[name] ?? hdrDefaults.sdrMinLuminance,
                 sdrBrightness:   confSdrBrightness[name]   ?? hdrDefaults.sdrBrightness,
