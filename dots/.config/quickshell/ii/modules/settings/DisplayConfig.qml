@@ -21,6 +21,24 @@ ContentPage {
     property var monitors: []
     property var pendingChanges: ({})
 
+    // Revert-after-apply state. Wayland gives no recovery if the user
+    // applies a mode the panel can't drive (black screen, no TTY hint
+    // back to the settings window). Each Apply takes the file's pre-
+    // apply content as `revertSnapshot`, shows a banner with 15s
+    // countdown after the reload completes, and writes the snapshot
+    // back if the user doesn't click Keep. Closing settings or
+    // navigating to another page is treated as "didn't see / can't
+    // see" — Component.onDestruction triggers the revert too.
+    property string lastReadMonitorsConf: ""
+    property string revertSnapshot: ""
+    property bool revertPending: false
+    property int revertSecondsRemaining: 0
+    // Set true in applyMonitorChanges, consumed by reloadProc.onExited
+    // to know whether the reload it just observed was an Apply (banner)
+    // or a side-effect (no banner — e.g., the revertChanges() write,
+    // setDefaultMonitor's hyprland.conf rewrite).
+    property bool _showBannerAfterNextReload: false
+
     // Palette of colours for distinguishing monitors on the canvas
     readonly property var monitorColors: [
         Appearance.colors.colPrimary,
@@ -278,6 +296,11 @@ print(json.dumps(result))
             onRead: data => readConfProc.output += data + "\n"
         }
         onExited: {
+            // Cache the raw file content so applyMonitorChanges can
+            // snapshot it for the revert-after-apply banner. Stored
+            // before any parsing so a revert restores the file byte-
+            // for-byte (preserving comments, ordering, etc.).
+            displayConfigPage.lastReadMonitorsConf = readConfProc.output;
             let bitdepthResult = {};
             let vrrResult = {};
             let positionModeResult = {};
@@ -461,6 +484,12 @@ print(json.dumps(result))
     function applyMonitorChanges(monitorName) {
         let m = pendingChanges[monitorName];
         if (!m) return;
+        // Snapshot the file's pre-apply content so the revert banner can
+        // restore it. lastReadMonitorsConf is updated whenever
+        // readConfProc finishes (page load + every successful apply
+        // chain), so it always reflects the most recent on-disk state.
+        revertSnapshot = lastReadMonitorsConf;
+        _showBannerAfterNextReload = true;
         // Build full monitors.conf content from all pending changes
         let blocks = [];
         monitors.forEach(mon => {
@@ -489,6 +518,71 @@ print(json.dumps(result))
         writeProc.command = ["python3", "-c", py];
         writeProc.running = false;
         writeProc.running = true;
+    }
+
+    // User clicked "Keep" on the revert banner — accept the new config.
+    // The next applyMonitorChanges() call will snapshot the now-current
+    // file contents (lastReadMonitorsConf was already refreshed by the
+    // Apply chain's parseMonitorsConf), so subsequent reverts go to
+    // *this* state, not the older one.
+    function keepChanges() {
+        revertCountdownTimer.stop();
+        revertPending = false;
+        revertSecondsRemaining = 0;
+    }
+
+    // User clicked "Revert", the 15s timer expired, or the page is
+    // about to be destroyed. Writes the snapshot back through the
+    // existing writeProc → reloadProc chain. _showBannerAfterNextReload
+    // is already false at this point (cleared when the original Apply's
+    // banner came up), so this reload won't trigger a fresh banner.
+    function revertChanges() {
+        revertCountdownTimer.stop();
+        revertPending = false;
+        revertSecondsRemaining = 0;
+        if (revertSnapshot.length === 0) return;
+        let escaped = revertSnapshot
+            .replace(/\\/g, "\\\\")
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, "\\n");
+        let py =
+            "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
+            "content = '" + escaped + "'\n" +
+            "open(path, 'w').write(content)\n";
+        writeProc.command = ["python3", "-c", py];
+        writeProc.running = false;
+        writeProc.running = true;
+    }
+
+    // Fires the revert via Quickshell.execDetached so it survives the
+    // page being destroyed (e.g. user navigates to another settings tab
+    // or closes the settings window without clicking Keep). Mirrors
+    // revertChanges() but doesn't need any QML state afterward — the
+    // page is going away.
+    function revertChangesDetached() {
+        if (revertSnapshot.length === 0) return;
+        let escaped = revertSnapshot
+            .replace(/\\/g, "\\\\")
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, "\\n");
+        let py =
+            "import subprocess\n" +
+            "path = '" + displayConfigPage.monitorsConfPath + "'\n" +
+            "content = '" + escaped + "'\n" +
+            "open(path, 'w').write(content)\n" +
+            "subprocess.run(['hyprctl', 'reload'])\n";
+        Quickshell.execDetached(["python3", "-c", py]);
+    }
+
+    Timer {
+        id: revertCountdownTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            displayConfigPage.revertSecondsRemaining--;
+            if (displayConfigPage.revertSecondsRemaining <= 0)
+                displayConfigPage.revertChanges();
+        }
     }
 
     function parseMode(modeStr) {
@@ -872,6 +966,24 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
         onExited: {
             displayConfigPage.parseMonitorsConf();
             displayConfigPage.scaleApplied();
+            // If this reload was the tail of an Apply chain, raise the
+            // revert banner now that the new mode is on screen. The
+            // flag is consumed (cleared) here so unrelated reloads
+            // (revertChanges, setDefaultMonitor) don't trigger a
+            // banner.
+            if (displayConfigPage._showBannerAfterNextReload) {
+                displayConfigPage._showBannerAfterNextReload = false;
+                displayConfigPage.revertSecondsRemaining = 15;
+                displayConfigPage.revertPending = true;
+                revertCountdownTimer.start();
+                // Snap the Flickable back to the top so the banner is
+                // unmissable. ContentPage extends StyledFlickable, so
+                // contentY=0 puts row 0 of contentColumn at the visible
+                // top regardless of where the user had scrolled to (the
+                // bottom of the page when clicking a per-monitor Apply
+                // is the typical case).
+                displayConfigPage.contentY = 0;
+            }
         }
     }
 
@@ -880,6 +992,107 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
         readHyprlandConfProc.running = true;
         iccScanProc.running = true;
         parseMonitorsConf();
+    }
+
+    // If the page is destroyed (settings tab change, settings window
+    // close, full quickshell reload) while a revert is still pending,
+    // assume the user can't see / respond to the banner and revert.
+    // execDetached so the python+hyprctl chain finishes after our QML
+    // state is gone — a normal Process tied to this component would
+    // be killed mid-write.
+    Component.onDestruction: {
+        if (displayConfigPage.revertPending)
+            displayConfigPage.revertChangesDetached();
+    }
+
+    // ── Revert-after-apply banner ──────────────────────────────────────────
+    // Visible for 15s after each Apply. "Keep" clicks accept the new
+    // configuration; "Revert" or timeout (or page navigation, via
+    // Component.onDestruction above) restores monitors.conf from the
+    // pre-apply snapshot and reloads. Sits at the top of the page so a
+    // user who can't see clearly still sees the banner where it always
+    // appears in similar settings tools.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: visible ? 60 : 0
+        visible: displayConfigPage.revertPending
+        color: Appearance.colors.colSecondaryContainer
+        radius: Appearance.rounding.normal
+
+        RowLayout {
+            anchors {
+                fill: parent
+                leftMargin: 16
+                rightMargin: 12
+                topMargin: 8
+                bottomMargin: 8
+            }
+            spacing: 12
+
+            MaterialSymbol {
+                text: "schedule"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSecondaryContainer
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Keep these display settings?")
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.weight: Font.Medium
+                    color: Appearance.colors.colOnSecondaryContainer
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Reverting in %1 s — leaving the page also reverts.").arg(displayConfigPage.revertSecondsRemaining)
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colOnSecondaryContainer
+                    opacity: 0.85
+                }
+            }
+
+            RippleButton {
+                Layout.alignment: Qt.AlignVCenter
+                implicitHeight: 32
+                implicitWidth: 88
+                buttonRadius: Appearance.rounding.full
+                colBackground: Appearance.m3colors.m3surfaceContainerHigh
+                colBackgroundHover: Appearance.colors.colLayer2Hover
+                colRipple: Appearance.colors.colLayer2Active
+                contentItem: StyledText {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Translation.tr("Revert")
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colOnSecondaryContainer
+                }
+                onClicked: displayConfigPage.revertChanges()
+            }
+
+            RippleButton {
+                Layout.alignment: Qt.AlignVCenter
+                implicitHeight: 32
+                implicitWidth: 88
+                buttonRadius: Appearance.rounding.full
+                colBackground: Appearance.colors.colPrimary
+                colBackgroundHover: Qt.lighter(Appearance.colors.colPrimary, 1.1)
+                colRipple: Qt.lighter(Appearance.colors.colPrimary, 1.2)
+                contentItem: StyledText {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Translation.tr("Keep")
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colOnPrimary
+                }
+                onClicked: displayConfigPage.keepChanges()
+            }
+        }
     }
 
     // ── Arrangement canvas ─────────────────────────────────────────────────
