@@ -491,7 +491,32 @@ Singleton {
 
             property JsonObject light: JsonObject {
                 property JsonObject night: JsonObject {
+                    // `mode` is the unified dropdown's source of truth —
+                    // one of "disabled" / "automatic" / "manual" / "enabled".
+                    // We persist it explicitly rather than deriving the
+                    // dropdown state from runtime fields like
+                    // Hyprsunset.temperatureActive, because that runtime
+                    // value flips with the schedule and clock and can't
+                    // distinguish "user set Disabled" from "user set
+                    // Enabled but filter happens to be off right now".
+                    // The action handlers in DisplayConfig and the right-
+                    // sidebar NightLightDialog write `mode` and ALSO
+                    // propagate to `automatic` / `scheduleMode` /
+                    // Hyprsunset.toggleTemperature so the runtime
+                    // behaviour matches.
+                    //
+                    // Default "disabled" — fresh installs land on index 0
+                    // of the dropdown without the user having to opt out
+                    // of anything.
+                    property string mode: "disabled"
+                    // Remembers the most recent non-disabled mode the user
+                    // picked, so the right-sidebar Night Light toggle
+                    // button can restore that state when toggled back on
+                    // from "disabled" instead of always landing in the
+                    // same default. Updated by Hyprsunset.applyNightLightMode.
+                    property string lastActiveMode: "automatic"
                     property bool automatic: false
+                    property string scheduleMode: "manual"
                     property string from: "19:00" // Format: "HH:mm", 24-hour time
                     property string to: "06:30"   // Format: "HH:mm", 24-hour time
                     property int colorTemperature: 5000

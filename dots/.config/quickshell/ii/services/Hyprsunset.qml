@@ -160,6 +160,33 @@ Singleton {
         }
     }
 
+    // Single source of truth for applying a Night Light mode picked by
+    // either dropdown (Settings → Display, right-sidebar dialog) or
+    // the right-sidebar toggle button. Writes Config.options.light.night.mode
+    // (the dropdown's persistent state) and propagates the appropriate
+    // automatic/scheduleMode/temperatureActive transitions so the runtime
+    // matches. Also bookmarks the last non-disabled mode in
+    // lastActiveMode so the toggle button can restore the previous
+    // state when flipped back on from "disabled".
+    function applyNightLightMode(mode) {
+        const s = Config.options.light.night;
+        s.mode = mode;
+        if (mode !== "disabled") s.lastActiveMode = mode;
+        if (mode === "disabled") {
+            if (s.automatic) s.automatic = false;
+            if (root.temperatureActive) root.toggleTemperature(false);
+        } else if (mode === "automatic") {
+            if (s.scheduleMode !== "automatic") s.scheduleMode = "automatic";
+            if (!s.automatic) s.automatic = true;
+        } else if (mode === "manual") {
+            if (s.scheduleMode !== "manual") s.scheduleMode = "manual";
+            if (!s.automatic) s.automatic = true;
+        } else if (mode === "enabled") {
+            if (s.automatic) s.automatic = false;
+            if (!root.temperatureActive) root.toggleTemperature(true);
+        }
+    }
+
     // Change temp
     Connections {
         target: Config.options.light.night

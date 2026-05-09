@@ -3063,4 +3063,296 @@ for fn in [try_zenity, try_kdialog, try_yad, try_tkinter]:
             }
         }
     }
+
+    // ── Night Light ────────────────────────────────────────────────────────
+    // Mirrors Windows' "Night Light" panel: an instant Enable toggle, a
+    // Schedule toggle, and (when scheduling is on) a pair of "Turn on" /
+    // "Turn off" times. Backed by the existing Hyprsunset service +
+    // Config.options.light.night JsonObject; the Hyprsunset service
+    // re-evaluates the schedule once a minute via a clock binding, so
+    // changes here take effect on the next minute boundary at the
+    // latest (or immediately when toggling Enable now).
+    ContentSection {
+        icon: "nightlight"
+        title: Translation.tr("Night Light")
+
+        StyledText {
+            Layout.fillWidth: true
+            text: Translation.tr("Reduce blue light by warming the screen — easier on your eyes in the evening or at night.")
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
+        }
+
+        // Single dropdown rolls the old "Enable now" toggle and the
+        // schedule mode picker into one control:
+        //   Disabled  → filter off, schedule off
+        //   Automatic → schedule on, sunrise/sunset window
+        //   Set hours → schedule on, user-defined from/to (pickers below)
+        //   Enabled   → filter on, schedule off (always-on override)
+        //
+        // currentIndex is derived from the existing backend state so
+        // configs from before this change still resolve cleanly.
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "schedule"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Schedule night light")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                Layout.preferredWidth: 180
+                Layout.fillWidth: false
+                model: [
+                    Translation.tr("Disabled"),
+                    Translation.tr("Automatic"),
+                    Translation.tr("Set hours"),
+                    Translation.tr("Enabled"),
+                ]
+                // Source of truth is Config.options.light.night.mode —
+                // a persistent string the user picked. The runtime
+                // automatic/scheduleMode/Hyprsunset state is derived FROM
+                // this, not the other way around, so the dropdown can't
+                // drift out of sync with the user's intent.
+                readonly property var modeIndex: ({
+                    "disabled": 0, "automatic": 1, "manual": 2, "enabled": 3
+                })
+                readonly property var indexMode: [
+                    "disabled", "automatic", "manual", "enabled"
+                ]
+                currentIndex: modeIndex[Config.options.light.night.mode] ?? 0
+                onActivated: index => Hyprsunset.applyNightLightMode(indexMode[index])
+            }
+        }
+
+        // Schedule details: revealed only when scheduleMode === "manual"
+        // ("Set hours"). Visibility flip is the "drop-down" reveal —
+        // the time-pickers slide in beneath the Schedule dropdown and
+        // back out when it switches to "Automatic".
+        //
+        // The pickers display 12-hour time with an AM/PM combo for
+        // familiarity, but Config.options.light.night.{from,to} stay
+        // stored as "HH:mm" 24-hour because the Hyprsunset service
+        // parses them with Number(...split(":")). The helpers below
+        // round-trip cleanly (incl. the awkward 12-AM = 00:00 and
+        // 12-PM = 12:00 cases).
+        ColumnLayout {
+            id: nightSchedule
+            Layout.fillWidth: true
+            Layout.leftMargin: 32
+            // Slight extra breathing room above so "Turn on" doesn't
+            // sit flush against the Schedule dropdown row — only
+            // applied when the pickers are actually visible (manual
+            // mode), otherwise the section just collapses.
+            Layout.topMargin: visible ? 8 : 0
+            spacing: 8
+            visible: Config.options.light.night.mode === "manual"
+
+            // "HH:mm" (24h) → { hour12 (1-12), minute (0-59), period ("AM"|"PM") }
+            function parse12(timeStr) {
+                const parts = (timeStr ?? "").split(":");
+                const h24 = parseInt(parts[0], 10);
+                const m   = parseInt(parts[1], 10);
+                if (isNaN(h24) || isNaN(m))
+                    return { hour12: 12, minute: 0, period: "AM" };
+                if (h24 === 0)        return { hour12: 12,      minute: m, period: "AM" };
+                if (h24 < 12)         return { hour12: h24,     minute: m, period: "AM" };
+                if (h24 === 12)       return { hour12: 12,      minute: m, period: "PM" };
+                return                       { hour12: h24 - 12, minute: m, period: "PM" };
+            }
+
+            // (hour12, minute, period) → "HH:mm" (24h, zero-padded)
+            function compose24(hour12, minute, period) {
+                let h24;
+                if (period === "AM") h24 = (hour12 === 12) ? 0  : hour12;
+                else                 h24 = (hour12 === 12) ? 12 : hour12 + 12;
+                return String(h24).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+            }
+
+            // Single-component setters — read current, swap one piece, recompose.
+            function withHour(timeStr, h12) {
+                const cur = parse12(timeStr);
+                return compose24(h12, cur.minute, cur.period);
+            }
+            function withMinute(timeStr, m) {
+                const cur = parse12(timeStr);
+                return compose24(cur.hour12, m, cur.period);
+            }
+            function withPeriod(timeStr, period) {
+                const cur = parse12(timeStr);
+                return compose24(cur.hour12, cur.minute, period);
+            }
+
+            // "Turn on" row — wired to Config.options.light.night.from.
+            // Each ConfigSpinBox / StyledComboBox writes back through one
+            // of the with*() helpers so the other components survive the
+            // round-trip. Equality guard avoids a same-value re-write
+            // bouncing the binding.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                StyledText {
+                    Layout.preferredWidth: 80
+                    Layout.alignment: Qt.AlignVCenter
+                    text: Translation.tr("Turn on")
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                ConfigSpinBox {
+                    Layout.preferredWidth: 70
+                    from: 1
+                    to: 12
+                    value: nightSchedule.parse12(Config.options.light.night.from).hour12
+                    onValueChanged: {
+                        const next = nightSchedule.withHour(Config.options.light.night.from, value);
+                        if (next !== Config.options.light.night.from)
+                            Config.options.light.night.from = next;
+                    }
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: ":"
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                ConfigSpinBox {
+                    Layout.preferredWidth: 70
+                    from: 0
+                    to: 59
+                    value: nightSchedule.parse12(Config.options.light.night.from).minute
+                    onValueChanged: {
+                        const next = nightSchedule.withMinute(Config.options.light.night.from, value);
+                        if (next !== Config.options.light.night.from)
+                            Config.options.light.night.from = next;
+                    }
+                }
+
+                StyledComboBox {
+                    Layout.preferredWidth: 80
+                    Layout.fillWidth: false
+                    model: ["AM", "PM"]
+                    currentIndex: nightSchedule.parse12(Config.options.light.night.from).period === "AM" ? 0 : 1
+                    onActivated: index => {
+                        const period = (index === 0) ? "AM" : "PM";
+                        const next = nightSchedule.withPeriod(Config.options.light.night.from, period);
+                        if (next !== Config.options.light.night.from)
+                            Config.options.light.night.from = next;
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            // "Turn off" row — same pattern bound to .to.
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                StyledText {
+                    Layout.preferredWidth: 80
+                    Layout.alignment: Qt.AlignVCenter
+                    text: Translation.tr("Turn off")
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                ConfigSpinBox {
+                    Layout.preferredWidth: 70
+                    from: 1
+                    to: 12
+                    value: nightSchedule.parse12(Config.options.light.night.to).hour12
+                    onValueChanged: {
+                        const next = nightSchedule.withHour(Config.options.light.night.to, value);
+                        if (next !== Config.options.light.night.to)
+                            Config.options.light.night.to = next;
+                    }
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: ":"
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                ConfigSpinBox {
+                    Layout.preferredWidth: 70
+                    from: 0
+                    to: 59
+                    value: nightSchedule.parse12(Config.options.light.night.to).minute
+                    onValueChanged: {
+                        const next = nightSchedule.withMinute(Config.options.light.night.to, value);
+                        if (next !== Config.options.light.night.to)
+                            Config.options.light.night.to = next;
+                    }
+                }
+
+                StyledComboBox {
+                    Layout.preferredWidth: 80
+                    Layout.fillWidth: false
+                    model: ["AM", "PM"]
+                    currentIndex: nightSchedule.parse12(Config.options.light.night.to).period === "AM" ? 0 : 1
+                    onActivated: index => {
+                        const period = (index === 0) ? "AM" : "PM";
+                        const next = nightSchedule.withPeriod(Config.options.light.night.to, period);
+                        if (next !== Config.options.light.night.to)
+                            Config.options.light.night.to = next;
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+        }
+
+        // Intensity (colour temperature) — sits below the schedule
+        // section (incl. the conditional Turn on/off pickers) so it
+        // reads as a separate axis: the schedule controls *when* the
+        // filter fires, this controls *how warm* it gets when it
+        // does. Range 6500K (no warming) → 1200K (deepest amber);
+        // stop indicators at 5000K (mid-warmth default) and the
+        // lower bound. Hyprsunset.onColorTemperatureChanged dispatches
+        // `hyprctl hyprsunset temperature` live whenever the filter
+        // is currently active, so dragging here updates the screen
+        // tint immediately if night light is on; otherwise it just
+        // persists in Config and applies on the next on-cycle.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            spacing: 10
+
+            MaterialSymbol {
+                text: "wb_sunny"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colOnSecondaryContainer
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            StyledText {
+                Layout.preferredWidth: 120
+                Layout.alignment: Qt.AlignVCenter
+                text: Translation.tr("Intensity")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+
+            StyledSlider {
+                Layout.fillWidth: true
+                configuration: StyledSlider.Configuration.XS
+                from: 6500
+                to: 1200
+                stopIndicatorValues: [5000, 1200]
+                value: Config.options.light.night.colorTemperature
+                onMoved: Config.options.light.night.colorTemperature = value
+                usePercentTooltip: false
+                tooltipContent: `${Math.round(value)}K`
+            }
+        }
+    }
 }
