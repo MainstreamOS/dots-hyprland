@@ -79,6 +79,14 @@ PanelWindow {
     property bool dragging: false
     property list<point> points: []
     property var mouseButton: null
+    // Whether Shift was held when the user released the drag — promotes the
+    // default Copy/Edit action to CharRecognition (OCR). Same modifier-on-
+    // release philosophy as the right-button → Edit toggle below; lets the
+    // user click the bar's screenshot button (which always opens in Copy
+    // mode) and switch to "snip text out of this region" by just holding
+    // Shift, no second keybind needed. Captured on press AND release so
+    // mid-drag shift presses are honoured.
+    property bool _shiftHeld: false
     property var imageRegions: []
     readonly property list<var> windowRegions: RegionFunctions.filterWindowRegionsByLayers(
         root.windows.filter(w => w.workspace.id === root.activeWorkspaceId),
@@ -271,9 +279,20 @@ PanelWindow {
         root.regionWidth = Math.max(0, Math.min(root.regionWidth, root.screen.width - root.regionX));
         root.regionHeight = Math.max(0, Math.min(root.regionHeight, root.screen.height - root.regionY));
 
-        // Adjust action
+        // Adjust action — honour the modifier-on-release gestures on top
+        // of whatever action originally invoked the selector. From a
+        // default-Copy invocation (bar button, regionScreenshot keybind):
+        //   plain drag     → Copy        (image to clipboard)
+        //   right-button   → Edit        (image opened in editor)
+        //   Shift + drag   → OCR / text  (recognised text to clipboard)
+        // Other invocations (Search / Record / explicit OCR keybind) skip
+        // this morphing — only Copy/Edit can be upgraded mid-drag.
         if (root.action === RegionSelection.SnipAction.Copy || root.action === RegionSelection.SnipAction.Edit) {
-            root.action = root.mouseButton === Qt.RightButton ? RegionSelection.SnipAction.Edit : RegionSelection.SnipAction.Copy;
+            if (root._shiftHeld) {
+                root.action = RegionSelection.SnipAction.CharRecognition;
+            } else {
+                root.action = root.mouseButton === Qt.RightButton ? RegionSelection.SnipAction.Edit : RegionSelection.SnipAction.Copy;
+            }
         }
         
         const screenshotDir = Config.options.screenSnip.savePath !== "" ? //
@@ -334,8 +353,13 @@ PanelWindow {
             root.draggingY = mouse.y;
             root.dragging = true;
             root.mouseButton = mouse.button;
+            root._shiftHeld = (mouse.modifiers & Qt.ShiftModifier) !== 0;
         }
         onReleased: (mouse) => {
+            // Re-sample shift on release so a mid-drag press of Shift still
+            // promotes the gesture to OCR. The release state is what `snip()`
+            // checks against.
+            root._shiftHeld = (mouse.modifiers & Qt.ShiftModifier) !== 0;
             // Detect if it was a click -> Try to select targeted region
             if (root.draggingX === root.dragStartX && root.draggingY === root.dragStartY) {
                 if (root.targetedRegionValid()) {
