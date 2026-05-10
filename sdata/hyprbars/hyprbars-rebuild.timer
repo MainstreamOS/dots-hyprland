@@ -1,0 +1,26 @@
+[Unit]
+# Drives hyprbars-rebuild.service so that hyprbars catches up to upstream
+# after a Hyprland release without waiting for the user's next pacman -Syu
+# that touches hyprland.
+#
+# Cadence rationale:
+#   * OnBootSec=5min  — first attempt shortly after boot, with time for
+#                       network-online.target to actually be online.
+#   * OnUnitActiveSec=24h — then once a day. Upstream hyprland-plugins
+#                           doesn't ship multiple compat fixes per day,
+#                           and the rebuild only does real work when the
+#                           cached commit is unusable; routine ticks
+#                           short-circuit on the cache.
+#   * Persistent=true — if the timer's window was missed (laptop closed,
+#                       suspended, etc.), fire on next boot instead of
+#                       silently skipping.
+Description=Periodically rebuild hyprbars (recovers from upstream-lag windows)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=24h
+Persistent=true
+Unit=hyprbars-rebuild.service
+
+[Install]
+WantedBy=timers.target

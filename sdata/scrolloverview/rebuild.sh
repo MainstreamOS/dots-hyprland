@@ -45,6 +45,23 @@
 #                                          points at upstream yayuuu/...)
 #   SCROLLOVERVIEW_REF=<tag/sha>    explicit pin; disables auto-fallback
 #   WALK_DEPTH=<N>                  commits to try in step 2f (default 50)
+#
+# Exit codes:
+#   * exit 1 - operator action required: missing build deps, can't read
+#              Hyprland version, or a user-pinned SCROLLOVERVIEW_REF didn't
+#              build.
+#   * exit 0 - either built successfully, OR no upstream commit yet builds
+#              against the running Hyprland (treated as transient upstream
+#              lag). The pacman transaction stays clean; the systemd timer
+#              keeps retrying every 24h until upstream catches up.
+#
+# Status file (/var/lib/scrolloverview/status):
+#   Written on state transitions, read by /usr/local/bin/scrolloverview-status-notify
+#   from the user's Hyprland session to show friendly desktop notifications.
+#     state=failed     - last attempt failed; overview currently off
+#     state=recovered  - succeeded after a prior failure (one-shot, cleared
+#                        on next successful build)
+#     (absent)         - steady state; no notification
 # =============================================================================
 
 set -euo pipefail
@@ -53,6 +70,11 @@ CONFIG_FILE=/etc/scrolloverview.conf
 SRC_DIR=/var/cache/scrolloverview/src
 LAST_GOOD_FILE=/var/cache/scrolloverview/last-good-ref
 BUILD_LOG=/var/cache/scrolloverview/last-build.log
+# State file (read by scrolloverview-status-notify on Hyprland startup to
+# surface friendly desktop notifications). /var/lib instead of /var/cache
+# because this is state, not regenerable cache.
+STATUS_DIR=/var/lib/scrolloverview
+STATUS_FILE="$STATUS_DIR/status"
 LOG_PFX="[scrolloverview-rebuild]"
 
 SCROLLOVERVIEW_REPO="https://github.com/MainstreamOS/hyprland-scroll-overview"
@@ -189,6 +211,47 @@ auto_detect_refs() {
 }
 
 # ------------------------------------------------------------------
+# Status-file helpers (read by /usr/local/bin/scrolloverview-status-notify)
+# ------------------------------------------------------------------
+write_status_failed() {
+    local hypr_ver="$1"
+    mkdir -p "$STATUS_DIR"
+    cat > "$STATUS_FILE" <<EOF
+state=failed
+hyprland_version=$hypr_ver
+last_attempt=$(date -Iseconds 2>/dev/null || date)
+EOF
+    chmod 644 "$STATUS_FILE"
+}
+
+# Called after a successful build. Three transitions:
+#   * no prior status     -> nothing to do (file stays absent)
+#   * prior state=failed  -> write state=recovered (one-shot user notification)
+#   * prior state=recovered (or anything unrecognized) -> remove the file so
+#     the next run is a clean slate and the user-side notify script doesn't
+#     re-show stale "is back" messages.
+clear_or_recovered_status() {
+    local hypr_ver="$1"
+    [[ -f "$STATUS_FILE" ]] || return 0
+    local prev_state=""
+    prev_state=$(grep '^state=' "$STATUS_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)
+    if [[ "$prev_state" == "failed" ]]; then
+        local prev_ver=""
+        prev_ver=$(grep '^hyprland_version=' "$STATUS_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)
+        mkdir -p "$STATUS_DIR"
+        cat > "$STATUS_FILE" <<EOF
+state=recovered
+recovered_from=$prev_ver
+hyprland_version=$hypr_ver
+recovered_at=$(date -Iseconds 2>/dev/null || date)
+EOF
+        chmod 644 "$STATUS_FILE"
+    else
+        rm -f "$STATUS_FILE"
+    fi
+}
+
+# ------------------------------------------------------------------
 # Resolve and build
 # ------------------------------------------------------------------
 SUCCESS_REF=""
@@ -201,6 +264,7 @@ if [[ -n "$SCROLLOVERVIEW_REF" ]]; then
         err "build failed at pinned ref $SCROLLOVERVIEW_REF"
         err "full log: $BUILD_LOG"
         tail -n 20 "$BUILD_LOG" >&2
+        write_status_failed "$HYPR_VER"
         exit 1
     fi
 else
@@ -236,12 +300,18 @@ else
 fi
 
 if [[ -z "$SUCCESS_REF" ]]; then
-    err "could not find any hyprland-scroll-overview ref that builds against Hyprland $HYPR_VER"
-    err "tried up to $WALK_DEPTH commits walking back from $SCROLLOVERVIEW_DEFAULT_BRANCH"
+    err "no hyprland-scroll-overview commit builds against Hyprland $HYPR_VER yet."
+    err "this is almost always because upstream hyprland-scroll-overview hasn't"
+    err "  shipped a $HYPR_VER-compatible commit yet (the API moved). The"
+    err "  scrolloverview-rebuild.timer retries every 24h and self-heals once"
+    err "  upstream catches up — no action needed."
+    err "tried up to $WALK_DEPTH commits walking back from $SCROLLOVERVIEW_DEFAULT_BRANCH."
     err "full log of last attempt: $BUILD_LOG"
-    err "to override, set SCROLLOVERVIEW_REF=<sha> in $CONFIG_FILE and re-run."
+    err "to pin a known-good ref manually, set SCROLLOVERVIEW_REF=<sha> in $CONFIG_FILE."
     tail -n 20 "$BUILD_LOG" >&2
-    exit 1
+    write_status_failed "$HYPR_VER"
+    log "exiting 0 (transient upstream lag, not a system error)."
+    exit 0
 fi
 
 BUILT_SO="$SRC_DIR/scrolloverview.so"
@@ -258,6 +328,8 @@ for target in "${TARGETS[@]}"; do
     install -m 755 -o "$user" -g "$user" "$BUILT_SO" "$target"
     log "Updated $target (owner: $user)"
 done
+
+clear_or_recovered_status "$HYPR_VER"
 
 log "Done. ${#TARGETS[@]} user(s) updated against Hyprland $HYPR_VER."
 log "Built ref: $SUCCESS_REF (resolved to $(git -C "$SRC_DIR" rev-parse --short HEAD))."

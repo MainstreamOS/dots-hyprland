@@ -1,0 +1,26 @@
+[Unit]
+# Re-runs the same build script the pacman hook calls, on a periodic
+# schedule. The pacman hook only fires when hyprland is upgraded, so on
+# its own it can't recover from "hyprland upgraded today, but upstream
+# hyprland-plugins doesn't have a compatible commit yet" — the build
+# fails and stays failed until the next hyprland upgrade. With this
+# timer driving rebuild.sh on a 24h cadence (see hyprbars-rebuild.timer),
+# the moment upstream merges a compatible commit, the next tick picks
+# it up and the .so reappears for every user that has hyprbars enabled.
+Description=Rebuild hyprbars Hyprland plugin against current Hyprland
+Documentation=file:///usr/local/lib/hyprbars/rebuild.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/hyprbars/rebuild.sh
+# rebuild.sh handles its own signaling (writes /var/lib/hyprbars/status
+# on transitions; read by hyprbars-status-notify from the user session).
+# We don't want to flood `systemctl --failed` when upstream hasn't
+# shipped a compatible commit yet — that's reported via the status file
+# and a desktop notification, not as a unit failure.
+StandardOutput=journal
+StandardError=journal
+# Cap runtime so a runaway clone doesn't pile up.
+TimeoutStartSec=15min

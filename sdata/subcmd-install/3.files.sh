@@ -412,6 +412,70 @@ function setup_hyprland_plugins(){
     echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/hyprbars/ — skipping auto-rebuild setup.${STY_RST}"
     echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild hyprbars after each hyprland upgrade.${STY_RST}"
   fi
+
+  # ---------------------------------------------------------------------------
+  # Install the systemd retry timer + service. The pacman hook above only fires
+  # when hyprland is upgraded, so it can't recover from "hyprland released
+  # today, upstream hyprland-plugins doesn't have a compat commit yet" — the
+  # build fails and stays failed until the *next* hyprland upgrade. The timer
+  # ticks once a day; the moment upstream merges a fix the next tick picks it
+  # up and title bars come back automatically.
+  # ---------------------------------------------------------------------------
+  local _service_src="$REPO_ROOT/sdata/hyprbars/hyprbars-rebuild.service"
+  local _timer_src="$REPO_ROOT/sdata/hyprbars/hyprbars-rebuild.timer"
+  if [[ -f "$_service_src" && -f "$_timer_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing hyprbars retry timer...${STY_RST}"
+    try sudo install -Dm644 "$_service_src" /etc/systemd/system/hyprbars-rebuild.service
+    try sudo install -Dm644 "$_timer_src"   /etc/systemd/system/hyprbars-rebuild.timer
+    try sudo systemctl daemon-reload
+    try sudo systemctl enable --now hyprbars-rebuild.timer
+    echo -e "${STY_GREEN}[$0]: Timer enabled — title bars self-heal once upstream catches up after a Hyprland release.${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: hyprbars-rebuild.{service,timer} missing — skipping retry timer setup.${STY_RST}"
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Install the user-side notification script and wire it into Hyprland's
+  # exec-once. Reads /var/lib/hyprbars/status (written by rebuild.sh on state
+  # transitions) and surfaces friendly desktop notifications:
+  #   * after a failed rebuild  -> "Title bars are off for now"
+  #   * after recovery          -> "Title bars are back"
+  # Wording deliberately avoids version numbers, "rebuild", or "plugin" so the
+  # user just sees a status update, not a build report.
+  # ---------------------------------------------------------------------------
+  local _notify_src="$REPO_ROOT/sdata/hyprbars/hyprbars-status-notify.sh"
+  if [[ -f "$_notify_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing hyprbars status notifier...${STY_RST}"
+    try sudo install -Dm755 "$_notify_src" /usr/local/bin/hyprbars-status-notify
+
+    # Wire into the user's custom execs.conf. Idempotent — re-running the
+    # installer doesn't add duplicate exec-once lines.
+    if [[ -f "$EXECS_CONF" ]]; then
+      if ! grep -q 'hyprbars-status-notify' "$EXECS_CONF"; then
+        {
+          echo ""
+          echo "# Surface friendly desktop notifications when title bars are temporarily"
+          echo "# off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
+          echo "# written by the system-side hyprbars-rebuild service."
+          echo "exec-once = /usr/local/bin/hyprbars-status-notify"
+        } >> "$EXECS_CONF"
+        echo -e "${STY_BLUE}[$0]: Added hyprbars-status-notify exec-once to $EXECS_CONF${STY_RST}"
+      else
+        echo -e "${STY_BLUE}[$0]: $EXECS_CONF already runs hyprbars-status-notify; skipping.${STY_RST}"
+      fi
+    else
+      mkdir -p "$(dirname "$EXECS_CONF")"
+      {
+        echo "# Hyprland custom exec-once entries (managed by dots-hyprland)"
+        echo ""
+        echo "# Surface friendly desktop notifications when title bars are temporarily"
+        echo "# off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
+        echo "# written by the system-side hyprbars-rebuild service."
+        echo "exec-once = /usr/local/bin/hyprbars-status-notify"
+      } > "$EXECS_CONF"
+      echo -e "${STY_BLUE}[$0]: Created $EXECS_CONF with hyprbars-status-notify entry${STY_RST}"
+    fi
+  fi
 }
 
 function setup_scrolloverview_plugin(){
@@ -495,6 +559,73 @@ function setup_scrolloverview_plugin(){
   else
     echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/scrolloverview/ — skipping auto-rebuild setup.${STY_RST}"
     echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild scrolloverview after each hyprland upgrade.${STY_RST}"
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Install the systemd retry timer + service. Same rationale as for hyprbars:
+  # the pacman hook only fires when hyprland is upgraded, so it can't recover
+  # from "hyprland released today, upstream hyprland-scroll-overview doesn't
+  # have a compat commit yet" — the build fails and stays failed until the
+  # *next* hyprland upgrade. The timer ticks once a day and self-heals as
+  # soon as upstream merges a fix.
+  # ---------------------------------------------------------------------------
+  local _so_service_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-rebuild.service"
+  local _so_timer_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-rebuild.timer"
+  if [[ -f "$_so_service_src" && -f "$_so_timer_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing scrolloverview retry timer...${STY_RST}"
+    try sudo install -Dm644 "$_so_service_src" /etc/systemd/system/scrolloverview-rebuild.service
+    try sudo install -Dm644 "$_so_timer_src"   /etc/systemd/system/scrolloverview-rebuild.timer
+    try sudo systemctl daemon-reload
+    try sudo systemctl enable --now scrolloverview-rebuild.timer
+    echo -e "${STY_GREEN}[$0]: Timer enabled — workspace overview self-heals once upstream catches up after a Hyprland release.${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: scrolloverview-rebuild.{service,timer} missing — skipping retry timer setup.${STY_RST}"
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Install the user-side notification script and wire it into Hyprland's
+  # exec-once. Reads /var/lib/scrolloverview/status (written by rebuild.sh on
+  # state transitions) and surfaces friendly desktop notifications:
+  #   * after a failed rebuild  -> "Workspace overview is off for now"
+  #   * after recovery          -> "Workspace overview is back"
+  # Wording deliberately avoids version numbers, "rebuild", or "plugin" so
+  # the user just sees a status update, not a build report.
+  # ---------------------------------------------------------------------------
+  local _so_notify_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-status-notify.sh"
+  local _so_execs_conf="$HOME/.config/hypr/custom/execs.conf"
+  if [[ -f "$_so_notify_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing scrolloverview status notifier...${STY_RST}"
+    try sudo install -Dm755 "$_so_notify_src" /usr/local/bin/scrolloverview-status-notify
+
+    # Wire into the user's custom execs.conf. Idempotent — re-running the
+    # installer doesn't add duplicate exec-once lines.
+    if [[ -f "$_so_execs_conf" ]]; then
+      if ! grep -q 'scrolloverview-status-notify' "$_so_execs_conf"; then
+        {
+          echo ""
+          echo "# Surface friendly desktop notifications when the workspace overview is"
+          echo "# temporarily off (after a Hyprland update) or comes back. Reads"
+          echo "# /var/lib/scrolloverview/status written by the system-side"
+          echo "# scrolloverview-rebuild service."
+          echo "exec-once = /usr/local/bin/scrolloverview-status-notify"
+        } >> "$_so_execs_conf"
+        echo -e "${STY_BLUE}[$0]: Added scrolloverview-status-notify exec-once to $_so_execs_conf${STY_RST}"
+      else
+        echo -e "${STY_BLUE}[$0]: $_so_execs_conf already runs scrolloverview-status-notify; skipping.${STY_RST}"
+      fi
+    else
+      mkdir -p "$(dirname "$_so_execs_conf")"
+      {
+        echo "# Hyprland custom exec-once entries (managed by dots-hyprland)"
+        echo ""
+        echo "# Surface friendly desktop notifications when the workspace overview is"
+        echo "# temporarily off (after a Hyprland update) or comes back. Reads"
+        echo "# /var/lib/scrolloverview/status written by the system-side"
+        echo "# scrolloverview-rebuild service."
+        echo "exec-once = /usr/local/bin/scrolloverview-status-notify"
+      } > "$_so_execs_conf"
+      echo -e "${STY_BLUE}[$0]: Created $_so_execs_conf with scrolloverview-status-notify entry${STY_RST}"
+    fi
   fi
 }
 
