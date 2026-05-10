@@ -63,7 +63,16 @@ ApplicationWindow {
         {
             name: Translation.tr("Display"),
             icon: "monitor",
-            component: "modules/settings/DisplayConfig.qml"
+            component: "modules/settings/DisplayConfig.qml",
+            // The Display page is by far the heaviest entry in this settings
+            // app — multiple monitors × per-monitor sections × ~400 widgets
+            // each. Synchronous load froze the page-swap animation while
+            // every monitor section materialised. Loader.asynchronous offloads
+            // the page's QML compilation + initial binding pass to a worker
+            // thread so the swap stays smooth. Only this page is opted-in;
+            // other pages stay sync because their layouts don't tolerate
+            // having a 0-width parent during the brief async-loading window.
+            asynchronous: true
         },
         {
             name: Translation.tr("Layouts"),
@@ -407,6 +416,13 @@ ApplicationWindow {
 
                     active: Config.ready
                     source: Config.ready ? root.pages[root.currentPage].component : ""
+                    // Per-page opt-in (see the page entries above) — currently
+                    // only DisplayConfig flips this on. Async loads avoid the
+                    // page-swap stutter on heavy pages but break layouts that
+                    // assume the Loader's content is sized synchronously, so
+                    // we don't apply it as a blanket setting.
+                    asynchronous: Config.ready
+                        && (root.pages[root.currentPage]?.asynchronous ?? false)
 
                     function reloadCurrentPage() {
                         if (!Config.ready)
