@@ -31,6 +31,10 @@ ShellRoot {
         Wallpapers.load()
         Updates.load()
         ThemeManager.load()
+        // Day/Night scheduler runs only here in the main shell — see the
+        // _autoApplyEnabled comment in ThemeManager for why. Settings.qml
+        // never sets this so its ThemeManager singleton stays passive.
+        ThemeManager._autoApplyEnabled = true
     }
 
 

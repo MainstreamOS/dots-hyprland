@@ -87,13 +87,36 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── 2. Stage merged config.json with wallpaperPath rewritten ────────────────
+# ── 2. Stage merged config.json with wallpaperPath rewritten + user meta-state preserved ─
+# Some Config fields are user-level preferences that happen to live in the same
+# config.json themes snapshot, but conceptually outlive any one theme. If we
+# blindly overwrote them with whatever was current when the theme was saved,
+# we'd see weird carry-over: the user picks a Day/Night theme, saves a
+# different theme later, and when they re-apply that other theme their
+# Day/Night selection silently rolls back to whatever was active at save time.
+# Read these from the live config BEFORE overwriting and re-inject after.
 TMP=$(mktemp --tmpdir="$(dirname "$SHELL_CONFIG")" config.json.XXXXXX)
-if [ -n "$WP_ABS" ]; then
-    jq --arg p "$WP_ABS" '.background.wallpaperPath = $p' "$THEME_DIR/config.json" > "$TMP" \
-        || { rm -f "$TMP"; rollback "failed to stage config.json"; }
-else
+PRESERVE_THEME_SCHED=""
+PRESERVE_LIGHT_NIGHT=""
+if [ -f "$SHELL_CONFIG" ]; then
+    PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    # Preserve the entire light.night object — schedule, automatic flag,
+    # mode, colour temperature, etc. are user preferences that should NOT
+    # be reset by theme switching. The matching strip on the save side
+    # also drops .light.night from new theme snapshots; this preserve
+    # path is what protects older snapshots that still carry those keys.
+    PRESERVE_LIGHT_NIGHT=$(jq -c '.light.night // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+fi
+JQ_FILTER='.'
+JQ_ARGS=()
+[ -n "$WP_ABS" ]                  && { JQ_FILTER+=' | .background.wallpaperPath = $p';            JQ_ARGS+=(--arg p "$WP_ABS"); }
+[ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
+[ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
+if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
+else
+    jq "${JQ_ARGS[@]}" "$JQ_FILTER" "$THEME_DIR/config.json" > "$TMP" \
+        || { rm -f "$TMP"; rollback "failed to stage config.json"; }
 fi
 mv -f "$TMP" "$SHELL_CONFIG"
 

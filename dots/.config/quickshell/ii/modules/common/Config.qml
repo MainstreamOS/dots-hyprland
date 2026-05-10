@@ -181,6 +181,21 @@ Singleton {
                     property string type: "auto" // Allowed: auto, scheme-content, scheme-expressive, scheme-fidelity, scheme-fruit-salad, scheme-monochrome, scheme-neutral, scheme-rainbow, scheme-tonal-spot
                     property string accentColor: ""
                 }
+                // Day/Night Themes scheduler: ThemeManager auto-applies daySlug
+                // or nightSlug depending on `mode` and the current time. When
+                // mode is "nightlight" it follows Hyprsunset.shouldBeOn (so
+                // theme changes line up with the Night Light filter); when
+                // "manual" it uses dayFrom / nightFrom as the day-window
+                // boundaries (HH:mm 24-hour, parsed by ThemeManager). "off"
+                // disables auto-apply entirely. Default daySlug/nightSlug
+                // are empty until the user picks them in Settings → Themes.
+                property JsonObject themeSchedule: JsonObject {
+                    property string mode: "off"   // "off" | "nightlight" | "manual"
+                    property string daySlug: ""
+                    property string nightSlug: ""
+                    property string dayFrom: "06:00"
+                    property string nightFrom: "20:00"
+                }
             }
 
             property JsonObject audio: JsonObject {

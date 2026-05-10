@@ -46,6 +46,22 @@ ContentPage {
     // can't pile-up successive applies before the previous one settles.
     property string applyingSlug: ""
 
+    // True whenever the Day/Night Themes scheduler is in charge of the
+    // active theme (any mode other than "off"). When this is true:
+    //   - the per-card "Apply" button in the theme grid is disabled so
+    //     manual picks can't fight the scheduler (the scheduler would
+    //     just revert the apply on the next clock tick or shouldBeOn
+    //     change, producing the "I clicked it and it bounced back"
+    //     experience)
+    //   - the "Update" button on the active card stays enabled because
+    //     that's a save, not an apply
+    //   - the Day/Night dropdowns in the section below stay enabled
+    //     because picking a slug there is part of configuring the
+    //     schedule itself, not a manual override
+    //   - saving new themes from the "Save current as theme" card stays
+    //     enabled — themes can always be captured
+    readonly property bool scheduleActive: (Config.options?.appearance?.themeSchedule?.mode ?? "off") !== "off"
+
     // ── Helpers ──────────────────────────────────────────────────────────────
     function showStatus(msg) {
         root.statusMessage = msg
@@ -62,6 +78,66 @@ ContentPage {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-+|-+$/g, "")
         return s || ("theme-" + Date.now())
+    }
+
+    // ── Day/Night helpers ───────────────────────────────────────────────────
+    // True when the configured schedule says we're currently in the day
+    // window. Used by the Day/Night dropdowns to decide whether picking a
+    // slug should immediately become the active theme — same answer
+    // ThemeManager._evaluateSchedule arrives at when it auto-applies in
+    // the main shell. "off" mode never claims either window so the dropdown
+    // just stores the choice without triggering an apply.
+    function _isCurrentlyDay() {
+        const s = Config.options.appearance.themeSchedule
+        if (!s || s.mode === "off") return false
+        if (s.mode === "nightlight") return !Hyprsunset.shouldBeOn
+        // manual: check current clock against dayFrom / nightFrom
+        const now = new Date()
+        const t = now.getHours() * 60 + now.getMinutes()
+        const dp = (s.dayFrom || "06:00").split(":")
+        const np = (s.nightFrom || "20:00").split(":")
+        const dm = (parseInt(dp[0], 10) || 0) * 60 + (parseInt(dp[1], 10) || 0)
+        const nm = (parseInt(np[0], 10) || 0) * 60 + (parseInt(np[1], 10) || 0)
+        return dm < nm ? (t >= dm && t < nm) : (t >= dm || t < nm)
+    }
+    function _isCurrentlyNight() {
+        const s = Config.options.appearance.themeSchedule
+        if (!s || s.mode === "off") return false
+        return !root._isCurrentlyDay()
+    }
+
+    // ── Time helpers (Day/Night Themes section) ─────────────────────────────
+    // Round-trip "HH:mm" 24-hour storage <-> 12-hour display so the SpinBox
+    // pickers can show "1–12 AM/PM" without changing what we persist (Config
+    // uses 24-hour throughout). Same pattern DisplayConfig's Night Light
+    // section uses; kept inline here so this file doesn't depend on it.
+    function tsParse12(timeStr) {
+        const parts = (timeStr || "").split(":")
+        const h24 = parseInt(parts[0], 10)
+        const m   = parseInt(parts[1], 10)
+        if (isNaN(h24) || isNaN(m))
+            return { hour12: 12, minute: 0, period: "AM" }
+        if (h24 === 0)        return { hour12: 12,      minute: m, period: "AM" }
+        if (h24 < 12)         return { hour12: h24,     minute: m, period: "AM" }
+        if (h24 === 12)       return { hour12: 12,      minute: m, period: "PM" }
+        return { hour12: h24 - 12, minute: m, period: "PM" }
+    }
+    function tsTo24(hour12, minute, period) {
+        let h24 = hour12 % 12
+        if (period === "PM") h24 += 12
+        return String(h24).padStart(2, "0") + ":" + String(minute).padStart(2, "0")
+    }
+    function tsWithHour(timeStr, hour12) {
+        const p = tsParse12(timeStr)
+        return tsTo24(hour12, p.minute, p.period)
+    }
+    function tsWithMinute(timeStr, minute) {
+        const p = tsParse12(timeStr)
+        return tsTo24(p.hour12, minute, p.period)
+    }
+    function tsWithPeriod(timeStr, period) {
+        const p = tsParse12(timeStr)
+        return tsTo24(p.hour12, p.minute, period)
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
@@ -98,6 +174,21 @@ ContentPage {
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => loadLastAppliedProc.buf += data }
         onExited: root.lastAppliedSlug = (loadLastAppliedProc.buf || "").trim()
+    }
+
+    // Live-track last-applied.txt so this Settings page updates the
+    // "active" highlight in the Themes section the moment any apply
+    // happens — including ones the main shell's ThemeManager fires on
+    // its own (clock-minute crossings, Hyprsunset schedule transitions).
+    // Without this, the page only reflected applies it initiated itself.
+    FileView {
+        path: root.lastAppliedPath
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: root.lastAppliedSlug = (text() || "").trim()
+        onLoadFailed: error => {
+            if (error == FileViewError.FileNotFound) root.lastAppliedSlug = ""
+        }
     }
 
     function refreshThemes() { loadIndexProc.running = false; loadIndexProc.running = true }
@@ -214,16 +305,45 @@ ContentPage {
             `THEMES='${root.themesDir}'\n` +
             `DIR="$THEMES/$SLUG"\n` +
             `mkdir -p "$DIR"\n` +
-            `cp -f '${root.shellConfigPath}' "$DIR/config.json"\n` +
+            // Snapshot the live config but strip user-level meta-state that
+            // shouldn't ride along with a theme:
+            //   - appearance.themeSchedule  (Day/Night picks span themes by
+            //                                design)
+            //   - light.night.*             (Night Light schedule / mode /
+            //                                colour temp is a user preference;
+            //                                if a theme baked in `automatic=true`
+            //                                + a from/to window that included
+            //                                "right now", applying that theme
+            //                                during the night window would
+            //                                flip Hyprsunset on, change
+            //                                shouldBeOn, and bounce the
+            //                                theme scheduler straight back
+            //                                into the configured Night
+            //                                theme — undoing the manual apply.
+            //                                Treat the whole night block as
+            //                                user-level state.)
+            // apply-theme.sh ALSO preserves these from the live config when
+            // applying, so older themes that still carry these keys won't
+            // poison the user's settings either.
+            `jq 'del(.appearance.themeSchedule) | del(.light.night)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             (wpTrimmed ? `WP='${wpTrimmed}'\n` +
                          `EXT="\${WP##*.}"\n` +
                          `cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
-            // Screenshot of primary focused monitor
+            // Screenshot of primary focused monitor. Always overwrites
+            // preview.png — same path whether this is a brand-new save
+            // or an Update on an existing theme.
             `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
             `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
-            `CREATED=$(date +%s)\n` +
+            // Millisecond resolution so back-to-back Update saves (within
+            // the same wall-clock second) still produce a distinct
+            // `created` value. The grid's preview Image keys its
+            // cache-bust URL off this — if two saves landed in the same
+            // second, the URL wouldn't change and the QML Image cache
+            // could keep showing the previous frame even though
+            // preview.png on disk was already overwritten.
+            `CREATED=$(date +%s%3N)\n` +
             `cat > "$DIR/meta.json" <<EOF\n` +
             `{"slug":"$SLUG","name":"$NAME","wallpaperFile":"$WP_FILE","mode":"$MODE","created":$CREATED}\n` +
             `EOF\n` +
@@ -412,6 +532,39 @@ ContentPage {
             Layout.fillWidth: true
         }
 
+        // Schedule-active lock banner. Tells the user why the Apply buttons
+        // in the grid below are dimmed — without this, the buttons would
+        // just silently refuse clicks and look broken. The "Off" word is
+        // styled to match the Day/Night dropdown so it's obvious where
+        // to go to unlock manual applies.
+        Rectangle {
+            visible: root.scheduleActive
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            radius: Appearance.rounding.small
+            color: Qt.rgba(Appearance.m3colors.m3primary.r, Appearance.m3colors.m3primary.g, Appearance.m3colors.m3primary.b, 0.12)
+            implicitHeight: lockRow.implicitHeight + 16
+            RowLayout {
+                id: lockRow
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                MaterialSymbol {
+                    text: "lock"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.m3colors.m3primary
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colOnLayer1
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    text: Translation.tr("Manual apply is disabled to honor your Day/Night Themes settings, but you can still save new themes and update the current theme with Day/Night Themes active. Set Day/Night Themes to \"Off\" below to apply themes manually.")
+                }
+            }
+        }
+
         // 2-column grid: first cell is the "Save new theme" card, then existing themes
         GridLayout {
             id: themeGrid
@@ -424,7 +577,16 @@ ContentPage {
             Rectangle {
                 id: saveCard
                 Layout.fillWidth: true
-                Layout.preferredHeight: 260
+                // Preferred height grows to match the image when this card
+                // is the only one in the grid (full row width → tall 9:16
+                // image → card needs ~width*9/16+20 to contain it). Once
+                // the user saves themes, the layout splits the row and the
+                // card width drops by half, so the standard 260px is plenty
+                // for the half-width image plus margins. Width-only
+                // dependency, so no binding loop with the layout's height.
+                Layout.preferredHeight: root.orderedThemes.length === 0
+                    ? Math.round(saveCard.width * 9 / 16) + 20
+                    : 260
                 radius: Appearance.rounding.normal
                 color: Appearance.colors.colLayer2
 
@@ -552,9 +714,29 @@ ContentPage {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 buttonRadius: Appearance.rounding.full
-                                enabled: !themeCard.busy
+                                // The active card's button is "Update" (a save,
+                                // see beginSave below) and stays enabled even
+                                // when the scheduler is on — saving is always
+                                // allowed. Non-active cards show "Apply" and
+                                // get locked while root.scheduleActive is true
+                                // to prevent the schedule from immediately
+                                // reverting the user's pick.
+                                readonly property bool gated: root.scheduleActive && !themeCard.isActive
+                                enabled: !themeCard.busy && !gated
                                 colBackground: Appearance.colors.colPrimary
                                 colBackgroundHover: Appearance.colors.colPrimaryHover
+                                // RippleButton's default buttonColor fully
+                                // transparentizes the container when enabled=
+                                // false, which makes the Apply button vanish
+                                // into the card background — confusing UX. Use
+                                // the M3 filled-button disabled spec instead
+                                // (onSurface tint at 12% alpha) so the button
+                                // stays visibly a button, just clearly inactive.
+                                buttonColor: enabled
+                                    ? ColorUtils.transparentize(toggled
+                                        ? (hovered ? colBackgroundToggledHover : colBackgroundToggled)
+                                        : (hovered ? colBackgroundHover : colBackground), 0)
+                                    : ColorUtils.applyAlpha(Appearance.m3colors.m3onSurface, 0.12)
                                 onClicked: themeCard.isActive
                                     ? root.beginSave(themeCard.modelData.slug)
                                     : root.applyTheme(themeCard.modelData)
@@ -565,13 +747,23 @@ ContentPage {
                                         MaterialSymbol {
                                             text: themeCard.isActive ? "refresh" : "check"
                                             iconSize: Appearance.font.pixelSize.larger
-                                            color: Appearance.colors.colOnPrimary
+                                            // Match the container's M3 disabled
+                                            // treatment — neutral onSurface tint
+                                            // when disabled (busy or gated by
+                                            // schedule) instead of the bright
+                                            // colOnPrimary that's only legible
+                                            // on the primary background.
+                                            color: themeCard.busy || (root.scheduleActive && !themeCard.isActive)
+                                                ? Appearance.m3colors.m3onSurface
+                                                : Appearance.colors.colOnPrimary
                                             fill: 1
                                         }
                                         StyledText {
                                             text: themeCard.isActive ? Translation.tr("Update") : Translation.tr("Apply")
                                             font.pixelSize: Appearance.font.pixelSize.small
-                                            color: Appearance.colors.colOnPrimary
+                                            color: themeCard.busy || (root.scheduleActive && !themeCard.isActive)
+                                                ? Appearance.m3colors.m3onSurface
+                                                : Appearance.colors.colOnPrimary
                                         }
                                     }
                                 }
@@ -606,6 +798,417 @@ ContentPage {
                     }
                 }
             }
+        }
+    }
+
+    // ── Section divider ─────────────────────────────────────────────────────
+    // Material 3 full-bleed Divider (1dp at outline-variant) marking the
+    // hard break between Themes and Day/Night Themes — these are unrelated
+    // enough that the eye should register them as separate pages of intent
+    // rather than a continuous flow.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.topMargin: 24
+        Layout.bottomMargin: 12
+        implicitHeight: 1
+        color: Appearance.m3colors.m3outlineVariant
+    }
+
+    // ── Day/Night Themes ────────────────────────────────────────────────────
+    // Pairs two saved themes to time-of-day. "Off" leaves the user's current
+    // selection alone; "Follow Night Light" keys on Hyprsunset.shouldBeOn so
+    // theme transitions line up with the Night Light filter; "Set hours"
+    // reveals 12-hour pickers under each card. Auto-apply itself lives in
+    // ThemeManager so transitions still fire when this Settings window is
+    // closed — the UI here just writes Config.options.appearance.themeSchedule.
+    ContentSection {
+        icon: "wb_twilight"
+        title: Translation.tr("Day/Night Themes")
+        Layout.fillWidth: true
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            // Bigger bottom margin pushes the description well clear of the
+            // Day / Night card row so the cards don't hug the explainer.
+            Layout.bottomMargin: 24
+            wrapMode: Text.WordWrap
+            color: Appearance.colors.colSubtext
+            font.pixelSize: Appearance.font.pixelSize.small
+            text: Translation.tr("Pair two of your saved themes to time of day. Pick a Day theme and a Night theme, then choose how the switch happens — follow the Night Light schedule or set your own day-start and night-start times. Off keeps whichever theme you applied last.")
+        }
+
+        // Card row: Day | + | Night, treated as three explicit sections so
+        // the day and night cards always share an identical width and the
+        // "+" sits in its own narrow column between them.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 14
+
+            // ── Day column ──────────────────────────────────────────────────
+            ColumnLayout {
+                id: dayCol
+                // Both Day and Night columns share Layout.fillWidth + the
+                // same Layout.preferredWidth so the layout splits any extra
+                // space between them in equal halves regardless of which
+                // column has the wider implicit content (e.g. AM/PM picker).
+                // The "+" column has no fillWidth and gets only its own
+                // implicit width.
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                spacing: 6
+                readonly property string slug: Config.options.appearance.themeSchedule.daySlug
+                readonly property var theme: root.themes.find(t => t.slug === dayCol.slug) || null
+
+                // Icon + title above the card, centred
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    MaterialSymbol {
+                        text: "wb_sunny"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colOnLayer1
+                    }
+                    StyledText {
+                        text: Translation.tr("Day")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                    }
+                }
+
+                // Card
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 200
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 8
+
+                        // Screenshot of the picked theme; placeholder when unset.
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+
+                            StyledImage {
+                                id: dayPreview
+                                anchors.fill: parent
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                                visible: dayCol.theme !== null
+                                source: dayCol.theme
+                                    ? "file://" + root.themesDir + "/" + dayCol.slug + "/preview.png?v=" + (dayCol.theme.created || 0)
+                                    : ""
+                                sourceSize.width: parent.width
+                                sourceSize.height: parent.height
+                                layer.enabled: true
+                                layer.effect: OpacityMask {
+                                    maskSource: Rectangle {
+                                        width: dayPreview.width
+                                        height: dayPreview.height
+                                        radius: Appearance.rounding.small
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: !dayPreview.visible
+                                radius: Appearance.rounding.small
+                                color: Appearance.colors.colLayer3
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "wb_sunny"
+                                        iconSize: 32
+                                        color: Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: Translation.tr("Pick a theme")
+                                        color: Appearance.colors.colSubtext
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                    }
+                                }
+                            }
+                        }
+
+                        // Theme dropdown UNDER the screenshot, centred.
+                        StyledComboBox {
+                            Layout.fillWidth: true
+                            model: [Translation.tr("— None —")].concat(root.themes.map(t => t.name))
+                            currentIndex: {
+                                if (!dayCol.slug) return 0
+                                const idx = root.themes.findIndex(t => t.slug === dayCol.slug)
+                                return idx >= 0 ? idx + 1 : 0
+                            }
+                            onActivated: index => {
+                                const slug = (index === 0) ? "" : root.themes[index - 1].slug
+                                Config.options.appearance.themeSchedule.daySlug = slug
+                                // If the schedule says it's currently day,
+                                // pick this slug as the active theme right
+                                // now — same outcome as clicking Apply on
+                                // it in the Themes section above.
+                                if (slug && root._isCurrentlyDay()) {
+                                    const theme = root.themes.find(t => t.slug === slug)
+                                    if (theme) root.applyTheme(theme)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Day-start time picker, only visible in "manual" schedule mode.
+                // Mirrors the Night Light "Turn on" / "Turn off" pickers in
+                // DisplayConfig.qml — same ConfigSpinBox widget, same 70px
+                // preferred width, same equality-guarded onValueChanged
+                // round-trip — so the two pickers feel identical to the user.
+                // AM is locked because the card is the Day side — letting the
+                // user pick PM here would contradict the card's identity.
+                // Any saved-PM time gets normalised to AM the moment the user
+                // touches either spinner.
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    visible: Config.options.appearance.themeSchedule.mode === "manual"
+                    ConfigSpinBox {
+                        Layout.preferredWidth: 70
+                        from: 1
+                        to: 12
+                        value: root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).hour12
+                        onValueChanged: {
+                            const m = root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).minute
+                            const next = root.tsTo24(value, m, "AM")
+                            if (next !== Config.options.appearance.themeSchedule.dayFrom)
+                                Config.options.appearance.themeSchedule.dayFrom = next
+                        }
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: ":"
+                        color: Appearance.colors.colOnLayer1
+                    }
+                    ConfigSpinBox {
+                        Layout.preferredWidth: 70
+                        from: 0
+                        to: 59
+                        value: root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).minute
+                        onValueChanged: {
+                            const h = root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).hour12
+                            const next = root.tsTo24(h, value, "AM")
+                            if (next !== Config.options.appearance.themeSchedule.dayFrom)
+                                Config.options.appearance.themeSchedule.dayFrom = next
+                        }
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "AM"
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                    }
+                }
+            }
+
+            // ── "+" between cards ───────────────────────────────────────────
+            // No fillWidth — this column takes only its implicit width so
+            // the Day and Night columns split the rest evenly. The leading
+            // spacer matches the icon-title row above each card so the "+"
+            // glyph aligns vertically with the screenshots, not the labels.
+            ColumnLayout {
+                Layout.alignment: Qt.AlignTop
+                Layout.preferredWidth: 24
+                spacing: 0
+                Item { implicitHeight: 28 }   // matches icon-title row height
+                MaterialSymbol {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredHeight: 200
+                    text: "add"
+                    iconSize: Appearance.font.pixelSize.title
+                    color: Appearance.colors.colSubtext
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            // ── Night column ────────────────────────────────────────────────
+            ColumnLayout {
+                id: nightCol
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1   // mirrors dayCol — see comment there
+                spacing: 6
+                readonly property string slug: Config.options.appearance.themeSchedule.nightSlug
+                readonly property var theme: root.themes.find(t => t.slug === nightCol.slug) || null
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    MaterialSymbol {
+                        text: "bedtime"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colOnLayer1
+                    }
+                    StyledText {
+                        text: Translation.tr("Night")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 200
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 8
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+
+                            StyledImage {
+                                id: nightPreview
+                                anchors.fill: parent
+                                fillMode: Image.PreserveAspectCrop
+                                cache: false
+                                visible: nightCol.theme !== null
+                                source: nightCol.theme
+                                    ? "file://" + root.themesDir + "/" + nightCol.slug + "/preview.png?v=" + (nightCol.theme.created || 0)
+                                    : ""
+                                sourceSize.width: parent.width
+                                sourceSize.height: parent.height
+                                layer.enabled: true
+                                layer.effect: OpacityMask {
+                                    maskSource: Rectangle {
+                                        width: nightPreview.width
+                                        height: nightPreview.height
+                                        radius: Appearance.rounding.small
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: !nightPreview.visible
+                                radius: Appearance.rounding.small
+                                color: Appearance.colors.colLayer3
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "bedtime"
+                                        iconSize: 32
+                                        color: Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: Translation.tr("Pick a theme")
+                                        color: Appearance.colors.colSubtext
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                    }
+                                }
+                            }
+                        }
+
+                        StyledComboBox {
+                            Layout.fillWidth: true
+                            model: [Translation.tr("— None —")].concat(root.themes.map(t => t.name))
+                            currentIndex: {
+                                if (!nightCol.slug) return 0
+                                const idx = root.themes.findIndex(t => t.slug === nightCol.slug)
+                                return idx >= 0 ? idx + 1 : 0
+                            }
+                            onActivated: index => {
+                                const slug = (index === 0) ? "" : root.themes[index - 1].slug
+                                Config.options.appearance.themeSchedule.nightSlug = slug
+                                if (slug && root._isCurrentlyNight()) {
+                                    const theme = root.themes.find(t => t.slug === slug)
+                                    if (theme) root.applyTheme(theme)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Night-start time picker. PM is locked because the card is
+                // the Night side — same rationale as the Day picker's locked
+                // AM. See that picker for the full reasoning.
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+                    visible: Config.options.appearance.themeSchedule.mode === "manual"
+                    ConfigSpinBox {
+                        Layout.preferredWidth: 70
+                        from: 1
+                        to: 12
+                        value: root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).hour12
+                        onValueChanged: {
+                            const m = root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).minute
+                            const next = root.tsTo24(value, m, "PM")
+                            if (next !== Config.options.appearance.themeSchedule.nightFrom)
+                                Config.options.appearance.themeSchedule.nightFrom = next
+                        }
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: ":"
+                        color: Appearance.colors.colOnLayer1
+                    }
+                    ConfigSpinBox {
+                        Layout.preferredWidth: 70
+                        from: 0
+                        to: 59
+                        value: root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).minute
+                        onValueChanged: {
+                            const h = root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).hour12
+                            const next = root.tsTo24(h, value, "PM")
+                            if (next !== Config.options.appearance.themeSchedule.nightFrom)
+                                Config.options.appearance.themeSchedule.nightFrom = next
+                        }
+                    }
+                    StyledText {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "PM"
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                    }
+                }
+            }
+        }
+
+        // Schedule mode dropdown — centred under the card row.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            Item { Layout.fillWidth: true }
+            StyledText {
+                Layout.alignment: Qt.AlignVCenter
+                text: Translation.tr("Schedule")
+                color: Appearance.colors.colOnLayer1
+            }
+            StyledComboBox {
+                Layout.preferredWidth: 200
+                model: [
+                    Translation.tr("Off"),
+                    Translation.tr("Follow Night Light"),
+                    Translation.tr("Set hours"),
+                ]
+                readonly property var modeIndex: ({ "off": 0, "nightlight": 1, "manual": 2 })
+                readonly property var indexMode: ["off", "nightlight", "manual"]
+                currentIndex: modeIndex[Config.options.appearance.themeSchedule.mode] ?? 0
+                onActivated: index => {
+                    Config.options.appearance.themeSchedule.mode = indexMode[index]
+                }
+            }
+            Item { Layout.fillWidth: true }
         }
     }
 
