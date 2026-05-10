@@ -66,6 +66,14 @@ ContentPage {
     // (either this session via the wizard, or previously — detected from confMaxLuminance)
     property var hdrCalibratedMonitors: ({})
 
+    // ICC profile state. iccProfileDir is the on-disk library; the import
+    // flow copies user-picked .icc/.icm files into this dir so paths in
+    // monitors.conf stay stable. iccProfiles is rescanned whenever a file
+    // is added or removed.
+    property var confIccProfile: ({})
+    property string iccProfileDir: `${Quickshell.env("HOME")}/.icc-profiles`
+    property var iccProfiles: []
+
     // Workspace-to-monitor bindings
     // "default" = Hyprland decides, "custom" = user assigns workspaces to monitors
     property string wsBindingMode: "default"
@@ -243,25 +251,34 @@ for card in sorted(glob.glob('/sys/class/drm/card[0-9]')):
             except Exception:
                 ten_bit = False
 
-        # HDR: check EDID for CTA-861 HDR Static Metadata Data Block
-        # (tag 7, ext-tag 6). When present and long enough, also extract
-        # the manufacturer-suggested luminance values so we can use them
-        # as defaults instead of the hardcoded 600/400/0. Per CTA-861-G
-        # § 7.5.13:
-        #   desired_max_luminance     = 50 * 2 ** (byte / 32)   cd/m²
-        #   desired_max_frame_avg     = 50 * 2 ** (byte / 32)   cd/m²
-        #   desired_min_luminance     = (max * (byte/255)**2) / 100
-        # The block layout after the tag/length byte is:
-        #   pos+1: ext_tag = 6
-        #   pos+2: eotf flags
-        #   pos+3: SM descriptor type flags
-        #   pos+4: max_luminance      (only if ln >= 4)
-        #   pos+5: max_avg_luminance  (only if ln >= 5)
-        #   pos+6: min_luminance      (only if ln >= 6, depends on max)
+        # HDR + Colorimetry: walk the EDID's CTA-861 extension blocks
+        # once, picking out two extended-tag blocks we care about:
+        #
+        #   ext-tag 6: HDR Static Metadata Data Block (CTA-861-G § 7.5.13)
+        #     desired_max_luminance     = 50 * 2 ** (byte / 32)   cd/m²
+        #     desired_max_frame_avg     = 50 * 2 ** (byte / 32)   cd/m²
+        #     desired_min_luminance     = (max * (byte/255)**2) / 100
+        #     Layout: pos+1 ext_tag=6, pos+2 eotf, pos+3 SM, pos+4..6 lum
+        #
+        #   ext-tag 5: Colorimetry Data Block (CTA-861-G § 7.5.5)
+        #     pos+2 bits encode panel-supported colorspaces:
+        #       bit 0: xvYCC601    bit 4: opRGB (Adobe RGB)
+        #       bit 1: xvYCC709    bit 5: BT2020 cYCC
+        #       bit 2: sYCC601     bit 6: BT2020 YCC
+        #       bit 3: opYCC601    bit 7: BT2020 RGB
+        #     The flags drive the EDID-derived color-mode pill: panels
+        #     that don't advertise a wide gamut shouldn't be silently
+        #     mapped to one. DCI-P3 isn't in CTA-861's standard slots
+        #     (it lives in DisplayID extensions or vendor blocks); we
+        #     leave it false here and let the UI fall back to bit-depth-
+        #     based defaults for that one.
         hdr = False
         hdr_max = None
         hdr_avg = None
         hdr_min = None
+        color_bt2020 = False
+        color_adobe  = False
+        color_dci_p3 = False
         try:
             edid = open(os.path.join(conn_dir, 'edid'), 'rb').read()
             for blk in range(1, len(edid) // 128):
@@ -283,6 +300,10 @@ for card in sorted(glob.glob('/sys/class/drm/card[0-9]')):
                             hdr_avg = round(50 * (2 ** (b[pos+5] / 32.0)))
                         if ln >= 6 and hdr_max is not None:
                             hdr_min = round(hdr_max * ((b[pos+6] / 255.0) ** 2) / 100, 4)
+                    elif t == 7 and ln >= 2 and b[pos+1] == 5:
+                        f = b[pos+2]
+                        color_bt2020 = bool(f & 0xE0)   # bits 5/6/7
+                        color_adobe  = bool(f & 0x18)   # bits 3/4
                     pos += 1 + ln
         except Exception:
             pass
@@ -294,6 +315,9 @@ for card in sorted(glob.glob('/sys/class/drm/card[0-9]')):
             'hdrMaxLuminance':    hdr_max,
             'hdrMaxAvgLuminance': hdr_avg,
             'hdrMinLuminance':    hdr_min,
+            'colorBT2020': color_bt2020,
+            'colorAdobe':  color_adobe,
+            'colorDciP3':  color_dci_p3,
         }
 
 print(json.dumps(result))
@@ -338,6 +362,7 @@ print(json.dumps(result))
             let sdrBrightnessResult   = {};
             let sdrSaturationResult   = {};
             let hdrModeResult = {};
+            let iccProfileResult = {};
             let wsAssignments = {};
             let hasAnyWsBinding = false;
 
@@ -366,6 +391,7 @@ print(json.dumps(result))
                             if (currentBlock["sdr_min_luminance"]) sdrMinLuminanceResult[name] = parseFloat(currentBlock["sdr_min_luminance"]);
                             if (currentBlock["sdrbrightness"])     sdrBrightnessResult[name]   = parseFloat(currentBlock["sdrbrightness"]);
                             if (currentBlock["sdrsaturation"])     sdrSaturationResult[name]   = parseFloat(currentBlock["sdrsaturation"]);
+                            if (currentBlock["icc"])               iccProfileResult[name]      = currentBlock["icc"];
                             let pos = currentBlock["position"] ?? "";
                             if (pos.startsWith("auto-center-")) positionModeResult[name] = pos;
                         }
@@ -386,6 +412,8 @@ print(json.dumps(result))
                 if (mp) positionModeResult[mp[1]] = mp[2];
                 let mc = line.match(/^monitor=([^,]+),.+,cm,(\w+)/);
                 if (mc) colorModeResult[mc[1]] = mc[2];
+                let mi = line.match(/^monitor=([^,]+),.+,icc,([^,\n]+)/);
+                if (mi) iccProfileResult[mi[1]] = mi[2].trim();
 
                 // ── HDR mode metadata (persisted as comment) ─────────────
                 let mh = trimmed.match(/^#\s*ii_hdr_mode:(\S+)\s*=\s*(\d+)/);
@@ -411,6 +439,7 @@ print(json.dumps(result))
             displayConfigPage.confSdrBrightness   = sdrBrightnessResult;
             displayConfigPage.confSdrSaturation   = sdrSaturationResult;
             displayConfigPage.confHdrMode          = hdrModeResult;
+            displayConfigPage.confIccProfile       = iccProfileResult;
             // Any monitor that already has max_luminance in conf has been calibrated before
             let calibrated = Object.assign({}, displayConfigPage.hdrCalibratedMonitors);
             Object.keys(maxLuminanceResult).forEach(n => { calibrated[n] = true; });
@@ -451,7 +480,7 @@ print(json.dumps(result))
         let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
         let colorMode = m.colorMode ?? "srgb";
         let isHdr = colorMode === "hdr" || colorMode === "hdredid";
-        let hdrMode = m.hdrMode ?? 0;  // 0=none, 1=Always On, 2=Fullscreen Only
+        let hdrMode = m.hdrMode ?? 0;  // 0=none, 1=Fullscreen Only, 2=Always On
         // HDR forces 10-bit; otherwise use the stored bitdepth
         let bitdepth = (isHdr || hdrMode > 0) ? 10 : (m.bitdepth ?? 8);
 
@@ -470,24 +499,38 @@ print(json.dumps(result))
             lines.push(`    transform = ${m.transform}`);
             if (bitdepth !== 8)          lines.push(`    bitdepth = ${bitdepth}`);
             if ((m.vrr ?? 0) !== 0)      lines.push(`    vrr = ${m.vrr}`);
-            // "Fullscreen Only" (2): don't write cm=hdr — Hyprland's
+            // "Fullscreen Only" (1, default): don't write cm=hdr — Hyprland's
             // render:cm_auto_hdr (default 1) handles fullscreen HDR switching.
-            // "Always On" (1): write cm=hdr/hdredid as usual.
-            if (isHdr && hdrMode === 2) {
+            // "Always On" (2): write cm=hdr/hdredid as usual.
+            // Every other colorMode value (srgb / wide / dp3 / dcip3 /
+            // adobe / edid) is written verbatim; "auto" is the no-op.
+            if (isHdr && hdrMode === 1) {
                 // Skip cm = hdr so Hyprland only activates HDR for fullscreen apps
             } else if (colorMode !== "auto") {
                 lines.push(`    cm = ${colorMode}`);
             }
+            // ICC profile (mutually exclusive with HDR — Hyprland's ICC
+            // pipeline replaces colorspace conversion, so cm = hdr/etc.
+            // is suppressed by the UI when an ICC profile is active).
+            // Requires Hyprland built with USE_ICC=1 (0.55+); on older
+            // builds the directive is silently ignored.
+            let icc = m.iccProfile ?? "";
+            if (icc && !isHdr) lines.push(`    icc = ${icc}`);
             if (isHdr) {
                 let d = displayConfigPage.hdrDefaults;
                 lines.push(`    sdrbrightness = ${(m.sdrBrightness   ?? d.sdrBrightness).toFixed(3)}`);
                 lines.push(`    sdrsaturation = ${(m.sdrSaturation   ?? d.sdrSaturation).toFixed(3)}`);
                 lines.push(`    sdr_min_luminance = ${(m.sdrMinLuminance ?? d.sdrMinLuminance).toFixed(4)}`);
                 lines.push(`    sdr_max_luminance = ${Math.round(m.sdrMaxLuminance ?? d.sdrMaxLuminance)}`);
-                // Only write luminance limits if the user explicitly calibrated them;
-                // otherwise let Hyprland infer them from the monitor's EDID.
-                let calibrated = displayConfigPage.hdrCalibratedMonitors[name] ?? false;
-                if (calibrated) {
+                // HDR target luminance — only meaningful for `cm = hdr`
+                // (`cm = hdredid` makes Hyprland parse the EDID itself).
+                // We always write these for `cm = hdr`: skipping them
+                // makes Hyprland fall through to its 10000-nit PQ-peak
+                // default which over-drives any real panel. The values
+                // chain through user calibration → EDID-seeded caps
+                // → hdrDefaults via initPending, so a sensible value
+                // is always in `m.maxLuminance` etc.
+                if (colorMode === "hdr") {
                     lines.push(`    min_luminance = ${(m.minLuminance    ?? d.minLuminance).toFixed(4)}`);
                     lines.push(`    max_luminance = ${Math.round(m.maxLuminance    ?? d.maxLuminance)}`);
                     lines.push(`    max_avg_luminance = ${Math.round(m.maxAvgLuminance ?? d.maxAvgLuminance)}`);
@@ -635,11 +678,12 @@ print(json.dumps(result))
                 bitdepth: confBitdepth[name] ?? 8,
                 vrr: confVrr[name] ?? 0,
                 positionMode: isDefault ? undefined : (confPositionMode[name] ?? "auto-center-right"),
-                // If hdrMode is "Fullscreen Only" (2), cm=hdr isn't in the config file,
+                // If hdrMode is "Fullscreen Only" (1), cm=hdr isn't in the config file,
                 // but the UI still needs to show HDR as the active color mode.
-                colorMode: (confHdrMode[name] === 2 && !confColorMode[name])
+                colorMode: (confHdrMode[name] === 1 && !confColorMode[name])
                     ? "hdr" : (confColorMode[name] ?? "auto"),
                 hdrMode: confHdrMode[name] ?? 0,
+                iccProfile: confIccProfile[name] ?? "",
                 // HDR luminance fallback chain: existing user value
                 // from monitors.conf → manufacturer-suggested defaults
                 // from EDID (CTA-861 HDR Static Metadata block, parsed
@@ -839,6 +883,179 @@ print(json.dumps(result))
         }
     }
 
+    // ── ICC profile management ─────────────────────────────────────────────
+
+    // Ensure ~/.icc-profiles/ exists and scan it for profiles.
+    Process {
+        id: iccScanProc
+        property string output: ""
+        command: ["bash", "-c",
+            `mkdir -p '${displayConfigPage.iccProfileDir}' && ` +
+            `find '${displayConfigPage.iccProfileDir}' -maxdepth 1 -type f \\( -iname '*.icc' -o -iname '*.icm' \\) -print0 | ` +
+            `xargs -0 -r ls`]
+        stdout: SplitParser {
+            onRead: data => iccScanProc.output += data + "\n"
+        }
+        onExited: {
+            let profiles = [];
+            iccScanProc.output.split("\n").forEach(line => {
+                let p = line.trim();
+                if (!p) return;
+                let filename = p.split("/").pop();
+                let stem = filename.replace(/\.[^.]+$/, "");
+                // Files imported via Settings are named `<monitor>__<original>.icc`
+                // so two monitors can each have their own profile.icc without
+                // collision. Split that prefix back off for display, but
+                // keep it on disk so the source-monitor info survives.
+                let importedFor = "";
+                let displayName = stem;
+                let sep = stem.indexOf("__");
+                if (sep > 0) {
+                    importedFor = stem.substring(0, sep);
+                    displayName = stem.substring(sep + 2);
+                }
+                profiles.push({ name: displayName, path: p, importedFor: importedFor });
+            });
+            displayConfigPage.iccProfiles = profiles;
+            iccScanProc.output = "";
+        }
+    }
+
+    // Pick a new ICC file using a multi-method fallback chain:
+    //   zenity → kdialog → yad → python3 tkinter
+    // Avoids the python3-gi / xdg-desktop-portal dependency that caused
+    // the original D-Bus implementation to silently fail on many setups.
+    Process {
+        id: iccPickerProc
+        property string targetMonitor: ""
+        property string output: ""
+        command: ["python3", "-c", `
+import subprocess, sys, os
+
+# Each runner only falls through on FileNotFoundError (the picker binary
+# isn't installed). Any other outcome — successful selection, user
+# cancel, internal error — is treated as "this picker handled the
+# request" and stops the chain. Without this, cancelling zenity would
+# spawn kdialog next, which is the wrong behaviour: a cancel is the
+# user's explicit "no", not a signal to try another tool.
+
+def run_zenity():
+    return subprocess.run(
+        ['zenity', '--file-selection',
+         '--title=Import ICC Profile',
+         '--file-filter=ICC Profiles (*.icc *.icm) | *.icc *.icm'],
+        capture_output=True, text=True, timeout=300)
+
+def run_kdialog():
+    return subprocess.run(
+        ['kdialog', '--getopenfilename',
+         os.path.expanduser('~'), '*.icc *.icm|ICC Profiles'],
+        capture_output=True, text=True, timeout=300)
+
+def run_yad():
+    return subprocess.run(
+        ['yad', '--file-selection', '--title=Import ICC Profile',
+         '--file-filter=*.icc|ICC Profile', '--file-filter=*.icm|ICM Profile'],
+        capture_output=True, text=True, timeout=300)
+
+for runner in [run_zenity, run_kdialog, run_yad]:
+    try:
+        r = runner()
+    except FileNotFoundError:
+        continue   # picker not installed — try the next one
+    except Exception:
+        sys.exit(0)  # any other error: don't keep prompting
+    # Picker ran. Emit selected path (if any) and stop the chain —
+    # an empty stdout means the user cancelled, which is fine.
+    out = r.stdout.strip().rstrip('|')   # yad sometimes appends '|'
+    if out:
+        print(out)
+    sys.exit(0)
+
+# Final fallback: tkinter (ships with stdlib, no external picker needed).
+try:
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.wm_attributes('-topmost', True)
+    p = filedialog.askopenfilename(
+        title='Import ICC Profile',
+        filetypes=[('ICC Profiles', '*.icc *.icm'), ('All Files', '*')])
+    root.destroy()
+    if p:
+        print(p)
+except Exception:
+    pass
+`]
+        stdout: SplitParser {
+            onRead: data => iccPickerProc.output += data
+        }
+        stderr: SplitParser {
+            onRead: data => console.warn("iccPickerProc stderr:", data)
+        }
+        onExited: (code) => {
+            let src = iccPickerProc.output.trim();
+            let mon = iccPickerProc.targetMonitor;
+            // Clear state immediately so a quick re-click starts fresh
+            iccPickerProc.output = "";
+            iccPickerProc.targetMonitor = "";
+            if (src !== "" && mon !== "") {
+                let filename = src.split("/").pop();
+                // Namespace by target monitor so two displays can each
+                // import a profile with the same source filename
+                // (e.g. both vendors ship `calibration.icc`) without one
+                // silently overwriting the other. Sanitise mon for the
+                // filesystem — Hyprland output names are already safe
+                // (DP-1, HDMI-A-1) but be defensive.
+                let safeMon = mon.replace(/[^A-Za-z0-9_-]/g, "_");
+                iccCopyProc.targetMonitor = mon;
+                iccCopyProc.destPath = `${displayConfigPage.iccProfileDir}/${safeMon}__${filename}`;
+                iccCopyProc.command = ["cp", "--", src, iccCopyProc.destPath];
+                iccCopyProc.running = false;
+                iccCopyProc.running = true;
+            }
+        }
+    }
+
+    // Copy the chosen file then rescan and auto-select it.
+    Process {
+        id: iccCopyProc
+        property string targetMonitor: ""
+        property string destPath: ""
+        command: []
+        onExited: (code) => {
+            if (code === 0 && iccCopyProc.targetMonitor !== "") {
+                displayConfigPage.updatePending(iccCopyProc.targetMonitor, "iccProfile", iccCopyProc.destPath);
+            }
+            iccCopyProc.targetMonitor = "";
+            iccCopyProc.destPath = "";
+            iccScanProc.running = false;
+            iccScanProc.running = true;
+        }
+    }
+
+    // Delete a profile file (called after user confirms).
+    Process {
+        id: iccDeleteProc
+        property string deletedPath: ""
+        property string targetMonitor: ""
+        command: []
+        onExited: {
+            // If the deleted profile was active for any monitor, clear it
+            let mon = iccDeleteProc.targetMonitor;
+            if (mon) {
+                let cur = displayConfigPage.pendingChanges[mon]?.iccProfile ?? "";
+                if (cur === iccDeleteProc.deletedPath)
+                    displayConfigPage.updatePending(mon, "iccProfile", "");
+            }
+            iccDeleteProc.deletedPath = "";
+            iccDeleteProc.targetMonitor = "";
+            iccScanProc.running = false;
+            iccScanProc.running = true;
+        }
+    }
+
     Process {
         id: reloadProc
         command: ["hyprctl", "reload"]
@@ -869,6 +1086,7 @@ print(json.dumps(result))
     Component.onCompleted: {
         capabilitiesProc.running = true;
         readHyprlandConfProc.running = true;
+        iccScanProc.running = true;
         parseMonitorsConf();
     }
 
@@ -1169,15 +1387,33 @@ print(json.dumps(result))
                 if (caps) return caps.hdr ?? false;
                 return false;
             }
+            // Always-on pill set: Auto, DCI P3, Adobe RGB, Apple RGB,
+            // and HDR (HDR only if the panel is HDR-capable). Anything
+            // else that capabilitiesProc flags as supported by the panel
+            // gets inserted just before HDR — currently that's BT2020,
+            // gated on the CTA-861 Colorimetry Data Block. A previously-
+            // saved mode that's not in the always-on set (e.g. cm = srgb
+            // from an older config) is also restored so the picker doesn't
+            // silently drop the user's current selection.
             readonly property var supportedColorModes: {
+                let caps = displayConfigPage.monitorCapabilities[monitorSection.monName];
+                let cur = monitorSection.pending.colorMode ?? "srgb";
                 let modes = [
-                    { key: "auto",   label: Translation.tr("Auto")      },
-                    { key: "srgb",   label: "sRGB"      },
-                    { key: "dcip3",  label: "DCI P3"    },
-                    { key: "adobe",  label: "Adobe RGB" },
-                    { key: "dp3",    label: "Apple RGB" },
-                    { key: "wide",   label: "BT2020"    },
+                    { key: "auto",  label: Translation.tr("Auto") },
+                    { key: "dcip3", label: "DCI P3" },
+                    { key: "adobe", label: "Adobe RGB" },
+                    { key: "dp3",   label: "Apple RGB" },
                 ];
+                // Caps-driven extras, inserted in the order they're listed
+                // here (immediately before any HDR pill we append below).
+                if (caps?.colorBT2020) modes.push({ key: "wide", label: "BT2020" });
+                // Restore a saved mode that's not in any of the lists above
+                // so the user's current pill stays selectable. Label is
+                // upper-cased so unknown / legacy mode names visually stand
+                // out from the curated pill set above.
+                let alreadyHave = modes.some(m => m.key === cur);
+                if (!alreadyHave && cur !== "hdr" && cur !== "hdredid")
+                    modes.push({ key: cur, label: cur.toUpperCase() });
                 if (monitorSection.hdrSupported)
                     modes.push({ key: "hdr", label: "HDR" });
                 return modes;
@@ -1976,6 +2212,9 @@ print(json.dumps(result))
             }
 
             // ── Color Management card ─────────────────────────────────────
+            // Dimmed and click-blocked when an ICC profile is active —
+            // Hyprland's ICC pipeline supersedes its colorspace conversion,
+            // so the cm/HDR/calibration controls below would be no-ops.
             Rectangle {
                 id: colorMgmtCard
                 Layout.fillWidth: true
@@ -1984,6 +2223,14 @@ print(json.dumps(result))
                 radius: Appearance.rounding.normal
                 clip: true
                 implicitHeight: colorMgmtCol.implicitHeight
+                opacity: (monitorSection.pending.iccProfile ?? "") !== "" ? 0.38 : 1.0
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: (monitorSection.pending.iccProfile ?? "") !== ""
+                    propagateComposedEvents: false
+                }
 
                 ColumnLayout {
                     id: colorMgmtCol
@@ -2001,6 +2248,17 @@ print(json.dumps(result))
                                 text: "palette"
                                 iconSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnLayer2
+                                // Aggressive gap close: the Material Symbols
+                                // font's em-box leaves several pixels of
+                                // whitespace inside the icon's bounding box,
+                                // and tweaking RowLayout.spacing alone wasn't
+                                // enough to overcome it. Force the painted
+                                // width as the layout slot AND pull the next
+                                // item further left with a negative right
+                                // margin so the visible glyph ends up flush
+                                // against "Color Management".
+                                Layout.preferredWidth: paintedWidth
+                                Layout.rightMargin: -11
                             }
                             StyledText {
                                 text: Translation.tr("Color Management")
@@ -2020,6 +2278,8 @@ print(json.dumps(result))
                         RowLayout {
                             anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
                             spacing: 6
+
+                            Item { Layout.fillWidth: true }
 
                             Repeater {
                                 model: monitorSection.supportedColorModes
@@ -2041,7 +2301,10 @@ print(json.dumps(result))
 
                                     onClicked: {
                                         let updates = { colorMode: modelData.key };
-                                        // HDR forces 10-bit and defaults to "Always On" mode
+                                        // HDR forces 10-bit and defaults to "Fullscreen Only" mode —
+                                        // safer than Always On since it leaves the SDR desktop alone
+                                        // and only flips into HDR for fullscreen clients that ask
+                                        // for it (via render:cm_auto_hdr).
                                         if (modelData.key === "hdr" || modelData.key === "hdredid") {
                                             updates.bitdepth = 10;
                                             if (!(monitorSection.pending.hdrMode > 0))
@@ -2072,10 +2335,9 @@ print(json.dumps(result))
                                                 : Appearance.colors.colOnLayer1
                                         }
                                     }
+                                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                                 }
                             }
-
-                            Item { Layout.fillWidth: true }
                         }
                     }
 
@@ -2096,17 +2358,19 @@ print(json.dumps(result))
 
                         property bool popupOpen: hdrModePopup.visible
                         readonly property var hdrModeOptions: [
-                            { label: Translation.tr("Always On"),      value: 1 },
-                            { label: Translation.tr("Fullscreen Only"), value: 2 },
+                            { label: Translation.tr("Fullscreen Only"), value: 1 },
+                            { label: Translation.tr("Always On"),       value: 2 },
                         ]
                         property string hdrModeLabel: {
                             let v = monitorSection.pending.hdrMode || 1;
                             let opt = hdrModeOptions.find(o => o.value === v);
-                            return opt ? opt.label : Translation.tr("Always On");
+                            return opt ? opt.label : Translation.tr("Fullscreen Only");
                         }
 
                         Rectangle {
                             anchors.fill: parent
+                            bottomLeftRadius:  Appearance.rounding.normal
+                            bottomRightRadius: Appearance.rounding.normal
                             color: hdrModeArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
                             Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
                         }
@@ -2196,125 +2460,70 @@ print(json.dumps(result))
                         }
                     }
 
-                    // ── Use EDID dropdown ─────────────────────────────────
-                    Item {
-                        id: edidRow
-                        Layout.fillWidth: true
-                        implicitHeight: 44
-                        visible: {
-                            let cm = monitorSection.pending.colorMode ?? "srgb";
-                            return cm === "hdr" || cm === "hdredid";
-                        }
+                }
+            }
 
-                        property bool popupOpen: edidPopup.visible
-                        readonly property var edidOptions: [
-                            { label: Translation.tr("No"),  value: "hdr" },
-                            { label: Translation.tr("Yes"), value: "hdredid" },
-                        ]
-                        property string edidLabel: {
-                            let cm = monitorSection.pending.colorMode ?? "srgb";
-                            return cm === "hdredid" ? Translation.tr("Yes") : Translation.tr("No");
-                        }
+            // ── Calibrate Monitor for HDR card ───────────────────────────
+            // First in the HDR-tuning sequence: visual test patterns
+            // catch panel behavior the EDID-seeded defaults can't (ABL,
+            // real perceived black floor, sustained-vs-peak luminance).
+            // Run this once, then use Fine Tune below for nudges.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                color: Appearance.colors.colLayer2
+                radius: Appearance.rounding.normal
+                clip: true
+                implicitHeight: 52
+                visible: {
+                    let cm = monitorSection.pending.colorMode ?? "srgb";
+                    return cm === "hdr" || cm === "hdredid";
+                }
 
-                        property bool isFullscreenOnly: (monitorSection.pending.hdrMode || 1) === 2
-                        opacity: isFullscreenOnly ? 0.38 : 1.0
-                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Appearance.rounding.normal
+                    color: calibrateArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
+                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                }
 
-                        Rectangle {
-                            anchors.fill: parent
-                            bottomLeftRadius: Appearance.rounding.normal
-                            bottomRightRadius: Appearance.rounding.normal
-                            color: edidArea.containsMouse && !edidRow.isFullscreenOnly ? Appearance.colors.colLayer3 : "transparent"
-                            Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                        }
+                RowLayout {
+                    anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
+                    spacing: 10
 
-                        RowLayout {
-                            anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
-                            spacing: 8
-                            StyledText {
-                                text: Translation.tr("Use EDID")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer2
-                            }
-                            Item { Layout.fillWidth: true }
-                            StyledText {
-                                text: edidRow.edidLabel
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.colors.colSubtext
-                            }
-                            MaterialSymbol {
-                                text: "keyboard_arrow_down"
-                                iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.colors.colSubtext
-                                rotation: edidRow.popupOpen ? 180 : 0
-                                Behavior on rotation { NumberAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                            }
-                        }
-
-                        MouseArea {
-                            id: edidArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            enabled: !edidRow.isFullscreenOnly
-                            cursorShape: edidRow.isFullscreenOnly ? Qt.ArrowCursor : Qt.PointingHandCursor
-                            onClicked: edidPopup.visible ? edidPopup.close() : edidPopup.open()
-                        }
-
-                        Popup {
-                            id: edidPopup
-                            y: edidRow.height + 4
-                            width: edidRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: edidBg }
-                                Rectangle { id: edidBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: edidPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: edidRow.edidOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.colorMode ?? "srgb") === modelData.value
-                                        color: edidDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: edidDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "colorMode", modelData.value);
-                                                edidPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    MaterialSymbol {
+                        text: "tune"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: monitorSection.monColor
                     }
+                    StyledText {
+                        text: Translation.tr("Calibrate Monitor for HDR")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colOnLayer2
+                        Layout.fillWidth: true
+                    }
+                    MaterialSymbol {
+                        text: "chevron_right"
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: Appearance.colors.colSubtext
+                    }
+                }
 
+                MouseArea {
+                    id: calibrateArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        hdrCalLoader.active = false;
+                        hdrCalLoader.active = true;
+                    }
                 }
             }
 
             // ── Fine Tune card (separate from Color Management) ──────────
+            // Second: numeric nudges to the values produced by Calibrate
+            // (or the EDID-seeded defaults if Calibrate hasn't been run).
             Rectangle {
                 id: fineTuneCard
                 Layout.fillWidth: true
@@ -2389,7 +2598,7 @@ print(json.dumps(result))
                         implicitHeight: visible ? 32 : 0
                         visible: fineTuneHeader.expanded && fineTuneHeader.visible
                         clip: true
-                        opacity: (monitorSection.pending.hdrMode || 1) === 2 ? 0.38 : 1.0
+                        opacity: (monitorSection.pending.hdrMode || 1) === 1 ? 0.38 : 1.0
                         Behavior on opacity { NumberAnimation { duration: 150 } }
                         Behavior on implicitHeight { NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
 
@@ -2423,8 +2632,8 @@ print(json.dumps(result))
                             implicitHeight: visible ? 44 : 0
                             visible: fineTuneHeader.expanded && fineTuneHeader.visible
                             clip: true
-                            opacity: (monitorSection.pending.hdrMode || 1) === 2 ? 0.38 : 1.0
-                            enabled: (monitorSection.pending.hdrMode || 1) !== 2
+                            opacity: (monitorSection.pending.hdrMode || 1) === 1 ? 0.38 : 1.0
+                            enabled: (monitorSection.pending.hdrMode || 1) !== 1
                             Behavior on opacity { NumberAnimation { duration: 150 } }
                             Behavior on implicitHeight { NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
                             Rectangle {
@@ -2598,60 +2807,6 @@ print(json.dumps(result))
                 }
             }
 
-            // ── Calibrate Monitor for HDR card ───────────────────────────
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.topMargin: 8
-                color: Appearance.colors.colLayer2
-                radius: Appearance.rounding.normal
-                clip: true
-                implicitHeight: 52
-                visible: {
-                    let cm = monitorSection.pending.colorMode ?? "srgb";
-                    return cm === "hdr" || cm === "hdredid";
-                }
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Appearance.rounding.normal
-                    color: calibrateArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
-                    Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                }
-
-                RowLayout {
-                    anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
-                    spacing: 10
-
-                    MaterialSymbol {
-                        text: "tune"
-                        iconSize: Appearance.font.pixelSize.larger
-                        color: monitorSection.monColor
-                    }
-                    StyledText {
-                        text: Translation.tr("Calibrate Monitor for HDR")
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        color: Appearance.colors.colOnLayer2
-                        Layout.fillWidth: true
-                    }
-                    MaterialSymbol {
-                        text: "chevron_right"
-                        iconSize: Appearance.font.pixelSize.larger
-                        color: Appearance.colors.colSubtext
-                    }
-                }
-
-                MouseArea {
-                    id: calibrateArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        hdrCalLoader.active = false;
-                        hdrCalLoader.active = true;
-                    }
-                }
-            }
-
             // ── HDR Calibration window loader ─────────────────────────────
             Loader {
                 id: hdrCalLoader
@@ -2660,7 +2815,7 @@ print(json.dumps(result))
                 onLoaded: {
                     let p = displayConfigPage.pendingChanges[monitorSection.monName] ?? {};
                     item.monitorName        = monitorSection.monName;
-                    item.fullscreenOnly     = (monitorSection.pending.hdrMode || 1) === 2;
+                    item.fullscreenOnly     = (monitorSection.pending.hdrMode || 1) === 1;
                     let d = displayConfigPage.hdrDefaults;
                     item.valMaxLuminance    = p.maxLuminance    ?? d.maxLuminance;
                     item.valMaxAvgLuminance = p.maxAvgLuminance ?? d.maxAvgLuminance;
@@ -2695,6 +2850,313 @@ print(json.dumps(result))
                     });
                     item.cancelled.connect(function() { hdrCalLoader.active = false; });
                     item.showFullScreen();
+                }
+            }
+
+            // ── ICC Profile card ──────────────────────────────────────────
+            // Mutually exclusive with HDR / cm = anything — when a profile
+            // is active the Color Management card above dims and blocks
+            // input, since Hyprland's ICC LUT replaces colorspace work.
+            // Requires Hyprland ≥ 0.55 with USE_ICC=1 (older builds silently
+            // ignore the `icc =` directive).
+            Rectangle {
+                id: iccCard
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                color: Appearance.colors.colLayer2
+                radius: Appearance.rounding.normal
+                clip: true
+                implicitHeight: iccCardCol.implicitHeight
+
+                ColumnLayout {
+                    id: iccCardCol
+                    anchors { left: parent.left; right: parent.right; top: parent.top }
+                    spacing: 0
+
+                    // ── Header row with Import button ─────────────────────
+                    Item {
+                        Layout.fillWidth: true
+                        implicitHeight: 52
+
+                        Rectangle {
+                            anchors.fill: parent
+                            topLeftRadius: Appearance.rounding.normal
+                            topRightRadius: Appearance.rounding.normal
+                            color: iccImportArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
+                            Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                        }
+
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
+                            spacing: 10
+
+                            MaterialSymbol {
+                                text: "upload_file"
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: monitorSection.monColor
+                            }
+                            StyledText {
+                                text: Translation.tr("Import ICC Profile")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer2
+                            }
+
+                            // Inline pill badge replacing the old hover-only
+                            // info tooltip — always visible so users can't
+                            // miss that activating an ICC profile takes
+                            // precedence over the cm/HDR controls above.
+                            Rectangle {
+                                implicitWidth: iccBadgeTxt.implicitWidth + 14
+                                implicitHeight: iccBadgeTxt.implicitHeight + 6
+                                radius: height / 2
+                                color: Appearance.colors.colLayer3
+                                border.width: 1
+                                border.color: Appearance.colors.colOutlineVariant
+                                StyledText {
+                                    id: iccBadgeTxt
+                                    anchors.centerIn: parent
+                                    text: Translation.tr("Overrides color management")
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: Appearance.colors.colSubtext
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            MaterialSymbol {
+                                text: "chevron_right"
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: Appearance.colors.colSubtext
+                            }
+                        }
+
+                        MouseArea {
+                            id: iccImportArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                iccPickerProc.targetMonitor = monitorSection.monName;
+                                iccPickerProc.running = false;
+                                iccPickerProc.running = true;
+                            }
+                        }
+                    }
+
+                    // ── Profile list ──────────────────────────────────────
+                    Repeater {
+                        model: displayConfigPage.iccProfiles
+
+                        delegate: Item {
+                            id: iccProfileRow
+                            required property var modelData
+                            required property int index
+
+                            property bool isActive: monitorSection.pending.iccProfile === modelData.path
+                            property bool isLast: index === displayConfigPage.iccProfiles.length - 1
+
+                            Layout.fillWidth: true
+                            implicitWidth: parent ? parent.width : 0
+                            implicitHeight: 40
+
+                            // Delete confirmation state
+                            property bool confirmingDelete: false
+
+                            Rectangle {
+                                anchors.fill: parent
+                                topLeftRadius: 0
+                                topRightRadius: 0
+                                bottomLeftRadius: iccProfileRow.isLast ? Appearance.rounding.normal : 0
+                                bottomRightRadius: iccProfileRow.isLast ? Appearance.rounding.normal : 0
+                                color: iccRowHover.containsMouse && !iccProfileRow.confirmingDelete
+                                    ? Appearance.colors.colLayer3 : "transparent"
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                            }
+
+                            Rectangle {
+                                anchors { left: parent.left; right: parent.right; top: parent.top }
+                                implicitHeight: 1
+                                color: Appearance.m3colors.m3outlineVariant
+                                opacity: 0.5
+                            }
+
+                            // Normal row content
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
+                                spacing: 8
+                                visible: !iccProfileRow.confirmingDelete
+
+                                // Radio indicator
+                                MouseArea {
+                                    id: iccRowHover
+                                    implicitWidth: 20
+                                    implicitHeight: 20
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: displayConfigPage.updatePending(monitorSection.monName, "iccProfile", iccProfileRow.isActive ? "" : iccProfileRow.modelData.path)
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 16; height: 16
+                                        radius: 8
+                                        color: "transparent"
+                                        border.width: 2
+                                        border.color: iccProfileRow.isActive
+                                            ? monitorSection.monColor
+                                            : Appearance.colors.colOutlineVariant
+                                        Behavior on border.color { ColorAnimation { duration: 100 } }
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: 8; height: 8
+                                            radius: 4
+                                            color: monitorSection.monColor
+                                            visible: iccProfileRow.isActive
+                                        }
+                                    }
+                                }
+
+                                // Profile name + (optional) source-monitor tag.
+                                // Clicking anywhere in this column toggles
+                                // the radio.
+                                Item {
+                                    Layout.fillWidth: true
+                                    implicitHeight: nameTxt.implicitHeight
+                                    RowLayout {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 8
+                                        StyledText {
+                                            id: nameTxt
+                                            text: iccProfileRow.modelData.name
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: iccProfileRow.isActive
+                                                ? monitorSection.monColor
+                                                : Appearance.colors.colOnLayer2
+                                        }
+                                        // Tag showing which monitor this profile was
+                                        // imported for. Lets the user tell at a glance
+                                        // when the same display library lists profiles
+                                        // earmarked for different physical panels.
+                                        StyledText {
+                                            visible: (iccProfileRow.modelData.importedFor ?? "") !== ""
+                                            text: `· ${iccProfileRow.modelData.importedFor}`
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            color: Appearance.colors.colSubtext
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: displayConfigPage.updatePending(monitorSection.monName, "iccProfile", iccProfileRow.isActive ? "" : iccProfileRow.modelData.path)
+                                    }
+                                }
+
+                                // Delete button
+                                MouseArea {
+                                    implicitWidth: 22
+                                    implicitHeight: 22
+                                    cursorShape: Qt.PointingHandCursor
+                                    hoverEnabled: true
+                                    onClicked: iccProfileRow.confirmingDelete = true
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "remove"
+                                        iconSize: Appearance.font.pixelSize.normal
+                                        color: Appearance.colors.colSubtext
+                                    }
+                                }
+                            }
+
+                            // Confirmation row
+                            RowLayout {
+                                anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
+                                spacing: 8
+                                visible: iccProfileRow.confirmingDelete
+
+                                MaterialSymbol {
+                                    text: "warning"
+                                    iconSize: Appearance.font.pixelSize.normal
+                                    color: Appearance.m3colors.m3error
+                                }
+                                StyledText {
+                                    text: Translation.tr("Delete \"%1\"?").arg(iccProfileRow.modelData?.name ?? "")
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    color: Appearance.colors.colOnLayer2
+                                    Layout.fillWidth: true
+                                }
+                                // Confirm delete
+                                MouseArea {
+                                    implicitWidth: 52
+                                    implicitHeight: 24
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        let path = iccProfileRow.modelData.path;
+                                        iccDeleteProc.deletedPath = path;
+                                        iccDeleteProc.targetMonitor = monitorSection.monName;
+                                        iccDeleteProc.command = ["rm", "--", path];
+                                        iccDeleteProc.running = false;
+                                        iccDeleteProc.running = true;
+                                        iccProfileRow.confirmingDelete = false;
+                                    }
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: Appearance.rounding.small
+                                        color: Appearance.m3colors.m3error
+                                        StyledText {
+                                            anchors.centerIn: parent
+                                            text: Translation.tr("Delete")
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            color: Appearance.m3colors.m3onError
+                                        }
+                                    }
+                                }
+                                // Cancel
+                                MouseArea {
+                                    implicitWidth: 52
+                                    implicitHeight: 24
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: iccProfileRow.confirmingDelete = false
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: Appearance.rounding.small
+                                        color: Appearance.colors.colLayer3
+                                        border.width: 1
+                                        border.color: Appearance.colors.colOutlineVariant
+                                        StyledText {
+                                            anchors.centerIn: parent
+                                            text: Translation.tr("Cancel")
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            color: Appearance.colors.colOnLayer2
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Empty state
+                    Item {
+                        Layout.fillWidth: true
+                        implicitHeight: 40
+                        visible: displayConfigPage.iccProfiles.length === 0
+
+                        Rectangle {
+                            anchors.fill: parent
+                            bottomLeftRadius: Appearance.rounding.normal
+                            bottomRightRadius: Appearance.rounding.normal
+                            color: "transparent"
+                        }
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                            implicitHeight: 1
+                            color: Appearance.m3colors.m3outlineVariant
+                            opacity: 0.5
+                        }
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("No profiles imported")
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
                 }
             }
 

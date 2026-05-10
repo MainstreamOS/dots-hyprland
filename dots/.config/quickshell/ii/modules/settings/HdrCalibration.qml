@@ -33,19 +33,24 @@ Window {
     signal done(var values)
     signal cancelled()
 
-    // Quick presets — pre-fill all values from a known panel type
+    // Quick presets — pre-fill all values from a known panel type, except
+    // the first ("Recommended") which keeps whatever's already in
+    // valMaxLuminance etc. Those came from initPending's chain
+    // (conf-file → monitorCapabilities.hdr*Luminance from the EDID's
+    // CTA-861 HDR Static Metadata block → hdrDefaults), so for a fresh
+    // monitor it's literally the panel's manufacturer-reported HDR specs.
     readonly property var presets: [
-        { label: Translation.tr("OLED / QD-OLED"),  icon: "✦", desc: Translation.tr("True black, high peak"),
-          v: { maxLuminance: 1000, maxAvgLuminance: 600, minLuminance: 0,
-               sdrMaxLuminance: 280, sdrMinLuminance: 0.003, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
+        { label: Translation.tr("Detected"),        icon: "◇", desc: Translation.tr("Tailored to what your display reports"),
+          recommended: true, v: null },
         { label: Translation.tr("LCD HDR 600"),     icon: "◧", desc: Translation.tr("Mid-range HDR LCD"),
           v: { maxLuminance: 600, maxAvgLuminance: 400, minLuminance: 0.05,
                sdrMaxLuminance: 250, sdrMinLuminance: 0.008, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
         { label: Translation.tr("LCD HDR 1000"),    icon: "◨", desc: Translation.tr("High-end HDR LCD"),
           v: { maxLuminance: 1000, maxAvgLuminance: 600, minLuminance: 0.03,
                sdrMaxLuminance: 300, sdrMinLuminance: 0.005, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
-        { label: Translation.tr("Custom"),          icon: "◇", desc: Translation.tr("Start from current values"),
-          v: null },
+        { label: Translation.tr("OLED / QD-OLED"),  icon: "✦", desc: Translation.tr("True black, high peak"),
+          v: { maxLuminance: 1000, maxAvgLuminance: 600, minLuminance: 0,
+               sdrMaxLuminance: 280, sdrMinLuminance: 0.003, sdrBrightness: 1.0, sdrSaturation: 1.0 }},
     ]
 
     function loadPreset(preset) {
@@ -353,9 +358,17 @@ Window {
                                         anchors.fill: parent
                                         implicitHeight: presetCol.implicitHeight + 20
                                         radius: 8
-                                        color: presetArea.containsMouse ? "#1a1a1a" : "#0e0e0e"
-                                        border.width: 1
-                                        border.color: presetArea.containsMouse ? "#3a3a3a" : "#1e1e1e"
+                                        // Recommended preset gets a brighter base + a 2px accent
+                                        // border so the user's eye lands on it the moment the
+                                        // calibration page opens, without needing to scan all four.
+                                        property bool isRecommended: presetArea.modelData.recommended === true
+                                        color: presetArea.containsMouse
+                                            ? (isRecommended ? "#2a2a2a" : "#1a1a1a")
+                                            : (isRecommended ? "#1c1c1c" : "#0e0e0e")
+                                        border.width: isRecommended ? 2 : 1
+                                        border.color: presetArea.containsMouse
+                                            ? (isRecommended ? "#7a7a7a" : "#3a3a3a")
+                                            : (isRecommended ? "#5a5a5a" : "#1e1e1e")
                                         Behavior on color { ColorAnimation { duration: 100 } }
                                         Behavior on border.color { ColorAnimation { duration: 100 } }
 
@@ -376,6 +389,27 @@ Window {
                                                     font.pixelSize: 14
                                                     font.weight: Font.Medium
                                                 }
+                                                // Inline badge sitting flush to the right of the
+                                                // title so it reads as a qualifier on the preset
+                                                // (e.g. "Detected — RECOMMENDED") rather than a
+                                                // floating chip in the corner.
+                                                Rectangle {
+                                                    visible: presetRect.isRecommended
+                                                    implicitWidth: recBadge.implicitWidth + 12
+                                                    implicitHeight: recBadge.implicitHeight + 4
+                                                    radius: height / 2
+                                                    color: "#3a3a3a"
+                                                    Text {
+                                                        id: recBadge
+                                                        anchors.centerIn: parent
+                                                        text: Translation.tr("RECOMMENDED")
+                                                        color: "#dddddd"
+                                                        font.pixelSize: 9
+                                                        font.weight: Font.DemiBold
+                                                        font.letterSpacing: 0.5
+                                                    }
+                                                }
+                                                Item { Layout.fillWidth: true }
                                             }
                                             Text {
                                                 text: presetArea.modelData.desc
