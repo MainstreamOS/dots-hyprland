@@ -123,10 +123,24 @@ LazyLoader {
                     }
                     Item { Layout.fillWidth: true }
                     StyledText {
+                        id: volumePctText
+                        // Pin the width to whatever "100%" would render at
+                        // with this font, so the popup stops resizing every
+                        // time the volume changes a digit width (5% → 50%
+                        // → 100%). horizontalAlignment then keeps the text
+                        // right-justified inside that fixed slot.
+                        Layout.preferredWidth: pctMetrics.advanceWidth
+                        horizontalAlignment: Text.AlignRight
                         text: Math.round((Audio.sink?.audio.volume ?? 0) * 100) + "%"
                         font.pixelSize: Appearance.font.pixelSize.small
                         font.family: "monospace"
                         color: Appearance.colors.colSubtext
+
+                        TextMetrics {
+                            id: pctMetrics
+                            text: "100%"
+                            font: volumePctText.font
+                        }
                     }
                 }
 
