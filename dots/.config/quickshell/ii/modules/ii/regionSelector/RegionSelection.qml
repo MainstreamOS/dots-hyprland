@@ -427,7 +427,12 @@ PanelWindow {
                     && root.targetedRegionWidth === modelData.size[0] //
                     && root.targetedRegionHeight === modelData.size[1])
 
-                opacity: root.draggedAway ? 0 : root.targetRegionOpacity
+                // Only the hovered region is visible — keeping every window's
+                // outline drawn at once made overlapping windows hard to read
+                // and added visual noise. Non-targeted regions stay in the
+                // model (so updateTargetedRegion can still hit-test them on
+                // mouse-move) but render at opacity 0 until hovered.
+                opacity: (root.draggedAway || !targeted) ? 0 : root.targetRegionOpacity
                 borderColor: root.windowBorderColor
                 fillColor: targeted ? root.windowFillColor : "transparent"
                 text: `${modelData.class}`
@@ -451,12 +456,14 @@ PanelWindow {
                 required property var modelData
                 clientDimensions: modelData
                 targeted: !root.draggedAway &&
-                    (root.targetedRegionX === modelData.at[0] 
+                    (root.targetedRegionX === modelData.at[0]
                     && root.targetedRegionY === modelData.at[1]
                     && root.targetedRegionWidth === modelData.size[0]
                     && root.targetedRegionHeight === modelData.size[1])
 
-                opacity: root.draggedAway ? 0 : root.targetRegionOpacity
+                // Hover-only visibility, same rationale as the window
+                // Repeater above.
+                opacity: (root.draggedAway || !targeted) ? 0 : root.targetRegionOpacity
                 borderColor: root.windowBorderColor
                 fillColor: targeted ? root.windowFillColor : "transparent"
                 text: `${modelData.namespace}`
@@ -480,12 +487,14 @@ PanelWindow {
                 required property var modelData
                 clientDimensions: modelData
                 targeted: !root.draggedAway &&
-                    (root.targetedRegionX === modelData.at[0] 
+                    (root.targetedRegionX === modelData.at[0]
                     && root.targetedRegionY === modelData.at[1]
                     && root.targetedRegionWidth === modelData.size[0]
                     && root.targetedRegionHeight === modelData.size[1])
 
-                opacity: root.draggedAway ? 0 : root.contentRegionOpacity
+                // Hover-only visibility, same rationale as the window
+                // Repeater above.
+                opacity: (root.draggedAway || !targeted) ? 0 : root.contentRegionOpacity
                 borderColor: root.imageBorderColor
                 fillColor: targeted ? root.imageFillColor : "transparent"
                 text: Translation.tr("Content region")
