@@ -20,7 +20,6 @@ ContentPage {
     property bool shadowsEnabled: true
     property bool bordersEnabled: true
     property bool roundCornersEnabled: true
-    property bool titleBarsEnabled: false
     // Mirrors whether scrolloverview is currently loaded into Hyprland.
     // Source of truth is `hyprctl plugin list` (read by scrollOverviewStateReader),
     // not the conf file — Hyprland only re-reads `plugin = ...` directives at
@@ -52,7 +51,7 @@ ContentPage {
     Component.onCompleted: {
         lockTimeoutReader.running = true
         decoReader.running = true
-        titleBarReader.running = true
+        scrollOverviewConfReader.running = true
         scrollOverviewStateReader.running = true
     }
 
@@ -65,30 +64,31 @@ ContentPage {
             if (Config.themeApplyInProgress) return
             decoReader.running = false
             decoReader.running = true
-            titleBarReader.running = false
-            titleBarReader.running = true
+            scrollOverviewConfReader.running = false
+            scrollOverviewConfReader.running = true
             scrollOverviewStateReader.running = false
             scrollOverviewStateReader.running = true
         }
     }
 
     Process {
-        id: titleBarReader
+        id: scrollOverviewConfReader
         command: ["cat", root.customGeneralConf]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => titleBarReader.buf += data + "\n" }
+        stdout: SplitParser { onRead: data => scrollOverviewConfReader.buf += data + "\n" }
         onExited: {
-            root.titleBarsEnabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(titleBarReader.buf);
             // Pull current scrolloverview values from the plugin config
             // block. Match is scoped under `scrolloverview { ... }` (lazy
             // [\s\S]*? skips through nested blocks like `shadow {}`).
             // If a value isn't present we leave the default in place —
             // the plugin uses the same defaults internally.
-            let gapMatch = titleBarReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bworkspace_gap\s*=\s*(\d+)/);
+            // (Title bars enabled-state is read by services/TitleBars.qml,
+            // which reads the same file independently.)
+            let gapMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bworkspace_gap\s*=\s*(\d+)/);
             if (gapMatch) root.scrollOverviewWorkspaceGap = parseInt(gapMatch[1]);
             // scale is a float (e.g. 0.5) — accept optional decimal part
-            let scaleMatch = titleBarReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bscale\s*=\s*(\d+(?:\.\d+)?)/);
+            let scaleMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*\{[\s\S]*?\bscale\s*=\s*(\d+(?:\.\d+)?)/);
             if (scaleMatch) root.scrollOverviewWorkspaceScale = parseFloat(scaleMatch[1]);
         }
     }
@@ -447,40 +447,16 @@ ContentPage {
                     text: Translation.tr("Rounded corners on windows and the bar")
                 }
             }
+            // All file-edit + plugin load/unload mechanics live in the
+            // TitleBars service so this page and Settings → Layouts
+            // share one implementation.
             ConfigSwitch {
                 buttonIcon: "title"
                 text: Translation.tr("Title Bars")
-                checked: root.titleBarsEnabled
+                checked: TitleBars.enabled
                 onCheckedChanged: {
                     if (!root._decoReady) return;
-                    root.titleBarsEnabled = checked;
-                    // Toggle the plugin = .../hyprbars.so directive in
-                    // custom/general.conf. If the line already exists
-                    // (commented or not) we just flip its comment state;
-                    // if it's missing entirely we prepend a fresh
-                    // directive on enable. Mirrors the scrolloverview
-                    // toggle's self-healing pattern so a user whose
-                    // custom/general.conf predates the install hook
-                    // adding the line can still flip the toggle on
-                    // and have it just work. Hyprland loads the .so
-                    // directly when the directive is uncommented, so
-                    // `hyprctl reload` is enough.
-                    let py =
-                        "import re, sys, os\n" +
-                        "enable = sys.argv[1] == '1'\n" +
-                        "conf = sys.argv[2]\n" +
-                        "plugin_path = os.path.expanduser('~/.local/share/hyprland/plugins/hyprbars.so')\n" +
-                        "text = open(conf).read()\n" +
-                        "if re.search(r'^[ \\t]*#?[ \\t]*plugin[ \\t]*=[ \\t]*.*hyprbars\\.so', text, flags=re.M):\n" +
-                        "    if enable:\n" +
-                        "        text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
-                        "    else:\n" +
-                        "        text = re.sub(r'^([ \\t]*)(?!#)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
-                        "elif enable:\n" +
-                        "    text = '# hyprbars plugin load directive\\nplugin = ' + plugin_path + '\\n\\n' + text\n" +
-                        "open(conf, 'w').write(text)\n";
-                    root.runPy(py, [checked ? "1" : "0", root.customGeneralConf])
-                    Quickshell.execDetached(["hyprctl", "reload"])
+                    TitleBars.setEnabled(checked);
                 }
                 StyledToolTip {
                     text: Translation.tr("Show title bars on windows")

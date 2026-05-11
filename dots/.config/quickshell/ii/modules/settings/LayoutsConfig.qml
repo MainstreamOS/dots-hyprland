@@ -16,7 +16,6 @@ ContentPage {
     property var workspaceLayouts: ["dwindle","dwindle","dwindle","dwindle","dwindle",
                                     "dwindle","dwindle","dwindle","dwindle","dwindle"]
     property var workspaceFloats: [false,false,false,false,false,false,false,false,false,false]
-    property bool titleBarsEnabled: false
 
     readonly property bool perWorkspace: currentLayout === "per_workspace"
     readonly property string hyprlandConf: Quickshell.env("HOME") + "/.config/hypr/hyprland.conf"
@@ -26,19 +25,6 @@ ContentPage {
 
     Component.onCompleted: {
         layoutProc.running = false; layoutProc.running = true
-        titleBarReader.running = true
-    }
-
-    Process {
-        id: titleBarReader
-        command: ["cat", root.customGeneralConf]
-        property string buf: ""
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => titleBarReader.buf += data + "\n" }
-        onExited: {
-            // Enabled when the plugin = .../hyprbars.so line exists and is NOT commented out
-            root.titleBarsEnabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(titleBarReader.buf);
-        }
     }
 
     Process {
@@ -768,9 +754,9 @@ ContentPage {
                             Layout.fillWidth: true
                             implicitHeight: 130
                             radius: Appearance.rounding.normal
-                            color: root.titleBarsEnabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
-                            border.width: root.titleBarsEnabled ? 2 : 1
-                            border.color: root.titleBarsEnabled ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+                            color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
+                            border.width: TitleBars.enabled ? 2 : 1
+                            border.color: TitleBars.enabled ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
 
                             Item {
                                 anchors { fill: parent; margins: 10 }
@@ -782,8 +768,8 @@ ContentPage {
                                     border.width: 1; border.color: Appearance.colors.colOutlineVariant
                                     Rectangle {
                                         width: parent.width; height: 14; radius: 2
-                                        color: root.titleBarsEnabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                        border.width: root.titleBarsEnabled ? 1 : 0
+                                        color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
+                                        border.width: TitleBars.enabled ? 1 : 0
                                         border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
                                         Row {
                                             anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
@@ -812,8 +798,8 @@ ContentPage {
                                     border.width: 1; border.color: Appearance.colors.colOutlineVariant
                                     Rectangle {
                                         width: parent.width; height: 14; radius: 2
-                                        color: root.titleBarsEnabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                        border.width: root.titleBarsEnabled ? 1 : 0
+                                        color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
+                                        border.width: TitleBars.enabled ? 1 : 0
                                         border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
                                         Row {
                                             anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
@@ -837,8 +823,8 @@ ContentPage {
                                     border.width: 1; border.color: Appearance.colors.colOutlineVariant
                                     Rectangle {
                                         width: parent.width; height: 14; radius: 2
-                                        color: root.titleBarsEnabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                        border.width: root.titleBarsEnabled ? 1 : 0
+                                        color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
+                                        border.width: TitleBars.enabled ? 1 : 0
                                         border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
                                         Row {
                                             anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
@@ -858,31 +844,17 @@ ContentPage {
                             }
                         }
 
-                        // Toggle centered below the card
+                        // Toggle centered below the card. All the file-edit and
+                        // plugin load/unload mechanics live in the TitleBars
+                        // service so this page and Settings → Interface can't
+                        // drift out of sync (they used to — see TitleBars.qml
+                        // for the full story).
                         ConfigSwitch {
                             Layout.alignment: Qt.AlignHCenter
                             buttonIcon: "title"
                             text: Translation.tr("Title Bars")
-                            checked: root.titleBarsEnabled
-                            onCheckedChanged: {
-                                if (checked === root.titleBarsEnabled) return;
-                                root.titleBarsEnabled = checked;
-                                // Toggle by commenting/uncommenting the plugin = .../hyprbars.so line
-                                // in custom/general.conf. No hyprpm needed — Hyprland loads the .so
-                                // directly when the directive is present and uncommented.
-                                let py =
-                                    "import re, sys\n" +
-                                    "enable = sys.argv[1] == '1'\n" +
-                                    "conf = sys.argv[2]\n" +
-                                    "text = open(conf).read()\n" +
-                                    "if enable:\n" +
-                                    "    text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
-                                    "else:\n" +
-                                    "    text = re.sub(r'^([ \\t]*)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
-                                    "open(conf, 'w').write(text)\n";
-                                Quickshell.execDetached(["python3", "-c", py, checked ? "1" : "0", root.customGeneralConf]);
-                                Quickshell.execDetached(["hyprctl", "reload"]);
-                            }
+                            checked: TitleBars.enabled
+                            onCheckedChanged: TitleBars.setEnabled(checked)
                             StyledToolTip {
                                 text: Translation.tr("Show title bars on windows")
                             }
