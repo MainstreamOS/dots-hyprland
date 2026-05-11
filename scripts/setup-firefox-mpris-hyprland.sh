@@ -32,6 +32,7 @@ fi
 
 command -v git   >/dev/null 2>&1 || fatal "git not found — install with: sudo pacman -S git"
 command -v cargo >/dev/null 2>&1 || fatal "cargo (rust) not found — install with: sudo pacman -S rust"
+command -v zip   >/dev/null 2>&1 || fatal "zip not found — install with: sudo pacman -S zip (upstream install.sh bundles the extension as a .xpi via zip)"
 
 # ---------- clone or fast-forward -----------------------------------------
 
