@@ -3396,6 +3396,21 @@ except Exception:
         }
     }
 
+    // ── Section divider ─────────────────────────────────────────────────────
+    // Material 3 full-bleed Divider (1dp at outline-variant) marking the
+    // hard break between the display-output settings above and the Night
+    // Light filter below — these are unrelated enough that the eye should
+    // register them as separate pages of intent rather than a continuous
+    // flow. Same divider treatment ThemesConfig uses between Themes and
+    // Day/Night Themes.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.topMargin: 24
+        Layout.bottomMargin: 12
+        implicitHeight: 1
+        color: Appearance.m3colors.m3outlineVariant
+    }
+
     // ── Night Light ────────────────────────────────────────────────────────
     // Mirrors Windows' "Night Light" panel: an instant Enable toggle, a
     // Schedule toggle, and (when scheduling is on) a pair of "Turn on" /
