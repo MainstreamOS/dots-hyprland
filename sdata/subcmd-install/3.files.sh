@@ -351,7 +351,7 @@ function setup_hyprland_plugins(){
   if ! _ensure_hyprland_plugin \
         "hyprbars" \
         "https://github.com/MainstreamOS/hyprland-plugins" \
-        "main" \
+        "mainstream" \
         "hyprbars" \
         "hyprbars.so"; then
     return 1
