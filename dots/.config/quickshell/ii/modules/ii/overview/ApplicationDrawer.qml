@@ -19,22 +19,13 @@ Item {
     property real collapsedHeight: 400 // Better initial height
     property real availableHeight: 0
     property real availableWidth: 0
-    // Caller-supplied trim applied to the expanded height as a flat
-    // pixel delta — used by Overview's scrolloverview-launcher mode
-    // to compensate for the SearchWidget sitting above the drawer
-    // (so the drawer's bottom-y matches the non-launcher mode's,
-    // keeping the gap to the dock identical across modes).
-    // Subtracted *after* the 0.85 factor, not folded into
-    // availableHeight, so the trim is one-for-one with the top
-    // displacement instead of being attenuated.
-    property real expandedHeightAdjustment: 0
 
     property real expandedHeight: {
         // Use most of available height when expanded, but leave space for top bar
         if (availableHeight > 0) {
             // Use 85% of available height to ensure it doesn't overlap top bar
             // This leaves ~15% for the bar and some breathing room
-            return Math.max(100, availableHeight * 0.85 - expandedHeightAdjustment);
+            return Math.max(100, availableHeight * 0.85);
         }
         return 600;
     }
@@ -82,73 +73,9 @@ Item {
     // Bumped on folder changes to force ScriptModel re-evaluation
     property int _folderRevision: 0
 
-    // Gates the open/close height Behavior. Default true so the
-    // collapse-on-close, expand-on-toggle, etc. all keep animating.
-    // Overview.qml flips this off momentarily when opening straight
-    // to expanded mode (trigger = "Scrolling Overview") so the drawer
-    // appears fully extended without the resize transition, then
-    // re-enables it on the next event-loop tick.
-    property bool animateExpand: true
-
-    function disableExpandAnimation() {
-        root.animateExpand = false;
-    }
-    function enableExpandAnimation() {
-        root.animateExpand = true;
-    }
-
-    // When true, the drawer's internal search field is hidden — used
-    // by Overview's scrolloverview-launcher mode where the top
-    // SearchWidget is the single search owner. Typing in that mode
-    // hides the drawer entirely (search results take the surface),
-    // so root.searchText simply stays "" while this is on; we don't
-    // need to pipe text through.
-    property bool useExternalSearch: false
-
-    // Re-route a printable keystroke that landed somewhere other than
-    // the drawer's search field (typically a focused grid item, after
-    // the user has pressed an arrow key) back into the search field.
-    // Focus moves to searchField and the character is appended at the
-    // cursor — so a user who just navigated to an icon and starts
-    // typing keeps filtering instead of dropping the keystroke.
-    function focusSearchAndAppend(text) {
-        if (!text || text.length === 0) return;
-        searchField.forceActiveFocus();
-        searchField.text += text;
-        searchField.cursorPosition = searchField.text.length;
-    }
-
-    // Arrow-key navigation hook called by Overview's columnLayout when
-    // the drawer is expanded: routes Left/Right/Up/Down into the app
-    // grid's currentIndex and forceActiveFocus's the resulting delegate
-    // so the existing focus-driven highlight (RippleButton's
-    // colBackground binding on appButton.focus) lights up the right
-    // tile and Enter on that tile launches the app. Returns true if
-    // the event should be marked accepted.
-    function moveSelection(key) {
-        if (appGrid.count === 0) return false;
-        if (appGrid.currentIndex < 0) {
-            appGrid.currentIndex = 0;
-        } else if (key === Qt.Key_Right) {
-            appGrid.moveCurrentIndexRight();
-        } else if (key === Qt.Key_Left) {
-            appGrid.moveCurrentIndexLeft();
-        } else if (key === Qt.Key_Down) {
-            appGrid.moveCurrentIndexDown();
-        } else if (key === Qt.Key_Up) {
-            appGrid.moveCurrentIndexUp();
-        } else {
-            return false;
-        }
-        const item = appGrid.itemAtIndex(appGrid.currentIndex);
-        if (item) item.forceActiveFocus();
-        return true;
-    }
-
     implicitHeight: root.expanded ? root.expandedHeight : root.collapsedHeight
 
     Behavior on implicitHeight {
-        enabled: root.animateExpand
         NumberAnimation {
             duration: Appearance.animation.elementResize.duration
             easing.type: Appearance.animation.elementResize.type
@@ -342,10 +269,10 @@ Item {
             TextField {
                 id: searchField
                 Layout.fillWidth: true
-                visible: root.expanded && !root.useExternalSearch
-                Layout.maximumHeight: (root.expanded && !root.useExternalSearch) ? implicitHeight : 0
-                opacity: (root.expanded && !root.useExternalSearch) ? 1 : 0
-                focus: root.expanded && !root.useExternalSearch
+                visible: root.expanded
+                Layout.maximumHeight: root.expanded ? implicitHeight : 0
+                opacity: root.expanded ? 1 : 0
+                focus: root.expanded
 
                 Behavior on opacity {
                     NumberAnimation {
