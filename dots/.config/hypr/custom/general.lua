@@ -42,7 +42,7 @@ hl.plugin.load(scrolloverviewSo)
 -- hyprbars plugin. Same install path. Commented out by default — the
 -- Title Bars toggle in Settings → Interface → Decorations toggles the
 -- `-- ` prefix on this exact line via TitleBars.qml's self-healing path.
-hl.plugin.load(HOME .. "/.local/share/hyprland/plugins/hyprbars.so")
+-- hl.plugin.load(HOME .. "/.local/share/hyprland/plugins/hyprbars.so")
 
 -- Plugin config — applied DEFERRED via timer (not at parse time).
 --
