@@ -8,6 +8,7 @@ import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import Quickshell.Wayland
 
 Singleton {
     id: root
@@ -222,7 +223,20 @@ Singleton {
                     execute: () => {
                         Emojis.recordUsage(emoji);
                         Quickshell.clipboardText = emoji;
-                        Quickshell.execDetached(["bash", "-c", `sleep ${Cliphist.pasteDelay} && ${Cliphist.pressPasteCommand}`]);
+                        // Capture the underlying toplevel's address now,
+                        // BEFORE the launcher's close animation lets
+                        // Hyprland's "last window" pointer drift to some
+                        // other toplevel (which is what focuscurrentorlast
+                        // was hitting — wrong app every time).
+                        // ToplevelManager.activeToplevel tracks
+                        // wlr-foreign-toplevel-management, which ignores
+                        // layer-shell focus, so it still points at the
+                        // app the user was on when they hit Super+. .
+                        const top = ToplevelManager.activeToplevel;
+                        const addr = top && top.HyprlandToplevel ? `0x${top.HyprlandToplevel.address}` : "";
+                        const focusCmd = addr ? `hyprctl dispatch focuswindow address:${addr} >/dev/null; ` : "";
+                        Quickshell.execDetached(["bash", "-c",
+                            `${focusCmd}sleep ${Cliphist.pasteDelay} && wtype -- '${StringUtils.shellSingleQuoteEscape(emoji)}'`]);
                     }
                 });
             }
