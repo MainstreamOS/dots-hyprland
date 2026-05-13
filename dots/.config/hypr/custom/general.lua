@@ -189,70 +189,17 @@ end
 -- (hyprbars only clears the button list on preReload between reloads).
 hl.on("config.reloaded", applyPluginConfig)
 
--- Hyprland 0.55 scrolloverview load-race workaround.
--- Plugin loading is async (hl.plugin.load just queues; the actual load runs
--- via PluginSystem::updateConfigPlugins().then(...)). PLUGIN_INIT can land
--- mid-layer-shell-setup and wedge Quickshell's dock pointer dispatch.
--- Unloading + reloading via hyprctl AFTER quickshell registers its layers
--- clears the wedge for the rest of the session.
+-- Hyprland 0.55 scrolloverview load-race workaround lives in
+-- custom/execs.lua, which runs scripts/scrolloverview-power-cycle.sh
+-- on hyprland.start. The bash script polls hyprctl layers until a
+-- Quickshell namespace appears, then unconditionally unloads + reloads
+-- the plugin so its input hook re-inserts after Quickshell's surface.
 --
--- Idempotency: the previous implementation used a Lua-local `cycled` flag
--- that reset on every config reload. Every time Quickshell reloads
--- (Ctrl+Super+R, or layer rebuild from a monitor event), its layer
--- surfaces re-register and layer.opened fires again — so the cycle ran
--- repeatedly, and a race in the unload+load window could leave the plugin
--- stuck unloaded. The marker file below sits in Hyprland's own runtime
--- dir (auto-cleaned when Hyprland exits) so the cycle runs at most ONCE
--- per Hyprland session, no matter how many times Quickshell reloads.
---
--- Plus a fast-path: if the plugin's Lua function is already registered
--- by the time we observe the first qualifying layer.opened, PLUGIN_INIT
--- ran to completion without the wedge → no cycle needed at all. Skip
--- the disruptive unload+load entirely.
-local function _cycleMarkerPath()
-    local his = os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or "default"
-    local rt = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-    return rt .. "/hypr/" .. his .. "/.scrolloverview-cycled"
-end
-
-local function _markerExists(path)
-    local f = io.open(path, "r")
-    if not f then return false end
-    f:close()
-    return true
-end
-
-local function _writeMarker(path)
-    local f = io.open(path, "w")
-    if f then f:close() end
-end
-
-hl.on("layer.opened", function(ls)
-    if ls == nil then return end
-    local ns = ls.namespace or ""
-    if not (ns:match("^quickshell") or ns:match("^qs[-_]") or ns:match("^ii[-_]")) then
-        return
-    end
-
-    local marker = _cycleMarkerPath()
-    if _markerExists(marker) then return end
-
-    -- Fast path: plugin's Lua function is already registered → init ran
-    -- cleanly. Mark cycled so subsequent layer events don't re-check.
-    if hl.plugin and hl.plugin.scrolloverview and hl.plugin.scrolloverview.overview then
-        _writeMarker(marker)
-        return
-    end
-
-    -- Plugin is wedged or PLUGIN_INIT hasn't completed — run the cycle.
-    _writeMarker(marker)
-
-    -- Brief settle so a second layer registering in the same tick still
-    -- lands before we yank the plugin.
-    hl.timer(function()
-        hl.exec_cmd('hyprctl plugin unload "' .. scrolloverviewSo .. '"')
-        hl.timer(function()
-            hl.exec_cmd('hyprctl plugin load "' .. scrolloverviewSo .. '"')
-        end, { timeout = 100, type = "oneshot" })
-    end, { timeout = 200, type = "oneshot" })
-end)
+-- A previous Lua-only version of this gate (hl.on("layer.opened") +
+-- marker file) had a fast-path bug: it skipped the cycle when
+-- hl.plugin.scrolloverview.overview was already registered, but the
+-- wedge can be present even with the plugin fully loaded (the race is
+-- between Quickshell's surface and the plugin's input hook, not the
+-- PLUGIN_INIT completion). Unconditional cycling at startup is the
+-- safer shape — the cost is a ~300ms plugin-absent window, the
+-- benefit is a guaranteed wedge-clear regardless of timing.

@@ -6,10 +6,8 @@ hl.on("hyprland.start", function()
     -- hl.exec_cmd("fcitx5")
 
     hl.exec_cmd("$HOME/.config/hypr/custom/scripts/bluetooth-autoconnect.sh")
-end)
 
--- The scrolloverview load-race workaround used to live here as an exec-once
--- of scrolloverview-power-cycle.sh. It now lives in custom/general.lua,
--- triggered by hl.on("layer.opened") filtered by Quickshell namespace —
--- same cycle (hyprctl plugin unload/load) but a deterministic trigger
--- instead of bash polling.
+    -- Hyprland 0.55 scrolloverview load-race workaround — see the script
+    -- header for the full story. Logs to ~/.local/state/scrolloverview-power-cycle.log.
+    hl.exec_cmd("$HOME/.config/hypr/custom/scripts/scrolloverview-power-cycle.sh")
+end)
