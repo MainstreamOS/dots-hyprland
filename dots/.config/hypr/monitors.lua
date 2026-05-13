@@ -1,0 +1,17 @@
+-- Monitor configuration. Rewritten by Quickshell Settings → Display.
+--
+-- Hyprland auto-detects connected outputs at preferred mode + scale 1
+-- when no `hl.monitor(...)` calls are present, which is what we want
+-- in the skel — the first-boot wallpaper / Welcome / Display panel
+-- runs against the auto-detected layout, and any user changes there
+-- overwrite this file with explicit hl.monitor blocks.
+--
+-- This file exists primarily so `tryRequire("monitors")` in
+-- hyprland.lua resolves cleanly on a fresh install. Removing it
+-- triggers Hyprland's config-error overlay even though the require
+-- is pcall-wrapped — the loader logs "module not found" before
+-- pcall catches it.
+--
+-- nwg-displays (sudo pacman -S nwg-displays) is the legacy
+-- third-party GUI for editing this file in hyprlang form; it does
+-- NOT understand Lua syntax, so prefer Quickshell Settings.
