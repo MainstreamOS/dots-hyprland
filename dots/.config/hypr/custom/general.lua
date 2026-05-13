@@ -107,7 +107,7 @@ local function applyPluginConfig()
             plugin = {
                 hyprbars = {
                     bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
-                    ["col.text"] = "rgba(00000000)",
+                    bar_title_enabled = false,
                     bar_height = 30,
                     bar_padding = 10,
                     bar_button_padding = 5,
