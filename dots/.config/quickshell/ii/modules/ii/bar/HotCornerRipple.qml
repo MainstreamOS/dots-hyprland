@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs
@@ -201,17 +202,25 @@ Variants {
             // is unaffected.
             property bool toggleCooldown: false
 
-            // Disable entirely when:
-            //  - trigger is "off", OR
-            //  - trigger is "scrolloverview" but the plugin isn't loaded
-            //    (no dispatcher to talk to).
-            // "default" is always enabled — the built-in overview is
-            // part of the shell, not a separate plugin.
-            enabled: {
-                if (trigger === "off") return false;
-                if (trigger === "scrolloverview") return GlobalStates.scrollOverviewEnabled;
-                return true; // "default"
-            }
+            // Disable only when the user explicitly set the trigger to "off".
+            //
+            // Previously this also disabled when scrolloverview plugin wasn't
+            // loaded, but `GlobalStates.scrollOverviewEnabled` re-polls via
+            // `hyprctl plugin list` on every Hyprland `configreloaded` event
+            // — including the plugin unload+load cycle in our custom/general.lua
+            // layer.opened workaround. If the user's cursor was inside the
+            // corner during that ~100ms re-poll window, MouseArea disable
+            // would drop the hover state; on re-enable, Qt doesn't synthesize
+            // a fresh onEntered until the cursor exits and re-enters. Result:
+            // hot corner "fails to activate every so often" until the user
+            // moves the cursor away.
+            //
+            // The dispatch invocation already handles the not-loaded case
+            // gracefully (hyprctl eval prints a Lua error and exits non-zero,
+            // no overview opens). Tradeoff: a permanently-unloaded plugin
+            // leaves the ripple firing into nothing — but that's better than
+            // missed activations on a working setup.
+            enabled: trigger !== "off"
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton
 
@@ -286,6 +295,66 @@ Variants {
                 interval: 500
                 onTriggered: triggerArea.toggleCooldown = false
             }
+            // Self-healing dispatch for the scrolloverview plugin.
+            //
+            // Failure mode: the layer.opened workaround in custom/general.lua
+            // does an `hyprctl plugin unload + 100ms + load` cycle every
+            // time Quickshell's layer surface registers (which happens on
+            // initial Hyprland start AND on every Quickshell reload). The
+            // cycle is fire-and-forget — if the re-load races with the
+            // plugin's previous unload, or hyprctl returns "Cannot load a
+            // plugin twice" during a transient state, the plugin can end up
+            // unloaded. Once unloaded, hl.plugin.scrolloverview is nil and
+            // every corner dispatch errors with "attempt to index a nil
+            // value (field 'scrolloverview')".
+            //
+            // The Lua expression below guards on the function existing:
+            //   - If loaded → call overview("on")
+            //   - If nil → return a sentinel string we can grep for in the
+            //     dispatchProc.onExited handler, which then triggers a
+            //     force-reload so the NEXT click works.
+            //
+            // Wrapping in a do/return block keeps the expression a single
+            // statement that the hyprctl eval wrap (`return hl.dispatch(<X>)`
+            // — see HyprCtl.cpp:1108) doesn't trip over.
+            Process {
+                id: dispatchProc
+                // Bare dispatch — no guard. When the plugin's Lua function
+                // is missing, the eval errors out with "attempt to index a
+                // nil value (field 'scrolloverview')". onExited greps that
+                // text from stdout/stderr and triggers the force-reload so
+                // the NEXT hover succeeds.
+                command: ["hyprctl", "eval",
+                    'hl.plugin.scrolloverview.overview("on")']
+                property string outBuf: ""
+                property string errBuf: ""
+                onRunningChanged: if (running) { outBuf = ""; errBuf = "" }
+                stdout: SplitParser { onRead: data => dispatchProc.outBuf += data + "\n" }
+                stderr: SplitParser { onRead: data => dispatchProc.errBuf += data + "\n" }
+                onExited: {
+                    // Self-heal: scrolloverview's Lua function is missing
+                    // (plugin transiently unloaded by the layer.opened
+                    // workaround race in custom/general.lua). Kick a
+                    // `hyprctl plugin load` async so the next hover works.
+                    const missing = dispatchProc.outBuf.indexOf("'scrolloverview'") >= 0
+                                  || dispatchProc.errBuf.indexOf("'scrolloverview'") >= 0;
+                    if (missing) {
+                        soReloadProc.running = false;
+                        soReloadProc.running = true;
+                    }
+                }
+            }
+            // Force-reload helper for when the scrolloverview plugin has
+            // gone missing. Tries `plugin load` directly; the prior unload
+            // may or may not have happened cleanly, hence `|| true` so the
+            // pipeline doesn't fail if Hyprland already considers it loaded
+            // (`Cannot load a plugin twice!`).
+            Process {
+                id: soReloadProc
+                command: ["bash", "-c",
+                    "hyprctl plugin load " +
+                    "\"$HOME/.local/share/hyprland/plugins/scrolloverview.so\" 2>&1 || true"]
+            }
             Timer {
                 // Waits for the full ripple cascade before opening the
                 // chosen overview. Action depends on the current trigger:
@@ -299,7 +368,16 @@ Variants {
                 onTriggered: {
                     if (GlobalStates.overviewOpen) return;
                     if (triggerArea.trigger === "scrolloverview") {
-                        Hyprland.dispatch("scrolloverview:overview on");
+                        // Hyprland 0.55 Lua mode: scrolloverview:overview
+                        // dispatcher (with the colon) is unreachable from
+                        // hl.dispatch. Route through the addLuaFunction
+                        // exposure registered by our patched plugin
+                        // (hl.plugin.scrolloverview.overview). Goes through
+                        // dispatchProc rather than execDetached so onExited
+                        // can grep the eval's stderr for the nil-value
+                        // error and trigger the self-heal reload.
+                        dispatchProc.running = false;
+                        dispatchProc.running = true;
                     } else if (triggerArea.trigger === "default") {
                         GlobalStates.overviewWorkspacesOnly = true;
                         GlobalStates.overviewOpen = true;
