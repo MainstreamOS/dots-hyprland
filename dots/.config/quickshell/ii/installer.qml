@@ -29,7 +29,8 @@ ApplicationWindow {
     // ── Monitor data ──
     property var monitors: []
     property var pendingChanges: ({})
-    property string monitorsConfPath: `${Quickshell.env("HOME")}/.config/hypr/monitors.conf`
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
+    property string monitorsConfPath: `${Quickshell.env("HOME")}/.config/hypr/monitors.lua`
     // Set true when "Start Install" is pressed; the writeProc → reloadProc
     // chain consumes it once the apply has fully landed and then launches
     // Calamares. Keeps the install button behaviour atomic without racing
@@ -158,7 +159,7 @@ ApplicationWindow {
             const scaleMap = { 1.0: "1", 1.25: "1.25", 1.5: "1.5", 2.0: "2" };
             let scale = scaleMap[snapped] ?? snapped.toFixed(4);
             let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
-            lines.push(`monitor = ${mon.name}, ${mode}, 0x0, ${scale}`);
+            lines.push(`hl.monitor({ output = "${mon.name}", mode = "${mode}", position = "0x0", scale = "${scale}" })`);
         });
         let fileContent = lines.join("\n") + "\n";
         let escaped = fileContent

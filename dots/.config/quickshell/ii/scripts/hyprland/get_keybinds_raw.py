@@ -2,13 +2,12 @@
 """
 Lossless Hyprland keybind parser for the settings app's keybinds editor.
 
-Unlike `get_keybinds.py` (which filters out `[hidden]` lines and ignores
-non-bind lines for the cheatsheet), this script emits one JSON object per
-`bind*` line, preserving line numbers, comments, and the full bind-type
-prefix (`bind`, `binde`, `bindid`, `bindle`, etc.) so the editor can
-round-trip every line in the user's config.
+Parses the Lua-config format introduced in Hyprland 0.55:
+    hl.bind("MODS + KEY", DISPATCHER_EXPR, {OPTIONS})
+    hl.unbind("MODS + KEY")
+    hl.define_submap("name", function() ... end)
 
-Output shape:
+Output shape (matches the legacy hyprlang parser as closely as possible):
     {
         "path": "<absolute path>",
         "exists": true,
@@ -17,10 +16,10 @@ Output shape:
             {
                 "lineNumber": N,            # 1-indexed
                 "indent": "<leading ws>",
-                "bindType": "bind",          # full prefix verbatim
+                "bindType": "bind",          # synthesized from opts table
                 "mods": ["SUPER", "SHIFT"],
                 "key": "Return",
-                "dispatcher": "exec",
+                "dispatcher": "exec",        # mapped back from hl.dsp.* form
                 "args": "kitty",
                 "comment": "Open terminal",
                 "isHidden": false,
@@ -33,6 +32,10 @@ Output shape:
             {"lineNumber": N, "indent": "...", "mods": [...], "key": "...", "raw": "..."}
         ]
     }
+
+Best-effort dispatcher extraction. For dispatchers not in the inverse map,
+`dispatcher` is set to the raw expression and `args` is left empty so the
+UI can still display and edit-as-raw.
 """
 
 import argparse
@@ -41,57 +44,184 @@ import os
 import re
 import sys
 
-BIND_RE = re.compile(r"^([ \t]*)(bind[a-z]*)\s*=\s*(.*)$")
-UNBIND_RE = re.compile(r"^([ \t]*)unbind\s*=\s*(.*)$")
-SUBMAP_RE = re.compile(r"^[ \t]*submap\s*=\s*(.*)$")
+HL_BIND_RE = re.compile(r'^([ \t]*)hl\.bind\(\s*"([^"]+)"\s*,\s*(.+?)\)\s*(?:--\s*(.*))?$')
+HL_UNBIND_RE = re.compile(r'^([ \t]*)hl\.unbind\(\s*"([^"]+)"\s*\)\s*(?:--\s*(.*))?$')
+HL_DEFINE_SUBMAP_RE = re.compile(r'^[ \t]*hl\.define_submap\(\s*"([^"]+)"\s*,')
 HIDDEN_TAG = "[hidden]"
-MOD_SEPARATORS = ("+", " ")
 
 
-def parse_mods(mods_str: str) -> list[str]:
-    """Split a Hyprland mod string into a clean list.
-
-    Accepts both ``SUPER + SHIFT`` and ``SUPER+SHIFT`` and ``SUPER SHIFT``.
-    Empty mod strings (e.g. ``,Escape``) return an empty list.
-    """
-    s = mods_str.strip()
-    if not s:
-        return []
-    parts = re.split(r"[+\s]+", s)
-    return [p for p in parts if p]
+def parse_lua_key(key_str: str) -> tuple[list[str], str]:
+    """Split a Lua-form key string like "SUPER + SHIFT + Q" into (mods, key)."""
+    parts = [p.strip() for p in key_str.split("+") if p.strip()]
+    if not parts:
+        return [], ""
+    return parts[:-1], parts[-1]
 
 
-def parse_bind_args(rest: str) -> tuple[list[str], str, str, str, str, bool]:
-    """Parse the ``= ...`` portion of a bind line.
+# Inverse of the dispatcher map in KeybindsConfig.qml's _editFile.
+# Pattern → (hyprlang dispatcher name, capture-group index for args, or None)
+INVERSE_DSP = [
+    (re.compile(r'^hl\.dsp\.exec_cmd\("(.*)"\)$', re.S),                        ("exec", 1)),
+    (re.compile(r'^hl\.dsp\.exit\(\)$'),                                          ("exit", None)),
+    (re.compile(r'^hl\.dsp\.window\.close\(\)$'),                                 ("killactive", None)),
+    (re.compile(r'^hl\.dsp\.window\.pin\(\)$'),                                   ("pin", None)),
+    (re.compile(r'^hl\.dsp\.window\.pseudo\(\)$'),                                ("pseudo", None)),
+    (re.compile(r'^hl\.dsp\.window\.center\(\)$'),                                ("centerwindow", None)),
+    (re.compile(r'^hl\.dsp\.window\.float\(\{action\s*=\s*"toggle"\}\)$'),        ("togglefloating", None)),
+    (re.compile(r'^hl\.dsp\.window\.fullscreen\(\{mode\s*=\s*"maximized"\}\)$'),  ("fullscreen", "1")),
+    (re.compile(r'^hl\.dsp\.window\.fullscreen\(\{mode\s*=\s*"fullscreen"\}\)$'), ("fullscreen", "0")),
+    (re.compile(r'^hl\.dsp\.window\.move\(\{direction\s*=\s*"(.+?)"\}\)$'),       ("movewindow", 1)),
+    (re.compile(r'^hl\.dsp\.window\.move\(\{workspace\s*=\s*"(.+?)",\s*follow\s*=\s*false\}\)$'), ("movetoworkspacesilent", 1)),
+    (re.compile(r'^hl\.dsp\.window\.move\(\{workspace\s*=\s*"(.+?)"\}\)$'),       ("movetoworkspace", 1)),
+    (re.compile(r'^hl\.dsp\.window\.resize\(\)$'),                                ("resizewindow", None)),
+    (re.compile(r'^hl\.dsp\.window\.swap\(\{direction\s*=\s*"(.+?)"\}\)$'),       ("swapwindow", 1)),
+    (re.compile(r'^hl\.dsp\.window\.bring_to_top\(\)$'),                          ("bringactivetotop", None)),
+    (re.compile(r'^hl\.dsp\.window\.alter_zorder\("(.+?)"\)$'),                   ("alterzorder", 1)),
+    (re.compile(r'^hl\.dsp\.focus\(\{direction\s*=\s*"(.+?)"\}\)$'),              ("movefocus", 1)),
+    (re.compile(r'^hl\.dsp\.focus\(\{workspace\s*=\s*"(.+?)"\}\)$'),              ("workspace", 1)),
+    (re.compile(r'^hl\.dsp\.focus\(\{window\s*=\s*"(.+?)"\}\)$'),                 ("focuswindow", 1)),
+    (re.compile(r'^hl\.dsp\.focus\(\{monitor\s*=\s*"(.+?)"\}\)$'),                ("focusmonitor", 1)),
+    (re.compile(r'^hl\.dsp\.focus\(\{last\s*=\s*true\}\)$'),                      ("focuscurrentorlast", None)),
+    (re.compile(r'^hl\.dsp\.focus\(\{urgent_or_last\s*=\s*true\}\)$'),            ("focusurgentorlast", None)),
+    (re.compile(r'^hl\.dsp\.workspace\.toggle_special\("(.*)"\)$'),               ("togglespecialworkspace", 1)),
+    (re.compile(r'^hl\.dsp\.layout\("(.+?)"\)$'),                                 ("layoutmsg", 1)),
+    (re.compile(r'^hl\.dsp\.submap\("(.+?)"\)$'),                                 ("submap", 1)),
+    (re.compile(r'^hl\.dsp\.global\("(.+?)"\)$'),                                 ("global", 1)),
+    (re.compile(r'^hl\.dsp\.event\("(.+?)"\)$'),                                  ("event", 1)),
+    (re.compile(r'^hl\.dsp\.dpms\(\{action\s*=\s*"(.+?)"\}\)$'),                  ("dpms", 1)),
+    (re.compile(r'^hl\.dsp\.pass\(\{window\s*=\s*"(.+?)"\}\)$'),                  ("pass", 1)),
+    (re.compile(r'^hl\.dsp\.group\.toggle\(\)$'),                                 ("togglegroup", None)),
+    (re.compile(r'^hl\.dsp\.group\.next\(\)$'),                                   ("changegroupactive", "f")),
+    (re.compile(r'^hl\.dsp\.group\.prev\(\)$'),                                   ("changegroupactive", "b")),
+    (re.compile(r'^hl\.dsp\.group\.move_window\(\{forward\s*=\s*true\}\)$'),      ("moveoutofgroup", None)),
+]
 
-    Returns (mods, key, dispatcher, args, comment, isHidden).
 
-    Hyprland bind syntax: ``MODS, KEY, DISPATCHER, ARGS  # comment``.
-    The arg field may itself contain commas (``exec, foo, bar``); only the
-    first three commas are structural separators.
-    """
-    body, _, comment_part = rest.partition("#")
-    comment = comment_part.strip()
-    is_hidden = comment.startswith(HIDDEN_TAG)
-    if is_hidden:
-        comment = comment[len(HIDDEN_TAG):].strip()
-
-    fields = body.split(",", 3)
-    fields = [f.strip() for f in fields]
-    while len(fields) < 4:
-        fields.append("")
-
-    mods_str, key, dispatcher, args = fields
-    args = args.rstrip(",").strip()
-    return parse_mods(mods_str), key, dispatcher, args, comment, is_hidden
+def map_dispatcher_back(expr: str) -> tuple[str, str]:
+    """Reverse the dispatcher mapping. Returns (dispatcher, args)."""
+    e = expr.strip().rstrip(",")
+    for pat, info in INVERSE_DSP:
+        m = pat.match(e)
+        if m:
+            disp, arg_spec = info
+            if arg_spec is None:
+                return disp, ""
+            if isinstance(arg_spec, int):
+                return disp, m.group(arg_spec)
+            return disp, arg_spec
+    # Unknown — pass the whole expression through so the editor can show it.
+    return e, ""
 
 
-def parse_unbind_args(rest: str) -> tuple[list[str], str]:
-    body, _, _ = rest.partition("#")
-    fields = [f.strip() for f in body.split(",", 1)]
-    while len(fields) < 2:
-        fields.append("")
-    return parse_mods(fields[0]), fields[1]
+def split_top_level(s: str) -> list[str]:
+    """Split a comma-separated string respecting nested parens/braces/strings."""
+    parts: list[str] = []
+    depth_paren = 0
+    depth_brace = 0
+    in_str = False
+    str_char = ""
+    buf: list[str] = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if in_str:
+            buf.append(c)
+            if c == "\\" and i + 1 < len(s):
+                buf.append(s[i + 1])
+                i += 2
+                continue
+            if c == str_char:
+                in_str = False
+        else:
+            if c in ('"', "'"):
+                in_str = True
+                str_char = c
+                buf.append(c)
+            elif c == "(":
+                depth_paren += 1
+                buf.append(c)
+            elif c == ")":
+                depth_paren -= 1
+                buf.append(c)
+            elif c == "{":
+                depth_brace += 1
+                buf.append(c)
+            elif c == "}":
+                depth_brace -= 1
+                buf.append(c)
+            elif c == "," and depth_paren == 0 and depth_brace == 0:
+                parts.append("".join(buf).strip())
+                buf = []
+            else:
+                buf.append(c)
+        i += 1
+    if buf:
+        parts.append("".join(buf).strip())
+    return parts
+
+
+def parse_opts(opts_str: str) -> dict:
+    """Parse a Lua options table body like `{description = "x", locked = true}`."""
+    s = opts_str.strip()
+    if s.startswith("{"):
+        s = s[1:]
+    if s.endswith("}"):
+        s = s[:-1]
+    out: dict = {}
+    for entry in split_top_level(s):
+        e = entry.strip().rstrip(",").strip()
+        if not e:
+            continue
+        m = re.match(r'^(\w+)\s*=\s*(.+)$', e, re.S)
+        if not m:
+            continue
+        k, v = m.group(1), m.group(2).strip()
+        if v.startswith('"') and v.endswith('"'):
+            out[k] = v[1:-1]
+        elif v == "true":
+            out[k] = True
+        elif v == "false":
+            out[k] = False
+        else:
+            out[k] = v
+    return out
+
+
+def bind_type_for_opts(opts: dict) -> str:
+    """Synthesise the hyprlang bind-type prefix from the options table."""
+    if opts.get("mouse"):
+        return "bindm"
+    flags = []
+    if opts.get("locked"):
+        flags.append("l")
+    if opts.get("repeating"):
+        flags.append("e")
+    if opts.get("description"):
+        flags.append("d")
+    if opts.get("non_consuming"):
+        flags.append("n")
+    if opts.get("transparent"):
+        flags.append("t")
+    if opts.get("ignore_mods"):
+        flags.append("i")
+    if opts.get("release"):
+        flags.append("r")
+    if opts.get("long_press"):
+        flags.append("o")
+    return "bind" + "".join(flags)
+
+
+def parse_bind_line(rest_after_open_paren: str) -> tuple[str, str, str]:
+    """Split the hl.bind(...) inner CSV into (key_str, dispatcher_expr, opts_or_empty)."""
+    parts = split_top_level(rest_after_open_paren)
+    if not parts:
+        return "", "", ""
+    key_str = parts[0].strip()
+    if key_str.startswith('"') and key_str.endswith('"'):
+        key_str = key_str[1:-1]
+    dispatcher = parts[1].strip() if len(parts) > 1 else ""
+    opts_str = parts[2].strip() if len(parts) > 2 else ""
+    return key_str, dispatcher, opts_str
 
 
 def parse_file(path: str) -> dict:
@@ -113,26 +243,49 @@ def parse_file(path: str) -> dict:
         out["exists"] = False
         return out
 
-    current_submap = "global"
+    submap_stack = ["global"]
+    pending_submap_end = []  # depth counter; tracks nesting
+
     for i, raw in enumerate(lines):
         line_no = i + 1
+        stripped = raw.strip()
 
-        sm = SUBMAP_RE.match(raw)
+        sm = HL_DEFINE_SUBMAP_RE.match(raw)
         if sm:
-            name = sm.group(1).strip()
-            current_submap = name if name else "global"
-            if name and name != "global":
-                out["submapsDefined"].append({"name": name, "lineNumber": line_no})
+            name = sm.group(1)
+            submap_stack.append(name)
+            out["submapsDefined"].append({"name": name, "lineNumber": line_no})
             continue
 
-        m = BIND_RE.match(raw)
+        # Crude block end detection: a line that's just `end)` closes
+        # the current submap. Good enough for our auto-generated content.
+        if stripped == "end)" and len(submap_stack) > 1:
+            submap_stack.pop()
+            continue
+
+        current_submap = submap_stack[-1]
+
+        m = HL_BIND_RE.match(raw)
         if m:
-            indent, bind_type, rest = m.group(1), m.group(2), m.group(3)
-            mods, key, dispatcher, args, comment, is_hidden = parse_bind_args(rest)
+            indent = m.group(1)
+            key_str = m.group(2)
+            tail = m.group(3)
+            comment = (m.group(4) or "").strip()
+            is_hidden = comment.startswith(HIDDEN_TAG)
+            if is_hidden:
+                comment = comment[len(HIDDEN_TAG):].strip()
+            # Reconstruct the inner CSV from "key", dispatcher[, opts]
+            inner = '"' + key_str + '", ' + tail
+            _, dispatcher_expr, opts_str = parse_bind_line(inner)
+            opts = parse_opts(opts_str) if opts_str else {}
+            mods, key = parse_lua_key(key_str)
+            dispatcher, args = map_dispatcher_back(dispatcher_expr)
+            if opts.get("description") and not comment:
+                comment = str(opts["description"])
             out["binds"].append({
                 "lineNumber": line_no,
                 "indent": indent,
-                "bindType": bind_type,
+                "bindType": bind_type_for_opts(opts),
                 "mods": mods,
                 "key": key,
                 "dispatcher": dispatcher,
@@ -144,10 +297,11 @@ def parse_file(path: str) -> dict:
             })
             continue
 
-        u = UNBIND_RE.match(raw)
+        u = HL_UNBIND_RE.match(raw)
         if u:
-            indent, rest = u.group(1), u.group(2)
-            mods, key = parse_unbind_args(rest)
+            indent = u.group(1)
+            key_str = u.group(2)
+            mods, key = parse_lua_key(key_str)
             out["unbinds"].append({
                 "lineNumber": line_no,
                 "indent": indent,
@@ -160,8 +314,8 @@ def parse_file(path: str) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Lossless Hyprland keybind parser")
-    parser.add_argument("--path", required=True, help="Path to a Hyprland config file (no sourcing)")
+    parser = argparse.ArgumentParser(description="Lossless Hyprland keybind parser (Lua syntax)")
+    parser.add_argument("--path", required=True, help="Path to a Hyprland Lua keybind file (no requires followed)")
     args = parser.parse_args()
 
     result = parse_file(args.path)

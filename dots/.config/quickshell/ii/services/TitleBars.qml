@@ -32,13 +32,22 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property string confPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/general.conf`
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
+    readonly property string confPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/general.lua`
     readonly property string pluginPath: `${FileUtils.trimFileProtocol(Directories.home)}/.local/share/hyprland/plugins/hyprbars.so`
 
     // Reflects whether the plugin directive in custom/general.conf is
     // currently uncommented. Refreshed at startup and after the file
     // changes. Read-only to consumers — call setEnabled() to change it.
     property bool enabled: false
+
+    // Flips true once readerProc has produced its first result. Consumers
+    // bind their Switch's `animateChanges` to this so the toggle position
+    // snaps in from the file-state on page-open instead of animating from
+    // the default false → restored true on every menu reopen. The flag
+    // STAYS true once set — subsequent re-reads (theme apply etc.) keep
+    // user-driven animations intact.
+    property bool enabledLoaded: false
 
     function load() {} // For forcing singleton initialization
 
@@ -64,24 +73,23 @@ Singleton {
         // missing entirely (configs predating the install hook that
         // adds it), enable prepends a fresh directive at the top of the
         // file so the toggle still works on first flip.
+        // Lua-form directive: `hl.plugin.load("...hyprbars.so")` — toggled by
+        // adding/removing the `-- ` comment prefix. Self-heal if the line is
+        // missing entirely.
         const py =
             "import re, sys, os, subprocess\n" +
             "enable = sys.argv[1] == '1'\n" +
             "conf = sys.argv[2]\n" +
             "plugin_path = sys.argv[3]\n" +
             "text = open(conf).read()\n" +
-            "if re.search(r'^[ \\t]*#?[ \\t]*plugin[ \\t]*=[ \\t]*.*hyprbars\\.so', text, flags=re.M):\n" +
+            "if re.search(r'^[ \\t]*(?:--\\s*)?hl\\.plugin\\.load\\([^)]*hyprbars\\.so[^)]*\\)', text, flags=re.M):\n" +
             "    if enable:\n" +
-            "        text = re.sub(r'^([ \\t]*)#[ \\t]*(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1\\2', text, flags=re.M)\n" +
+            "        text = re.sub(r'^([ \\t]*)--\\s*(hl\\.plugin\\.load\\([^)]*hyprbars\\.so[^)]*\\))', r'\\1\\2', text, flags=re.M)\n" +
             "    else:\n" +
-            "        text = re.sub(r'^([ \\t]*)(?!#)(plugin[ \\t]*=[ \\t]*.*hyprbars\\.so)', r'\\1# \\2', text, flags=re.M)\n" +
+            "        text = re.sub(r'^([ \\t]*)(?!--)(hl\\.plugin\\.load\\([^)]*hyprbars\\.so[^)]*\\))', r'\\1-- \\2', text, flags=re.M)\n" +
             "elif enable:\n" +
-            "    text = '# hyprbars plugin load directive\\nplugin = ' + plugin_path + '\\n\\n' + text\n" +
+            "    text = '-- hyprbars plugin load directive\\nhl.plugin.load(\"' + plugin_path + '\")\\n\\n' + text\n" +
             "open(conf, 'w').write(text)\n" +
-            // capture_output swallows hyprctl's stderr on harmless
-            // states like "already loaded" / "not loaded" — those exits
-            // are non-zero but the file state already reflects the
-            // user's intent, so there's nothing for QML to surface.
             "verb = 'load' if enable else 'unload'\n" +
             "subprocess.run(['hyprctl', 'plugin', verb, plugin_path], capture_output=True)\n"
         Quickshell.execDetached(["python3", "-c", py, value ? "1" : "0", root.confPath, root.pluginPath])
@@ -94,7 +102,10 @@ Singleton {
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
         onExited: {
-            root.enabled = /^[ \t]*plugin[ \t]*=[ \t]*.*hyprbars\.so/m.test(readerProc.buf)
+            // Enabled = uncommented hl.plugin.load line (no leading `-- `).
+            root.enabled = /^[ \t]*hl\.plugin\.load\([^)]*hyprbars\.so/m.test(readerProc.buf)
+            // First read complete — Switches can start animating from here.
+            root.enabledLoaded = true
         }
     }
 

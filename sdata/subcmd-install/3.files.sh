@@ -342,10 +342,10 @@ function setup_hyprland_plugins(){
   try systemctl --user daemon-reload 2>/dev/null
   try sudo rm -f /usr/local/bin/hyprland-plugins-setup
   try sudo rm -f /etc/sudoers.d/hyprpm
-  local EXECS_CONF="$HOME/.config/hypr/custom/execs.conf"
-  if [[ -f "$EXECS_CONF" ]] && grep -q 'hyprland-plugins-setup' "$EXECS_CONF"; then
-    sed -i '/# Defer hyprpm to first login/d; /hyprland-plugins-setup/d' "$EXECS_CONF"
-    echo -e "${STY_BLUE}[$0]: Removed old hyprland-plugins-setup trigger from $EXECS_CONF${STY_RST}"
+  local EXECS_LUA="$HOME/.config/hypr/custom/execs.lua"
+  if [[ -f "$EXECS_LUA" ]] && grep -q 'hyprland-plugins-setup' "$EXECS_LUA"; then
+    sed -i '/-- Defer hyprpm to first login/d; /hyprland-plugins-setup/d' "$EXECS_LUA"
+    echo -e "${STY_BLUE}[$0]: Removed old hyprland-plugins-setup trigger from $EXECS_LUA${STY_RST}"
   fi
 
   if ! _ensure_hyprland_plugin \
@@ -363,27 +363,28 @@ function setup_hyprland_plugins(){
   realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
 
   # The plugin { hyprbars { ... } } settings block already lives in
-  # custom/general.conf (shipped with the dots). We prepend the load directive
+  # custom/general.lua (shipped with the dots). We prepend the load directive
   # to the same file — Hyprland requires the .so to be loaded before its
   # settings block is parsed, otherwise the config is silently ignored.
-  local _general_conf="$HOME/.config/hypr/custom/general.conf"
-  if [[ -f "$_general_conf" ]]; then
-    if ! grep -q 'plugin *= *.*hyprbars\.so' "$_general_conf"; then
+  local _general_lua="$HOME/.config/hypr/custom/general.lua"
+  if [[ -f "$_general_lua" ]]; then
+    if ! grep -qE 'hl\.plugin\.load.*hyprbars\.so' "$_general_lua"; then
       local _tmp; _tmp=$(mktemp)
       {
-        echo "# hyprbars plugin load directive (built from source at install time)"
-        echo "# plugin = ${plugin_path}"
+        echo "-- hyprbars plugin load directive (built from source at install time)"
+        echo "-- TitleBars.qml toggles the comment prefix on this exact line."
+        echo "-- hl.plugin.load(\"${plugin_path}\")"
         echo ""
-        cat "$_general_conf"
+        cat "$_general_lua"
       } > "$_tmp"
-      mv "$_tmp" "$_general_conf"
-      echo -e "${STY_CYAN}[$0]: Added '# plugin = ${plugin_path}' to $_general_conf (commented out — enable via Title Bars toggle)${STY_RST}"
+      mv "$_tmp" "$_general_lua"
+      echo -e "${STY_CYAN}[$0]: Added commented hl.plugin.load(\"${plugin_path}\") to $_general_lua (enable via Title Bars toggle)${STY_RST}"
     else
-      echo -e "${STY_BLUE}[$0]: $_general_conf already loads hyprbars; skipping.${STY_RST}"
+      echo -e "${STY_BLUE}[$0]: $_general_lua already loads hyprbars; skipping.${STY_RST}"
     fi
   else
-    echo -e "${STY_YELLOW}[$0]: $_general_conf missing — add this line to a sourced hypr config manually:${STY_RST}"
-    echo -e "${STY_YELLOW}  plugin = ${plugin_path}${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]: $_general_lua missing — add this line to a sourced hypr config manually:${STY_RST}"
+    echo -e "${STY_YELLOW}  hl.plugin.load(\"${plugin_path}\")${STY_RST}"
   fi
 
   # ---------------------------------------------------------------------------
@@ -448,32 +449,34 @@ function setup_hyprland_plugins(){
     echo -e "${STY_CYAN}[$0]: Installing hyprbars status notifier...${STY_RST}"
     try sudo install -Dm755 "$_notify_src" /usr/local/bin/hyprbars-status-notify
 
-    # Wire into the user's custom execs.conf. Idempotent — re-running the
-    # installer doesn't add duplicate exec-once lines.
-    if [[ -f "$EXECS_CONF" ]]; then
-      if ! grep -q 'hyprbars-status-notify' "$EXECS_CONF"; then
+    # Wire into the user's custom execs.lua. Idempotent — re-running the
+    # installer doesn't add duplicate hl.on subscriptions. Each hl.on registers
+    # an independent callback, so appending a second one for the same event is
+    # additive (not destructive).
+    if [[ -f "$EXECS_LUA" ]]; then
+      if ! grep -q 'hyprbars-status-notify' "$EXECS_LUA"; then
         {
           echo ""
-          echo "# Surface friendly desktop notifications when title bars are temporarily"
-          echo "# off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
-          echo "# written by the system-side hyprbars-rebuild service."
-          echo "exec-once = /usr/local/bin/hyprbars-status-notify"
-        } >> "$EXECS_CONF"
-        echo -e "${STY_BLUE}[$0]: Added hyprbars-status-notify exec-once to $EXECS_CONF${STY_RST}"
+          echo "-- Surface friendly desktop notifications when title bars are temporarily"
+          echo "-- off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
+          echo "-- written by the system-side hyprbars-rebuild service."
+          echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/hyprbars-status-notify\") end)"
+        } >> "$EXECS_LUA"
+        echo -e "${STY_BLUE}[$0]: Added hyprbars-status-notify hl.on subscription to $EXECS_LUA${STY_RST}"
       else
-        echo -e "${STY_BLUE}[$0]: $EXECS_CONF already runs hyprbars-status-notify; skipping.${STY_RST}"
+        echo -e "${STY_BLUE}[$0]: $EXECS_LUA already runs hyprbars-status-notify; skipping.${STY_RST}"
       fi
     else
-      mkdir -p "$(dirname "$EXECS_CONF")"
+      mkdir -p "$(dirname "$EXECS_LUA")"
       {
-        echo "# Hyprland custom exec-once entries (managed by dots-hyprland)"
+        echo "-- Hyprland custom start-up commands (managed by dots-hyprland)"
         echo ""
-        echo "# Surface friendly desktop notifications when title bars are temporarily"
-        echo "# off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
-        echo "# written by the system-side hyprbars-rebuild service."
-        echo "exec-once = /usr/local/bin/hyprbars-status-notify"
-      } > "$EXECS_CONF"
-      echo -e "${STY_BLUE}[$0]: Created $EXECS_CONF with hyprbars-status-notify entry${STY_RST}"
+        echo "-- Surface friendly desktop notifications when title bars are temporarily"
+        echo "-- off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
+        echo "-- written by the system-side hyprbars-rebuild service."
+        echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/hyprbars-status-notify\") end)"
+      } > "$EXECS_LUA"
+      echo -e "${STY_BLUE}[$0]: Created $EXECS_LUA with hyprbars-status-notify entry${STY_RST}"
     fi
   fi
 }
@@ -512,30 +515,30 @@ function setup_scrolloverview_plugin(){
   x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
   realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
 
-  # Add the load directive (active, not commented) to custom/general.conf so
+  # Add the load directive (active, not commented) to custom/general.lua so
   # the bar's top-left hot corner — which dispatches `scrolloverview:overview
   # on` — actually has a plugin to talk to. This is a deliberate deviation
   # from the hyprbars install, which keeps the directive commented because
   # there's a separate UI toggle for hyprbars; scroll-overview has no such
   # toggle and the hot corner depends on the plugin being loaded.
-  local _general_conf="$HOME/.config/hypr/custom/general.conf"
-  if [[ -f "$_general_conf" ]]; then
-    if ! grep -q 'plugin *= *.*scrolloverview\.so' "$_general_conf"; then
+  local _general_lua="$HOME/.config/hypr/custom/general.lua"
+  if [[ -f "$_general_lua" ]]; then
+    if ! grep -qE 'hl\.plugin\.load.*scrolloverview\.so' "$_general_lua"; then
       local _tmp; _tmp=$(mktemp)
       {
-        echo "# scrolloverview plugin load directive (built from source at install time)"
-        echo "plugin = ${plugin_path}"
+        echo "-- scrolloverview plugin load directive (built from source at install time)"
+        echo "hl.plugin.load(\"${plugin_path}\")"
         echo ""
-        cat "$_general_conf"
+        cat "$_general_lua"
       } > "$_tmp"
-      mv "$_tmp" "$_general_conf"
-      echo -e "${STY_CYAN}[$0]: Added 'plugin = ${plugin_path}' to $_general_conf${STY_RST}"
+      mv "$_tmp" "$_general_lua"
+      echo -e "${STY_CYAN}[$0]: Added hl.plugin.load(\"${plugin_path}\") to $_general_lua${STY_RST}"
     else
-      echo -e "${STY_BLUE}[$0]: $_general_conf already loads scrolloverview; skipping.${STY_RST}"
+      echo -e "${STY_BLUE}[$0]: $_general_lua already loads scrolloverview; skipping.${STY_RST}"
     fi
   else
-    echo -e "${STY_YELLOW}[$0]: $_general_conf missing — add this line to a sourced hypr config manually:${STY_RST}"
-    echo -e "${STY_YELLOW}  plugin = ${plugin_path}${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]: $_general_lua missing — add this line to a sourced hypr config manually:${STY_RST}"
+    echo -e "${STY_YELLOW}  hl.plugin.load(\"${plugin_path}\")${STY_RST}"
   fi
 
   # ---------------------------------------------------------------------------
@@ -592,39 +595,41 @@ function setup_scrolloverview_plugin(){
   # the user just sees a status update, not a build report.
   # ---------------------------------------------------------------------------
   local _so_notify_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-status-notify.sh"
-  local _so_execs_conf="$HOME/.config/hypr/custom/execs.conf"
+  local _so_execs_lua="$HOME/.config/hypr/custom/execs.lua"
   if [[ -f "$_so_notify_src" ]]; then
     echo -e "${STY_CYAN}[$0]: Installing scrolloverview status notifier...${STY_RST}"
     try sudo install -Dm755 "$_so_notify_src" /usr/local/bin/scrolloverview-status-notify
 
-    # Wire into the user's custom execs.conf. Idempotent — re-running the
-    # installer doesn't add duplicate exec-once lines.
-    if [[ -f "$_so_execs_conf" ]]; then
-      if ! grep -q 'scrolloverview-status-notify' "$_so_execs_conf"; then
+    # Wire into the user's custom execs.lua. Idempotent — re-running the
+    # installer doesn't add duplicate hl.on subscriptions. Each hl.on registers
+    # an independent callback, so appending another for the same event is
+    # additive (not destructive).
+    if [[ -f "$_so_execs_lua" ]]; then
+      if ! grep -q 'scrolloverview-status-notify' "$_so_execs_lua"; then
         {
           echo ""
-          echo "# Surface friendly desktop notifications when the workspace overview is"
-          echo "# temporarily off (after a Hyprland update) or comes back. Reads"
-          echo "# /var/lib/scrolloverview/status written by the system-side"
-          echo "# scrolloverview-rebuild service."
-          echo "exec-once = /usr/local/bin/scrolloverview-status-notify"
-        } >> "$_so_execs_conf"
-        echo -e "${STY_BLUE}[$0]: Added scrolloverview-status-notify exec-once to $_so_execs_conf${STY_RST}"
+          echo "-- Surface friendly desktop notifications when the workspace overview is"
+          echo "-- temporarily off (after a Hyprland update) or comes back. Reads"
+          echo "-- /var/lib/scrolloverview/status written by the system-side"
+          echo "-- scrolloverview-rebuild service."
+          echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/scrolloverview-status-notify\") end)"
+        } >> "$_so_execs_lua"
+        echo -e "${STY_BLUE}[$0]: Added scrolloverview-status-notify hl.on subscription to $_so_execs_lua${STY_RST}"
       else
-        echo -e "${STY_BLUE}[$0]: $_so_execs_conf already runs scrolloverview-status-notify; skipping.${STY_RST}"
+        echo -e "${STY_BLUE}[$0]: $_so_execs_lua already runs scrolloverview-status-notify; skipping.${STY_RST}"
       fi
     else
-      mkdir -p "$(dirname "$_so_execs_conf")"
+      mkdir -p "$(dirname "$_so_execs_lua")"
       {
-        echo "# Hyprland custom exec-once entries (managed by dots-hyprland)"
+        echo "-- Hyprland custom start-up commands (managed by dots-hyprland)"
         echo ""
-        echo "# Surface friendly desktop notifications when the workspace overview is"
-        echo "# temporarily off (after a Hyprland update) or comes back. Reads"
-        echo "# /var/lib/scrolloverview/status written by the system-side"
-        echo "# scrolloverview-rebuild service."
-        echo "exec-once = /usr/local/bin/scrolloverview-status-notify"
-      } > "$_so_execs_conf"
-      echo -e "${STY_BLUE}[$0]: Created $_so_execs_conf with scrolloverview-status-notify entry${STY_RST}"
+        echo "-- Surface friendly desktop notifications when the workspace overview is"
+        echo "-- temporarily off (after a Hyprland update) or comes back. Reads"
+        echo "-- /var/lib/scrolloverview/status written by the system-side"
+        echo "-- scrolloverview-rebuild service."
+        echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/scrolloverview-status-notify\") end)"
+      } > "$_so_execs_lua"
+      echo -e "${STY_BLUE}[$0]: Created $_so_execs_lua with scrolloverview-status-notify entry${STY_RST}"
     fi
   fi
 }
@@ -859,7 +864,7 @@ showfun setup_scrolloverview_plugin
 v setup_scrolloverview_plugin
 
 # Apply GPU-dependent hypr dotfile tweaks (NVIDIA Wayland env vars, hypridle
-# dpms delays, AQ_DRM_DEVICES for hybrid NVIDIA) now that custom/env.conf and
+# dpms delays, AQ_DRM_DEVICES for hybrid NVIDIA) now that custom/env.lua and
 # hypridle.conf exist on disk. Safe no-op on non-NVIDIA systems and re-runs.
 # Defined in 2.setups.sh; still in scope here because both files are sourced
 # by ./setup in the same shell.
@@ -890,5 +895,5 @@ ms_hint "in Hyprland: Super+W = wallpaper · Super+Tab = keybinds"
 printf "\n"
 
 if [[ -z "${ILLOGICAL_IMPULSE_VIRTUAL_ENV}" ]]; then
-  printf "\n${STY_RED}[$0]: \!! Important \!! : Please ensure environment variable ${STY_RST} \$ILLOGICAL_IMPULSE_VIRTUAL_ENV ${STY_RED} is set to proper value (by default \"~/.local/state/quickshell/.venv\"), or Quickshell config will not work. We have already provided this configuration in ~/.config/hypr/hyprland/env.conf, but you need to ensure it is included in hyprland.conf, and also a restart is needed for applying it.${STY_RST}\n"
+  printf "\n${STY_RED}[$0]: \!! Important \!! : Please ensure environment variable ${STY_RST} \$ILLOGICAL_IMPULSE_VIRTUAL_ENV ${STY_RED} is set to proper value (by default \"~/.local/state/quickshell/.venv\"), or Quickshell config will not work. We have already provided this configuration in ~/.config/hypr/hyprland/env.lua, but you need to ensure it is included in hyprland.lua, and also a restart is needed for applying it.${STY_RST}\n"
 fi

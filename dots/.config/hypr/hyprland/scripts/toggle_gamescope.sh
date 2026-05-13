@@ -46,11 +46,19 @@ if [ -z "$GAMESCOPE_ESCAPED" ]; then
     CONNECTOR=$(echo "$MONITOR" | jq -r '.name')
     CURRENT_TTY=$(fgconsole)
 
-    # Check ~/.config/hypr/monitors.conf for vrr,1 on the active connector
-    MONITORS_CONF="$HOME/.config/hypr/monitors.conf"
+    # Check ~/.config/hypr/monitors.lua for vrr = 1 on the active connector.
+    # Lua-config form: hl.monitor({ output = "DP-1", ..., vrr = 1, ... })
+    # We anchor the search on `output = "<CONNECTOR>"` and look for `vrr = 1`
+    # in the same hl.monitor({...}) call (awk delimits on the `})` end-marker).
+    MONITORS_LUA="$HOME/.config/hypr/monitors.lua"
     VRR_CAPABLE=0
-    if [ -f "$MONITORS_CONF" ]; then
-        if grep -E "^monitor=${CONNECTOR}," "$MONITORS_CONF" | grep -q "vrr,1"; then
+    if [ -f "$MONITORS_LUA" ]; then
+        if awk -v conn="$CONNECTOR" '
+            /^hl\.monitor\(\s*\{/        { in_blk = 1; matched = 0; vrr_on = 0; next }
+            in_blk && $0 ~ "output[ \t]*=[ \t]*\"" conn "\"" { matched = 1 }
+            in_blk && /^[ \t]*vrr[ \t]*=[ \t]*1[ \t]*,?/     { vrr_on = 1 }
+            in_blk && /^\}\)/            { if (matched && vrr_on) { print "ok"; exit } in_blk = 0 }
+        ' "$MONITORS_LUA" | grep -q ok; then
             VRR_CAPABLE=1
         fi
     fi

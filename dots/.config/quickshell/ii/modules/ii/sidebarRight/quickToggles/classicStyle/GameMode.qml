@@ -12,7 +12,25 @@ QuickToggleButton {
     onClicked: {
         root.toggled = !root.toggled
         if (root.toggled) {
-            Quickshell.execDetached(["bash", "-c", `hyprctl --batch "keyword animations:enabled 0; keyword decoration:shadow:enabled 0; keyword decoration:blur:enabled 0; keyword general:gaps_in 0; keyword general:gaps_out 0; keyword general:border_size 1; keyword decoration:rounding 0; keyword general:allow_tearing 1"`])
+            // Hyprland 0.55 Lua mode: `hyprctl keyword` is rejected
+            // ("keyword can't work with non-legacy parsers. Use eval."), so
+            // every entry-into-game-mode keyword has to be wrapped in
+            // hl.config via hyprctl eval.
+            Quickshell.execDetached(["hyprctl", "eval",
+                'hl.config({' +
+                    'animations = { enabled = false },' +
+                    'decoration = {' +
+                        'rounding = 0,' +
+                        'blur = { enabled = false },' +
+                        'shadow = { enabled = false }' +
+                    '},' +
+                    'general = {' +
+                        'gaps_in = 0,' +
+                        'gaps_out = 0,' +
+                        'border_size = 1,' +
+                        'allow_tearing = true' +
+                    '}' +
+                '})'])
         } else {
             Quickshell.execDetached(["hyprctl", "reload"])
         }

@@ -46,6 +46,9 @@ hl.config({
         workspace_swipe_create_new = true
     },
     general = {
+        -- Settings → Layouts panel rewrites this line via regex.
+        layout = "master",
+
         -- Gaps and border
         gaps_in = 4,
         gaps_out = 5,
@@ -298,6 +301,24 @@ hl.config({
         zoom_disable_aa = true,
         hotspot_padding = 1
     },
+
+    -- KNOWN ISSUE — 10-bit + layer-surface flicker
+    --
+    -- With bitdepth = 10 set on a monitor in monitors.lua, Hyprland 0.55.0
+    -- renegotiates the DRM swapchain between XR24 (8-bit) and XR30
+    -- (10-bit) whenever a layer surface (Quickshell overview, app drawer,
+    -- wallpaper selector) appears or disappears. Each renegotiation
+    -- triggers a DRM modeset and a brief screen flicker. None of the
+    -- exposed render:* options (cm_enabled, cm_auto_hdr, non_shader_cm,
+    -- direct_scanout) fully suppress the renegotiation as long as
+    -- bitdepth = 10 is set.
+    --
+    -- Upstream fix: commit dab9649 "monitor: don't modeset on reserved
+    -- changes" (#14397, Vaxry, 2026-05-10). Landed AFTER 0.55.0 release;
+    -- expected to ship in the next Hyprland release. When you update past
+    -- that commit, the layer-surface modesetting should stop.
+    --
+    -- For now we accept the flicker as the tradeoff for keeping 10-bit.
 
     xwayland = {
         force_zero_scaling = true

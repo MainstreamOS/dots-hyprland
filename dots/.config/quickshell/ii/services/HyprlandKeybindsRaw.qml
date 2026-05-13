@@ -22,8 +22,9 @@ Singleton {
     id: root
 
     readonly property string parserPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/hyprland/get_keybinds_raw.py`)
-    readonly property string defaultPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hyprland/keybinds.conf`)
-    readonly property string userPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/custom/keybinds.conf`)
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
+    readonly property string defaultPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/hyprland/keybinds.lua`)
+    readonly property string userPath: FileUtils.trimFileProtocol(`${Directories.config}/hypr/custom/keybinds.lua`)
 
     property var defaultData: ({ binds: [], unbinds: [], submapsDefined: [], exists: false })
     property var userData: ({ binds: [], unbinds: [], submapsDefined: [], exists: false })

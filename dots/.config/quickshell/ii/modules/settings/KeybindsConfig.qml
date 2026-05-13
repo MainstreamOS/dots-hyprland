@@ -46,6 +46,7 @@ ContentPage {
     }
 
     // ── Ensure capture submap exists in user keybind file ─────────────────
+    // Lua format: hl.define_submap("name", function() hl.bind(...) end).
     Process {
         id: ensureSubmapProc
         property string py: `
@@ -56,10 +57,10 @@ if not os.path.isfile(path):
     open(path, 'a').close()
 text = open(path).read()
 if marker not in text:
-    block = "\\n# " + marker + " — capture submap used by the settings keybinds editor; do not remove\\n"
-    block += "submap = " + marker + "\\n"
-    block += "bind = , Escape, submap, global\\n"
-    block += "submap = global\\n"
+    block = "\\n-- " + marker + " — capture submap used by the settings keybinds editor; do not remove\\n"
+    block += "hl.define_submap(\\"" + marker + "\\", function()\\n"
+    block += "    hl.bind(\\"Escape\\", hl.dsp.submap(\\"reset\\"))\\n"
+    block += "end)\\n"
     if not text.endswith("\\n"):
         text += "\\n"
     text += block
@@ -92,7 +93,14 @@ if marker not in text:
     }
 
     // Apply edits to the user keybind file via a Python heredoc.
-    // op is one of: append, replace, delete, override
+    // op is one of: append, replace, delete, override, delete_with_unbind_cleanup.
+    // Emits Hyprland-0.55 Lua syntax:
+    //   hl.bind("MODS + KEY", DISPATCHER_CLOSURE, {OPTIONS})
+    //   hl.unbind("MODS + KEY")
+    // Bind types (binde/bindl/bindd/bindm/bindle/...) become entries in the
+    // options table. Dispatchers are mapped to hl.dsp.* closures via a lookup
+    // table; unknown dispatchers fall back to a Lua function that shells out
+    // to `hyprctl dispatch 'hl.dsp.<form>'` so the bind is still functional.
     function _editFile(op, payload) {
         const py = `
 import json, os, sys
@@ -102,18 +110,145 @@ data = json.loads(sys.argv[3])
 if not os.path.isfile(path):
     open(path, 'a').close()
 lines = open(path).read().split("\\n")
+
+# bind type → list of option keys to set true. 'description' is special
+# (set with the actual comment string if present).
+BIND_TYPE_OPTS = {
+    "bind":   [],
+    "bindd":  ["description"],
+    "binde":  ["repeating"],
+    "binded": ["repeating", "description"],
+    "bindl":  ["locked"],
+    "bindle": ["locked", "repeating"],
+    "bindld": ["locked", "description"],
+    "bindel": ["locked", "repeating"],
+    "bindm":  ["mouse"],
+    "bindn":  ["non_consuming"],
+    "bindt":  ["transparent"],
+    "bindr":  ["release"],
+    "bindo":  ["long_press"],
+    "bindi":  ["ignore_mods"],
+    "bindid": ["ignore_mods", "description"],
+    "bindit": ["ignore_mods", "transparent"],
+    "binditn":["ignore_mods", "transparent", "non_consuming"],
+    "bindp":  [],  # # silent submit — rare; treat as plain bind
+}
+
+# Map hyprlang dispatcher names to Lua dispatcher expression builders.
+# Each entry is a function args (string, may be empty) → Lua expression.
+def dsp_exec(args):     return 'hl.dsp.exec_cmd("' + lua_esc(args) + '")'
+def dsp_exit(args):     return 'hl.dsp.exit()'
+def dsp_killactive(_):  return 'hl.dsp.window.close()'
+def dsp_pin(_):         return 'hl.dsp.window.pin()'
+def dsp_pseudo(_):      return 'hl.dsp.window.pseudo()'
+def dsp_centerwin(_):   return 'hl.dsp.window.center()'
+def dsp_togglefloat(_): return 'hl.dsp.window.float({action = "toggle"})'
+def dsp_fullscreen(a):  return 'hl.dsp.window.fullscreen({mode = "' + ("maximized" if a.strip() == "1" else "fullscreen") + '"})'
+def dsp_movewin(a):     return 'hl.dsp.window.move({direction = "' + a.strip() + '"})'
+def dsp_resizewin(_):   return 'hl.dsp.window.resize()'
+def dsp_swapwin(a):     return 'hl.dsp.window.swap({direction = "' + a.strip() + '"})'
+def dsp_movefocus(a):   return 'hl.dsp.focus({direction = "' + a.strip() + '"})'
+def dsp_workspace(a):   return 'hl.dsp.focus({workspace = "' + a.strip() + '"})'
+def dsp_movetows(a):    return 'hl.dsp.window.move({workspace = "' + a.strip() + '"})'
+def dsp_movetowssilent(a): return 'hl.dsp.window.move({workspace = "' + a.strip() + '", follow = false})'
+def dsp_togglespecial(a):  return 'hl.dsp.workspace.toggle_special("' + (a.strip() or "special") + '")'
+def dsp_focuswindow(a): return 'hl.dsp.focus({window = "' + a.strip() + '"})'
+def dsp_layoutmsg(a):   return 'hl.dsp.layout("' + a.strip() + '")'
+def dsp_submap(a):      return 'hl.dsp.submap("' + a.strip() + '")'
+def dsp_global(a):      return 'hl.dsp.global("' + a.strip() + '")'
+def dsp_event(a):       return 'hl.dsp.event("' + a.strip() + '")'
+def dsp_dpms(a):        return 'hl.dsp.dpms({action = "' + (a.strip() or "toggle") + '"})'
+def dsp_pass(a):        return 'hl.dsp.pass({window = "' + a.strip() + '"})'
+def dsp_focuscurrentorlast(_): return 'hl.dsp.focus({last = true})'
+def dsp_focusurgentorlast(_):  return 'hl.dsp.focus({urgent_or_last = true})'
+def dsp_focusmonitor(a):       return 'hl.dsp.focus({monitor = "' + a.strip() + '"})'
+def dsp_bringactivetotop(_):   return 'hl.dsp.window.bring_to_top()'
+def dsp_alterzorder(a):        return 'hl.dsp.window.alter_zorder("' + a.strip() + '")'
+def dsp_togglegroup(_):        return 'hl.dsp.group.toggle()'
+def dsp_changegroupactive(a):  return 'hl.dsp.group.' + ("next" if a.strip() in ("","f","forward") else "prev") + '()'
+def dsp_moveoutofgroup(_):     return 'hl.dsp.group.move_window({forward = true})'
+
+DSP_MAP = {
+    "exec": dsp_exec, "execr": dsp_exec, "exec-once": dsp_exec,
+    "exit": dsp_exit,
+    "killactive": dsp_killactive, "closewindow": dsp_killactive,
+    "pin": dsp_pin,
+    "pseudo": dsp_pseudo,
+    "centerwindow": dsp_centerwin,
+    "togglefloating": dsp_togglefloat,
+    "fullscreen": dsp_fullscreen,
+    "movewindow": dsp_movewin,
+    "resizewindow": dsp_resizewin,
+    "swapwindow": dsp_swapwin,
+    "movefocus": dsp_movefocus,
+    "workspace": dsp_workspace,
+    "movetoworkspace": dsp_movetows,
+    "movetoworkspacesilent": dsp_movetowssilent,
+    "togglespecialworkspace": dsp_togglespecial,
+    "focuswindow": dsp_focuswindow,
+    "layoutmsg": dsp_layoutmsg,
+    "submap": dsp_submap,
+    "global": dsp_global,
+    "event": dsp_event,
+    "dpms": dsp_dpms,
+    "pass": dsp_pass,
+    "focuscurrentorlast": dsp_focuscurrentorlast,
+    "focusurgentorlast": dsp_focusurgentorlast,
+    "focusmonitor": dsp_focusmonitor,
+    "bringactivetotop": dsp_bringactivetotop,
+    "alterzorder": dsp_alterzorder,
+    "togglegroup": dsp_togglegroup,
+    "changegroupactive": dsp_changegroupactive,
+    "moveoutofgroup": dsp_moveoutofgroup,
+}
+
+def lua_esc(s):
+    # Escape backslashes and double quotes for a Lua double-quoted string.
+    return s.replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
+
+def fmt_dispatcher(disp, args):
+    fn = DSP_MAP.get(disp)
+    if fn is not None:
+        return fn(args)
+    # Unknown dispatcher — fall back to a function that shells out through
+    # hyprctl dispatch with the Lua-mode wrapper string. Slow but correct.
+    full = disp + ((" " + args) if args else "")
+    return 'function() hl.exec_cmd("hyprctl dispatch \\'' + full + '\\'") end'
+
+def fmt_lua_key(mods, key):
+    parts = [m for m in (mods or []) if m]
+    if key:
+        parts.append(key)
+    return " + ".join(parts)
+
+def fmt_opts(bind_type, comment):
+    opts = []
+    fl = BIND_TYPE_OPTS.get(bind_type, [])
+    for flag in fl:
+        if flag == "description":
+            if comment:
+                opts.append('description = "' + lua_esc(comment) + '"')
+        else:
+            opts.append(flag + " = true")
+    if not opts:
+        return ""
+    return ", {" + ", ".join(opts) + "}"
+
 def fmt_bind(b):
-    mods = " ".join([m for m in (b.get("mods") or []) if m])
+    mods = b.get("mods") or []
     key = b.get("key", "")
     disp = b.get("dispatcher", "")
     args = b.get("args", "") or ""
     bt = b.get("bindType", "bind")
-    rest = mods + ", " + key + ", " + disp
-    if args:
-        rest += ", " + args
-    return bt + " = " + rest
+    comment = b.get("comment", "") or ""
+    key_str = fmt_lua_key(mods, key)
+    dsp_str = fmt_dispatcher(disp, args)
+    opts_str = fmt_opts(bt, comment)
+    return 'hl.bind("' + key_str + '", ' + dsp_str + opts_str + ')'
+
 def fmt_unbind(mods, key):
-    return "unbind = " + " ".join([m for m in (mods or []) if m]) + ", " + key
+    return 'hl.unbind("' + fmt_lua_key(mods, key) + '")'
+
 if op == "append":
     line = fmt_bind(data["bind"])
     if lines and lines[-1] == "":
@@ -141,7 +276,6 @@ elif op == "delete_with_unbind_cleanup":
     idx = data["lineNumber"] - 1
     if 0 <= idx < len(lines):
         del lines[idx]
-    # Also remove a matching unbind line if present (used when deleting an override)
     unbind_line = fmt_unbind(data["mods"], data["key"])
     lines = [l for l in lines if l.strip() != unbind_line.strip()]
 text = "\\n".join(lines)
@@ -155,18 +289,76 @@ open(path, "w").write(text)
     }
 
     // ── User actions ──────────────────────────────────────────────────────
+    // Normalize a mod list for combo comparison: drop blanks, lower-case,
+    // sort. SUPER+SHIFT and shift+super collapse to the same key.
+    function _normMods(mods) {
+        return (mods || []).filter(m => m).map(m => String(m).toLowerCase()).sort().join("+")
+    }
+
+    // Drop the "d" (description) flag for functional equivalence:
+    // bindd → bind, binded → binde, bindld → bindl, bindid → bindi.
+    // Description is cheatsheet-only metadata; everything else (e=repeating,
+    // l=locked, m=mouse, n=non-consuming, etc.) changes behavior and stays.
+    function _stripDescFlag(bt) {
+        const map = { bindd: "bind", binded: "binde", bindld: "bindl", bindid: "bindi" }
+        return map[bt] || bt
+    }
+
+    // Does `bind` functionally match some bind in hyprland/keybinds.lua?
+    // Compares stripped-bindType + mod set + key + dispatcher + args. Ignores
+    // description/comment — those are cosmetic. When this returns true,
+    // the override evaporates instead of being written, so the row pops
+    // back to locked-with-override-icon on the next reload.
+    function _matchesDefault(bind) {
+        const defaults = HyprlandKeybindsRaw.defaultData.binds || []
+        const tMods = _normMods(bind.mods)
+        const tKey = String(bind.key || "").toLowerCase()
+        const tBT = _stripDescFlag(bind.bindType || "bind")
+        const tDisp = bind.dispatcher || ""
+        const tArgs = String(bind.args || "").trim()
+        for (const d of defaults) {
+            if (_stripDescFlag(d.bindType || "bind") !== tBT) continue
+            if (_normMods(d.mods) !== tMods) continue
+            if (String(d.key || "").toLowerCase() !== tKey) continue
+            if ((d.dispatcher || "") !== tDisp) continue
+            if (String(d.args || "").trim() !== tArgs) continue
+            return true
+        }
+        return false
+    }
+
     function actionAdd(bind) {
+        if (_matchesDefault(bind)) {
+            // Adding a duplicate of a default — no-op, don't pollute the file.
+            return
+        }
         _bindKeyword(bind)
         _editFile("append", { bind: bind })
     }
 
     function actionEdit(oldBind, newBind) {
+        if (_matchesDefault(newBind)) {
+            // Edit restored the bind to its default. Strip the user bind line
+            // and any matching `hl.unbind` partner — the post-write reload
+            // will re-establish the default. Mirrors actionDelete's path.
+            _unbindKeyword(oldBind.mods, oldBind.key)
+            _editFile("delete_with_unbind_cleanup", {
+                lineNumber: oldBind.lineNumber,
+                mods: oldBind.mods,
+                key: oldBind.key
+            })
+            return
+        }
         _unbindKeyword(oldBind.mods, oldBind.key)
         _bindKeyword(newBind)
         _editFile("replace", { lineNumber: oldBind.lineNumber, bind: newBind })
     }
 
     function actionOverride(lockedBind, newBind) {
+        if (_matchesDefault(newBind)) {
+            // "Override" with identical-to-default values — nothing to write.
+            return
+        }
         _unbindKeyword(lockedBind.mods, lockedBind.key)
         _bindKeyword(newBind)
         _editFile("override", {
@@ -339,7 +531,7 @@ open(path, "w").write(text)
                     Layout.fillWidth: true
                     color: Appearance.colors.colSubtext
                     font.pixelSize: Appearance.font.pixelSize.smaller
-                    text: Translation.tr("Click the override icon to replace one in your custom file.")
+                    text: Translation.tr("Click the edit icon to replace one in your custom file.")
                     wrapMode: Text.Wrap
                 }
             }

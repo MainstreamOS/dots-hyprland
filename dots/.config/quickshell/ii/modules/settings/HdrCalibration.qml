@@ -528,7 +528,7 @@ Window {
                         Text {
                             Layout.topMargin: 24
                             Layout.alignment: Qt.AlignHCenter
-                            text: Translation.tr("Clicking Apply will save these values to monitors.conf\nand reload Hyprland immediately.")
+                            text: Translation.tr("Clicking Apply will save these values to monitors.lua\nand reload Hyprland immediately.")
                             color: "#444444"
                             font.pixelSize: 12
                             lineHeight: 1.6

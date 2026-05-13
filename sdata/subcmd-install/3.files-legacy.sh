@@ -71,7 +71,13 @@ case "${SKIP_HYPRLAND}" in
       fi
     done
     if [ "$OS_GROUP_ID" = "fedora" ];then
-      v bash -c "printf \"# Polkit authentication agent fallback\nexec-once = systemctl --user start hyprpolkitagent\n\" >> ${XDG_CONFIG_HOME}/hypr/hyprland/execs.conf"
+      # Polkit authentication agent fallback. Appended to hyprland/execs.lua
+      # by spawning a separate hl.on subscription (additive, idempotent on
+      # repeat installs if you skip the file when already present).
+      _execs_lua="${XDG_CONFIG_HOME}/hypr/hyprland/execs.lua"
+      if [ -f "$_execs_lua" ] && ! grep -q 'hyprpolkitagent' "$_execs_lua"; then
+        v bash -c "printf '\n-- Polkit authentication agent fallback (Fedora)\nhl.on(\"hyprland.start\", function() hl.exec_cmd(\"systemctl --user start hyprpolkitagent\") end)\n' >> \"$_execs_lua\""
+      fi
     fi
 
     install_dir__ignore_existing "dots/.config/hypr/custom" "${XDG_CONFIG_HOME}/hypr/custom"

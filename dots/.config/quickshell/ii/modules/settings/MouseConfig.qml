@@ -21,25 +21,37 @@ ContentPage {
 
     // 2 cards * 150px + 16px gap
 
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
     readonly property string envConf:
-        Quickshell.env("HOME") + "/.config/hypr/custom/env.conf"
+        Quickshell.env("HOME") + "/.config/hypr/custom/env.lua"
 
     Component.onCompleted: {
         mouseProc.running = false; mouseProc.running = true
         tpProc.running    = false; tpProc.running    = true
     }
 
+    // Strip surrounding quotes and trailing comma from a Lua value token.
+    // `"flat",` → `flat`, `0.0,` → `0.0`, `true` → `true`.
+    function _luaUnwrap(val) {
+        return String(val).replace(/^["']/, "").replace(/["']?,?\s*$/, "")
+    }
+
     Process {
         id: mouseProc
+        // Anchor the exit pattern on the actual `touchpad = {` block opener.
+        // The previous bare `/touchpad/` matched any line containing the
+        // word "touchpad" — including the file's doc comment
+        // `-- (one key per line, touchpad as a nested table).` — and exited
+        // before reading any of the input-table values below it.
         command: ["awk",
-            "/touchpad/{exit} /^[[:space:]]*(sensitivity|left_handed|accel_profile|natural_scroll)[[:space:]]*=/{print}",
+            "/^[[:space:]]*touchpad[[:space:]]*=[[:space:]]*\\{/{exit} /^[[:space:]]*(sensitivity|left_handed|accel_profile|natural_scroll)[[:space:]]*=/{print}",
             root.envConf
         ]
         stdout: SplitParser {
             onRead: data => {
                 const m = data.match(/^\s*(\w+)\s*=\s*(.+?)\s*$/)
                 if (!m) return
-                const key = m[1]; const val = m[2]
+                const key = m[1]; const val = root._luaUnwrap(m[2])
                 if (key === "sensitivity")    root.sensitivity   = parseFloat(val) || 0.0
                 if (key === "left_handed")    root.leftHanded    = val === "1" || val === "true"
                 if (key === "accel_profile")  root.accelEnabled  = val !== "flat"
@@ -51,47 +63,98 @@ ContentPage {
 
     Process {
         id: tpProc
+        // Anchor on the actual `touchpad = {` block opener so comments
+        // mentioning 'touchpad' don't enter the -A5 search window. The
+        // original bare `grep -A5 touchpad` happened to work because the
+        // comment's window didn't contain a natural_scroll line — but a
+        // single line of file reshuffling could trip it.
         command: ["bash", "-c",
-            "grep -A5 touchpad \"$1\" 2>/dev/null | grep natural_scroll || true",
+            "grep -A5 '^[[:space:]]*touchpad[[:space:]]*=' \"$1\" 2>/dev/null | grep natural_scroll || true",
             "--", root.envConf
         ]
         stdout: SplitParser {
             onRead: data => {
                 const m = data.match(/natural_scroll\s*=\s*(\S+)/)
-                if (m) root.naturalScrollTP = m[1] === "1" || m[1] === "true"
+                if (m) {
+                    const v = root._luaUnwrap(m[1])
+                    root.naturalScrollTP = v === "1" || v === "true"
+                }
             }
         }
     }
 
+    // Format a QML-passed value as a Lua literal for a given key.
+    // - boolean-keyed values (0/1) become `false`/`true`
+    // - accel_profile is a string → wrap in quotes
+    // - everything else gets stringified (numbers stay bare)
+    function _luaLiteral(key, value) {
+        const boolKeys = ["left_handed", "natural_scroll"]
+        if (boolKeys.indexOf(key) !== -1) {
+            // accept 0/1/"0"/"1"/true/false
+            const truthy = value === 1 || value === "1" || value === true
+            return truthy ? "true" : "false"
+        }
+        if (key === "accel_profile") {
+            return '"' + String(value) + '"'
+        }
+        // numeric (sensitivity)
+        return String(value)
+    }
+
     function applyInput(key, value) {
         if (!root.ready) return
-        Quickshell.execDetached(["hyprctl", "keyword", "input:" + key, String(value)])
-        // Python script replaces only first occurrence of key (before touchpad block)
+        // Live apply: Lua mode rejects `hyprctl keyword` ("can't work with
+        // non-legacy parsers. Use eval."), so we route through hyprctl eval +
+        // hl.config(). Booleans need real Lua keywords (`true`/`false`),
+        // numbers stay bare, strings get quoted — _luaLiteral handles all
+        // three. The leaf is just the input-table key, no nested colons.
+        const luaVal = root._luaLiteral(key, value)
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            'hl.config({ input = { ["' + key + '"] = ' + luaVal + ' } })'
+        ])
+        // Persist into env.lua. Replaces the first matching key in the
+        // OUTER input table (skipping the nested touchpad block). The
+        // touchpad-detection regex anchors on `touchpad = {` so comment
+        // lines mentioning 'touchpad' (e.g. the file-top doc comment)
+        // don't falsely latch in_tp and block legitimate matches.
         const mouseScript =
-            "import sys\n" +
+            "import sys, re\n" +
             "key, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
             "lines = open(conf).read().split('\\n')\n" +
             "in_tp = False\n" +
             "done = False\n" +
             "result = []\n" +
             "for line in lines:\n" +
-            "    if 'touchpad' in line:\n" +
+            "    stripped = line.strip()\n" +
+            "    # Only the actual `touchpad = {` opener flips in_tp;\n" +
+            "    # comments and unrelated 'touchpad' mentions ignored.\n" +
+            "    if re.match(r'touchpad\\s*=\\s*\\{', stripped):\n" +
             "        in_tp = True\n" +
-            "    if not in_tp and not done and line.strip().startswith(key):\n" +
-            "        line = '    ' + key + ' = ' + val\n" +
+            "    elif in_tp and re.match(r'\\},?\\s*$', stripped):\n" +
+            "        in_tp = False\n" +
+            "    elif not in_tp and not done and stripped.startswith(key + ' '):\n" +
+            "        line = '        ' + key + ' = ' + val + ','\n" +
             "        done = True\n" +
             "    result.append(line)\n" +
             "if not done:\n" +
-            "    result.append('    ' + key + ' = ' + val)\n" +
+            "    # Couldn't find an existing slot — bail rather than corrupt\n" +
+            "    # the file by appending bare assignments after the closing }).\n" +
+            "    sys.exit(0)\n" +
             "open(conf, 'w').write('\\n'.join(result))\n"
-        Quickshell.execDetached(["python3", "-c", mouseScript, String(key), String(value), root.envConf])
+        Quickshell.execDetached(["python3", "-c", mouseScript, String(key), luaVal, root.envConf])
     }
 
-    // Write mouse natural_scroll - skips inside touchpad block
-    // chr(123)='{' chr(125)='}' avoids QML brace counting
+    // Write mouse natural_scroll - skips inside touchpad block.
+    // chr(123)='{' chr(125)='}' avoids QML brace counting.
     function applyMouseNaturalScroll(value) {
         if (!root.ready) return
-        Quickshell.execDetached(["hyprctl", "keyword", "input:natural_scroll", String(value)])
+        const luaVal = root._luaLiteral("natural_scroll", value)
+        // Live apply via hyprctl eval — Lua mode rejects `hyprctl keyword`.
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            'hl.config({ input = { natural_scroll = ' + luaVal + ' } })'
+        ])
         const py =
             "import sys\n" +
             "val, conf = sys.argv[1], sys.argv[2]\n" +
@@ -106,16 +169,23 @@ ContentPage {
             "    if in_tp and cb in line and ob not in line:\n" +
             "        in_tp = False\n" +
             "    if not in_tp and 'natural_scroll' in line:\n" +
-            "        line = '    natural_scroll = ' + val\n" +
+            "        line = '        natural_scroll = ' + val + ','\n" +
             "    result.append(line)\n" +
             "open(conf, 'w').write('\\n'.join(result))\n"
-        Quickshell.execDetached(["python3", "-c", py, String(value), root.envConf])
+        Quickshell.execDetached(["python3", "-c", py, luaVal, root.envConf])
     }
 
-    // Write touchpad natural_scroll - only inside touchpad block
+    // Write touchpad natural_scroll - only inside touchpad block.
     function applyTouchpadInput(value) {
         if (!root.ready) return
-        Quickshell.execDetached(["hyprctl", "keyword", "input:touchpad:natural_scroll", String(value)])
+        const luaVal = root._luaLiteral("natural_scroll", value)
+        // Live apply via hyprctl eval — Lua mode rejects `hyprctl keyword`.
+        // Nested-table form so the inner natural_scroll under `touchpad` is
+        // targeted, not the outer one.
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            'hl.config({ input = { touchpad = { natural_scroll = ' + luaVal + ' } } })'
+        ])
         const py =
             "import sys\n" +
             "val, conf = sys.argv[1], sys.argv[2]\n" +
@@ -127,11 +197,11 @@ ContentPage {
             "    if 'touchpad' in line and ob in line:\n" +
             "        in_tp = True\n" +
             "    if in_tp and 'natural_scroll' in line:\n" +
-            "        line = '        natural_scroll = ' + val\n" +
+            "        line = '            natural_scroll = ' + val + ','\n" +
             "        in_tp = False\n" +
             "    result.append(line)\n" +
             "open(conf, 'w').write('\\n'.join(result))\n"
-        Quickshell.execDetached(["python3", "-c", py, String(value), root.envConf])
+        Quickshell.execDetached(["python3", "-c", py, luaVal, root.envConf])
     }
 
     // ── General ───────────────────────────────────────────────────────────────

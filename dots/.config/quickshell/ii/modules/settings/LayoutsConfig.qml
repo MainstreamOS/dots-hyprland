@@ -18,10 +18,14 @@ ContentPage {
     property var workspaceFloats: [false,false,false,false,false,false,false,false,false,false]
 
     readonly property bool perWorkspace: currentLayout === "per_workspace"
-    readonly property string hyprlandConf: Quickshell.env("HOME") + "/.config/hypr/hyprland.conf"
-    readonly property string workspacesConf: Quickshell.env("HOME") + "/.config/hypr/workspaces.conf"
-    readonly property string rulesConf: Quickshell.env("HOME") + "/.config/hypr/custom/rules.conf"
-    readonly property string customGeneralConf: Quickshell.env("HOME") + "/.config/hypr/custom/general.conf"
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
+    readonly property string hyprlandConf: Quickshell.env("HOME") + "/.config/hypr/hyprland.lua"
+    readonly property string workspacesConf: Quickshell.env("HOME") + "/.config/hypr/workspaces.lua"
+    readonly property string rulesConf: Quickshell.env("HOME") + "/.config/hypr/custom/rules.lua"
+    readonly property string customGeneralConf: Quickshell.env("HOME") + "/.config/hypr/custom/general.lua"
+    // The global layout (dwindle/master/etc) lives in hyprland/general.lua's
+    // general = { layout = "..." } slot.
+    readonly property string hyprGeneralConf: Quickshell.env("HOME") + "/.config/hypr/hyprland/general.lua"
 
     Component.onCompleted: {
         layoutProc.running = false; layoutProc.running = true
@@ -41,10 +45,11 @@ ContentPage {
         }
     }
 
-    // Check if source=workspaces.conf is uncommented (per-workspace active)
+    // Check if tryRequire("workspaces") is uncommented in hyprland.lua
+    // (per-workspace mode active).
     Process {
         id: perWsCheckProc
-        command: ["grep", "-cE", "^\\s*source\\s*=\\s*workspaces\\.conf", root.hyprlandConf]
+        command: ["grep", "-cE", "^\\s*tryRequire\\(\"workspaces\"\\)", root.hyprlandConf]
         stdout: SplitParser {
             onRead: data => {
                 if (parseInt(data) > 0)
@@ -58,14 +63,15 @@ ContentPage {
         }
     }
 
-    // Parse workspace layouts from workspaces.conf
+    // Parse workspace layouts from workspaces.lua. Each line is now:
+    //   hl.workspace_rule({ workspace = "N", layout = "NAME" })
     Process {
         id: readWsConf
         command: ["cat", root.workspacesConf]
         property var parsed: []
         stdout: SplitParser {
             onRead: data => {
-                const m = data.match(/workspace\s*=\s*(\d+)\s*,\s*layout:(\S+)/)
+                const m = data.match(/workspace\s*=\s*"(\d+)"\s*,\s*layout\s*=\s*"([^"]+)"/)
                 if (m) {
                     const idx = parseInt(m[1]) - 1
                     if (idx >= 0 && idx < 10) {
@@ -88,7 +94,8 @@ ContentPage {
         }
     }
 
-    // Parse float rules from rules.conf
+    // Parse float rules from custom/rules.lua. Each line is now:
+    //   hl.window_rule({ match = { workspace = "N" }, float = true })  -- ii-float-rule
     Process {
         id: readFloatRulesProc
         command: ["cat", root.rulesConf]
@@ -97,7 +104,7 @@ ContentPage {
         stdout: SplitParser { onRead: data => readFloatRulesProc.buf += data + "\n" }
         onExited: {
             const floats = [false,false,false,false,false,false,false,false,false,false]
-            const re = /windowrule\s*=\s*float\s+on\s*,\s*match:workspace\s+(\d+)/g
+            const re = /hl\.window_rule\(\{\s*match\s*=\s*\{\s*workspace\s*=\s*"(\d+)"\s*\}\s*,\s*float\s*=\s*true\s*\}\)\s*--\s*ii-float-rule/g
             let m
             while ((m = re.exec(readFloatRulesProc.buf)) !== null) {
                 const idx = parseInt(m[1]) - 1
@@ -120,25 +127,22 @@ ContentPage {
     }
 
     function enablePerWorkspace() {
+        // Write workspaces.lua with per-workspace hl.workspace_rule() lines,
+        // then uncomment the `tryRequire("workspaces")` line in hyprland.lua.
         let py =
-            "import sys\n" +
-            "ws_conf, hy_conf = sys.argv[1], sys.argv[2]\n" +
+            "import sys, re\n" +
+            "ws_lua, hy_lua = sys.argv[1], sys.argv[2]\n" +
             "ws_lines = [\n"
         for (let i = 0; i < 10; i++) {
-            py += "    'workspace = " + (i + 1) + ", layout:" + root.workspaceLayouts[i] + "',\n"
+            py += "    'hl.workspace_rule({ workspace = \"" + (i + 1) + "\", layout = \"" + root.workspaceLayouts[i] + "\" })',\n"
         }
         py +=
             "]\n" +
-            "open(ws_conf, 'w').write('\\n'.join(ws_lines) + '\\n')\n" +
-            "lines = open(hy_conf).read().split('\\n')\n" +
-            "result = []\n" +
-            "for line in lines:\n" +
-            "    stripped = line.lstrip('#').strip()\n" +
-            "    if stripped == 'source=workspaces.conf':\n" +
-            "        result.append(stripped)\n" +
-            "    else:\n" +
-            "        result.append(line)\n" +
-            "open(hy_conf, 'w').write('\\n'.join(result))\n"
+            "open(ws_lua, 'w').write('\\n'.join(ws_lines) + '\\n')\n" +
+            "text = open(hy_lua).read()\n" +
+            "# Strip any leading `-- ` from a tryRequire(\"workspaces\") line\n" +
+            "text = re.sub(r'(?m)^(\\s*)--\\s*(tryRequire\\(\"workspaces\"\\))', r'\\1\\2', text)\n" +
+            "open(hy_lua, 'w').write(text)\n"
         enablePerWsProc.command = ["python3", "-c", py, root.workspacesConf, root.hyprlandConf]
         enablePerWsProc.running = false
         enablePerWsProc.running = true
@@ -194,37 +198,28 @@ ContentPage {
         if (name === "per_workspace") {
             enablePerWorkspace()
         } else {
+            // Two-file edit in one Python: (a) comment out tryRequire("workspaces")
+            // in hyprland.lua so we leave per-workspace mode; (b) update
+            // `layout = "..."` inside the `general = { ... }` table of
+            // hyprland/general.lua.
             const py =
                 "import sys, re\n" +
-                "path, layout = sys.argv[1], sys.argv[2]\n" +
-                "lines = open(path).read().split('\\n')\n" +
-                "result = []\n" +
-                "in_general = False\n" +
-                "layout_written = False\n" +
-                "for line in lines:\n" +
-                "    stripped = line.lstrip('#').strip()\n" +
-                "    if stripped == 'source=workspaces.conf':\n" +
-                "        result.append('#' + stripped)\n" +
-                "    elif re.match(r'^general\\s*\\{', stripped):\n" +
-                "        in_general = True\n" +
-                "        result.append(line)\n" +
-                "    elif in_general and re.match(r'^\\}', stripped):\n" +
-                "        in_general = False\n" +
-                "        result.append(line)\n" +
-                "    elif re.match(r'^general:layout\\s*=', stripped):\n" +
-                "        result.append('general:layout = ' + layout)\n" +
-                "        layout_written = True\n" +
-                "    elif in_general and re.match(r'^layout\\s*=', stripped):\n" +
-                "        indent = len(line) - len(line.lstrip())\n" +
-                "        result.append(' ' * indent + 'layout = ' + layout)\n" +
-                "        layout_written = True\n" +
-                "    else:\n" +
-                "        result.append(line)\n" +
-                "if not layout_written:\n" +
-                "    result.append('general:layout = ' + layout)\n" +
-                "open(path, 'w').write('\\n'.join(result))\n"
+                "hy_lua, gen_lua, layout = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
+                "# (a) hyprland.lua: comment out the workspaces require if active\n" +
+                "text = open(hy_lua).read()\n" +
+                "text = re.sub(r'(?m)^(\\s*)(?!--)(tryRequire\\(\"workspaces\"\\))', r'\\1-- \\2', text)\n" +
+                "open(hy_lua, 'w').write(text)\n" +
+                "# (b) hyprland/general.lua: rewrite layout = \"...\" inside general = { ... }\n" +
+                "# Block-opener anchored at line start (re.M) so a doc comment\n" +
+                "# mentioning `general = {` doesn't shadow the real config block.\n" +
+                "text = open(gen_lua).read()\n" +
+                "new_text, count = re.subn(r'(^[ \\t]*general\\s*=\\s*\\{[^}]*?layout\\s*=\\s*\")[^\"]+(\")', r'\\g<1>' + layout + r'\\g<2>', text, count=1, flags=re.S|re.M)\n" +
+                "if count == 0:\n" +
+                "    # No existing layout key — insert one right after `general = {`\n" +
+                "    new_text = re.sub(r'(?m)^([ \\t]*)general(\\s*=\\s*\\{)', r'\\1general\\2\\n        layout = \"' + layout + r'\",', text, count=1)\n" +
+                "open(gen_lua, 'w').write(new_text)\n"
             editConfProc.pendingLayout = name
-            editConfProc.command = ["python3", "-c", py, root.hyprlandConf, name]
+            editConfProc.command = ["python3", "-c", py, root.hyprlandConf, root.hyprGeneralConf, name]
             editConfProc.running = false
             editConfProc.running = true
         }
@@ -235,19 +230,20 @@ ContentPage {
 
     function setFloatRules(floatArr) {
         root.workspaceFloats = floatArr
+        // Manage float rules in custom/rules.lua. We tag each generated line
+        // with the trailing `-- ii-float-rule` marker so we can reliably remove
+        // ours without touching hand-written window rules in the same file.
         const py =
             "import re, sys, json\n" +
             "conf = sys.argv[1]\n" +
             "floats = json.loads(sys.argv[2])\n" +
             "text = open(conf).read()\n" +
-            "# Remove all existing ii float rules\n" +
-            "text = re.sub(r'\\nwindowrule = float on, match:workspace \\d+', '', text)\n" +
-            "text = re.sub(r'^windowrule = float on, match:workspace \\d+\\n?', '', text, flags=re.M)\n" +
-            "# Add new float rules at end\n" +
+            "# Strip our previously-written rules (marker-tagged)\n" +
+            "text = re.sub(r'(?m)^hl\\.window_rule\\(\\{.*?\\}\\)\\s*--\\s*ii-float-rule\\n?', '', text)\n" +
             "rules = []\n" +
             "for i, f in enumerate(floats):\n" +
             "    if f:\n" +
-            "        rules.append('windowrule = float on, match:workspace ' + str(i + 1))\n" +
+            "        rules.append('hl.window_rule({ match = { workspace = \"' + str(i + 1) + '\" }, float = true })  -- ii-float-rule')\n" +
             "if rules:\n" +
             "    text = text.rstrip() + '\\n' + '\\n'.join(rules) + '\\n'\n" +
             "else:\n" +
@@ -283,13 +279,13 @@ ContentPage {
         floats[wsIndex] = false
         root.setFloatRules(floats)
 
-        // Write workspaces.conf
+        // Write workspaces.lua
         let py =
             "import sys\n" +
             "path = sys.argv[1]\n" +
             "lines = [\n"
         for (let i = 0; i < 10; i++) {
-            py += "    'workspace = " + (i + 1) + ", layout:" + root.workspaceLayouts[i] + "',\n"
+            py += "    'hl.workspace_rule({ workspace = \"" + (i + 1) + "\", layout = \"" + root.workspaceLayouts[i] + "\" })',\n"
         }
         py += "]\nopen(path, 'w').write('\\n'.join(lines) + '\\n')\n"
         writeWsConfProc.command = ["python3", "-c", py, root.workspacesConf]

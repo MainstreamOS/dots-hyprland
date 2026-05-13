@@ -229,13 +229,23 @@ ContentPage {
         easing.type: Easing.InQuad
     }
 
+    // Move the active window into a special workspace so it disappears from
+    // the screenshot, and bring it back afterward. Hyprland 0.55 Lua mode:
+    // hyprctl dispatch wraps args as `return hl.dispatch(<args>)`, so the
+    // legacy hyprlang names `movetoworkspacesilent` and `focuswindow` can't
+    // be used directly — the colon-and-bare-identifier syntax fails the Lua
+    // parser. Equivalents live under hl.dsp.window.move and hl.dsp.focus.
     Process {
         id: hideWindowProc
         property string buf: ""
         command: ["bash", "-c",
             "ADDR=$(hyprctl activewindow -j | jq -r '.address') && " +
             "echo \"$ADDR\" && " +
-            "hyprctl dispatch movetoworkspacesilent \"special:themecap,address:$ADDR\" >/dev/null"
+            // Lua-mode dispatch: move the window-by-address into a special
+            // workspace, no focus follow (silent). follow=false → silent=true
+            // in hl.dsp.window.move's table-arg semantics
+            // (LuaBindingsDispatchers.cpp:773-774).
+            "hyprctl dispatch \"hl.dsp.window.move({workspace = 'special:themecap', follow = false, window = 'address:$ADDR'})\" >/dev/null"
         ]
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => hideWindowProc.buf += data }
@@ -261,10 +271,14 @@ ContentPage {
     function restoreWindowAfterShot() {
         if (!root.windowHiddenForShot || !root.hyprWindowAddr) return
         root.windowHiddenForShot = false
+        // Lua-mode: move back to the active workspace WITH focus follow
+        // (follow=true → silent=false), then explicit focus on the window
+        // address to ensure it's the active client again. Two dispatchers
+        // because the move alone doesn't always re-raise the address.
         restoreWindowProc.command = ["bash", "-c",
             "WS=$(hyprctl activeworkspace -j | jq -r '.id') && " +
-            "hyprctl dispatch movetoworkspacesilent \"$WS,address:" + root.hyprWindowAddr + "\" >/dev/null && " +
-            "hyprctl dispatch focuswindow \"address:" + root.hyprWindowAddr + "\" >/dev/null"
+            "hyprctl dispatch \"hl.dsp.window.move({workspace = '$WS', follow = true, window = 'address:" + root.hyprWindowAddr + "'})\" >/dev/null && " +
+            "hyprctl dispatch \"hl.dsp.focus({window = 'address:" + root.hyprWindowAddr + "'})\" >/dev/null"
         ]
         restoreWindowProc.running = false
         restoreWindowProc.running = true
@@ -347,11 +361,11 @@ ContentPage {
             `cat > "$DIR/meta.json" <<EOF\n` +
             `{"slug":"$SLUG","name":"$NAME","wallpaperFile":"$WP_FILE","mode":"$MODE","created":$CREATED}\n` +
             `EOF\n` +
-            // Snapshot current decoration flags (same parsing logic as
-            // InterfaceConfig.qml's decoReader) so applying this theme later
-            // restores the look the user had at save time.
-            `GENERAL='${root.homePath}/.config/hypr/hyprland/general.conf'\n` +
-            `CUSTOM='${root.homePath}/.config/hypr/custom/general.conf'\n` +
+            // Snapshot current decoration flags (Lua-config syntax — same
+            // parsing logic as InterfaceConfig.qml's decoReader). Applying
+            // this theme later restores the look the user had at save time.
+            `GENERAL='${root.homePath}/.config/hypr/hyprland/general.lua'\n` +
+            `CUSTOM='${root.homePath}/.config/hypr/custom/general.lua'\n` +
             `python3 - "$DIR/decorations.json" "$GENERAL" "$CUSTOM" <<'PY'\n` +
             `import json, os, re, sys\n` +
             `out_path, general, custom = sys.argv[1], sys.argv[2], sys.argv[3]\n` +
@@ -360,15 +374,15 @@ ContentPage {
             `try:\n` +
             `    text = open(general).read()\n` +
             `    for key, block in (("animations", "animations"), ("blur", "blur"), ("shadow", "shadow")):\n` +
-            `        m = re.search(block + r"\\s*\\{[^}]*?enabled\\s*=\\s*(\\w+)", text, re.S)\n` +
+            `        m = re.search(block + r"\\s*=\\s*\\{[^}]*?enabled\\s*=\\s*(\\w+)", text, re.S)\n` +
             `        if m: flags[key] = truthy(m.group(1))\n` +
-            `    bm = re.search(r"^(\\s*)(#\\s*)?border_size\\s*=", text, re.M)\n` +
+            `    bm = re.search(r"^(\\s*)(--\\s*)?border_size\\s*=", text, re.M)\n` +
             `    flags["borders"] = bool(bm and not bm.group(2))\n` +
             `    rm = re.search(r"^\\s*rounding\\s*=\\s*(\\d+)", text, re.M)\n` +
             `    if rm: flags["roundCorners"] = int(rm.group(1)) > 0\n` +
             `except FileNotFoundError: pass\n` +
             `try:\n` +
-            `    flags["titleBars"] = bool(re.search(r"^[ \\t]*plugin[ \\t]*=[ \\t]*.*hyprbars\\.so", open(custom).read(), re.M))\n` +
+            `    flags["titleBars"] = bool(re.search(r"^[ \\t]*hl\\.plugin\\.load\\([^)]*hyprbars\\.so", open(custom).read(), re.M))\n` +
             `except FileNotFoundError: pass\n` +
             `with open(out_path, "w") as f: json.dump(flags, f, indent=2)\n` +
             `PY\n` +

@@ -166,9 +166,17 @@ hl.bind("SUPER + Slash", hl.dsp.layout("removemaster"), {description = "Remove m
 hl.bind("SUPER + Space", hl.dsp.layout("orientationnext"), {description = "Swap master layout orientation"} )
 
 --##! Scrolling Layout (fork fbdd8134 + 1dca3c52)
--- Routed through hyprctl exec to avoid parse-time "Invalid dispatcher" error
--- before the scrolloverview plugin is loaded.
-hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprctl dispatch scrolloverview:overview toggle"), {description = "Toggle Scrolling overview"} )
+-- The scrolloverview:overview dispatcher's colon makes it unreachable from
+-- hl.dispatch (which only takes hl.dsp.* userdata or Lua functions, and
+-- hyprctl's `dispatch X` Lua-wrap fails to parse the colon). The plugin
+-- exposes a Lua-callable wrapper via addLuaFunction in Lua mode — we route
+-- through that. The hyprbarsActive-style guard avoids a parse-time error
+-- when the plugin's Lua function isn't yet registered (load happens async).
+hl.bind("SUPER + O", function()
+    if hl.plugin and hl.plugin.scrolloverview and hl.plugin.scrolloverview.overview then
+        hl.plugin.scrolloverview.overview("toggle")
+    end
+end, {description = "Toggle Scrolling overview"})
 
 --##! Monocle Layout (fork f9dec549)
 hl.bind("SUPER + J", hl.dsp.layout("cyclenext"), {description = "Next window"} )

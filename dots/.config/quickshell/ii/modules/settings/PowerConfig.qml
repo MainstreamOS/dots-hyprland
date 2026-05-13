@@ -60,11 +60,13 @@ ContentPage {
         }
     }
 
-    // Read DPMS timeout from hypridle.conf (targets the listener containing dpms off)
+    // Read DPMS timeout from hypridle.conf (targets the listener containing
+    // dpms off). Pattern is loose enough to match both hyprlang `dpms off`
+    // and the Lua-form `hl.dsp.dpms({action = "off"})`.
     Process {
         id: screenBlankReader
         command: ["awk",
-            "/timeout[[:space:]]*=/{for(i=1;i<=NF;i++)if($i~/^[0-9]+$/){t=$i;break}} /on-timeout.*dpms off/{print t; exit}",
+            "/timeout[[:space:]]*=/{for(i=1;i<=NF;i++)if($i~/^[0-9]+$/){t=$i;break}} /on-timeout.*dpms.*off/{print t; exit}",
             hyprIdleConf
         ]
         property string buf: ""
@@ -144,7 +146,9 @@ ContentPage {
     }
 
     function applyScreenBlank(enabled, secs) {
-        applyHyprIdleTimeout("dpms off", enabled, secs)
+        // Loose keyword matches both hyprlang (`dpms off`) and Lua-form
+        // (`hl.dsp.dpms({action = "off"})`) entries in hypridle.conf.
+        applyHyprIdleTimeout("dpms.*off", enabled, secs)
     }
 
     function applyAutoSuspend(enabled, secs) {

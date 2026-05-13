@@ -164,16 +164,18 @@ set_thumbnail_path() {
 # insertion.
 set_scrolloverview_wallpaper() {
     local path="$1"
-    local target="$XDG_CONFIG_HOME/hypr/custom/general.conf"
+    local target="$XDG_CONFIG_HOME/hypr/custom/general.lua"
     [[ -z "$path" || ! -f "$target" ]] && return
 
     if grep -qE '^[[:space:]]*wallpaper_path[[:space:]]*=' "$target"; then
         local tmpfile
         tmpfile="$(mktemp)"
+        # Lua form: `wallpaper_path = "...",` (with quotes and trailing comma).
+        # Preserves leading indent so the value stays inside the parent table.
         awk -v new="$path" '
             /^[[:space:]]*wallpaper_path[[:space:]]*=/ {
                 match($0, /^[[:space:]]*/)
-                printf "%swallpaper_path = %s\n", substr($0, 1, RLENGTH), new
+                printf "%swallpaper_path = \"%s\",\n", substr($0, 1, RLENGTH), new
                 next
             }
             { print }

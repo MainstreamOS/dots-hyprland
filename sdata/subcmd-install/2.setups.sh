@@ -798,33 +798,35 @@ function _mkinitcpio_remove_hook(){
   fi
 }
 
-# Append an 'env = KEY,VALUE' line into the user's hypr custom env.conf if the
-# key isn't already set. Prints a warning (and returns 1) if the file doesn't
-# exist, which is the normal case on first install before dotfiles are deployed.
+# Append an 'hl.env("KEY", "VALUE")' line into the user's hypr custom env.lua
+# if the key isn't already set. Returns 1 if the file doesn't exist, which is
+# the normal case on first install before dotfiles are deployed.
 function _hypr_env_upsert(){
   local _key="$1" _val="$2"
-  local _env_conf="$HOME/.config/hypr/custom/env.conf"
-  [[ -f "$_env_conf" ]] || return 1
-  if ! grep -q "^env = ${_key}" "$_env_conf"; then
-    printf 'env = %s,%s\n' "$_key" "$_val" >> "$_env_conf"
+  local _env_lua="$HOME/.config/hypr/custom/env.lua"
+  [[ -f "$_env_lua" ]] || return 1
+  if ! grep -qE "hl\.env\(\"${_key}\"" "$_env_lua"; then
+    printf 'hl.env("%s", "%s")\n' "$_key" "$_val" >> "$_env_lua"
     echo -e "${STY_CYAN}[$0]: Added hypr env: ${_key}=${_val}${STY_RST}"
   fi
 }
 
-# Inject short sleeps before 'hyprctl dispatch dpms on' in hypridle.conf so
+# Inject short sleeps before the Lua-form dpms-on dispatch in hypridle.conf so
 # NVIDIA DRM/KMS has time to finish reinit after resume, avoiding the session
 # recover prompt. AMD/Intel don't need this (i915/amdgpu resume synchronously).
 function _hypr_fix_hypridle_for_nvidia(){
   local _hypridle="$HOME/.config/hypr/hypridle.conf"
   [[ -f "$_hypridle" ]] || return 1
-  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch dpms on' "$_hypridle" \
-      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch dpms on' "$_hypridle"; then
-    sed -i '/after_sleep_cmd/s|hyprctl dispatch dpms on|sleep 2 \&\& hyprctl dispatch dpms on|' "$_hypridle"
+  # The Lua-form dispatch string is: hl.dsp.dpms({action = "on"}). We add a
+  # `sleep 2 && ` prefix on the hyprctl command, leaving the rest intact.
+  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle" \
+      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle"; then
+    sed -i '/after_sleep_cmd/s|hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|sleep 2 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|' "$_hypridle"
     echo -e "${STY_CYAN}[$0]: Added 2s dpms-on delay to after_sleep_cmd (NVIDIA resume fix).${STY_RST}"
   fi
-  if grep -qE 'on-resume\s*=.*hyprctl dispatch dpms on' "$_hypridle" \
-      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch dpms on' "$_hypridle"; then
-    sed -i '/on-resume/s|hyprctl dispatch dpms on|sleep 1 \&\& hyprctl dispatch dpms on|' "$_hypridle"
+  if grep -qE 'on-resume\s*=.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle" \
+      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle"; then
+    sed -i '/on-resume/s|hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|sleep 1 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|' "$_hypridle"
     echo -e "${STY_CYAN}[$0]: Added 1s dpms-on delay to on-resume (NVIDIA resume fix).${STY_RST}"
   fi
 }

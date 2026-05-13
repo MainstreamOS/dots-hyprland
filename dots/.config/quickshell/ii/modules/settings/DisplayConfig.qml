@@ -36,7 +36,7 @@ ContentPage {
     // Set true in applyAllChanges, consumed by reloadProc.onExited
     // to know whether the reload it just observed was an Apply (banner)
     // or a side-effect (no banner — e.g., the revertChanges() write,
-    // setDefaultMonitor's hyprland.conf rewrite).
+    // setDefaultMonitor's general.lua cursor-table rewrite).
     property bool _showBannerAfterNextReload: false
 
     // Palette of colours for distinguishing monitors on the canvas
@@ -47,8 +47,12 @@ ContentPage {
         Appearance.m3colors.m3error,
     ]
 
-    property string monitorsConfPath: `${Quickshell.env("HOME")}/.config/hypr/monitors.conf`
-    property string hyprlandConfPath: `${Quickshell.env("HOME")}/.config/hypr/hyprland.conf`
+    // Targets the Lua-config tree introduced in Hyprland 0.55.
+    // monitors.lua holds per-monitor hl.monitor({...}) calls;
+    // hyprlandGeneralPath holds the cursor block (default_monitor).
+    property string monitorsConfPath: `${Quickshell.env("HOME")}/.config/hypr/monitors.lua`
+    property string hyprlandConfPath: `${Quickshell.env("HOME")}/.config/hypr/hyprland.lua`
+    property string hyprlandGeneralPath: `${Quickshell.env("HOME")}/.config/hypr/hyprland/general.lua`
     property string defaultMonitor: ""
     property var confBitdepth: ({})
     property var confVrr: ({})
@@ -68,7 +72,7 @@ ContentPage {
 
     // ICC profile state. iccProfileDir is the on-disk library; the import
     // flow copies user-picked .icc/.icm files into this dir so paths in
-    // monitors.conf stay stable. iccProfiles is rescanned whenever a file
+    // monitors.lua stay stable. iccProfiles is rescanned whenever a file
     // is added or removed.
     property var confIccProfile: ({})
     property string iccProfileDir: `${Quickshell.env("HOME")}/.icc-profiles`
@@ -134,9 +138,12 @@ ContentPage {
         });
         displayConfigPage.monitors = sorted;
 
-        // Write cursor block to hyprland.conf
+        // Persist cursor.default_monitor into hyprland/general.lua's
+        // `cursor = { ... }` table. We update the existing key if present,
+        // otherwise insert it right after `cursor = {`. The rest of the
+        // cursor table (zoom_factor, hotspot_padding, etc.) stays intact.
         let escaped = monitorName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-        let confPath = displayConfigPage.hyprlandConfPath.replace(/'/g, "\\'");
+        let confPath = displayConfigPage.hyprlandGeneralPath.replace(/'/g, "\\'");
         let py =
             "import re\n" +
             "path = '" + confPath + "'\n" +
@@ -145,9 +152,18 @@ ContentPage {
             "    content = open(path, 'r').read()\n" +
             "except FileNotFoundError:\n" +
             "    content = ''\n" +
-            "content = re.sub(r'\\ncursor\\s*\\{[^}]*\\}', '', content)\n" +
-            "content = content.rstrip('\\n') + '\\ncursor {\\n    default_monitor = ' + name + '\\n}\\n'\n" +
-            "open(path, 'w').write(content)\n";
+            "# Rewrite existing default_monitor key inside the cursor table.\n" +
+            "new_text, count = re.subn(\n" +
+            "    r'(cursor\\s*=\\s*\\{[^}]*?default_monitor\\s*=\\s*\")[^\"]*(\")',\n" +
+            "    r'\\g<1>' + name + r'\\g<2>',\n" +
+            "    content, count=1, flags=re.S)\n" +
+            "if count == 0:\n" +
+            "    # No existing key — insert right after `cursor = {`.\n" +
+            "    new_text = re.sub(\n" +
+            "        r'(cursor\\s*=\\s*\\{)',\n" +
+            "        r'\\1\\n        default_monitor = \"' + name + r'\",',\n" +
+            "        content, count=1)\n" +
+            "open(path, 'w').write(new_text)\n";
         writeHyprlandProc.command = ["python3", "-c", py];
         writeHyprlandProc.running = false;
         writeHyprlandProc.running = true;
@@ -366,18 +382,23 @@ print(json.dumps(result))
             let wsAssignments = {};
             let hasAnyWsBinding = false;
 
-            // Parse monitorv2 { ... } blocks as well as legacy monitor= lines
+            // Lua format: each monitor is `hl.monitor({ output = "DP-1", ... })`
+            // and workspace bindings are `hl.workspace_rule({ workspace = "1", monitor = "DP-1" })`.
+            // HDR-mode metadata is persisted as a Lua comment `-- ii_hdr_mode:NAME = N`.
+            //
+            // Strip surrounding quotes/trailing-comma from a captured Lua value.
+            const stripLua = v => String(v).replace(/^\s*"/, "").replace(/"?,?\s*$/, "").trim();
             let currentBlock = null;
             readConfProc.output.split("\n").forEach(line => {
                 let trimmed = line.trim();
 
-                // ── monitorv2 block start ──────────────────────────────────
-                if (/^monitorv2\s*\{/.test(trimmed)) {
+                // ── hl.monitor({ block start ──────────────────────────────
+                if (/^hl\.monitor\s*\(\s*\{/.test(trimmed)) {
                     currentBlock = {};
                     return;
                 }
                 if (currentBlock !== null) {
-                    if (trimmed === "}") {
+                    if (/^\}\s*\)/.test(trimmed) || trimmed === "}") {
                         // End of block — commit parsed values
                         let name = currentBlock["output"];
                         if (name) {
@@ -397,30 +418,18 @@ print(json.dumps(result))
                         }
                         currentBlock = null;
                     } else {
-                        let kv = trimmed.match(/^(\w+)\s*=\s*(.+)$/);
-                        if (kv) currentBlock[kv[1]] = kv[2].trim();
+                        let kv = trimmed.match(/^(\w+)\s*=\s*(.+?),?\s*$/);
+                        if (kv) currentBlock[kv[1]] = stripLua(kv[2]);
                     }
                     return;
                 }
 
-                // ── Legacy monitor= lines (fallback) ──────────────────────
-                let mb = line.match(/^monitor=([^,]+),.+,bitdepth,(\d+)/);
-                if (mb) bitdepthResult[mb[1]] = parseInt(mb[2]);
-                let mv = line.match(/^monitor=([^,]+),.+,vrr,(\d+)/);
-                if (mv) vrrResult[mv[1]] = parseInt(mv[2]);
-                let mp = line.match(/^monitor=([^,]+),[^,]+,(auto-center-[^,]+),/);
-                if (mp) positionModeResult[mp[1]] = mp[2];
-                let mc = line.match(/^monitor=([^,]+),.+,cm,(\w+)/);
-                if (mc) colorModeResult[mc[1]] = mc[2];
-                let mi = line.match(/^monitor=([^,]+),.+,icc,([^,\n]+)/);
-                if (mi) iccProfileResult[mi[1]] = mi[2].trim();
-
-                // ── HDR mode metadata (persisted as comment) ─────────────
-                let mh = trimmed.match(/^#\s*ii_hdr_mode:(\S+)\s*=\s*(\d+)/);
+                // ── HDR mode metadata (persisted as a Lua comment) ────────
+                let mh = trimmed.match(/^--\s*ii_hdr_mode:(\S+)\s*=\s*(\d+)/);
                 if (mh) hdrModeResult[mh[1]] = parseInt(mh[2]);
 
-                // ── Workspace bindings (same in both syntaxes) ─────────────
-                let mw = line.match(/^workspace\s*=\s*(\d+)\s*,\s*monitor:(\S+)/);
+                // ── Workspace bindings — hl.workspace_rule({ workspace = "N", monitor = "DP-1" })
+                let mw = line.match(/hl\.workspace_rule\(\{\s*workspace\s*=\s*"(\d+)"\s*,\s*monitor\s*=\s*"([^"]+)"/);
                 if (mw) {
                     wsAssignments[parseInt(mw[1])] = mw[2];
                     hasAnyWsBinding = true;
@@ -485,64 +494,52 @@ print(json.dumps(result))
         let bitdepth = (isHdr || hdrMode > 0) ? 10 : (m.bitdepth ?? 8);
 
         let lines = [];
-        // Persist HDR mode as a comment so it survives reloads
+        // Persist HDR mode as a Lua comment so it survives reloads.
         if (isHdr && hdrMode > 0)
-            lines.push(`# ii_hdr_mode:${name} = ${hdrMode}`);
-        lines.push(`monitorv2 {`);
-        lines.push(`    output = ${name}`);
+            lines.push(`-- ii_hdr_mode:${name} = ${hdrMode}`);
+        // Lua hl.monitor({...}) call. Strings get quoted, numbers and booleans bare.
+        lines.push(`hl.monitor({`);
+        lines.push(`    output = "${name}",`);
         if (!m.enabled) {
-            lines.push(`    disabled = true`);
+            lines.push(`    disabled = true,`);
         } else {
-            lines.push(`    mode = ${mode}`);
-            lines.push(`    position = ${pos}`);
-            lines.push(`    scale = ${scale}`);
-            lines.push(`    transform = ${m.transform}`);
-            if (bitdepth !== 8)          lines.push(`    bitdepth = ${bitdepth}`);
-            if ((m.vrr ?? 0) !== 0)      lines.push(`    vrr = ${m.vrr}`);
+            lines.push(`    mode = "${mode}",`);
+            lines.push(`    position = "${pos}",`);
+            lines.push(`    scale = "${scale}",`);
+            lines.push(`    transform = ${m.transform},`);
+            if (bitdepth !== 8)          lines.push(`    bitdepth = ${bitdepth},`);
+            if ((m.vrr ?? 0) !== 0)      lines.push(`    vrr = ${m.vrr},`);
             // "Fullscreen Only" (1, default): don't write cm=hdr — Hyprland's
             // render:cm_auto_hdr (default 1) handles fullscreen HDR switching.
             // "Always On" (2): write cm=hdr/hdredid as usual.
-            // Every other colorMode value (srgb / wide / dp3 / dcip3 /
-            // adobe / edid) is written verbatim; "auto" is the no-op.
             if (isHdr && hdrMode === 1) {
                 // Skip cm = hdr so Hyprland only activates HDR for fullscreen apps
             } else if (colorMode !== "auto") {
-                lines.push(`    cm = ${colorMode}`);
+                lines.push(`    cm = "${colorMode}",`);
             }
             // ICC profile (mutually exclusive with HDR — Hyprland's ICC
-            // pipeline replaces colorspace conversion, so cm = hdr/etc.
-            // is suppressed by the UI when an ICC profile is active).
-            // Requires Hyprland built with USE_ICC=1 (0.55+); on older
-            // builds the directive is silently ignored.
+            // pipeline replaces colorspace conversion).
             let icc = m.iccProfile ?? "";
-            if (icc && !isHdr) lines.push(`    icc = ${icc}`);
+            if (icc && !isHdr) lines.push(`    icc = "${icc}",`);
             if (isHdr) {
                 let d = displayConfigPage.hdrDefaults;
-                lines.push(`    sdrbrightness = ${(m.sdrBrightness   ?? d.sdrBrightness).toFixed(3)}`);
-                lines.push(`    sdrsaturation = ${(m.sdrSaturation   ?? d.sdrSaturation).toFixed(3)}`);
-                lines.push(`    sdr_min_luminance = ${(m.sdrMinLuminance ?? d.sdrMinLuminance).toFixed(4)}`);
-                lines.push(`    sdr_max_luminance = ${Math.round(m.sdrMaxLuminance ?? d.sdrMaxLuminance)}`);
-                // HDR target luminance — only meaningful for `cm = hdr`
-                // (`cm = hdredid` makes Hyprland parse the EDID itself).
-                // We always write these for `cm = hdr`: skipping them
-                // makes Hyprland fall through to its 10000-nit PQ-peak
-                // default which over-drives any real panel. The values
-                // chain through user calibration → EDID-seeded caps
-                // → hdrDefaults via initPending, so a sensible value
-                // is always in `m.maxLuminance` etc.
+                lines.push(`    sdrbrightness = ${(m.sdrBrightness   ?? d.sdrBrightness).toFixed(3)},`);
+                lines.push(`    sdrsaturation = ${(m.sdrSaturation   ?? d.sdrSaturation).toFixed(3)},`);
+                lines.push(`    sdr_min_luminance = ${(m.sdrMinLuminance ?? d.sdrMinLuminance).toFixed(4)},`);
+                lines.push(`    sdr_max_luminance = ${Math.round(m.sdrMaxLuminance ?? d.sdrMaxLuminance)},`);
                 if (colorMode === "hdr") {
-                    lines.push(`    min_luminance = ${(m.minLuminance    ?? d.minLuminance).toFixed(4)}`);
-                    lines.push(`    max_luminance = ${Math.round(m.maxLuminance    ?? d.maxLuminance)}`);
-                    lines.push(`    max_avg_luminance = ${Math.round(m.maxAvgLuminance ?? d.maxAvgLuminance)}`);
+                    lines.push(`    min_luminance = ${(m.minLuminance    ?? d.minLuminance).toFixed(4)},`);
+                    lines.push(`    max_luminance = ${Math.round(m.maxLuminance    ?? d.maxLuminance)},`);
+                    lines.push(`    max_avg_luminance = ${Math.round(m.maxAvgLuminance ?? d.maxAvgLuminance)},`);
                 }
-                lines.push(`    sdr_eotf = srgb`);
+                lines.push(`    sdr_eotf = "srgb",`);
             }
         }
-        lines.push(`}`);
+        lines.push(`})`);
         return lines.join("\n");
     }
 
-    // Writes the entire monitors.conf from current pendingChanges for
+    // Writes the entire monitors.lua from current pendingChanges for
     // every monitor at once. The page now exposes a single Apply
     // button (rather than one per monitor) — this matches the
     // function's actual behavior (it's always written every monitor
@@ -556,18 +553,18 @@ print(json.dumps(result))
         // chain), so it always reflects the most recent on-disk state.
         revertSnapshot = lastReadMonitorsConf;
         _showBannerAfterNextReload = true;
-        // Build full monitors.conf content from all pending changes
+        // Build full monitors.lua content from all pending changes
         let blocks = [];
         monitors.forEach(mon => {
             let p = pendingChanges[mon.name] ?? {};
             blocks.push(buildMonitorBlock(mon.name, p, mon));
         });
-        // Append workspace-monitor bindings if in custom mode
+        // Append workspace-monitor bindings if in custom mode (Lua syntax).
         if (wsBindingMode === "custom") {
             let wsLines = [];
             for (let ws = 1; ws <= 10; ws++) {
                 let assigned = workspaceAssignments[ws];
-                if (assigned) wsLines.push(`workspace = ${ws}, monitor:${assigned}`);
+                if (assigned) wsLines.push(`hl.workspace_rule({ workspace = "${ws}", monitor = "${assigned}" })`);
             }
             if (wsLines.length > 0) blocks.push(wsLines.join("\n"));
         }
@@ -685,7 +682,7 @@ print(json.dumps(result))
                 hdrMode: confHdrMode[name] ?? 0,
                 iccProfile: confIccProfile[name] ?? "",
                 // HDR luminance fallback chain: existing user value
-                // from monitors.conf → manufacturer-suggested defaults
+                // from monitors.lua → manufacturer-suggested defaults
                 // from EDID (CTA-861 HDR Static Metadata block, parsed
                 // by capabilitiesProc) → hardcoded fallback. Means most
                 // HDR users won't need to run the calibration wizard
@@ -801,7 +798,7 @@ print(json.dumps(result))
             try {
                 let parsed = JSON.parse(monitorProc.output.trim());
                 // Ensure a default monitor is always set.
-                // If hyprland.conf hasn't been read yet (race), or no cursor block exists,
+                // If general.lua hasn't been read yet (race), or no cursor block exists,
                 // fall back to whichever monitor is at 0x0, or the first monitor.
                 if (!displayConfigPage.defaultMonitor ||
                     !parsed.find(m => m.name === displayConfigPage.defaultMonitor)) {
@@ -828,7 +825,7 @@ print(json.dumps(result))
         }
     }
 
-    // Write monitors.conf then reload Hyprland
+    // Write monitors.lua then reload Hyprland
     Process {
         id: writeProc
         command: []
@@ -838,7 +835,7 @@ print(json.dumps(result))
         }
     }
 
-    // Write hyprland.conf cursor block (default_monitor)
+    // Write general.lua cursor table (default_monitor)
     Process {
         id: writeHyprlandProc
         command: []
@@ -848,10 +845,12 @@ print(json.dumps(result))
         }
     }
 
-    // Read hyprland.conf to get current default_monitor
+    // Read hyprland/general.lua to get the current cursor.default_monitor.
+    // In Lua the field is `default_monitor = "DP-1"` inside a `cursor = { ... }`
+    // table — so we capture between quotes and strip them.
     Process {
         id: readHyprlandConfProc
-        command: ["cat", displayConfigPage.hyprlandConfPath]
+        command: ["cat", displayConfigPage.hyprlandGeneralPath]
         property string output: ""
         stdout: SplitParser {
             onRead: data => readHyprlandConfProc.output += data + "\n"
@@ -860,9 +859,9 @@ print(json.dumps(result))
             let defaultMon = "";
             let inCursorBlock = false;
             readHyprlandConfProc.output.split("\n").forEach(line => {
-                if (/^\s*cursor\s*\{/.test(line)) inCursorBlock = true;
+                if (/^\s*cursor\s*=\s*\{/.test(line)) inCursorBlock = true;
                 if (inCursorBlock) {
-                    let m = line.match(/^\s*default_monitor\s*=\s*(.+?)\s*$/);
+                    let m = line.match(/^\s*default_monitor\s*=\s*"([^"]+)"/);
                     if (m) defaultMon = m[1];
                 }
                 if (/^\s*\}/.test(line)) inCursorBlock = false;
@@ -1104,7 +1103,7 @@ except Exception:
     // ── Revert-after-apply banner ──────────────────────────────────────────
     // Visible for 15s after each Apply. "Keep" clicks accept the new
     // configuration; "Revert" or timeout (or page navigation, via
-    // Component.onDestruction above) restores monitors.conf from the
+    // Component.onDestruction above) restores monitors.lua from the
     // pre-apply snapshot and reloads. Sits at the top of the page so a
     // user who can't see clearly still sees the banner where it always
     // appears in similar settings tools.
@@ -1365,10 +1364,10 @@ except Exception:
             property color monColor: displayConfigPage.monitorColors[index % displayConfigPage.monitorColors.length]
 
             // Support detection via capabilitiesProc, which:
-            //   - Reads HYPR_VRR_ALLOWED / HYPR_10BIT_ALLOWED from env.conf
+            //   - Reads HYPR_VRR_ALLOWED / HYPR_10BIT_ALLOWED from env.lua
             //     directly (post-install writes these for known-dangerous hardware)
             //   - Detects the DRM driver and per-connector sysfs capabilities
-            //   - Applies env.conf overrides on top of sysfs results
+            //   - Applies env.lua overrides on top of sysfs results
             // Defaults to true when no caps entry exists (hardware not known to
             // be dangerous) so working features are never incorrectly blocked.
             readonly property bool vrrSupported: {
@@ -1965,6 +1964,15 @@ except Exception:
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Appearance.m3colors.m3outlineVariant; opacity: 0.5 }
 
                     // ── Row: 10-bit ────────────────────────────────────────
+                    //
+                    // KNOWN ISSUE: with 10-bit ON, Hyprland 0.55.0 renegotiates
+                    // the DRM swapchain (XR24 ↔ XR30) on every layer-surface
+                    // composition change, producing a brief flicker on every
+                    // overview / app drawer / wallpaper selector open/close.
+                    // Upstream fix lives in commit dab9649 ("monitor: don't
+                    // modeset on reserved changes", #14397) — released after
+                    // 0.55.0. When updated past that commit, the flicker
+                    // should stop and this toggle becomes free of side effects.
                     Item {
                         id: tenBitRow
                         Layout.fillWidth: true
@@ -2841,7 +2849,7 @@ except Exception:
                         let cal = Object.assign({}, displayConfigPage.hdrCalibratedMonitors);
                         cal[monitorSection.monName] = true;
                         displayConfigPage.hdrCalibratedMonitors = cal;
-                        // Auto-apply: write to monitors.conf and reload Hyprland.
+                        // Auto-apply: write to monitors.lua and reload Hyprland.
                         // applyAllChanges always serialises every monitor's
                         // pendingChanges, so the just-calibrated values land
                         // in the file alongside any other in-progress edits.
@@ -3232,7 +3240,12 @@ except Exception:
                                     StyledText {
                                         id: customPillTxt
                                         anchors.centerIn: parent
-                                        text: Translation.tr("Enable")
+                                        // Reflects the active state: "Enabled" when custom-mode
+                                        // is on (pill is filled), "Enable" when it's off (pill
+                                        // is the click-to-activate affordance).
+                                        text: parent.parent.active
+                                            ? Translation.tr("Enabled")
+                                            : Translation.tr("Enable")
                                         font.pixelSize: Appearance.font.pixelSize.small
                                         color: parent.parent.active
                                             ? Appearance.colors.colOnPrimary
@@ -3367,7 +3380,7 @@ except Exception:
 
     // ── Apply changes ──────────────────────────────────────────────────────
     // Single Apply for the whole page. applyAllChanges() loops every
-    // monitor's pendingChanges and writes one full monitors.conf, then
+    // monitor's pendingChanges and writes one full monitors.lua, then
     // reloads once — versus the old behavior of clicking Apply per
     // monitor and triggering N reloads in sequence (each flashing the
     // outputs).
