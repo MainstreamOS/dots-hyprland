@@ -314,9 +314,6 @@ ApplicationWindow {
                                     RowLayout {
                                         spacing: 3
                                         KeyboardKey {
-                                            key: "Ctrl"
-                                        }
-                                        KeyboardKey {
                                             key: "󰖳"
                                         }
                                         StyledText {
@@ -324,7 +321,7 @@ ApplicationWindow {
                                             text: "+"
                                         }
                                         KeyboardKey {
-                                            key: "T"
+                                            key: "W"
                                         }
                                     }
                                 }
@@ -434,7 +431,7 @@ ApplicationWindow {
                                             text: "+"
                                         }
                                         KeyboardKey {
-                                            key: "/"
+                                            key: "Tab"
                                         }
                                     }
                                 }
