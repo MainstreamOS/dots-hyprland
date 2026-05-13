@@ -81,9 +81,14 @@ ApplicationWindow {
                     let titleRegex = (root.title || "")
                         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
                     if (!titleRegex) return;
+                    // Hyprland 0.55 Lua mode: `hyprctl dispatch <bare-name>`
+                    // wraps as `return hl.dispatch(<argv joined>)` and chokes
+                    // on legacy hyprlang dispatcher names. Use the Lua-form
+                    // hl.dsp.window.move with x/y for pixel-exact positioning
+                    // (relative defaults to false → absolute coords).
                     recenterMoveProc.command = [
-                        "hyprctl", "dispatch", "movewindowpixel",
-                        `exact ${tx} ${ty},title:^${titleRegex}$`
+                        "hyprctl", "dispatch",
+                        `hl.dsp.window.move({x = ${tx}, y = ${ty}, window = "title:^${titleRegex}$"})`
                     ];
                     recenterMoveProc.running = false;
                     recenterMoveProc.running = true;
@@ -125,6 +130,45 @@ ApplicationWindow {
             Math.abs(curr - scale) < Math.abs(prev - scale) ? curr : prev);
     }
 
+    // Build one multi-line `hl.monitor({ ... })` block. Mirrors the shape
+    // Settings → Display writes from buildMonitorBlock() in DisplayConfig.qml
+    // so a file written here can be round-trip-edited by that panel later.
+    // Installer-scoped subset (mode / position / scale + transform / vrr /
+    // disabled passthrough) — HDR / ICC / bitdepth aren't exposed in the
+    // installer UI and stay on Hyprland's auto-detected defaults.
+    function buildMonitorBlock(name, m, mon) {
+        let snapped = snapScale(m.scale);
+        const scaleMap = {
+            [1.0]:   "1.0",
+            [1.25]:  "1.25",
+            [1.5]:   "1.5",
+            [5/3]:   "1.666667",
+            [1.875]: "1.875",
+            [2.0]:   "2.0"
+        };
+        let scale = scaleMap[snapped] ?? snapped.toFixed(4);
+        let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
+
+        let lines = [];
+        lines.push(`hl.monitor({`);
+        lines.push(`    output = "${name}",`);
+        if (mon.disabled) {
+            lines.push(`    disabled = true,`);
+        } else {
+            lines.push(`    mode = "${mode}",`);
+            // "auto" lets Hyprland arrange monitors left-to-right in
+            // connection order — safer than hardcoding "0x0" for every
+            // output, which would stack them on a multi-monitor setup.
+            // The user can fine-tune positioning later in Settings → Display.
+            lines.push(`    position = "auto",`);
+            lines.push(`    scale = "${scale}",`);
+            if ((mon.transform ?? 0) !== 0) lines.push(`    transform = ${mon.transform},`);
+            if ((mon.vrr ?? 0) !== 0)       lines.push(`    vrr = ${mon.vrr},`);
+        }
+        lines.push(`})`);
+        return lines.join("\n");
+    }
+
     function initPending(monitor) {
         let name = monitor.name;
         if (!pendingChanges[name]) {
@@ -151,17 +195,15 @@ ApplicationWindow {
     }
 
     function applyMonitorChanges(monitorName) {
-        let lines = [];
+        let blocks = [];
         monitors.forEach(mon => {
             let p = pendingChanges[mon.name] ?? {};
             let m = Object.assign({}, mon, p);
-            let snapped = snapScale(m.scale);
-            const scaleMap = { 1.0: "1", 1.25: "1.25", 1.5: "1.5", 2.0: "2" };
-            let scale = scaleMap[snapped] ?? snapped.toFixed(4);
-            let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
-            lines.push(`hl.monitor({ output = "${mon.name}", mode = "${mode}", position = "0x0", scale = "${scale}" })`);
+            blocks.push(buildMonitorBlock(mon.name, m, mon));
         });
-        let fileContent = lines.join("\n") + "\n";
+        // Blank line between blocks matches DisplayConfig's output style and
+        // keeps the file readable when Settings → Display rewrites it.
+        let fileContent = blocks.join("\n\n") + "\n";
         let escaped = fileContent
             .replace(/\\/g, "\\\\")
             .replace(/'/g, "\\'")
@@ -704,7 +746,7 @@ ApplicationWindow {
         onClicked: {
             // Apply every monitor's pending settings (mode + scale) before
             // handing off to Calamares. applyMonitorChanges already iterates
-            // over all monitors and writes the full monitors.conf, so the
+            // over all monitors and writes the full monitors.lua, so the
             // monitorName arg is irrelevant — we just need the file written
             // and hyprctl reloaded. The reloadProc onExited handler then
             // launches Calamares once startInstallQueued is set.
