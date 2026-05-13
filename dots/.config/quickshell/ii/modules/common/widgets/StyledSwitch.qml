@@ -13,6 +13,15 @@ Switch {
     property color activeColor: Appearance?.colors.colPrimary ?? "#685496"
     property color inactiveColor: Appearance?.colors.colSurfaceContainerHighest ?? "#45464F"
 
+    // Gate for the thumb/track Behavior animations. Pages that load their
+    // initial `checked` state asynchronously (e.g. InterfaceConfig.qml
+    // reading hyprland/general.lua on page open) can keep this false
+    // until the read completes so the toggle SNAPS to its file-state
+    // instead of visibly sliding from "off" to its restored "on" position
+    // every time the settings menu reopens. Default true keeps normal
+    // user-click changes animated.
+    property bool animateChanges: true
+
     PointingHandInteraction {}
 
     // Custom track styling
@@ -25,9 +34,11 @@ Switch {
         border.color: root.checked ? root.activeColor : Appearance.m3colors.m3outline
 
         Behavior on color {
+            enabled: root.animateChanges
             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
         Behavior on border.color {
+            enabled: root.animateChanges
             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
     }
@@ -43,6 +54,7 @@ Switch {
         anchors.leftMargin: root.checked ? ((root.pressed || root.down) ? (22 * root.scale) : 24 * root.scale) : ((root.pressed || root.down) ? (2 * root.scale) : 8 * root.scale)
 
         Behavior on anchors.leftMargin {
+            enabled: root.animateChanges
             NumberAnimation {
                 duration: Appearance.animationCurves.expressiveFastSpatialDuration
                 easing.type: Easing.BezierSpline
@@ -50,6 +62,7 @@ Switch {
             }
         }
         Behavior on width {
+            enabled: root.animateChanges
             NumberAnimation {
                 duration: Appearance.animationCurves.expressiveFastSpatialDuration
                 easing.type: Easing.BezierSpline
@@ -57,6 +70,7 @@ Switch {
             }
         }
         Behavior on height {
+            enabled: root.animateChanges
             NumberAnimation {
                 duration: Appearance.animationCurves.expressiveFastSpatialDuration
                 easing.type: Easing.BezierSpline
@@ -64,6 +78,7 @@ Switch {
             }
         }
         Behavior on color {
+            enabled: root.animateChanges
             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
     }

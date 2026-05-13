@@ -8,6 +8,12 @@ RippleButton {
     id: root
     property string buttonIcon
     property alias iconSize: iconWidget.iconSize
+    // Forwarded to the inner StyledSwitch — pages that load their initial
+    // `checked` state from a file (e.g. InterfaceConfig.qml reading
+    // general.lua) can hold this false through that read so the restored
+    // toggle position snaps in place instead of sliding in on every menu
+    // reopen. Default true keeps user-click changes animated.
+    property alias animateChanges: switchWidget.animateChanges
 
     Layout.fillWidth: true
     implicitHeight: contentItem.implicitHeight + 8 * 2
