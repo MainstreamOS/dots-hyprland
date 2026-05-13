@@ -55,8 +55,8 @@ makedepends=(
   'wayland'
   'wayland-protocols'
 )
-provides=("$_pkgname")
-conflicts=("$_pkgname")
+provides=("$_pkgname" "$_pkgname-git")
+conflicts=("$_pkgname" "$_pkgname-git")
 
 _pkgsrc="$_pkgname"
 source=("$_pkgsrc::git+$url.git#commit=$_commit"

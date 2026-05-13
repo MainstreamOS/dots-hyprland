@@ -358,8 +358,8 @@ switch() {
         deactivate
         return 1
     fi
-    "$SCRIPT_DIR"/applycolor.sh
     deactivate
+    "$SCRIPT_DIR"/applycolor.sh
 
     # Pass screen width, height, and wallpaper path to post_process
     max_width_desired="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
