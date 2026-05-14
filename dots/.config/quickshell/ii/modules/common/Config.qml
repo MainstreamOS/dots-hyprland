@@ -470,8 +470,16 @@ Singleton {
                 property real hoverRegionHeight: 2
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
-                property list<string> pinnedApps: [ // IDs of pinned entries
-                    "google-chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify", "kitty", "org.gnome.Software",]
+                property list<string> pinnedApps: [ // IDs of pinned entries.
+                    // Match Hyprland's reported window class:
+                    //   - Native apps usually use a lowercase short name (kitty, mpv, steam).
+                    //   - Flatpak apps use the reverse-DNS app-ref (com.spotify.Client,
+                    //     com.google.Chrome). Mixing both in the same list is fine — each
+                    //     entry just has to match what the running window actually reports.
+                    // Keep this in sync with the Default Apps preselect in
+                    // netinstall.conf so the dock has launchers for the apps a fresh
+                    // install actually ships.
+                    "com.google.Chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "com.spotify.Client", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
                 property JsonObject contextMenuVolume: JsonObject {
                     property bool enable: true
