@@ -74,9 +74,23 @@ Singleton {
         onLoadFailed: root.resetFilePathNextTime();
     }
 
+    // Re-entrancy guard: upstream's execDetached double-fires on rapid
+    // presses and races applycolor.sh. Drop presses while a run is in
+    // flight; refresh the theme on exit. Matches QuickConfig.qml's path.
+    Process {
+        id: toggleLightDarkProc
+        onExited: root.reapplyTheme()
+    }
+
     function toggleLightDark() {
+        if (toggleLightDarkProc.running) return;
         const currentlyDark = Appearance.m3colors.darkmode;
-        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", currentlyDark ? "light" : "dark", "--noswitch"]);
+        toggleLightDarkProc.command = [
+            Directories.wallpaperSwitchScriptPath,
+            "--mode", currentlyDark ? "light" : "dark",
+            "--noswitch",
+        ];
+        toggleLightDarkProc.running = true;
     }
 
     GlobalShortcut {

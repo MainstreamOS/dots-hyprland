@@ -14,6 +14,14 @@ term_alpha=100 #Set this to < 100 make all your terminals transparent
 if [ ! -d "$STATE_DIR"/user/generated ]; then
   mkdir -p "$STATE_DIR"/user/generated
 fi
+
+# Race guard: serialize concurrent runs so two parallel invocations
+# don't cp + sed the kitty-theme.conf template over each other's
+# partial work. -w 30 queues callers up to 30 s; lock auto-releases
+# on script exit (see the `wait` calls below that keep fd 9 alive).
+exec 9>"$STATE_DIR/applycolor.lock"
+flock -w 30 9 || { echo "applycolor.sh: lock timeout — skipping"; exit 0; }
+
 cd "$CONFIG_DIR" || exit
 
 colornames=''
@@ -76,6 +84,9 @@ apply_anyterm() {
 apply_term() {
   apply_anyterm &
   apply_kitty &
+  # Keep apply_term alive until its children finish, otherwise the
+  # outer flock releases before apply_kitty's cp+sed runs.
+  wait
 }
 
 # Check if terminal theming is enabled in config
@@ -91,3 +102,7 @@ else
 fi
 
 # apply_qt & # Qt theming is already handled by kde-material-colors
+
+# Hold fd 9 (and the flock) open until every backgrounded apply_* job
+# finishes; otherwise the lock releases mid-work.
+wait
