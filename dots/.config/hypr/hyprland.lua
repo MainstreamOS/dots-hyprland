@@ -43,8 +43,14 @@ tryRequire("custom.general")
 tryRequire("custom.rules")
 tryRequire("custom.keybinds")
 
--- Optional sub-files written by Quickshell Settings (LayoutsConfig, DisplayConfig)
-tryRequire("workspaces")
+-- Optional sub-files written by Quickshell Settings (LayoutsConfig, DisplayConfig).
+-- workspaces.lua sits commented out by default — uncommented by LayoutsConfig
+-- when the user picks "Per Workspace" in Settings → Layouts; recommented when
+-- they switch back to a global layout. Without the `-- ` prefix shipped here,
+-- the perWsCheckProc grep in LayoutsConfig would always match on a fresh
+-- install and the panel would open with "Per Workspace" highlighted instead
+-- of "Dwindle".
+-- tryRequire("workspaces")
 tryRequire("monitors")
 
 -- Shell overrides (Quickshell-managed runtime knobs: GameMode, AntiFlashbang, etc.)
