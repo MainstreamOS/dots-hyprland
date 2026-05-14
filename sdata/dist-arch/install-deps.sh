@@ -174,6 +174,15 @@ install-local-pkgbuild() {
   # via the yay path before any Flatpak entries are reached (the list orders
   # `flatpak:` first, ahead of the reverse-DNS entries).
   if [[ "$pkgname" == "mainstream-extras" ]]; then
+    # Drop pacman hooks BEFORE the optdepends loop so they're in place
+    # when the corresponding packages get installed below. Currently
+    # only one — nautilus-copy-path's bundled config.json defaults to
+    # 4 menu items; the hook flips uri/name/content to false after
+    # every install/upgrade so only "Copy path" surfaces.
+    x sudo install -Dm 644 \
+        ./sdata/nautilus-copy-path/95-nautilus-copy-path-config.hook \
+        /etc/pacman.d/hooks/95-nautilus-copy-path-config.hook
+
     printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     local _flathub_added=false
     for dep in "${optdepends[@]}"; do

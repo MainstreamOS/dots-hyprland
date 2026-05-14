@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-extras
 pkgver=1.0
-pkgrel=8
+pkgrel=10
 pkgdesc='Mainstream OS Extra Software'
 arch=(any)
 license=(None)
@@ -23,6 +23,8 @@ optdepends=(
   'snapper: Btrfs snapshot manager'
   'fastfetch: System info'
   'topgrade: System updater'
+  'nautilus-copy-path: Copy path/URI/name from Nautilus context menu'
+  'nautilus-admin-gtk4: Open / edit as administrator from Nautilus context menu'
   'com.google.Chrome: Google Chrome — web browser'
   'net.nokyan.Resources: Resources — system monitor'
   'org.gnome.Calculator: GNOME Calculator'

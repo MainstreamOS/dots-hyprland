@@ -1,0 +1,15 @@
+# nautilus-copy-path hardcodes its config to the file shipped inside the
+# package's own install dir — it never checks ~/.config or /etc. Flip
+# the three extra items (URI / name / content) to false after every
+# install/upgrade so only "Copy path" surfaces in the context menu.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = nautilus-copy-path
+
+[Action]
+Description = Locking nautilus-copy-path to path-only menu entry...
+When = PostTransaction
+Exec = /bin/sh -c "sed -i 's/\"uri\": true/\"uri\": false/; s/\"name\": true/\"name\": false/; s/\"content\": true/\"content\": false/' /usr/share/nautilus-python/extensions/nautilus-copy-path/config.json"
