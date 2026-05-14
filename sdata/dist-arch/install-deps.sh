@@ -164,14 +164,46 @@ install-local-pkgbuild() {
   # these are the default apps (calculator, office, media player, etc.) that
   # should be present on every installation. The KDE blocklist and --ignore
   # flag still apply, so no Plasma packages can sneak in via this path.
+  #
+  # Dual-source routing matches archiso's netinstall.conf:
+  #   - Name contains a dot (reverse-DNS, e.g. com.spotify.Client) → Flatpak,
+  #     installed via `flatpak install --system flathub <ref>` after a
+  #     one-shot remote-add for flathub.
+  #   - Anything else → native Arch / AUR, installed via the existing yay path.
+  # The flatpak binary itself is in this optdepends list and gets installed
+  # via the yay path before any Flatpak entries are reached (the list orders
+  # `flatpak:` first, ahead of the reverse-DNS entries).
   if [[ "$pkgname" == "mainstream-extras" ]]; then
     printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
+    local _flathub_added=false
     for dep in "${optdepends[@]}"; do
       local pkg="${dep%%:*}"
       if _is_kde_blocked "$pkg"; then
         printf "${STY_YELLOW}[$0]: Skipping blocked KDE/Plasma extras dep '%s'${STY_RST}\n" "$pkg"
         continue
       fi
+      # Flatpak ref → reverse-DNS app ID (dot in name).
+      if [[ "$pkg" == *.* ]]; then
+        if ! command -v flatpak >/dev/null 2>&1; then
+          printf "${STY_YELLOW}[$0]: WARNING: flatpak not installed yet, deferring '%s'${STY_RST}\n" "$pkg"
+          failed_deps+=("$pkg")
+          continue
+        fi
+        # One-shot flathub remote-add the first time we see a Flatpak ref.
+        # --if-not-exists is idempotent, but caching saves a fork per package.
+        if ! $_flathub_added; then
+          x sudo flatpak remote-add --if-not-exists --system flathub \
+              https://flathub.org/repo/flathub.flatpakrepo || true
+          _flathub_added=true
+        fi
+        if ! sudo flatpak install --system --noninteractive --assumeyes \
+                flathub "$pkg"; then
+          printf "${STY_YELLOW}[$0]: WARNING: Failed to install Flatpak '%s', will retry after others.${STY_RST}\n" "$pkg"
+          failed_deps+=("$pkg")
+        fi
+        continue
+      fi
+      # Native Arch / AUR path.
       if ! yay -S --sudoloop $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
         printf "${STY_YELLOW}[$0]: WARNING: Failed to install extras dep '%s', will retry after others.${STY_RST}\n" "$pkg"
         failed_deps+=("$pkg")
@@ -179,9 +211,25 @@ install-local-pkgbuild() {
     done
   fi
 
-  # Retry failed deps once (they may have failed due to ordering/transient issues)
+  # Retry failed deps once (they may have failed due to ordering/transient
+  # issues — e.g. a Flatpak ref hit before `flatpak` itself was installed,
+  # or yay racing with another in-flight pacman). Route Flatpak refs to
+  # flatpak install on the retry too; without this, com.spotify.Client
+  # would get tried as a yay package on the retry and fail twice.
   for dep in "${failed_deps[@]}"; do
     if _is_kde_blocked "$dep"; then continue; fi
+    if [[ "$dep" == *.* ]] && command -v flatpak >/dev/null 2>&1; then
+      if ! $_flathub_added; then
+        x sudo flatpak remote-add --if-not-exists --system flathub \
+            https://flathub.org/repo/flathub.flatpakrepo || true
+        _flathub_added=true
+      fi
+      if ! sudo flatpak install --system --noninteractive --assumeyes \
+              flathub "$dep"; then
+        printf "${STY_RED}[$0]: ERROR: Failed to install Flatpak '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
+      fi
+      continue
+    fi
     if ! yay -S --sudoloop $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_RED}[$0]: ERROR: Failed to install dependency '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
     fi
