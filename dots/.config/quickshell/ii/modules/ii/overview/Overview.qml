@@ -216,36 +216,32 @@ Scope {
                     : -1
                 if (ws <= 0 || !app) return
 
-                // Folder drop → launch every contained app on the target workspace.
-                // [workspace N silent] is per-spawn-PID and misses windows from
-                // DBus-activated apps (GNOME Nautilus, Text Editor, etc.), which
-                // are spawned by the long-running service rather than the binary
-                // we exec. Focus the target workspace first so the service's new
-                // windows land on it regardless of activation style.
+                // Focus the target workspace, then exec each command.
+                // Lua "..." escaping: \\ first, then " — order matters so
+                // the freshly-added \" isn't re-escaped.
+                Hyprland.dispatch(`hl.dsp.focus({workspace = ${ws}})`)
+
+                function dispatchExec(parts) {
+                    if (!parts || parts.length === 0) return
+                    const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
+                    const lua = cmd
+                        .replace(/\\/g, "\\\\")
+                        .replace(/"/g, '\\"')
+                    Hyprland.dispatch(`hl.dsp.exec_cmd("${lua}")`)
+                }
+
                 if (app._isFolder === true) {
+                    // Folder drop → spawn every contained app on the
+                    // (now-focused) target workspace.
                     const ids = app.appIds || []
-                    if (ids.length === 0) return
-                    Hyprland.dispatch(`workspace ${ws}`)
                     for (let i = 0; i < ids.length; i++) {
                         const entry = AppSearch.guessDesktopEntry(ids[i])
-                        const parts = entry ? entry.command : null
-                        if (parts && parts.length > 0) {
-                            const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
-                            Hyprland.dispatch(`exec ${cmd}`)
-                        }
+                        dispatchExec(entry ? entry.command : null)
                     }
                     return
                 }
 
-                // Launch single apps the same way as folder drops:
-                // focus the target workspace first, then exec. This keeps
-                // DBus-activated apps consistent with folder launches.
-                const parts = app.command
-                if (parts && parts.length > 0) {
-                    const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
-                    Hyprland.dispatch(`workspace ${ws}`)
-                    Hyprland.dispatch(`exec ${cmd}`)
-                }
+                dispatchExec(app.command)
             }
 
             function onAppDragCancelled() {
