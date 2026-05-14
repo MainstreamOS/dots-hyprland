@@ -259,10 +259,13 @@ Item {
                                             color: Appearance.m3colors.m3onSurface
                                         }
                                         onClicked: {
+                                            // 0.55 Lua dispatch; follow = false keeps "silent" semantics.
                                             const ws = wsButton.index + 1;
                                             for (const toplevel of root.appToplevel.toplevels) {
                                                 const addr = `0x${toplevel.HyprlandToplevel?.address}`;
-                                                Hyprland.dispatch(`movetoworkspacesilent ${ws},address:${addr}`);
+                                                Hyprland.dispatch(
+                                                    `hl.dsp.window.move({workspace = ${ws}, follow = false, window = "address:${addr}"})`
+                                                );
                                             }
                                             root.close();
                                         }
