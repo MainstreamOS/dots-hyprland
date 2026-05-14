@@ -131,7 +131,7 @@ Item {
     property alias listViewRef: listView
     property real mouseXInList: -9999
     property bool listHovered: false
-    property real maxScale: 2.2
+    property real maxScale: 2.35
     property real sigma: 60
 
     function scaleForX(itemCenterX) {

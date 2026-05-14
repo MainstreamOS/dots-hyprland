@@ -216,8 +216,26 @@ DockButton {
                 }
                 active: !root.isSeparator && !root.isFolder
                 sourceComponent: IconImage {
+                    id: appIconImage
                     source: Quickshell.iconPath(root.desktopEntry?.icon ?? AppSearch.guessIcon(appToplevel.appId), "image-missing")
                     implicitSize: root.iconSize
+                    mipmap: true
+                    // Rasterize at the hover peak so the parent Item's
+                    // `scale: hoverScale` transform is always a downscale
+                    // (crisp) rather than an upscale (fuzzy). IconImage's
+                    // default sourceSize tracks actualSize (= iconSize) —
+                    // at 100% display scale that's only ~iconSize raster
+                    // pixels, which look pixelated when the magnification
+                    // animation grows the visual size to iconSize * maxScale.
+                    // HiDPI display scales mask the bug because Qt's DPR
+                    // already multiplies the raster size.
+                    //
+                    // mipmap on + downscale from the hover-peak raster
+                    // keeps the idle state cleanly anti-aliased without
+                    // visibly softening the magnified peak (mip 0 == 1:1
+                    // sample at full hover).
+                    backer.sourceSize.width: root.iconSize * root.appListRoot.maxScale
+                    backer.sourceSize.height: root.iconSize * root.appListRoot.maxScale
                 }
             }
 
@@ -247,9 +265,17 @@ DockButton {
                             model: root.folderAppIds
 
                             IconImage {
+                                id: folderTileIcon
                                 required property var modelData
                                 source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
                                 implicitSize: root.iconSize * 0.4
+                                mipmap: true
+                                // Folder tiles live in the same scaled Item
+                                // as the main app icon, so they need the
+                                // same maxScale-bumped sourceSize to stay
+                                // crisp through the hover animation.
+                                backer.sourceSize.width: root.iconSize * 0.4 * root.appListRoot.maxScale
+                                backer.sourceSize.height: root.iconSize * 0.4 * root.appListRoot.maxScale
                             }
                         }
                     }
