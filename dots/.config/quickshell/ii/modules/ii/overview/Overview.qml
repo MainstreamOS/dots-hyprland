@@ -39,6 +39,61 @@ Scope {
     //    committed, so real dismiss events (clicking outside) work normally.
     property bool ignoreDismiss: false
 
+    // Fallback for D-Bus-activated / splash-then-real apps whose real
+    // window bypasses the exec_cmd workspace rule. Each drop registers
+    // a class hint for 5s; openwindow events that match a hint get
+    // silently moved to the target workspace.
+    property var _pendingSpawns: ({})
+
+    function _addSpawnWatch(hint, ws) {
+        if (!hint || ws <= 0) return
+        const key = String(hint).toLowerCase().replace(/^.*\//, "")
+        if (!key) return
+        const updated = _pendingSpawns
+        updated[key] = { targetWs: ws, expiresAt: Date.now() + 5000 }
+        _pendingSpawns = updated
+        _spawnWatchExpire.restart()
+    }
+
+    Timer {
+        id: _spawnWatchExpire
+        interval: 1000
+        repeat: true
+        running: Object.keys(overviewScope._pendingSpawns).length > 0
+        onTriggered: {
+            const now = Date.now()
+            const updated = overviewScope._pendingSpawns
+            let dirty = false
+            for (const k in updated) {
+                if (updated[k].expiresAt < now) { delete updated[k]; dirty = true }
+            }
+            if (dirty) overviewScope._pendingSpawns = updated
+        }
+    }
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name !== "openwindow") return
+            if (Object.keys(overviewScope._pendingSpawns).length === 0) return
+            // event.data: ADDR,WORKSPACE_NAME,CLASS,TITLE
+            const parts = String(event.data).split(",")
+            if (parts.length < 3) return
+            const addr = parts[0]
+            const klass = parts[2].toLowerCase()
+            const wsNum = parseInt(parts[1], 10)
+            for (const watched in overviewScope._pendingSpawns) {
+                if (klass.indexOf(watched) === -1 && watched.indexOf(klass) === -1) continue
+                const target = overviewScope._pendingSpawns[watched].targetWs
+                if (wsNum === target) continue
+                Hyprland.dispatch(
+                    `hl.dsp.window.move({ workspace = ${target}, follow = false, window = "address:0x${addr}" })`
+                )
+                // Don't delete — multi-window apps may open more within 5s.
+            }
+        }
+    }
+
     // Phase 2: re-arm the grab while the guard is still active.
     Timer {
         id: rearmTimer
@@ -216,32 +271,33 @@ Scope {
                     : -1
                 if (ws <= 0 || !app) return
 
-                // Focus the target workspace, then exec each command.
-                // Lua "..." escaping: \\ first, then " — order matters so
-                // the freshly-added \" isn't re-escaped.
-                Hyprland.dispatch(`hl.dsp.focus({workspace = ${ws}})`)
-
-                function dispatchExec(parts) {
+                // exec_cmd's two-arg form carries the workspace rule
+                // on the spawned env; _addSpawnWatch is the fallback
+                // for D-Bus / splash flows that bypass the rule.
+                // Lua escape order: \\ first, then " — otherwise the
+                // newly-added \" gets re-escaped.
+                function dispatchExec(parts, hint) {
                     if (!parts || parts.length === 0) return
                     const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
                     const lua = cmd
                         .replace(/\\/g, "\\\\")
                         .replace(/"/g, '\\"')
-                    Hyprland.dispatch(`hl.dsp.exec_cmd("${lua}")`)
+                    Hyprland.dispatch(`hl.dsp.exec_cmd("${lua}", { workspace = "${ws} silent" })`)
+                    overviewScope._addSpawnWatch(hint || parts[0], ws)
                 }
 
                 if (app._isFolder === true) {
-                    // Folder drop → spawn every contained app on the
-                    // (now-focused) target workspace.
                     const ids = app.appIds || []
                     for (let i = 0; i < ids.length; i++) {
                         const entry = AppSearch.guessDesktopEntry(ids[i])
-                        dispatchExec(entry ? entry.command : null)
+                        const hint = entry?.startupClass || entry?.id || ids[i]
+                        dispatchExec(entry ? entry.command : null, hint)
                     }
                     return
                 }
 
-                dispatchExec(app.command)
+                const hint = app.startupClass || app.id || (app.command ? app.command[0] : null)
+                dispatchExec(app.command, hint)
             }
 
             function onAppDragCancelled() {
