@@ -136,6 +136,7 @@ Item { // Bar content region
             id: middleCenterGroup
             anchors.verticalCenter: parent.verticalCenter
             padding: workspacesWidget.widgetPadding
+            glowing: workspacesWidget.dragOver
 
             Workspaces {
                 id: workspacesWidget

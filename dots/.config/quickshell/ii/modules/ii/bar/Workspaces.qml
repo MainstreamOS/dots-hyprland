@@ -32,6 +32,10 @@ Item {
     property real workspaceIconMarginShrinked: -4
     property int workspaceIndexInGroup: (effectiveActiveWorkspaceId - 1) % root.workspacesShown
 
+    // Exposed for the parent BarGroup pill to glow while a drag-to-scroll
+    // is in progress. Mirrors dragScrollArea.dragActive.
+    readonly property bool dragOver: dragScrollArea.dragActive
+
     property bool showNumbers: false
     Timer {
         id: showNumbersTimer
@@ -253,7 +257,6 @@ Item {
         implicitWidth: root.vertical ? indicatorThickness : indicatorLength
         y: root.vertical ? indicatorPosition : null
         implicitHeight: root.vertical ? indicatorLength : indicatorThickness
-
     }
 
     // Workspaces - numbers
@@ -316,17 +319,44 @@ Item {
                         opacity: (Config.options?.bar.workspaces.alwaysShowNumbers
                             || root.showNumbers
                             || (Config.options?.bar.workspaces.showAppIcons && workspaceButtonBackground.biggestWindow)
+                            || (root.dragOver && !dirArrow.isMiddle)
                             ) ? 0 : 1
                         visible: opacity > 0
                         anchors.centerIn: parent
                         width: workspaceButtonWidth * 0.18
                         height: width
                         radius: width / 2
-                        color: (root.effectiveActiveWorkspaceId == button.workspaceValue) ? 
-                            Appearance.m3colors.m3onPrimary : 
-                            (workspaceOccupied[index] ? Appearance.m3colors.m3onSecondaryContainer : 
+                        color: (root.effectiveActiveWorkspaceId == button.workspaceValue) ?
+                            Appearance.m3colors.m3onPrimary :
+                            (workspaceOccupied[index] ? Appearance.m3colors.m3onSecondaryContainer :
                                 Appearance.colors.colOnLayer1Inactive)
 
+                        Behavior on opacity {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
+                    }
+                    // Directional chevron — replaces the dot during a
+                    // drag-to-scroll. Slots left of centre point left,
+                    // right point right; the middle one (or two, if
+                    // workspacesShown is even) stay as dots.
+                    MaterialSymbol {
+                        id: dirArrow
+                        readonly property real centerIdx: (root.workspacesShown - 1) / 2
+                        readonly property real distFromCenter: index - centerIdx
+                        readonly property bool isLeft: distFromCenter < -0.5
+                        readonly property bool isRight: distFromCenter > 0.5
+                        readonly property bool isMiddle: !isLeft && !isRight
+
+                        anchors.centerIn: parent
+                        text: isLeft ? "chevron_left" : "chevron_right"
+                        iconSize: workspaceButtonWidth * 0.7
+                        color: (root.effectiveActiveWorkspaceId == button.workspaceValue) ?
+                            Appearance.m3colors.m3onPrimary :
+                            (workspaceOccupied[index] ? Appearance.m3colors.m3onSecondaryContainer :
+                                Appearance.colors.colOnLayer1Inactive)
+
+                        visible: opacity > 0.01
+                        opacity: root.dragOver && !isMiddle ? 1 : 0
                         Behavior on opacity {
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                         }
