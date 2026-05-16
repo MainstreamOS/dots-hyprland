@@ -20,7 +20,14 @@ ContentPage {
     property bool flagDisableSystem: false
     property bool flagDisableFlatpak: false
     property bool flagDisableFirmware: true
+    property bool flagAutoRebuildQuickshell: true
     property string customArgs: ""
+
+    // Set by the stdout/stderr scanners when pacman's quickshell-check
+    // hook fires its "built against Qt X but system updated to Qt Y"
+    // warning. Drives the auto-rebuild follow-up after topgrade exits.
+    property bool quickshellWarningDetected: false
+    property string detectedQuickshellPackage: ""
 
     function buildCommand() {
         let args = ["bash", "-c", buildTopgradeCommand()];
@@ -56,6 +63,8 @@ ContentPage {
         if (isRunning) return;
         outputText = "";
         userStopped = false;
+        quickshellWarningDetected = false;
+        detectedQuickshellPackage = "";
         topgradeProc.command = buildCommand();
         topgradeProc.running = true;
         isRunning = true;
@@ -64,11 +73,101 @@ ContentPage {
     function stopUpdate() {
         if (!isRunning) return;
         userStopped = true;
-        topgradeProc.signal(15); // SIGTERM
+        // Signal whichever phase is currently running (topgrade, the
+        // package-owner probe, or the Quickshell rebuild).
+        if (topgradeProc.running) topgradeProc.signal(15);
+        if (quickshellOwnerProc.running) quickshellOwnerProc.signal(15);
+        if (quickshellRebuildProc.running) quickshellRebuildProc.signal(15);
+    }
+
+    // Substring-match the upstream quickshell-check.hook's warning. The
+    // exact phrasing comes from `quickshell --private-check-compat` and
+    // doesn't get translated by the user's locale, so a fixed match is
+    // fine across systems.
+    function checkForQuickshellWarning(data) {
+        if (data && data.indexOf("Quickshell was built against Qt") !== -1) {
+            quickshellWarningDetected = true;
+        }
     }
 
     Process {
         id: topgradeProc
+        environment: ({
+            "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
+        })
+        stdout: SplitParser {
+            onRead: data => {
+                root.outputText += data + "\n";
+                root.checkForQuickshellWarning(data);
+            }
+        }
+        stderr: SplitParser {
+            onRead: data => {
+                root.outputText += data + "\n";
+                root.checkForQuickshellWarning(data);
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            if (root.userStopped) {
+                root.outputText += "\n" + Translation.tr("Update stopped by user. Cleaning up…");
+                lockCleanupProc.running = true;
+                root.isRunning = false;
+                return;
+            }
+            if (exitCode === 0) {
+                root.outputText += "\n" + Translation.tr("Update completed successfully.");
+            } else {
+                root.outputText += "\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
+            }
+            // Follow-up: if the Quickshell ABI hook fired and the user
+            // hasn't disabled auto-rebuild, resolve the owning package
+            // and rebuild it. Skip on non-zero topgrade exit so we don't
+            // hide a real failure.
+            if (exitCode === 0 && root.quickshellWarningDetected && root.flagAutoRebuildQuickshell) {
+                root.outputText += "\n\n>>> " + Translation.tr("Quickshell ABI mismatch detected. Looking up owning package…");
+                quickshellOwnerProc.running = true;
+            } else {
+                root.isRunning = false;
+            }
+        }
+    }
+
+    // Step 1 of the rebuild: resolve which package actually owns
+    // /usr/bin/quickshell. The same upstream hook ships with whichever
+    // quickshell variant is installed (illogical-impulse-quickshell-git,
+    // mainstream-quickshell-git, plain quickshell-git, …), so this
+    // works without hard-coding a package name.
+    Process {
+        id: quickshellOwnerProc
+        command: ["pacman", "-Qoq", "/usr/bin/quickshell"]
+        stdout: SplitParser {
+            onRead: data => {
+                const pkg = data.trim();
+                if (pkg.length > 0) root.detectedQuickshellPackage = pkg;
+            }
+        }
+        stderr: SplitParser {
+            onRead: data => {
+                root.outputText += data + "\n";
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0 && root.detectedQuickshellPackage.length > 0) {
+                root.outputText += "\n>>> " + Translation.tr("Rebuilding %1 against the new Qt…").arg(root.detectedQuickshellPackage);
+                quickshellRebuildProc.command = ["bash", "-c",
+                    "sudo -A -v && yay -S --rebuildtree --noconfirm " + root.detectedQuickshellPackage];
+                quickshellRebuildProc.running = true;
+            } else {
+                root.outputText += "\n>>> " + Translation.tr("Could not determine which package owns /usr/bin/quickshell — please rebuild manually.");
+                root.isRunning = false;
+            }
+        }
+    }
+
+    // Step 2: actually rebuild the package with yay. Stream output into
+    // the same panel so the user sees one continuous log instead of two.
+    Process {
+        id: quickshellRebuildProc
         environment: ({
             "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
         })
@@ -85,12 +184,9 @@ ContentPage {
         onExited: (exitCode, exitStatus) => {
             root.isRunning = false;
             if (exitCode === 0) {
-                root.outputText += "\n" + Translation.tr("Update completed successfully.");
-            } else if (root.userStopped) {
-                root.outputText += "\n" + Translation.tr("Update stopped by user. Cleaning up…");
-                lockCleanupProc.running = true;
+                root.outputText += "\n>>> " + Translation.tr("Quickshell rebuilt successfully. Restart Quickshell to pick up the new binary.");
             } else {
-                root.outputText += "\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
+                root.outputText += "\n>>> " + Translation.tr("Quickshell rebuild failed (exit %1). To retry manually: yay -S --rebuildtree %2").arg(exitCode).arg(root.detectedQuickshellPackage);
             }
         }
     }
@@ -274,6 +370,17 @@ ContentPage {
                     text: Translation.tr("Skip firmware updates")
                     checked: root.flagDisableFirmware
                     onCheckedChanged: root.flagDisableFirmware = checked
+                }
+            }
+            ConfigRow {
+                ConfigSwitch {
+                    buttonIcon: "build"
+                    text: Translation.tr("Auto-rebuild Quickshell")
+                    checked: root.flagAutoRebuildQuickshell
+                    onCheckedChanged: root.flagAutoRebuildQuickshell = checked
+                    StyledToolTip {
+                        text: Translation.tr("If a Qt update breaks Quickshell's ABI, rebuild it automatically after topgrade finishes.")
+                    }
                 }
             }
 
