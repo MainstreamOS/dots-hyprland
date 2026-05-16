@@ -1,2 +1,8 @@
 [misc]
 sudo_command = "pkexec"
+# Skip Hyprland's official plugin-package manager. Our hyprbars +
+# scrolloverview plugins are rebuilt by pacman hooks (see
+# /usr/local/lib/{hyprbars,scrolloverview}/rebuild.sh), so no plugin
+# repos are registered with hyprpm and `hyprpm update` always returns
+# exit 1 ("No repos to update") — which topgrade treats as a failure.
+disable = ["hyprpm"]
