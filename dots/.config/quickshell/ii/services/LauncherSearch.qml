@@ -234,9 +234,19 @@ Singleton {
                         // app the user was on when they hit Super+. .
                         const top = ToplevelManager.activeToplevel;
                         const addr = top && top.HyprlandToplevel ? `0x${top.HyprlandToplevel.address}` : "";
-                        const focusCmd = addr ? `hyprctl dispatch focuswindow address:${addr} >/dev/null; ` : "";
-                        Quickshell.execDetached(["bash", "-c",
-                            `${focusCmd}sleep ${Cliphist.pasteDelay} && wtype -- '${StringUtils.shellSingleQuoteEscape(emoji)}'`]);
+                        const emojiArg = StringUtils.shellSingleQuoteEscape(emoji);
+                        // Poll activewindow until focus actually lands on the
+                        // captured toplevel — a fixed sleep was racy under load.
+                        // Ceiling is 25 × 20ms = 500ms; we wtype anyway after.
+                        const cmd = addr
+                            ? `hyprctl dispatch focuswindow address:${addr} >/dev/null 2>&1; `
+                              + `for _ in $(seq 1 25); do `
+                              + `[ "$(hyprctl activewindow -j 2>/dev/null | jq -r .address 2>/dev/null)" = "${addr}" ] && break; `
+                              + `sleep 0.02; `
+                              + `done; `
+                              + `wtype -- '${emojiArg}'`
+                            : `sleep ${Cliphist.pasteDelay} && wtype -- '${emojiArg}'`;
+                        Quickshell.execDetached(["bash", "-c", cmd]);
                     }
                 });
             }
