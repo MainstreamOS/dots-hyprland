@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Settings">
+  <defs>
+    <linearGradient id="streamFlat" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0e9bb6"></stop>
+      <stop offset="100%" stop-color="#1f80c8"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="26" fill="#2a2b32"></rect>
+  <g stroke-linecap="round">
+    <line x1="24" y1="36" x2="96" y2="36" stroke="#3a3d45" stroke-width="6"></line>
+    <line x1="24" y1="36" x2="48" y2="36" stroke="url(#streamFlat)" stroke-width="6"></line>
+    <circle cx="48" cy="36" r="8" fill="#c9ccd4"></circle>
+
+    <line x1="24" y1="60" x2="96" y2="60" stroke="#3a3d45" stroke-width="6"></line>
+    <line x1="24" y1="60" x2="78" y2="60" stroke="url(#streamFlat)" stroke-width="6"></line>
+    <circle cx="78" cy="60" r="8" fill="#c9ccd4"></circle>
+
+    <line x1="24" y1="84" x2="96" y2="84" stroke="#3a3d45" stroke-width="6"></line>
+    <line x1="24" y1="84" x2="64" y2="84" stroke="url(#streamFlat)" stroke-width="6"></line>
+    <circle cx="64" cy="84" r="8" fill="#c9ccd4"></circle>
+  </g>
+</svg>

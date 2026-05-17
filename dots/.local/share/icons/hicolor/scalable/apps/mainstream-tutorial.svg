@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Welcome to Mainstream">
+  <defs>
+    <linearGradient id="streamGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e9bb6"></stop>
+      <stop offset="100%" stop-color="#1f80c8"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="26" fill="#2a2b32"></rect>
+  
+  <g fill="none" stroke="url(#streamGrad)" stroke-width="3.5" stroke-linecap="round">
+    <path d="M 46 40 C 50 34 42 28 46 20" opacity="0.95"></path>
+    <path d="M 60 40 C 64 34 56 28 60 20" opacity="0.75"></path>
+    <path d="M 74 40 C 78 34 70 28 74 20" opacity="0.55"></path>
+  </g>
+  
+  <rect x="34" y="50" width="44" height="44" rx="4" fill="#c9ccd4"></rect>
+  
+  <path d="M 78 60 C 92 60 92 84 78 84" fill="none" stroke="#c9ccd4" stroke-width="6" stroke-linecap="round"></path>
+  
+  <rect x="28" y="96" width="56" height="4" rx="2" fill="#c9ccd4" opacity="0.65"></rect>
+</svg>

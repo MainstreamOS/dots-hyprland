@@ -479,7 +479,7 @@ Singleton {
                     // Keep this in sync with the Default Apps preselect in
                     // netinstall.conf so the dock has launchers for the apps a fresh
                     // install actually ships.
-                    "com.google.Chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "com.spotify.Client", "kitty", "org.gnome.Software",]
+                    "com.google.Chrome", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "com.spotify.Client", "settings", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
                 property JsonObject contextMenuVolume: JsonObject {
                     property bool enable: true

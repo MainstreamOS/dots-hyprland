@@ -19,7 +19,16 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
     readonly property bool isFolder: appToplevel.isFolder === true
-    property var desktopEntry: isFolder ? null : AppSearch.guessDesktopEntry(appToplevel.appId)
+
+    // appToplevel.appId is already the canonical resolved id (e.g.
+    // "settings", "welcome-tutorial") because TaskbarApps.resolveAppId
+    // splits "org.quickshell" toplevels by title at the service layer.
+    // We keep this property so callers can still go through one lookup
+    // point if the resolution rules ever need to differ between the
+    // dock and elsewhere.
+    readonly property string lookupAppId: appToplevel.appId
+
+    property var desktopEntry: isFolder ? null : AppSearch.guessDesktopEntry(lookupAppId)
 
     Timer {
         // Retry looking up the desktop entry if it failed (e.g. database not loaded yet)
@@ -29,7 +38,7 @@ DockButton {
         repeat: true
         onTriggered: {
             retryCount--;
-            root.desktopEntry = AppSearch.guessDesktopEntry(root.appToplevel.appId);
+            root.desktopEntry = AppSearch.guessDesktopEntry(root.lookupAppId);
         }
     }
 
@@ -217,7 +226,7 @@ DockButton {
                 active: !root.isSeparator && !root.isFolder
                 sourceComponent: IconImage {
                     id: appIconImage
-                    source: Quickshell.iconPath(root.desktopEntry?.icon ?? AppSearch.guessIcon(appToplevel.appId), "image-missing")
+                    source: Quickshell.iconPath(root.desktopEntry?.icon ?? AppSearch.guessIcon(root.lookupAppId), "image-missing")
                     implicitSize: root.iconSize
                     mipmap: true
                     // Rasterize at the hover peak so the parent Item's

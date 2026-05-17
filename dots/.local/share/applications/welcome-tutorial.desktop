@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Welcome
+GenericName=Mainstream Welcome Tour
+Comment=Reopen the first-run feature walkthrough
+Exec=sh -c 'qs -p ~/.config/quickshell/ii/welcome-tutorial.qml'
+Icon=mainstream-tutorial
+Type=Application
+Categories=Documentation;Utility;
+Keywords=welcome;tutorial;tour;walkthrough;mainstream;onboarding;
+StartupNotify=false

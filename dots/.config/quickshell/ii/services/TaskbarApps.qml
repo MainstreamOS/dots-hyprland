@@ -1,12 +1,44 @@
 pragma Singleton
 
 import qs.modules.common
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
 Singleton {
     id: root
+
+    // ── App-id resolution ─────────────────────────────────────────
+    // Every Quickshell ApplicationWindow reports the same wayland
+    // app_id ("org.quickshell") because Qt's setDesktopFileName is
+    // global with no per-window override. Use the window title to map
+    // those toplevels to canonical ids so each qs app gets its own
+    // dock entry and its own icon — otherwise they all merge into one
+    // "org.quickshell" group and the icon flips to whichever toplevel
+    // happens to be at index 0. Translation.tr() is used on both
+    // sides so non-English locales keep matching.
+    function resolveAppId(toplevel) {
+        if (toplevel.appId !== "org.quickshell") return toplevel.appId;
+        const title = toplevel.title || "";
+        if (title === Translation.tr("Mainstream Settings")) return "settings";
+        if (title === Translation.tr("Welcome to Mainstream")) return "welcome-tutorial";
+        return toplevel.appId;
+    }
+
+    // One-time migration: previous shell versions stored Quickshell
+    // pins as "org.quickshell" (the literal wayland app_id at pin
+    // time) which can't distinguish between qs apps. Convert any
+    // such pin to "settings" — the only qs app in the default
+    // pinnedApps list. Users who pinned other qs apps under the old
+    // behavior can re-pin them to store them under their canonical
+    // resolved ids.
+    Component.onCompleted: {
+        const apps = Config.options?.dock.pinnedApps ?? [];
+        if (apps.indexOf("org.quickshell") !== -1) {
+            Config.options.dock.pinnedApps = apps.map(id => id === "org.quickshell" ? "settings" : id);
+        }
+    }
 
     // ── Pin helpers ───────────────────────────────────────────────
     readonly property string folderPrefix: "folder:"
@@ -84,16 +116,19 @@ Singleton {
         // Ignored apps
         const ignoredRegexStrings = Config.options?.dock.ignoredAppRegexes ?? [];
         const ignoredRegexes = ignoredRegexStrings.map(pattern => new RegExp(pattern, "i"));
-        // Open windows
+        // Open windows. Resolve each toplevel's effective app_id via
+        // resolveAppId() so org.quickshell windows split into separate
+        // entries by title instead of merging into one group.
         for (const toplevel of ToplevelManager.toplevels.values) {
             if (ignoredRegexes.some(re => re.test(toplevel.appId))) continue;
-            if (!map.has(toplevel.appId.toLowerCase())) map.set(toplevel.appId.toLowerCase(), ({
+            const resolvedAppId = root.resolveAppId(toplevel);
+            if (!map.has(resolvedAppId.toLowerCase())) map.set(resolvedAppId.toLowerCase(), ({
                 pinned: false,
                 toplevels: [],
-                originalId: toplevel.appId,
+                originalId: resolvedAppId,
                 isFolder: false
             }));
-            map.get(toplevel.appId.toLowerCase()).toplevels.push(toplevel);
+            map.get(resolvedAppId.toLowerCase()).toplevels.push(toplevel);
         }
 
         var values = [];
