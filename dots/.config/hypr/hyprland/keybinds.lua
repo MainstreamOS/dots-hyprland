@@ -34,7 +34,7 @@ hl.bind("SUPER + f12", hl.dsp.global("quickshell:overlayToggle"), {description =
 hl.bind("CTRL + ALT + Delete", hl.dsp.global("quickshell:sessionToggle"), {description = "Toggle session menu"} )
 hl.bind("SUPER + H", hl.dsp.global("quickshell:barToggle"), {description = "Toggle bar"} )
 hl.bind("CTRL + ALT + Delete", hl.dsp.exec_cmd(qsIsAlive.." || pkill wlogout || wlogout -p layer-shell") )
-hl.bind("SHIFT + SUPER + ALT + Slash", hl.dsp.exec_cmd("qs -p $HOME/.config/quickshell/$qsConfig/welcome.qml") )
+hl.bind("SHIFT + SUPER + ALT + Slash", hl.dsp.exec_cmd("qs -p $HOME/.config/quickshell/$qsConfig/welcome-tutorial.qml") )
 
 hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd(qsIpcCall.." brightness increment || brightnessctl s 5%+"), {locked = true, repeating = true} )
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd(qsIpcCall.." brightness decrement || brightnessctl s 5%-"), {locked = true, repeating = true} )
