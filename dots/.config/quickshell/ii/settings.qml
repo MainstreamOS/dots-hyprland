@@ -282,7 +282,10 @@ ApplicationWindow {
                 id: windowControlsRow
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
+                // Close button suppressed — use Super+Q (or the window
+                // manager's own close gesture) to dismiss the window.
                 RippleButton {
+                    visible: false
                     buttonRadius: Appearance.rounding.full
                     implicitWidth: 35
                     implicitHeight: 35
