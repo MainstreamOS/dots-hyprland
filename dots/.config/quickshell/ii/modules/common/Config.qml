@@ -310,7 +310,7 @@ Singleton {
                     //   "off"            — the corner is disabled entirely;
                     //                      left-clicks fall through to the
                     //                      bar's left-side area
-                    property string trigger: "off"
+                    property string trigger: "scrolloverview"
                     // Whether the ripple animation plays at all (only
                     // relevant when trigger == "scrolloverview"). When
                     // false the hot-corner cascade is suppressed and
