@@ -48,6 +48,27 @@ EOF
   fi
 }
 
+function setup_disk_mounter(){
+  # Install the privileged helper + polkit policy used by the
+  # ~/.config/quickshell/ii/disk-mounter.qml app ("Auto Drive Mount").
+  #
+  # The policy declares allow_active=auth_admin_keep, which caches the
+  # admin authentication for ~5 minutes after the first prompt. Without
+  # this, every mount/unmount triggers a fresh polkit dialog.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/disk-mounter" \
+      /usr/local/bin/disk-mounter
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.disk-mounter.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.disk-mounter.policy
+
+  # Enable avahi-daemon so the app's Network tab can discover SMB hosts
+  # on the LAN via avahi-browse. Idempotent; --now also starts it.
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files avahi-daemon.service >/dev/null 2>&1; then
+      x sudo systemctl enable --now avahi-daemon.service || true
+    fi
+  fi
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -301,6 +322,9 @@ v setup_user_group
 
 showfun setup_sddm_bg_polkit
 v setup_sddm_bg_polkit
+
+showfun setup_disk_mounter
+v setup_disk_mounter
 
 if [[ ! -z $(systemctl --version) ]]; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.

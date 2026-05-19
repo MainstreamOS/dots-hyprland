@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+# disk-mounter — mount/unmount drives for the invoking user and (optionally)
+# add a UUID- or URL-based entry to /etc/fstab so the mount auto-activates on
+# boot. Installed at /usr/local/bin/disk-mounter and invoked via pkexec from
+# the disk-mounter.qml UI ("Auto Drive Mount"). A polkit policy ships
+# alongside this script and declares allow_active=auth_admin_keep, so the
+# first admin prompt caches for ~5 minutes and subsequent mount/unmount
+# operations within that window don't re-prompt.
+#
+# Subcommand dispatch:
+#
+#   mount-block <device> <fstype> <uuid> <mountpoint> <label> <fstab|nofstab>
+#       Local block device (HDD/SSD partition). Optionally relabels the FS.
+#
+#   mount-smb   <host> <share> <mountpoint> <label> <username|guest> <fstab|nofstab>
+#       SMB/CIFS share. When username != "guest", the password is read from
+#       stdin (NOT passed on the command line so it never appears in /proc/ps).
+#       Credentials get written to /etc/disk-mounter-credentials/<safe>.
+#
+#   mount-nfs   <host> <export> <mountpoint> <label> <fstab|nofstab>
+#       NFS export. No credentials — access is gated server-side by IP.
+#
+#   unmount     <mountpoint> <remove-fstab|keep>
+#       Lazy-umount the mountpoint. When mode="remove-fstab", also strips the
+#       fstab entry pointing at it and removes any associated credentials file.
+
+set -euo pipefail
+
+# ── Common helpers (used by every subcommand) ─────────────────────────────
+log() { echo "[disk-mounter] $*" >&2; }
+
+# Strip anything fstab-unsafe so a value can live in a mountpoint path or a
+# credentials filename. Collapses runs of underscores; trims leading/trailing.
+sanitize_segment() {
+    local s="$1"
+    s="${s//[^A-Za-z0-9_.-]/_}"
+    s="${s//__/_}"
+    s="${s#_}"
+    s="${s%_}"
+    [[ -z "$s" ]] && s="drive"
+    printf '%s' "$s"
+}
+
+# Escape spaces / tabs / commas / backslashes the way fstab(5) expects so a
+# free-form label survives both the space-delimited row grammar and the
+# comma-delimited options-field grammar inside it.
+escape_for_fstab() {
+    local s="$1"
+    s="${s//\\/\\134}"
+    s="${s// /\\040}"
+    s="${s//$'\t'/\\011}"
+    s="${s//,/\\054}"
+    printf '%s' "$s"
+}
+
+# Resolve the human who invoked pkexec so we can chown native-ownership
+# filesystems and stamp the FAT-family mount options with their uid/gid.
+resolve_caller() {
+    caller_uid="${PKEXEC_UID:-${SUDO_UID:-}}"
+    if [[ -z "$caller_uid" ]]; then
+        log "ERROR: cannot determine invoking user (no PKEXEC_UID / SUDO_UID)"
+        exit 3
+    fi
+    local caller_entry
+    caller_entry="$(getent passwd "$caller_uid")"
+    caller_user="$(echo "$caller_entry" | cut -d: -f1)"
+    caller_gid="$(id -g "$caller_user")"
+}
+
+# Build the trailing GVFS option pair the way Nautilus expects:
+#   x-gvfs-show           — surface the mount in the sidebar
+#   x-gvfs-name=<label>   — sidebar display name (optional, escaped)
+build_gvfs_opts() {
+    local effective_label="$1"
+    local opts="x-gvfs-show"
+    if [[ -n "$effective_label" ]]; then
+        opts="$opts,x-gvfs-name=$(escape_for_fstab "$effective_label")"
+    fi
+    printf '%s' "$opts"
+}
+
+# Strip any pre-existing fstab line that points at the same UUID/source so
+# remounting through the app doesn't accumulate duplicates. `sed`'s `\#...#`
+# form lets us use # as the delimiter (paths and UUIDs contain /).
+strip_fstab_match() {
+    local key="$1"  # pre-escaped match prefix (anchored at column 1)
+    sed -i "\#^${key}\b#d" /etc/fstab
+}
+
+# ── Subcommand: mount-block ───────────────────────────────────────────────
+mount_block() {
+    if [[ $# -ne 6 ]]; then
+        log "usage: mount-block <device> <fstype> <uuid> <mountpoint> <label> <fstab|nofstab>"
+        exit 64
+    fi
+    local device="$1" fstype="$2" uuid="$3" mountpoint="$4" label="$5" fstab_mode="$6"
+
+    [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
+    resolve_caller
+
+    # Optional relabel. If $label is non-empty AND differs from the current
+    # on-disk label, swap to per-fstype labelling utility. Failures abort
+    # because the user explicitly asked for the rename.
+    local current_label
+    current_label="$(lsblk -no LABEL "$device" 2>/dev/null | head -n1 || true)"
+    if [[ -n "$label" && "$label" != "$current_label" ]]; then
+        case "$fstype" in
+            ext2|ext3|ext4)                          e2label "$device" "$label" ;;
+            vfat|fat|fat16|fat32|msdos)              fatlabel "$device" "$label" ;;
+            ntfs)
+                command -v ntfslabel >/dev/null || { log "ntfslabel not installed (ntfs-3g)"; exit 2; }
+                ntfslabel "$device" "$label" ;;
+            btrfs)                                    btrfs filesystem label "$device" "$label" ;;
+            xfs)                                      xfs_admin -L "$label" "$device" ;;
+            exfat)
+                command -v exfatlabel >/dev/null || { log "exfatlabel not installed (exfatprogs)"; exit 2; }
+                exfatlabel "$device" "$label" ;;
+            *) log "Cannot relabel $fstype filesystem — proceeding without rename" ;;
+        esac
+    fi
+
+    local effective_label="${label:-$current_label}"
+    local gvfs_opts; gvfs_opts="$(build_gvfs_opts "$effective_label")"
+
+    # FAT-family and NTFS don't store Unix ownership/perms — stamp the user
+    # via uid/gid/umask. ext*/btrfs/xfs track per-file ownership; we chown
+    # the mountpoint root after the mount instead.
+    local mount_opts
+    case "$fstype" in
+        vfat|fat|fat16|fat32|msdos|exfat|ntfs|ntfs-3g)
+            mount_opts="defaults,nofail,rw,uid=$caller_uid,gid=$caller_gid,umask=0022,$gvfs_opts" ;;
+        *)
+            mount_opts="defaults,nofail,rw,$gvfs_opts" ;;
+    esac
+
+    mkdir -p "$mountpoint"
+    mount -o "$mount_opts" UUID="$uuid" "$mountpoint"
+
+    case "$fstype" in
+        ext2|ext3|ext4|btrfs|xfs) chown "$caller_uid:$caller_gid" "$mountpoint" ;;
+    esac
+
+    if [[ "$fstab_mode" == "fstab" ]]; then
+        strip_fstab_match "UUID=${uuid}"
+        printf 'UUID=%s %s %s %s 0 2\n' "$uuid" "$mountpoint" "$fstype" "$mount_opts" >> /etc/fstab
+    fi
+    echo "Mounted $device at $mountpoint"
+}
+
+# ── Credentials dir (SMB only) ────────────────────────────────────────────
+CREDS_DIR="/etc/disk-mounter-credentials"
+
+# LUKS keyfile location. The app no longer ships a mount-luks flow (the
+# keyfile-on-disk auto-unlock pattern has security tradeoffs we steer
+# users away from), but the unmount path still cleans up keyfiles for
+# anyone who set LUKS up via gnome-disks or by hand-editing crypttab.
+LUKS_KEYS_DIR="/etc/cryptsetup-keys.d"
+
+ensure_creds_dir() {
+    mkdir -p "$CREDS_DIR"
+    chmod 0700 "$CREDS_DIR"
+    chown root:root "$CREDS_DIR"
+}
+
+# Derive a stable credentials filename from a mountpoint:
+#   /mnt/Photos  →  /etc/disk-mounter-credentials/mnt-Photos
+creds_path_for_mountpoint() {
+    local mp="$1"
+    local key; key="$(sanitize_segment "${mp#/}")"
+    printf '%s/%s' "$CREDS_DIR" "$key"
+}
+
+# ── Subcommand: mount-smb ─────────────────────────────────────────────────
+mount_smb() {
+    if [[ $# -ne 6 ]]; then
+        log "usage: mount-smb <host> <share> <mountpoint> <label> <username|guest> <fstab|nofstab>"
+        exit 64
+    fi
+    local host="$1" share="$2" mountpoint="$3" label="$4" username="$5" fstab_mode="$6"
+
+    command -v mount.cifs >/dev/null || { log "ERROR: mount.cifs not found — install cifs-utils."; exit 5; }
+    resolve_caller
+
+    local effective_label="${label:-$share}"
+    local gvfs_opts; gvfs_opts="$(build_gvfs_opts "$effective_label")"
+
+    # Base CIFS options. uid/gid stamp the user's ownership on every file
+    # (CIFS doesn't carry Unix perms unless the server supports the Unix
+    # extensions). file_mode/dir_mode default to a sensible 0644/0755.
+    local mount_opts="rw,nofail,uid=$caller_uid,gid=$caller_gid,file_mode=0644,dir_mode=0755,_netdev,$gvfs_opts"
+
+    # Source spec uses //host/share. UNC must keep its backslashes-as-
+    # forward-slashes — fstab is happy with that form. No escaping needed
+    # for the source field since slashes are allowed in column 1.
+    local source="//${host}/${share}"
+
+    if [[ "$username" == "guest" || -z "$username" ]]; then
+        mount_opts="$mount_opts,guest"
+    else
+        # Read password from stdin so it never appears in /proc/<pid>/cmdline
+        # or environment. The QML pipes it in via Process.stdin.
+        local password=""
+        IFS= read -r password || true
+        ensure_creds_dir
+        local creds_file; creds_file="$(creds_path_for_mountpoint "$mountpoint")"
+        # Write atomically: temp file in same dir, mode 0400, then mv.
+        local tmp; tmp="$(mktemp -p "$CREDS_DIR")"
+        printf 'username=%s\npassword=%s\n' "$username" "$password" > "$tmp"
+        chmod 0400 "$tmp"
+        chown root:root "$tmp"
+        mv "$tmp" "$creds_file"
+        mount_opts="$mount_opts,credentials=$creds_file"
+    fi
+
+    mkdir -p "$mountpoint"
+    mount -t cifs -o "$mount_opts" "$source" "$mountpoint"
+
+    if [[ "$fstab_mode" == "fstab" ]]; then
+        # Strip any earlier line for the same mountpoint (column 2) — the
+        # source URL might have a different host/share spelling so we key
+        # on the mountpoint instead.
+        sed -i "\# ${mountpoint} #d" /etc/fstab
+        printf '%s %s cifs %s 0 0\n' "$source" "$mountpoint" "$mount_opts" >> /etc/fstab
+    fi
+    echo "Mounted $source at $mountpoint"
+}
+
+# ── Subcommand: mount-nfs ─────────────────────────────────────────────────
+mount_nfs() {
+    if [[ $# -ne 5 ]]; then
+        log "usage: mount-nfs <host> <export> <mountpoint> <label> <fstab|nofstab>"
+        exit 64
+    fi
+    local host="$1" export_path="$2" mountpoint="$3" label="$4" fstab_mode="$5"
+
+    command -v mount.nfs >/dev/null || command -v mount.nfs4 >/dev/null \
+        || { log "ERROR: mount.nfs not found — install nfs-utils."; exit 5; }
+    resolve_caller
+
+    local effective_label="${label:-$(basename "$export_path")}"
+    local gvfs_opts; gvfs_opts="$(build_gvfs_opts "$effective_label")"
+
+    # NFS doesn't have per-mount Unix-ownership remapping like CIFS does —
+    # the server's uid/gid are what land on the client. nofail keeps boot
+    # going if the server is down; _netdev defers mounting until network
+    # is up.
+    local mount_opts="rw,nofail,_netdev,$gvfs_opts"
+
+    local source="${host}:${export_path}"
+    mkdir -p "$mountpoint"
+    mount -t nfs -o "$mount_opts" "$source" "$mountpoint"
+
+    if [[ "$fstab_mode" == "fstab" ]]; then
+        sed -i "\# ${mountpoint} #d" /etc/fstab
+        printf '%s %s nfs %s 0 0\n' "$source" "$mountpoint" "$mount_opts" >> /etc/fstab
+    fi
+    echo "Mounted $source at $mountpoint"
+}
+
+# ── Subcommand: unmount ───────────────────────────────────────────────────
+unmount() {
+    if [[ $# -ne 2 ]]; then
+        log "usage: unmount <mountpoint> <remove-fstab|keep>"
+        exit 64
+    fi
+    local mountpoint="$1" mode="$2"
+
+    # Grab the source device BEFORE umount, while it's still resolvable
+    # via the live mount table. We need this to detect LUKS mappers
+    # (whose source under fstab is /dev/mapper/luks-*) so we can close
+    # them after the umount.
+    local source_dev=""
+    source_dev="$(findmnt -n -o SOURCE "$mountpoint" 2>/dev/null || true)"
+    if [[ -z "$source_dev" && -f /etc/fstab ]]; then
+        # Fall back to fstab if the mount isn't currently active — covers
+        # the case where the user opens the app after a reboot in which
+        # the auto-mount failed.
+        source_dev="$(awk -v mp="$mountpoint" '$2==mp && $0 !~ /^[[:space:]]*#/ {print $1; exit}' /etc/fstab)"
+    fi
+
+    if mountpoint -q "$mountpoint" 2>/dev/null; then
+        # Plain umount first so the cryptsetup close downstream actually
+        # works. -l (lazy) leaves the mapper busy until the last handle
+        # closes, which would defeat the LUKS-close step.
+        if ! umount "$mountpoint" 2>/dev/null; then
+            # Fallback for the "something has the dir open" case. The
+            # umount eventually completes once the holder closes; for
+            # LUKS we won't be able to close the mapper synchronously,
+            # but systemd will tear it down when the kernel releases it.
+            umount -l "$mountpoint" || { log "ERROR: umount $mountpoint failed"; exit 6; }
+            log "WARN: lazy unmount used — LUKS mapper (if any) will close when last handle releases."
+        fi
+    else
+        log "Not currently mounted: $mountpoint (will still update fstab if requested)"
+    fi
+
+    # Close the LUKS mapper now that the filesystem above it is gone.
+    if [[ "$source_dev" == /dev/mapper/* ]]; then
+        local mapper_name; mapper_name="$(basename "$source_dev")"
+        if [[ -e "/dev/mapper/$mapper_name" ]]; then
+            cryptsetup close "$mapper_name" 2>/dev/null || \
+                log "WARN: cryptsetup close $mapper_name failed (mapper may still be in use)."
+        fi
+
+        if [[ "$mode" == "remove-fstab" ]]; then
+            # Strip the crypttab declaration too so the mapper doesn't
+            # get re-opened on next boot, and drop the associated
+            # keyfile (if there was one) since it's worthless without
+            # the crypttab entry pointing at it.
+            [[ -f /etc/crypttab ]] && sed -i "\#^${mapper_name}\b#d" /etc/crypttab
+            [[ -f "${LUKS_KEYS_DIR}/${mapper_name}.key" ]] && rm -f "${LUKS_KEYS_DIR}/${mapper_name}.key"
+        fi
+    fi
+
+    if [[ "$mode" == "remove-fstab" ]]; then
+        sed -i "\# ${mountpoint} #d" /etc/fstab
+
+        # SMB credentials we wrote for this mountpoint, if any.
+        local creds_file; creds_file="$(creds_path_for_mountpoint "$mountpoint")"
+        [[ -f "$creds_file" ]] && rm -f "$creds_file"
+
+        # Drop the mountpoint dir if empty.
+        rmdir "$mountpoint" 2>/dev/null || true
+    fi
+    echo "Unmounted $mountpoint"
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────
+[[ $# -lt 1 ]] && { log "usage: $0 {mount-block|mount-smb|mount-nfs|unmount} ..."; exit 64; }
+
+sub="$1"; shift
+case "$sub" in
+    mount-block) mount_block "$@" ;;
+    mount-smb)   mount_smb   "$@" ;;
+    mount-nfs)   mount_nfs   "$@" ;;
+    unmount)     unmount     "$@" ;;
+    *) log "Unknown subcommand: $sub"; exit 64 ;;
+esac

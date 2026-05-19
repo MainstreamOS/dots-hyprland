@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Auto Mount
+GenericName=Drive Mount Manager
+Comment=Mount local disks, network shares, and manage which drives mount on boot
+Exec=sh -c 'qs -p ~/.config/quickshell/ii/disk-mounter.qml'
+Icon=drive-multidisk
+Type=Application
+Categories=System;Settings;HardwareSettings;
+Keywords=mount;drive;disk;fstab;storage;volume;partition;network;share;smb;nfs;samba;
+StartupNotify=false

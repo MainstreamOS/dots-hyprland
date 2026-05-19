@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for the Auto Drive Mount app's privileged helper.
+
+    `allow_active = auth_admin_keep` means: in an active local session
+    (typical desktop use), the user has to authenticate as an admin
+    ONCE, then subsequent invocations within ~5 minutes don't re-prompt.
+    That's the "mount three drives in a row" UX win — without this, each
+    mount/unmount triggers a fresh polkit dialog.
+
+    `allow_inactive = auth_admin` and `allow_any = auth_admin` keep the
+    full-strength prompt for non-active or non-local sessions (SSH,
+    inactive seats, etc.) — caching there could be abused.
+
+    The exec.path annotation binds this policy to the system-installed
+    helper. pkexec invocations with /usr/local/bin/disk-mounter as the
+    target program automatically match this action.
+-->
+<policyconfig>
+    <vendor>Mainstream OS</vendor>
+    <vendor_url>https://mainstreamos.org</vendor_url>
+    <icon_name>drive-harddisk</icon_name>
+
+    <action id="org.mainstreamos.disk-mounter">
+        <description>Manage drive mounts and fstab entries</description>
+        <description xml:lang="en_US">Manage drive mounts and fstab entries</description>
+        <message>Authentication is required to mount or unmount drives</message>
+        <message xml:lang="en_US">Authentication is required to mount or unmount drives</message>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/disk-mounter</annotate>
+        <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+    </action>
+</policyconfig>
