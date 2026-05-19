@@ -47,7 +47,7 @@ hl.config({
     },
     general = {
         -- Settings → Layouts panel rewrites this line via regex.
-        layout = "master",
+        layout = "dwindle",
 
         -- Gaps and border
         gaps_in = 4,
