@@ -88,9 +88,37 @@ Singleton {
 
         function onRawEvent(event) {
             // console.log("Hyprland raw event:", event.name);
-            if (["openlayer", "closelayer", "screencast"].includes(event.name)) return;
-            updateAll()
+            //
+            // Filter out screencopy session lifecycle events. They never
+            // change the window list, but each one used to trigger
+            // updateAll() — which spawns 5 hyprctl subprocesses and rebuilds
+            // windowByAddress.
+            //
+            // The overview opens 11+ screencopy sessions simultaneously
+            // (one per non-heavy window tile). Hyprland fires both
+            // `screencast` AND `screencastv2` for each. With only
+            // `screencast` filtered, the v2 variant was triggering 11
+            // updateAll calls = 55 hyprctl spawns in ~1.5 seconds,
+            // pegging the main thread and explaining the overview-open
+            // stall when a game window kept Hyprland's compositor busy
+            // enough that each hyprctl took longer to return.
+            //
+            // Also debounce real events (window moves, title changes,
+            // etc.) so a flurry only fires updateAll once. See
+            // updateAllDebounceTimer below.
+            if (["openlayer", "closelayer", "screencast", "screencastv2"].includes(event.name)) return;
+            updateAllDebounceTimer.restart()
         }
+    }
+
+    // Coalesce bursts of Hyprland events into a single updateAll. A burst
+    // is anything within 50ms — beyond that, it's a separate user action
+    // and worth re-querying.
+    Timer {
+        id: updateAllDebounceTimer
+        interval: 50
+        repeat: false
+        onTriggered: updateAll()
     }
 
     Process {

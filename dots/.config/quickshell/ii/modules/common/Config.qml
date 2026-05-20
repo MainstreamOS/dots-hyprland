@@ -672,6 +672,14 @@ Singleton {
                 property bool orderRightLeft: false
                 property bool orderBottomUp: false
                 property bool centerIcons: true
+                // Keep the wlr-layer-shell surface mapped while the overview
+                // is closed. Default ON makes opens instant even on a busy
+                // compositor (e.g. running a game at 4K@144Hz). Turn OFF to
+                // free the Overlay-layer surface and restore direct scanout
+                // for exclusive-fullscreen games, at the cost of a ~1s wait
+                // the first time the overview is opened while the
+                // compositor is busy.
+                property bool keepSurfaceAlive: true
             }
 
             property JsonObject regionSelector: JsonObject {

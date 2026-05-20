@@ -14,11 +14,15 @@ RippleButton {
     // toggle position snaps in place instead of sliding in on every menu
     // reopen. Default true keeps user-click changes animated.
     property alias animateChanges: switchWidget.animateChanges
+    // Optional hover tooltip. Leave empty (default) to suppress the
+    // tooltip entirely; set to any non-empty string to show a tooltip
+    // when the user hovers the switch row.
+    property string tooltipText: ""
 
     Layout.fillWidth: true
     implicitHeight: contentItem.implicitHeight + 8 * 2
     font.pixelSize: Appearance.font.pixelSize.small
-    
+
     onClicked: checked = !checked
 
     contentItem: RowLayout {
@@ -44,6 +48,11 @@ RippleButton {
             checked: root.checked
             onClicked: root.clicked()
         }
+    }
+
+    StyledToolTip {
+        text: root.tooltipText
+        extraVisibleCondition: root.tooltipText.length > 0
     }
 }
 

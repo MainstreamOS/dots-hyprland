@@ -7,8 +7,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Widgets
 import Quickshell.Io
+import Quickshell.Widgets
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
@@ -119,12 +119,50 @@ Scope {
         property string searchingText: ""
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
-        // Stay visible during fade-out; hideTimer cuts visibility after animation
-        visible: GlobalStates.overviewOpen || contentFade.opacity > 0
+
+        // ── Surface lifecycle ────────────────────────────────────────────
+        // When Config.options.overview.keepSurfaceAlive is true (default),
+        // the wlr-layer-shell surface is permanently allocated. This makes
+        // every overview-open instant, even when Hyprland is busy
+        // compositing a game at 4K@144Hz on another workspace (otherwise
+        // the configure roundtrip takes 1-1.5s and pegs qs's main thread).
+        //
+        // Users who want direct scanout for exclusive-fullscreen games can
+        // turn the option off — surface becomes visible only while open,
+        // which restores scanout but reintroduces the open-stall whenever
+        // the compositor is busy.
+        //
+        // When the surface is alive but the overview is closed,
+        // contentFade.opacity=0 hides the contents visually and an empty
+        // mask Region routes all pointer input through to apps below.
+        visible: (Config.options.overview.keepSurfaceAlive ?? true)
+            || GlobalStates.overviewOpen
+            || contentFade.opacity > 0
+
+        // Empty Region while closed = full click-through (input passes
+        // through to apps below). When open we drop the mask so the
+        // overview can receive clicks normally.
+        mask: (GlobalStates.overviewOpen || contentFade.opacity > 0)
+            ? null
+            : passthroughRegion
+        Region { id: passthroughRegion }
 
         WlrLayershell.namespace: "quickshell:overview"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: GlobalStates.overviewOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        // Use Overlay layer (not Top) so the surface stays visible during
+        // exclusive/borderless fullscreen apps. Hyprland forces alpha=0 on
+        // any layer surface below Overlay when a monitor is in fullscreen
+        // mode (see Hyprland src/desktop/view/LayerSurface.cpp:335). With
+        // the always-alive surface fix, our overview can't rely on "newly
+        // mapped above fullscreen" semantics, so we need Overlay layer.
+        WlrLayershell.layer: WlrLayer.Overlay
+        // Keep keyboardFocus mode constant (OnDemand always). Toggling it
+        // between None ↔ OnDemand on every open caused the focus grab to
+        // dismiss spuriously, closing the overview ~400-1200ms after open.
+        // With OnDemand permanently set, the empty mask still prevents the
+        // panel from accidentally catching focus while closed because clicks
+        // pass through to apps below — the panel can only receive focus
+        // when the overview is open and the user clicks inside it.
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
         color: "transparent"
 
         // Full-screen so the dim overlay covers app windows behind the overview.

@@ -89,6 +89,17 @@ Item { // Window
         animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
     }
 
+    // Live preview of every visible window, including fullscreen and
+    // maximised ones (games, IDEs, browsers running solo on a workspace).
+    //
+    // Capture only happens while the overview is open: captureSource is
+    // bound to overviewOpen, so it's null when the overview is closed and
+    // no GPU work is happening. When the overview opens with a heavy
+    // tile (e.g. a 4K game alone on its workspace), GPU usage climbs for
+    // the few seconds the overview is visible — that's the cost of
+    // showing what's actually in each window. The overview-open speed
+    // fix is independent of this (it's about the wlr-layer-shell surface
+    // lifecycle, see Overview.qml).
     ScreencopyView {
         id: windowPreview
         anchors.fill: parent
