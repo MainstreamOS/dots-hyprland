@@ -942,9 +942,8 @@ AMDEOF
       _mkinitcpio_add_modules amdgpu
       cmdline_args+=("amdgpu.modeset=1")
       if $_is_rdna4; then
-        echo -e "${STY_CYAN}[$0]: RDNA 4 — adding sg_display=0 and mem_sleep_default=deep.${STY_RST}"
-        # s2idle is broken on Navi 48 through at least 6.17.x; force S3 deep sleep.
-        cmdline_args+=("amdgpu.sg_display=0" "mem_sleep_default=deep")
+        echo -e "${STY_CYAN}[$0]: RDNA 4 — adding sg_display=0.${STY_RST}"
+        cmdline_args+=("amdgpu.sg_display=0")
       fi
     fi
   fi
@@ -986,11 +985,6 @@ NVIDIAEOF
     elif $HAS_NVIDIA && $HAS_AMD; then
       _mkinitcpio_add_modules amdgpu
     fi
-  fi
-
-  # --- Generic S3 deep sleep preference when available ---
-  if [[ -f /sys/power/mem_sleep ]] && grep -q 'deep' /sys/power/mem_sleep; then
-    cmdline_args+=("mem_sleep_default=deep")
   fi
 
   # --- resume= for hibernation, if a swap partition exists ---
