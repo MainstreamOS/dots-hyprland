@@ -68,6 +68,7 @@ _ms_logo_width() {
 _ms_pad() {
   local n=$1
   (( n > 0 )) && printf '%*s' "$n" ''
+  return 0
 }
 
 _ms_col_width() {
@@ -536,7 +537,7 @@ v() {
   if [[ "${MS_VISUAL:-0}" == "1" ]]; then
     _ms_sudo_prompt_if_needed "$1"
     printf '\n>>> %s\n' "$*"
-    "$@"; local rc=$?
+    local rc=0; "$@" || rc=$?
     if (( rc == 0 )); then
       printf '<<< ok: %s\n' "$*"
     else
@@ -578,7 +579,7 @@ v() {
 x() {
   if [[ "${MS_VISUAL:-0}" == "1" ]]; then
     _ms_sudo_prompt_if_needed "$1"
-    "$@"; local _rc=$?
+    local _rc=0; "$@" || _rc=$?
     if (( _rc == 0 )); then return 0; fi
     # Up to two retries with backoff for transient AUR/mirror/network
     # blips. Each retry message is rendered above the tail so the user
@@ -592,7 +593,7 @@ x() {
       ms_step_raw "retry: ${_label}"
       printf '\n[retry %d/2 after rc=%d] %s\n' "$_attempt" "$_rc" "$*"
       sleep $((_attempt * 3))
-      "$@"; _rc=$?
+      _rc=0; "$@" || _rc=$?
       if (( _rc == 0 )); then
         ms_hint "recovered after retry ${_attempt}"
         return 0
