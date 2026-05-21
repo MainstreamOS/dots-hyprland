@@ -9,11 +9,18 @@ import Quickshell.Io
 
 Singleton {
     id: root
-    property bool available: UPower.displayDevice.isLaptopBattery
-    property var chargeState: UPower.displayDevice.state
+    // Test mode lets desktop users (no laptop battery) preview the bar
+    // indicator with configurable synthetic values. See Config.options.battery.
+    readonly property bool testMode: Config.options.battery.testMode
+    property bool available: testMode || UPower.displayDevice.isLaptopBattery
+    property var chargeState: testMode
+        ? (Config.options.battery.testCharging ? UPowerDeviceState.Charging : UPowerDeviceState.Discharging)
+        : UPower.displayDevice.state
     property bool isCharging: chargeState == UPowerDeviceState.Charging
     property bool isPluggedIn: isCharging || chargeState == UPowerDeviceState.PendingCharge
-    property real percentage: UPower.displayDevice?.percentage ?? 1
+    property real percentage: testMode
+        ? (Config.options.battery.testPercentage / 100)
+        : (UPower.displayDevice?.percentage ?? 1)
     readonly property bool allowAutomaticSuspend: Config.options.battery.automaticSuspend
     readonly property bool soundEnabled: Config.options.sounds.battery
 
@@ -27,11 +34,18 @@ Singleton {
     property bool isSuspendingAndNotCharging: allowAutomaticSuspend && isSuspending && !isCharging
     property bool isFullAndCharging: isFull && isCharging
 
-    property real energyRate: UPower.displayDevice.changeRate
-    property real timeToEmpty: UPower.displayDevice.timeToEmpty
-    property real timeToFull: UPower.displayDevice.timeToFull
+    property real energyRate: testMode
+        ? Config.options.battery.testPowerWatts
+        : UPower.displayDevice.changeRate
+    // UPower reports times in seconds; testTimeMinutes is human-friendly, convert.
+    property real timeToEmpty: testMode
+        ? (isCharging ? 0 : Config.options.battery.testTimeMinutes * 60)
+        : UPower.displayDevice.timeToEmpty
+    property real timeToFull: testMode
+        ? (isCharging ? Config.options.battery.testTimeMinutes * 60 : 0)
+        : UPower.displayDevice.timeToFull
 
-    property real health: (function() {
+    property real health: testMode ? Config.options.battery.testHealthPercentage : (function() {
         const devList = UPower.devices.values;
         for (let i = 0; i < devList.length; ++i) {
             const dev = devList[i];

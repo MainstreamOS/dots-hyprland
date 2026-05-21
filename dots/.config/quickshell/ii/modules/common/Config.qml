@@ -431,6 +431,22 @@ Singleton {
                 property int full: 101
                 property bool automaticSuspend: true
                 property int suspend: 3
+                // What the bar indicator's hover popup reveals. Time is on by
+                // default; power draw and health are opt-in (power-user info).
+                property JsonObject popup: JsonObject {
+                    property bool showTime: true
+                    property bool showPower: false
+                    property bool showHealth: false
+                }
+                // Test mode: force the battery indicator visible with synthetic
+                // values, regardless of whether a real laptop battery exists.
+                // Lets desktop users preview/customise the bar widget + popup.
+                property bool testMode: false
+                property int testPercentage: 50            // 0–100
+                property bool testCharging: false
+                property int testTimeMinutes: 90           // drives time-to-full (charging) / time-to-empty (discharging)
+                property real testPowerWatts: 12.5         // drives energy rate (Charging: / Discharging: W row)
+                property real testHealthPercentage: 92.0   // drives the Health row
             }
 
             property JsonObject calendar: JsonObject {

@@ -12,8 +12,13 @@ LazyLoader {
     property Item hoverTarget
     default property Item contentItem
     property real popupBackgroundMargin: 0
+    // Manual-show path for right-click / click-triggered popups. When
+    // showOnHover is false the popup ignores hover entirely and only obeys
+    // forceShow; hoverTarget is still required for positioning math.
+    property bool forceShow: false
+    property bool showOnHover: true
 
-    active: hoverTarget && hoverTarget.containsMouse
+    active: forceShow || (showOnHover && hoverTarget && hoverTarget.containsMouse)
 
     component: PanelWindow {
         id: popupWindow

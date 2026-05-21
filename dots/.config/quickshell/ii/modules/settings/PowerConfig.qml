@@ -379,6 +379,32 @@ ContentPage {
                 }
             }
         }
+
+        ContentSubsectionLabel { text: Translation.tr("Battery Indicator Popup") }
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "schedule"
+                text: Translation.tr("Time remaining")
+                checked: Config.options.battery.popup.showTime
+                onCheckedChanged: { Config.options.battery.popup.showTime = checked }
+            }
+            ConfigSwitch {
+                buttonIcon: "bolt"
+                text: Translation.tr("Battery drain")
+                checked: Config.options.battery.popup.showPower
+                onCheckedChanged: { Config.options.battery.popup.showPower = checked }
+            }
+        }
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "heart_check"
+                text: Translation.tr("Battery health")
+                checked: Config.options.battery.popup.showHealth
+                onCheckedChanged: { Config.options.battery.popup.showHealth = checked }
+            }
+        }
     }
 
     // ── Sounds ────────────────────────────────────────────────────────────────

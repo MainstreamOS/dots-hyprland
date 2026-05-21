@@ -17,6 +17,14 @@ MouseArea {
     implicitHeight: Appearance.sizes.barHeight
 
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
+    // Right-click toggles the power-mode popup (Performance / Balanced /
+    // Power Saver). Left-click is intentionally a no-op — the hover popup
+    // already surfaces battery info.
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton)
+            powerModePopup.open = !powerModePopup.open
+    }
 
     ClippedProgressBar {
         id: batteryProgress
@@ -58,6 +66,13 @@ MouseArea {
 
     BatteryPopup {
         id: batteryPopup
+        hoverTarget: root
+        // Suppress the hover popup whenever the power-mode popup is open so
+        // they don't stack on top of each other.
+        showOnHover: !powerModePopup.open
+    }
+    PowerModePopup {
+        id: powerModePopup
         hoverTarget: root
     }
 }

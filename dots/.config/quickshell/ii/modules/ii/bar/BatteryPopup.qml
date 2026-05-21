@@ -20,12 +20,13 @@ StyledPopup {
 
         StyledPopupValueRow {
             visible: {
+                if (!Config.options.battery.popup.showTime) return false;
                 let timeValue = Battery.isCharging ? Battery.timeToFull : Battery.timeToEmpty;
                 let power = Battery.energyRate;
                 return !(Battery.chargeState == 4 || timeValue <= 0 || power <= 0.01);
             }
             icon: "schedule"
-            label: Battery.isCharging ? Translation.tr("Time to full:") : Translation.tr("Time to empty:")
+            label: Battery.isCharging ? Translation.tr("Until fully charged:") : Translation.tr("Remaining:")
             value: {
                 function formatTime(seconds) {
                     var h = Math.floor(seconds / 3600);
@@ -43,7 +44,8 @@ StyledPopup {
         }
 
         StyledPopupValueRow {
-            visible:  !(Battery.chargeState != 4 && Battery.energyRate == 0)
+            visible: Config.options.battery.popup.showPower
+                     && !(Battery.chargeState != 4 && Battery.energyRate == 0)
             icon: "bolt"
             label: {
                 if (Battery.chargeState == 4) {
@@ -64,6 +66,7 @@ StyledPopup {
         }
 
         StyledPopupValueRow {
+            visible: Config.options.battery.popup.showHealth
             icon: "heart_check"
             label: Translation.tr("Health:")
             value: `${(Battery.health).toFixed(1)}%`
