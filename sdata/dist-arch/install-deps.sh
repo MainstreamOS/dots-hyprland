@@ -180,7 +180,7 @@ install-local-pkgbuild() {
     # 4 menu items; the hook flips uri/name/content to false after
     # every install/upgrade so only "Copy path" surfaces.
     x sudo install -Dm 644 \
-        ./sdata/nautilus-copy-path/95-nautilus-copy-path-config.hook \
+        "${REPO_ROOT}/sdata/nautilus-copy-path/95-nautilus-copy-path-config.hook" \
         /etc/pacman.d/hooks/95-nautilus-copy-path-config.hook
 
     printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
