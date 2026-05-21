@@ -432,4 +432,30 @@ ContentPage {
             Item { Layout.fillWidth: true }
         }
     }
+
+    // ── Window Restore ────────────────────────────────────────────────────────
+    // Backed by scripts/session/{snapshot,restore}.sh. The shutdown hook in
+    // hypr/custom/execs.lua writes a snapshot of mapped toplevels; the
+    // matching start hook re-spawns each entry and dispatches placement via
+    // movetoworkspacesilent + setfloating once Hyprland emits openwindow.
+    // Userspace shim until Hyprland implements xdg-session-management-v1.
+    ContentSection {
+        icon: "restore_page"
+        title: Translation.tr("Window Restore")
+
+        ConfigRow {
+            uniform: false
+            ConfigSwitch {
+                buttonIcon: "restore"
+                text: Translation.tr("Restore windows on login")
+                checked: Config.options.session.restoreEnabled
+                onCheckedChanged: {
+                    Config.options.session.restoreEnabled = checked
+                }
+                StyledToolTip {
+                    text: Translation.tr("Snapshots open windows at logout and relaunches them on next login, sent back to their original workspaces. Best-effort — apps that don't expose a relaunchable command line, or that join an existing process, may be skipped.")
+                }
+            }
+        }
+    }
 }

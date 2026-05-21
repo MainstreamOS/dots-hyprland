@@ -1,5 +1,6 @@
 pragma Singleton
 import Quickshell
+import Quickshell.Io
 import qs.services
 import qs.modules.common
 
@@ -10,6 +11,41 @@ Singleton {
         HyprlandData.windowList.map(w => w.pid).forEach(pid => {
             Quickshell.execDetached(["kill", pid]);
         });
+    }
+
+    // Capture the current window set for session/restore.sh to replay on the
+    // next login. Called from logout / reboot / poweroff / rebootToFirmware
+    // BEFORE closeAllWindows() so the snapshot sees the windows while they're
+    // still mapped. Self-gates on Config.options.session.restoreEnabled — no
+    // effect when the toggle is off. The hyprland.shutdown hook in
+    // custom/execs.lua remains a safety net for code paths that bypass this
+    // singleton (lid close, hardware power button, killed compositor).
+    //
+    // Implementation note: this MUST be synchronous w.r.t. the power command
+    // that follows. Earlier versions used execDetached() and the snapshot
+    // was killed by systemd's user-process teardown wave before its python
+    // enrichment step finished writing last.json. We now use a Process and
+    // queue the actual power action into _afterSnapshot, fired from
+    // onExited so the chain is properly sequenced.
+    property var _afterSnapshot: null
+
+    Process {
+        id: snapshotProc
+        command: ["bash", Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/session/snapshot.sh"]
+        onExited: {
+            const f = root._afterSnapshot;
+            root._afterSnapshot = null;
+            if (f) f();
+        }
+    }
+
+    function snapshotThen(after) {
+        // Replace any queued post-snapshot action with the new one (last
+        // write wins). If a snapshot is already running, the existing
+        // onExited will fire `after` when it finishes; no need to retrigger.
+        root._afterSnapshot = after;
+        if (!snapshotProc.running)
+            snapshotProc.running = true;
     }
 
     function changePassword() {
@@ -25,8 +61,10 @@ Singleton {
     }
 
     function logout() {
-        closeAllWindows();
-        Quickshell.execDetached(["pkill", "-i", "Hyprland"]);
+        snapshotThen(() => {
+            closeAllWindows();
+            Quickshell.execDetached(["pkill", "-i", "Hyprland"]);
+        });
     }
 
     function launchTaskManager() {
@@ -58,17 +96,23 @@ Singleton {
     }
 
     function poweroff() {
-        closeAllWindows();
-        Quickshell.execDetached(["bash", "-c", `systemctl poweroff || loginctl poweroff`]);
+        snapshotThen(() => {
+            closeAllWindows();
+            Quickshell.execDetached(["bash", "-c", `systemctl poweroff || loginctl poweroff`]);
+        });
     }
 
     function reboot() {
-        closeAllWindows();
-        Quickshell.execDetached(["bash", "-c", `reboot || loginctl reboot`]);
+        snapshotThen(() => {
+            closeAllWindows();
+            Quickshell.execDetached(["bash", "-c", `reboot || loginctl reboot`]);
+        });
     }
 
     function rebootToFirmware() {
-        closeAllWindows();
-        Quickshell.execDetached(["bash", "-c", `systemctl reboot --firmware-setup || loginctl reboot --firmware-setup`]);
+        snapshotThen(() => {
+            closeAllWindows();
+            Quickshell.execDetached(["bash", "-c", `systemctl reboot --firmware-setup || loginctl reboot --firmware-setup`]);
+        });
     }
 }
