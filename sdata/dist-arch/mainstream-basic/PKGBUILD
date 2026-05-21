@@ -16,6 +16,7 @@ depends=(
   curl
   wget
   ripgrep
+  fd
   expect
   jq
   xdg-user-dirs

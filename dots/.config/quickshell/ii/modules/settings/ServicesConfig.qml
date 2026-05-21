@@ -200,6 +200,17 @@ ContentPage {
         }
         */
 
+        ConfigSwitch {
+            text: Translation.tr("File and folder search")
+            checked: Config.options.search.fileSearch.enable
+            onCheckedChanged: {
+                Config.options.search.fileSearch.enable = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("Walks your home directory live via fd whenever you type in the launcher. Apps remain at the top of results; files and folders show below them with icons from your active theme.")
+            }
+        }
+
         ContentSubsection {
             title: Translation.tr("Prefixes")
             ConfigRow {

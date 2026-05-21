@@ -765,6 +765,15 @@ Singleton {
                     property string imageSearchEngineBaseUrl: "https://lens.google.com/uploadbyurl?url="
                     property bool useCircleSelection: false
                 }
+                // File + folder search backed by `fd`. Walks ~/ live (no DB
+                // rebuild), passes the query as argv (no shell injection),
+                // hardcoded excludes for the obvious noise dirs. Streams
+                // results into the launcher with XDG MIME icons resolved
+                // against the user's active icon theme.
+                property JsonObject fileSearch: JsonObject {
+                    property bool enable: true
+                    property int maxResults: 30
+                }
             }
 
             property JsonObject sidebar: JsonObject {
