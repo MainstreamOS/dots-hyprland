@@ -442,7 +442,7 @@ ContentPage {
 
     NoticeBox {
         Layout.fillWidth: true
-        text: Translation.tr('Not all options are available in this app. You should also check the config file by hitting the "Config file" button on the topleft corner or opening %1 manually.').arg(Directories.shellConfigPath)
+        text: Translation.tr("Not all settings are available in this app. You can also check the config file by hitting the \"Copy config path\" button and editing the file in an IDE or text editor.")
 
         Item {
             Layout.fillWidth: true
@@ -453,10 +453,10 @@ ContentPage {
             Layout.fillWidth: false
             buttonRadius: Appearance.rounding.small
             materialIcon: justCopied ? "check" : "content_copy"
-            mainText: justCopied ? Translation.tr("Path copied") : Translation.tr("Copy path")
+            mainText: justCopied ? Translation.tr("Path copied") : Translation.tr("Copy config path")
             onClicked: {
                 copyPathButton.justCopied = true
-                Quickshell.clipboardText = FileUtils.trimFileProtocol(`${Directories.config}/illogical-impulse/config.json`);
+                Quickshell.clipboardText = FileUtils.trimFileProtocol(Directories.shellConfigPath);
                 revertTextTimer.restart();
             }
             colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
