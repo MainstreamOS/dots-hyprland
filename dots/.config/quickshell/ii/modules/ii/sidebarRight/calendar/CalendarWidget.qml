@@ -1,3 +1,4 @@
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -13,6 +14,16 @@ Item {
     property var calendarLayout: CalendarLayout.getCalendarLayout(viewingDate, monthShift === 0)
     width: calendarColumn.width
     implicitHeight: calendarColumn.height + 10 * 2
+
+    // Snap the view back to the current month each time the right sidebar
+    // closes, so reopening it always lands on today rather than wherever
+    // the user scrolled to last time. Cheap (just resets an int).
+    Connections {
+        target: GlobalStates
+        function onSidebarRightOpenChanged() {
+            if (!GlobalStates.sidebarRightOpen) monthShift = 0;
+        }
+    }
 
     Keys.onPressed: (event) => {
         if ((event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp)
