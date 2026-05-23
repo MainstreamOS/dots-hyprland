@@ -1115,6 +1115,49 @@ function setup_sddm_pixie(){
 showfun setup_sddm_pixie
 v setup_sddm_pixie
 
+# Audio defaults — enable the units that the mainstream-audio package ships.
+#
+# The mainstream-audio package installs three files that fix the two most
+# common audio failure modes on a fresh install:
+#   * /etc/wireplumber/wireplumber.conf.d/51-disable-hdmi-default.conf
+#     — lowers HDMI/DP sink priority below analog so WirePlumber's
+#       default-picker doesn't silently route to a discrete GPU's HDA.
+#   * /usr/lib/systemd/system/mainstream-audio-firstboot.service
+#   * /usr/lib/mainstream/audio-firstboot
+#     — first-boot oneshot: alsactl init for UCM-driven codec defaults,
+#       unmute Master/Speaker/Headphone/PCM/Front, disable flaky Auto-Mute,
+#       persist mixer state via alsactl store.
+#
+# See sdata/dist-arch/mainstream-audio/ for the sources. The package is
+# pulled in earlier in the install loop (install-deps.sh) so all three
+# files exist on disk by the time this runs.
+#
+# What this function does that the package can't: turn the units on. Arch
+# packages don't auto-enable services on install, and we don't ship a
+# /usr/lib/systemd/system-preset/ file because explicit enables are easier
+# to reason about in two places (this script + the archiso install-dotfiles).
+function setup_audio_defaults(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: audio defaults setup is currently Arch-only. Skipping.${STY_RST}"
+    return 0
+  fi
+
+  if [[ ! -f /usr/lib/systemd/system/mainstream-audio-firstboot.service ]]; then
+    echo -e "${STY_YELLOW}[$0]: mainstream-audio-firstboot.service not installed — is mainstream-audio package present? Skipping.${STY_RST}"
+    return 0
+  fi
+
+  # alsa-restore / alsa-state are usually auto-enabled by alsa-utils'
+  # upstream systemd preset; the explicit enable is a cheap safety net
+  # against preset changes and is harmless if already on (|| true).
+  x sudo systemctl enable mainstream-audio-firstboot.service \
+    || echo -e "${STY_YELLOW}[$0]: Failed to enable mainstream-audio-firstboot.service${STY_RST}"
+  x sudo systemctl enable alsa-restore.service 2>/dev/null || true
+  x sudo systemctl enable alsa-state.service   2>/dev/null || true
+}
+showfun setup_audio_defaults
+v setup_audio_defaults
+
 # firefox-mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
 # Replaces plasma-browser-integration with a lightweight (~2MB binary)
 # alternative that doesn't drag in the KDE chain. Always installed —

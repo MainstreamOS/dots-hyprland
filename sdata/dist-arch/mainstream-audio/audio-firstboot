@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Mainstream OS — first-boot audio initialization
+#
+# Driven by mainstream-audio-firstboot.service. Runs exactly once: the
+# service unit is gated by ConditionPathExists=!/var/lib/mainstream/audio-firstboot.done
+# and this script touches that marker on success.
+#
+# Fixes two common-but-silent hardware failure modes:
+#   1. ALSA "Master" / "Speaker" / "Headphone" controls ship muted on a
+#      surprising number of laptops and motherboards. Without an unmute pass
+#      the user hears nothing even though PipeWire and WirePlumber are
+#      perfectly happy.
+#   2. "Auto-Mute Mode" on certain Realtek codecs misreads jack-detection
+#      and permanently mutes rear speakers. We disable it — trade-off is
+#      that plugging headphones in won't auto-silence speakers, which is a
+#      strictly better default than "no sound at all".
+#
+# Per-card failures (control doesn't exist on this codec, sset rejects the
+# argument) are deliberately tolerated with `|| true`. The script must
+# succeed on every machine even if individual controls are absent.
+
+set -u
+
+mkdir -p /var/lib/mainstream
+
+# Apply UCM-driven hardware defaults first. UCM (Use Case Manager) handles
+# codec-specific quirks — Realtek dual-amp setups, headset jack routing,
+# digital-mic gates — that blanket amixer commands can't reach.
+alsactl init 2>/dev/null || true
+
+# Walk every card aplay reports, unmute the common-but-muted controls, and
+# set sensible levels. Suppress amixer's verbose output (-q) and per-control
+# failures (|| true) — missing controls per card are normal.
+for card in $(aplay -l 2>/dev/null | awk -F'[ :]' '/^card/ {print $2}' | sort -u); do
+    for ctl in Master Speaker Headphone PCM Front; do
+        amixer -c "$card" -q sset "$ctl" unmute 2>/dev/null || true
+    done
+    amixer -c "$card" -q sset Master   80%       2>/dev/null || true
+    amixer -c "$card" -q sset Speaker  80%       2>/dev/null || true
+    amixer -c "$card" -q sset Headphone 80%      2>/dev/null || true
+    amixer -c "$card" -q sset PCM      90%       2>/dev/null || true
+    amixer -c "$card" -q sset "Auto-Mute Mode" Disabled 2>/dev/null || true
+done
+
+# Persist mixer state to /var/lib/alsa/asound.state so alsa-restore.service
+# picks it up on subsequent boots.
+alsactl store 2>/dev/null || true
+
+# Mark complete — flips ConditionPathExists for the service unit so this
+# script never runs again unless an admin removes the marker.
+touch /var/lib/mainstream/audio-firstboot.done

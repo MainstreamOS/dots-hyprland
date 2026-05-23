@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-audio
 pkgver=1.0
-pkgrel=4
+pkgrel=6
 pkgdesc='Mainstream OS Audio Dependencies'
 provides=('illogical-impulse-audio')
 replaces=('illogical-impulse-audio')
@@ -15,5 +15,20 @@ depends=(
   pipewire-pulse
   libdbusmenu-gtk3
   playerctl
+  alsa-utils
 )
+source=(
+  '51-disable-hdmi-default.conf'
+  'mainstream-audio-firstboot.service'
+  'audio-firstboot'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
+package() {
+  install -Dm644 "$srcdir/51-disable-hdmi-default.conf" \
+    "$pkgdir/etc/wireplumber/wireplumber.conf.d/51-disable-hdmi-default.conf"
+  install -Dm644 "$srcdir/mainstream-audio-firstboot.service" \
+    "$pkgdir/usr/lib/systemd/system/mainstream-audio-firstboot.service"
+  install -Dm755 "$srcdir/audio-firstboot" \
+    "$pkgdir/usr/lib/mainstream/audio-firstboot"
+}

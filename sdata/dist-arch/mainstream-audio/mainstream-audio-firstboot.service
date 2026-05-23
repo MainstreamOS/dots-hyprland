@@ -1,0 +1,18 @@
+[Unit]
+Description=Mainstream OS first-boot audio initialization
+Documentation=man:alsactl(1) man:amixer(1)
+# Self-gating: once the firstboot script touches the marker, this unit
+# becomes a no-op on every subsequent boot.
+ConditionPathExists=!/var/lib/mainstream/audio-firstboot.done
+After=sound.target
+Wants=sound.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/audio-firstboot
+# Do not keep the unit "active" after exit — the next-boot gate is
+# the marker file, not RemainAfterExit.
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
