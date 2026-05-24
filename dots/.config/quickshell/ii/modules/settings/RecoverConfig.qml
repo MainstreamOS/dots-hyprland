@@ -15,10 +15,23 @@ ContentPage {
     property bool isRunning: false
     property bool restoreSuccess: false
 
+    // Held in QML state from the moment the user submits the password
+    // until the restore process exits. Cleared from the visible field
+    // immediately on submit, and from this property in onRunningChanged
+    // / onExited so it doesn't linger longer than needed.
+    property string pendingPassword: ""
+
     function startRestore() {
         if (isRunning) return;
+        if (passwordField.text.length === 0) {
+            outputText = Translation.tr("Enter your password to start the restore.");
+            return;
+        }
         outputText = "";
         restoreSuccess = false;
+        pendingPassword = passwordField.text;
+        passwordField.text = "";
+        restoreProc.stdinEnabled = true;
         restoreProc.running = true;
         isRunning = true;
     }
@@ -30,22 +43,38 @@ ContentPage {
 
     Process {
         id: restoreProc
-        command: ["sudo", "-A", "/usr/local/bin/limine-restore-auto"]
-        environment: ({
-            "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
-        })
+        // sudo -S reads the password from stdin (written in
+        // onRunningChanged below). Drops the SUDO_ASKPASS dance —
+        // matches the Update panel's authentication pattern.
+        command: ["sudo", "-S", "/usr/local/bin/limine-restore-auto"]
         stdout: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
-            }
+            onRead: data => { root.outputText += data + "\n"; }
         }
         stderr: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
+            onRead: data => { root.outputText += data + "\n"; }
+        }
+        onRunningChanged: {
+            // When the process flips idle → running, push the password
+            // into stdin and close the pipe so sudo's read returns
+            // immediately. Same pattern as disk-mounter.qml.
+            if (running && root.pendingPassword.length > 0) {
+                write(root.pendingPassword + "\n");
+                root.pendingPassword = "";
+                stdinEnabled = false;
             }
         }
         onExited: (exitCode, exitStatus) => {
             root.isRunning = false;
+            // Defensive: clear any straggler password from QML state.
+            root.pendingPassword = "";
+            // sudo writes a recognisable line to stderr on auth failure;
+            // surface a clearer message than a bare "exit code 1".
+            const authFailed = root.outputText.indexOf("incorrect password") !== -1
+                || root.outputText.indexOf("Sorry, try again") !== -1;
+            if (authFailed) {
+                root.outputText += "\n" + Translation.tr("Authentication failed — wrong password. Try again.");
+                return;
+            }
             if (exitCode === 0) {
                 root.restoreSuccess = true;
             } else {
@@ -183,11 +212,50 @@ ContentPage {
         }
 
         ConfigRow {
-            Item { Layout.fillWidth: true }
+            // Inline password field. Submitted via sudo -S stdin in
+            // startRestore() \u2014 same UX as the Update panel. Visible
+            // field clears the moment the user clicks Restore so the
+            // password doesn't sit on screen during the restore.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 38
+                radius: Appearance.rounding.small
+                color: Appearance.colors.colLayer1
+                border.color: passwordField.activeFocus ? Appearance.m3colors.m3primary : Appearance.m3colors.m3outlineVariant
+                border.width: 1
+
+                TextInput {
+                    id: passwordField
+                    anchors {
+                        fill: parent
+                        leftMargin: 12
+                        rightMargin: 12
+                    }
+                    verticalAlignment: TextInput.AlignVCenter
+                    echoMode: TextInput.Password
+                    passwordCharacter: "\u2022"
+                    color: Appearance.colors.colOnLayer1
+                    font.family: Appearance.font.family.main
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    selectByMouse: true
+                    enabled: !root.isRunning
+                    onAccepted: {
+                        if (!root.isRunning) root.startRestore();
+                    }
+
+                    StyledText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: passwordField.text.length === 0 && !passwordField.activeFocus
+                        text: Translation.tr("Password")
+                        color: Appearance.m3colors.m3outlineVariant
+                        font: passwordField.font
+                    }
+                }
+            }
             RippleButtonWithIcon {
                 materialIcon: root.isRunning ? "hourglass_top" : "play_arrow"
                 mainText: root.isRunning ? Translation.tr("Restoring\u2026") : Translation.tr("Restore Snapshot")
-                enabled: !root.isRunning
+                enabled: !root.isRunning && passwordField.text.length > 0
                 onClicked: root.startRestore()
             }
             RippleButtonWithIcon {
