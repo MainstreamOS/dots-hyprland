@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# Mainstream OS — privileged system-update helper.
+#
+# Invoked via:  sudo -S /usr/local/bin/mainstream-update-helper [args]
+# Driven by:    ~/.config/quickshell/ii/modules/settings/UpdateConfig.qml
+#
+# Runs the primary update path (pacman + AUR + flatpak) by invoking
+# each tool directly. Optionally runs topgrade afterwards to catch the
+# 100+ developer-tool ecosystems topgrade knows about (cargo, pipx, npm,
+# nix, JetBrains, VS Code, …). This avoids the layer-of-indirection
+# fragility we hit with topgrade-as-primary while preserving its
+# "update everything-ish" coverage as an opt-out tier.
+#
+# Authentication: the calling user authenticates once via sudo -S
+# (password from the QML inline field). This helper runs as root for
+# just long enough to write a temporary, narrow NOPASSWD rule scoped
+# to the caller. Everything downstream that needs root invokes
+# sudo and hits that rule; everything that needs user context runs
+# under `runuser -u $SUDO_USER`. The temp rule lives at
+# /etc/sudoers.d/00-mainstream-update-active (no dots in the filename
+# — sudoers.d silently skips any file whose name contains a "."), and
+# is removed on every exit path (trap on EXIT, INT, TERM, HUP, plus a
+# defensive cleanup at startup catching stale rules from a kill -9'd
+# previous run).
+#
+# Skip flags (any combination):
+#   --skip-system            skip pacman -Syu
+#   --skip-aur               skip yay/paru AUR update
+#   --skip-flatpak           skip flatpak update (system + user)
+#   --skip-extras            skip the topgrade developer-tool pass
+#   --skip-firmware          when extras runs, pass --disable firmware
+#                            to topgrade (firmware updates can prompt
+#                            polkit and time out non-interactively)
+#   --auto-rebuild-quickshell  opt-in: after all other steps, run
+#                            `quickshell --private-check-compat` and
+#                            yay-rebuild the owning package on mismatch.
+#
+# Exit codes:
+#   0    everything succeeded (or was skipped)
+#   100  primary succeeded (or partial), extras failed — the QML banner
+#        renders this as "completed with errors" so users notice the
+#        non-fatal failure
+#   N    pacman / aur / flatpak exit code on a primary failure
+
+set -u
+
+# ── Resolve calling user ────────────────────────────────────────────────────
+ORIG_USER="${SUDO_USER:-}"
+if [[ -z "$ORIG_USER" && -n "${PKEXEC_UID:-}" ]]; then
+    ORIG_USER=$(getent passwd "$PKEXEC_UID" | cut -d: -f1)
+fi
+if [[ -z "$ORIG_USER" || "$ORIG_USER" == "root" ]]; then
+    echo "mainstream-update-helper: refusing to run without a non-root caller" >&2
+    echo "  hint: invoke via sudo -S, not directly as root." >&2
+    exit 1
+fi
+ORIG_HOME=$(getent passwd "$ORIG_USER" | cut -d: -f6)
+if [[ -z "$ORIG_HOME" || ! -d "$ORIG_HOME" ]]; then
+    echo "mainstream-update-helper: could not resolve home directory for $ORIG_USER" >&2
+    exit 1
+fi
+
+# ── Temp NOPASSWD + cleanup trap ────────────────────────────────────────────
+# Filename rule: no dots — sudoers.d silently skips files whose names
+# contain "." (see man sudoers, #includedir). Use a numeric prefix so
+# it loads before other 50-numbered drop-ins.
+TEMP_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
+rm -f "$TEMP_SUDOERS"
+
+cleanup() {
+    rm -f "$TEMP_SUDOERS"
+    # A user-stopped update may have killed pacman mid-transaction;
+    # without this the next pacman invocation refuses to start until
+    # the user manually removes the lock.
+    rm -f /var/lib/pacman/db.lck 2>/dev/null
+}
+trap cleanup EXIT INT TERM HUP
+
+# Broad NOPASSWD scoped to the calling user, active only while this
+# helper is running. The narrow alternative (NOPASSWD on /usr/bin/pacman
+# and /usr/bin/makepkg only) covered the primary update path but missed
+# sub-sudo calls topgrade's extras pass can make — `sudo needrestart`,
+# `sudo pacdiff`, `sudo docker pull` for rootful Docker, `sudo tldr -u`
+# for the system-wide tldr cache, etc. — which would each prompt on
+# a TTY-less invocation and hang. NOPASSWD: ALL covers everything the
+# helper or any sub-process might invoke. The trade-off: during the
+# update window (typically minutes), any process running as the
+# calling user can sudo anything without auth. Off the moment the
+# helper exits — trap removes the file. At-rest security
+# (/etc/sudoers.d/wheel = standard `%wheel ALL=(ALL:ALL) ALL`, password
+# required) is unchanged. This matches what Pamac / mintupdate / other
+# distro GUI updaters effectively do during their run.
+cat > "$TEMP_SUDOERS" << EOF
+$ORIG_USER ALL=(ALL) NOPASSWD: ALL
+EOF
+chmod 0440 "$TEMP_SUDOERS"
+
+# ── Parse flags ─────────────────────────────────────────────────────────────
+SKIP_SYSTEM=0
+SKIP_AUR=0
+SKIP_FLATPAK=0
+SKIP_EXTRAS=0
+SKIP_FIRMWARE=0
+AUTO_REBUILD_QS=0
+TOPGRADE_EXTRA_ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --skip-system)              SKIP_SYSTEM=1 ;;
+        --skip-aur)                 SKIP_AUR=1 ;;
+        --skip-flatpak)             SKIP_FLATPAK=1 ;;
+        --skip-extras)              SKIP_EXTRAS=1 ;;
+        --skip-firmware)            SKIP_FIRMWARE=1 ;;
+        --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
+        *)                          TOPGRADE_EXTRA_ARGS+=("$arg") ;;
+    esac
+done
+
+# Defensive — if any sub-process unexpectedly tries to use a graphical
+# askpass, point it at /bin/false so it fails fast instead of hanging
+# on a TTY prompt the QML can't service.
+export SUDO_ASKPASS=/bin/false
+
+# Per-step return codes, defaulted to "skipped/ok" (0). Updated below
+# only when the step actually runs.
+PACMAN_RC=0
+AUR_RC=0
+FLATPAK_RC=0
+TOPGRADE_RC=0
+
+# ── 1. System packages (pacman) ─────────────────────────────────────────────
+if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  System packages — pacman -Syu"
+    echo "═══════════════════════════════════════════════════════════"
+    pacman -Syu --noconfirm
+    PACMAN_RC=$?
+else
+    echo ""
+    echo "── System packages: skipped (per --skip-system)"
+fi
+
+# ── 2. AUR (yay or paru) ────────────────────────────────────────────────────
+if [[ "$SKIP_AUR" -eq 0 ]]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    if command -v yay >/dev/null 2>&1; then
+        echo "  AUR packages — yay -Sua"
+        echo "═══════════════════════════════════════════════════════════"
+        runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            yay -Sua --noconfirm
+        AUR_RC=$?
+    elif command -v paru >/dev/null 2>&1; then
+        echo "  AUR packages — paru -Sua"
+        echo "═══════════════════════════════════════════════════════════"
+        runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            paru -Sua --noconfirm
+        AUR_RC=$?
+    else
+        echo "  AUR: no helper (yay/paru) installed — skipping"
+        echo "═══════════════════════════════════════════════════════════"
+    fi
+else
+    echo ""
+    echo "── AUR: skipped (per --skip-aur)"
+fi
+
+# ── 3. Flatpak (system + user) ──────────────────────────────────────────────
+if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Flatpak — flatpak update (system + user)"
+    echo "═══════════════════════════════════════════════════════════"
+    # System-wide flatpaks update as root (no sudo needed; we are root).
+    flatpak update --noninteractive --system
+    FP_SYS_RC=$?
+    # Per-user flatpaks need to run as the user (they live under
+    # ~/.local/share/flatpak/) — runuser with HOME set.
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+        flatpak update --noninteractive --user
+    FP_USR_RC=$?
+    # Either non-zero counts as a flatpak failure.
+    if [[ "$FP_SYS_RC" -ne 0 ]]; then
+        FLATPAK_RC="$FP_SYS_RC"
+    elif [[ "$FP_USR_RC" -ne 0 ]]; then
+        FLATPAK_RC="$FP_USR_RC"
+    fi
+elif [[ "$SKIP_FLATPAK" -ne 0 ]]; then
+    echo ""
+    echo "── Flatpak: skipped (per --skip-flatpak)"
+fi
+
+# ── 4. Extras (topgrade for developer ecosystems) ───────────────────────────
+# Topgrade handles cargo, pipx, npm, nix, rustup, gem, JetBrains
+# Toolbox, VS Code extensions, github-cli extensions, and 100+ more.
+# Most users don't have all of these installed; topgrade only runs
+# the steps for tools it actually finds. We disable the steps already
+# covered by sections 1–3 (system, flatpak) plus firmware (default,
+# tunable via --skip-firmware which here means "also disable in extras").
+if [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Developer extras — topgrade (cargo, pipx, npm, nix, …)"
+    echo "═══════════════════════════════════════════════════════════"
+    TG_ARGS=(--cleanup --yes --disable system --disable flatpak)
+    if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
+        TG_ARGS+=(--disable firmware)
+    fi
+    TG_ARGS+=("${TOPGRADE_EXTRA_ARGS[@]}")
+    runuser -u "$ORIG_USER" -- env \
+        HOME="$ORIG_HOME" \
+        SUDO_ASKPASS=/bin/false \
+        topgrade "${TG_ARGS[@]}"
+    TOPGRADE_RC=$?
+elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
+    echo ""
+    echo "── Developer extras: skipped (per --skip-extras)"
+fi
+
+# ── 5. Quickshell ABI mismatch follow-up ────────────────────────────────────
+# Pacman's quickshell-check.hook fires when Qt is updated but
+# Quickshell wasn't rebuilt against the new Qt. The same ABI test
+# the hook runs is `quickshell --private-check-compat`; non-zero
+# exit means mismatch.
+if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
+    if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            /usr/bin/quickshell --private-check-compat >/dev/null 2>&1; then
+        QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
+        if [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
+            echo ""
+            echo "═══════════════════════════════════════════════════════════"
+            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG"
+            echo "═══════════════════════════════════════════════════════════"
+            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                yay -S --rebuildtree --noconfirm "$QS_PKG" || true
+            echo ">>> Restart Quickshell to pick up the new binary."
+        elif [[ -n "$QS_PKG" ]]; then
+            echo ""
+            echo ">>> Quickshell ABI mismatch detected, but yay is not installed."
+            echo ">>> To fix manually: yay -S --rebuildtree $QS_PKG"
+        fi
+    fi
+fi
+
+# ── 6. Summary + exit code ──────────────────────────────────────────────────
+# Helper outputs a human-readable summary that the QML banner doesn't
+# rely on, plus chooses an exit code that lets the QML differentiate
+# "everything ok" from "primary ok but extras failed" from "primary
+# failed". The status_for() helper renders the per-step state.
+status_for() {
+    local skip="$1" rc="$2"
+    if [[ "$skip" -eq 1 ]]; then
+        echo "skipped"
+    elif [[ "$rc" -eq 0 ]]; then
+        echo "ok"
+    else
+        echo "FAILED (rc=$rc)"
+    fi
+}
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  Summary"
+echo "═══════════════════════════════════════════════════════════"
+printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"  "$PACMAN_RC")"
+printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"     "$AUR_RC")"
+printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK" "$FLATPAK_RC")"
+printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"  "$TOPGRADE_RC")"
+echo ""
+
+# Exit-code priority. Primary failures (pacman, aur, flatpak) override
+# extras; only when primary is clean do we surface extras failure as
+# the special 100 ("completed with errors").
+if [[ "$SKIP_SYSTEM"  -ne 1 ]] && [[ "$PACMAN_RC"   -ne 0 ]]; then exit "$PACMAN_RC";   fi
+if [[ "$SKIP_AUR"     -ne 1 ]] && [[ "$AUR_RC"      -ne 0 ]]; then exit "$AUR_RC";      fi
+if [[ "$SKIP_FLATPAK" -ne 1 ]] && [[ "$FLATPAK_RC"  -ne 0 ]]; then exit "$FLATPAK_RC";  fi
+if [[ "$SKIP_EXTRAS"  -ne 1 ]] && [[ "$TOPGRADE_RC" -ne 0 ]]; then exit 100;            fi
+exit 0

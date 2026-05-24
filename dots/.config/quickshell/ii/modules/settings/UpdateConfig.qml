@@ -15,193 +15,141 @@ ContentPage {
     property bool isRunning: false
     property bool userStopped: false
 
-    // Topgrade flags
-    property bool flagYes: true
-    property bool flagDisableSystem: false
-    property bool flagDisableFlatpak: false
-    property bool flagDisableFirmware: true
+    // Step skip-flags. The helper runs pacman + yay + flatpak directly
+    // as the primary path and (by default) topgrade afterwards for the
+    // developer-tool extras. Each --noconfirm/--yes is hard-coded in
+    // the helper since an unattended GUI update isn't useful if it
+    // stops at prompts. Defaults match what most users want: everything
+    // runs except firmware (firmware updates can prompt polkit and
+    // time out non-interactively).
+    property bool flagSkipSystem: false
+    property bool flagSkipAur: false
+    property bool flagSkipFlatpak: false
+    property bool flagSkipExtras: false
+    property bool flagSkipFirmware: true
     property bool flagAutoRebuildQuickshell: true
     property string customArgs: ""
 
-    // Set by the stdout/stderr scanners when pacman's quickshell-check
-    // hook fires its "built against Qt X but system updated to Qt Y"
-    // warning. Drives the auto-rebuild follow-up after topgrade exits.
-    property bool quickshellWarningDetected: false
-    property string detectedQuickshellPackage: ""
+    // Held in QML state from the moment the user submits the password
+    // until the helper process exits. Cleared from the visible field
+    // immediately on submit, and from this property on helper exit.
+    property string pendingPassword: ""
 
-    function buildCommand() {
-        let args = ["bash", "-c", buildTopgradeCommand()];
+    function buildHelperArgs() {
+        // The privileged work runs in /usr/local/bin/mainstream-update-helper
+        // which writes a temporary NOPASSWD sudoers rule, runs pacman +
+        // yay/paru + flatpak directly, then optionally tops up with
+        // topgrade for developer-tool ecosystems.
+        let args = ["sudo", "-S", "/usr/local/bin/mainstream-update-helper"];
+        if (flagSkipSystem)            args.push("--skip-system");
+        if (flagSkipAur)               args.push("--skip-aur");
+        if (flagSkipFlatpak)           args.push("--skip-flatpak");
+        if (flagSkipExtras)            args.push("--skip-extras");
+        if (flagSkipFirmware)          args.push("--skip-firmware");
+        if (flagAutoRebuildQuickshell) args.push("--auto-rebuild-quickshell");
+        if (customArgs.trim().length > 0) {
+            // Custom args are passed through to topgrade when extras runs.
+            // Split on whitespace so multi-token args reach topgrade properly.
+            let extra = customArgs.trim().split(/\s+/);
+            for (let i = 0; i < extra.length; i++) args.push(extra[i]);
+        }
         return args;
     }
 
-    function buildTopgradeCommand() {
-        let parts = ["topgrade", "--cleanup"];
-        if (flagYes) parts.push("--yes");
-        if (flagDisableSystem) { parts.push("--disable"); parts.push("system"); }
-        if (flagDisableFlatpak) { parts.push("--disable"); parts.push("flatpak"); }
-        if (flagDisableFirmware) { parts.push("--disable"); parts.push("firmware"); }
-        if (customArgs.trim().length > 0) {
-            parts.push(customArgs.trim());
-        }
-        // Acquire sudo upfront via askpass, then run topgrade
-        return `sudo -A -v && ${parts.join(" ")}`;
-    }
-
     function commandPreview() {
-        let parts = ["topgrade", "--cleanup"];
-        if (flagYes) parts.push("--yes");
-        if (flagDisableSystem) { parts.push("--disable"); parts.push("system"); }
-        if (flagDisableFlatpak) { parts.push("--disable"); parts.push("flatpak"); }
-        if (flagDisableFirmware) { parts.push("--disable"); parts.push("firmware"); }
-        if (customArgs.trim().length > 0) {
-            parts.push(customArgs.trim());
-        }
-        return parts.join(" ");
+        // List the steps the helper will run in order, marking each as
+        // ✓ (will run) or ✗ (skipped). Tells the user what's about to
+        // happen far more usefully than a single command line.
+        let lines = [];
+        lines.push((flagSkipSystem      ? "✗" : "✓") + "  System packages    (pacman -Syu)");
+        lines.push((flagSkipAur         ? "✗" : "✓") + "  AUR                (yay -Sua)");
+        lines.push((flagSkipFlatpak     ? "✗" : "✓") + "  Flatpak            (flatpak update --system + --user)");
+        lines.push((flagSkipExtras      ? "✗" : "✓") + "  Developer extras   (topgrade — cargo, pipx, npm, nix, ...)");
+        lines.push((flagAutoRebuildQuickshell ? "✓" : "✗") + "  Quickshell ABI check + rebuild if needed");
+        return lines.join("\n");
     }
 
     function startUpdate() {
         if (isRunning) return;
+        if (passwordField.text.length === 0) {
+            outputText = Translation.tr("Enter your password to start the update.");
+            return;
+        }
         outputText = "";
         userStopped = false;
-        quickshellWarningDetected = false;
-        detectedQuickshellPackage = "";
-        topgradeProc.command = buildCommand();
-        topgradeProc.running = true;
+        // Snapshot the password and clear the visible field so it
+        // doesn't sit on screen for the rest of the run.
+        pendingPassword = passwordField.text;
+        passwordField.text = "";
+        helperProc.command = buildHelperArgs();
+        helperProc.stdinEnabled = true;
+        helperProc.running = true;
         isRunning = true;
     }
 
     function stopUpdate() {
         if (!isRunning) return;
         userStopped = true;
-        // Signal whichever phase is currently running (topgrade, the
-        // package-owner probe, or the Quickshell rebuild).
-        if (topgradeProc.running) topgradeProc.signal(15);
-        if (quickshellOwnerProc.running) quickshellOwnerProc.signal(15);
-        if (quickshellRebuildProc.running) quickshellRebuildProc.signal(15);
+        if (helperProc.running) helperProc.signal(15);
     }
 
-    // Substring-match the upstream quickshell-check.hook's warning. The
-    // exact phrasing comes from `quickshell --private-check-compat` and
-    // doesn't get translated by the user's locale, so a fixed match is
-    // fine across systems.
-    function checkForQuickshellWarning(data) {
-        if (data && data.indexOf("Quickshell was built against Qt") !== -1) {
-            quickshellWarningDetected = true;
-        }
-    }
-
+    // Single privileged helper process. The helper at
+    // /usr/local/bin/mainstream-update-helper handles topgrade, the
+    // drop-to-user AUR step, the Quickshell ABI rebuild, and the
+    // pacman db.lck cleanup on stop — all inside one sudo invocation
+    // so the user only authenticates once.
     Process {
-        id: topgradeProc
-        environment: ({
-            "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
-        })
+        id: helperProc
         stdout: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
-                root.checkForQuickshellWarning(data);
-            }
+            onRead: data => { root.outputText += data + "\n"; }
         }
         stderr: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
-                root.checkForQuickshellWarning(data);
-            }
+            onRead: data => { root.outputText += data + "\n"; }
         }
-        onExited: (exitCode, exitStatus) => {
-            if (root.userStopped) {
-                root.outputText += "\n" + Translation.tr("Update stopped by user. Cleaning up…");
-                lockCleanupProc.running = true;
-                root.isRunning = false;
-                return;
-            }
-            if (exitCode === 0) {
-                root.outputText += "\n" + Translation.tr("Update completed successfully.");
-            } else {
-                root.outputText += "\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
-            }
-            // Follow-up: if the Quickshell ABI hook fired and the user
-            // hasn't disabled auto-rebuild, resolve the owning package
-            // and rebuild it. Skip on non-zero topgrade exit so we don't
-            // hide a real failure.
-            if (exitCode === 0 && root.quickshellWarningDetected && root.flagAutoRebuildQuickshell) {
-                root.outputText += "\n\n>>> " + Translation.tr("Quickshell ABI mismatch detected. Looking up owning package…");
-                quickshellOwnerProc.running = true;
-            } else {
-                root.isRunning = false;
-            }
-        }
-    }
-
-    // Step 1 of the rebuild: resolve which package actually owns
-    // /usr/bin/quickshell. The same upstream hook ships with whichever
-    // quickshell variant is installed (illogical-impulse-quickshell-git,
-    // mainstream-quickshell-git, plain quickshell-git, …), so this
-    // works without hard-coding a package name.
-    Process {
-        id: quickshellOwnerProc
-        command: ["pacman", "-Qoq", "/usr/bin/quickshell"]
-        stdout: SplitParser {
-            onRead: data => {
-                const pkg = data.trim();
-                if (pkg.length > 0) root.detectedQuickshellPackage = pkg;
-            }
-        }
-        stderr: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
-            }
-        }
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0 && root.detectedQuickshellPackage.length > 0) {
-                root.outputText += "\n>>> " + Translation.tr("Rebuilding %1 against the new Qt…").arg(root.detectedQuickshellPackage);
-                quickshellRebuildProc.command = ["bash", "-c",
-                    "sudo -A -v && yay -S --rebuildtree --noconfirm " + root.detectedQuickshellPackage];
-                quickshellRebuildProc.running = true;
-            } else {
-                root.outputText += "\n>>> " + Translation.tr("Could not determine which package owns /usr/bin/quickshell — please rebuild manually.");
-                root.isRunning = false;
-            }
-        }
-    }
-
-    // Step 2: actually rebuild the package with yay. Stream output into
-    // the same panel so the user sees one continuous log instead of two.
-    Process {
-        id: quickshellRebuildProc
-        environment: ({
-            "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
-        })
-        stdout: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
-            }
-        }
-        stderr: SplitParser {
-            onRead: data => {
-                root.outputText += data + "\n";
+        onRunningChanged: {
+            // When the process flips from idle → running, push the
+            // password into stdin so `sudo -S` can authenticate, then
+            // immediately close the stdin stream — the helper doesn't
+            // read further input, and leaving the pipe open holds the
+            // process group open in some edge cases. This is the same
+            // pattern disk-mounter.qml uses.
+            if (running && root.pendingPassword.length > 0) {
+                write(root.pendingPassword + "\n");
+                root.pendingPassword = "";
+                stdinEnabled = false;
             }
         }
         onExited: (exitCode, exitStatus) => {
             root.isRunning = false;
-            if (exitCode === 0) {
-                root.outputText += "\n>>> " + Translation.tr("Quickshell rebuilt successfully. Restart Quickshell to pick up the new binary.");
-            } else {
-                root.outputText += "\n>>> " + Translation.tr("Quickshell rebuild failed (exit %1). To retry manually: yay -S --rebuildtree %2").arg(exitCode).arg(root.detectedQuickshellPackage);
+            // Drop any straggler password from QML state, even on
+            // error paths where pendingPassword may still be set.
+            root.pendingPassword = "";
+            if (root.userStopped) {
+                root.outputText += "\n" + Translation.tr("Update stopped by user.");
+                return;
             }
-        }
-    }
-
-    Process {
-        id: lockCleanupProc
-        command: ["sudo", "-A", "rm", "-f", "/var/lib/pacman/db.lck"]
-        environment: ({
-            "SUDO_ASKPASS": Directories.scriptPath.toString().replace("file://", "") + "/sudo-askpass.sh"
-        })
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                root.outputText += "\n" + Translation.tr("Pacman lock file removed.");
+            // sudo exits 1 on auth failure with a specific stderr line;
+            // surface a clearer message than a bare "exit code 1".
+            const authFailed = root.outputText.indexOf("incorrect password") !== -1
+                || root.outputText.indexOf("Sorry, try again") !== -1;
+            if (authFailed) {
+                root.outputText += "\n" + Translation.tr("Authentication failed — wrong password. Try again.");
+                return;
+            }
+            // Exit code 100 is the helper's "primary path ok but
+            // developer-tool extras failed" signal. We deliberately
+            // render it the same as a full success: the Summary block
+            // above already marks the failed extras step as
+            // "FAILED (rc=N)", so power users who use those tools
+            // (cargo, pipx, npm, nix, …) see the failure when they
+            // scroll through the log. Regular users — who likely
+            // don't have those toolchains installed at all — aren't
+            // alarmed by an extras pass that errored on tools they
+            // never touch.
+            if (exitCode === 0 || exitCode === 100) {
+                root.outputText += "\n" + Translation.tr("Update completed successfully.");
             } else {
-                root.outputText += "\n" + Translation.tr("Could not remove pacman lock file. You may need to run: sudo rm /var/lib/pacman/db.lck");
+                root.outputText += "\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
             }
         }
     }
@@ -250,7 +198,7 @@ ContentPage {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 250
+            implicitHeight: 200
             radius: Appearance.rounding.small
             color: Appearance.colors.colLayer0
             clip: true
@@ -309,6 +257,9 @@ ContentPage {
             }
         }
 
+        // Show-advanced toggle on its own row, left-aligned above the
+        // password / Start row. ConfigSwitch is wider than a button so
+        // pinning it alongside the password field made the row crowded.
         ConfigRow {
             ConfigSwitch {
                 id: advancedToggle
@@ -316,9 +267,60 @@ ContentPage {
                 text: Translation.tr("Show advanced options")
                 checked: false
             }
+            // Fill the rest of the row with empty space so the toggle
+            // doesn't stretch — ConfigRow uses RowLayout, which would
+            // otherwise distribute width.
+            Item { Layout.fillWidth: true }
+        }
+
+        ConfigRow {
+            // Password field on the left edge of the row. Captured at
+            // submit, then passed to the helper via sudo -S over stdin
+            // (see helperProc above). Visible field is cleared as soon
+            // as the helper starts so it doesn't sit on screen for the
+            // duration of a 30-minute upgrade. Always present, always
+            // required — no popup polkit dialog as a fallback.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 38
+                radius: Appearance.rounding.small
+                color: Appearance.colors.colLayer1
+                border.color: passwordField.activeFocus ? Appearance.m3colors.m3primary : Appearance.m3colors.m3outlineVariant
+                border.width: 1
+
+                TextInput {
+                    id: passwordField
+                    anchors {
+                        fill: parent
+                        leftMargin: 12
+                        rightMargin: 12
+                    }
+                    verticalAlignment: TextInput.AlignVCenter
+                    echoMode: TextInput.Password
+                    passwordCharacter: "•"
+                    color: Appearance.colors.colOnLayer1
+                    font.family: Appearance.font.family.main
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    selectByMouse: true
+                    enabled: !root.isRunning
+                    onAccepted: {
+                        if (!root.isRunning) root.startUpdate();
+                    }
+
+                    StyledText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: passwordField.text.length === 0 && !passwordField.activeFocus
+                        text: Translation.tr("Password")
+                        color: Appearance.m3colors.m3outlineVariant
+                        font: passwordField.font
+                    }
+                }
+            }
+
             RippleButtonWithIcon {
                 materialIcon: root.isRunning ? "stop" : "play_arrow"
                 mainText: root.isRunning ? Translation.tr("Stop") : Translation.tr("Start update")
+                enabled: root.isRunning || passwordField.text.length > 0
                 onClicked: {
                     if (root.isRunning) root.stopUpdate();
                     else root.startUpdate();
@@ -339,21 +341,21 @@ ContentPage {
             ConfigRow {
                 uniform: true
                 ConfigSwitch {
-                    buttonIcon: "check_circle"
-                    text: Translation.tr("Auto-confirm prompts")
-                    checked: root.flagYes
-                    onCheckedChanged: root.flagYes = checked
+                    buttonIcon: "desktop_windows"
+                    text: Translation.tr("Skip system packages")
+                    checked: root.flagSkipSystem
+                    onCheckedChanged: root.flagSkipSystem = checked
                     StyledToolTip {
-                        text: Translation.tr("Automatically say yes to prompts during update")
+                        text: Translation.tr("Skip the pacman -Syu step.")
                     }
                 }
                 ConfigSwitch {
-                    buttonIcon: "desktop_windows"
-                    text: Translation.tr("Skip system packages")
-                    checked: root.flagDisableSystem
-                    onCheckedChanged: root.flagDisableSystem = checked
+                    buttonIcon: "block"
+                    text: Translation.tr("Disable AUR (yay/paru)")
+                    checked: root.flagSkipAur
+                    onCheckedChanged: root.flagSkipAur = checked
                     StyledToolTip {
-                        text: Translation.tr("Skip system package manager (pacman, apt, etc.)")
+                        text: Translation.tr("Skip the AUR update step entirely. Turn this on if yay or paru keeps hanging or failing for you during updates.")
                     }
                 }
             }
@@ -362,24 +364,37 @@ ContentPage {
                 ConfigSwitch {
                     buttonIcon: "deployed_code"
                     text: Translation.tr("Skip Flatpak apps")
-                    checked: root.flagDisableFlatpak
-                    onCheckedChanged: root.flagDisableFlatpak = checked
+                    checked: root.flagSkipFlatpak
+                    onCheckedChanged: root.flagSkipFlatpak = checked
                 }
                 ConfigSwitch {
-                    buttonIcon: "memory"
-                    text: Translation.tr("Skip firmware updates")
-                    checked: root.flagDisableFirmware
-                    onCheckedChanged: root.flagDisableFirmware = checked
+                    buttonIcon: "developer_mode"
+                    text: Translation.tr("Skip extras (topgrade)")
+                    checked: root.flagSkipExtras
+                    onCheckedChanged: root.flagSkipExtras = checked
+                    StyledToolTip {
+                        text: Translation.tr("After the primary update, topgrade catches developer-tool ecosystems (cargo, pipx, npm, nix, JetBrains, VS Code, ...). Turn this on to skip that pass — useful if you don't use those tools or topgrade itself is failing for you.")
+                    }
                 }
             }
             ConfigRow {
+                uniform: true
+                ConfigSwitch {
+                    buttonIcon: "memory"
+                    text: Translation.tr("Skip firmware updates")
+                    checked: root.flagSkipFirmware
+                    onCheckedChanged: root.flagSkipFirmware = checked
+                    StyledToolTip {
+                        text: Translation.tr("Only applies when developer extras runs. Firmware updates (fwupd) can prompt polkit and time out non-interactively.")
+                    }
+                }
                 ConfigSwitch {
                     buttonIcon: "build"
                     text: Translation.tr("Auto-rebuild Quickshell")
                     checked: root.flagAutoRebuildQuickshell
                     onCheckedChanged: root.flagAutoRebuildQuickshell = checked
                     StyledToolTip {
-                        text: Translation.tr("If a Qt update breaks Quickshell's ABI, rebuild it automatically after topgrade finishes.")
+                        text: Translation.tr("If a Qt update breaks Quickshell's ABI, rebuild the owning package automatically after all other update steps finish.")
                     }
                 }
             }
@@ -438,11 +453,16 @@ ContentPage {
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: Appearance.colors.colOnLayer1
                     wrapMode: Text.Wrap
+                    // Force plain-text rendering so the ✓ / ✗ characters
+                    // and explicit \n separators render literally — without
+                    // this AutoText might try to interpret the content as
+                    // rich text.
+                    textFormat: Text.PlainText
                 }
             }
 
             StyledText {
-                text: Translation.tr("Command preview")
+                text: Translation.tr("Steps that will run")
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 color: Appearance.m3colors.m3outlineVariant
             }

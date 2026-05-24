@@ -584,6 +584,21 @@ function setup_limine_snapper(){
     echo -e "${STY_BLUE}[$0]: Skipping limine + snapper setup.${STY_RST}"
   fi
 }
+function setup_update_helper(){
+  # Install /usr/local/bin/mainstream-update-helper — the privileged
+  # script invoked by the Quickshell Update settings panel
+  # (UpdateConfig.qml). The helper writes a *temporary* narrow NOPASSWD
+  # rule scoped to the calling user, runs topgrade for system updates,
+  # drops to the user for yay/paru AUR builds, and removes the temp
+  # rule on every exit path. No persistent NOPASSWD on disk.
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: update helper setup is currently Arch-only. Skipping.${STY_RST}"
+    return 0
+  fi
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/update/mainstream-update-helper" \
+      /usr/local/bin/mainstream-update-helper
+}
+
 function setup_pacman_nopasswd(){
   # Grant NOPASSWD for pacman so yay/makepkg can install AUR packages
   # (e.g. limine-snapper-sync) without prompting mid-install.
@@ -1079,6 +1094,10 @@ function setup_gpu_hypr_tweaks(){
 
 showfun setup_pacman_nopasswd
 v setup_pacman_nopasswd
+
+# Install the privileged helper the Quickshell Update panel invokes.
+showfun setup_update_helper
+v setup_update_helper
 
 showfun setup_limine_snapper
 v setup_limine_snapper
