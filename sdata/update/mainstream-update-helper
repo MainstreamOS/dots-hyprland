@@ -17,16 +17,24 @@
 # to the caller. Everything downstream that needs root invokes
 # sudo and hits that rule; everything that needs user context runs
 # under `runuser -u $SUDO_USER`. The temp rule lives at
-# /etc/sudoers.d/00-mainstream-update-active (no dots in the filename
-# — sudoers.d silently skips any file whose name contains a "."), and
-# is removed on every exit path (trap on EXIT, INT, TERM, HUP, plus a
-# defensive cleanup at startup catching stale rules from a kill -9'd
-# previous run).
+# /etc/sudoers.d/99-mainstream-update-active. Two constraints on the
+# filename: (1) no dots — sudoers.d silently skips files whose names
+# contain "." (man sudoers, @includedir); (2) it must sort LAST in
+# /etc/sudoers.d/ so sudoers' last-match-wins evaluation lands on
+# our NOPASSWD rule, not on g_wheel's password-required `%wheel
+# ALL=(ALL:ALL) ALL`. The earlier `00-` prefix sorted FIRST and was
+# silently overridden by g_wheel for every sudo invocation after
+# the helper's initial sudo -S, causing yay's `sudo pacman -U`
+# install step to prompt and time out. The rule is removed on every
+# exit path (trap on EXIT, INT, TERM, HUP) and the legacy `00-`
+# filename is wiped defensively at startup in case a stale file
+# lingered from a kill -9'd previous run.
 #
 # Skip flags (any combination):
 #   --skip-system            skip pacman -Syu
 #   --skip-aur               skip yay/paru AUR update
 #   --skip-flatpak           skip flatpak update (system + user)
+#   --skip-snap              skip snap refresh
 #   --skip-extras            skip the topgrade developer-tool pass
 #   --skip-firmware          when extras runs, pass --disable firmware
 #                            to topgrade (firmware updates can prompt
@@ -61,14 +69,23 @@ if [[ -z "$ORIG_HOME" || ! -d "$ORIG_HOME" ]]; then
 fi
 
 # ── Temp NOPASSWD + cleanup trap ────────────────────────────────────────────
-# Filename rule: no dots — sudoers.d silently skips files whose names
-# contain "." (see man sudoers, #includedir). Use a numeric prefix so
-# it loads before other 50-numbered drop-ins.
-TEMP_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
-rm -f "$TEMP_SUDOERS"
+# Filename rules:
+#   (a) no dots — sudoers.d silently skips files whose names contain "."
+#       (man sudoers, @includedir).
+#   (b) must sort LAST in /etc/sudoers.d/. sudoers is last-match-wins,
+#       so a NOPASSWD rule must parse AFTER any matching password-required
+#       rule it intends to override. /etc/sudoers.d/g_wheel ships the
+#       standard `%wheel ALL=(ALL:ALL) ALL` (no NOPASSWD); with the old
+#       `00-` prefix our rule parsed first, g_wheel parsed later, and
+#       the wheel rule won — yay's `sudo pacman -U` would then prompt
+#       and time out. The `99-` prefix puts us after g_wheel, so the
+#       NOPASSWD rule wins the last-match race.
+TEMP_SUDOERS="/etc/sudoers.d/99-mainstream-update-active"
+LEGACY_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
+rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
 
 cleanup() {
-    rm -f "$TEMP_SUDOERS"
+    rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
     # A user-stopped update may have killed pacman mid-transaction;
     # without this the next pacman invocation refuses to start until
     # the user manually removes the lock.
@@ -90,7 +107,17 @@ trap cleanup EXIT INT TERM HUP
 # (/etc/sudoers.d/wheel = standard `%wheel ALL=(ALL:ALL) ALL`, password
 # required) is unchanged. This matches what Pamac / mintupdate / other
 # distro GUI updaters effectively do during their run.
+#
+# `Defaults:USER verifypw=any` covers a subtle case: yay (and other
+# AUR helpers) call `sudo -v` to refresh the credential cache before
+# install. The default `verifypw=all` requires EVERY matching sudoers
+# entry to have NOPASSWD for `sudo -v` to skip the prompt — our
+# NOPASSWD rule has it, but g_wheel doesn't, so the default would
+# prompt. `verifypw=any` flips the policy to "if ANY matching entry
+# has NOPASSWD, skip the prompt", which our rule satisfies. Scoped
+# per-user so other accounts on the system are unaffected.
 cat > "$TEMP_SUDOERS" << EOF
+Defaults:$ORIG_USER verifypw = any
 $ORIG_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 "$TEMP_SUDOERS"
@@ -99,6 +126,7 @@ chmod 0440 "$TEMP_SUDOERS"
 SKIP_SYSTEM=0
 SKIP_AUR=0
 SKIP_FLATPAK=0
+SKIP_SNAP=0
 SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
 AUTO_REBUILD_QS=0
@@ -108,6 +136,7 @@ for arg in "$@"; do
         --skip-system)              SKIP_SYSTEM=1 ;;
         --skip-aur)                 SKIP_AUR=1 ;;
         --skip-flatpak)             SKIP_FLATPAK=1 ;;
+        --skip-snap)                SKIP_SNAP=1 ;;
         --skip-extras)              SKIP_EXTRAS=1 ;;
         --skip-firmware)            SKIP_FIRMWARE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
@@ -117,14 +146,20 @@ done
 
 # Defensive — if any sub-process unexpectedly tries to use a graphical
 # askpass, point it at /bin/false so it fails fast instead of hanging
-# on a TTY prompt the QML can't service.
+# on a TTY prompt the QML can't service. Empty SUDO_PROMPT suppresses
+# the "[sudo] password for USER:" header — with NOPASSWD active any
+# child sudo authorizes without input, but sudo still prints the
+# prompt header by default and yay's interleaved output makes that
+# look like a blocking prompt to the user.
 export SUDO_ASKPASS=/bin/false
+export SUDO_PROMPT=""
 
 # Per-step return codes, defaulted to "skipped/ok" (0). Updated below
 # only when the step actually runs.
 PACMAN_RC=0
 AUR_RC=0
 FLATPAK_RC=0
+SNAP_RC=0
 TOPGRADE_RC=0
 
 # ── 1. System packages (pacman) ─────────────────────────────────────────────
@@ -190,19 +225,41 @@ elif [[ "$SKIP_FLATPAK" -ne 0 ]]; then
     echo "── Flatpak: skipped (per --skip-flatpak)"
 fi
 
-# ── 4. Extras (topgrade for developer ecosystems) ───────────────────────────
+# ── 4. Snap (refresh as root, bypasses polkit) ──────────────────────────────
+# `snap refresh` talks to snapd over D-Bus, which gates the
+# io.snapcraft.snapd.manage action behind polkit. Polkit is a separate
+# auth path from sudoers — our NOPASSWD rule does NOT apply, so when
+# topgrade runs `snap refresh` as the calling user a polkit prompt
+# pops up and blocks the unattended flow. Running it here from the
+# helper (which is root) skips polkit entirely: root is implicitly
+# authorized for any action. Topgrade gets --disable snap below so
+# it doesn't redundantly try.
+if [[ "$SKIP_SNAP" -eq 0 ]] && command -v snap >/dev/null 2>&1; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Snap packages — snap refresh"
+    echo "═══════════════════════════════════════════════════════════"
+    snap refresh
+    SNAP_RC=$?
+elif [[ "$SKIP_SNAP" -ne 0 ]]; then
+    echo ""
+    echo "── Snap: skipped (per --skip-snap)"
+fi
+
+# ── 5. Extras (topgrade for developer ecosystems) ───────────────────────────
 # Topgrade handles cargo, pipx, npm, nix, rustup, gem, JetBrains
 # Toolbox, VS Code extensions, github-cli extensions, and 100+ more.
 # Most users don't have all of these installed; topgrade only runs
 # the steps for tools it actually finds. We disable the steps already
-# covered by sections 1–3 (system, flatpak) plus firmware (default,
-# tunable via --skip-firmware which here means "also disable in extras").
+# covered by sections 1–3 (system, flatpak, snap) plus firmware
+# (default, tunable via --skip-firmware which here means "also
+# disable in extras").
 if [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Developer extras — topgrade (cargo, pipx, npm, nix, …)"
     echo "═══════════════════════════════════════════════════════════"
-    TG_ARGS=(--cleanup --yes --disable system --disable flatpak)
+    TG_ARGS=(--cleanup --yes --disable system --disable flatpak --disable snap)
     if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
         TG_ARGS+=(--disable firmware)
     fi
@@ -217,7 +274,7 @@ elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo "── Developer extras: skipped (per --skip-extras)"
 fi
 
-# ── 5. Quickshell ABI mismatch follow-up ────────────────────────────────────
+# ── 6. Quickshell ABI mismatch follow-up ────────────────────────────────────
 # Pacman's quickshell-check.hook fires when Qt is updated but
 # Quickshell wasn't rebuilt against the new Qt. The same ABI test
 # the hook runs is `quickshell --private-check-compat`; non-zero
@@ -242,7 +299,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
     fi
 fi
 
-# ── 6. Summary + exit code ──────────────────────────────────────────────────
+# ── 7. Summary + exit code ──────────────────────────────────────────────────
 # Helper outputs a human-readable summary that the QML banner doesn't
 # rely on, plus chooses an exit code that lets the QML differentiate
 # "everything ok" from "primary ok but extras failed" from "primary
@@ -264,14 +321,21 @@ echo "════════════════════════�
 printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"  "$PACMAN_RC")"
 printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"     "$AUR_RC")"
 printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK" "$FLATPAK_RC")"
+printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"    "$SNAP_RC")"
 printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"  "$TOPGRADE_RC")"
 echo ""
 
 # Exit-code priority. Primary failures (pacman, aur, flatpak) override
-# extras; only when primary is clean do we surface extras failure as
-# the special 100 ("completed with errors").
+# everything else and propagate their own RC for the QML to surface.
+# Snap and extras are treated as SOFT — they fail to exit 100
+# ("completed with errors") rather than a hard failure code. Snap is
+# soft because most Arch users don't depend on it for system function
+# (it's a separate ecosystem on top of Arch); a snap-server timeout
+# shouldn't make the whole update look red to a regular user. The
+# log still shows the failure for the power-user case.
 if [[ "$SKIP_SYSTEM"  -ne 1 ]] && [[ "$PACMAN_RC"   -ne 0 ]]; then exit "$PACMAN_RC";   fi
 if [[ "$SKIP_AUR"     -ne 1 ]] && [[ "$AUR_RC"      -ne 0 ]]; then exit "$AUR_RC";      fi
 if [[ "$SKIP_FLATPAK" -ne 1 ]] && [[ "$FLATPAK_RC"  -ne 0 ]]; then exit "$FLATPAK_RC";  fi
+if [[ "$SKIP_SNAP"    -ne 1 ]] && [[ "$SNAP_RC"     -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_EXTRAS"  -ne 1 ]] && [[ "$TOPGRADE_RC" -ne 0 ]]; then exit 100;            fi
 exit 0
