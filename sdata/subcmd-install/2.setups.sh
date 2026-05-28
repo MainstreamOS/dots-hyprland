@@ -856,17 +856,17 @@ function _hypr_env_upsert(){
 function _hypr_fix_hypridle_for_nvidia(){
   local _hypridle="$HOME/.config/hypr/hypridle.conf"
   [[ -f "$_hypridle" ]] || return 1
-  # The Lua-form dispatch string is: hl.dsp.dpms({action = "on"}). We add a
-  # `sleep 2 && ` prefix on the hyprctl command, leaving the rest intact.
-  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle" \
-      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle"; then
-    sed -i '/after_sleep_cmd/s|hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|sleep 2 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|' "$_hypridle"
-    echo -e "${STY_CYAN}[$0]: Added 2s dpms-on delay to after_sleep_cmd (NVIDIA resume fix).${STY_RST}"
+  # The Lua-form dispatch string is: hl.dsp.dpms({ action = "enable" }). We
+  # add a `sleep 2 && ` prefix on the hyprctl command, leaving the rest intact.
+  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle" \
+      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle"; then
+    sed -i '/after_sleep_cmd/s|hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|sleep 2 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|' "$_hypridle"
+    echo -e "${STY_CYAN}[$0]: Added 2s dpms-enable delay to after_sleep_cmd (NVIDIA resume fix).${STY_RST}"
   fi
-  if grep -qE 'on-resume\s*=.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle" \
-      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*on' "$_hypridle"; then
-    sed -i '/on-resume/s|hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|sleep 1 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({action = "on"})'"'"'|' "$_hypridle"
-    echo -e "${STY_CYAN}[$0]: Added 1s dpms-on delay to on-resume (NVIDIA resume fix).${STY_RST}"
+  if grep -qE 'on-resume\s*=.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle" \
+      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle"; then
+    sed -i '/on-resume/s|hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|sleep 1 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|' "$_hypridle"
+    echo -e "${STY_CYAN}[$0]: Added 1s dpms-enable delay to on-resume (NVIDIA resume fix).${STY_RST}"
   fi
 }
 
