@@ -127,8 +127,17 @@ ContentPage {
             // Drop any straggler password from QML state, even on
             // error paths where pendingPassword may still be set.
             root.pendingPassword = "";
+            // Strip trailing whitespace before appending the completion
+            // line. SplitParser tends to emit an empty trailing chunk
+            // when the stream ends in a newline (`printf "...\n"`), and
+            // the stdout handler re-adds another \n to that empty —
+            // result is 1-2 extra blank lines after the helper's
+            // Summary block. Normalising here keeps the auto-scrolled
+            // viewport landing on the actual Summary text, not on
+            // dead whitespace.
+            root.outputText = root.outputText.replace(/\s+$/, "");
             if (root.userStopped) {
-                root.outputText += "\n" + Translation.tr("Update stopped by user.");
+                root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
                 return;
             }
             // sudo exits 1 on auth failure with a specific stderr line;
@@ -136,7 +145,7 @@ ContentPage {
             const authFailed = root.outputText.indexOf("incorrect password") !== -1
                 || root.outputText.indexOf("Sorry, try again") !== -1;
             if (authFailed) {
-                root.outputText += "\n" + Translation.tr("Authentication failed — wrong password. Try again.");
+                root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
                 return;
             }
             // Exit code 100 is the helper's "primary path ok but
@@ -150,9 +159,9 @@ ContentPage {
             // alarmed by an extras pass that errored on tools they
             // never touch.
             if (exitCode === 0 || exitCode === 100) {
-                root.outputText += "\n" + Translation.tr("Update completed successfully.");
+                root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
             } else {
-                root.outputText += "\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
+                root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
             }
         }
     }

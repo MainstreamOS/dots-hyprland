@@ -294,13 +294,17 @@ fi
 # the steps for tools it actually finds. We disable the steps already
 # covered by sections 1–4 (system, flatpak, snap) plus firmware
 # (default, tunable via --skip-firmware which here means "also
-# disable in extras").
+# disable in extras") and lensfun (network step against
+# lensfun.sourceforge.net + wilson.bronger.org/lensfun-db; either
+# mirror going slow can hang topgrade indefinitely with no progress
+# output — observed 57+ minute stall in the wild. Users who want
+# lensfun updates can run `topgrade --only lensfun` manually).
 if [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Developer extras — topgrade (cargo, pipx, npm, nix, …)"
     echo "═══════════════════════════════════════════════════════════"
-    TG_ARGS=(--cleanup --yes --disable system --disable flatpak --disable snap)
+    TG_ARGS=(--cleanup --yes --disable system --disable flatpak --disable snap --disable lensfun)
     if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
         TG_ARGS+=(--disable firmware)
     fi
@@ -366,7 +370,6 @@ printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"
 printf "  %-30s %s\n" "Dotfiles (updatems):"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
 printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
 printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
-echo ""
 
 # Exit-code priority. Primary failures (pacman, aur, flatpak) override
 # everything else and propagate their own RC for the QML to surface.
