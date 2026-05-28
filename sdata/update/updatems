@@ -18,9 +18,17 @@
 #      user to restore later), point the mainstream branch at the new
 #      tag via `git reset --hard`, then run:
 #         ./setup exp-update --skip-notice --non-interactive \
-#                            --default-choice backup
+#                            --default-choice backup -p
 #      so per-file conflicts go to .update-backups/<file>.<ts>.bak
-#      rather than blocking on a prompt.
+#      rather than blocking on a prompt, AND any mainstream-* PKGBUILDs
+#      that bumped between the last-applied tag and the new tag get
+#      rebuilt + installed via `makepkg -sCi --noconfirm`. exp-update's
+#      non-interactive default for -p is "build only packages with
+#      changed PKGBUILDs" — no-op when no PKGBUILD has changed, which
+#      is the common case. Required because the [mainstream] pacman
+#      repo is file://-based and frozen at install time; without -p
+#      package fixes (audio hot-plug init, etc.) would land in the
+#      cache clone but never reach the live system.
 #   5. Write the new tag to the marker on success.
 #
 # Exit codes:
@@ -155,8 +163,8 @@ say "Pointing $REPO_BRANCH at $LATEST_TAG..."
 git checkout "$REPO_BRANCH" 2>/dev/null || git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
 git reset --hard "$LATEST_TAG" || die "git reset --hard $LATEST_TAG failed"
 
-say "Running ./setup exp-update (non-interactive, backup-on-conflict)..."
-./setup exp-update --skip-notice --non-interactive --default-choice backup
+say "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)..."
+./setup exp-update --skip-notice --non-interactive --default-choice backup -p
 RC=$?
 
 # ── 7. Update marker on success ────────────────────────────────────────────
