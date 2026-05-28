@@ -35,6 +35,7 @@
 #   --skip-aur               skip yay/paru AUR update
 #   --skip-flatpak           skip flatpak update (system + user)
 #   --skip-snap              skip snap refresh
+#   --skip-dotfiles          skip the updatems Mainstream-dotfiles refresh
 #   --skip-extras            skip the topgrade developer-tool pass
 #   --skip-firmware          when extras runs, pass --disable firmware
 #                            to topgrade (firmware updates can prompt
@@ -127,6 +128,7 @@ SKIP_SYSTEM=0
 SKIP_AUR=0
 SKIP_FLATPAK=0
 SKIP_SNAP=0
+SKIP_DOTFILES=0
 SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
 AUTO_REBUILD_QS=0
@@ -137,6 +139,7 @@ for arg in "$@"; do
         --skip-aur)                 SKIP_AUR=1 ;;
         --skip-flatpak)             SKIP_FLATPAK=1 ;;
         --skip-snap)                SKIP_SNAP=1 ;;
+        --skip-dotfiles)            SKIP_DOTFILES=1 ;;
         --skip-extras)              SKIP_EXTRAS=1 ;;
         --skip-firmware)            SKIP_FIRMWARE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
@@ -160,6 +163,8 @@ PACMAN_RC=0
 AUR_RC=0
 FLATPAK_RC=0
 SNAP_RC=0
+DOTFILES_RC=0
+DOTFILES_SYS_RC=0
 TOPGRADE_RC=0
 
 # ── 1. System packages (pacman) ─────────────────────────────────────────────
@@ -246,12 +251,48 @@ elif [[ "$SKIP_SNAP" -ne 0 ]]; then
     echo "── Snap: skipped (per --skip-snap)"
 fi
 
-# ── 5. Extras (topgrade for developer ecosystems) ───────────────────────────
+# ── 5. Mainstream dotfiles (updatems) ───────────────────────────────────────
+# /usr/local/bin/updatems is a per-user command that checks for a new
+# release tag (mainstream-*) on the upstream MainstreamOS/dots-hyprland
+# repo and, when one is detected, runs `./setup exp-update` against the
+# clone at ~/.cache/dots-hyprland with --non-interactive
+# --default-choice backup so file conflicts back up to
+# .update-backups/ rather than blocking on a prompt. No-op when
+# already at the latest tag. Auto-clones the repo on first run.
+# Runs as the calling user (updatems refuses root).
+if [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  Mainstream dotfiles — updatems"
+    echo "═══════════════════════════════════════════════════════════"
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems
+    DOTFILES_RC=$?
+
+    # ── 5b. System-level dotfiles bits (updatems-system) ───────────────────
+    # updatems handles user-level files (~/.config etc.); updatems-system
+    # refreshes the corresponding system-level files that live in
+    # /usr/share, /usr/share/polkit-1, and /usr/local/bin (Plymouth theme,
+    # SDDM polkit + bg helper, the update tooling itself). File copies
+    # only — no initramfs rebuild, no kernel-cmdline rewrite. Tracked as
+    # a separate Summary line so users can see which half (user-level
+    # vs system-bits) failed if one does.
+    if command -v updatems-system >/dev/null 2>&1; then
+        echo ""
+        echo "── Mainstream system bits — updatems-system"
+        updatems-system "$ORIG_HOME/.cache/dots-hyprland"
+        DOTFILES_SYS_RC=$?
+    fi
+elif [[ "$SKIP_DOTFILES" -ne 0 ]]; then
+    echo ""
+    echo "── Dotfiles: skipped (per --skip-dotfiles)"
+fi
+
+# ── 6. Extras (topgrade for developer ecosystems) ───────────────────────────
 # Topgrade handles cargo, pipx, npm, nix, rustup, gem, JetBrains
 # Toolbox, VS Code extensions, github-cli extensions, and 100+ more.
 # Most users don't have all of these installed; topgrade only runs
 # the steps for tools it actually finds. We disable the steps already
-# covered by sections 1–3 (system, flatpak, snap) plus firmware
+# covered by sections 1–4 (system, flatpak, snap) plus firmware
 # (default, tunable via --skip-firmware which here means "also
 # disable in extras").
 if [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
@@ -274,7 +315,7 @@ elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo "── Developer extras: skipped (per --skip-extras)"
 fi
 
-# ── 6. Quickshell ABI mismatch follow-up ────────────────────────────────────
+# ── 7. Quickshell ABI mismatch follow-up ────────────────────────────────────
 # Pacman's quickshell-check.hook fires when Qt is updated but
 # Quickshell wasn't rebuilt against the new Qt. The same ABI test
 # the hook runs is `quickshell --private-check-compat`; non-zero
@@ -299,7 +340,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
     fi
 fi
 
-# ── 7. Summary + exit code ──────────────────────────────────────────────────
+# ── 8. Summary + exit code ──────────────────────────────────────────────────
 # Helper outputs a human-readable summary that the QML banner doesn't
 # rely on, plus chooses an exit code that lets the QML differentiate
 # "everything ok" from "primary ok but extras failed" from "primary
@@ -318,24 +359,28 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  Summary"
 echo "═══════════════════════════════════════════════════════════"
-printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"  "$PACMAN_RC")"
-printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"     "$AUR_RC")"
-printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK" "$FLATPAK_RC")"
-printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"    "$SNAP_RC")"
-printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"  "$TOPGRADE_RC")"
+printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"   "$PACMAN_RC")"
+printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
+printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC")"
+printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC")"
+printf "  %-30s %s\n" "Dotfiles (updatems):"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
+printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
+printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
 echo ""
 
 # Exit-code priority. Primary failures (pacman, aur, flatpak) override
 # everything else and propagate their own RC for the QML to surface.
-# Snap and extras are treated as SOFT — they fail to exit 100
-# ("completed with errors") rather than a hard failure code. Snap is
-# soft because most Arch users don't depend on it for system function
-# (it's a separate ecosystem on top of Arch); a snap-server timeout
-# shouldn't make the whole update look red to a regular user. The
+# Snap, dotfiles, and extras are treated as SOFT — they fail to exit
+# 100 ("completed with errors") rather than a hard failure code. They
+# are soft because each is a non-critical augmentation: snap-server
+# timeouts, transient git-fetch failures, and topgrade quirks
+# shouldn't turn the whole update banner red for a regular user. The
 # log still shows the failure for the power-user case.
-if [[ "$SKIP_SYSTEM"  -ne 1 ]] && [[ "$PACMAN_RC"   -ne 0 ]]; then exit "$PACMAN_RC";   fi
-if [[ "$SKIP_AUR"     -ne 1 ]] && [[ "$AUR_RC"      -ne 0 ]]; then exit "$AUR_RC";      fi
-if [[ "$SKIP_FLATPAK" -ne 1 ]] && [[ "$FLATPAK_RC"  -ne 0 ]]; then exit "$FLATPAK_RC";  fi
-if [[ "$SKIP_SNAP"    -ne 1 ]] && [[ "$SNAP_RC"     -ne 0 ]]; then exit 100;            fi
-if [[ "$SKIP_EXTRAS"  -ne 1 ]] && [[ "$TOPGRADE_RC" -ne 0 ]]; then exit 100;            fi
+if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
+if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
+if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi
+if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100;            fi
+if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 100;            fi
+if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 100;            fi
+if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
 exit 0

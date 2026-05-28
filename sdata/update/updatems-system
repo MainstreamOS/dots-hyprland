@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# updatems-system — refresh Mainstream OS system-level files after a
+# dotfiles tag bump. Invoked from the privileged mainstream-update-helper
+# (section 5b) right after the user-level updatems step, so it runs as
+# root and writes to /usr/share, /usr/share/polkit-1, and /usr/local/bin.
+#
+# Scope: file copies only. Specifically:
+#   /usr/share/plymouth/themes/mainstream/   (Plymouth boot splash theme)
+#   /usr/share/polkit-1/actions/...sddm-bg.policy
+#   /usr/share/polkit-1/rules.d/50-sddm-bg.rules
+#   /usr/local/bin/sddm-bg-helper
+#   /usr/local/bin/mainstream-update-helper  (the helper that just ran us)
+#   /usr/local/bin/updatems                  (the user-level command)
+#   /usr/local/bin/updatems-system           (this script itself)
+#
+# Deliberately NOT done here:
+#   - mkinitcpio rebuild (1–2 min per kernel × N kernels). Plymouth
+#     reads its theme dir at boot, so a refreshed theme becomes active
+#     on the next mkinitcpio run that the user triggers anyway.
+#   - plymouth-set-default-theme (one-time install-time concern; already
+#     pointing at "mainstream").
+#   - /etc/kernel/cmdline rewrites for splash/quiet flags (set once at
+#     install).
+#
+# For those install-time concerns, the user can still run:
+#   cd ~/.cache/dots-hyprland && ./setup install-setups
+#
+# Usage: updatems-system [REPO_DIR]
+#   REPO_DIR defaults to ~$ORIG_USER/.cache/dots-hyprland — the path
+#   updatems uses for its clone. The helper passes this explicitly so
+#   we don't have to resolve it ourselves.
+set -u
+
+[[ $EUID -eq 0 ]] || { echo "updatems-system: must run as root" >&2; exit 1; }
+
+# Resolve REPO_DIR. Argument > $SUDO_USER's clone > $HOME's clone.
+if [[ -n "${1:-}" ]]; then
+    REPO_DIR="$1"
+elif [[ -n "${SUDO_USER:-}" ]]; then
+    REPO_DIR="$(getent passwd "$SUDO_USER" | cut -d: -f6)/.cache/dots-hyprland"
+else
+    REPO_DIR="$HOME/.cache/dots-hyprland"
+fi
+
+if [[ ! -d "$REPO_DIR/.git" ]]; then
+    echo "updatems-system: no dots-hyprland clone at $REPO_DIR" >&2
+    echo "  hint: run updatems as your user first to bootstrap the clone." >&2
+    exit 1
+fi
+
+c_blue=$'\e[38;5;80m'; c_green=$'\e[38;5;79m'
+c_yellow=$'\e[38;5;221m'; c_rst=$'\e[0m'
+say()  { printf '%s==>%s %s\n' "$c_blue"   "$c_rst" "$*"; }
+ok()   { printf '%s OK%s  %s\n' "$c_green"  "$c_rst" "$*"; }
+warn() { printf '%s ! %s  %s\n' "$c_yellow" "$c_rst" "$*" >&2; }
+
+cd "$REPO_DIR" || { echo "cannot cd to $REPO_DIR" >&2; exit 1; }
+
+# Per-component rc tracking; any non-zero rolls up to a single soft fail
+# (return 1). We DON'T abort on the first failure — best effort, refresh
+# what we can.
+RC=0
+_install_file() {
+    # $1 mode  $2 src  $3 dst  $4 label
+    local mode="$1" src="$2" dst="$3" label="$4"
+    if [[ ! -f "$src" ]]; then
+        warn "$label source missing at $src — skipping"
+        return 0
+    fi
+    if install -m "$mode" -o root -g root "$src" "$dst"; then
+        ok "$label refreshed -> $dst"
+    else
+        warn "$label install failed (src=$src dst=$dst)"
+        RC=1
+    fi
+}
+
+# ── Plymouth theme files (no rebuild — see header) ─────────────────────────
+PLY_SRC="$REPO_DIR/sdata/plymouth/mainstream"
+PLY_DST="/usr/share/plymouth/themes/mainstream"
+if [[ -d "$PLY_SRC" ]]; then
+    say "Refreshing Plymouth theme -> $PLY_DST"
+    if rm -rf "$PLY_DST" && cp -r "$PLY_SRC" "$PLY_DST"; then
+        chown -R root:root "$PLY_DST"
+        find "$PLY_DST" -type d -exec chmod 755 {} +
+        find "$PLY_DST" -type f -exec chmod 644 {} +
+        ok "Plymouth theme refreshed (initramfs NOT rebuilt; takes effect on the next mkinitcpio pass)"
+    else
+        warn "Plymouth theme refresh failed"
+        RC=1
+    fi
+else
+    warn "No Plymouth source at $PLY_SRC — skipping"
+fi
+
+# ── SDDM background helper + polkit ────────────────────────────────────────
+_install_file 0755 \
+    "$REPO_DIR/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh" \
+    /usr/local/bin/sddm-bg-helper \
+    "SDDM bg helper"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/polkit/org.illogicalimpulse.sddm-bg.policy" \
+    /usr/share/polkit-1/actions/org.illogicalimpulse.sddm-bg.policy \
+    "SDDM polkit action"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/polkit/50-sddm-bg.rules" \
+    /usr/share/polkit-1/rules.d/50-sddm-bg.rules \
+    "SDDM polkit rules"
+
+# ── Update tooling (refreshes itself + updatems + helper) ──────────────────
+# Refreshing the helper while it's mid-run is safe on Linux — the
+# kernel keeps the inode open via the existing fd until the process
+# exits, then the new file takes over for subsequent invocations.
+_install_file 0755 \
+    "$REPO_DIR/sdata/update/mainstream-update-helper" \
+    /usr/local/bin/mainstream-update-helper \
+    "Update helper"
+
+_install_file 0755 \
+    "$REPO_DIR/sdata/update/updatems" \
+    /usr/local/bin/updatems \
+    "updatems"
+
+_install_file 0755 \
+    "$REPO_DIR/sdata/update/updatems-system" \
+    /usr/local/bin/updatems-system \
+    "updatems-system"
+
+if [[ $RC -eq 0 ]]; then
+    ok "System-level refresh complete."
+else
+    warn "System-level refresh finished with errors (see above)."
+fi
+exit "$RC"

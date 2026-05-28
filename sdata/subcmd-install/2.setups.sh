@@ -599,6 +599,37 @@ function setup_update_helper(){
       /usr/local/bin/mainstream-update-helper
 }
 
+function setup_updatems(){
+  # Install /usr/local/bin/updatems — the user-facing dotfiles refresh
+  # command. Lightweight wrapper around `./setup exp-update` that gates
+  # on a tag-bump check against the upstream MainstreamOS/dots-hyprland
+  # remote, auto-clones the dotfiles repo if absent, and auto-stashes
+  # local edits before applying. Invoked standalone OR from the
+  # mainstream-update-helper as the "Dotfiles" step (section 5).
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: updatems setup is currently Arch-only. Skipping.${STY_RST}"
+    return 0
+  fi
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/update/updatems" \
+      /usr/local/bin/updatems
+}
+
+function setup_updatems_system(){
+  # Install /usr/local/bin/updatems-system — the root-context companion
+  # to updatems that refreshes system-level files (Plymouth theme, SDDM
+  # polkit + bg helper, and the update tooling itself) after a tag bump.
+  # Invoked from mainstream-update-helper section 5b right after the
+  # user-level updatems step. File copies only — initramfs rebuild and
+  # kernel-cmdline rewrite are NOT done here (see ./setup install-setups
+  # for those install-time concerns).
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: updatems-system setup is currently Arch-only. Skipping.${STY_RST}"
+    return 0
+  fi
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/update/updatems-system" \
+      /usr/local/bin/updatems-system
+}
+
 function setup_pacman_nopasswd(){
   # Grant NOPASSWD for pacman so yay/makepkg can install AUR packages
   # (e.g. limine-snapper-sync) without prompting mid-install.
@@ -1098,6 +1129,14 @@ v setup_pacman_nopasswd
 # Install the privileged helper the Quickshell Update panel invokes.
 showfun setup_update_helper
 v setup_update_helper
+
+# Install the updatems dotfiles-refresh command (section 5 of the helper).
+showfun setup_updatems
+v setup_updatems
+
+# Install the updatems-system root-context companion (section 5b).
+showfun setup_updatems_system
+v setup_updatems_system
 
 showfun setup_limine_snapper
 v setup_limine_snapper

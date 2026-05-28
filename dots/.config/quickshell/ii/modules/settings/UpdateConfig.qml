@@ -25,6 +25,7 @@ ContentPage {
     property bool flagSkipSystem: false
     property bool flagSkipAur: false
     property bool flagSkipFlatpak: false
+    property bool flagSkipDotfiles: false
     property bool flagSkipExtras: false
     property bool flagSkipFirmware: true
     property bool flagAutoRebuildQuickshell: true
@@ -44,6 +45,7 @@ ContentPage {
         if (flagSkipSystem)            args.push("--skip-system");
         if (flagSkipAur)               args.push("--skip-aur");
         if (flagSkipFlatpak)           args.push("--skip-flatpak");
+        if (flagSkipDotfiles)          args.push("--skip-dotfiles");
         if (flagSkipExtras)            args.push("--skip-extras");
         if (flagSkipFirmware)          args.push("--skip-firmware");
         if (flagAutoRebuildQuickshell) args.push("--auto-rebuild-quickshell");
@@ -64,6 +66,7 @@ ContentPage {
         lines.push((flagSkipSystem      ? "✗" : "✓") + "  System packages    (pacman -Syu)");
         lines.push((flagSkipAur         ? "✗" : "✓") + "  AUR                (yay -Sua)");
         lines.push((flagSkipFlatpak     ? "✗" : "✓") + "  Flatpak            (flatpak update --system + --user)");
+        lines.push((flagSkipDotfiles    ? "✗" : "✓") + "  Mainstream dots    (updatems — on remote tag bump)");
         lines.push((flagSkipExtras      ? "✗" : "✓") + "  Developer extras   (topgrade — cargo, pipx, npm, nix, ...)");
         lines.push((flagAutoRebuildQuickshell ? "✓" : "✗") + "  Quickshell ABI check + rebuild if needed");
         return lines.join("\n");
@@ -388,6 +391,18 @@ ContentPage {
                         text: Translation.tr("Only applies when developer extras runs. Firmware updates (fwupd) can prompt polkit and time out non-interactively.")
                     }
                 }
+                ConfigSwitch {
+                    buttonIcon: "code"
+                    text: Translation.tr("Skip dotfiles")
+                    checked: root.flagSkipDotfiles
+                    onCheckedChanged: root.flagSkipDotfiles = checked
+                    StyledToolTip {
+                        text: Translation.tr("Skip the Mainstream dotfiles refresh step (updatems). Dotfiles update only when a new release tag is published upstream; turn this on to manage them manually.")
+                    }
+                }
+            }
+            ConfigRow {
+                uniform: true
                 ConfigSwitch {
                     buttonIcon: "build"
                     text: Translation.tr("Auto-rebuild Quickshell")
