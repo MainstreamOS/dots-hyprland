@@ -1,0 +1,24 @@
+# Mainstream OS — re-run the per-card audio unmute pass whenever a new
+# ALSA card appears. Catches USB hot-plug (USB headsets like Fifine,
+# HyperX, Logitech that ship with PCM/Master muted), dock undock with
+# audio replug, Bluetooth A2DP adapters that register a card, etc.
+#
+# The mainstream-audio-firstboot.service handles whatever cards were
+# present at the very first boot; this rule handles every card that
+# arrives later (including the same card if it gets unplugged and
+# replugged during a session).
+#
+# Number 89 keeps this AFTER kernel/udev's own sound subsystem rules
+# (50-udev-default, etc.) and BEFORE alsa-utils' 90-alsa-restore so
+# our unmute pass settles before alsa-restore tries to apply saved
+# state on top.
+#
+# `TAG+="systemd"` is REQUIRED: per systemd.device(5), SYSTEMD_WANTS=
+# only takes effect on devices that are tagged "systemd" — without it
+# the env var lands in the udev database but systemd-udevd never
+# notifies systemd to instantiate the unit. systemd's own example
+# rules in /usr/lib/udev/rules.d/99-systemd.rules pair every
+# SYSTEMD_WANTS= with TAG+="systemd"; we follow suit.
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="card[0-9]*", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}+="mainstream-audio-card-init@%k.service"

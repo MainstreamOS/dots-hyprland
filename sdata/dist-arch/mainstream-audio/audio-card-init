@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Mainstream OS — per-card audio initialization
+#
+# Called from two paths:
+#   1. /usr/lib/mainstream/audio-firstboot, once per card detected at
+#      first boot.
+#   2. mainstream-audio-card-init@.service, triggered by udev whenever
+#      a new sound card appears at runtime — USB headsets hot-plugged
+#      after first boot (Fifine, HyperX, Logitech, etc.), dock undock,
+#      Bluetooth A2DP adapters that register an ALSA card, etc.
+#
+# Without (2), a USB audio device plugged in after the firstboot pass
+# enumerates with whatever ALSA defaults its firmware reports — for
+# many devices that means PCM or Master shipping muted (the `MM` flag
+# in alsamixer) or at 0%, producing total silence even though
+# PipeWire/WirePlumber are happy and the per-stream volume looks fine.
+#
+# Argument $1 is the ALSA card identifier: numeric "2", or kernel name
+# "card2" (udev passes the kernel name via %k). Per-control failures
+# are tolerated with `|| true` — controls that don't exist on a given
+# codec are normal, the script must succeed on every device shape.
+set -u
+
+card="${1:-}"
+if [[ -z "$card" ]]; then
+    echo "audio-card-init: usage: $0 <card-number-or-name>" >&2
+    exit 1
+fi
+# Strip a leading "card" prefix if udev passed the kernel name.
+card="${card#card}"
+if ! [[ "$card" =~ ^[0-9]+$ ]]; then
+    echo "audio-card-init: invalid card '$card' (must be numeric or 'cardN')" >&2
+    exit 1
+fi
+
+# UCM-driven defaults first. Per-card so we don't blast every card on
+# every USB hot-plug event.
+alsactl init "$card" 2>/dev/null || true
+
+# Unmute the controls that ship muted on a surprising number of
+# devices. amixer's -q suppresses verbose output; per-control failures
+# (missing controls on this codec) are normal so swallow them.
+for ctl in Master Speaker Headphone PCM Front; do
+    amixer -c "$card" -q sset "$ctl" unmute 2>/dev/null || true
+done
+
+# Hardware levels set to 100% across the board. The PipeWire stream
+# volume in the Quickshell audio panel is the only user-facing knob
+# Mainstream ships — pavucontrol-qt is available but neither it nor
+# the panel control the ALSA hardware mixer directly. Anything below
+# 100% here acts as an invisible ceiling on the panel's slider, so
+# we open it all the way and let PipeWire be the only attenuator.
+amixer -c "$card" -q sset Master    100% 2>/dev/null || true
+amixer -c "$card" -q sset Speaker   100% 2>/dev/null || true
+amixer -c "$card" -q sset Headphone 100% 2>/dev/null || true
+amixer -c "$card" -q sset PCM       100% 2>/dev/null || true
+
+# Realtek "Auto-Mute Mode" misreads jack-detection on some codecs and
+# silences rear speakers. Disable — trade-off is no headphone auto-mute,
+# which is strictly better than "no sound at all".
+amixer -c "$card" -q sset "Auto-Mute Mode" Disabled 2>/dev/null || true
+
+# Persist mixer state so alsa-restore.service picks it up on the next
+# boot. alsactl store is global (not per-card), but that's intended —
+# we want the latest snapshot of every active card written together.
+alsactl store 2>/dev/null || true

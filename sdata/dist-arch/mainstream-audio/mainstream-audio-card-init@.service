@@ -1,0 +1,19 @@
+[Unit]
+Description=Mainstream OS audio card init for %i
+Documentation=man:alsactl(1) man:amixer(1)
+# Wait for the sound subsystem to be ready before running amixer on
+# the freshly-added card.
+After=sound.target
+Wants=sound.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/audio-card-init %i
+# Don't keep the unit "active" after exit — each card-add event
+# starts a fresh one-shot run.
+RemainAfterExit=no
+
+# Note: no [Install] section. This unit is template-only and is
+# instantiated by udev via SYSTEMD_WANTS (see
+# /usr/lib/udev/rules.d/89-mainstream-audio.rules), not by
+# systemctl enable.
