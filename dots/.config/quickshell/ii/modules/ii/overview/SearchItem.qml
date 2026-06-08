@@ -247,7 +247,7 @@ RippleButton {
                     color: root.colForeground
                     horizontalAlignment: Text.AlignLeft
                     elide: Text.ElideRight
-                    text: root.selected ? root.itemName : root.displayContent
+                    text: root.selected ? StringUtils.escapeHtml(root.itemName) : root.displayContent
                 }
             }
             Loader { // Clipboard image preview

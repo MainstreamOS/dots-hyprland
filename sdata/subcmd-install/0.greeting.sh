@@ -25,7 +25,7 @@ if [[ "${MS_VISUAL:-0}" == "1" ]]; then
 else
   pause
   case $ask in
-    false) sleep 0 ;;
+    false) true ;;
     *)
       ms_section "Confirm every command before it runs?"
       ms_hint "y = yes, ask before each (default)"

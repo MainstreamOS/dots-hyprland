@@ -9,7 +9,8 @@ provides=('illogical-impulse-microtex-git')
 replaces=('illogical-impulse-microtex-git')
 #pkgdesc="A dynamic, cross-platform, and embeddable LaTeX rendering library"
 arch=("x86_64")
-url="https://github.com/NanoMichael/${_pkgname}"
+#url="https://github.com/NanoMichael/${_pkgname}"
+url="https://github.com/end-4/${_pkgname}"
 license=('MIT')
 depends=(
   tinyxml2

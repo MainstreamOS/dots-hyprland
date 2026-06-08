@@ -118,7 +118,7 @@ v remove_deprecated_dependencies
 
 # Issue #363
 case $SKIP_SYSUPDATE in
-  true) sleep 0;;
+  true) true;;
   *) v sudo pacman -Syu --noconfirm;;
 esac
 
