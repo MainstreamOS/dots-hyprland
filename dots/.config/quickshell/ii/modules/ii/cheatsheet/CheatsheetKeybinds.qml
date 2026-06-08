@@ -16,6 +16,7 @@ Item {
 
     StyledFlickable {
         id: flickable
+        clip: true
         anchors.fill: parent
         anchors.margins: Appearance.rounding.small
         contentHeight: height
@@ -24,7 +25,7 @@ Item {
             id: flow
             height: flickable.height
             flow: Flow.TopToBottom
-            spacing: 12
+            spacing: 10
             Repeater {
                 model: [...HyprlandKeybinds.keybindCategories, ""]
                 delegate: CheatsheetKeybindsCategory {
@@ -33,5 +34,11 @@ Item {
                 }
             }
         }
+    }
+
+    ScrollEdgeFade {
+        target: flickable
+        vertical: false
+        color: Appearance.colors.colLayer0Base
     }
 }
