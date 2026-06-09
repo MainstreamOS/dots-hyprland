@@ -35,6 +35,17 @@ Singleton {
     // Auto-resets to false whenever overviewOpen flips to false.
     property bool overviewWorkspacesOnly: false
     onOverviewOpenChanged: {
+        // Refuse to open the Quickshell overview / app launcher while the
+        // scrolloverview Hyprland plugin's overview is up. The launcher
+        // animating on top of the plugin's full-zoom overview is sluggish (the
+        // plugin re-renders every live workspace preview each frame and there's
+        // no plugin-API way to cache that with blur), so we suppress it
+        // entirely there rather than ship a janky animation. Reverting the
+        // property synchronously here means it never actually renders open.
+        if (overviewOpen && scrollOverviewOpen) {
+            overviewOpen = false;
+            return;
+        }
         if (!overviewOpen) overviewWorkspacesOnly = false;
     }
     property bool regionSelectorOpen: false
