@@ -22,6 +22,12 @@ Singleton {
     property bool oskOpen: false
     property bool overlayOpen: false
     property bool overviewOpen: false
+    // True while the scrolloverview Hyprland plugin's overview is open (synced
+    // from its scrolloverview>>open/close IPC events below). The hot corner's
+    // "already open, don't re-fire" guards check this so a focus-grab-synthesized
+    // corner re-entry (e.g. the workspaceNumber overlay on a Super press) doesn't
+    // re-ripple / re-dispatch while the plugin overview is already up.
+    property bool scrollOverviewOpen: false
     // When true alongside overviewOpen, the overview shows only the
     // workspace previews — search bar and app drawer chrome are hidden.
     // Set by Bar.qml's hot corner when its trigger is configured for
@@ -125,11 +131,13 @@ Singleton {
             // accidentally clobbering the saved value.
             if (event.name === "scrolloverview") {
                 if (event.data === "open") {
+                    root.scrollOverviewOpen = true;
                     if (root._savedFakeScreenRounding < 0) {
                         root._savedFakeScreenRounding = Config.options.appearance.fakeScreenRounding;
                         Config.options.appearance.fakeScreenRounding = 0;
                     }
                 } else if (event.data === "close") {
+                    root.scrollOverviewOpen = false;
                     if (root._savedFakeScreenRounding >= 0) {
                         Config.options.appearance.fakeScreenRounding = root._savedFakeScreenRounding;
                         root._savedFakeScreenRounding = -1;

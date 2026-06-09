@@ -258,7 +258,7 @@ Variants {
 
                     // "scrolloverview" doesn't toggle on a second hit
                     // while the overview is up.
-                    if (trig === "scrolloverview" && GlobalStates.overviewOpen) return;
+                    if (trig === "scrolloverview" && (GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen)) return;
 
                     // Skip the open path when an unrelated dismissable
                     // overlay (cheatsheet, sidebar, media controls, …)
@@ -366,7 +366,7 @@ Variants {
                 id: delayTimer
                 interval: Config?.options.bar.hotCorners.animationEnabled === false ? 0 : 530
                 onTriggered: {
-                    if (GlobalStates.overviewOpen) return;
+                    if (GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen) return;
                     if (triggerArea.trigger === "scrolloverview") {
                         // Hyprland 0.55 Lua mode: scrolloverview:overview
                         // dispatcher (with the colon) is unreachable from
@@ -391,7 +391,7 @@ Variants {
                 // For default: still arm so a second corner-hit toggles
                 // the overview off (the dwell handler does the
                 // open-vs-close decision).
-                if (GlobalStates.overviewOpen && triggerArea.trigger !== "default") return;
+                if ((GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen) && triggerArea.trigger !== "default") return;
                 dwellTimer.restart();
             }
             onExited: dwellTimer.stop()
