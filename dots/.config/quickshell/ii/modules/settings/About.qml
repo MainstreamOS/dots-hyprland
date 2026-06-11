@@ -75,7 +75,7 @@ ContentPage {
             RippleButtonWithIcon {
                 materialIcon: "favorite"
                 mainText: Translation.tr("Donate")
-                onClicked: Qt.openUrlExternally("https://mainstreamos.org/donate")
+                onClicked: Qt.openUrlExternally("https://github.com/sponsors/MainstreamOS")
             }
         }
 
