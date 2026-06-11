@@ -4,8 +4,12 @@ hl.on("hyprland.start", function ()
     -- Session env + hyprland-session.target must be up BEFORE any Qt app
     -- launches (the portal is Requisite= on it; Qt init stalls on a portal
     -- that cannot start), so qs is chained after them in one exec_cmd —
-    -- separate exec_cmd calls have no ordering guarantee.
-    hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start hyprland-session.target && qs -c $qsConfig")
+    -- separate exec_cmd calls have no ordering guarantee. --no-block matters:
+    -- a plain start waits for the WHOLE transaction, which via
+    -- xdg-desktop-autostart.target includes Discord and friends — qs would
+    -- not spawn until every autostart app finished launching. The target
+    -- itself activates immediately; only the wanted units keep starting.
+    hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start --no-block hyprland-session.target && qs -c $qsConfig")
 
     -- Bar, wallpaper
     hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
