@@ -21,14 +21,6 @@ import qs.modules.ii.background.widgets.weather
 
 Variants {
     id: root
-    readonly property bool fixedClockPosition: Config.options.background.clock.fixedPosition
-    readonly property real fixedClockX: Config.options.background.clock.x
-    readonly property real fixedClockY: Config.options.background.clock.y
-    readonly property real clockSizePadding: 20
-    readonly property real screenSizePadding: 50
-    readonly property string clockStyle: Config.options.background.clock.style
-    readonly property bool showCookieQuote: Config.options.background.showQuote && Config.options.background.quote !== "" && !GlobalStates.screenLocked && Config.options.background.clock.style === "cookie"
-    readonly property real clockParallaxFactor: Config.options.background.parallax.clockFactor // 0 = full parallax, 1 = no parallax
     model: Quickshell.screens
 
     PanelWindow {
@@ -85,7 +77,6 @@ Variants {
             ? Math.max(logicalScreenWidth / wallpaperWidth, logicalScreenHeight / wallpaperHeight)
             : 1
         readonly property real effectiveWallpaperScale: minSuitableScale * parallaxRation
-        onEffectiveWallpaperScaleChanged: bgRoot.updateClockPosition()
         property real scaledWallpaperWidth: wallpaperWidth * effectiveWallpaperScale
         property real scaledWallpaperHeight: wallpaperHeight * effectiveWallpaperScale
         property real parallaxTotalPixelsX: Math.max(0, scaledWallpaperWidth - logicalScreenWidth)
@@ -159,43 +150,6 @@ Variants {
                     bgRoot.wallpaperWidth = width;
                     bgRoot.wallpaperHeight = height;
                     // minSuitableScale is a reactive binding; no manual assignment needed.
-                    bgRoot.updateClockPosition();
-                }
-            }
-        }
-
-        // Clock positioning
-        function updateClockPosition() {
-            // Somehow all this manual setting is needed to make the proc correctly use the new values
-            leastBusyRegionProc.path = bgRoot.wallpaperPath;
-            leastBusyRegionProc.contentWidth = clockLoader.implicitWidth + root.clockSizePadding * 2;
-            leastBusyRegionProc.contentHeight = clockLoader.implicitHeight + root.clockSizePadding * 2;
-            leastBusyRegionProc.horizontalPadding = bgRoot.movableXSpace + root.screenSizePadding * 2;
-            leastBusyRegionProc.verticalPadding = bgRoot.movableYSpace + root.screenSizePadding * 2;
-            leastBusyRegionProc.running = false;
-            leastBusyRegionProc.running = true;
-        }
-        Process {
-            id: leastBusyRegionProc
-            property string path: bgRoot.wallpaperPath
-            property int contentWidth: 300
-            property int contentHeight: 300
-            property int horizontalPadding: bgRoot.movableXSpace
-            property int verticalPadding: bgRoot.movableYSpace
-            command: [Quickshell.shellPath("scripts/images/least-busy-region-venv.sh"), "--screen-width", Math.round(bgRoot.logicalScreenWidth / bgRoot.effectiveWallpaperScale), "--screen-height", Math.round(bgRoot.logicalScreenHeight / bgRoot.effectiveWallpaperScale), "--width", contentWidth, "--height", contentHeight, "--horizontal-padding", horizontalPadding, "--vertical-padding", verticalPadding, path
-                // "--visual-output",
-                ,]
-            stdout: StdioCollector {
-                id: leastBusyRegionOutputCollector
-                onStreamFinished: {
-                    const output = leastBusyRegionOutputCollector.text;
-                    // console.log("[Background] Least busy region output:", output)
-                    if (output.length === 0)
-                        return;
-                    const parsedContent = JSON.parse(output);
-                    bgRoot.clockX = parsedContent.center_x * bgRoot.effectiveWallpaperScale;
-                    bgRoot.clockY = parsedContent.center_y * bgRoot.effectiveWallpaperScale;
-                    bgRoot.dominantColor = parsedContent.dominant_color || Appearance.colors.colLayer0;
                 }
             }
         }

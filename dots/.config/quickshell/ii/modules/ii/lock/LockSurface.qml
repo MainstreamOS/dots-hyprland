@@ -177,7 +177,7 @@ MouseArea {
                     // Show icon only (no interaction) - use same approach as SysTrayItem
                     IconImage {
                         id: trayIcon
-                        visible: !Config.options.bar.tray.monochromeIcons
+                        visible: !Config.options.tray.monochromeIcons
                         source: modelData.icon
                         anchors.centerIn: parent
                         width: parent.width
@@ -186,7 +186,7 @@ MouseArea {
                     
                     // Monochrome icon fallback
                     Loader {
-                        active: Config.options.bar.tray.monochromeIcons
+                        active: Config.options.tray.monochromeIcons
                         anchors.fill: trayIcon
                         sourceComponent: Item {
                             Desaturate {
