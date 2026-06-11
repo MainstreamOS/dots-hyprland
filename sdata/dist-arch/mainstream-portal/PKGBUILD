@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-portal
 pkgver=1.0
-pkgrel=4
+pkgrel=5
 pkgdesc='Mainstream OS XDG Desktop Portals'
 provides=('illogical-impulse-portal')
 replaces=('illogical-impulse-portal')
@@ -12,4 +12,5 @@ depends=(
   xdg-desktop-portal
   xdg-desktop-portal-gtk
   xdg-desktop-portal-hyprland
+  xdg-desktop-portal-xapp
 )
