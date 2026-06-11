@@ -1,16 +1,19 @@
 -- put former exec-once commands inside the func and former exec commands outside
 hl.on("hyprland.start", function ()
 
+    -- Session env + hyprland-session.target must be up BEFORE any Qt app
+    -- launches (the portal is Requisite= on it; Qt init stalls on a portal
+    -- that cannot start), so qs is chained after them in one exec_cmd —
+    -- separate exec_cmd calls have no ordering guarantee.
+    hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start hyprland-session.target && qs -c $qsConfig")
+
     -- Bar, wallpaper
     hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
-    hl.exec_cmd("qs -c $qsConfig")
     hl.exec_cmd("$HOME/.config/hypr/custom/scripts/__restore_video_wallpaper.sh")
 
     -- Core components (authentication, lock screen, notification daemon)
     hl.exec_cmd("gnome-keyring-daemon --start --components=secrets")
     hl.exec_cmd("hypridle")
-    hl.exec_cmd("dbus-update-activation-environment --all")
-    hl.exec_cmd("sleep 1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start hyprland-session.target")
 
     -- Audio
     hl.exec_cmd("easyeffects --hide-window --service-mode")
