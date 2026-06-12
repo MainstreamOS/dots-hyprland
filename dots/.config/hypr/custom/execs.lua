@@ -20,6 +20,9 @@ end)
 
 hl.on("hyprland.shutdown", function()
     -- Capture the current window set so restore.sh can replay it next start.
-    -- Same config gate; no effect when restore is disabled.
-    hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/session/snapshot.sh")
+    -- Same config gate; no effect when restore is disabled. --skip-if-fresh:
+    -- when the power action came through Session.qml it already snapshotted
+    -- synchronously BEFORE closing windows — capturing again here would
+    -- overwrite that full snapshot with a post-close (possibly empty) one.
+    hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/session/snapshot.sh --skip-if-fresh 30")
 end)

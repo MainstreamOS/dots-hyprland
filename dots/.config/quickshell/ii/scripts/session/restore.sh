@@ -1,44 +1,31 @@
 #!/usr/bin/env bash
-# =============================================================================
-# session/restore.sh
-#
-# Thin shim around session/restore.py. Two reasons it exists as bash:
-#
-#   1. Fast-path the config-disabled case so we don't pay python startup
-#      cost (~30ms) on every Hyprland start for users who haven't opted in.
-#   2. Preserves the file path that hypr/custom/execs.lua and
-#      Session.qml's snapshotProc call — no churn there when we switched
-#      the implementation from socat-bash to python.
-#
-# All arguments are forwarded to restore.py (notably --force, used by
-# manual triggers that should bypass the config gate).
-# =============================================================================
+# Thin gate for session/session.py restore. Exists so the config-disabled
+# path costs one jq read instead of python startup, and so the file path
+# called by hypr/custom/execs.lua stays stable across implementations.
+# --force bypasses the gate (manual triggers).
 set -uo pipefail
 
-CONFIG_FILE="$HOME/.config/illogical-impulse/config.json"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SNAPSHOT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/sessions"
-LOG="$SNAPSHOT_DIR/restore.log"
+CONFIG="$HOME/.config/illogical-impulse/config.json"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/sessions"
+log() { mkdir -p "$LOG_DIR"; printf '[%s] %s\n' "$(date -Iseconds)" "$*" >> "$LOG_DIR/session.log"; }
 
-mkdir -p "$SNAPSHOT_DIR"
-
-# --force bypasses the config gate; otherwise read it and short-circuit.
 force=0
 for arg in "$@"; do
     [[ "$arg" == "--force" ]] && force=1
 done
 
-if [[ $force -eq 0 ]] && [[ -f "$CONFIG_FILE" ]] && command -v jq >/dev/null 2>&1; then
-    enabled=$(jq -r '.session.restoreEnabled // false' "$CONFIG_FILE" 2>/dev/null)
+if [[ $force -eq 0 ]] && [[ -f "$CONFIG" ]] && command -v jq >/dev/null 2>&1; then
+    enabled=$(jq -r '.session.restoreEnabled // false' "$CONFIG" 2>/dev/null)
     if [[ "$enabled" != "true" ]]; then
-        printf '[%s] session restore disabled — skipping\n' "$(date -Iseconds)" >> "$LOG"
+        log "restore: disabled — skipping"
         exit 0
     fi
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-    printf '[%s] python3 missing — aborting\n' "$(date -Iseconds)" >> "$LOG"
+    log "restore: python3 missing — aborting"
     exit 1
 fi
 
-exec python3 "$SCRIPT_DIR/restore.py" "$@"
+exec python3 "$DIR/session.py" restore "$@"
