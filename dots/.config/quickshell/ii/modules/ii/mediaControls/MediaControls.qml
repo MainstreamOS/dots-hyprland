@@ -34,10 +34,18 @@ Scope {
             let p1 = players[i];
             let group = [i];
 
-            // Find duplicates by trackTitle prefix
+            // Group only genuine duplicates of the SAME track: one title
+            // contains the other (a mirror bus may truncate the title). The
+            // old extra clause `p1.position - p2.position <= 2 && p1.length -
+            // p2.length <= 2` used signed subtraction (no abs), so any player
+            // shorter than another matched and distinct tracks were collapsed
+            // — with per-tab browser players (firefox-mpris-hyprland) it
+            // dropped the actually-playing video from the panel. Title match
+            // is the reliable signal; MprisController already removes the
+            // playerctld mirror and the browser built-in.
             for (let j = i + 1; j < players.length; ++j) {
                 let p2 = players[j];
-                if (p1.trackTitle && p2.trackTitle && (p1.trackTitle.includes(p2.trackTitle) || p2.trackTitle.includes(p1.trackTitle)) || (p1.position - p2.position <= 2 && p1.length - p2.length <= 2)) {
+                if (p1.trackTitle && p2.trackTitle && (p1.trackTitle.includes(p2.trackTitle) || p2.trackTitle.includes(p1.trackTitle))) {
                     group.push(j);
                 }
             }
