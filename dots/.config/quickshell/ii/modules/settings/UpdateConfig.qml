@@ -23,7 +23,10 @@ ContentPage {
     // runs except firmware (firmware updates can prompt polkit and
     // time out non-interactively).
     property bool flagSkipSystem: false
-    property bool flagSkipAur: false
+    // AUR is disabled by default: Mainstream installs ship no AUR helper
+    // and don't use the AUR for system packages (recent AUR supply-chain
+    // concerns). Users who installed yay/paru themselves can untick this.
+    property bool flagSkipAur: true
     property bool flagSkipFlatpak: false
     property bool flagSkipDotfiles: false
     property bool flagSkipExtras: false
@@ -367,7 +370,7 @@ ContentPage {
                     checked: root.flagSkipAur
                     onCheckedChanged: root.flagSkipAur = checked
                     StyledToolTip {
-                        text: Translation.tr("Skip the AUR update step entirely. Turn this on if yay or paru keeps hanging or failing for you during updates.")
+                        text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
                     }
                 }
             }
