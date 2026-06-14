@@ -1228,16 +1228,20 @@ function setup_firefox_mpris_hyprland(){
     echo -e "${STY_YELLOW}[$0]: firefox-mpris-hyprland setup is currently Arch-only. Skipping.${STY_RST}"
     return 0
   fi
+  # On Mainstream OS ISO installs it's already provided prebuilt by the
+  # [mainstream] repo — nothing to do. Only build it for standalone installs
+  # that don't have it yet. The setup script makepkg's the PKGBUILD, which
+  # pulls its own build deps (rust/cargo/zip/git) via makepkg -s, so no
+  # toolchain needs to be pre-present.
+  if pacman -Qq firefox-mpris-hyprland &>/dev/null; then
+    echo -e "${STY_GREEN}[$0]: firefox-mpris-hyprland already installed — skipping.${STY_RST}"
+    return 0
+  fi
   x bash "${REPO_ROOT}/scripts/setup-firefox-mpris-hyprland.sh" \
     || echo -e "${STY_YELLOW}[$0]: firefox-mpris-hyprland install hit an error — see above. Continuing with the rest of setup.${STY_RST}"
 }
-# Temporarily disabled: setup-firefox-mpris-hyprland.sh's preflight runs
-# `command -v cargo` and bails on fresh installs because `rust` is not
-# pulled in by any of the mainstream-* metapackages. Re-enable once
-# either rust is added as a runtime dep or the setup script self-installs
-# its build deps on demand.
-# showfun setup_firefox_mpris_hyprland
-# v setup_firefox_mpris_hyprland
+showfun setup_firefox_mpris_hyprland
+v setup_firefox_mpris_hyprland
 
 showfun teardown_pacman_nopasswd
 v teardown_pacman_nopasswd

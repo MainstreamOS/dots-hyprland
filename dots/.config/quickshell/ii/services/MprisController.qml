@@ -28,17 +28,39 @@ Singleton {
 	readonly property bool hasActivePlasmaIntegration: Mpris.players.values.some(
 		p => p.dbusName?.startsWith('org.mpris.MediaPlayer2.plasma-browser-integration')
 	)
+	// firefox-mpris-hyprland exposes per-tab players named
+	// org.mpris.MediaPlayer2.firefox.instance<pid>_t<tab>[_f<frame>]. The _t
+	// segment distinguishes them from the browser's own single built-in player
+	// (…firefox.instance_<n>_<m>, no _t).
+	function isFirefoxMprisBridge(name) {
+		return /\.firefox\.instance\d+_t\d+/.test(name ?? '');
+	}
+	readonly property bool hasFirefoxMprisBridge: Mpris.players.values.some(
+		p => isFirefoxMprisBridge(p.dbusName)
+	)
+	// The browser's own sparse single MPRIS player (Firefox built-in / Chromium),
+	// as opposed to the rich per-tab bridge players.
+	function isBuiltinBrowserPlayer(name) {
+		name = name ?? '';
+		return (name.startsWith('org.mpris.MediaPlayer2.firefox') && !isFirefoxMprisBridge(name))
+			|| name.startsWith('org.mpris.MediaPlayer2.chromium');
+	}
 	function isRealPlayer(player) {
         if (!Config.options.media.filterDuplicatePlayers) {
             return true;
         }
+        const name = player.dbusName ?? '';
+        // Hide the browser's built-in single player when a richer source is
+        // present — either plasma-browser-integration or our per-tab bridge —
+        // so it isn't duplicated alongside the rich player. The bridge's own
+        // per-tab players are never built-in players, so they're always kept.
+        const richBrowserSource = hasActivePlasmaIntegration || hasFirefoxMprisBridge;
         return (
-            // Remove native browser buses only if plasma-browser-integration is actually active on D-Bus
-            !(hasActivePlasmaIntegration && player.dbusName.startsWith('org.mpris.MediaPlayer2.firefox')) && !(hasActivePlasmaIntegration && player.dbusName.startsWith('org.mpris.MediaPlayer2.chromium')) &&
+            !(richBrowserSource && isBuiltinBrowserPlayer(name)) &&
             // playerctld just copies other buses and we don't need duplicates
-            !player.dbusName?.startsWith('org.mpris.MediaPlayer2.playerctld') &&
+            !name.startsWith('org.mpris.MediaPlayer2.playerctld') &&
             // Non-instance mpd bus
-            !(player.dbusName?.endsWith('.mpd') && !player.dbusName.endsWith('MediaPlayer2.mpd')));
+            !(name.endsWith('.mpd') && !name.endsWith('MediaPlayer2.mpd')));
     }
 
 	// Original stuff from fox below
