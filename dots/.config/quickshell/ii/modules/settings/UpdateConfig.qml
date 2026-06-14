@@ -15,6 +15,12 @@ ContentPage {
     property bool isRunning: false
     property bool userStopped: false
 
+    // Whether an AUR helper (yay or paru) is actually installed. The AUR
+    // update switch is only shown when one is — Mainstream ships none by
+    // default, so for most users the toggle would be a no-op control for a
+    // step that can't run. Detected once on load by aurHelperCheck below.
+    property bool aurHelperPresent: false
+
     // Step skip-flags. The helper runs pacman + yay + flatpak directly
     // as the primary path and (by default) topgrade afterwards for the
     // developer-tool extras. Each --noconfirm/--yes is hard-coded in
@@ -67,7 +73,10 @@ ContentPage {
         // happen far more usefully than a single command line.
         let lines = [];
         lines.push((flagSkipSystem      ? "✗" : "✓") + "  System packages    (pacman -Syu)");
-        lines.push((flagSkipAur         ? "✗" : "✓") + "  AUR                (yay -Sua)");
+        // Only list the AUR step when a helper is actually installed —
+        // otherwise it's a guaranteed no-op the user shouldn't have to read.
+        if (aurHelperPresent)
+            lines.push((flagSkipAur     ? "✗" : "✓") + "  AUR                (yay -Sua)");
         lines.push((flagSkipFlatpak     ? "✗" : "✓") + "  Flatpak            (flatpak update --system + --user)");
         lines.push((flagSkipDotfiles    ? "✗" : "✓") + "  Mainstream dots    (updatems — on remote tag bump)");
         lines.push((flagSkipExtras      ? "✗" : "✓") + "  Developer extras   (topgrade — cargo, pipx, npm, nix, ...)");
@@ -166,6 +175,16 @@ ContentPage {
             } else {
                 root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
             }
+        }
+    }
+
+    // One-shot probe for an AUR helper. Exit 0 = yay or paru is on PATH.
+    Process {
+        id: aurHelperCheck
+        command: ["sh", "-c", "command -v yay >/dev/null 2>&1 || command -v paru >/dev/null 2>&1"]
+        running: true
+        onExited: (exitCode, exitStatus) => {
+            root.aurHelperPresent = (exitCode === 0);
         }
     }
 
@@ -365,23 +384,14 @@ ContentPage {
                     }
                 }
                 ConfigSwitch {
-                    buttonIcon: "block"
-                    text: Translation.tr("Disable AUR (yay/paru)")
-                    checked: root.flagSkipAur
-                    onCheckedChanged: root.flagSkipAur = checked
-                    StyledToolTip {
-                        text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
-                    }
-                }
-            }
-            ConfigRow {
-                uniform: true
-                ConfigSwitch {
                     buttonIcon: "deployed_code"
                     text: Translation.tr("Skip Flatpak apps")
                     checked: root.flagSkipFlatpak
                     onCheckedChanged: root.flagSkipFlatpak = checked
                 }
+            }
+            ConfigRow {
+                uniform: true
                 ConfigSwitch {
                     buttonIcon: "developer_mode"
                     text: Translation.tr("Skip extras (topgrade)")
@@ -391,9 +401,6 @@ ContentPage {
                         text: Translation.tr("After the primary update, topgrade catches developer-tool ecosystems (cargo, pipx, npm, nix, JetBrains, VS Code, ...). Turn this on to skip that pass — useful if you don't use those tools or topgrade itself is failing for you.")
                     }
                 }
-            }
-            ConfigRow {
-                uniform: true
                 ConfigSwitch {
                     buttonIcon: "memory"
                     text: Translation.tr("Skip firmware updates")
@@ -403,6 +410,9 @@ ContentPage {
                         text: Translation.tr("Only applies when developer extras runs. Firmware updates (fwupd) can prompt polkit and time out non-interactively.")
                     }
                 }
+            }
+            ConfigRow {
+                uniform: true
                 ConfigSwitch {
                     buttonIcon: "code"
                     text: Translation.tr("Skip dotfiles")
@@ -412,9 +422,6 @@ ContentPage {
                         text: Translation.tr("Skip the Mainstream dotfiles refresh step (updatems). Dotfiles update only when a new release tag is published upstream; turn this on to manage them manually.")
                     }
                 }
-            }
-            ConfigRow {
-                uniform: true
                 ConfigSwitch {
                     buttonIcon: "build"
                     text: Translation.tr("Auto-rebuild Quickshell")
@@ -424,6 +431,25 @@ ContentPage {
                         text: Translation.tr("If a Qt update breaks Quickshell's ABI, rebuild the owning package automatically after all other update steps finish.")
                     }
                 }
+            }
+            // AUR switch lives last, and only when a helper is installed —
+            // Mainstream ships none, so for most users this control would
+            // toggle a step that can't run.
+            ConfigRow {
+                uniform: true
+                visible: root.aurHelperPresent
+                ConfigSwitch {
+                    buttonIcon: "block"
+                    text: Translation.tr("Disable AUR (yay/paru)")
+                    checked: root.flagSkipAur
+                    onCheckedChanged: root.flagSkipAur = checked
+                    StyledToolTip {
+                        text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
+                    }
+                }
+                // Keep the lone switch at column width instead of stretching
+                // across the full row.
+                Item { Layout.fillWidth: true }
             }
 
             Rectangle {
