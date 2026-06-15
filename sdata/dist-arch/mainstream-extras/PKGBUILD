@@ -25,7 +25,7 @@ optdepends=(
   'topgrade: System updater'
   'nautilus-copy-path: Copy path/URI/name from Nautilus context menu'
   'nautilus-admin-gtk4: Open / edit as administrator from Nautilus context menu'
-  'com.google.Chrome: Google Chrome — web browser'
+  'chromium: Chromium — web browser'
   'net.nokyan.Resources: Resources — system monitor'
   'org.gnome.Calculator: GNOME Calculator'
   'org.gnome.Calendar: GNOME Calendar'

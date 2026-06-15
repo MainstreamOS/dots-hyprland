@@ -411,7 +411,7 @@ ApplicationWindow {
         // workspace. Window counts vary so each page reads differently
         // when the tiled background swaps.
         readonly property var workspaceApps: [
-            ["google-chrome", "code-oss", "kitty"],
+            ["chromium", "code-oss", "kitty"],
             ["spotify", "telegram"],
             ["firefox"],
             ["gimp", "vlc", "thunderbird", "blender"],
@@ -944,7 +944,7 @@ ApplicationWindow {
         // there and the destination window shows the same Spotify
         // screenshot the preview shows, just at full tile size.
         readonly property var workspaceApps: [
-            ["google-chrome", "code-oss", "kitty"],
+            ["chromium", "code-oss", "kitty"],
             ["telegram"],
             ["spotify"],
             ["gimp", "vlc", "blender"],
@@ -997,7 +997,7 @@ ApplicationWindow {
         // padding 8 → 14). Pin button on the left, pinned apps in
         // the middle, drawer button on the right (matches card 1).
         readonly property var dockApps: [
-            "google-chrome", "spotify", "org.gnome.Nautilus", "gimp", "discord"
+            "chromium", "spotify", "org.gnome.Nautilus", "gimp", "discord"
         ]
         readonly property int dockIconSize: 29
         readonly property int dockGap: 14
@@ -2073,7 +2073,7 @@ ApplicationWindow {
 
         // Drawer (visible but no drag-from-drawer happens here)
         readonly property var drawerApps: [
-            "firefox", "google-chrome", "visual-studio-code", "spotify", "telegram",
+            "firefox", "chromium", "visual-studio-code", "spotify", "telegram",
             "vlc", "gimp", "blender", "krita", "obs",
             "thunderbird", "libreoffice-startcenter", "audacity", "godot",
             "inkscape", "chromium", "brave-browser", "slack", "signal-desktop",
@@ -2117,8 +2117,8 @@ ApplicationWindow {
         readonly property string appA: "spotify"
         readonly property string appB: "telegram"
         // Phase 2: app pulled fresh from the drawer onto ws 3.
-        readonly property string chromeApp: "google-chrome"
-        readonly property int chromeAppIdx: 1  // index of google-chrome in drawerApps
+        readonly property string chromeApp: "chromium"
+        readonly property int chromeAppIdx: 1  // index of chromium in drawerApps
         readonly property color demoWindowColor: "#FFFFFF"
         readonly property color demoWindowBarColor: "#E8EAED"
 
@@ -2770,7 +2770,7 @@ ApplicationWindow {
         // strip has a recognisable app icon to point at.
         readonly property int currentWs: 0
         readonly property var workspaceApps: [
-            ["google-chrome"],
+            ["chromium"],
             ["spotify", "telegram"],
             ["org.gnome.Nautilus"],
             ["gimp", "vlc", "blender"],
@@ -3267,7 +3267,7 @@ ApplicationWindow {
 
         // Drawer (same 36-app grid as Card1/Card7; joplin at the end)
         readonly property var drawerApps: [
-            "firefox", "google-chrome", "visual-studio-code", "spotify", "telegram",
+            "firefox", "chromium", "visual-studio-code", "spotify", "telegram",
             "vlc", "gimp", "blender", "krita", "obs",
             "thunderbird", "libreoffice-startcenter", "audacity", "godot",
             "inkscape", "chromium", "brave-browser", "slack", "signal-desktop",
