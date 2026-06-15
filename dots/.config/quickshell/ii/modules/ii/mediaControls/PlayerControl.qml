@@ -24,11 +24,27 @@ Item { // Player instance
     property list<real> visualizerPoints: []
     property real maxVisualizerValue: 1000 // Max value in the data points
     property int visualizerSmoothing: 2 // Number of points to average for smoothing
-    // The visualizer is driven by one system-wide cava (the default sink), so
-    // every playing tile would otherwise render the same waveform. Show it only
-    // on the active player so the tiles don't all mirror the same audio.
-    property bool isActivePlayer: true
     property real radius
+
+    // Per-app visualizer: cava-stream.sh captures THIS app's own PipeWire stream
+    // so each tile animates to its own audio, not the mixed system output. Audio
+    // is per-process, so windows of the same app share its stream; apps whose
+    // stream is anonymous (e.g. Spotify) fall back to the system audio in the
+    // script. The app->stream mapping lives in the script (pactl) because
+    // Quickshell's PwNode.properties doesn't expose object.serial untracked.
+    readonly property string streamAppId: (root.player?.desktopEntry || root.player?.identity) ?? ""
+
+    Process {
+        id: streamCava
+        running: (root.player?.isPlaying ?? false) && root.streamAppId !== ""
+        command: ["bash", `${FileUtils.trimFileProtocol(Directories.scriptPath)}/cava/cava-stream.sh`, root.streamAppId]
+        stdout: SplitParser {
+            onRead: data => {
+                root.visualizerPoints = data.split(";").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+            }
+        }
+        onRunningChanged: if (!running) root.visualizerPoints = [];
+    }
 
     property string displayedArtFilePath: root.downloaded ? Qt.resolvedUrl(artFilePath) : ""
 
@@ -143,7 +159,7 @@ Item { // Player instance
         WaveVisualizer {
             id: visualizerCanvas
             anchors.fill: parent
-            live: (root.player?.isPlaying ?? false) && root.isActivePlayer
+            live: root.player?.isPlaying ?? false
             points: root.visualizerPoints
             maxVisualizerValue: root.maxVisualizerValue
             color: blendedColors.colPrimary
