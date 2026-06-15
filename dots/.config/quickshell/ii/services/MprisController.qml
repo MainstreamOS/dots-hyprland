@@ -38,25 +38,49 @@ Singleton {
 	readonly property bool hasFirefoxMprisBridge: Mpris.players.values.some(
 		p => isFirefoxMprisBridge(p.dbusName)
 	)
-	// The browser's own sparse single MPRIS player (Firefox built-in / Chromium),
-	// as opposed to the rich per-tab bridge players.
-	function isBuiltinBrowserPlayer(name) {
+	// firefox-mpris-hyprland also bridges Chromium: a Chromium session publishes
+	// org.mpris.MediaPlayer2.chromium.instance<pid>_t<window>. The _t<digits>
+	// segment distinguishes the per-window bridge from Chromium's own native
+	// single player (…chromium.instance<n>, no _t).
+	function isChromiumMprisBridge(name) {
+		return /\.chromium\.instance\d+_t\d+/.test(name ?? '');
+	}
+	readonly property bool hasChromiumMprisBridge: Mpris.players.values.some(
+		p => isChromiumMprisBridge(p.dbusName)
+	)
+	// A browser's own sparse single MPRIS player (Firefox built-in, Chromium
+	// native), as opposed to the rich per-window bridge players. Split per
+	// browser so a rich source for one browser never hides the other's player.
+	function isBuiltinFirefoxPlayer(name) {
 		name = name ?? '';
-		return (name.startsWith('org.mpris.MediaPlayer2.firefox') && !isFirefoxMprisBridge(name))
-			|| name.startsWith('org.mpris.MediaPlayer2.chromium');
+		return name.startsWith('org.mpris.MediaPlayer2.firefox') && !isFirefoxMprisBridge(name);
+	}
+	function isBuiltinChromiumPlayer(name) {
+		name = name ?? '';
+		return (name.startsWith('org.mpris.MediaPlayer2.chromium')
+			|| name.startsWith('org.mpris.MediaPlayer2.chrome'))
+			&& !isChromiumMprisBridge(name);
+	}
+	function isBuiltinBrowserPlayer(name) {
+		return isBuiltinFirefoxPlayer(name) || isBuiltinChromiumPlayer(name);
 	}
 	function isRealPlayer(player) {
         if (!Config.options.media.filterDuplicatePlayers) {
             return true;
         }
         const name = player.dbusName ?? '';
-        // Hide the browser's built-in single player when a richer source is
-        // present — either plasma-browser-integration or our per-tab bridge —
-        // so it isn't duplicated alongside the rich player. The bridge's own
-        // per-tab players are never built-in players, so they're always kept.
-        const richBrowserSource = hasActivePlasmaIntegration || hasFirefoxMprisBridge;
+        // Hide a browser's built-in single player only when a richer source for
+        // THAT browser is present, so it isn't duplicated. Scoped per browser:
+        // the Firefox bridge (or plasma-browser-integration) hides the Firefox
+        // built-in; plasma also hides the Chromium built-in. Critically a
+        // Firefox bridge must NOT hide Chromium's native player — different
+        // browsers — which previously left Chromium showing a bar title with no
+        // player in the popup.
+        const richFirefoxSource = hasActivePlasmaIntegration || hasFirefoxMprisBridge;
+        const richChromiumSource = hasActivePlasmaIntegration || hasChromiumMprisBridge;
         return (
-            !(richBrowserSource && isBuiltinBrowserPlayer(name)) &&
+            !(richFirefoxSource && isBuiltinFirefoxPlayer(name)) &&
+            !(richChromiumSource && isBuiltinChromiumPlayer(name)) &&
             // playerctld just copies other buses and we don't need duplicates
             !name.startsWith('org.mpris.MediaPlayer2.playerctld') &&
             // Non-instance mpd bus
