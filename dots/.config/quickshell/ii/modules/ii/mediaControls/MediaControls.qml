@@ -39,7 +39,7 @@ Scope {
             // old extra clause `p1.position - p2.position <= 2 && p1.length -
             // p2.length <= 2` used signed subtraction (no abs), so any player
             // shorter than another matched and distinct tracks were collapsed
-            // — with per-tab browser players (firefox-mpris-hyprland) it
+            // — with per-tab browser players (mpris-hyprland) it
             // dropped the actually-playing video from the panel. Title match
             // is the reliable signal; MprisController already removes the
             // playerctld mirror and the browser built-in.

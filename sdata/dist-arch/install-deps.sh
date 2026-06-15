@@ -286,7 +286,7 @@ done
 
 ## plasma-browser-integration is intentionally not installed.
 ## It pulls ~600MiB of KDE/Plasma packages on a system without KDE present.
-## We use firefox-mpris-hyprland instead (per-tab MPRIS bridge, ~2MB binary,
-## no KDE deps) — set up automatically by `setup_firefox_mpris_hyprland` in
+## We use mpris-hyprland instead (per-tab MPRIS bridge, ~2MB binary,
+## no KDE deps) — set up automatically by `setup_mpris_hyprland` in
 ## the next step.
-printf "${STY_CYAN}[$0]: Skipping plasma-browser-integration (using firefox-mpris-hyprland instead).${STY_RST}\n"
+printf "${STY_CYAN}[$0]: Skipping plasma-browser-integration (using mpris-hyprland instead).${STY_RST}\n"

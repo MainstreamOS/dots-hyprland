@@ -28,7 +28,7 @@ Singleton {
 	readonly property bool hasActivePlasmaIntegration: Mpris.players.values.some(
 		p => p.dbusName?.startsWith('org.mpris.MediaPlayer2.plasma-browser-integration')
 	)
-	// firefox-mpris-hyprland exposes one player per browser window, named
+	// mpris-hyprland exposes one player per browser window, named
 	// org.mpris.MediaPlayer2.firefox.instance<pid>_t<windowId>. The _t<digits>
 	// segment distinguishes it from the browser's own built-in player
 	// (…firefox.instance_<n>_<m>, no _t).
@@ -38,7 +38,7 @@ Singleton {
 	readonly property bool hasFirefoxMprisBridge: Mpris.players.values.some(
 		p => isFirefoxMprisBridge(p.dbusName)
 	)
-	// firefox-mpris-hyprland also bridges Chromium: a Chromium session publishes
+	// mpris-hyprland also bridges Chromium: a Chromium session publishes
 	// org.mpris.MediaPlayer2.chromium.instance<pid>_t<window>. The _t<digits>
 	// segment distinguishes the per-window bridge from Chromium's own native
 	// single player (…chromium.instance<n>, no _t).
