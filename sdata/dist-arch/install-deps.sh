@@ -177,8 +177,8 @@ install-local-pkgbuild() {
     # Drop pacman hooks BEFORE the optdepends loop so they're in place
     # when the corresponding packages get installed below. Currently
     # only one — nautilus-copy-path's bundled config.json defaults to
-    # 4 menu items; the hook flips uri/name/content to false after
-    # every install/upgrade so only "Copy path" surfaces.
+    # 4 menu items; the hook flips uri to false after every
+    # install/upgrade so "Copy URI" is hidden (Path / Name / Content remain).
     x sudo install -Dm 644 \
         "${REPO_ROOT}/sdata/nautilus-copy-path/95-nautilus-copy-path-config.hook" \
         /etc/pacman.d/hooks/95-nautilus-copy-path-config.hook
