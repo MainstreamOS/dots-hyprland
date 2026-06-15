@@ -24,6 +24,10 @@ Item { // Player instance
     property list<real> visualizerPoints: []
     property real maxVisualizerValue: 1000 // Max value in the data points
     property int visualizerSmoothing: 2 // Number of points to average for smoothing
+    // The visualizer is driven by one system-wide cava (the default sink), so
+    // every playing tile would otherwise render the same waveform. Show it only
+    // on the active player so the tiles don't all mirror the same audio.
+    property bool isActivePlayer: true
     property real radius
 
     property string displayedArtFilePath: root.downloaded ? Qt.resolvedUrl(artFilePath) : ""
@@ -139,7 +143,7 @@ Item { // Player instance
         WaveVisualizer {
             id: visualizerCanvas
             anchors.fill: parent
-            live: root.player?.isPlaying
+            live: (root.player?.isPlaying ?? false) && root.isActivePlayer
             points: root.visualizerPoints
             maxVisualizerValue: root.maxVisualizerValue
             color: blendedColors.colPrimary
