@@ -17,7 +17,7 @@ optdepends=(
   'appstream-glib: App metadata library'
   'mpv: Video player'
   'mpv-modernz: Modern mpv UI'
-  'mpv-thumbfast: mpv thumbnail support'
+  'mpv-thumbfast-git: mpv thumbnail support'
   'steam: Gaming launcher'
   'satty: Screenshot annotation'
   'snapper: Btrfs snapshot manager'

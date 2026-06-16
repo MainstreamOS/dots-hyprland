@@ -250,12 +250,10 @@ pacman -S --needed --noconfirm limine
 # Configure the generator-owned Limine setup before we touch any old bootloader.
 info "Installing limine entry automation packages..."
 if ! command -v limine-mkinitcpio >/dev/null 2>&1 || ! command -v limine-snapper-sync >/dev/null 2>&1; then
-    if command -v yay &>/dev/null; then
-        sudo -u "${SUDO_USER:-$USER}" yay -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
-    elif command -v paru &>/dev/null; then
-        sudo -u "${SUDO_USER:-$USER}" paru -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
+    if pacman -Sp limine-snapper-sync limine-mkinitcpio-hook >/dev/null 2>&1; then
+        pacman -S --needed --noconfirm limine-snapper-sync limine-mkinitcpio-hook
     else
-        error "limine-mkinitcpio-hook and limine-snapper-sync are required for the managed Limine setup, but no AUR helper (yay/paru) is available."
+        error "limine-snapper-sync and limine-mkinitcpio-hook are required for the managed Limine setup but aren't available from any configured repo. Ensure the [mainstream] repo is set up (the MainstreamOS dotfiles installer adds it)."
     fi
 fi
 command -v limine-update >/dev/null 2>&1 || error "limine-update not found after installing limine-mkinitcpio-hook."

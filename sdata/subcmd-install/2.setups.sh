@@ -631,7 +631,7 @@ function setup_updatems_system(){
 }
 
 function setup_pacman_nopasswd(){
-  # Grant NOPASSWD for pacman so yay/makepkg can install AUR packages
+  # Grant NOPASSWD for pacman so makepkg and the package installs can run
   # (e.g. limine-snapper-sync) without prompting mid-install.
   # Removed again by teardown_pacman_nopasswd after the relevant installs.
   local _user; _user="$(whoami)"

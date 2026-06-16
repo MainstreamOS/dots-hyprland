@@ -1,15 +1,23 @@
 # This script is meant to be sourced.
 # It's not for directly running.
 
-install-yay(){
+# Import the MainstreamOS packages signing key and add the [mainstream] repo — a
+# signed pacman repo (GitHub Releases) holding the FOSS packages the meta-packages
+# used to pull from the AUR. With it in pacman.conf every dependency installs with
+# plain `pacman -S` (official repos + [mainstream]), so no AUR helper is needed.
+# base-devel is still required for the makepkg builds of the local mainstream-*
+# meta-packages below.
+MAINSTREAM_KEY_FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
+MAINSTREAM_REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
+setup-mainstream-repo(){
   x sudo pacman -S --needed --noconfirm base-devel
-  x git clone https://aur.archlinux.org/yay-bin.git /tmp/buildyay
-  x cd /tmp/buildyay
-  x makepkg -o
-  x makepkg -se --noconfirm
-  x makepkg -i --noconfirm
-  x cd ${REPO_ROOT}
-  rm -rf /tmp/buildyay
+  x sudo pacman-key --add "${REPO_ROOT}/sdata/dist-arch/mainstream.pub"
+  x sudo pacman-key --lsign-key "$MAINSTREAM_KEY_FPR"
+  if ! grep -q '^\[mainstream\]' /etc/pacman.conf; then
+    printf '\n[mainstream]\nSigLevel = Required\nServer = %s\n' "$MAINSTREAM_REPO_URL" \
+      | sudo tee -a /etc/pacman.conf >/dev/null
+  fi
+  x sudo pacman -Sy
 }
 
 remove_deprecated_dependencies(){
@@ -32,7 +40,7 @@ implicitize_old_dependencies(){
 
   echo "Attempting to set previously explicitly installed deps as implicit..."
   for i in "${explicitly_installed[@]}"; do for j in "${old_deps_list[@]}"; do
-    [ "$i" = "$j" ] && yay -D --asdeps "$i"
+    [ "$i" = "$j" ] && sudo pacman -D --asdeps "$i"
   done; done
 
   return 0
@@ -42,8 +50,8 @@ implicitize_old_dependencies(){
 # Packages that must never be installed, regardless of what PKGBUILDs request.
 # These are blocked at three layers:
 #   1. The depends[] loop checks this list and skips any matching entry explicitly.
-#   2. Every yay call passes --ignore with this list so pacman won't pull them
-#      in as transitive dependencies during AUR resolution.
+#   2. Every pacman -S call passes --ignore with this list so pacman won't pull
+#      them in as transitive dependencies.
 #   3. pacman.conf IgnorePkg is temporarily set around makepkg so that
 #      makepkg's own internal pacman -S calls also respect the block.
 #
@@ -122,19 +130,17 @@ case $SKIP_SYSUPDATE in
   *) v sudo pacman -Syu --noconfirm;;
 esac
 
-# Use yay. Because paru does not support cleanbuild.
-# Also see https://wiki.hyprland.org/FAQ/#how-do-i-update
-if ! command -v yay >/dev/null 2>&1;then
-  echo -e "${STY_YELLOW}[$0]: \"yay\" not found.${STY_RST}"
-  showfun install-yay
-  v install-yay
-fi
+# Set up the [mainstream] signed pacman repo (replaces the AUR helper) so the
+# meta-package dependencies install with plain pacman.
+showfun setup-mainstream-repo
+v setup-mainstream-repo
 
 showfun implicitize_old_dependencies
 v implicitize_old_dependencies
 
-# https://github.com/end-4/dots-hyprland/issues/581
-# yay -Bi is kinda hit or miss, instead cd into the relevant directory and manually source and install deps
+# Build each local meta-package directly: cd into its dir, source the PKGBUILD,
+# install its deps with pacman, then makepkg.
+# (https://github.com/end-4/dots-hyprland/issues/581 — yay -Bi was unreliable.)
 install-local-pkgbuild() {
   local location=$1
   local installflags=$2
@@ -154,7 +160,7 @@ install-local-pkgbuild() {
       continue
     fi
 
-    if ! yay -S --sudoloop $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
+    if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_YELLOW}[$0]: WARNING: Failed to install dependency '%s', will retry after others.${STY_RST}\n" "$dep"
       failed_deps+=("$dep")
     fi
@@ -169,9 +175,10 @@ install-local-pkgbuild() {
   #   - Name contains a dot (reverse-DNS, e.g. com.spotify.Client) → Flatpak,
   #     installed via `flatpak install --system flathub <ref>` after a
   #     one-shot remote-add for flathub.
-  #   - Anything else → native Arch / AUR, installed via the existing yay path.
+  #   - Anything else → native package (official repo or [mainstream]) installed
+  #     via pacman.
   # The flatpak binary itself is in this optdepends list and gets installed
-  # via the yay path before any Flatpak entries are reached (the list orders
+  # via the pacman path before any Flatpak entries are reached (the list orders
   # `flatpak:` first, ahead of the reverse-DNS entries).
   if [[ "$pkgname" == "mainstream-extras" ]]; then
     # Drop pacman hooks BEFORE the optdepends loop so they're in place
@@ -213,7 +220,7 @@ install-local-pkgbuild() {
         continue
       fi
       # Native Arch / AUR path.
-      if ! yay -S --sudoloop $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
+      if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
         printf "${STY_YELLOW}[$0]: WARNING: Failed to install extras dep '%s', will retry after others.${STY_RST}\n" "$pkg"
         failed_deps+=("$pkg")
       fi
@@ -221,10 +228,9 @@ install-local-pkgbuild() {
   fi
 
   # Retry failed deps once (they may have failed due to ordering/transient
-  # issues — e.g. a Flatpak ref hit before `flatpak` itself was installed,
-  # or yay racing with another in-flight pacman). Route Flatpak refs to
-  # flatpak install on the retry too; without this, com.spotify.Client
-  # would get tried as a yay package on the retry and fail twice.
+  # issues — e.g. a Flatpak ref hit before `flatpak` itself was installed).
+  # Route Flatpak refs to flatpak install on the retry too; without this,
+  # com.spotify.Client would get tried as a pacman package and fail twice.
   for dep in "${failed_deps[@]}"; do
     if _is_kde_blocked "$dep"; then continue; fi
     if [[ "$dep" == *.* ]] && command -v flatpak >/dev/null 2>&1; then
@@ -239,7 +245,7 @@ install-local-pkgbuild() {
       fi
       continue
     fi
-    if ! yay -S --sudoloop $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
+    if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_RED}[$0]: ERROR: Failed to install dependency '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
     fi
   done
