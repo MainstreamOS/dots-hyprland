@@ -41,8 +41,9 @@
 #                            to topgrade (firmware updates can prompt
 #                            polkit and time out non-interactively)
 #   --auto-rebuild-quickshell  opt-in: after all other steps, run
-#                            `quickshell --private-check-compat` and
-#                            yay-rebuild the owning package on mismatch.
+#                            `quickshell --private-check-compat` and rebuild
+#                            the owning package on mismatch (makepkg for the
+#                            [mainstream] build, else yay/paru).
 #
 # Exit codes:
 #   0    everything succeeded (or was skipped)
@@ -167,11 +168,13 @@ DOTFILES_RC=0
 DOTFILES_SYS_RC=0
 TOPGRADE_RC=0
 
-# ── 1. System packages (pacman) ─────────────────────────────────────────────
+# ── 1. System + [mainstream] packages (pacman) ──────────────────────────────
+# pacman -Syu refreshes every configured repo, so the signed [mainstream] repo
+# (the prebuilt packages that used to come from the AUR) updates here too.
 if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  System packages — pacman -Syu"
+    echo "  System & [mainstream] packages — pacman -Syu"
     echo "═══════════════════════════════════════════════════════════"
     pacman -Syu --noconfirm
     PACMAN_RC=$?
@@ -328,18 +331,37 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
     if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
             /usr/bin/quickshell --private-check-compat >/dev/null 2>&1; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
-        if [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
+        QS_PKGBUILD_DIR="$ORIG_HOME/.cache/dots-hyprland/sdata/dist-arch/mainstream-quickshell-git"
+        if [[ -n "$QS_PKG" ]] && [[ -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
+            # [mainstream] build — rebuild from the dotfiles PKGBUILD with makepkg.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
-            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG"
+            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (makepkg)"
+            echo "═══════════════════════════════════════════════════════════"
+            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                bash -c "cd '$QS_PKGBUILD_DIR' && makepkg -Afsi --noconfirm" || true
+            echo ">>> Restart Quickshell to pick up the new binary."
+        elif [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
+            # AUR-sourced Quickshell (user installed a helper) — let yay rebuild it.
+            echo ""
+            echo "═══════════════════════════════════════════════════════════"
+            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (yay)"
             echo "═══════════════════════════════════════════════════════════"
             runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
                 yay -S --rebuildtree --noconfirm "$QS_PKG" || true
             echo ">>> Restart Quickshell to pick up the new binary."
+        elif [[ -n "$QS_PKG" ]] && command -v paru >/dev/null 2>&1; then
+            echo ""
+            echo "═══════════════════════════════════════════════════════════"
+            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (paru)"
+            echo "═══════════════════════════════════════════════════════════"
+            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                paru -S --rebuildtree --noconfirm "$QS_PKG" || true
+            echo ">>> Restart Quickshell to pick up the new binary."
         elif [[ -n "$QS_PKG" ]]; then
             echo ""
-            echo ">>> Quickshell ABI mismatch detected, but yay is not installed."
-            echo ">>> To fix manually: yay -S --rebuildtree $QS_PKG"
+            echo ">>> Quickshell ABI mismatch detected. Run a full update (or"
+            echo ">>> pacman -Syu) once the [mainstream] repo ships a rebuilt $QS_PKG."
         fi
     fi
 fi
