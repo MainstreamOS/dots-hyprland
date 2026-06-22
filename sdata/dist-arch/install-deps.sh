@@ -9,6 +9,23 @@
 # meta-packages below.
 MAINSTREAM_KEY_FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
 MAINSTREAM_REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
+
+# Retry a command with increasing backoff. The [mainstream] repo is a single
+# GitHub-hosted server (no mirrors), so a transient network blip pulling its db
+# or packages would otherwise fail the whole install. pacman caches and resumes
+# partial downloads, so a retry only re-attempts what didn't complete.
+retry(){
+  local n=1 max=5 delay=4
+  until "$@"; do
+    if (( n >= max )); then
+      printf "${STY_RED:-}[$0]: failed after %d attempts: %s${STY_RST:-}\n" "$max" "$*"
+      return 1
+    fi
+    printf "${STY_YELLOW:-}[$0]: attempt %d/%d failed, retrying in %ds: %s${STY_RST:-}\n" "$n" "$max" "$delay" "$*"
+    sleep "$delay"; n=$((n+1)); delay=$((delay+4))
+  done
+}
+
 setup-mainstream-repo(){
   x sudo pacman -S --needed --noconfirm base-devel
   x sudo pacman-key --add "${REPO_ROOT}/sdata/dist-arch/mainstream.pub"
@@ -17,7 +34,7 @@ setup-mainstream-repo(){
     printf '\n[mainstream]\nSigLevel = Required\nServer = %s\n' "$MAINSTREAM_REPO_URL" \
       | sudo tee -a /etc/pacman.conf >/dev/null
   fi
-  x sudo pacman -Sy
+  retry x sudo pacman -Sy
 }
 
 remove_deprecated_dependencies(){
@@ -160,7 +177,7 @@ install-local-pkgbuild() {
       continue
     fi
 
-    if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
+    if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_YELLOW}[$0]: WARNING: Failed to install dependency '%s', will retry after others.${STY_RST}\n" "$dep"
       failed_deps+=("$dep")
     fi
@@ -220,7 +237,7 @@ install-local-pkgbuild() {
         continue
       fi
       # Native Arch / AUR path.
-      if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
+      if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
         printf "${STY_YELLOW}[$0]: WARNING: Failed to install extras dep '%s', will retry after others.${STY_RST}\n" "$pkg"
         failed_deps+=("$pkg")
       fi
@@ -245,7 +262,7 @@ install-local-pkgbuild() {
       fi
       continue
     fi
-    if ! sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
+    if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_RED}[$0]: ERROR: Failed to install dependency '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
     fi
   done
