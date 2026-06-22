@@ -376,10 +376,10 @@ Item {
                     interactive: false
                     boundsBehavior: Flickable.StopAtBounds
 
+                    // Collapsed grid is interactive:false (scroll wheel expands
+                    // it), so a draggable-looking bar is misleading — hide it.
                     ScrollBar.vertical: ScrollBar {
-                        visible: !root.expanded && gridContainer.hasOverflow
-                        policy: ScrollBar.AsNeeded
-                        minimumSize: 0.1
+                        policy: ScrollBar.AlwaysOff
                     }
 
                     model: ScriptModel {
