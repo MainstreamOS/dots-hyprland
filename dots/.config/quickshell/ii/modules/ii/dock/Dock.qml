@@ -27,7 +27,7 @@ Scope { // Scope
             screen: modelData
             visible: !GlobalStates.screenLocked
 
-            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || GlobalStates.overviewOpen
+            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || GlobalStates.overviewOpen || revealGrace.running
 
             anchors {
                 bottom: true
@@ -42,6 +42,17 @@ Scope { // Scope
             }
             Component.onDestruction: {
                 GlobalFocusGrab.removePersistent(dockRoot);
+            }
+
+            // Keep revealed briefly after the overview closes: its full-screen
+            // surface steals the dock's hover, so containsMouse is stale-false
+            // at close and `reveal` would collapse before the pointer re-enters.
+            Timer { id: revealGrace; interval: 600 }
+            Connections {
+                target: GlobalStates
+                function onOverviewOpenChanged() {
+                    if (!GlobalStates.overviewOpen) revealGrace.restart();
+                }
             }
 
             implicitWidth: dockBackground.implicitWidth

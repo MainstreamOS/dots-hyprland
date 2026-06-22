@@ -16,28 +16,9 @@ Scope {
     id: overviewScope
     property bool dontAutoCancelSearch: false
 
-    // ── NVIDIA surface-commit race guard ────────────────────────────────────
-    // On NVIDIA (and other GPUs with slower Wayland surface commits) the
-    // HyprlandFocusGrab fires onCleared immediately after the overview opens
-    // from a dock button click, because the overview's Wayland surface hasn't
-    // been committed to the compositor yet and focus is still on the dock.
-    // This causes the overview to flash and instantly close.
-    //
-    // Two-phase fix to handle both the initial race and a secondary race:
-    //
-    //  Phase 1 (0 → 120 ms):  Surface is committing.  Any onCleared that fires
-    //    during this window is the false-positive — ignore it.
-    //
-    //  Phase 2 (120 ms):  rearmTimer fires while the guard is STILL active.
-    //    Re-adding the window to the focus grab transitions grab.active from
-    //    false → true again, which on NVIDIA can itself trigger a second
-    //    immediate onCleared (same race, new grab setup).  Keeping ignoreDismiss
-    //    true here absorbs that second false-positive too.
-    //
-    //  Phase 3 (300 ms):  dismissGuardTimer fires and clears ignoreDismiss.
-    //    By this point both races have settled and the surface is fully
-    //    committed, so real dismiss events (clicking outside) work normally.
-    property bool ignoreDismiss: false
+    // Dismiss in-surface (dismissArea + Escape), not the shared focus grab: the
+    // always-alive full-screen surface already captures outside clicks, so the
+    // grab was redundant and its races broke the dock launcher button.
 
     // Fallback for D-Bus-activated / splash-then-real apps whose real
     // window bypasses the exec_cmd workspace rule. Each drop registers
@@ -94,26 +75,6 @@ Scope {
         }
     }
 
-    // Phase 2: re-arm the grab while the guard is still active.
-    Timer {
-        id: rearmTimer
-        interval: 120
-        onTriggered: {
-            if (GlobalStates.overviewOpen) {
-                GlobalFocusGrab.addDismissable(panelWindow);
-            }
-        }
-    }
-
-    // Phase 3: clear the guard after both races have settled.
-    Timer {
-        id: dismissGuardTimer
-        interval: 300
-        onTriggered: {
-            overviewScope.ignoreDismiss = false;
-        }
-    }
-
     PanelWindow {
         id: panelWindow
         property string searchingText: ""
@@ -139,10 +100,10 @@ Scope {
             || GlobalStates.overviewOpen
             || contentFade.opacity > 0
 
-        // Empty Region while closed = full click-through (input passes
-        // through to apps below). When open we drop the mask so the
-        // overview can receive clicks normally.
-        mask: (GlobalStates.overviewOpen || contentFade.opacity > 0)
+        // null mask = capture (open), empty Region = click-through (closed).
+        // Gate on overviewOpen only, NOT the fade-out opacity — capturing while
+        // contentFade fades out swallowed the next click (dead dock button).
+        mask: GlobalStates.overviewOpen
             ? null
             : passthroughRegion
         Region { id: passthroughRegion }
@@ -155,14 +116,9 @@ Scope {
         // the always-alive surface fix, our overview can't rely on "newly
         // mapped above fullscreen" semantics, so we need Overlay layer.
         WlrLayershell.layer: WlrLayer.Overlay
-        // Keep keyboardFocus mode constant (OnDemand always). Toggling it
-        // between None ↔ OnDemand on every open caused the focus grab to
-        // dismiss spuriously, closing the overview ~400-1200ms after open.
-        // With OnDemand permanently set, the empty mask still prevents the
-        // panel from accidentally catching focus while closed because clicks
-        // pass through to apps below — the panel can only receive focus
-        // when the overview is open and the user clicks inside it.
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+        // Exclusive while open holds the keyboard (search/Escape) now that the
+        // focus grab is gone; None while closed (click-through surface).
+        WlrLayershell.keyboardFocus: GlobalStates.overviewOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         color: "transparent"
 
         // Full-screen so the dim overlay covers app windows behind the overview.
@@ -186,10 +142,6 @@ Scope {
                     appDrawer.openFolder = null;
                     appDrawer.resetScroll();
                     flickable.contentY = 0;
-                    rearmTimer.stop();
-                    dismissGuardTimer.stop();
-                    overviewScope.ignoreDismiss = false;
-                    GlobalFocusGrab.dismiss();
                 } else {
                     if (!overviewScope.dontAutoCancelSearch) {
                         searchWidget.cancelSearch();
@@ -200,23 +152,12 @@ Scope {
                     appDrawer.folderPopupVisible = false;
                     appDrawer.openFolder = null;
                     appDrawer.resetScroll();
-                    // Arm the two-phase dismiss guard (see comment above).
-                    overviewScope.ignoreDismiss = true;
-                    rearmTimer.restart();
-                    dismissGuardTimer.restart();
-                    GlobalFocusGrab.addDismissable(panelWindow);
+                    // Focus the search box (Exclusive keyboardFocus delivers keys).
+                    Qt.callLater(() => searchWidget.focusSearchInput());
                 }
             }
         }
 
-        Connections {
-            target: GlobalFocusGrab
-            function onDismissed() {
-                if (contentFade.appDragging) return  // don't close during app drag
-                if (overviewScope.ignoreDismiss) return  // absorb NVIDIA surface-commit race
-                GlobalStates.overviewOpen = false;
-            }
-        }
         function setSearchingText(text) {
             searchWidget.setSearchingText(text);
             searchWidget.focusFirstItem();
@@ -368,6 +309,17 @@ Scope {
                     appDrawer.searchText = "";
                     Qt.callLater(() => { flickable.contentY = 0; });
                 }
+            }
+
+            // Click empty space to close. Inside the flickable + z:-1 so it sits
+            // behind the widgets (which consume their own clicks).
+            MouseArea {
+                id: dismissArea
+                z: -1
+                width: flickable.width
+                height: Math.max(flickable.height, columnLayout.implicitHeight)
+                enabled: GlobalStates.overviewOpen && !contentFade.appDragging
+                onClicked: GlobalStates.overviewOpen = false
             }
 
             ColumnLayout {
