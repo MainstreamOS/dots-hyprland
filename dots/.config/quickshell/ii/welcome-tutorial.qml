@@ -93,23 +93,22 @@ ApplicationWindow {
         }
     }
 
-    // First-run state — mirrors welcome.qml so the "Show next time"
+    // First-run state — mirrors welcome.qml so the "Show next startup"
     // switch toggles the same first_run.txt file the FirstRunExperience
-    // service watches. Default ON: leaving the switch alone keeps the
-    // tutorial scheduled for next login; toggling OFF writes the file
-    // so it stays skipped on subsequent boots.
+    // service watches. Default OFF: the tutorial greets once on first
+    // login and then stays skipped — the FirstRunExperience service
+    // writes the marker before launching us, so leaving the switch alone
+    // keeps it disabled. Toggling ON removes the marker so it shows
+    // again at the next startup.
     property string firstRunFilePath: FileUtils.trimFileProtocol(`${Directories.state}/user/first_run.txt`)
     property string firstRunFileContent: "This file is just here to confirm you've been greeted :>"
-    property bool showNextTime: true
+    property bool showNextStartup: false
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
-        // Align the file state with the switch's default-ON: remove
-        // the marker so the tutorial fires again next session unless
-        // the user toggles the switch off.
-        if (root.showNextTime) {
-            Quickshell.execDetached(["rm", "-f", root.firstRunFilePath])
-        }
+        // No file work here: the marker is already written by the
+        // FirstRunExperience service, so the tutorial is disabled by
+        // default. Only an explicit toggle (below) changes that.
     }
 
     // ── Frame ────────────────────────────────────────────────────────────
@@ -121,7 +120,7 @@ ApplicationWindow {
         // Titlebar — mirrors welcome.qml's titlebar so the tutorial
         // takes over the welcome window's role on first boot. Title
         // text and placement match welcome.qml; the Skip button is
-        // replaced by a "Show next time" StyledSwitch (default ON)
+        // replaced by a "Show next startup" StyledSwitch (default OFF)
         // that toggles the same first_run.txt marker the
         // FirstRunExperience service watches.
         Item {
@@ -152,11 +151,11 @@ ApplicationWindow {
                 anchors.right: parent.right
                 StyledText {
                     font.pixelSize: Appearance.font.pixelSize.smaller
-                    text: Translation.tr("Show next time")
+                    text: Translation.tr("Show next startup")
                 }
                 StyledSwitch {
-                    id: showNextTimeSwitch
-                    checked: root.showNextTime
+                    id: showNextStartupSwitch
+                    checked: root.showNextStartup
                     scale: 0.6
                     Layout.alignment: Qt.AlignVCenter
                     onCheckedChanged: {
