@@ -48,6 +48,51 @@ ApplicationWindow {
     property int currentCard: 0
     readonly property int cardCount: 8   // bump as you add more cards
 
+    // Shared asset dir for the cards' screenshots/icons.
+    readonly property string imageDir: Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
+
+    // Shared mockup geometry — the feature cards render the same
+    // 600x380 canvas and 560-wide bar, so these live here as one
+    // source of truth. Constants that genuinely differ between cards
+    // (barH, dock sizing) stay local to each card.
+    readonly property int mockW: 600
+    readonly property int mockH: 380
+    readonly property int barW: 560
+    readonly property int barSlotW: 16
+    readonly property int barSlotH: 16
+    readonly property int barSlotR: 2
+    readonly property int barIconSize: 10
+    readonly property int barIndicatorInset: 1
+
+    // Shared 36-app drawer dataset and Dwindle-ish tile templates,
+    // used by the mockup cards that render a drawer / tiled windows.
+    readonly property var drawerApps: [
+        "firefox", "google-chrome", "visual-studio-code", "spotify", "telegram",
+        "vlc", "gimp", "blender", "krita", "obs",
+        "thunderbird", "libreoffice-startcenter", "audacity", "godot",
+        "inkscape", "brave-browser", "slack", "signal-desktop",
+        "element-desktop", "zoom", "kdenlive", "transmission", "qbittorrent",
+        "steam", "lutris", "heroic", "mpv",
+        "handbrake", "openshot", "scribus", "ksnip", "virt-manager",
+        "postman", "dbeaver", "joplin"
+    ]
+    function tileLayout(count) {
+        switch (count) {
+        case 0: return []
+        case 1: return [{x:0,    y:0,   w:1,    h:1   }]
+        case 2: return [{x:0,    y:0,   w:0.5,  h:1   },
+                        {x:0.5,  y:0,   w:0.5,  h:1   }]
+        case 3: return [{x:0,    y:0,   w:0.55, h:1   },
+                        {x:0.55, y:0,   w:0.45, h:0.5 },
+                        {x:0.55, y:0.5, w:0.45, h:0.5 }]
+        case 4: return [{x:0,    y:0,   w:0.55, h:1   },
+                        {x:0.55, y:0,   w:0.45, h:0.34},
+                        {x:0.55, y:0.34,w:0.45, h:0.33},
+                        {x:0.55, y:0.67,w:0.45, h:0.33}]
+        default: return []
+        }
+    }
+
     // First-run state — mirrors welcome.qml so the "Show next time"
     // switch toggles the same first_run.txt file the FirstRunExperience
     // service watches. Default ON: leaving the switch alone keeps the
@@ -155,16 +200,30 @@ ApplicationWindow {
                 anchors.fill: parent
                 currentIndex: root.currentCard
 
-                Card0Setup {}
-                Card1BarTour {}
-                Card2Workspaces {}
-                Card3DockAndDrawer {}
-                Card4MoveBetweenWorkspaces {}
-                Card5FileDragViaBar {}
-                Card6DockPreview {}
-                Card7AppShowcaseTabs {}
-                // Card10 {}, … add more here
+                // Cards are built lazily — only the visited ones are
+                // instantiated, so the welcome paints card 0 immediately
+                // instead of constructing all eight (with their timers and
+                // animations) up front. Once shown, a card stays loaded so
+                // navigating back to it is instant.
+                LazyCard { sourceComponent: card0Comp }
+                LazyCard { sourceComponent: card1Comp }
+                LazyCard { sourceComponent: card2Comp }
+                LazyCard { sourceComponent: card3Comp }
+                LazyCard { sourceComponent: card4Comp }
+                LazyCard { sourceComponent: card5Comp }
+                LazyCard { sourceComponent: card6Comp }
+                LazyCard { sourceComponent: card7Comp }
+                // add more LazyCard { sourceComponent: cardNComp } here
             }
+
+            Component { id: card0Comp; Card0Setup {} }
+            Component { id: card1Comp; Card1BarTour {} }
+            Component { id: card2Comp; Card2Workspaces {} }
+            Component { id: card3Comp; Card3DockAndDrawer {} }
+            Component { id: card4Comp; Card4MoveBetweenWorkspaces {} }
+            Component { id: card5Comp; Card5FileDragViaBar {} }
+            Component { id: card6Comp; Card6DockPreview {} }
+            Component { id: card7Comp; Card7AppShowcaseTabs {} }
         }
 
         // Footer
@@ -396,6 +455,120 @@ ApplicationWindow {
         }
     }
 
+    // A StackLayout slot that builds its card on first view and keeps
+    // it loaded afterwards, so the unseen cards cost nothing at the
+    // welcome's first paint. Animations stay gated on the card's
+    // visibility, exactly as when the cards were instantiated eagerly.
+    component LazyCard : Loader {
+        property bool everShown: false
+        active: StackLayout.isCurrentItem || everShown
+        onLoaded: everShown = true
+    }
+
+    // The workspace strip's animated highlight: an AnimatedTabIndexPair
+    // drives a rounded indicator that stretches between the previous and
+    // current slot. Shared by every card that renders the bar.
+    component WorkspaceIndicator : Item {
+        required property var card
+        AnimatedTabIndexPair {
+            id: idxPair
+            index: card.currentWs
+        }
+        Rectangle {
+            z: 1
+            readonly property real lo: Math.min(idxPair.idx1, idxPair.idx2)
+            readonly property real hi: Math.max(idxPair.idx1, idxPair.idx2)
+            x: lo * card.barSlotW + card.barIndicatorInset
+            width: (hi - lo) * card.barSlotW + card.barSlotW - 2 * card.barIndicatorInset
+            height: card.barSlotH - 2 * card.barIndicatorInset
+            y: card.barIndicatorInset
+            radius: height / 2
+            color: Appearance.m3colors.m3primary
+            opacity: 0.9
+        }
+    }
+
+    // The "now playing" pill that sits just right of the active-window
+    // text in the bar. Shared by every card that renders the bar.
+    component MediaPill : PillBg {
+        required property Item anchorLeftTo
+        required property var card
+        anchors.left: anchorLeftTo.right
+        anchors.leftMargin: 8
+        anchors.verticalCenter: parent.verticalCenter
+        height: card.barPillH
+        width: mediaRow.implicitWidth + 12
+        Row {
+            id: mediaRow
+            anchors.centerIn: parent
+            spacing: 4
+            Rectangle {
+                width: 12; height: 12; radius: 6
+                color: Appearance.m3colors.m3primary
+                opacity: 0.9
+                anchors.verticalCenter: parent.verticalCenter
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "music_note"
+                    iconSize: 9
+                    color: Appearance.m3colors.m3onPrimary
+                }
+            }
+            StyledText {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Subnautica 2 LAU…"
+                font.pixelSize: 8
+                color: Appearance.colors.colOnLayer1
+                elide: Text.ElideRight
+                width: 70
+            }
+        }
+    }
+
+    // Shared left column for the simple feature cards: fixed-width
+    // title + body stack, vertically centred. Card7 (tabbed) keeps its
+    // own crossfading variant.
+
+    component CardLeftColumn : ColumnLayout {
+        property string title
+        property string body
+        Layout.minimumWidth: 280
+        Layout.maximumWidth: 280
+        Layout.preferredWidth: 280
+        Layout.fillWidth: false
+        Layout.fillHeight: true
+        Layout.alignment: Qt.AlignVCenter
+        spacing: 12
+
+        Item { Layout.fillHeight: true }
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.maximumWidth: 280
+            text: title
+            font {
+                family: Appearance.font.family.title
+                pixelSize: Appearance.font.pixelSize.huge
+                variableAxes: Appearance.font.variableAxes.title
+            }
+            color: Appearance.colors.colOnLayer0
+            wrapMode: Text.WordWrap
+        }
+        StyledText {
+            Layout.fillWidth: true
+            Layout.maximumWidth: 280
+            text: body
+            textFormat: Text.RichText
+            font.pixelSize: Appearance.font.pixelSize.normal
+            color: Appearance.colors.colOnLayer0
+            opacity: 0.85
+            wrapMode: Text.WordWrap
+            lineHeight: 1.35
+        }
+
+        Item { Layout.fillHeight: true }
+    }
+
     // ── Card 2: Workspaces ───────────────────────────────────────────────
     component Card2Workspaces : Item {
         id: card2
@@ -411,7 +584,7 @@ ApplicationWindow {
         // workspace. Window counts vary so each page reads differently
         // when the tiled background swaps.
         readonly property var workspaceApps: [
-            ["chromium", "code-oss", "kitty"],
+            ["google-chrome", "code-oss", "kitty"],
             ["spotify", "telegram"],
             ["firefox"],
             ["gimp", "vlc", "thunderbird", "blender"],
@@ -431,15 +604,15 @@ ApplicationWindow {
 
         // Mockup geometry — same 600×380 internal grid as card 1 so the
         // scale-to-fit container behaves identically.
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
 
         // ── Top bar ───────────────────────────────────────────────────
         // Closely mirrors the real bar: faint pill backgrounds on each
         // section (no defined border), workspace strip dead-centre,
         // active-window text + media pill on the left, clock+utils +
         // weather + sys-tray pill on the right.
-        readonly property int barW: 560
+        readonly property int barW: root.barW
         readonly property int barH: 30               // matches Card1BarTour (panel 1)
         readonly property int barX: (mockW - barW) / 2
         readonly property int barY: 12
@@ -449,11 +622,11 @@ ApplicationWindow {
         // indicator overlays them via AnimatedTabIndexPair so the
         // leading edge moves fast (100ms) and the trailing edge lags
         // (300ms) — same "trail catches up" feel as the real bar.
-        readonly property int barSlotW: 16
-        readonly property int barSlotH: 16
-        readonly property int barSlotR: 2            // smaller inactive dot, highlight + icon unchanged
-        readonly property int barIconSize: 10
-        readonly property int barIndicatorInset: 1   // → 14×14 circle at rest
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR            // smaller inactive dot, highlight + icon unchanged
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset   // → 14×14 circle at rest
 
         // ── Tiled-windows background ─────────────────────────────────
         // Same dimensions and position as Card6DockPreview's tile area
@@ -465,69 +638,15 @@ ApplicationWindow {
         readonly property int tileGap: 6
         readonly property int tileBarH: 11
 
-        // Dwindle-ish layout templates: each entry is a list of unit
-        // rectangles {x, y, w, h} in 0..1 normalized coords inside the
-        // tile container. Picked to read as natural tile shapes for
-        // each window count.
-        function tileLayout(count) {
-            switch (count) {
-            case 0: return []
-            case 1: return [{x:0,    y:0,   w:1,    h:1   }]
-            case 2: return [{x:0,    y:0,   w:0.5,  h:1   },
-                            {x:0.5,  y:0,   w:0.5,  h:1   }]
-            case 3: return [{x:0,    y:0,   w:0.55, h:1   },
-                            {x:0.55, y:0,   w:0.45, h:0.5 },
-                            {x:0.55, y:0.5, w:0.45, h:0.5 }]
-            case 4: return [{x:0,    y:0,   w:0.55, h:1   },
-                            {x:0.55, y:0,   w:0.45, h:0.34},
-                            {x:0.55, y:0.34,w:0.45, h:0.33},
-                            {x:0.55, y:0.67,w:0.45, h:0.33}]
-            default: return []
-            }
-        }
-
         RowLayout {
             anchors.fill: parent
             anchors.margins: 28
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Workspaces keep your apps tidy")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Think of each workspace as its own desk — put email on one, code on another, a game on a third. The dots in your bar show which desk you're on and which have apps open. Click one, press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + 1‑9</b>, or press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + scroll the mouse wheel</b> to switch between them.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("Workspaces keep your apps tidy")
+                body: Translation.tr("Think of each workspace as its own desk — put email on one, code on another, a game on a third. The dots in your bar show which desk you're on and which have apps open. Click one, press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + 1‑9</b>, or press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + scroll the mouse wheel</b> to switch between them.")
             }
 
             // Right: animated mockup — same scale-to-fit shape as card 1
@@ -598,39 +717,7 @@ ApplicationWindow {
                             // circle (stands in for album art when none)
                             // plus a clipped track title, all on a
                             // colLayer1 pill.
-                            PillBg {
-                                id: mediaPill
-                                anchors.left: activeWindowText.right
-                                anchors.leftMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: card2.barPillH
-                                width: mediaRow.implicitWidth + 12
-                                Row {
-                                    id: mediaRow
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    Rectangle {
-                                        width: 12; height: 12; radius: 6
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "music_note"
-                                            iconSize: 9
-                                            color: Appearance.m3colors.m3onPrimary
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "Subnautica 2 LAU…"
-                                        font.pixelSize: 8
-                                        color: Appearance.colors.colOnLayer1
-                                        elide: Text.ElideRight
-                                        width: 70
-                                    }
-                                }
-                            }
+                            MediaPill { anchorLeftTo: activeWindowText; card: card2 }
 
                             // ── Centre: workspace strip pill ──
                             // Perfectly centered in the bar (matches the
@@ -648,23 +735,7 @@ ApplicationWindow {
                                     implicitWidth: card2.barSlotW * card2.totalWs
                                     implicitHeight: card2.barSlotH
 
-                                    AnimatedTabIndexPair {
-                                        id: barIdxPair
-                                        index: card2.currentWs
-                                    }
-
-                                    Rectangle {
-                                        z: 1
-                                        readonly property real lo: Math.min(barIdxPair.idx1, barIdxPair.idx2)
-                                        readonly property real hi: Math.max(barIdxPair.idx1, barIdxPair.idx2)
-                                        x: lo * card2.barSlotW + card2.barIndicatorInset
-                                        width: (hi - lo) * card2.barSlotW + card2.barSlotW - 2 * card2.barIndicatorInset
-                                        height: card2.barSlotH - 2 * card2.barIndicatorInset
-                                        y: card2.barIndicatorInset
-                                        radius: height / 2
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                    }
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card2 }
 
                                     Row {
                                         z: 2
@@ -849,7 +920,7 @@ ApplicationWindow {
                                                 required property string modelData
                                                 readonly property var apps: card2.workspaceApps[page.index] || []
                                                 readonly property var rect: {
-                                                    const rects = card2.tileLayout(apps.length)
+                                                    const rects = root.tileLayout(apps.length)
                                                     return rects[index] || {x:0, y:0, w:0, h:0}
                                                 }
                                                 x: Math.round(rect.x * card2.tileW) + (rect.x > 0 ? card2.tileGap / 2 : 0)
@@ -944,17 +1015,14 @@ ApplicationWindow {
         // there and the destination window shows the same Spotify
         // screenshot the preview shows, just at full tile size.
         readonly property var workspaceApps: [
-            ["chromium", "code-oss", "kitty"],
+            ["google-chrome", "code-oss", "kitty"],
             ["telegram"],
             ["spotify"],
             ["gimp", "vlc", "blender"],
             ["discord", "obs"],
         ]
 
-        // Path to the welcome-tutorial-images directory (same lookup
-        // pattern Card6FileManager / Card11 use for their screenshots).
-        readonly property string imageDir:
-            Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
+        readonly property string imageDir: root.imageDir
         readonly property int totalWs: 10
         readonly property int cycleLength: workspaceApps.length
 
@@ -964,21 +1032,21 @@ ApplicationWindow {
         }
 
         // ── Mockup geometry ──
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
 
         // Bar (same shape as card 2; numbers tightened a touch so the
         // dock fits below)
-        readonly property int barW: 560
+        readonly property int barW: root.barW
         readonly property int barH: 30
         readonly property int barX: (mockW - barW) / 2
         readonly property int barY: 12
         readonly property int barPillH: 22
-        readonly property int barSlotW: 16
-        readonly property int barSlotH: 16
-        readonly property int barSlotR: 2
-        readonly property int barIconSize: 10
-        readonly property int barIndicatorInset: 1
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset
 
         // Tile viewport — extended down to the same height as Card6
         // FileManager's window so the windows feel substantial. The
@@ -997,7 +1065,7 @@ ApplicationWindow {
         // padding 8 → 14). Pin button on the left, pinned apps in
         // the middle, drawer button on the right (matches card 1).
         readonly property var dockApps: [
-            "chromium", "spotify", "org.gnome.Nautilus", "gimp", "discord"
+            "google-chrome", "spotify", "org.gnome.Nautilus", "gimp", "discord"
         ]
         readonly property int dockIconSize: 29
         readonly property int dockGap: 14
@@ -1040,66 +1108,15 @@ ApplicationWindow {
             Math.max(20, Math.min(mockW - menuW - 20, dockIconCenterX(rightClickIdx) - menuW / 2))
         readonly property int menuY: dockY - menuH - 14
 
-        // Same Dwindle-ish tile templates as card 2.
-        function tileLayout(count) {
-            switch (count) {
-            case 0: return []
-            case 1: return [{x:0,    y:0,   w:1,    h:1   }]
-            case 2: return [{x:0,    y:0,   w:0.5,  h:1   },
-                            {x:0.5,  y:0,   w:0.5,  h:1   }]
-            case 3: return [{x:0,    y:0,   w:0.55, h:1   },
-                            {x:0.55, y:0,   w:0.45, h:0.5 },
-                            {x:0.55, y:0.5, w:0.45, h:0.5 }]
-            case 4: return [{x:0,    y:0,   w:0.55, h:1   },
-                            {x:0.55, y:0,   w:0.45, h:0.34},
-                            {x:0.55, y:0.34,w:0.45, h:0.33},
-                            {x:0.55, y:0.67,w:0.45, h:0.33}]
-            default: return []
-            }
-        }
-
         RowLayout {
             anchors.fill: parent
             anchors.margins: 28
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Click and right-click your dock apps")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Hover the dock and the icons magnify. Click an open app to peek at its window — click the preview to jump straight to its workspace. Right-click to open a context menu with the app's most useful commands: a new window, control it's audio, move to another workspace, pin or unpin, and close every window at once.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("Click and right-click your dock apps")
+                body: Translation.tr("Hover the dock and the icons magnify. Click an open app to peek at its window — click the preview to jump straight to its workspace. Right-click to open a context menu with the app's most useful commands: a new window, control it's audio, move to another workspace, pin or unpin, and close every window at once.")
             }
 
             // Right: animated mockup
@@ -1161,39 +1178,7 @@ ApplicationWindow {
                             }
 
                             // Media pill
-                            PillBg {
-                                id: mediaPill3
-                                anchors.left: activeWindowText3.right
-                                anchors.leftMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: card6.barPillH
-                                width: mediaRow3.implicitWidth + 12
-                                Row {
-                                    id: mediaRow3
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    Rectangle {
-                                        width: 12; height: 12; radius: 6
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "music_note"
-                                            iconSize: 9
-                                            color: Appearance.m3colors.m3onPrimary
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "Subnautica 2 LAU…"
-                                        font.pixelSize: 8
-                                        color: Appearance.colors.colOnLayer1
-                                        elide: Text.ElideRight
-                                        width: 70
-                                    }
-                                }
-                            }
+                            MediaPill { anchorLeftTo: activeWindowText3; card: card6 }
 
                             // Centre: workspace pill
                             PillBg {
@@ -1208,23 +1193,7 @@ ApplicationWindow {
                                     implicitWidth: card6.barSlotW * card6.totalWs
                                     implicitHeight: card6.barSlotH
 
-                                    AnimatedTabIndexPair {
-                                        id: barIdxPair3
-                                        index: card6.currentWs
-                                    }
-
-                                    Rectangle {
-                                        z: 1
-                                        readonly property real lo: Math.min(barIdxPair3.idx1, barIdxPair3.idx2)
-                                        readonly property real hi: Math.max(barIdxPair3.idx1, barIdxPair3.idx2)
-                                        x: lo * card6.barSlotW + card6.barIndicatorInset
-                                        width: (hi - lo) * card6.barSlotW + card6.barSlotW - 2 * card6.barIndicatorInset
-                                        height: card6.barSlotH - 2 * card6.barIndicatorInset
-                                        y: card6.barIndicatorInset
-                                        radius: height / 2
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                    }
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card6 }
 
                                     Row {
                                         z: 2
@@ -1369,7 +1338,7 @@ ApplicationWindow {
                                                 readonly property bool isSpotify: modelData === "spotify"
                                                 readonly property var apps: card6.workspaceApps[page3.index] || []
                                                 readonly property var rect: {
-                                                    const rects = card6.tileLayout(apps.length)
+                                                    const rects = root.tileLayout(apps.length)
                                                     return rects[index] || {x:0, y:0, w:0, h:0}
                                                 }
                                                 x: Math.round(rect.x * card6.tileW) + (rect.x > 0 ? card6.tileGap / 2 : 0)
@@ -2054,8 +2023,8 @@ ApplicationWindow {
         property bool ws3Hovered: false
 
         // ── Mockup geometry (identical to card 1) ──
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
         readonly property int barH: 22
 
         readonly property int wsTileW: 100
@@ -2072,16 +2041,7 @@ ApplicationWindow {
         readonly property int wsAreaY: wsContainerY + wsPadding
 
         // Drawer (visible but no drag-from-drawer happens here)
-        readonly property var drawerApps: [
-            "firefox", "chromium", "visual-studio-code", "spotify", "telegram",
-            "vlc", "gimp", "blender", "krita", "obs",
-            "thunderbird", "libreoffice-startcenter", "audacity", "godot",
-            "inkscape", "chromium", "brave-browser", "slack", "signal-desktop",
-            "element-desktop", "zoom", "kdenlive", "transmission", "qbittorrent",
-            "steam", "lutris", "heroic", "mpv",
-            "handbrake", "openshot", "scribus", "ksnip", "virt-manager",
-            "postman", "dbeaver", "joplin"
-        ]
+readonly property var drawerApps: root.drawerApps
         readonly property int drawerCols: 14
         readonly property int drawerRows: 3
         readonly property int drawerIconSize: 16
@@ -2117,8 +2077,8 @@ ApplicationWindow {
         readonly property string appA: "spotify"
         readonly property string appB: "telegram"
         // Phase 2: app pulled fresh from the drawer onto ws 3.
-        readonly property string chromeApp: "chromium"
-        readonly property int chromeAppIdx: 1  // index of chromium in drawerApps
+        readonly property string chromeApp: "google-chrome"
+        readonly property int chromeAppIdx: 1  // index of google-chrome in drawerApps
         readonly property color demoWindowColor: "#FFFFFF"
         readonly property color demoWindowBarColor: "#E8EAED"
 
@@ -2154,42 +2114,9 @@ ApplicationWindow {
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Drag apps to any workspace")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Open Overview with <b>Super <font face='JetBrains Mono NF'>(󰖳)</font></b>, then drag — move an already-open window from one workspace tile to another, or grab a fresh app from the drawer and drop it on any workspace. Either way, the app lands right where you want it.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("Drag apps to any workspace")
+                body: Translation.tr("Open Overview with <b>Super <font face='JetBrains Mono NF'>(󰖳)</font></b>, then drag — move an already-open window from one workspace tile to another, or grab a fresh app from the drawer and drop it on any workspace. Either way, the app lands right where you want it.")
             }
 
             // Right: animated mockup
@@ -2770,7 +2697,7 @@ ApplicationWindow {
         // strip has a recognisable app icon to point at.
         readonly property int currentWs: 0
         readonly property var workspaceApps: [
-            ["chromium"],
+            ["google-chrome"],
             ["spotify", "telegram"],
             ["org.gnome.Nautilus"],
             ["gimp", "vlc", "blender"],
@@ -2783,20 +2710,20 @@ ApplicationWindow {
         }
 
         // ── Mockup geometry ──
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
 
         // Bar (identical to card 4's)
-        readonly property int barW: 560
+        readonly property int barW: root.barW
         readonly property int barH: 30
         readonly property int barX: (mockW - barW) / 2
         readonly property int barY: 12
         readonly property int barPillH: 22
-        readonly property int barSlotW: 16
-        readonly property int barSlotH: 16
-        readonly property int barSlotR: 2
-        readonly property int barIconSize: 10
-        readonly property int barIndicatorInset: 1
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset
 
         // Dock at the bottom — sized like card 4's; joplin is intentionally
         // omitted here so a later card can demo adding it.
@@ -2823,42 +2750,9 @@ ApplicationWindow {
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Get to know your bar and dock")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Two surfaces always within reach. The bar across the top handles status — your active window, media, workspaces, time, weather, and system toggles. The dock at the bottom holds your pinned apps and the app drawer.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("Get to know your bar and dock")
+                body: Translation.tr("Two surfaces always within reach. The bar across the top handles status — your active window, media, workspaces, time, weather, and system toggles. The dock at the bottom holds your pinned apps and the app drawer.")
             }
 
             // Right: animated mockup
@@ -2919,39 +2813,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            PillBg {
-                                id: mediaPill8
-                                anchors.left: activeWindowText8.right
-                                anchors.leftMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: card1.barPillH
-                                width: mediaRow8.implicitWidth + 12
-                                Row {
-                                    id: mediaRow8
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    Rectangle {
-                                        width: 12; height: 12; radius: 6
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "music_note"
-                                            iconSize: 9
-                                            color: Appearance.m3colors.m3onPrimary
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "Subnautica 2 LAU…"
-                                        font.pixelSize: 8
-                                        color: Appearance.colors.colOnLayer1
-                                        elide: Text.ElideRight
-                                        width: 70
-                                    }
-                                }
-                            }
+                            MediaPill { anchorLeftTo: activeWindowText8; card: card1 }
 
                             PillBg {
                                 id: workspacePill8
@@ -2965,23 +2827,7 @@ ApplicationWindow {
                                     implicitWidth: card1.barSlotW * card1.totalWs
                                     implicitHeight: card1.barSlotH
 
-                                    AnimatedTabIndexPair {
-                                        id: barIdxPair8
-                                        index: card1.currentWs
-                                    }
-
-                                    Rectangle {
-                                        z: 1
-                                        readonly property real lo: Math.min(barIdxPair8.idx1, barIdxPair8.idx2)
-                                        readonly property real hi: Math.max(barIdxPair8.idx1, barIdxPair8.idx2)
-                                        x: lo * card1.barSlotW + card1.barIndicatorInset
-                                        width: (hi - lo) * card1.barSlotW + card1.barSlotW - 2 * card1.barIndicatorInset
-                                        height: card1.barSlotH - 2 * card1.barIndicatorInset
-                                        y: card1.barIndicatorInset
-                                        radius: height / 2
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                    }
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card1 }
 
                                     Row {
                                         z: 2
@@ -3246,8 +3092,8 @@ ApplicationWindow {
         property bool appLaunched: false
 
         // ── Mockup geometry (mirrors Card1's layout) ──────────────────
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
         readonly property int barH: 22
 
         // Workspaces
@@ -3266,17 +3112,8 @@ ApplicationWindow {
         readonly property int activeWsIdx: 0
 
         // Drawer (same 36-app grid as Card1/Card7; joplin at the end)
-        readonly property var drawerApps: [
-            "firefox", "chromium", "visual-studio-code", "spotify", "telegram",
-            "vlc", "gimp", "blender", "krita", "obs",
-            "thunderbird", "libreoffice-startcenter", "audacity", "godot",
-            "inkscape", "chromium", "brave-browser", "slack", "signal-desktop",
-            "element-desktop", "zoom", "kdenlive", "transmission", "qbittorrent",
-            "steam", "lutris", "heroic", "mpv",
-            "handbrake", "openshot", "scribus", "ksnip", "virt-manager",
-            "postman", "dbeaver", "joplin"
-        ]
-        readonly property int joplinIdx: 35
+readonly property var drawerApps: root.drawerApps
+        readonly property int joplinIdx: 34
         readonly property int firefoxIdx: 0
         readonly property int drawerCols: 14
         readonly property int drawerRows: 3
@@ -3337,42 +3174,9 @@ ApplicationWindow {
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("The dock and app drawer")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("To see the dock, hover the bottom edge of the screen to get it to slide up. From there, click the app drawer button to open the drawer.<br><br>The dock can hold pinned apps for quick access — right-click any app in the drawer and choose <b>\"Pin to dock\"</b> to add it. The drawer is your launcher — click any app to open it on the active workspace.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("The dock and app drawer")
+                body: Translation.tr("To see the dock, hover the bottom edge of the screen to get it to slide up. From there, click the app drawer button to open the drawer.<br><br>The dock can hold pinned apps for quick access — right-click any app in the drawer and choose <b>\"Pin to dock\"</b> to add it. The drawer is your launcher — click any app to open it on the active workspace.")
             }
 
             // Right: animated mockup
@@ -3831,13 +3635,13 @@ ApplicationWindow {
         property bool barDragActive: false
 
         // ── Mockup geometry ──────────────────────────────────────────
-        readonly property int mockW: 600
-        readonly property int mockH: 380
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
 
         // Bar — same compact sizing as Card8's bar tour, so the user
         // sees the workspace pill in the context of the full top bar
         // (active window, media, workspaces, clock, weather, tray).
-        readonly property int barW: 560
+        readonly property int barW: root.barW
         readonly property int barH: 30
         readonly property int barX: (mockW - barW) / 2
         readonly property int barY: 12
@@ -3846,11 +3650,11 @@ ApplicationWindow {
         // the new feedback (glow, chevrons, next-pill preview, progress
         // fill) still reads at this scale.
         readonly property int pillCount: 10
-        readonly property int barSlotW: 16
-        readonly property int barSlotH: 16
-        readonly property int barSlotR: 2
-        readonly property int barIconSize: 10
-        readonly property int barIndicatorInset: 1
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset
         readonly property int barPillPadH: 5
         readonly property int barPillPadV: 3
         readonly property int barStripW: pillCount * barSlotW
@@ -3885,10 +3689,7 @@ ApplicationWindow {
         readonly property int fileLocalX: winLocalX + sidebarW + (winW - sidebarW) / 2
         readonly property int fileLocalY: winLocalY + 22 + (winH - 22) * 0.45
 
-        // Path to the welcome-tutorial-images directory (same lookup
-        // pattern Card6FileManager uses for its screenshots).
-        readonly property string imageDir:
-            Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
+        readonly property string imageDir: root.imageDir
 
         // Mockup-coordinate helpers for the cursor / ghost
         function fileMockX() { return canvasX + fileLocalX }
@@ -3907,42 +3708,9 @@ ApplicationWindow {
             spacing: 28
 
             // Left: title + body
-            ColumnLayout {
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
-                Layout.preferredWidth: 280
-                Layout.fillWidth: false
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 12
-
-                Item { Layout.fillHeight: true }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Drag files between workspaces with the bar")
-                    font {
-                        family: Appearance.font.family.title
-                        pixelSize: Appearance.font.pixelSize.huge
-                        variableAxes: Appearance.font.variableAxes.title
-                    }
-                    color: Appearance.colors.colOnLayer0
-                    wrapMode: Text.WordWrap
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 280
-                    text: Translation.tr("Grab a file and hover the workspace pill in the bar — it lights up and the dots fan out into arrows showing the scroll direction. Slide right to advance workspaces, left to go back, and drop the file into any app on the new workspace without ever opening the overview.")
-                    textFormat: Text.RichText
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colOnLayer0
-                    opacity: 0.85
-                    wrapMode: Text.WordWrap
-                    lineHeight: 1.35
-                }
-
-                Item { Layout.fillHeight: true }
+            CardLeftColumn {
+                title: Translation.tr("Drag files between workspaces with the bar")
+                body: Translation.tr("Grab a file and hover the workspace pill in the bar — it lights up and the dots fan out into arrows showing the scroll direction. Slide right to advance workspaces, left to go back, and drop the file into any app on the new workspace without ever opening the overview.")
             }
 
             // Right: animated mockup
@@ -4597,9 +4365,9 @@ ApplicationWindow {
         }
 
         // Mockup geometry — same as Card6/Card9/Card5
-        readonly property int mockW: 600
-        readonly property int mockH: 380
-        readonly property int barW: 560
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
+        readonly property int barW: root.barW
         readonly property int barH: 30
         readonly property int barX: (mockW - barW) / 2
         readonly property int barY: 12
@@ -4610,17 +4378,16 @@ ApplicationWindow {
         readonly property int iconSize: 78
         readonly property int iconLeftInset: 24
         readonly property int iconBottomInset: 28
-        readonly property string imageDir:
-            Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
+        readonly property string imageDir: root.imageDir
 
         // Bar internals — same geometry as Card5/6/9 so the bar
         // contents render identically when reproduced here.
         readonly property int barPillH: 22
-        readonly property int barSlotW: 16
-        readonly property int barSlotH: 16
-        readonly property int barSlotR: 2
-        readonly property int barIconSize: 10
-        readonly property int barIndicatorInset: 1
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset
 
         // Workspace state for the bar mock — each section pretends the
         // current workspace's primary app is the one being showcased,
@@ -4831,39 +4598,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            PillBg {
-                                id: mediaPill12
-                                anchors.left: activeWindowText12.right
-                                anchors.leftMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                height: card7.barPillH
-                                width: mediaRow12.implicitWidth + 12
-                                Row {
-                                    id: mediaRow12
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    Rectangle {
-                                        width: 12; height: 12; radius: 6
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "music_note"
-                                            iconSize: 9
-                                            color: Appearance.m3colors.m3onPrimary
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "Subnautica 2 LAU…"
-                                        font.pixelSize: 8
-                                        color: Appearance.colors.colOnLayer1
-                                        elide: Text.ElideRight
-                                        width: 70
-                                    }
-                                }
-                            }
+                            MediaPill { anchorLeftTo: activeWindowText12; card: card7 }
 
                             PillBg {
                                 id: workspacePill12
@@ -4877,23 +4612,7 @@ ApplicationWindow {
                                     implicitWidth: card7.barSlotW * card7.totalWs
                                     implicitHeight: card7.barSlotH
 
-                                    AnimatedTabIndexPair {
-                                        id: barIdxPair12
-                                        index: card7.currentWs
-                                    }
-
-                                    Rectangle {
-                                        z: 1
-                                        readonly property real lo: Math.min(barIdxPair12.idx1, barIdxPair12.idx2)
-                                        readonly property real hi: Math.max(barIdxPair12.idx1, barIdxPair12.idx2)
-                                        x: lo * card7.barSlotW + card7.barIndicatorInset
-                                        width: (hi - lo) * card7.barSlotW + card7.barSlotW - 2 * card7.barIndicatorInset
-                                        height: card7.barSlotH - 2 * card7.barIndicatorInset
-                                        y: card7.barIndicatorInset
-                                        radius: height / 2
-                                        color: Appearance.m3colors.m3primary
-                                        opacity: 0.9
-                                    }
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card7 }
 
                                     Row {
                                         z: 2
