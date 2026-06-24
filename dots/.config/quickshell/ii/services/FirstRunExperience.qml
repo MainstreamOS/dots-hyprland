@@ -27,7 +27,13 @@ Singleton {
 
     function handleFirstRun() {
         Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, root.defaultWallpaperPath])
-        Quickshell.execDetached(["bash", "-c", `qs -p '${root.welcomeQmlPath}'`])
+        // Gate the welcome on the shell's first paint. It launches as a second,
+        // heavy quickshell process; starting it during the main shell's startup
+        // races the first paint and stalls the bar for a long time. Wait (up to
+        // ~10s) for a quickshell:* layer surface to appear — the same paint gate
+        // session.py uses before restoring windows — then launch it.
+        Quickshell.execDetached(["bash", "-c",
+            `for i in $(seq 1 100); do hyprctl layers 2>/dev/null | grep -q quickshell && break; sleep 0.1; done; qs -p '${root.welcomeQmlPath}'`])
     }
 
     FileView {
