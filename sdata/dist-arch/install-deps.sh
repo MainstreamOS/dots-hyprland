@@ -290,6 +290,33 @@ install-local-pkgbuild() {
   x popd
 }
 
+# quickshell is the only heavy compile in the dotfiles. Prefer the signed
+# [mainstream] prebuilt and fall back to a source build only when it is missing
+# or its linkage is broken (e.g. an Arch soname bump the prebuilt predates).
+install-quickshell() {
+  local location=$1
+  local installflags=$2
+  local pkg=mainstream-quickshell-git
+
+  if pacman -Si "$pkg" >/dev/null 2>&1; then
+    if retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" "$pkg"; then
+      local bin
+      bin=$(command -v quickshell 2>/dev/null)
+      if [[ -n "$bin" ]] && ! ldd "$bin" 2>&1 | grep -q "not found"; then
+        printf "${STY_CYAN}[$0]: Installed prebuilt $pkg from [mainstream].${STY_RST}\n"
+        return 0
+      fi
+      printf "${STY_YELLOW}[$0]: Prebuilt $pkg has broken linkage — building from source...${STY_RST}\n"
+    else
+      printf "${STY_YELLOW}[$0]: Prebuilt $pkg install failed — building from source...${STY_RST}\n"
+    fi
+  else
+    printf "${STY_CYAN}[$0]: $pkg not in [mainstream] — building from source...${STY_RST}\n"
+  fi
+
+  install-local-pkgbuild "$location" "$installflags"
+}
+
 # Install core dependencies from the meta-packages
 metapkgs=(./sdata/dist-arch/mainstream-{audio,backlight,basic,fonts-themes,gnome,portal,python,screencapture,toolkit,widgets})
 metapkgs+=(./sdata/dist-arch/mainstream-hyprland)
@@ -300,11 +327,13 @@ metapkgs+=(./sdata/dist-arch/mainstream-bibata-modern-classic-bin)
 
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"
-  $ask && showfun install-local-pkgbuild || metainstallflags="$metainstallflags --noconfirm"
+  installfn=install-local-pkgbuild
+  [[ "$(basename "$i")" == mainstream-quickshell-git ]] && installfn=install-quickshell
+  $ask && showfun "$installfn" || metainstallflags="$metainstallflags --noconfirm"
   if declare -F ms_step >/dev/null 2>&1; then
     ms_step installing "$(basename "$i")"
   fi
-  v install-local-pkgbuild "$i" "$metainstallflags"
+  v "$installfn" "$i" "$metainstallflags"
 done
 
 ## plasma-browser-integration is intentionally not installed.
