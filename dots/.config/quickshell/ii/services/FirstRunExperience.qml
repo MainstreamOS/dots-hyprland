@@ -26,14 +26,18 @@ Singleton {
     }
 
     function handleFirstRun() {
-        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, root.defaultWallpaperPath])
-        // Gate the welcome on the shell's first paint. It launches as a second,
+        // Idle priority: let the bar win the CPU/IO during startup; the theme
+        // generation catches up a beat after the bar has painted.
+        Quickshell.execDetached(["nice", "-n", "19", "ionice", "-c", "3", Directories.wallpaperSwitchScriptPath, root.defaultWallpaperPath])
+        // Gate the welcome on the BAR's first paint. It launches as a second,
         // heavy quickshell process; starting it during the main shell's startup
-        // races the first paint and stalls the bar for a long time. Wait (up to
-        // ~10s) for a quickshell:* layer surface to appear — the same paint gate
-        // session.py uses before restoring windows — then launch it.
+        // races the paint and pops up over a blank/half-painted bar. Wait (up to
+        // ~15s) for the bar's own layer surface — quickshell:bar (or
+        // quickshell:verticalBar), NOT just any quickshell:* surface: lighter
+        // ones like quickshell:background map before the themed bar paints on a
+        // cold first boot, so a bare match races it. Settle a beat, then launch.
         Quickshell.execDetached(["bash", "-c",
-            `for i in $(seq 1 100); do hyprctl layers 2>/dev/null | grep -q quickshell && break; sleep 0.1; done; qs -p '${root.welcomeQmlPath}'`])
+            `for i in $(seq 1 150); do hyprctl layers -j 2>/dev/null | grep -Eq '"namespace": *"quickshell:(bar|verticalBar)"' && break; sleep 0.1; done; sleep 0.3; qs -p '${root.welcomeQmlPath}'`])
     }
 
     FileView {
