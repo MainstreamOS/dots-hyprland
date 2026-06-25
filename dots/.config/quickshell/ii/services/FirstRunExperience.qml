@@ -26,9 +26,18 @@ Singleton {
     }
 
     function handleFirstRun() {
-        // Idle priority: let the bar win the CPU/IO during startup; the theme
-        // generation catches up a beat after the bar has painted.
-        Quickshell.execDetached(["nice", "-n", "19", "ionice", "-c", "3", Directories.wallpaperSwitchScriptPath, root.defaultWallpaperPath])
+        // Generate the theme from the default wallpaper, but only when it has
+        // not already been generated. A fresh install bakes the colors in
+        // before the first boot, so re-running the full pipeline here just
+        // races the bar's first paint and duplicates work the installer (and
+        // the first-login service) already did. Skip it when the generated
+        // theme files are present; run it at idle priority otherwise, so the
+        // bar still wins CPU and I/O during startup.
+        const genDir = Directories.generatedMaterialThemePath.replace(/\/colors\.json$/, "")
+        Quickshell.execDetached(["bash", "-c",
+            `g='${genDir}'; ` +
+            `[ -s "$g/colors.json" ] && [ -s "$g/material_colors.scss" ] && grep -q on_background "$g/colors.json" 2>/dev/null && exit 0; ` +
+            `exec nice -n 19 ionice -c 3 '${Directories.wallpaperSwitchScriptPath}' '${root.defaultWallpaperPath}'`])
         // Gate the welcome on the BAR's first paint. It launches as a second,
         // heavy quickshell process; starting it during the main shell's startup
         // races the paint and pops up over a blank/half-painted bar. Wait (up to
