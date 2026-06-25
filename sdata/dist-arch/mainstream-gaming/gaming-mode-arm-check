@@ -1,0 +1,27 @@
+#!/bin/bash
+# sddm.service ExecStartPre (installed via 10-gaming.conf). Makes a gaming/desktop
+# entry a strict one-shot and enforces OS-first on every other sddm start:
+#   * a FRESH marker (a deliberate switch armed it moments ago) -> consume it and
+#     leave /etc/sddm.conf so THIS start performs the single autologin it asked for.
+#   * no marker, or a STALE one (e.g. stranded by a StartLimit-blocked restart and
+#     only reached much later, or any unexpected start) -> run `gaming-mode-switch
+#     reset` to strip the autologin User= so SDDM reaches the password greeter and
+#     never re-enters a broken gamescope session in a loop. The marker lives in /run
+#     (tmpfs), so a reboot always clears it; anything ambiguous falls back to reset
+#     (the safe, password-greeter direction).
+#
+# Shipped as an sddm.service drop-in (always present, no `systemctl enable`), so the
+# OS-first reset never depends on a separately-enabled unit surviving the squashfs /
+# unpackfs install. The drop-in uses ExecStartPre=- and this always exits 0, so a
+# hiccup here can never wedge the login screen.
+set -u
+MARKER="/run/gaming-mode-armed"
+fresh=0
+if [[ -e "$MARKER" ]]; then
+    age=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || echo 0) ))
+    rm -f "$MARKER"
+    [[ "$age" -ge 0 && "$age" -le 120 ]] && fresh=1
+fi
+[[ "$fresh" -eq 1 ]] && exit 0
+/usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
+exit 0

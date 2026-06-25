@@ -29,6 +29,13 @@ hl.on("hyprland.start", function ()
 
     -- Cursor
     hl.exec_cmd("hyprctl setcursor Bibata-Modern-Classic 24")
+
+    -- Gaming Mode: strip any autologin User= from /etc/sddm.conf so normal
+    -- boots/logouts reach the SDDM password greeter (no-op on a fresh desktop).
+    -- Redundant with the sddm.service ExecStartPre (gaming-mode-arm-check), the
+    -- authoritative boot-time reset; this just closes the gap if the user logs
+    -- straight out of a gaming-exit session without an intervening reboot.
+    hl.exec_cmd("sudo -n /usr/bin/gaming-mode-switch reset 2>/dev/null || true")
 end)
 
 hl.on("hyprland.shutdown", function()

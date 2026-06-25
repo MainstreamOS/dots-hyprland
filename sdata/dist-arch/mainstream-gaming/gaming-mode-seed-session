@@ -1,0 +1,49 @@
+#!/bin/bash
+# Pin the SDDM greeter's default session tile to Hyprland (OS-first: a fresh login
+# lands on the desktop, not gaming).
+#
+# The Pixie greeter (Main.qml:58) takes its default tile from sessionModel.lastIndex,
+# which SDDM seeds from the [Last] Session key in its state file (/var/lib/sddm/state.conf;
+# see state.conf(5)). With no state file lastIndex is 0 = the alphabetically first
+# session in /usr/share/wayland-sessions, i.e. gamescope-session.desktop -- so the
+# greeter would otherwise open on gaming. [Autologin] Session= governs only autologin,
+# not the greeter's default tile, so the desktop default has to be set here, in
+# [Last] Session.
+#
+# Combined with [Users] RememberLastSession=false in the base config, a gaming login
+# can never repoint the default back to gamescope. Run as a sddm.service ExecStartPre
+# (10-gaming.conf) before every sddm start, so the desktop default is self-healing.
+set -u
+
+STATE_DIR="/var/lib/sddm"
+STATE="${STATE_DIR}/state.conf"
+DEFAULT_SESSION="hyprland.desktop"
+
+install -d -o sddm -g sddm -m 0750 "$STATE_DIR" 2>/dev/null || install -d -m 0750 "$STATE_DIR"
+
+tmp="$(mktemp "${STATE_DIR}/state.conf.XXXXXX")" || exit 0
+if [[ -f "$STATE" ]]; then
+    # Preserve everything except the [Last] Session key we own; force it to Hyprland.
+    awk -v sess="$DEFAULT_SESSION" '
+        BEGIN { in_l = 0; seen = 0 }
+        /^[[:space:]]*\[/ {
+            hdr = $0; sub(/#.*$/, "", hdr); gsub(/[[:space:]]/, "", hdr)
+            if (in_l && !seen) { print "Session=" sess; seen = 1 }
+            in_l = (hdr == "[Last]")
+            print; next
+        }
+        in_l && /^[[:space:]]*Session[[:space:]]*=/ { print "Session=" sess; seen = 1; next }
+        { print }
+        END {
+            if (in_l && !seen) { print "Session=" sess }
+            else if (!seen) { print ""; print "[Last]"; print "Session=" sess }
+        }
+    ' "$STATE" > "$tmp" 2>/dev/null
+else
+    printf '[Last]\nSession=%s\n' "$DEFAULT_SESSION" > "$tmp"
+fi
+
+[[ -s "$tmp" ]] || printf '[Last]\nSession=%s\n' "$DEFAULT_SESSION" > "$tmp"
+chown sddm:sddm "$tmp" 2>/dev/null || true
+chmod 0644 "$tmp"
+mv -f "$tmp" "$STATE"

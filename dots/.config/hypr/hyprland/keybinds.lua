@@ -257,7 +257,7 @@ hl.bind("SUPER + I", hl.dsp.exec_cmd(settingsApp), {description = "Settings app"
 hl.bind("CTRL + SHIFT + Escape", hl.dsp.exec_cmd(taskManager), {description = "Task manager"} )
 
 --##! Gaming
-hl.bind("SUPER + G", hl.dsp.exec_cmd("setsid -f "..hyprScripts.."/toggle_gamescope.sh"), {description = "Toggle Steam Gamescope Mode"} )
+hl.bind("SUPER + G", hl.dsp.exec_cmd("setsid -f /usr/bin/gaming-mode"), {description = "Gaming Mode (Steam Big Picture)"} )
 
 --##! Utilities
 --# Screenshot, Record, OCR, Color picker, Clipboard history

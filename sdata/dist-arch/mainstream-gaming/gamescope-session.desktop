@@ -1,0 +1,13 @@
+[Desktop Entry]
+# Mainstream OS override (installed to /usr/local/share/wayland-sessions, which SDDM
+# reads before /usr/share and dedups in favour of). NoDisplay hides this session from
+# the login greeter so a fresh user can't pick Steam Big Picture by accident -- the OS
+# is the default. Gaming Mode still autologins into it: SDDM's greeter SessionModel
+# skips NoDisplay sessions, but the autologin path (Session::setTo) loads them anyway.
+Encoding=UTF-8
+Name=Steam Big Picture
+Comment=Steam Big Picture session
+Exec=gamescope-session-plus steam
+Type=Application
+DesktopNames=gamescope
+NoDisplay=true

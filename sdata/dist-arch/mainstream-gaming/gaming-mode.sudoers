@@ -1,0 +1,5 @@
+# wheel users may flip the display manager between the desktop and the gamescope
+# Steam session without a password. Scoped to the three exact gaming-mode-switch
+# invocations -- nothing else is granted. (The boot-time reset runs as root via the
+# sddm.service ExecStartPre gaming-mode-arm-check, not through sudo.)
+%wheel ALL=(root) NOPASSWD: /usr/bin/gaming-mode-switch gaming, /usr/bin/gaming-mode-switch desktop, /usr/bin/gaming-mode-switch reset

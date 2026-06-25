@@ -1,0 +1,20 @@
+#!/bin/bash
+# Distro hook that Steam's Big Picture power menu reaches through
+# /usr/bin/steamos-session-select (shipped by gamescope-session-steam). Steam
+# exec's it with the requested target session as $1 (e.g. "desktop"). Restart
+# and Shut Down never arrive here -- gamescope-session-plus handles those itself
+# via its reboot/shutdown sentinel files -- so any call here means "leave Gaming
+# Mode and return to the Hyprland desktop".
+
+target="${1:-desktop}"
+case "$target" in
+    gamescope|gamescope-session|steam)
+        # Already where we want to be; nothing to do.
+        exit 0
+        ;;
+esac
+
+# Let Steam save its state before the session is torn down, then hand the
+# privileged display-manager flip to gaming-mode-switch (NOPASSWD sudoers rule).
+timeout 8 steam -shutdown >/dev/null 2>&1 || true
+exec sudo -n /usr/bin/gaming-mode-switch desktop

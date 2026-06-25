@@ -1,0 +1,65 @@
+groups=(mainstream)
+pkgname=mainstream-gaming
+pkgver=1.0
+pkgrel=1
+pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
+arch=(any)
+license=(MIT)
+depends=(
+  gamescope
+  gamescope-session-git
+  gamescope-session-steam-git
+)
+source=(
+  gaming-mode
+  gaming-mode-switch
+  gaming-mode-install
+  gaming-mode-seed-session
+  gaming-mode-arm-check
+  os-session-select
+  gaming-mode.sudoers
+  10-gaming.conf
+  10-mainstream-gaming.conf
+  gamescope-session.desktop
+  gamescope-session-steam.desktop
+  gamescope-drm.conf
+)
+sha256sums=(
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+  SKIP
+)
+install=mainstream-gaming.install
+
+package() {
+  install -Dm755 "$srcdir/gaming-mode"              "$pkgdir/usr/bin/gaming-mode"
+  install -Dm755 "$srcdir/gaming-mode-switch"       "$pkgdir/usr/bin/gaming-mode-switch"
+  install -Dm755 "$srcdir/gaming-mode-install"      "$pkgdir/usr/bin/gaming-mode-install"
+  install -Dm755 "$srcdir/gaming-mode-seed-session" "$pkgdir/usr/bin/gaming-mode-seed-session"
+  install -Dm755 "$srcdir/gaming-mode-arm-check"    "$pkgdir/usr/bin/gaming-mode-arm-check"
+  install -Dm755 "$srcdir/os-session-select"        "$pkgdir/usr/lib/os-session-select"
+  install -Dm440 "$srcdir/gaming-mode.sudoers"      "$pkgdir/etc/sudoers.d/gaming-mode"
+
+  install -Dm644 "$srcdir/10-gaming.conf" \
+                 "$pkgdir/usr/lib/systemd/system/sddm.service.d/10-gaming.conf"
+
+  install -Dm644 "$srcdir/10-mainstream-gaming.conf" \
+                 "$pkgdir/etc/sddm.conf.d/10-mainstream-gaming.conf"
+
+  install -Dm644 "$srcdir/gamescope-session.desktop" \
+                 "$pkgdir/usr/local/share/wayland-sessions/gamescope-session.desktop"
+  install -Dm644 "$srcdir/gamescope-session-steam.desktop" \
+                 "$pkgdir/usr/local/share/wayland-sessions/gamescope-session-steam.desktop"
+
+  install -Dm644 "$srcdir/gamescope-drm.conf" \
+                 "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@.service.d/10-gamescope-drm.conf"
+}

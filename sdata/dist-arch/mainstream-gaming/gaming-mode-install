@@ -1,0 +1,30 @@
+#!/bin/bash
+# One-time installer for the heavy half of Gaming Mode, run via pkexec so the
+# user authenticates once. The gamescope session stack is a dependency of
+# mainstream-gaming and is already present; this pulls Steam and the 32-bit
+# Vulkan stack, kept out of the base install so non-gamers carry none of it.
+#
+# pacman -Sy (refresh) before installing these leaf packages follows the common
+# gaming-setup idiom; users who want a strict full upgrade can run their normal
+# system update first.
+set -e
+
+pkgs=(
+    steam
+    mangohud lib32-mangohud
+    vulkan-icd-loader lib32-vulkan-icd-loader
+    lib32-mesa
+)
+
+gpu=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
+case "$gpu" in
+    *\[1002:*) pkgs+=(vulkan-radeon lib32-vulkan-radeon) ;;
+esac
+case "$gpu" in
+    *\[8086:*) pkgs+=(vulkan-intel lib32-vulkan-intel) ;;
+esac
+case "$gpu" in
+    *\[10de:*) pkgs+=(lib32-nvidia-utils) ;;
+esac
+
+exec pacman -Sy --needed --noconfirm "${pkgs[@]}"

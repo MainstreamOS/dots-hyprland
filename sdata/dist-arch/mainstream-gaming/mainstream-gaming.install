@@ -1,0 +1,24 @@
+post_install() {
+    # The OS-first boot reset runs as a sddm.service ExecStartPre (10-gaming.conf) --
+    # no separate unit to enable, so it can't be lost on the squashfs install. Just
+    # reload so the drop-in is picked up, and leave /etc/sddm.conf at the no-User base
+    # with the greeter pointed at Hyprland without waiting for a reboot.
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
+    /usr/bin/gaming-mode-seed-session >/dev/null 2>&1 || true
+}
+
+post_upgrade() {
+    # Defensive: /etc/sddm.conf is the sole autologin source, so clear any stray
+    # gamescope autologin drop-in left in conf.d, then re-assert the no-User base and
+    # the Hyprland greeter default.
+    rm -f /etc/sddm.conf.d/zz-gaming.conf
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
+    /usr/bin/gaming-mode-seed-session >/dev/null 2>&1 || true
+}
+
+pre_remove() {
+    # Leave /etc/sddm.conf at the no-User base so removal can't strand an autologin.
+    /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
+}

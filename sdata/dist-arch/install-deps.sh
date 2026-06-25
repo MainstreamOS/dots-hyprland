@@ -324,6 +324,7 @@ metapkgs+=(./sdata/dist-arch/mainstream-microtex-git)
 metapkgs+=(./sdata/dist-arch/mainstream-quickshell-git)
 metapkgs+=(./sdata/dist-arch/mainstream-extras)
 metapkgs+=(./sdata/dist-arch/mainstream-bibata-modern-classic-bin)
+metapkgs+=(./sdata/dist-arch/mainstream-gaming)
 
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"
