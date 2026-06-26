@@ -16,10 +16,16 @@ function setup_user_group(){
     x sudo groupadd i2c
   fi
 
-  if [[ "$OS_GROUP_ID" == "fedora" ]]; then
-    x sudo usermod -aG video,input "$(whoami)"
-  else
-    x sudo usermod -aG video,i2c,input "$(whoami)"
+  # Match the archiso/Calamares default group set so both install paths grant
+  # the user the same device access (render for GPU compute, audio, storage, lp,
+  # optical, …). Only add groups that exist so a missing one can't fail the whole
+  # usermod call.
+  local _want=(wheel network audio video input power storage lp optical render i2c)
+  [[ "$OS_GROUP_ID" == "fedora" ]] && _want=(wheel network audio video input power render)
+  local _add=() _g
+  for _g in "${_want[@]}"; do getent group "$_g" >/dev/null 2>&1 && _add+=("$_g"); done
+  if [[ ${#_add[@]} -gt 0 ]]; then
+    x sudo usermod -aG "$(IFS=,; echo "${_add[*]}")" "$(whoami)"
   fi
 }
 
@@ -216,6 +222,9 @@ function setup_gpu_drivers(){
         case "$OS_GROUP_ID" in
           arch)
             x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-mesa-driver
+            # 32-bit Vulkan so Steam/multilib apps don't pull lib32-nvidia-utils
+            # as the provider on AMD (best-effort: needs multilib, which Steam needs too).
+            try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers mesa-va-drivers
@@ -234,6 +243,7 @@ function setup_gpu_drivers(){
         case "$OS_GROUP_ID" in
           arch)
             x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver
+            try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers intel-media-driver
@@ -266,6 +276,19 @@ function setup_gpu_drivers(){
         ;;
     esac
   done
+
+  # Vulkan-provider catch-all: guarantee a (lib32-)vulkan-driver provider exists
+  # before Steam / other multilib apps install, so pacman's --noconfirm provider
+  # resolution can't fall back to the alphabetically-first one (lib32-nvidia-utils)
+  # on AMD/Intel/VM systems. Mirrors archiso install-gpu-drivers.
+  if [[ "$OS_GROUP_ID" == "arch" ]]; then
+    if ! pacman -T vulkan-driver >/dev/null 2>&1; then
+      try sudo pacman -S --needed --noconfirm vulkan-swrast
+    fi
+    if ! pacman -T lib32-vulkan-driver >/dev/null 2>&1; then
+      try sudo pacman -S --needed --noconfirm lib32-vulkan-swrast
+    fi
+  fi
 }
 
 
@@ -917,6 +940,33 @@ function setup_audio_defaults(){
 }
 showfun setup_audio_defaults
 v setup_audio_defaults
+
+# Brand /etc/os-release as Mainstream OS so the dots ./setup path matches the ISO
+# (which ships a real /etc/os-release). Stock Arch symlinks /etc/os-release to the
+# filesystem-owned /usr/lib/os-release; replace the symlink with a real override so
+# /usr/lib/os-release stays untouched (no pacman conflicts on filesystem upgrades).
+function setup_os_release_branding(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || { echo -e "${STY_YELLOW}[$0]: os-release branding is Arch-only. Skipping.${STY_RST}"; return 0; }
+  echo -e "${STY_CYAN}[$0]: Branding /etc/os-release as Mainstream OS...${STY_RST}"
+  sudo rm -f /etc/os-release
+  x sudo tee /etc/os-release >/dev/null <<'EOF'
+NAME="Mainstream OS"
+PRETTY_NAME="Mainstream OS"
+ID=arch
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;0;141;195"
+HOME_URL="https://mainstreamos.org/"
+DOCUMENTATION_URL="https://mainstreamos.org/docs"
+SUPPORT_URL="https://github.com/MainstreamOS/dots-hyprland/discussions"
+BUG_REPORT_URL="https://github.com/MainstreamOS/dots-hyprland/issues"
+PRIVACY_POLICY_URL="https://mainstreamos.org/privacy"
+DONATE_URL="https://mainstreamos.org/donate"
+LOGO=mainstream-logo
+EOF
+}
+showfun setup_os_release_branding
+v setup_os_release_branding
 
 # Raise the inotify watch limit so Quickshell's file watchers (config + style
 # hot-reload, generated colors, wallpaper) don't hit the kernel default ceiling.
