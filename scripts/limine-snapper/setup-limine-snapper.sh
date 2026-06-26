@@ -27,6 +27,15 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+# Source the shared GPU library for the canonical base kernel cmdline
+# (gpu_base_cmdline_tokens) and the single cmdline writer (cmdline_upsert),
+# shared with the dots ./setup GPU path. This script runs as root, so the
+# library writes directly (GPU_SUDO='').
+_LSN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "$_LSN_DIR/../../sdata/lib/gpu-config.sh"
+GPU_SUDO=''
+
 upsert_shell_setting() {
     local file="$1"
     local key="$2"
@@ -51,48 +60,6 @@ upsert_shell_setting() {
         printf '%s=%s\n' "$key" "$value" >> "$tmpfile"
     fi
     install -D -m 644 "$tmpfile" "$file"
-    rm -f "$tmpfile"
-}
-
-upsert_kernel_cmdline_args() {
-    local cmdline_file="/etc/kernel/cmdline"
-    local -a new_args=("$@")
-    local -a existing=()
-    local -a keys=()
-    local -a kept=()
-    local tmpfile
-    local token key skip existing_line
-
-    if [[ -f "$cmdline_file" ]]; then
-        existing_line=$(tr '\n' ' ' < "$cmdline_file")
-        read -r -a existing <<< "$existing_line"
-    elif [[ -r /proc/cmdline ]]; then
-        read -r -a existing <<< "$(cat /proc/cmdline)"
-    fi
-
-    for token in "${new_args[@]}"; do
-        keys+=("${token%%=*}")
-    done
-
-    for token in "${existing[@]}"; do
-        [[ -z "$token" ]] && continue
-        [[ "$token" == BOOT_IMAGE=* ]] && continue
-        [[ "$token" == initrd=* ]] && continue
-        key="${token%%=*}"
-        skip=false
-        for existing_key in "${keys[@]}"; do
-            if [[ "$key" == "$existing_key" ]]; then
-                skip=true
-                break
-            fi
-        done
-        $skip || kept+=("$token")
-    done
-
-    kept+=("${new_args[@]}")
-    tmpfile=$(mktemp)
-    printf '%s\n' "${kept[*]}" > "$tmpfile"
-    install -D -m 644 "$tmpfile" "$cmdline_file"
     rm -f "$tmpfile"
 }
 
@@ -272,17 +239,13 @@ ROOT_TOKEN="root=UUID=$ROOT_UUID"
 if [[ -n "$ROOT_PARTUUID" ]]; then
     ROOT_TOKEN="root=PARTUUID=$ROOT_PARTUUID"
 fi
-upsert_kernel_cmdline_args \
-    "$ROOT_TOKEN" \
-    "rootflags=subvol=$ROOT_SUBVOL" \
-    "rw" \
-    "rootfstype=btrfs" \
-    "quiet" \
-    "loglevel=0" \
-    "systemd.show_status=false" \
-    "rd.systemd.show_status=false" \
-    "rd.udev.log_level=0" \
-    "vt.global_cursor_default=0"
+# Canonical base cmdline from the shared library (Plymouth splash, zswap
+# disabled, rd.udev.log_level=3, subvol normalized) written via the single
+# cmdline_upsert. Replaces the old per-token seed: drops the now-redundant
+# loglevel=0 / systemd.show_status silencing (splash covers it) and adds the
+# locked zswap.enabled=0.
+read -r -a _base_cmdline <<< "$(gpu_base_cmdline_tokens "$ROOT_TOKEN" "$ROOT_SUBVOL")"
+cmdline_upsert "${_base_cmdline[@]}"
 
 info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
 limine-update

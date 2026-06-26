@@ -669,72 +669,6 @@ function _limine_configure_generator_defaults(){
   fi
 }
 
-# Upsert args into /etc/kernel/cmdline (single-line canonical kernel cmdline on
-# Arch). This is the source-of-truth consumed by mkinitcpio when building UKIs
-# (Unified Kernel Images) — UKIs embed the cmdline into the .efi at build time,
-# so direct edits to generated Limine entries would never reach UKI boot
-# entries. limine-entry-tool also reads this file first for protocol: linux
-# entries, so writing here covers both paths.
-# Seeds the file from the currently configured cmdline when absent, preferring
-# /boot/limine.conf as a compatibility fallback and otherwise /proc/cmdline
-# stripped of BOOT_IMAGE=/initrd=. Then upserts by key-dedup like the other
-# helpers.
-function _kernel_cmdline_upsert(){
-  local cmdline_file="/etc/kernel/cmdline"
-  local -a new_args=("$@")
-  (( ${#new_args[@]} == 0 )) && return 0
-  local -a existing=()
-  if [[ -f "$cmdline_file" ]]; then
-    local _base; _base=$(tr '\n' ' ' < "$cmdline_file")
-    read -r -a existing <<< "$_base"
-  else
-    local _seed=""
-    if [[ -f /boot/limine.conf ]]; then
-      _seed=$(awk '/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/ {
-        sub(/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/, "");
-        print; exit
-      }' /boot/limine.conf)
-    fi
-    if [[ -z "$_seed" && -r /proc/cmdline ]]; then
-      _seed=$(cat /proc/cmdline)
-    fi
-    local -a _toks; read -r -a _toks <<< "$_seed"
-    local _t
-    for _t in "${_toks[@]}"; do
-      [[ "$_t" == BOOT_IMAGE=* ]] && continue
-      [[ "$_t" == initrd=* ]] && continue
-      existing+=("$_t")
-    done
-  fi
-  local -a _keys=() kept=()
-  local _a
-  for _a in "${new_args[@]}"; do _keys+=("${_a%%=*}"); done
-  local _t _tk _k _skip
-  for _t in "${existing[@]}"; do
-    [[ -z "$_t" ]] && continue
-    _tk="${_t%%=*}"
-    _skip=false
-    for _k in "${_keys[@]}"; do
-      if [[ "$_tk" == "$_k" ]]; then _skip=true; break; fi
-    done
-    $_skip || kept+=("$_t")
-  done
-  kept+=("${new_args[@]}")
-  local _tmp; _tmp=$(mktemp)
-  printf '%s\n' "${kept[*]}" > "$_tmp"
-  sudo install -m 644 -D "$_tmp" "$cmdline_file"
-  rm -f "$_tmp"
-}
-
-# Persist kernel cmdline args in the canonical limine-entry-tool source file.
-# `limine-update` / `limine-mkinitcpio` regenerate /boot/limine.conf from
-# /etc/kernel/cmdline, so we avoid patching the generated config directly.
-function _limine_apply_cmdline_args(){
-  local -a args=("$@")
-  (( ${#args[@]} == 0 )) && return 0
-  _kernel_cmdline_upsert "${args[@]}"
-}
-
 MKINITCPIO_SYSTEMD_HOOKS=(base systemd plymouth autodetect microcode modconf kms keyboard sd-vconsole block filesystems fsck)
 
 function _mkinitcpio_ensure_systemd_stack(){
@@ -816,10 +750,8 @@ function setup_plymouth(){
   fi
   # Persist the desired boot flags in /etc/kernel/cmdline so future
   # limine-mkinitcpio regenerations keep the splash/silencing settings.
-  echo -e "${STY_CYAN}[$0]: Adding plymouth + silencing args to the managed kernel cmdline...${STY_RST}"
-  if ! _limine_apply_cmdline_args quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0; then
-    echo -e "${STY_YELLOW}[$0]: Failed to update /etc/kernel/cmdline for plymouth.${STY_RST}"
-  fi
+  echo -e "${STY_CYAN}[$0]: Ensuring the plymouth splash flags are in the managed kernel cmdline...${STY_RST}"
+  cmdline_upsert quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0
 
   # Rebuild initramfs so plymouth is active on next boot. On systems with
 # limine-mkinitcpio-hook installed, this also regenerates /boot/limine.conf
