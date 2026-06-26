@@ -256,9 +256,20 @@ Variants {
                         return;
                     }
 
-                    // "scrolloverview" doesn't toggle on a second hit
-                    // while the overview is up.
-                    if (trig === "scrolloverview" && (GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen)) return;
+                    // Close path: "scrolloverview" with its overview already
+                    // up toggles it off — call the dispatcher that
+                    // overview("off") returns and fire the ripple in parallel,
+                    // mirroring the "default" close above. Runs before the
+                    // dismissable check (like default) so the corner can always
+                    // close it.
+                    if (trig === "scrolloverview" && GlobalStates.scrollOverviewOpen) {
+                        GlobalStates.hotCornerTriggered();
+                        Quickshell.execDetached(["hyprctl", "eval",
+                            '(function() local f = hl.plugin.scrolloverview.overview("off") if type(f) == "function" then f() end end)()']);
+                        triggerArea.toggleCooldown = true;
+                        cooldownTimer.restart();
+                        return;
+                    }
 
                     // Skip the open path when an unrelated dismissable
                     // overlay (cheatsheet, sidebar, media controls, …)
@@ -284,10 +295,11 @@ Variants {
                     GlobalStates.hotCornerTriggered();
                     delayTimer.restart();
 
-                    if (trig === "default") {
-                        triggerArea.toggleCooldown = true;
-                        cooldownTimer.restart();
-                    }
+                    // Cooldown both triggers so a focus-grab re-entry
+                    // synthesized right after opening can't immediately
+                    // toggle the overview back off.
+                    triggerArea.toggleCooldown = true;
+                    cooldownTimer.restart();
                 }
             }
             Timer {
@@ -319,13 +331,16 @@ Variants {
             // — see HyprCtl.cpp:1108) doesn't trip over.
             Process {
                 id: dispatchProc
-                // Bare dispatch — no guard. When the plugin's Lua function
-                // is missing, the eval errors out with "attempt to index a
-                // nil value (field 'scrolloverview')". onExited greps that
-                // text from stdout/stderr and triggers the force-reload so
-                // the NEXT hover succeeds.
+                // Upstream's dispatcher refactor (scroll-overview afa8fc8) changed
+                // overview(arg): outside a __lua keybind it no longer dispatches —
+                // it RETURNS the dispatcher function. So call what it returns. The
+                // IIFE keeps it a single expression (the eval wrap can't trip over
+                // it) and lets the nil-plugin error still surface: when the plugin's
+                // Lua function is missing, indexing it errors with "attempt to index
+                // a nil value (field 'scrolloverview')", which onExited greps to
+                // trigger the force-reload so the NEXT hover succeeds.
                 command: ["hyprctl", "eval",
-                    'hl.plugin.scrolloverview.overview("on")']
+                    '(function() local f = hl.plugin.scrolloverview.overview("on") if type(f) == "function" then f() end end)()']
                 property string outBuf: ""
                 property string errBuf: ""
                 onRunningChanged: if (running) { outBuf = ""; errBuf = "" }
@@ -386,12 +401,9 @@ Variants {
             }
 
             onEntered: {
-                // For scrolloverview: don't re-arm if the overview is
-                // already up — we'd just be triggering it again.
-                // For default: still arm so a second corner-hit toggles
-                // the overview off (the dwell handler does the
-                // open-vs-close decision).
-                if ((GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen) && triggerArea.trigger !== "default") return;
+                // Arm the dwell for both triggers in both states — the dwell
+                // handler does the open-vs-close decision, so a second hover
+                // toggles the overview off (scrolloverview included now).
                 dwellTimer.restart();
             }
             onExited: dwellTimer.stop()
