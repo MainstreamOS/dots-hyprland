@@ -189,7 +189,9 @@ function setup_gpu_drivers(){
               [[ ${#_lib32[@]} -gt 0 ]] && try sudo pacman -S --needed --noconfirm "${_lib32[@]}"
             else
               # Frozen legacy branch (nvidia-580xx/470xx/390xx) — only present if [mainstream] prebuilt it.
-              # Try it; if unavailable, fall back to nouveau and leave a breadcrumb for the user.
+              # The *-dkms packages build against the kernel, so linux-headers + dkms must be present first.
+              x sudo pacman -S --needed --noconfirm linux-headers dkms
+              # Try the legacy branch; if unavailable, fall back to nouveau and leave a breadcrumb.
               if ! sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
                 echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
                 x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
@@ -967,6 +969,34 @@ EOF
 }
 showfun setup_os_release_branding
 v setup_os_release_branding
+
+# Set the login shell to zsh to match the ISO (Calamares users.conf shell:
+# /usr/bin/zsh). Guarded so it no-ops until mainstream-basic carries zsh.
+function setup_default_shell(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  command -v zsh >/dev/null 2>&1 || { echo -e "${STY_YELLOW}[$0]: zsh not installed — skipping default-shell change.${STY_RST}"; return 0; }
+  local _zsh _cur
+  _zsh="$(command -v zsh)"
+  _cur="$(getent passwd "$(whoami)" | cut -d: -f7)"
+  if [[ "$_cur" != "$_zsh" ]]; then
+    echo -e "${STY_CYAN}[$0]: Setting login shell to ${_zsh}...${STY_RST}"
+    x sudo usermod -s "$_zsh" "$(whoami)"
+  fi
+}
+showfun setup_default_shell
+v setup_default_shell
+
+# Printing: cups is socket-activated on the ISO (cups.service starts on the
+# first print job), so enable cups.socket rather than the service. Guarded so it
+# no-ops until mainstream-basic carries cups.
+function setup_printing(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  pacman -Qq cups >/dev/null 2>&1 || { echo -e "${STY_YELLOW}[$0]: cups not installed — skipping printing setup.${STY_RST}"; return 0; }
+  echo -e "${STY_CYAN}[$0]: Enabling cups.socket (print spooler on demand)...${STY_RST}"
+  x sudo systemctl enable cups.socket
+}
+showfun setup_printing
+v setup_printing
 
 # Raise the inotify watch limit so Quickshell's file watchers (config + style
 # hot-reload, generated colors, wallpaper) don't hit the kernel default ceiling.
