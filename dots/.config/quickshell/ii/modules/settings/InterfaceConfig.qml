@@ -32,6 +32,7 @@ ContentPage {
     // plugin's compiled-in defaults.
     property int scrollOverviewWorkspaceGap: 100     // pixels between workspace previews
     property real scrollOverviewWorkspaceScale: 0.5  // 0.0–1.0 — overview shrink factor
+    property string scrollOverviewLayout: "vertical" // "vertical" | "horizontal" — overview scroll axis
     property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
 
@@ -126,6 +127,9 @@ ContentPage {
             // scale is a float (e.g. 0.5) — accept optional decimal part
             let scaleMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*=\s*\{[\s\S]*?\bscale\s*=\s*(\d+(?:\.\d+)?)/);
             if (scaleMatch) root.scrollOverviewWorkspaceScale = parseFloat(scaleMatch[1]);
+            // layout is a quoted Lua string: layout = "vertical" | "horizontal".
+            let layoutMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*=\s*\{[\s\S]*?\blayout\s*=\s*"([a-z]+)"/);
+            if (layoutMatch) root.scrollOverviewLayout = layoutMatch[1];
         }
     }
 
@@ -135,11 +139,17 @@ ContentPage {
     // on every overview construction, so the next open picks up the new
     // value. Persistence via Python regex on custom/general.lua — replaces
     // an existing line in the `scrolloverview = { ... }` table, or inserts
-    // one right after the opening brace if no line exists yet. Handles both
-    // integers and floats (regex `[\d.]+` matches `48`, `0.5`, `100.25`).
+    // one right after the opening brace if no line exists yet. Handles integers,
+    // floats, bools, and quoted strings (e.g. layout = "vertical").
     // Inserted lines get a trailing comma to stay valid Lua table syntax.
     function setScrollOverviewKey(key, value) {
         setHyprKeyword(`plugin:scrolloverview:${key}`, value.toString())
+        // Lua-format the value for persistence: integers/floats/bools verbatim,
+        // anything else gets quoted as a Lua string (e.g. layout = "vertical").
+        const raw = value.toString();
+        const luaVal = (raw === "true" || raw === "false" || /^-?\d+(?:\.\d+)?$/.test(raw))
+            ? raw
+            : `"${raw.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
         // Block-opener pattern requires `^[ \t]*scrolloverview = {` at line
         // start (re.M flag) so a doc comment like
         // `-- scrolloverview = { gesture_distance = ... }` can't shadow the
@@ -152,12 +162,12 @@ ContentPage {
             "    text = open(conf).read()\n" +
             "except FileNotFoundError:\n" +
             "    sys.exit(0)\n" +
-            "pattern = r'(^[ \\t]*scrolloverview[ \\t]*=[ \\t]*\\{[\\s\\S]*?[ \\t]*)' + re.escape(key) + r'([ \\t]*=[ \\t]*)[\\d.]+'\n" +
+            "pattern = r'(^[ \\t]*scrolloverview[ \\t]*=[ \\t]*\\{[\\s\\S]*?[ \\t]*)' + re.escape(key) + r'([ \\t]*=[ \\t]*)(?:\"[^\"]*\"|-?[\\d.]+|true|false)'\n" +
             "new_text, count = re.subn(pattern, r'\\1' + key + r'\\g<2>' + val, text, count=1, flags=re.M|re.S)\n" +
             "if count == 0:\n" +
             "    new_text = re.sub(r'(?m)^([ \\t]*)scrolloverview([ \\t]*=[ \\t]*\\{)', r'\\1scrolloverview\\2\\n            ' + key + ' = ' + val + ',', text, count=1)\n" +
             "open(conf, 'w').write(new_text)\n";
-        runPy(py, [key, value.toString(), root.customGeneralConf])
+        runPy(py, [key, luaVal, root.customGeneralConf])
     }
 
     // Live source of truth for whether scrolloverview is loaded into Hyprland.
@@ -627,11 +637,51 @@ ContentPage {
             visible: Config.options.bar.hotCorners.trigger === "scrolloverview"
             title: Translation.tr("Scrolling Overview")
 
-        // Workspace gap and scale — only render once the plugin is
-        // actually loaded (driven by `hyprctl -i 0 plugin list` via
-        // scrollOverviewStateReader). Hides during the brief gap on
-        // first install before the .so loads, and stays hidden if the
-        // user has manually unloaded the plugin out-of-band.
+        // Layout — vertical (workspaces stacked, scroll up/down) vs horizontal
+        // (scroll left/right). Maps to the plugin:scrolloverview:layout string.
+        // Only render once the plugin is actually loaded (driven by
+        // `hyprctl -i 0 plugin list` via scrollOverviewStateReader); hides
+        // during the brief gap on first install before the .so loads.
+        RowLayout {
+            visible: root.scrollOverviewEnabled
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            // Match ConfigSwitch's vertical padding (implicitHeight: content + 8*2)
+            // so the selector has the same top/bottom breathing room as the
+            // Per app/Per window selector, which inherits it from its paired switch.
+            Layout.topMargin: 8
+            Layout.bottomMargin: 8
+            OptionalMaterialSymbol {
+                icon: "splitscreen"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Layout")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            ConfigSelectionArray {
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignVCenter
+                currentValue: root.scrollOverviewLayout
+                onSelected: newValue => {
+                    if (newValue === root.scrollOverviewLayout) return;
+                    root.scrollOverviewLayout = newValue;
+                    root.setScrollOverviewKey("layout", newValue);
+                }
+                options: [
+                    { displayName: Translation.tr("Vertical"),   icon: "view_day",  value: "vertical" },
+                    { displayName: Translation.tr("Horizontal"), icon: "view_week", value: "horizontal" },
+                ]
+            }
+        }
+
+        // Workspace gap and scale. topMargin lifts the inter-setting gap to 6
+        // (subsection spacing 2 + 4) so it matches the Ripple Animation /
+        // Trigger overview spacing in the section above.
         ConfigRow {
             visible: root.scrollOverviewEnabled
             uniform: true
@@ -687,6 +737,7 @@ ContentPage {
                 }
             }
         }
+
         } // end of Scrolling Overview ContentSubsection
     }
 
