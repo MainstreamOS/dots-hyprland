@@ -247,9 +247,15 @@ function setup_gpu_drivers(){
 
 
 function setup_gamescope(){
-  # Install python-evdev — required for the input proxy in toggle_gamescope.sh.
-  # jq and seatd are pulled in by other packages on Arch but listed explicitly
-  # as a safety net. --needed makes this a no-op if already installed.
+  # Runtime dependencies for the gamescope Gaming Mode session. gamescope is also
+  # pulled in by the mainstream-gaming package; python-evdev, jq and seatd are
+  # listed explicitly as a safety net. --needed makes this a no-op if already
+  # installed.
+  #
+  # The old in-session toggle (a broad /etc/sudoers.d/gamescope, the uinput input
+  # proxy, loginctl enable-linger and toggle_gamescope.sh) is gone: Gaming Mode
+  # now uses the SteamOS-style SDDM session switch shipped by mainstream-gaming,
+  # which carries its own tightly-scoped /etc/sudoers.d/gaming-mode.
   case "$OS_GROUP_ID" in
     arch)
       x sudo pacman -S --needed --noconfirm gamescope python-evdev jq seatd
@@ -261,51 +267,6 @@ function setup_gamescope(){
       echo -e "${STY_YELLOW}[$0]: Unsupported OS for gamescope setup. Install gamescope, python-evdev, jq, and seatd manually.${STY_RST}"
       ;;
   esac
-
-  # Sudoers file — allows toggle_gamescope.sh to stop/start sddm, start
-  # bluetooth.service, chvt, seatd, python3, setcap, systemd-run, kill,
-  # and rfkill without a password prompt. The last two are needed for
-  # cleanup at exit and for unblocking the BT radio so Steam's Deck UI
-  # Bluetooth menu works inside the gamescope session.
-  # chmod 440 is required — sudo refuses world-readable sudoers files.
-  local _user
-  _user=$(whoami)
-  sudo bash -c "cat > /etc/sudoers.d/gamescope << EOF
-Defaults:${_user} !requiretty
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop sddm
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start sddm
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start bluetooth.service
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/chvt
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/systemd-run
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/python3
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/seatd
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/setcap
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/kill
-${_user} ALL=(ALL) NOPASSWD: /usr/bin/rfkill
-EOF"
-  x sudo chmod 440 /etc/sudoers.d/gamescope
-
-  # udev rule — allows the input proxy to create a UInput virtual device.
-  # On Arch this is not added elsewhere in this script so we add it here.
-  # On Fedora it is already handled in the systemd block above.
-  if [[ "$OS_GROUP_ID" != "fedora" ]]; then
-    x sudo bash -c 'echo KERNEL=="uinput", MODE="0660", GROUP="input" | tee /etc/udev/rules.d/99-uinput.rules'
-    x sudo udevadm control --reload-rules
-    x sudo udevadm trigger || true
-  fi
-
-  # Enable linger so the user's systemd session persists independently
-  # of SDDM being stopped. Safe to call here since we are on a live system.
-  x loginctl enable-linger "$_user"
-
-  # Ensure the toggle script is executable — safety net in case permissions
-  # were lost during dotfile deployment.
-  local _toggle="$HOME/.config/hypr/hyprland/scripts/toggle_gamescope.sh"
-  if [[ -f "$_toggle" ]]; then
-    x chmod +x "$_toggle"
-  else
-    echo -e "${STY_YELLOW}[$0]: toggle_gamescope.sh not found at $_toggle — skipping chmod.${STY_RST}"
-  fi
 }
 
 
@@ -1083,7 +1044,7 @@ NVIDIAEOF
 }
 
 # Apply dotfile-level GPU tweaks (NVIDIA Wayland env vars in hypr custom
-# env.conf, dpms delays in hypridle.conf, AQ_DRM_DEVICES for hybrid NVIDIA).
+# env.lua, dpms delays in hypridle.conf, AQ_DRM_DEVICES for hybrid NVIDIA).
 # Separated from setup_gpu_autoconfig because these files only exist after
 # 3.files.sh deploys dotfiles. Safe to call more than once — each insertion is
 # idempotent and skips silently when the target file is missing.
@@ -1093,9 +1054,9 @@ function setup_gpu_hypr_tweaks(){
   if [[ -z "${HAS_NVIDIA:-}" ]]; then
     _gpu_detect >/dev/null 2>&1 || return 0
   fi
-  local _env_conf="$HOME/.config/hypr/custom/env.conf"
-  if [[ ! -f "$_env_conf" ]]; then
-    echo -e "${STY_YELLOW}[$0]: $_env_conf not found — deferring hypr GPU tweaks until after dotfiles are deployed.${STY_RST}"
+  local _env_lua="$HOME/.config/hypr/custom/env.lua"
+  if [[ ! -f "$_env_lua" ]]; then
+    echo -e "${STY_YELLOW}[$0]: $_env_lua not found — deferring hypr GPU tweaks until after dotfiles are deployed.${STY_RST}"
     return 0
   fi
 
