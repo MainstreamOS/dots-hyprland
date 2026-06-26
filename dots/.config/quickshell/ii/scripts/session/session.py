@@ -202,8 +202,11 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     windows = []
     for c in clients:
         cls = c.get("class") or ""
-        # The shell relaunches itself; capturing it would double-spawn.
-        if not cls or cls.lower().startswith("quickshell"):
+        # Skip the shell's own surfaces. Quickshell toplevels report their Qt
+        # reverse-DNS app-id ("org.quickshell"), so match the substring -- a
+        # startswith("quickshell") check misses the "org." form, captures the
+        # shell, then blindly relaunches it on restore.
+        if not cls or "quickshell" in cls.lower():
             continue
         pid = c.get("pid") or 0
         app_id = flatpak_app_id(pid)
