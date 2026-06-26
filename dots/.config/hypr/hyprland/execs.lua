@@ -36,6 +36,11 @@ hl.on("hyprland.start", function ()
     -- authoritative boot-time reset; this just closes the gap if the user logs
     -- straight out of a gaming-exit session without an intervening reboot.
     hl.exec_cmd("sudo -n /usr/bin/gaming-mode-switch reset 2>/dev/null || true")
+
+    -- Gaming Mode: one-time tip on the first return from a gaming session, pointing
+    -- at Steam's "Automatically Set Resolution" toggle (defaults on, renders soft, and
+    -- has no config lever to flip for the user). No-op until armed and never repeats.
+    hl.exec_cmd("/usr/bin/gaming-mode --tips")
 end)
 
 hl.on("hyprland.shutdown", function()

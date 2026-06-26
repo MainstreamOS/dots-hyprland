@@ -12,6 +12,22 @@ notify() {
     command -v notify-send >/dev/null 2>&1 && notify-send -u "$urgency" -a "Gaming Mode" "Gaming Mode" "$*"
 }
 
+# One-time markers (e.g. the first-run resolution tip) live here.
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream-gaming"
+
+# --tips: Hyprland-start hook. Once, after the first Gaming Mode session returns to the
+# desktop, point the user at Steam's "Automatically Set Resolution" toggle -- it defaults
+# on and renders soft, and there is no config/env lever to flip it for them. No-op unless
+# armed (set when entering gaming below), and never shown twice.
+if [[ "${1:-}" == "--tips" ]]; then
+    if [[ -e "$state_dir/res-hint-armed" ]]; then
+        rm -f "$state_dir/res-hint-armed"; touch "$state_dir/res-hint-done"
+        command -v notify-send >/dev/null 2>&1 && notify-send -u normal -t 0 -a "Gaming Mode" \
+            "Gaming Mode tip" "For a sharper picture, open Steam > Settings > Display and turn off 'Automatically Set Resolution'."
+    fi
+    exit 0
+fi
+
 # Debounce Super+G: take a per-user non-blocking lock so a mashed hotkey fires the
 # switch exactly once. If a switch is already in flight, drop this press silently --
 # the display manager is already restarting into gaming. This is the first line of
@@ -73,7 +89,11 @@ systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null || true
 snap="$HOME/.config/quickshell/ii/scripts/session/snapshot.sh"
 [[ -x "$snap" ]] && "$snap" >/dev/null 2>&1 || true
 
-# 5. Flip the display manager into the Steam Big Picture session.
+# 5. Arm the one-time resolution tip, shown on the next desktop return (see --tips).
+[[ -e "$state_dir/res-hint-done" || -e "$state_dir/res-hint-armed" ]] || \
+    { mkdir -p "$state_dir" && touch "$state_dir/res-hint-armed"; }
+
+# 6. Flip the display manager into the Steam Big Picture session.
 notify "Switching to Steam Big Picture..."
 if ! sudo -n /usr/bin/gaming-mode-switch gaming; then
     notify -c "Couldn't switch sessions -- a system update may be needed. Staying on the desktop."
