@@ -1,0 +1,34 @@
+# default-apps.list — single source of truth for Mainstream OS's default user
+# applications. Consumed by:
+#   - sdata/dist-arch/mainstream-extras/PKGBUILD -> optdepends (the dots install
+#     force-installs these default apps)
+#   - archiso build.sh -> the netinstall.conf "Included Extras" group (the same
+#     apps, pre-selected but user-uncheckable in the Calamares installer)
+#
+# Format per entry:  pkgname|Display Name|Description
+#   - A pkgname containing a dot (reverse-DNS, e.g. com.spotify.Client) is a
+#     Flatpak ref; everything else is a native package.
+#   - Infra (flatpak, appstream, appstream-glib) is NOT listed here — it lives in
+#     mainstream-extras depends so it installs before these apps.
+#   - Descriptions must not contain a '|' or a '"' (they are emitted into both
+#     pacman optdepends and double-quoted YAML).
+MAINSTREAM_DEFAULT_APPS=(
+  "chromium|Chromium|Open-source Chromium web browser — Google Chrome without the proprietary bits"
+  "net.nokyan.Resources|Resources|Modern GTK4 system monitor for CPU, memory, GPU, and disks"
+  "gnome-disk-utility|GNOME Disks|Manage drives, partitions, and disk images"
+  "gnome-software|GNOME Software|Graphical app store for Flatpak and system packages"
+  "org.gnome.Calculator|GNOME Calculator|Simple and scientific calculator"
+  "org.gnome.Calendar|GNOME Calendar|Clean, easy-to-use calendar app"
+  "org.gnome.SimpleScan|Simple Scan|Straightforward scanning utility"
+  "org.gnome.font-viewer|GNOME Font Viewer|Preview and install fonts"
+  "nautilus-copy-path|Nautilus Copy Path|Right-click Copy path / URI / name / content in Files"
+  "nautilus-admin-gtk4|Nautilus Open as Administrator|Right-click Open / Edit as Administrator in Files (pkexec-backed)"
+  "io.gitlab.adhami3310.Impression|Impression|Write disk images to USB drives"
+  "org.gnome.TextEditor|GNOME Text Editor|Simple, modern text editor"
+  "mpv|mpv|Lightweight, scriptable video player"
+  "mpv-modernz|mpv ModernZ|Modern OSC skin for mpv"
+  "mpv-thumbfast-git|mpv thumbfast|Thumbnail previews on the mpv seekbar"
+  "com.spotify.Client|Spotify|Official music streaming client"
+  "org.gnome.Loupe|Loupe|Modern GNOME image viewer with smooth zoom and gesture support"
+  "steam|Steam|Valve's game distribution platform with Proton compatibility"
+)

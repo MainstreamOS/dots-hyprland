@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-screencapture
 pkgver=1.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Mainstream OS Screenshot and Recording Dependencies'
 provides=('illogical-impulse-screencapture')
 replaces=('illogical-impulse-screencapture')
@@ -12,6 +12,7 @@ depends=(
   hyprshot
   slurp
   swappy
+  satty
   tesseract
   tesseract-data-eng
   wf-recorder

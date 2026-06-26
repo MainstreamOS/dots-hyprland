@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=7
+pkgrel=8
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -35,6 +35,7 @@ depends=(
   clinfo
   power-profiles-daemon
   topgrade
+  fastfetch
   cpio
   rsync
   go-yq # https://github.com/mikefarah/yq
