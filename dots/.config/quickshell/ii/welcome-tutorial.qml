@@ -51,6 +51,35 @@ ApplicationWindow {
     // Shared asset dir for the cards' screenshots/icons.
     readonly property string imageDir: Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
 
+    // Scrolling-overview layout (plugin:scrolloverview:layout). Not a Config
+    // option, so it uses the same live(hl.config)+persist(general.lua) path
+    // Settings -> Interface uses, kept self-contained here.
+    property string scrollOverviewLayout: "vertical" // "vertical" | "horizontal"
+    function setScrollOverviewLayout(value) {
+        if (value === root.scrollOverviewLayout) return;
+        root.scrollOverviewLayout = value;
+        // Live: set the plugin key via hl.config (Lua-mode keyword replacement);
+        // the plugin re-reads getLayout() on the next overview open.
+        Quickshell.execDetached(["hyprctl", "eval",
+            `hl.config({ plugin = { ["scrolloverview.layout"] = "${value}" } })`]);
+        // Persist into custom/general.lua's scrolloverview block: replace an
+        // existing layout = "..." line, or insert one after the block opener.
+        const conf = Quickshell.env("HOME") + "/.config/hypr/custom/general.lua";
+        const py =
+            "import re, sys\n" +
+            "val, conf = sys.argv[1], sys.argv[2]\n" +
+            "try:\n" +
+            "    text = open(conf).read()\n" +
+            "except FileNotFoundError:\n" +
+            "    sys.exit(0)\n" +
+            "pattern = r'(^[ \\t]*scrolloverview[ \\t]*=[ \\t]*\\{[\\s\\S]*?[ \\t]*)layout([ \\t]*=[ \\t]*)\"[^\"]*\"'\n" +
+            "new_text, count = re.subn(pattern, r'\\1layout\\g<2>' + val, text, count=1, flags=re.M|re.S)\n" +
+            "if count == 0:\n" +
+            "    new_text = re.sub(r'(?m)^([ \\t]*)scrolloverview([ \\t]*=[ \\t]*\\{)', r'\\1scrolloverview\\2\\n            layout = ' + val + ',', text, count=1)\n" +
+            "open(conf, 'w').write(new_text)\n";
+        Quickshell.execDetached(["python3", "-c", py, `"${value}"`, conf]);
+    }
+
     // Shared mockup geometry — the feature cards render the same
     // 600x380 canvas and 560-wide bar, so these live here as one
     // source of truth. Constants that genuinely differ between cards
@@ -5711,27 +5740,11 @@ readonly property var drawerApps: root.drawerApps
                             }
                         }
 
-                        // Ripple animation switch — hidden when corner is
-                        // off, matching Settings → Interface.
-                        ConfigSwitch {
-                            Layout.fillWidth: true
-                            visible: Config.options.bar.hotCorners.trigger !== "off"
-                            buttonIcon: "blur_circular"
-                            text: Translation.tr("Ripple Animation")
-                            checked: Config.options.bar.hotCorners.animationEnabled
-                            onCheckedChanged: {
-                                if (checked === Config.options.bar.hotCorners.animationEnabled) return
-                                Config.options.bar.hotCorners.animationEnabled = checked
-                            }
-                        }
-
-                        // Trigger overview combo — same layout/padding
-                        // as Settings → Interface so the icon lines up
-                        // with the Ripple Animation switch's icon above
-                        // (ConfigSwitch wraps in a RippleButton that has
-                        // ~6-8px of internal padding before the icon — a
-                        // bare RowLayout doesn't, so it needs explicit
-                        // left/right margins to match).
+                        // Trigger overview combo — same layout/padding as
+                        // Settings → Interface. ConfigSwitch-style rows wrap in a
+                        // RippleButton with ~6-8px of internal left padding before
+                        // the icon; a bare RowLayout doesn't, so it needs explicit
+                        // left/right margins to keep the icon aligned.
                         RowLayout {
                             Layout.fillWidth: true
                             Layout.leftMargin: 8
@@ -5763,6 +5776,43 @@ readonly property var drawerApps: root.drawerApps
                                 }
                                 onActivated: index => {
                                     Config.options.bar.hotCorners.trigger = model[index].value
+                                }
+                            }
+                        }
+
+                        // Scrolling-overview layout — Vertical/Horizontal, shown
+                        // only when the corner triggers the scrolling overview.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 8
+                            Layout.rightMargin: 8
+                            spacing: 4
+                            visible: Config.options.bar.hotCorners.trigger === "scrolloverview"
+                            OptionalMaterialSymbol {
+                                icon: "splitscreen"
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                            StyledText {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.leftMargin: 6
+                                text: Translation.tr("Scrolling Overview Layout")
+                                color: Appearance.colors.colOnSecondaryContainer
+                            }
+                            StyledComboBox {
+                                textRole: "displayName"
+                                Layout.fillWidth: false
+                                Layout.preferredWidth: 220
+                                model: [
+                                    { displayName: Translation.tr("Vertical"),   icon: "view_day",  value: "vertical" },
+                                    { displayName: Translation.tr("Horizontal"), icon: "view_week", value: "horizontal" }
+                                ]
+                                currentIndex: {
+                                    const idx = model.findIndex(item => item.value === root.scrollOverviewLayout)
+                                    return idx !== -1 ? idx : 0
+                                }
+                                onActivated: index => {
+                                    root.setScrollOverviewLayout(model[index].value)
                                 }
                             }
                         }
