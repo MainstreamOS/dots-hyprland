@@ -57,8 +57,8 @@ fi
 
 # ---------- build + install via makepkg ------------------------------------
 
-note "building + installing the package (makepkg -si pulls rust/cargo/zip/git)"
-( cd "$CACHE_DIR" && makepkg -si --needed --noconfirm ) \
+note "building + installing the package (makepkg -s pulls rust/cargo/zip/git; -r removes them after)"
+( cd "$CACHE_DIR" && makepkg -sir --needed --noconfirm ) \
     || fatal "makepkg failed — see output above"
 
 printf "${C_G}[mpris-hyprland]${C_RST} installed.\n"
