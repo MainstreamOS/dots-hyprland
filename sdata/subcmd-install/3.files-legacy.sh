@@ -85,6 +85,10 @@ case "${SKIP_HYPRLAND}" in
     fi
 
     install_dir__ignore_existing "dots/.config/hypr/custom" "${XDG_CONFIG_HOME}/hypr/custom"
+    # hyprlock helper scripts (caps-lock indicator + status line) and the
+    # workspaces config — static repo files the legacy deploy previously skipped.
+    install_dir__sync "dots/.config/hypr/hyprlock" "${XDG_CONFIG_HOME}/hypr/hyprlock"
+    install_file "dots/.config/hypr/workspaces.lua" "${XDG_CONFIG_HOME}/hypr/workspaces.lua"
     ;;
 esac
 
