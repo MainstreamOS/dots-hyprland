@@ -670,15 +670,15 @@ function setup_proton_ge(){
   done
   if (( ${#_missing[@]} > 0 )); then
     echo -e "${STY_RED}[$0]: Missing required tools: ${_missing[*]} — skipping Proton GE install.${STY_RST}"
-    return 1
+    return 0
   fi
 
   # ── Resolve latest release tag (e.g. "GE-Proton10-5") ─────────────────────
   local api_url="https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
   local release_json
   release_json=$(curl -fsSL "$api_url") || {
-    echo -e "${STY_RED}[$0]: GitHub API query failed — check network.${STY_RST}"
-    return 1
+    echo -e "${STY_YELLOW}[$0]: GitHub API query failed — skipping Proton GE (set a version in Steam later).${STY_RST}"
+    return 0
   }
 
   local tag
@@ -690,8 +690,8 @@ function setup_proton_ge(){
   fi
 
   if [[ -z "$tag" || "$tag" == "null" ]]; then
-    echo -e "${STY_RED}[$0]: Could not determine latest Proton GE tag.${STY_RST}"
-    return 1
+    echo -e "${STY_YELLOW}[$0]: Could not determine latest Proton GE tag — skipping.${STY_RST}"
+    return 0
   fi
   echo -e "${STY_CYAN}[$0]: Latest GE-Proton: $tag${STY_RST}"
 
@@ -702,34 +702,48 @@ function setup_proton_ge(){
   if [[ -d "$install_dir" ]]; then
     echo -e "${STY_BLUE}[$0]: $tag already installed — skipping download.${STY_RST}"
   else
+    # GE-Proton now ships an -aarch64 tarball alongside the x86_64 build, so a
+    # broad endswith(".tar.gz") match returns TWO urls and corrupts the curl
+    # argument with an embedded newline. Match the exact x86_64 asset name.
     local tarball_url
     if command -v jq &>/dev/null; then
       tarball_url=$(echo "$release_json" | \
-        jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url')
+        jq -r --arg tag "$tag" '.assets[] | select(.name == ($tag + ".tar.gz")) | .browser_download_url')
     else
       tarball_url=$(echo "$release_json" | python3 -c "
 import sys, json
+tag = '$tag'
 for a in json.load(sys.stdin)['assets']:
-    if a['name'].endswith('.tar.gz'):
+    if a['name'] == tag + '.tar.gz':
         print(a['browser_download_url']); break
 ")
     fi
 
     if [[ -z "$tarball_url" ]]; then
-      echo -e "${STY_RED}[$0]: No .tar.gz asset found for $tag.${STY_RST}"
-      return 1
+      echo -e "${STY_YELLOW}[$0]: No x86_64 .tar.gz asset found for $tag — skipping.${STY_RST}"
+      return 0
     fi
 
     echo -e "${STY_CYAN}[$0]: Downloading $tag...${STY_RST}"
-    x mkdir -p "$compat_dir"
+    mkdir -p "$compat_dir" || true
     local tmp_tar; tmp_tar=$(mktemp --suffix=.tar.gz)
-    x curl -fL --progress-bar -o "$tmp_tar" "$tarball_url"
+    # Non-fatal: GE-Proton is an optional gaming extra, so a download/extract
+    # hiccup must skip (return 0) rather than abort the whole install via x().
+    if ! curl -fL --progress-bar -o "$tmp_tar" "$tarball_url"; then
+      echo -e "${STY_YELLOW}[$0]: GE-Proton download failed — skipping (set a Proton version in Steam later).${STY_RST}"
+      rm -f "$tmp_tar"
+      return 0
+    fi
     echo -e "${STY_CYAN}[$0]: Extracting to $compat_dir...${STY_RST}"
-    x tar -xzf "$tmp_tar" -C "$compat_dir"
+    if ! tar -xzf "$tmp_tar" -C "$compat_dir"; then
+      echo -e "${STY_YELLOW}[$0]: GE-Proton extract failed — skipping.${STY_RST}"
+      rm -f "$tmp_tar"
+      return 0
+    fi
     rm -f "$tmp_tar"
     echo -e "${STY_GREEN}[$0]: Installed $tag to $install_dir${STY_RST}"
-    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-    realpath -se "$install_dir" >> "${INSTALLED_LISTFILE}"
+    mkdir -p "$(dirname ${INSTALLED_LISTFILE})" || true
+    realpath -se "$install_dir" >> "${INSTALLED_LISTFILE}" || true
   fi
 
   # ── Preseed Steam config ───────────────────────────────────────────────────
