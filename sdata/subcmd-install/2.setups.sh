@@ -165,9 +165,32 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Installing NVIDIA drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            # nvidia-dkms works across kernels; nvidia-utils for OpenGL, nvidia-settings for GUI config.
+            # Pick the driver branch by GPU generation: Turing+ -> nvidia-open,
+            # Maxwell/Kepler/Fermi -> frozen legacy branch, pre-Fermi -> nouveau.
             # modprobe options + cmdline + mkinitcpio modules are handled by setup_gpu_autoconfig later.
-            x sudo pacman -S --needed --noconfirm nvidia-dkms nvidia-utils nvidia-settings egl-wayland
+            gpu_detect || true
+            gpu_classify_nvidia_driver
+            echo -e "${STY_CYAN}[$0]: NVIDIA generation ${NVIDIA_GEN} -> driver family ${NVIDIA_DRIVER_FAMILY}${STY_RST}"
+            if [[ ${#NVIDIA_REPO_PKGS[@]} -gt 0 ]]; then
+              # Straight from official repos / [mainstream]: nvidia-open (Turing+) or nouveau (pre-Fermi).
+              local _repo=() _lib32=()
+              for _p in "${NVIDIA_REPO_PKGS[@]}"; do
+                case "$_p" in lib32-*) _lib32+=("$_p");; *) _repo+=("$_p");; esac
+              done
+              [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && _repo+=(egl-wayland)
+              x sudo pacman -S --needed --noconfirm "${_repo[@]}"
+              # 32-bit GL needs the multilib repo; best-effort so a non-multilib host doesn't abort the install.
+              [[ ${#_lib32[@]} -gt 0 ]] && try sudo pacman -S --needed --noconfirm "${_lib32[@]}"
+            else
+              # Frozen legacy branch (nvidia-580xx/470xx/390xx) — only present if [mainstream] prebuilt it.
+              # Try it; if unavailable, fall back to nouveau and leave a breadcrumb for the user.
+              if ! sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
+                echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
+                x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
+                note_failure "NVIDIA ${NVIDIA_GEN} card: proprietary branch ${NVIDIA_DRIVER_FAMILY} not available; installed nouveau instead."
+                flush_failures
+              fi
+            fi
             ;;
           fedora)
             # Use RPM Fusion for NVIDIA on Fedora
@@ -829,218 +852,26 @@ function _mkinitcpio_remove_hook(){
   fi
 }
 
-# Append an 'hl.env("KEY", "VALUE")' line into the user's hypr custom env.lua
-# if the key isn't already set. Returns 1 if the file doesn't exist, which is
-# the normal case on first install before dotfiles are deployed.
-function _hypr_env_upsert(){
-  local _key="$1" _val="$2"
-  local _env_lua="$HOME/.config/hypr/custom/env.lua"
-  [[ -f "$_env_lua" ]] || return 1
-  if ! grep -qE "hl\.env\(\"${_key}\"" "$_env_lua"; then
-    printf 'hl.env("%s", "%s")\n' "$_key" "$_val" >> "$_env_lua"
-    echo -e "${STY_CYAN}[$0]: Added hypr env: ${_key}=${_val}${STY_RST}"
-  fi
-}
+# Shared GPU detection + config library -- the single source of truth for both
+# the dots ./setup and archiso install paths (sdata/lib/gpu-config.sh). On the
+# live system: sudo writes, keep the kms hook, no ESP-size guard.
+source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
+GPU_SUDO=sudo
+GPU_EARLY_KMS_REMOVE_HOOK=false
+GPU_EARLY_KMS_ESP_THRESHOLD=0
 
-# Inject short sleeps before the Lua-form dpms-on dispatch in hypridle.conf so
-# NVIDIA DRM/KMS has time to finish reinit after resume, avoiding the session
-# recover prompt. AMD/Intel don't need this (i915/amdgpu resume synchronously).
-function _hypr_fix_hypridle_for_nvidia(){
-  local _hypridle="$HOME/.config/hypr/hypridle.conf"
-  [[ -f "$_hypridle" ]] || return 1
-  # The Lua-form dispatch string is: hl.dsp.dpms({ action = "enable" }). We
-  # add a `sleep 2 && ` prefix on the hyprctl command, leaving the rest intact.
-  if grep -qE 'after_sleep_cmd\s*=.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle" \
-      && ! grep -qE 'after_sleep_cmd\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle"; then
-    sed -i '/after_sleep_cmd/s|hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|sleep 2 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|' "$_hypridle"
-    echo -e "${STY_CYAN}[$0]: Added 2s dpms-enable delay to after_sleep_cmd (NVIDIA resume fix).${STY_RST}"
-  fi
-  if grep -qE 'on-resume\s*=.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle" \
-      && ! grep -qE 'on-resume\s*=.*sleep\s+[0-9].*&&.*hyprctl dispatch.*dpms.*action.*enable' "$_hypridle"; then
-    sed -i '/on-resume/s|hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|sleep 1 \&\& hyprctl dispatch '"'"'hl.dsp.dpms({ action = "enable" })'"'"'|' "$_hypridle"
-    echo -e "${STY_CYAN}[$0]: Added 1s dpms-enable delay to on-resume (NVIDIA resume fix).${STY_RST}"
-  fi
-}
-
-# Detect GPUs by PCI vendor ID and export state flags used by setup_gpu_autoconfig
-# and setup_gpu_hypr_tweaks. Safe to call multiple times.
-#   HAS_NVIDIA / HAS_AMD / HAS_INTEL — booleans
-#   IS_HYBRID                         — true if >1 discrete vendor present
-#   NVIDIA_PCI_DEC                    — decimal PCI device ID of first NVIDIA card (0 if none)
-function _gpu_detect(){
-  HAS_NVIDIA=false; HAS_AMD=false; HAS_INTEL=false; IS_HYBRID=false
-  NVIDIA_PCI_DEC=0
-  command -v lspci >/dev/null 2>&1 || { echo -e "${STY_YELLOW}[$0]: lspci not found — cannot detect GPU.${STY_RST}"; return 1; }
-  local gpu_lines; gpu_lines=$(lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' || true)
-  [[ -z "$gpu_lines" ]] && return 1
-  echo "$gpu_lines" | grep -q '\[10de:' && HAS_NVIDIA=true || true
-  echo "$gpu_lines" | grep -q '\[1002:' && HAS_AMD=true    || true
-  echo "$gpu_lines" | grep -q '\[8086:' && HAS_INTEL=true  || true
-  local _count=0
-  $HAS_NVIDIA && ((_count++)) || true
-  $HAS_AMD    && ((_count++)) || true
-  $HAS_INTEL  && ((_count++)) || true
-  [[ $_count -gt 1 ]] && IS_HYBRID=true || true
-  if $HAS_NVIDIA; then
-    local _id
-    _id=$(echo "$gpu_lines" | grep -oE '\[10de:[0-9a-fA-F]{4}\]' | head -1 | grep -oE '[0-9a-fA-F]{4}' | head -1)
-    [[ -n "$_id" ]] && NVIDIA_PCI_DEC=$((16#$_id)) || NVIDIA_PCI_DEC=0
-  fi
-  return 0
-}
-
-# Configure system-level bits for the detected GPU(s): kernel modules in the
-# initramfs, modprobe options, kernel cmdline args in /etc/kernel/cmdline, and
-# NVIDIA power-management systemd services. Ported from the archiso post-install
-# script but adapted for a running (non-chroot) system — DKMS modules build
-# against the live kernel so the initramfs rebuild runs in the same pass. Skips hypr
-# dotfile edits here; those are handled by setup_gpu_hypr_tweaks after dotfiles
-# are deployed in 3.files.sh.
 function setup_gpu_autoconfig(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
     echo -e "${STY_YELLOW}[$0]: GPU autoconfig is only implemented for Arch Linux. Skipping.${STY_RST}"
     return 0
   fi
-  if ! _gpu_detect; then
+  if ! gpu_detect; then
     echo -e "${STY_YELLOW}[$0]: No GPU detected — skipping autoconfig.${STY_RST}"
     return 0
   fi
   echo -e "${STY_CYAN}[$0]: GPU autoconfig — Intel=$HAS_INTEL AMD=$HAS_AMD NVIDIA=$HAS_NVIDIA Hybrid=$IS_HYBRID${STY_RST}"
-
-  local -a cmdline_args=()
-
-  # --- Intel (runs first so i915 appears before NVIDIA in MODULES) ---
-  if $HAS_INTEL; then
-    local _intel_line _is_arc=false
-    _intel_line=$(lspci 2>/dev/null | grep -iE "Intel.*(Graphics|UHD|HD|Iris|Arc|Xe)" | head -1 || true)
-    echo "$_intel_line" | grep -iqE "Arc|Xe|A[3-7][0-9]{2}" && _is_arc=true || true
-    if $_is_arc; then
-      echo -e "${STY_CYAN}[$0]: Intel Arc/Xe detected — using xe driver.${STY_RST}"
-      _mkinitcpio_add_modules xe
-    else
-      echo -e "${STY_CYAN}[$0]: Intel (i915) detected.${STY_RST}"
-      _mkinitcpio_add_modules i915
-      $IS_HYBRID || cmdline_args+=("i915.modeset=1")
-    fi
-  fi
-
-  # --- AMD ---
-  if $HAS_AMD; then
-    local _amd_line _is_old_amd=false _is_rdna4=false
-    _amd_line=$(lspci 2>/dev/null | grep -iE "VGA|3D|Display" | grep -iE "AMD|ATI|Radeon" | head -1 || true)
-    # Pre-GCN naming patterns → legacy radeon path
-    echo "$_amd_line" | grep -iqE "\bHD [2-6][0-9]{3}\b|\bRS[0-9]+\b|\bRV[0-9]+\b|\bR[67][0-9]{2}\b" && _is_old_amd=true || true
-    lspci 2>/dev/null | grep -iqE "Navi 4[0-9]|RX 9[0-9]{3}|gfx12" && _is_rdna4=true || true
-    if $_is_rdna4; then _is_old_amd=false; fi
-
-    if $_is_old_amd; then
-      echo -e "${STY_CYAN}[$0]: Pre-GCN AMD — enabling SI/CIK on amdgpu.${STY_RST}"
-      sudo mkdir -p /etc/modprobe.d
-      sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null << 'AMDEOF'
-options amdgpu si_support=1
-options amdgpu cik_support=1
-options radeon si_support=0
-options radeon cik_support=0
-AMDEOF
-      _mkinitcpio_add_modules amdgpu radeon
-      cmdline_args+=("amdgpu.si_support=1" "amdgpu.cik_support=1")
-    else
-      echo -e "${STY_CYAN}[$0]: GCN/RDNA AMD — configuring amdgpu.${STY_RST}"
-      _mkinitcpio_add_modules amdgpu
-      cmdline_args+=("amdgpu.modeset=1")
-      if $_is_rdna4; then
-        echo -e "${STY_CYAN}[$0]: RDNA 4 — adding sg_display=0.${STY_RST}"
-        cmdline_args+=("amdgpu.sg_display=0")
-      fi
-    fi
-  fi
-
-  # --- NVIDIA ---
-  if $HAS_NVIDIA; then
-    echo -e "${STY_CYAN}[$0]: NVIDIA PCI device ID: $(printf '0x%04x' "$NVIDIA_PCI_DEC") ($NVIDIA_PCI_DEC)${STY_RST}"
-    if (( NVIDIA_PCI_DEC >= 1728 )); then
-      # Fermi or newer — proprietary nvidia stack. Pre-Fermi stays on nouveau
-      # (the default kms hook handles it). Keep kms in HOOKS; NVIDIA is loaded
-      # early through MODULES below while the canonical systemd hook order remains
-      # intact.
-      _mkinitcpio_add_modules nvidia nvidia_modeset nvidia_uvm nvidia_drm
-      sudo mkdir -p /etc/modprobe.d
-      sudo tee /etc/modprobe.d/nvidia.conf > /dev/null << 'NVIDIAEOF'
-options nvidia-drm modeset=1 fbdev=1
-options nvidia NVreg_PreserveVideoMemoryAllocations=1
-options nvidia NVreg_TemporaryFilePath=/var/tmp
-NVIDIAEOF
-      cmdline_args+=("nvidia_drm.modeset=1")
-      local svc
-      for svc in nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service; do
-        sudo systemctl enable "$svc" >/dev/null 2>&1 \
-          && echo -e "${STY_CYAN}[$0]: Enabled $svc${STY_RST}" \
-          || echo -e "${STY_YELLOW}[$0]: $svc not found (driver version may not ship it).${STY_RST}"
-      done
-      sudo systemctl enable nvidia-powerd.service >/dev/null 2>&1 || true
-    else
-      echo -e "${STY_BLUE}[$0]: Pre-Fermi NVIDIA — keeping nouveau (kms hook kept).${STY_RST}"
-    fi
-  fi
-
-  # --- PRIME (only when we have multiple vendors) ---
-  if $IS_HYBRID; then
-    echo -e "${STY_CYAN}[$0]: Hybrid GPU detected — configuring PRIME.${STY_RST}"
-    if $HAS_NVIDIA && $HAS_INTEL; then
-      _mkinitcpio_add_modules i915
-      cmdline_args+=("i915.modeset=1")
-    elif $HAS_NVIDIA && $HAS_AMD; then
-      _mkinitcpio_add_modules amdgpu
-    fi
-  fi
-
-  # --- resume= for hibernation, if a swap partition exists ---
-  local swap_partuuid
-  swap_partuuid=$(blkid -t TYPE=swap -o export 2>/dev/null | awk -F= '/^PARTUUID=/{print $2; exit}' || true)
-  if [[ -n "$swap_partuuid" ]]; then
-    local _current_cmdline=""
-    if [[ -f /etc/kernel/cmdline ]]; then
-      _current_cmdline=$(tr '\n' ' ' < /etc/kernel/cmdline)
-    elif [[ -f /boot/limine.conf ]]; then
-      _current_cmdline=$(awk '/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/ {
-        sub(/^[[:space:]]*(kernel_cmdline|cmdline):[[:space:]]*/, "")
-        print
-        exit
-      }' /boot/limine.conf)
-    elif [[ -r /proc/cmdline ]]; then
-      _current_cmdline=$(cat /proc/cmdline)
-    fi
-    if grep -Eq '(^|[[:space:]])resume=' <<< "$_current_cmdline"; then
-      echo -e "${STY_BLUE}[$0]: resume= already present in the managed kernel cmdline — skipping.${STY_RST}"
-    else
-      cmdline_args+=("resume=PARTUUID=$swap_partuuid")
-      echo -e "${STY_CYAN}[$0]: Will set hibernation resume= to swap PARTUUID=$swap_partuuid.${STY_RST}"
-    fi
-  else
-    echo -e "${STY_BLUE}[$0]: No swap partition found — skipping resume= injection.${STY_RST}"
-  fi
-
-  # --- Apply collected kernel cmdline args in a single pass ---
-  # Persist them in /etc/kernel/cmdline and let limine-mkinitcpio regenerate
-  # the boot entries from that single source of truth.
-  if (( ${#cmdline_args[@]} > 0 )); then
-    echo -e "${STY_CYAN}[$0]: Applying limine kernel cmdline args: ${cmdline_args[*]}${STY_RST}"
-    if ! _limine_apply_cmdline_args "${cmdline_args[@]}"; then
-      echo -e "${STY_YELLOW}[$0]: Failed to update /etc/kernel/cmdline for GPU boot flags.${STY_RST}"
-    fi
-  fi
-
-  # --- Rebuild initramfs so new MODULES/HOOKS take effect on next boot ---
-  # Also regenerates /boot/limine.conf boot entries from /etc/kernel/cmdline on systems
-  # with limine-mkinitcpio-hook installed.
+  gpu_apply_autoconfig
   _initramfs_rebuild
-
-  # --- Apply dotfile-level tweaks if the target files already exist
-  #     (reinstall case). For first install, 3.files.sh calls this again after
-  #     the dotfiles are deployed.
-  setup_gpu_hypr_tweaks
-
-  echo -e "${STY_GREEN}[$0]: GPU autoconfig complete.${STY_RST}"
 }
 
 # Apply dotfile-level GPU tweaks (NVIDIA Wayland env vars in hypr custom
@@ -1052,36 +883,14 @@ function setup_gpu_hypr_tweaks(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then return 0; fi
   # Re-detect in case flags aren't set (when called from 3.files.sh directly).
   if [[ -z "${HAS_NVIDIA:-}" ]]; then
-    _gpu_detect >/dev/null 2>&1 || return 0
+    gpu_detect >/dev/null 2>&1 || return 0
   fi
   local _env_lua="$HOME/.config/hypr/custom/env.lua"
   if [[ ! -f "$_env_lua" ]]; then
     echo -e "${STY_YELLOW}[$0]: $_env_lua not found — deferring hypr GPU tweaks until after dotfiles are deployed.${STY_RST}"
     return 0
   fi
-
-  if $HAS_NVIDIA && (( NVIDIA_PCI_DEC >= 1728 )); then
-    # NVIDIA Wayland env vars. NVD_BACKEND=direct is a VA-API perf hint safe
-    # on Turing+; harmless on older Fermi/Kepler so we set it unconditionally
-    # within the Fermi+ branch.
-    _hypr_env_upsert "LIBVA_DRIVER_NAME"         "nvidia"         || true
-    _hypr_env_upsert "GBM_BACKEND"               "nvidia-drm"     || true
-    _hypr_env_upsert "__GLX_VENDOR_LIBRARY_NAME" "nvidia"         || true
-    _hypr_env_upsert "NVD_BACKEND"               "direct"         || true
-    _hypr_env_upsert "WLR_NO_HARDWARE_CURSORS"   "1"              || true
-    _hypr_fix_hypridle_for_nvidia || true
-  fi
-
-  # Hybrid with NVIDIA: pin the Aquamarine DRM device to the NVIDIA card via
-  # the stable by-path symlink. card0/card1 enumeration is non-deterministic
-  # across reboots, but /dev/dri/by-path/pci-<addr>-card follows the PCIe slot.
-  if $IS_HYBRID && $HAS_NVIDIA; then
-    local _nvidia_pciaddr
-    _nvidia_pciaddr=$(lspci -D 2>/dev/null | grep -iE "NVIDIA|GeForce|Quadro|Tesla" | head -1 | awk '{print $1}')
-    if [[ -n "$_nvidia_pciaddr" ]]; then
-      _hypr_env_upsert "AQ_DRM_DEVICES" "/dev/dri/by-path/pci-${_nvidia_pciaddr}-card" || true
-    fi
-  fi
+  gpu_apply_hypr_tweaks "$HOME"
 }
 
 showfun setup_pacman_nopasswd
