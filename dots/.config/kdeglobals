@@ -149,7 +149,7 @@ toolBarFont=Google Sans Flex,10,-1,5,500,0,0,0,0,0,0,0,0,0,0,1,Medium
 Theme=breeze-dark
 
 [KDE]
-widgetStyle=Darkly
+widgetStyle=kvantum
 
 [KFileDialog Settings]
 Allow Expansion=false

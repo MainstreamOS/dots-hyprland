@@ -10,12 +10,14 @@ arch=(any)
 license=(None)
 depends=(
   adw-gtk-theme-git
+  kvantum
   papirus-icon-theme
   eza
   fish
   fontconfig
   kitty
   matugen
+  noto-fonts
   otf-space-grotesk
   starship
   ttf-jetbrains-mono-nerd
