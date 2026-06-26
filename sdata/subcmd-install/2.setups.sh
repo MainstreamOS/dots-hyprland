@@ -1177,6 +1177,14 @@ function setup_audio_defaults(){
 showfun setup_audio_defaults
 v setup_audio_defaults
 
+# Raise the inotify watch limit so Quickshell's file watchers (config + style
+# hot-reload, generated colors, wallpaper) don't hit the kernel default ceiling.
+function setup_inotify_limits(){
+  x sudo bash -c "printf 'fs.inotify.max_user_watches = 524288\nfs.inotify.max_user_instances = 512\n' > /etc/sysctl.d/99-mainstream-inotify.conf && sysctl --system >/dev/null 2>&1 || true"
+}
+showfun setup_inotify_limits
+v setup_inotify_limits
+
 # mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
 # Replaces plasma-browser-integration with a lightweight (~2MB binary)
 # alternative that doesn't drag in the KDE chain. Always installed —
