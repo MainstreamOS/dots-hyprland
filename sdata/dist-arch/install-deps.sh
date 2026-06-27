@@ -207,6 +207,19 @@ install-local-pkgbuild() {
         "${REPO_ROOT}/sdata/nautilus-copy-path/95-nautilus-copy-path-config.hook" \
         /etc/pacman.d/hooks/95-nautilus-copy-path-config.hook
 
+    # A vulkan-driver provider must exist before the default apps (Steam etc.)
+    # install: those transactions run --noconfirm, so an unmet (lib32-)vulkan-
+    # driver silently resolves to the alphabetically-first provider,
+    # (lib32-)nvidia-utils, dragging the NVIDIA stack onto AMD/Intel systems.
+    # setup_gpu_drivers installs the real driver later; seed the software
+    # fallback now so pacman can never default to nvidia. (Mirrors archiso.)
+    if ! pacman -T vulkan-driver >/dev/null 2>&1; then
+      sudo pacman -S --needed --noconfirm vulkan-swrast || true
+    fi
+    if ! pacman -T lib32-vulkan-driver >/dev/null 2>&1; then
+      sudo pacman -S --needed --noconfirm lib32-vulkan-swrast || true
+    fi
+
     printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     local _flathub_added=false
     for dep in "${optdepends[@]}"; do
