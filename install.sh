@@ -2,7 +2,7 @@
 # Mainstream OS dotfiles bootstrap.
 #
 # One-line install:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/MainstreamOS/dots-hyprland/mainstream/get.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/MainstreamOS/dots-hyprland/mainstream/install.sh)
 #
 # Override defaults via env (export before running):
 #   MS_REPO_URL, MS_REPO_BRANCH, MS_CLONE_DIR
