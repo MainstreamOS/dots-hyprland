@@ -694,7 +694,7 @@ function _limine_configure_generator_defaults(){
   fi
 }
 
-MKINITCPIO_SYSTEMD_HOOKS=(base systemd plymouth autodetect microcode modconf kms keyboard sd-vconsole block filesystems fsck)
+MKINITCPIO_SYSTEMD_HOOKS=(base systemd autodetect microcode kms modconf block keyboard sd-vconsole plymouth filesystems)
 
 function _mkinitcpio_ensure_systemd_stack(){
   [[ "$OS_GROUP_ID" == "arch" ]] || return 0
