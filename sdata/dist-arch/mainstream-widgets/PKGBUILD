@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-widgets
 pkgver=1.0
-pkgrel=8
+pkgrel=9
 pkgdesc='Mainstream OS Widget Dependencies'
 provides=('illogical-impulse-widgets')
 replaces=('illogical-impulse-widgets')
@@ -19,4 +19,5 @@ depends=(
   translate-shell
   wlogout
   libqalculate
+  mpris-hyprland
 )
