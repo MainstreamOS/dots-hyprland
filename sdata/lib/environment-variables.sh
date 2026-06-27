@@ -28,3 +28,5 @@ BACKUP_DIR="${BACKUP_DIR:-$HOME/ii-original-dots-backup}"
 DOTS_CORE_CONFDIR="${XDG_CONFIG_HOME}/illogical-impulse"
 INSTALLED_LISTFILE="${DOTS_CORE_CONFDIR}/installed_listfile"
 FIRSTRUN_FILE="${DOTS_CORE_CONFDIR}/installed_true"
+# Touched at install start; cleanup purges only pacman cache newer than this.
+PACMAN_CACHE_MARKER="${XDG_CACHE_HOME}/dots-hyprland/.install-cache-marker"

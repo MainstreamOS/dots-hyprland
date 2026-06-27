@@ -40,3 +40,9 @@ else
       ;;
   esac
 fi
+
+# Drop a start marker so cleanup_install_caches purges only the pacman packages
+# THIS run downloads, leaving any pre-existing cache (e.g. a setup over an
+# existing install) untouched.
+mkdir -p "$(dirname "$PACMAN_CACHE_MARKER")" 2>/dev/null || true
+: > "$PACMAN_CACHE_MARKER" 2>/dev/null || true

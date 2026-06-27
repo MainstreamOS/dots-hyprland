@@ -864,14 +864,21 @@ v setup_proton_ge
 
 #####################################################################################
 
-# Reclaim install-time caches before finishing: the pacman cache for packages no
-# longer installed (build deps / churn), and uv's wheel download cache (the venv
-# is already built). Best-effort so a failure can't abort the install.
+# Reclaim install-time caches before finishing. Purge ONLY the pacman packages
+# this run downloaded — those newer than the start marker dropped in
+# 0.greeting.sh — so a setup run over an existing install leaves the user's
+# pre-existing cache intact. Also drop uv's wheel cache and the dotfiles build
+# cache (cloned plugin/font/mpris sources + build trees, dead weight once the
+# .so/packages are installed; re-runs reclone). Best-effort so a failure can't
+# abort the install.
 function cleanup_install_caches(){
   [[ "$OS_GROUP_ID" == "arch" ]] || return 0
   echo -e "${STY_CYAN}[$0]: Cleaning up install caches...${STY_RST}"
-  try sudo pacman -Sc --noconfirm
+  if [[ -f "$PACMAN_CACHE_MARKER" ]]; then
+    try sudo find /var/cache/pacman/pkg -maxdepth 1 -type f -name '*.pkg.tar.*' -newer "$PACMAN_CACHE_MARKER" -delete
+  fi
   try rm -rf "$HOME/.cache/uv"
+  try rm -rf "$XDG_CACHE_HOME/dots-hyprland/cache"
 }
 v cleanup_install_caches
 
