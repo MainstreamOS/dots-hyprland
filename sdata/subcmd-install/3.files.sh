@@ -414,26 +414,12 @@ function setup_hyprland_plugins(){
     echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild hyprbars after each hyprland upgrade.${STY_RST}"
   fi
 
-  # ---------------------------------------------------------------------------
-  # Install the systemd retry timer + service. The pacman hook above only fires
-  # when hyprland is upgraded, so it can't recover from "hyprland released
-  # today, upstream hyprland-plugins doesn't have a compat commit yet" — the
-  # build fails and stays failed until the *next* hyprland upgrade. The timer
-  # ticks once a day; the moment upstream merges a fix the next tick picks it
-  # up and title bars come back automatically.
-  # ---------------------------------------------------------------------------
-  local _service_src="$REPO_ROOT/sdata/hyprbars/hyprbars-rebuild.service"
-  local _timer_src="$REPO_ROOT/sdata/hyprbars/hyprbars-rebuild.timer"
-  if [[ -f "$_service_src" && -f "$_timer_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing hyprbars retry timer...${STY_RST}"
-    try sudo install -Dm644 "$_service_src" /etc/systemd/system/hyprbars-rebuild.service
-    try sudo install -Dm644 "$_timer_src"   /etc/systemd/system/hyprbars-rebuild.timer
-    try sudo systemctl daemon-reload
-    try sudo systemctl enable --now hyprbars-rebuild.timer
-    echo -e "${STY_GREEN}[$0]: Timer enabled — title bars self-heal once upstream catches up after a Hyprland release.${STY_RST}"
-  else
-    echo -e "${STY_YELLOW}[$0]: hyprbars-rebuild.{service,timer} missing — skipping retry timer setup.${STY_RST}"
-  fi
+  # The install-time build + the pacman hook above keep hyprbars in sync on
+  # hyprland upgrades. The old per-boot retry timer rebuilt on every boot even
+  # when nothing changed (redundant + wasteful), so it's no longer installed —
+  # matching the archiso path. Disable + remove any copy left from an earlier run.
+  try sudo systemctl disable --now hyprbars-rebuild.timer 2>/dev/null
+  try sudo rm -f /etc/systemd/system/hyprbars-rebuild.timer /etc/systemd/system/hyprbars-rebuild.service
 
   # ---------------------------------------------------------------------------
   # Install the user-side notification script and wire it into Hyprland's
@@ -564,26 +550,12 @@ function setup_scrolloverview_plugin(){
     echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild scrolloverview after each hyprland upgrade.${STY_RST}"
   fi
 
-  # ---------------------------------------------------------------------------
-  # Install the systemd retry timer + service. Same rationale as for hyprbars:
-  # the pacman hook only fires when hyprland is upgraded, so it can't recover
-  # from "hyprland released today, upstream hyprland-scroll-overview doesn't
-  # have a compat commit yet" — the build fails and stays failed until the
-  # *next* hyprland upgrade. The timer ticks once a day and self-heals as
-  # soon as upstream merges a fix.
-  # ---------------------------------------------------------------------------
-  local _so_service_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-rebuild.service"
-  local _so_timer_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-rebuild.timer"
-  if [[ -f "$_so_service_src" && -f "$_so_timer_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing scrolloverview retry timer...${STY_RST}"
-    try sudo install -Dm644 "$_so_service_src" /etc/systemd/system/scrolloverview-rebuild.service
-    try sudo install -Dm644 "$_so_timer_src"   /etc/systemd/system/scrolloverview-rebuild.timer
-    try sudo systemctl daemon-reload
-    try sudo systemctl enable --now scrolloverview-rebuild.timer
-    echo -e "${STY_GREEN}[$0]: Timer enabled — workspace overview self-heals once upstream catches up after a Hyprland release.${STY_RST}"
-  else
-    echo -e "${STY_YELLOW}[$0]: scrolloverview-rebuild.{service,timer} missing — skipping retry timer setup.${STY_RST}"
-  fi
+  # The install-time build + the pacman hook above keep scrolloverview in sync on
+  # hyprland upgrades. The old per-boot retry timer rebuilt on every boot even
+  # when nothing changed (redundant + wasteful), so it's no longer installed —
+  # matching the archiso path. Disable + remove any copy left from an earlier run.
+  try sudo systemctl disable --now scrolloverview-rebuild.timer 2>/dev/null
+  try sudo rm -f /etc/systemd/system/scrolloverview-rebuild.timer /etc/systemd/system/scrolloverview-rebuild.service
 
   # ---------------------------------------------------------------------------
   # Install the user-side notification script and wire it into Hyprland's
