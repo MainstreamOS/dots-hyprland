@@ -998,6 +998,17 @@ function setup_printing(){
 showfun setup_printing
 v setup_printing
 
+# NetworkManager-wait-online delays boot until the network is up — a desktop
+# doesn't need it (NM brings the network up asynchronously after login). Disable
+# it to shave boot time. Best-effort: harmless if it isn't enabled.
+function setup_network_wait(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  echo -e "${STY_CYAN}[$0]: Disabling NetworkManager-wait-online (boot speed)...${STY_RST}"
+  try sudo systemctl disable NetworkManager-wait-online.service
+}
+showfun setup_network_wait
+v setup_network_wait
+
 # Raise the inotify watch limit so Quickshell's file watchers (config + style
 # hot-reload, generated colors, wallpaper) don't hit the kernel default ceiling.
 function setup_inotify_limits(){

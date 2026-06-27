@@ -892,6 +892,17 @@ v setup_proton_ge
 
 #####################################################################################
 
+# Reclaim install-time caches before finishing: the pacman cache for packages no
+# longer installed (build deps / churn), and uv's wheel download cache (the venv
+# is already built). Best-effort so a failure can't abort the install.
+function cleanup_install_caches(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  echo -e "${STY_CYAN}[$0]: Cleaning up install caches...${STY_RST}"
+  try sudo pacman -Sc --noconfirm
+  try rm -rf "$HOME/.cache/uv"
+}
+v cleanup_install_caches
+
 v gen_firstrun
 v dedup_and_sort_listfile "${INSTALLED_LISTFILE}" "${INSTALLED_LISTFILE}"
 
