@@ -875,7 +875,7 @@ function cleanup_install_caches(){
   [[ "$OS_GROUP_ID" == "arch" ]] || return 0
   echo -e "${STY_CYAN}[$0]: Cleaning up install caches...${STY_RST}"
   if [[ -f "$PACMAN_CACHE_MARKER" ]]; then
-    try sudo find /var/cache/pacman/pkg -maxdepth 1 -type f -name '*.pkg.tar.*' -newer "$PACMAN_CACHE_MARKER" -delete
+    try sudo find /var/cache/pacman/pkg -maxdepth 1 -type f -name '*.pkg.tar.*' -cnewer "$PACMAN_CACHE_MARKER" -delete
   fi
   try rm -rf "$HOME/.cache/uv"
   try rm -rf "$XDG_CACHE_HOME/dots-hyprland/cache"
