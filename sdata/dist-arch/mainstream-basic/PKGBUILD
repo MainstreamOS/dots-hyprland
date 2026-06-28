@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=9
+pkgrel=10
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -12,7 +12,6 @@ depends=(
   bc
   coreutils
   cliphist
-  cmake
   curl
   wget
   ripgrep
