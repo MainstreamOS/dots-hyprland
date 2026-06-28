@@ -356,6 +356,13 @@ if [[ ! -z $(systemctl --version) ]]; then
     fi
   fi
   v sudo systemctl enable bluetooth --now
+  if systemctl list-unit-files firewalld.service >/dev/null 2>&1; then
+    v sudo systemctl enable firewalld.service || true
+    v sudo install -Dm644 "${REPO_ROOT}/sdata/firewalld/MainstreamWorkstation.xml" /etc/firewalld/zones/MainstreamWorkstation.xml
+    if [[ "$(sudo firewall-offline-cmd --get-default-zone 2>/dev/null)" != MainstreamWorkstation ]]; then
+      v sudo firewall-offline-cmd --set-default-zone=MainstreamWorkstation
+    fi
+  fi
   # Enable Bluetooth autoconnect for paired devices
   if [ -f /etc/bluetooth/main.conf ]; then
     v sudo sed -i 's/^#\?AutoEnable\s*=.*/AutoEnable=true/' /etc/bluetooth/main.conf

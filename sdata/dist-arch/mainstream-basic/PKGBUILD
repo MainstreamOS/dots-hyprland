@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=10
+pkgrel=11
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -14,6 +14,7 @@ depends=(
   cliphist
   curl
   wget
+  firewalld
   ripgrep
   fd
   expect
