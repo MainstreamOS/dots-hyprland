@@ -104,8 +104,7 @@ file://${HOME}/Music Music
 file://${HOME}/Pictures Pictures
 file://${HOME}/Videos Videos
 EOF
-    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-    realpath -se "$BOOKMARKS_FILE" >> "${INSTALLED_LISTFILE}"
+    record_installed "$BOOKMARKS_FILE"
 fi
 
 # Set Nautilus as default file manager and ensure XDG user dirs exist

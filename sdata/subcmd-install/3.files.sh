@@ -10,6 +10,17 @@ function warning_overwrite(){
   printf "The command below overwrites the destination.\n"
   printf "${STY_RST}"
 }
+record_installed(){
+  mkdir -p "$(dirname "$INSTALLED_LISTFILE")"
+  realpath -se "$1" >> "$INSTALLED_LISTFILE"
+}
+_rsync_to_listfile(){
+  local src=$1 dst=$2; shift 2
+  x mkdir -p "$dst"
+  local dest; dest=$(realpath -se "$dst")
+  x mkdir -p "$(dirname "$INSTALLED_LISTFILE")"
+  rsync -a "$@" --out-format='%i %n' "$src"/ "$dst"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "$INSTALLED_LISTFILE"
+}
 function auto_backup_configs(){
   local backup=false
   case $ask in
@@ -41,39 +52,28 @@ function auto_backup_configs(){
 function gen_firstrun(){
   x mkdir -p "$(dirname ${FIRSTRUN_FILE})"
   x touch "${FIRSTRUN_FILE}"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  realpath -se "${FIRSTRUN_FILE}" >> "${INSTALLED_LISTFILE}"
+  record_installed "${FIRSTRUN_FILE}"
 }
 cp_file(){
   # NOTE: This function is only for using in other functions
   x mkdir -p "$(dirname $2)"
   x cp -f "$1" "$2"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  realpath -se "$2" >> "${INSTALLED_LISTFILE}"
+  record_installed "$2"
 }
 rsync_dir(){
   # NOTE: This function is only for using in other functions
-  x mkdir -p "$2"
-  local dest="$(realpath -se $2)"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  rsync -a --out-format='%i %n' "$1"/ "$2"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "${INSTALLED_LISTFILE}"
+  _rsync_to_listfile "$1" "$2"
 }
 rsync_dir__ignore_existing(){
   # NOTE: This function is only for using in other functions
-  x mkdir -p "$2"
-  local dest="$(realpath -se $2)"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  rsync -a --ignore-existing --out-format='%i %n' "$1"/ "$2"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "${INSTALLED_LISTFILE}"
+  _rsync_to_listfile "$1" "$2" --ignore-existing
 }
 rsync_dir__sync(){
   # NOTE: This function is only for using in other functions
   # `--delete' for rsync to make sure that
   # original dotfiles and new ones in the SAME DIRECTORY
   # (eg. in ~/.config/hypr) won't be mixed together
-  x mkdir -p "$2"
-  local dest="$(realpath -se $2)"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  rsync -a --delete --out-format='%i %n' "$1"/ "$2"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "${INSTALLED_LISTFILE}"
+  _rsync_to_listfile "$1" "$2" --delete
 }
 rsync_dir__sync_exclude(){
   # NOTE: This function is only for using in other functions
@@ -86,10 +86,7 @@ rsync_dir__sync_exclude(){
   for pattern in "$@"; do
     excludes+=(--exclude "$pattern")
   done
-  x mkdir -p "$dest_dir"
-  local dest="$(realpath -se $dest_dir)"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  rsync -a --delete "${excludes[@]}" --out-format='%i %n' "$src"/ "$dest_dir"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "${INSTALLED_LISTFILE}"
+  _rsync_to_listfile "$src" "$dest_dir" "${excludes[@]}" --delete
 }
 function install_file(){
   # NOTE: Do not add prefix `v` or `x` when using this function
@@ -314,6 +311,62 @@ function _ensure_hyprland_plugin(){
   return 1
 }
 
+_install_plugin_rebuild_hook(){
+  local name="$1"
+  local _rebuild_src="$REPO_ROOT/sdata/$name/rebuild.sh"
+  local _hook_src="$REPO_ROOT/sdata/$name/95-$name-rebuild.hook"
+  local _conf_src="$REPO_ROOT/sdata/$name/$name.conf"
+  if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for $name...${STY_RST}"
+    try sudo install -Dm755 "$_rebuild_src" "/usr/local/lib/$name/rebuild.sh"
+    try sudo install -Dm644 "$_hook_src"    "/etc/pacman.d/hooks/95-$name-rebuild.hook"
+    if [[ -f "$_conf_src" && ! -f "/etc/$name.conf" ]]; then
+      try sudo install -Dm644 "$_conf_src" "/etc/$name.conf"
+    fi
+    echo -e "${STY_GREEN}[$0]: Hook installed — $name will auto-rebuild on hyprland upgrades.${STY_RST}"
+  else
+    echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/$name/ — skipping auto-rebuild setup.${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild $name after each hyprland upgrade.${STY_RST}"
+  fi
+}
+_remove_legacy_plugin_timer(){
+  local name="$1"
+  try sudo systemctl disable --now "$name-rebuild.timer" 2>/dev/null
+  try sudo rm -f "/etc/systemd/system/$name-rebuild.timer" "/etc/systemd/system/$name-rebuild.service"
+}
+_wire_plugin_status_notify(){
+  local name="$1"
+  local execs_lua="$2"
+  local notify_comment="$3"
+  local _notify_src="$REPO_ROOT/sdata/$name/$name-status-notify.sh"
+  local _notify_bin="/usr/local/bin/$name-status-notify"
+  if [[ -f "$_notify_src" ]]; then
+    echo -e "${STY_CYAN}[$0]: Installing $name status notifier...${STY_RST}"
+    try sudo install -Dm755 "$_notify_src" "$_notify_bin"
+    if [[ -f "$execs_lua" ]]; then
+      if ! grep -q "$name-status-notify" "$execs_lua"; then
+        {
+          echo ""
+          printf '%s\n' "$notify_comment"
+          echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"$_notify_bin\") end)"
+        } >> "$execs_lua"
+        echo -e "${STY_BLUE}[$0]: Added $name-status-notify hl.on subscription to $execs_lua${STY_RST}"
+      else
+        echo -e "${STY_BLUE}[$0]: $execs_lua already runs $name-status-notify; skipping.${STY_RST}"
+      fi
+    else
+      mkdir -p "$(dirname "$execs_lua")"
+      {
+        echo "-- Hyprland custom start-up commands (managed by dots-hyprland)"
+        echo ""
+        printf '%s\n' "$notify_comment"
+        echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"$_notify_bin\") end)"
+      } > "$execs_lua"
+      echo -e "${STY_BLUE}[$0]: Created $execs_lua with $name-status-notify entry${STY_RST}"
+    fi
+  fi
+}
+
 function setup_hyprland_plugins(){
   # Set up hyprbars: the .so lives at
   # ~/.local/share/hyprland/plugins/hyprbars.so loaded via a
@@ -359,8 +412,7 @@ function setup_hyprland_plugins(){
 
   local plugin_dir="$HOME/.local/share/hyprland/plugins"
   local plugin_path="$plugin_dir/hyprbars.so"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
+  record_installed "$plugin_path"
 
   # The plugin { hyprbars { ... } } settings block already lives in
   # custom/general.lua (shipped with the dots). We prepend the load directive
@@ -396,30 +448,13 @@ function setup_hyprland_plugins(){
   # installed/upgraded; the script is shared by archiso so the same logic
   # ships on freshly-installed systems too.
   # ---------------------------------------------------------------------------
-  local _rebuild_src="$REPO_ROOT/sdata/hyprbars/rebuild.sh"
-  local _hook_src="$REPO_ROOT/sdata/hyprbars/95-hyprbars-rebuild.hook"
-  local _conf_src="$REPO_ROOT/sdata/hyprbars/hyprbars.conf"
-  if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for hyprbars...${STY_RST}"
-    try sudo install -Dm755 "$_rebuild_src" /usr/local/lib/hyprbars/rebuild.sh
-    try sudo install -Dm644 "$_hook_src"    /etc/pacman.d/hooks/95-hyprbars-rebuild.hook
-    # Only drop the config file if the user hasn't customized one already —
-    # they may have pinned a different commit/fork than the shipped default.
-    if [[ -f "$_conf_src" && ! -f /etc/hyprbars.conf ]]; then
-      try sudo install -Dm644 "$_conf_src" /etc/hyprbars.conf
-    fi
-    echo -e "${STY_GREEN}[$0]: Hook installed — hyprbars will auto-rebuild on hyprland upgrades.${STY_RST}"
-  else
-    echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/hyprbars/ — skipping auto-rebuild setup.${STY_RST}"
-    echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild hyprbars after each hyprland upgrade.${STY_RST}"
-  fi
+  _install_plugin_rebuild_hook "hyprbars"
 
   # The install-time build + the pacman hook above keep hyprbars in sync on
   # hyprland upgrades. The old per-boot retry timer rebuilt on every boot even
   # when nothing changed (redundant + wasteful), so it's no longer installed —
   # matching the archiso path. Disable + remove any copy left from an earlier run.
-  try sudo systemctl disable --now hyprbars-rebuild.timer 2>/dev/null
-  try sudo rm -f /etc/systemd/system/hyprbars-rebuild.timer /etc/systemd/system/hyprbars-rebuild.service
+  _remove_legacy_plugin_timer "hyprbars"
 
   # ---------------------------------------------------------------------------
   # Install the user-side notification script and wire it into Hyprland's
@@ -430,41 +465,10 @@ function setup_hyprland_plugins(){
   # Wording deliberately avoids version numbers, "rebuild", or "plugin" so the
   # user just sees a status update, not a build report.
   # ---------------------------------------------------------------------------
-  local _notify_src="$REPO_ROOT/sdata/hyprbars/hyprbars-status-notify.sh"
-  if [[ -f "$_notify_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing hyprbars status notifier...${STY_RST}"
-    try sudo install -Dm755 "$_notify_src" /usr/local/bin/hyprbars-status-notify
-
-    # Wire into the user's custom execs.lua. Idempotent — re-running the
-    # installer doesn't add duplicate hl.on subscriptions. Each hl.on registers
-    # an independent callback, so appending a second one for the same event is
-    # additive (not destructive).
-    if [[ -f "$EXECS_LUA" ]]; then
-      if ! grep -q 'hyprbars-status-notify' "$EXECS_LUA"; then
-        {
-          echo ""
-          echo "-- Surface friendly desktop notifications when title bars are temporarily"
-          echo "-- off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
-          echo "-- written by the system-side hyprbars-rebuild service."
-          echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/hyprbars-status-notify\") end)"
-        } >> "$EXECS_LUA"
-        echo -e "${STY_BLUE}[$0]: Added hyprbars-status-notify hl.on subscription to $EXECS_LUA${STY_RST}"
-      else
-        echo -e "${STY_BLUE}[$0]: $EXECS_LUA already runs hyprbars-status-notify; skipping.${STY_RST}"
-      fi
-    else
-      mkdir -p "$(dirname "$EXECS_LUA")"
-      {
-        echo "-- Hyprland custom start-up commands (managed by dots-hyprland)"
-        echo ""
-        echo "-- Surface friendly desktop notifications when title bars are temporarily"
-        echo "-- off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status"
-        echo "-- written by the system-side hyprbars-rebuild service."
-        echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/hyprbars-status-notify\") end)"
-      } > "$EXECS_LUA"
-      echo -e "${STY_BLUE}[$0]: Created $EXECS_LUA with hyprbars-status-notify entry${STY_RST}"
-    fi
-  fi
+  _wire_plugin_status_notify "hyprbars" "$EXECS_LUA" \
+"-- Surface friendly desktop notifications when title bars are temporarily
+-- off (after a Hyprland update) or come back. Reads /var/lib/hyprbars/status
+-- written by the system-side hyprbars-rebuild service."
 }
 
 function setup_scrolloverview_plugin(){
@@ -498,8 +502,7 @@ function setup_scrolloverview_plugin(){
 
   local plugin_dir="$HOME/.local/share/hyprland/plugins"
   local plugin_path="$plugin_dir/scrolloverview.so"
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  realpath -se "$plugin_path" >> "${INSTALLED_LISTFILE}"
+  record_installed "$plugin_path"
 
   # Add the load directive (active, not commented) to custom/general.lua so
   # the bar's top-left hot corner — which dispatches `scrolloverview:overview
@@ -534,28 +537,13 @@ function setup_scrolloverview_plugin(){
   # hyprland gets a patch bump. The pacman hook re-runs the build whenever
   # the `hyprland` package is installed/upgraded.
   # ---------------------------------------------------------------------------
-  local _rebuild_src="$REPO_ROOT/sdata/scrolloverview/rebuild.sh"
-  local _hook_src="$REPO_ROOT/sdata/scrolloverview/95-scrolloverview-rebuild.hook"
-  local _conf_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview.conf"
-  if [[ -f "$_rebuild_src" && -f "$_hook_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing pacman rebuild hook for scrolloverview...${STY_RST}"
-    try sudo install -Dm755 "$_rebuild_src" /usr/local/lib/scrolloverview/rebuild.sh
-    try sudo install -Dm644 "$_hook_src"    /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
-    if [[ -f "$_conf_src" && ! -f /etc/scrolloverview.conf ]]; then
-      try sudo install -Dm644 "$_conf_src" /etc/scrolloverview.conf
-    fi
-    echo -e "${STY_GREEN}[$0]: Hook installed — scrolloverview will auto-rebuild on hyprland upgrades.${STY_RST}"
-  else
-    echo -e "${STY_YELLOW}[$0]: rebuild hook sources missing under sdata/scrolloverview/ — skipping auto-rebuild setup.${STY_RST}"
-    echo -e "${STY_YELLOW}[$0]:   You will need to manually rebuild scrolloverview after each hyprland upgrade.${STY_RST}"
-  fi
+  _install_plugin_rebuild_hook "scrolloverview"
 
   # The install-time build + the pacman hook above keep scrolloverview in sync on
   # hyprland upgrades. The old per-boot retry timer rebuilt on every boot even
   # when nothing changed (redundant + wasteful), so it's no longer installed —
   # matching the archiso path. Disable + remove any copy left from an earlier run.
-  try sudo systemctl disable --now scrolloverview-rebuild.timer 2>/dev/null
-  try sudo rm -f /etc/systemd/system/scrolloverview-rebuild.timer /etc/systemd/system/scrolloverview-rebuild.service
+  _remove_legacy_plugin_timer "scrolloverview"
 
   # ---------------------------------------------------------------------------
   # Install the user-side notification script and wire it into Hyprland's
@@ -566,44 +554,11 @@ function setup_scrolloverview_plugin(){
   # Wording deliberately avoids version numbers, "rebuild", or "plugin" so
   # the user just sees a status update, not a build report.
   # ---------------------------------------------------------------------------
-  local _so_notify_src="$REPO_ROOT/sdata/scrolloverview/scrolloverview-status-notify.sh"
-  local _so_execs_lua="$HOME/.config/hypr/custom/execs.lua"
-  if [[ -f "$_so_notify_src" ]]; then
-    echo -e "${STY_CYAN}[$0]: Installing scrolloverview status notifier...${STY_RST}"
-    try sudo install -Dm755 "$_so_notify_src" /usr/local/bin/scrolloverview-status-notify
-
-    # Wire into the user's custom execs.lua. Idempotent — re-running the
-    # installer doesn't add duplicate hl.on subscriptions. Each hl.on registers
-    # an independent callback, so appending another for the same event is
-    # additive (not destructive).
-    if [[ -f "$_so_execs_lua" ]]; then
-      if ! grep -q 'scrolloverview-status-notify' "$_so_execs_lua"; then
-        {
-          echo ""
-          echo "-- Surface friendly desktop notifications when the workspace overview is"
-          echo "-- temporarily off (after a Hyprland update) or comes back. Reads"
-          echo "-- /var/lib/scrolloverview/status written by the system-side"
-          echo "-- scrolloverview-rebuild service."
-          echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/scrolloverview-status-notify\") end)"
-        } >> "$_so_execs_lua"
-        echo -e "${STY_BLUE}[$0]: Added scrolloverview-status-notify hl.on subscription to $_so_execs_lua${STY_RST}"
-      else
-        echo -e "${STY_BLUE}[$0]: $_so_execs_lua already runs scrolloverview-status-notify; skipping.${STY_RST}"
-      fi
-    else
-      mkdir -p "$(dirname "$_so_execs_lua")"
-      {
-        echo "-- Hyprland custom start-up commands (managed by dots-hyprland)"
-        echo ""
-        echo "-- Surface friendly desktop notifications when the workspace overview is"
-        echo "-- temporarily off (after a Hyprland update) or comes back. Reads"
-        echo "-- /var/lib/scrolloverview/status written by the system-side"
-        echo "-- scrolloverview-rebuild service."
-        echo "hl.on(\"hyprland.start\", function() hl.exec_cmd(\"/usr/local/bin/scrolloverview-status-notify\") end)"
-      } > "$_so_execs_lua"
-      echo -e "${STY_BLUE}[$0]: Created $_so_execs_lua with scrolloverview-status-notify entry${STY_RST}"
-    fi
-  fi
+  _wire_plugin_status_notify "scrolloverview" "$HOME/.config/hypr/custom/execs.lua" \
+"-- Surface friendly desktop notifications when the workspace overview is
+-- temporarily off (after a Hyprland update) or comes back. Reads
+-- /var/lib/scrolloverview/status written by the system-side
+-- scrolloverview-rebuild service."
 }
 
 function install_google_sans_flex(){
@@ -623,8 +578,7 @@ function install_google_sans_flex(){
   rsync_dir "$src_dir" "$target_dir" 
   x fc-cache -fv
   x cd $REPO_ROOT
-  x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-  realpath -se "$target_dir" >> "${INSTALLED_LISTFILE}"
+  record_installed "$target_dir"
 }
 
 function setup_proton_ge(){
@@ -714,8 +668,7 @@ for a in json.load(sys.stdin)['assets']:
     fi
     rm -f "$tmp_tar"
     echo -e "${STY_GREEN}[$0]: Installed $tag to $install_dir${STY_RST}"
-    mkdir -p "$(dirname ${INSTALLED_LISTFILE})" || true
-    realpath -se "$install_dir" >> "${INSTALLED_LISTFILE}" || true
+    record_installed "$install_dir" || true
   fi
 
   # ── Preseed Steam config ───────────────────────────────────────────────────
@@ -752,8 +705,7 @@ for a in json.load(sys.stdin)['assets']:
 }
 EOF
     echo -e "${STY_GREEN}[$0]: Created $config_vdf — global Proton default: $tag.${STY_RST}"
-    x mkdir -p "$(dirname ${INSTALLED_LISTFILE})"
-    realpath -se "$config_vdf" >> "${INSTALLED_LISTFILE}"
+    record_installed "$config_vdf"
   else
     # config.vdf already exists — surgically patch only the "0" block inside
     # CompatToolMapping so we never clobber per-game overrides or other settings.
