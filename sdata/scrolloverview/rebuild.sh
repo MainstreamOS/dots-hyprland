@@ -114,6 +114,8 @@ for pc in hyprland pixman-1 libdrm pangocairo libinput libudev wayland-server xk
     pkg-config --exists "$pc" 2>/dev/null || { err "missing pkg-config dep: $pc"; exit 1; }
 done
 
+NPROC=$(nproc 2>/dev/null || echo 1)
+
 HYPR_VER=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
 [[ -n "$HYPR_VER" ]] || { err "could not read Hyprland version"; exit 1; }
 log "Installed Hyprland: $HYPR_VER"
@@ -163,7 +165,7 @@ build_at_ref() {
 
     : > "$BUILD_LOG"
     make -C "$SRC_DIR" clean >/dev/null 2>&1 || true
-    if make -C "$SRC_DIR" all -j"$(nproc)" >>"$BUILD_LOG" 2>&1 \
+    if make -C "$SRC_DIR" all -j"$NPROC" >>"$BUILD_LOG" 2>&1 \
        && [[ -f "$SRC_DIR/scrolloverview.so" ]]; then
         return 0
     fi
