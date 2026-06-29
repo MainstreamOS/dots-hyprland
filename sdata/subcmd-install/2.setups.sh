@@ -335,7 +335,7 @@ v setup_sddm_bg_polkit
 showfun setup_disk_mounter
 v setup_disk_mounter
 
-if [[ ! -z $(systemctl --version) ]]; then
+if command -v systemctl >/dev/null 2>&1; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.
   if [[ "$OS_GROUP_ID" == "fedora" ]]; then
     v bash -c "echo uinput | sudo tee /etc/modules-load.d/uinput.conf"
@@ -378,7 +378,7 @@ if [[ ! -z $(systemctl --version) ]]; then
   # Visual feedback ('*' per keystroke) at sudo prompts.
   showfun setup_pwfeedback
   v setup_pwfeedback
-elif [[ ! -z $(openrc --version) ]]; then
+elif command -v openrc >/dev/null 2>&1; then
   v bash -c "echo 'modules=i2c-dev' | sudo tee -a /etc/conf.d/modules"
   v sudo rc-update add modules boot
   v sudo rc-update add ydotool default
@@ -792,28 +792,6 @@ function setup_plymouth(){
 # that's a small cost for keeping plymouth working standalone.
   _initramfs_rebuild
   echo -e "${STY_GREEN}[$0]: Plymouth BGRT theme configured.${STY_RST}"
-}
-
-# Idempotent helper: add kernel modules to /etc/mkinitcpio.conf MODULES=(...).
-# Does nothing if the module is already present.
-function _mkinitcpio_add_modules(){
-  local mod
-  for mod in "$@"; do
-    if ! grep -qE "\bMODULES=\([^)]*\b${mod}\b" /etc/mkinitcpio.conf; then
-      sudo sed -i "s/^MODULES=(/MODULES=(${mod} /" /etc/mkinitcpio.conf
-      echo -e "${STY_CYAN}[$0]: Added initramfs module: ${mod}${STY_RST}"
-    fi
-  done
-}
-
-# Idempotent helper: remove a hook from /etc/mkinitcpio.conf HOOKS=(...).
-# Only operates on the HOOKS line so we don't accidentally touch MODULES etc.
-function _mkinitcpio_remove_hook(){
-  local hook="$1"
-  if grep -qE "^HOOKS=\([^)]*\b${hook}\b" /etc/mkinitcpio.conf; then
-    sudo sed -i -E "/^HOOKS=\(/ s/\b${hook}\b *//" /etc/mkinitcpio.conf
-    echo -e "${STY_CYAN}[$0]: Removed initramfs hook: ${hook}${STY_RST}"
-  fi
 }
 
 # Shared GPU detection + config library -- the single source of truth for both
