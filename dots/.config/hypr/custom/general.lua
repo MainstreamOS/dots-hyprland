@@ -85,7 +85,7 @@ local function applyPluginConfig()
                     workspace_gap = 100,
                     wallpaper = 2,           -- 0: global only, 1: per-workspace only, 2: both
                     -- switchwall.sh rewrites this line on every wallpaper change.
-                    wallpaper_path = "/home/itsjustdroid/.config/mainstream/themes/pink-sunrise/wallpaper.png",
+                    wallpaper_path = HOME .. "/.config/quickshell/ii/assets/images/default_wallpaper.png",
                     blur = true,
                     shadow = {
                         enabled = true,
@@ -131,7 +131,7 @@ local function applyPluginConfig()
         --
         -- movetoworkspacesilent has no direct equivalent in hl.dsp; only
         -- two buttons until upstream adds it (or a Lua-side wrapper).
-        if hl.plugin and hl.plugin.hyprbars and hl.plugin.hyprbars.add_button then
+        if hyprbarsActive() then
             -- Action strings are shell commands run via the legacy `exec`
             -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
             -- subshell, so the Lua expression after `hyprctl dispatch` must
