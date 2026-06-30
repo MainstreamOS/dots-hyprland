@@ -799,11 +799,9 @@ function setup_plymouth(){
 
 # Shared GPU detection + config library -- the single source of truth for both
 # the dots ./setup and archiso install paths (sdata/lib/gpu-config.sh). On the
-# live system: sudo writes, keep the kms hook, no ESP-size guard.
+# live system, writes go through sudo.
 source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
 GPU_SUDO=sudo
-GPU_EARLY_KMS_REMOVE_HOOK=false
-GPU_EARLY_KMS_ESP_THRESHOLD=0
 
 function setup_gpu_autoconfig(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
