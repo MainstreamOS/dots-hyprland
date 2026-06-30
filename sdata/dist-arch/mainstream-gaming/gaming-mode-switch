@@ -10,9 +10,18 @@
 #              arm a one-shot marker, restart sddm -> autologin into gamescope ONCE.
 #   desktop  - Steam "Exit to Desktop": write User+Session=hyprland, arm the marker,
 #              restart sddm -> a single seamless autologin back to Hyprland.
+#   logout   - Steam "Exit to Desktop" when the user chose the login-screen return in
+#              Gaming Mode Setup: strip the autologin User= and restart sddm so the
+#              session ends at the password greeter (the shared/public-machine case).
 #   reset    - strip the autologin User= so the next sddm start reaches the password
 #              greeter. Idempotent, never restarts sddm. Run before every sddm start
 #              by the gaming-mode-arm-check ExecStartPre, and from the Hyprland desktop.
+#   boot-gaming - boot-straight-to-gaming: write User+Session=gamescope WITHOUT
+#              restarting (sddm is about to start). Called only by gaming-mode-arm-check
+#              on the first sddm start of a cold boot when boot-target=gaming.
+#   get/set  - read/write the small Gaming Mode preference store (return-target,
+#              boot-target, open-setup) at /etc/mainstream-gaming/prefs.conf. `get` is read-only and
+#              unprivileged; `set` is reached via the scoped sudoers rule from the menu.
 #
 # One-shot autologin: SDDM autologins whenever the merged [Autologin] has a non-empty
 # User= AND daemonApp->first is true (true in EVERY freshly-spawned sddm process, so
@@ -30,27 +39,34 @@ set -u
 CONF="/etc/sddm.conf"
 LOCK="/run/gaming-mode-switch.lock"
 ARMED="/run/gaming-mode-armed"
+PREFS="/etc/mainstream-gaming/prefs.conf"
 GAMING_SESSION="gamescope-session.desktop"
 DESKTOP_SESSION="hyprland.desktop"
 SLEEP_TARGETS="sleep.target suspend.target hibernate.target hybrid-sleep.target"
 
-# Serialize every invocation (rapid Super+G, a desktop exit racing a reset, two
-# switches in flight) so /etc/sddm.conf is never half-written and sddm is never
-# double-restarted into the StartLimit. -w 10 bounds the wait so an ExecStartPre reset
-# can never hang the login screen indefinitely.
-exec 9>"$LOCK" 2>/dev/null || true
-flock -w 10 9 2>/dev/null || true
+valid_login_user() {
+    local uid
+    uid="$(id -u "$1" 2>/dev/null)" && [[ "$uid" -ge 1000 ]]
+}
 
 # Resolve the graphical user (only for the gaming/desktop autologin). sudo keeps it in
 # SUDO_USER; fall back to logname. Must be a real, login-capable, >=1000 account.
 resolve_user() {
     local u="${SUDO_USER:-}"
     [[ -z "$u" ]] && u="$(logname 2>/dev/null || true)"
-    if ! id -u "$u" >/dev/null 2>&1 || [[ "$(id -u "$u" 2>/dev/null)" -lt 1000 ]]; then
+    if ! valid_login_user "$u"; then
         echo "gaming-mode-switch: refusing autologin for invalid user '$u'" >&2
         exit 1
     fi
     printf '%s' "$u"
+}
+
+# Lowest-uid human account, used as the boot-straight-to-gaming autologin user when
+# the menu did not record one (single-user gaming box -- the common case).
+default_human_user() {
+    getent passwd 2>/dev/null \
+        | awk -F: '$3 >= 1000 && $3 < 60000 { print $3":"$1 }' \
+        | sort -t: -n | head -1 | cut -d: -f2
 }
 
 # Rewrite /etc/sddm.conf's [Autologin] block atomically (temp + mv = no truncation
@@ -103,6 +119,25 @@ write_autologin() {  # $1=user (may be empty)  $2=session basename
     mv -f "$tmp" "$CONF"
 }
 
+# Gaming Mode preference store -- a tiny key=value file read by os-session-select
+# (return-target) and gaming-mode-arm-check (boot-target/boot-user). World-readable so
+# the unprivileged consumers can read it; only this script (privileged) ever writes it.
+read_pref() {  # $1=key -> prints value, empty if unset/file missing
+    local key="$1"
+    [[ -z "$key" || ! -r "$PREFS" ]] && return 0
+    sed -n "s/^${key}=//p" "$PREFS" 2>/dev/null | tail -1
+}
+write_pref() {  # $1=key  $2=value  (atomic upsert)
+    local key="$1" val="$2" dir tmp
+    dir="$(dirname "$PREFS")"
+    install -d -m 0755 "$dir" 2>/dev/null || mkdir -p "$dir"
+    tmp="$(mktemp "${PREFS}.XXXXXX")" || return 1
+    [[ -f "$PREFS" ]] && grep -v "^${key}=" "$PREFS" > "$tmp" 2>/dev/null
+    printf '%s=%s\n' "$key" "$val" >> "$tmp"
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$PREFS"
+}
+
 # One-shot autologin token (tmpfs, cleared on reboot): present == "this next sddm start
 # may autologin"; absent == "fall back to the greeter".
 arm() { : > "$ARMED" 2>/dev/null || true; }
@@ -113,27 +148,79 @@ arm() { : > "$ARMED" 2>/dev/null || true; }
 # wedging into "start request repeated too quickly".
 restart_dm() { systemctl --no-block restart sddm; }
 
+mask_sleep()   { systemctl mask   --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true; }
+unmask_sleep() { systemctl unmask --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true; }
+
+# Read-only preference query: no lock, no privilege, runs as the calling user.
+if [[ "${1:-}" == "get" ]]; then
+    read_pref "${2:-}"
+    exit 0
+fi
+
+# Serialize every mutating invocation (rapid Super+G, a desktop exit racing a reset,
+# two switches in flight) so /etc/sddm.conf is never half-written and sddm is never
+# double-restarted into the StartLimit. -w 10 bounds the wait so an ExecStartPre reset
+# can never hang the login screen indefinitely.
+exec 9>"$LOCK" 2>/dev/null || true
+flock -w 10 9 2>/dev/null || true
+
 case "${1:-}" in
     gaming)
         u="$(resolve_user)"
         write_autologin "$u" "$GAMING_SESSION"
         arm
-        systemctl mask --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true
+        mask_sleep
         restart_dm
         ;;
     desktop)
         u="$(resolve_user)"
         write_autologin "$u" "$DESKTOP_SESSION"
         arm
-        systemctl unmask --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true
+        unmask_sleep
+        restart_dm
+        ;;
+    logout)
+        write_autologin "" "$DESKTOP_SESSION"
+        unmask_sleep
         restart_dm
         ;;
     reset)
         write_autologin "" "$DESKTOP_SESSION"
-        systemctl unmask --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true
+        unmask_sleep
+        ;;
+    boot-gaming)
+        # First sddm start of a cold boot with boot-target=gaming. Write the gamescope
+        # autologin for this one start only -- no restart (sddm is starting now), no
+        # marker. An invalid/missing boot user falls back to the greeter, never a loop.
+        u="$(read_pref boot-user)"
+        [[ -z "$u" ]] && u="$(default_human_user)"
+        if ! valid_login_user "$u"; then
+            write_autologin "" "$DESKTOP_SESSION"
+            exit 1
+        fi
+        write_autologin "$u" "$GAMING_SESSION"
+        mask_sleep
+        ;;
+    set)
+        key="${2:-}" val="${3:-}"
+        case "$key" in
+            return-target) [[ "$val" == "desktop"  || "$val" == "greeter" ]] || exit 2 ;;
+            boot-target)   [[ "$val" == "desktop"  || "$val" == "gaming"  ]] || exit 2 ;;
+            open-setup)    [[ "$val" == "remember" || "$val" == "always"  ]] || exit 2 ;;
+            *) exit 2 ;;
+        esac
+        write_pref "$key" "$val"
+        # Record (or clear) the account to autologin when booting straight to gaming.
+        if [[ "$key" == "boot-target" ]]; then
+            if [[ "$val" == "gaming" ]]; then
+                write_pref boot-user "$(resolve_user)"
+            else
+                write_pref boot-user ""
+            fi
+        fi
         ;;
     *)
-        echo "usage: gaming-mode-switch {gaming|desktop|reset}" >&2
+        echo "usage: gaming-mode-switch {gaming|desktop|logout|reset|boot-gaming|get <key>|set <key> <value>}" >&2
         exit 2
         ;;
 esac

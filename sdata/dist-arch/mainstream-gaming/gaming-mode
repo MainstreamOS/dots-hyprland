@@ -12,8 +12,17 @@ notify() {
     command -v notify-send >/dev/null 2>&1 && notify-send -u "$urgency" -a "Gaming Mode" "Gaming Mode" "$*"
 }
 
-# One-time markers (e.g. the first-run resolution tip) live here.
+# One-time markers (the setup-done gate, the first-run resolution tip) live here.
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream-gaming"
+
+# Gaming Mode Setup -- the Quickshell menu that introduces the slow first launch and
+# the Steam display tweaks, and writes the return-target / boot-target preferences.
+setup_qml="$HOME/.config/quickshell/ii/gaming-setup.qml"
+launch_setup() {  # $1 = firstrun|reconfig
+    [[ -f "$setup_qml" ]] || return 1
+    pgrep -f "gaming-setup.qml" >/dev/null 2>&1 && return 0   # already open
+    GAMING_SETUP_MODE="$1" setsid -f qs -p "$setup_qml" >/dev/null 2>&1
+}
 
 # --tips: Hyprland-start hook. Once, after the first Gaming Mode session returns to the
 # desktop, point the user at Steam's "Automatically Set Resolution" toggle -- it defaults
@@ -26,6 +35,37 @@ if [[ "${1:-}" == "--tips" ]]; then
             "Gaming Mode tip" "For a sharper picture, open Steam > Settings > Display and turn off 'Automatically Set Resolution'."
     fi
     exit 0
+fi
+
+# --setup: (re)open Gaming Mode Setup without switching sessions. Bound to Ctrl+Super+G
+# so the user can revisit their choices any time.
+if [[ "${1:-}" == "--setup" ]]; then
+    launch_setup reconfig
+    exit 0
+fi
+
+# --play: skip the setup menu and switch straight into gaming. The menu's "Enter Gaming
+# Mode" / "Start Gaming" buttons call this so they bypass the gate below -- otherwise,
+# under "Always open setup", the switch would bounce back into the menu in an endless loop.
+if [[ "${1:-}" != "--play" ]]; then
+    # Gate Super+G on the setup menu:
+    #   * first ever press (no setup-done marker) -> show the intro and write the marker.
+    #   * "Always open setup" preference          -> show the menu on every press; its
+    #     "Start Gaming" button calls back with --play to actually switch.
+    #   * otherwise ("Remember my setup")          -> fall through and switch directly.
+    # A missing menu QML also falls through to a direct switch rather than blocking gaming.
+    if [[ ! -e "$state_dir/setup-done" ]]; then
+        if launch_setup firstrun; then
+            # Mark the intro shown here, not only from the menu's QML: `setsid -f qs`
+            # returns 0 before the menu paints, so if it ever fails to start, a later
+            # Super+G must fall through to a direct switch instead of getting stuck
+            # relaunching a menu that never appears.
+            mkdir -p "$state_dir" && touch "$state_dir/setup-done"
+            exit 0
+        fi
+    elif [[ "$(/usr/bin/gaming-mode-switch get open-setup 2>/dev/null)" == "always" ]]; then
+        launch_setup reconfig && exit 0
+    fi
 fi
 
 # Debounce Super+G: take a per-user non-blocking lock so a mashed hotkey fires the

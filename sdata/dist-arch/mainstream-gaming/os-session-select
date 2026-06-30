@@ -14,7 +14,14 @@ case "$target" in
         ;;
 esac
 
-# Let Steam save its state before the session is torn down, then hand the
-# privileged display-manager flip to gaming-mode-switch (NOPASSWD sudoers rule).
+# Let Steam save its state before the session is torn down, then hand the privileged
+# display-manager flip to gaming-mode-switch (NOPASSWD sudoers rule). The user's
+# return-target preference (Gaming Mode Setup) decides where the session ends:
+#   desktop (default) -> seamless autologin back into Hyprland.
+#   greeter           -> the SDDM password screen, closing the security loop on a
+#                        shared or public machine.
 timeout 8 steam -shutdown >/dev/null 2>&1 || true
+if [[ "$(/usr/bin/gaming-mode-switch get return-target 2>/dev/null)" == "greeter" ]]; then
+    exec sudo -n /usr/bin/gaming-mode-switch logout
+fi
 exec sudo -n /usr/bin/gaming-mode-switch desktop

@@ -258,6 +258,7 @@ hl.bind("CTRL + SHIFT + Escape", hl.dsp.exec_cmd(taskManager), {description = "T
 
 --##! Gaming
 hl.bind("SUPER + G", hl.dsp.exec_cmd("setsid -f /usr/bin/gaming-mode"), {description = "Gaming Mode (Steam Big Picture)"} )
+hl.bind("CTRL + SUPER + G", hl.dsp.exec_cmd("setsid -f /usr/bin/gaming-mode --setup"), {description = "Gaming Mode Setup"} )
 
 --##! Utilities
 --# Screenshot, Record, OCR, Color picker, Clipboard history

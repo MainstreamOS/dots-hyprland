@@ -1,13 +1,16 @@
 #!/bin/bash
 # sddm.service ExecStartPre (installed via 10-gaming.conf). Makes a gaming/desktop
-# entry a strict one-shot and enforces OS-first on every other sddm start:
+# entry a strict one-shot and enforces the boot target on every other sddm start:
 #   * a FRESH marker (a deliberate switch armed it moments ago) -> consume it and
 #     leave /etc/sddm.conf so THIS start performs the single autologin it asked for.
-#   * no marker, or a STALE one (e.g. stranded by a StartLimit-blocked restart and
-#     only reached much later, or any unexpected start) -> run `gaming-mode-switch
-#     reset` to strip the autologin User= so SDDM reaches the password greeter and
-#     never re-enters a broken gamescope session in a loop. The marker lives in /run
-#     (tmpfs), so a reboot always clears it; anything ambiguous falls back to reset
+#   * no marker, on the FIRST sddm start of a cold boot, with boot-target=gaming ->
+#     write the gamescope autologin (boot-straight-to-gaming) for this one start.
+#   * no marker otherwise -- a cold boot with the default desktop target, or any
+#     in-boot restart (a StartLimit-stranded restart reached late, a gamescope crash,
+#     a reboot-from-gaming, any unexpected start) -> run `gaming-mode-switch reset` to
+#     strip the autologin User= so SDDM reaches the password greeter and never
+#     re-enters a broken gamescope session in a loop. Both markers live in /run
+#     (tmpfs), so a reboot always clears them; anything ambiguous falls back to reset
 #     (the safe, password-greeter direction).
 #
 # Shipped as an sddm.service drop-in (always present, no `systemctl enable`), so the
@@ -16,12 +19,37 @@
 # hiccup here can never wedge the login screen.
 set -u
 MARKER="/run/gaming-mode-armed"
+BOOTED="/run/gaming-mode-booted"
+
 fresh=0
 if [[ -e "$MARKER" ]]; then
     age=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || echo 0) ))
     rm -f "$MARKER"
     [[ "$age" -ge 0 && "$age" -le 120 ]] && fresh=1
 fi
+# A fresh marker means a deliberate Super+G / Exit-to-Desktop switch armed this exact
+# start: leave /etc/sddm.conf as written so the one-shot autologin happens.
 [[ "$fresh" -eq 1 ]] && exit 0
+
+# No deliberate switch. The /run sentinel (tmpfs) is absent only on the first sddm
+# start after a cold boot and present on every in-boot restart, so boot-straight-to-
+# gaming is honored exactly once per cold boot: a later crash-restart finds the
+# sentinel and falls through to the OS-first reset (password greeter) instead of
+# looping back into a broken session.
+if [[ ! -e "$BOOTED" ]]; then
+    : > "$BOOTED" 2>/dev/null || true
+    if [[ "$(/usr/bin/gaming-mode-switch get boot-target 2>/dev/null)" == "gaming" ]]; then
+        # Steam's first-run client download races a cold boot: on a fresh install it
+        # fires before DHCP/DNS are up, fails with "Steam needs to be online", and the
+        # session drops back to the desktop. Wait (bounded) for NetworkManager to finish
+        # so the gaming session comes up online. Gaming-boot only -- desktop boots never
+        # reach here, so they are never delayed.
+        command -v nm-online >/dev/null 2>&1 && nm-online -s -t 30 >/dev/null 2>&1
+        /usr/bin/gaming-mode-switch boot-gaming >/dev/null 2>&1 && exit 0
+    fi
+fi
+
+# Cold boot with the default desktop target, or any in-boot restart: strip the
+# autologin User= so SDDM reaches the password greeter (OS-first).
 /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
 exit 0

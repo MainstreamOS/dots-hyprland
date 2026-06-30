@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=1
+pkgrel=3
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
