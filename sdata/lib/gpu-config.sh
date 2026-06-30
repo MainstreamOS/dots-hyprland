@@ -84,6 +84,10 @@ gpu_detect() {
         if [[ $AMD_DEC -lt 26112 ]] && ! [[ $AMD_DEC -ge 4864 && $AMD_DEC -le 5887 ]]; then IS_OLD_AMD=true; fi
         amd_name="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" | grep -iE 'AMD|ATI|Radeon' | head -1 || true)"
         if grep -iqE '\bHD [2-6][0-9]{3}\b|\bRS[0-9]+\b|\bRV[0-9]+\b|\bR[67][0-9]{2}\b' <<<"$amd_name"; then IS_OLD_AMD=true; fi
+        # Modern integrated Radeon (Ryzen APUs) — some new IDs sit below the
+        # APU-exemption window (e.g. Krackan 0x1114), so rescue them by name.
+        # 'Radeon NxxxM' / bare 'Radeon Graphics' never appear on pre-GCN parts.
+        if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$lspci_names"; then IS_OLD_AMD=false; fi
         if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$lspci_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
     fi
 
@@ -140,7 +144,7 @@ _gpu_write_file() {
 gpu_base_cmdline_tokens() {
     local root_spec="$1" subvol="${2:-@}"
     subvol="${subvol#/}"
-    printf '%s rootflags=subvol=%s rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0' \
+    printf '%s rootflags=subvol=%s rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0' \
         "$root_spec" "$subvol"
 }
 
@@ -327,19 +331,17 @@ nvidia_enable_services() {
     fi
 }
 
-# ── nvidia_early_kms <remove_kms_hook:bool> [esp_threshold_mib] ──────────────
-# Inject the nvidia early-KMS modules, optionally dropping the kms hook first.
-# Skips injection when /boot/efi is a mounted FAT ESP smaller than the threshold
-# (reused small Windows ESP — a ~170 MB UKI would overflow it). threshold 0
-# disables the guard (the live dots path, which has no UKI/ESP constraint).
-nvidia_early_kms() {
-    local remove_kms="${1:-false}" threshold="${2:-512}" esp_mib
-    esp_mib="$(_gpu_esp_mib)"
-    if [[ "$threshold" -gt 0 && "$esp_mib" -gt 0 && "$esp_mib" -lt "$threshold" ]]; then
-        return 0
-    fi
-    [[ "$remove_kms" == true ]] && mkinitcpio_remove_hook kms || true
-    mkinitcpio_add_modules nvidia nvidia_modeset nvidia_uvm nvidia_drm
+# ── nvidia_defer_kms ────────────────────────────────────────────────────────
+# Do NOT early-load the nvidia modules into the initramfs: baking them in breaks
+# hibernation, because NVreg_PreserveVideoMemoryAllocations restores VRAM before
+# the init hooks make the temp filesystem usable (ArchWiki). KMS/full-res is kept
+# by nvidia_drm.modeset=1 on the cmdline; the modules load via udev on the real
+# root, after which suspend/hibernate VRAM preservation works. Remove the kms
+# hook so udev autodetect doesn't early-load nvidia_drm in its place. Dropping the
+# in-initramfs nvidia modules also shrinks the UKI, retiring the old small-ESP
+# guard. AMD/Intel still get early KMS via their explicit MODULES entries.
+nvidia_defer_kms() {
+    mkinitcpio_remove_hook kms
 }
 
 # ── hypridle_fix_nvidia <user_home> ─────────────────────────────────────────
@@ -381,9 +383,9 @@ _gpu_swap_partuuid() {
 # System-level GPU config from gpu_detect's results: per-vendor MODULES,
 # modprobe.d, NVIDIA early-KMS + services, the GPU kernel cmdline flags, and
 # resume= for hibernation. Mirrors dots setup_gpu_autoconfig. Does NOT rebuild
-# the initramfs or write the base cmdline -- the caller owns those. Early-KMS
-# behavior via GPU_EARLY_KMS_REMOVE_HOOK (default false = keep kms) and
-# GPU_EARLY_KMS_ESP_THRESHOLD (default 0 = guard off; archiso sets true/512).
+# the initramfs or write the base cmdline -- the caller owns those. NVIDIA is
+# deliberately NOT early-loaded (early-loading breaks hibernation); KMS is kept
+# by nvidia_drm.modeset=1. Any GPU_EARLY_KMS_* seams a caller sets are no-ops.
 gpu_apply_autoconfig() {
     local -a cmdline_args=()
     # Intel first so i915 precedes nvidia in MODULES.
@@ -406,7 +408,7 @@ gpu_apply_autoconfig() {
         fi
     fi
     if [[ $HAS_NVIDIA == true && $NVIDIA_PCI_DEC -ge 1728 ]] && _gpu_nvidia_has_driver; then
-        nvidia_early_kms "${GPU_EARLY_KMS_REMOVE_HOOK:-false}" "${GPU_EARLY_KMS_ESP_THRESHOLD:-0}"
+        nvidia_defer_kms
         write_modprobe_conf nvidia
         cmdline_args+=("nvidia_drm.modeset=1")
         local _pw=false

@@ -783,7 +783,10 @@ function setup_plymouth(){
   # Persist the desired boot flags in /etc/kernel/cmdline so future
   # limine-mkinitcpio regenerations keep the splash/silencing settings.
   echo -e "${STY_CYAN}[$0]: Ensuring the plymouth splash flags are in the managed kernel cmdline...${STY_RST}"
-  cmdline_upsert quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0
+  cmdline_upsert quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0
+  # Quiet the journal's audit spam without disabling the audit subsystem (the old
+  # audit=0 boot flag did the latter).
+  x sudo systemctl mask systemd-journald-audit.socket || true
 
   # Rebuild initramfs so plymouth is active on next boot. On systems with
 # limine-mkinitcpio-hook installed, this also regenerates /boot/limine.conf

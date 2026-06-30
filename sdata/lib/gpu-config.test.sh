@@ -35,6 +35,9 @@ chk amd-pregcn HAS_AMD true; chk amd-pregcn AMD_DEC 26464; chk amd-pregcn IS_OLD
 run amd-apu "" "06:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Renoir [Radeon Vega Series / Radeon Vega Mobile Series] [1002:1636] (rev c8)"
 chk amd-apu HAS_AMD true; chk amd-apu AMD_DEC 5686; chk amd-apu IS_OLD_AMD false
 
+run amd-krackan "" "c5:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Krackan [Radeon 840M / 860M Graphics] [1002:1114] (rev c1)"
+chk amd-krackan HAS_AMD true; chk amd-krackan AMD_DEC 4372; chk amd-krackan IS_OLD_AMD false
+
 # 5-9. NVIDIA generation ladder
 run nv-turing "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 chk nv-turing HAS_NVIDIA true; chk nv-turing NVIDIA_PCI_DEC 7815; chk nv-turing NVIDIA_GEN turing
@@ -74,7 +77,7 @@ chk vm-qemu IS_VM true; chk vm-qemu HAS_NVIDIA false; chk vm-qemu HAS_AMD false;
 # ── cmdline writer (canonical content + idempotency + key dedup) ────────────
 export GPU_SUDO=""
 CMDTMP="$(mktemp -d)"; export KERNEL_CMDLINE="$CMDTMP/cmdline"; : > "$KERNEL_CMDLINE"
-EXP_BASE='root=PARTUUID=abc-123 rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0 audit=0'
+EXP_BASE='root=PARTUUID=abc-123 rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0'
 chk_str cmdline-base-tokens "$(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@')" "$EXP_BASE"
 cmdline_upsert $(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@'); CASES=$((CASES + 1))
 chk_str cmdline-seed "$(cat "$KERNEL_CMDLINE")" "$EXP_BASE"
@@ -169,13 +172,9 @@ chk_str svc-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present
 chk_str svc-suspend-still "$( [[ "$ENABLED" == *"nvidia-suspend"* ]] && echo yes || echo no )" "yes"
 
 printf 'MODULES=()\nHOOKS=(base systemd plymouth kms block filesystems)\n' > "$MKINITCPIO_CONF"
-_gpu_esp_mib() { echo 200; }
-nvidia_early_kms true 512; CASES=$((CASES + 1))
-chk_str early-kms-skip "$(grep -c nvidia "$MKINITCPIO_CONF")" "0"
-_gpu_esp_mib() { echo 0; }
-nvidia_early_kms false 512; CASES=$((CASES + 1))
-chk_str early-kms-inject "$( [[ "$(grep '^MODULES=' "$MKINITCPIO_CONF")" == *"nvidia_drm"* ]] && echo yes || echo no )" "yes"
-chk_str early-kms-keep-kms "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo kept || echo gone )" "kept"
+nvidia_defer_kms; CASES=$((CASES + 1))
+chk_str defer-kms-no-nvidia "$(grep -c nvidia "$MKINITCPIO_CONF")" "0"
+chk_str defer-kms-removes-kms "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo present || echo gone )" "gone"
 
 HF="$NVHOME/.config/hypr/hypridle.conf"
 printf "listener {\n    after_sleep_cmd = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })' && hyprctl dispatch 'x'\n    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'\n}\n" > "$HF"
@@ -214,7 +213,8 @@ oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation 
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))
 CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"; GV="$(cat "$OHOME/.config/hypr/custom/general.lua")"
 chk_str turing-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo yes || echo no )" "yes"
-chk_str turing-modules "$( [[ "$ML" == *"nvidia_drm"* ]] && echo yes || echo no )" "yes"
+chk_str turing-no-early-nvidia "$( [[ "$ML" == *"nvidia"* ]] && echo present || echo absent )" "absent"
+chk_str turing-kms-removed "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo present || echo gone )" "gone"
 chk_str turing-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str turing-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
 chk_str turing-env "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo yes || echo no )" "yes"
@@ -251,7 +251,8 @@ chk_str arc-no-xe "$( [[ "$ML" == *xe* ]] && echo present || echo absent )" "abs
 oreset; FIX_LSPCI="00:02.0 VGA compatible controller [0300]: Intel Corporation TigerLake-H GT1 [UHD Graphics] [8086:9a60] (rev 01)
 01:00.0 3D controller [0302]: NVIDIA Corporation GA106M [GeForce RTX 3060 Mobile] [10de:2503] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
-chk_str hybrid-modules "$( [[ "$ML" == *"nvidia_drm"* && "$ML" == *"i915"* ]] && echo yes || echo no )" "yes"
+chk_str hybrid-modules "$( [[ "$ML" == *"i915"* ]] && echo yes || echo no )" "yes"
+chk_str hybrid-no-early-nvidia "$( [[ "$ML" == *"nvidia"* ]] && echo present || echo absent )" "absent"
 chk_str hybrid-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str hybrid-no-i915-modeset "$(count 'i915\.modeset=1' "$CL")" "0"
 
