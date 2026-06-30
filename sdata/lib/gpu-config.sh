@@ -28,9 +28,9 @@ _gpu_sys_vendor() { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
 # Single detection pass. Exports (true/false unless noted):
 #   HAS_NVIDIA HAS_AMD HAS_INTEL  IS_HYBRID  IS_VM
 #   NVIDIA_PCI_DEC (int)  NVIDIA_GEN (turing|maxwell|kepler|fermi|prefermi|none)
-#   AMD_DEC (int)         IS_OLD_AMD
-#   INTEL_DEC (int)       IS_ARC  IS_OLD_INTEL
-# Generation ladder (PCI device-id decimal): 7684 Turing+, 4928 Maxwell-Volta,
+#   AMD_DEC (int)         IS_OLD_AMD  IS_RDNA4
+# Generation ladder (PCI device-id decimal): 7682 Turing+ (0x1E02 TITAN RTX /
+# 0x1E03 RTX 2080 Ti 12GB are the lowest Turing IDs), 4928 Maxwell-Volta,
 # 4032 Kepler, 1728 Fermi, below Fermi -> prefermi (nouveau).
 # AMD "old" = pre-GCN: dec < 26112 AND NOT an APU (4864-5887 exemption), OR a
 # pre-GCN name (HD 2xxx-6xxx / RV / RS / R[67]xx); RDNA4 (Navi 4x / RX 9xxx /
@@ -40,7 +40,6 @@ gpu_detect() {
     HAS_NVIDIA=false HAS_AMD=false HAS_INTEL=false IS_HYBRID=false IS_VM=false
     NVIDIA_PCI_DEC=0 NVIDIA_GEN=none
     AMD_DEC=0 IS_OLD_AMD=false IS_RDNA4=false
-    INTEL_DEC=0 IS_ARC=false IS_OLD_INTEL=false
 
     # Probe each lspci form once and reuse: -nn (with [vendor:device] IDs) for
     # the ID matches, plain names for the marketing-name regexes. Kept separate
@@ -70,7 +69,7 @@ gpu_detect() {
         pci_line="$(grep -iE 'NVIDIA|GeForce|Quadro|Tesla' <<<"$lspci_nn" | head -1 || true)"
         pci_id="$(grep -oE '\[10de:[0-9a-fA-F]{4}\]' <<<"$pci_line" | tail -1 | grep -oE '[0-9a-fA-F]{4}' | tail -1 || true)"
         NVIDIA_PCI_DEC=$((16#${pci_id:-0}))
-        if   [[ $NVIDIA_PCI_DEC -ge 7684 ]]; then NVIDIA_GEN=turing
+        if   [[ $NVIDIA_PCI_DEC -ge 7682 ]]; then NVIDIA_GEN=turing
         elif [[ $NVIDIA_PCI_DEC -ge 4928 ]]; then NVIDIA_GEN=maxwell
         elif [[ $NVIDIA_PCI_DEC -ge 4032 ]]; then NVIDIA_GEN=kepler
         elif [[ $NVIDIA_PCI_DEC -ge 1728 ]]; then NVIDIA_GEN=fermi
@@ -88,17 +87,6 @@ gpu_detect() {
         if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$lspci_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
     fi
 
-    if [[ $HAS_INTEL == true ]]; then
-        local intel_dev intel_id
-        intel_dev="$(grep -iE 'Intel.*(Graphics|UHD|HD|Iris|Arc)' <<<"$lspci_names" | head -1 || true)"
-        if grep -iqE 'Arc|Xe|A[3-7][0-9]{2}' <<<"$intel_dev"; then
-            IS_ARC=true
-        else
-            intel_id="$(grep -iE 'Intel.*Graphics' <<<"$lspci_nn" | grep -oE '8086:[0-9a-fA-F]{4}' | head -1 | cut -d: -f2 || true)"
-            INTEL_DEC=$((16#${intel_id:-ffff}))
-            [[ $INTEL_DEC -lt 256 ]] && IS_OLD_INTEL=true || true
-        fi
-    fi
     return 0
 }
 
@@ -192,7 +180,12 @@ write_modprobe_conf() {
     ${GPU_SUDO:-} mkdir -p "$dir"
     case "$vendor" in
         nvidia)
-            printf 'options nvidia-drm modeset=1 fbdev=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp\n' \
+            # fbdev=1 exists only since driver 545 (nvidia-open / 580xx); the
+            # 470xx/390xx legacy branches reject the unknown param and fail to
+            # load nvidia-drm, so emit it only for the modern branches.
+            local fbdev=""
+            case "${NVIDIA_GEN:-}" in turing|maxwell) fbdev=" fbdev=1" ;; esac
+            printf 'options nvidia-drm modeset=1%s\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp\n' "$fbdev" \
                 | _gpu_write_file "$dir/nvidia.conf" ;;
         amd)
             printf 'options amdgpu si_support=1\noptions amdgpu cik_support=1\noptions radeon si_support=0\noptions radeon cik_support=0\n' \
@@ -322,7 +315,8 @@ nvidia_write_aq_drm() {
 
 # ── nvidia_enable_services <enable_powerd:bool> ─────────────────────────────
 # Enable suspend/hibernate/resume (tolerant of missing units); powerd only when
-# enable_powerd (turing/maxwell).
+# enable_powerd. Dynamic Boost is Ampere+ notebook-only, so only the turing
+# bucket (Turing and newer) can ever legitimately use it.
 nvidia_enable_services() {
     local enable_powerd="${1:-false}" svc
     for svc in nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service; do
@@ -394,12 +388,11 @@ gpu_apply_autoconfig() {
     local -a cmdline_args=()
     # Intel first so i915 precedes nvidia in MODULES.
     if [[ $HAS_INTEL == true ]]; then
-        if [[ $IS_ARC == true ]]; then
-            mkinitcpio_add_modules xe
-        else
-            mkinitcpio_add_modules i915
-            [[ $IS_HYBRID == true ]] || cmdline_args+=("i915.modeset=1")
-        fi
+        # i915 is the kernel default for Alchemist/Iris-Xe and older; on the rare
+        # Xe2 card (Battlemage/Lunar Lake) it is a harmless no-op and xe auto-loads.
+        # No i915.modeset cmdline token: the param was deprecated in 6.12 (warns)
+        # and KMS is already the -1 auto default; early KMS comes from MODULES.
+        mkinitcpio_add_modules i915
     fi
     if [[ $HAS_AMD == true ]]; then
         if [[ $IS_OLD_AMD == true ]]; then
@@ -417,14 +410,13 @@ gpu_apply_autoconfig() {
         write_modprobe_conf nvidia
         cmdline_args+=("nvidia_drm.modeset=1")
         local _pw=false
-        [[ "$NVIDIA_GEN" == turing || "$NVIDIA_GEN" == maxwell ]] && _pw=true || true
+        [[ "$NVIDIA_GEN" == turing ]] && _pw=true || true
         nvidia_enable_services "$_pw"
     fi
     # PRIME for hybrid.
     if [[ $IS_HYBRID == true ]]; then
         if [[ $HAS_NVIDIA == true && $HAS_INTEL == true ]]; then
             mkinitcpio_add_modules i915
-            cmdline_args+=("i915.modeset=1")
         elif [[ $HAS_NVIDIA == true && $HAS_AMD == true ]]; then
             mkinitcpio_add_modules amdgpu
         fi

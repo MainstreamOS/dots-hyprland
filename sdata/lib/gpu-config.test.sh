@@ -49,17 +49,17 @@ chk nv-prefermi NVIDIA_PCI_DEC 1553; chk nv-prefermi NVIDIA_GEN prefermi
 
 # 10-12. Intel
 run intel-arc "" "03:00.0 VGA compatible controller [0300]: Intel Corporation DG2 [Arc A770] [8086:56a0] (rev 08)"
-chk intel-arc HAS_INTEL true; chk intel-arc IS_ARC true; chk intel-arc IS_OLD_INTEL false
+chk intel-arc HAS_INTEL true
 run intel-modern "" "00:02.0 VGA compatible controller [0300]: Intel Corporation AlderLake-S GT1 [UHD Graphics 770] [8086:4680] (rev 0c)"
-chk intel-modern HAS_INTEL true; chk intel-modern IS_ARC false; chk intel-modern IS_OLD_INTEL false; chk intel-modern INTEL_DEC 18048
+chk intel-modern HAS_INTEL true
 run intel-presb "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Core Processor Integrated Graphics Controller [8086:0042] (rev 12)"
-chk intel-presb HAS_INTEL true; chk intel-presb IS_ARC false; chk intel-presb IS_OLD_INTEL true; chk intel-presb INTEL_DEC 66
+chk intel-presb HAS_INTEL true
 
 # 13. Hybrid NVIDIA + Intel (laptop; dGPU shows as 3D controller)
 run hybrid-nv-intel "" "00:02.0 VGA compatible controller [0300]: Intel Corporation TigerLake-H GT1 [UHD Graphics] [8086:9a60] (rev 01)
 01:00.0 3D controller [0302]: NVIDIA Corporation GA106M [GeForce RTX 3060 Mobile] [10de:2503] (rev a1)"
 chk hybrid-nv-intel HAS_NVIDIA true; chk hybrid-nv-intel HAS_INTEL true; chk hybrid-nv-intel HAS_AMD false
-chk hybrid-nv-intel IS_HYBRID true; chk hybrid-nv-intel NVIDIA_GEN turing; chk hybrid-nv-intel IS_OLD_INTEL false
+chk hybrid-nv-intel IS_HYBRID true; chk hybrid-nv-intel NVIDIA_GEN turing
 
 # 14. Hybrid NVIDIA + AMD
 run hybrid-nv-amd "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU106 [GeForce RTX 2070] [10de:1f02] (rev a1)
@@ -90,8 +90,10 @@ rm -rf "$CMDTMP"
 
 # ── modprobe / mkinitcpio MODULES + HOOKS / hypr env writers ────────────────
 WTMP="$(mktemp -d)"; export MODPROBE_DIR="$WTMP/modprobe.d" MKINITCPIO_CONF="$WTMP/mkinitcpio.conf"
-write_modprobe_conf nvidia; CASES=$((CASES + 1))
+NVIDIA_GEN=turing; write_modprobe_conf nvidia; CASES=$((CASES + 1))
 chk_str modprobe-nvidia "$(cat "$MODPROBE_DIR/nvidia.conf")" "$(printf 'options nvidia-drm modeset=1 fbdev=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp')"
+NVIDIA_GEN=kepler; write_modprobe_conf nvidia; CASES=$((CASES + 1))
+chk_str modprobe-nvidia-legacy "$(cat "$MODPROBE_DIR/nvidia.conf")" "$(printf 'options nvidia-drm modeset=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp')"
 write_modprobe_conf amd; CASES=$((CASES + 1))
 chk_str modprobe-amd "$(cat "$MODPROBE_DIR/amdgpu.conf")" "$(printf 'options amdgpu si_support=1\noptions amdgpu cik_support=1\noptions radeon si_support=0\noptions radeon cik_support=0')"
 
@@ -223,6 +225,13 @@ gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES
 chk_str kepler-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str kepler-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
 chk_str kepler-no-nvd "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str kepler-no-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "0"
+
+oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB] [10de:1c03] (rev a1)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1))
+chk_str maxwell-gen "$NVIDIA_GEN" "maxwell"
+chk_str maxwell-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
+chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
@@ -232,14 +241,19 @@ chk_str prefermi-no-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo pr
 oreset; FIX_LSPCI="00:02.0 VGA compatible controller [0300]: Intel Corporation AlderLake-S GT1 [UHD Graphics 770] [8086:4680] (rev 0c)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
 chk_str intel-modules "$( [[ "$ML" == *"i915"* ]] && echo yes || echo no )" "yes"
-chk_str intel-cmdline "$( [[ "$CL" == *"i915.modeset=1"* ]] && echo yes || echo no )" "yes"
+chk_str intel-cmdline "$( [[ "$CL" == *"i915.modeset=1"* ]] && echo present || echo absent )" "absent"
+
+oreset; FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Intel Corporation DG2 [Arc A770] [8086:56a0] (rev 08)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str arc-i915 "$( [[ "$ML" == *"i915"* ]] && echo yes || echo no )" "yes"
+chk_str arc-no-xe "$( [[ "$ML" == *xe* ]] && echo present || echo absent )" "absent"
 
 oreset; FIX_LSPCI="00:02.0 VGA compatible controller [0300]: Intel Corporation TigerLake-H GT1 [UHD Graphics] [8086:9a60] (rev 01)
 01:00.0 3D controller [0302]: NVIDIA Corporation GA106M [GeForce RTX 3060 Mobile] [10de:2503] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
 chk_str hybrid-modules "$( [[ "$ML" == *"nvidia_drm"* && "$ML" == *"i915"* ]] && echo yes || echo no )" "yes"
-chk_str hybrid-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* && "$CL" == *"i915.modeset=1"* ]] && echo yes || echo no )" "yes"
-chk_str hybrid-i915-once "$(count 'i915\.modeset=1' "$CL")" "1"
+chk_str hybrid-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
+chk_str hybrid-no-i915-modeset "$(count 'i915\.modeset=1' "$CL")" "0"
 
 # Legacy NVIDIA that fell back to nouveau (no proprietary driver) must NOT get
 # the nvidia config/env — that would black-screen the session.
