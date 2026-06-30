@@ -113,20 +113,45 @@ hypr_env_upsert "$ENVHOME" LIBVA_DRIVER_NAME nvidia   # idempotent
 chk_str env-line "$(cat "$ENVHOME/.config/hypr/custom/env.lua")" 'hl.env("LIBVA_DRIVER_NAME", "nvidia")'
 hypr_env_upsert "$WTMP/nonexistent" KEY val; rc=$?; CASES=$((CASES + 1))
 chk_str env-absent-skip "$rc" "0"
+
+: > "$ENVHOME/.config/hypr/custom/general.lua"
+CURSOR_LINE='hl.config({ cursor = { no_hardware_cursors = true } })'
+hypr_config_upsert "$ENVHOME" no_hardware_cursors "$CURSOR_LINE"; CASES=$((CASES + 1))
+hypr_config_upsert "$ENVHOME" no_hardware_cursors "$CURSOR_LINE"
+chk_str cursor-line "$(grep -c 'no_hardware_cursors = true' "$ENVHOME/.config/hypr/custom/general.lua")" "1"
+hypr_config_upsert "$WTMP/nonexistent" no_hardware_cursors "$CURSOR_LINE"; rc=$?; CASES=$((CASES + 1))
+chk_str cursor-absent-skip "$rc" "0"
 rm -rf "$WTMP"
 
 # ── NVIDIA env / services / early-KMS / hypridle / breadcrumb ────────────────
 NTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$NTMP/mkinitcpio.conf"
 NVHOME="$NTMP/home"; mkdir -p "$NVHOME/.config/hypr/custom"
 
-NVIDIA_GEN=turing; : > "$NVHOME/.config/hypr/custom/env.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
+NVIDIA_GEN=turing; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+GL="$(cat "$NVHOME/.config/hypr/custom/general.lua")"
 chk_str env-turing-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "direct")'* ]] && echo yes || echo no )" "yes"
 chk_str env-turing-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "nvidia")'* ]] && echo yes || echo no )" "yes"
-NVIDIA_GEN=kepler; : > "$NVHOME/.config/hypr/custom/env.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
+chk_str env-no-wlr-cursor "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
+chk_str env-turing-no-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str env-turing-no-qs-hint "$( [[ "$EL" == *'QS_DISABLE_DMABUF'* ]] && echo present || echo absent )" "absent"
+chk_str cursor-no-hw "$( [[ "$GL" == *'no_hardware_cursors = true'* ]] && echo yes || echo no )" "yes"
+chk_str anti-flicker "$( [[ "$GL" == *'nvidia_anti_flicker = true'* ]] && echo yes || echo no )" "yes"
+NVIDIA_GEN=kepler; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 chk_str env-kepler-no-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
-chk_str env-kepler-glx "$( [[ "$EL" == *'hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")'* ]] && echo yes || echo no )" "yes"
+chk_str env-kepler-no-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
+
+NVIDIA_GEN=maxwell; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str env-maxwell-nvd "$( [[ "$EL" == *'hl.env("NVD_BACKEND", "direct")'* ]] && echo yes || echo no )" "yes"
+chk_str env-maxwell-qs-hint "$( [[ "$EL" == *'QS_DISABLE_DMABUF'* ]] && echo yes || echo no )" "yes"
+
+printf 'hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")\nhl.env("WLR_NO_HARDWARE_CURSORS", "1")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str retire-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str retire-wlr "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
 
 : > "$NVHOME/.config/hypr/custom/env.lua"
 _gpu_lspci_d() { printf '%s\n' "0000:01:00.0 VGA compatible controller: NVIDIA Corporation TU104 [GeForce RTX 2080]"; }
@@ -170,7 +195,7 @@ _gpu_swap_partuuid() { echo ""; }
 _gpu_systemctl() { [[ "$1" == enable ]] && ENABLED="$ENABLED ${2%.service}"; return 0; }
 # Orchestration nvidia cases assume a proprietary driver is installed.
 _gpu_nvidia_has_driver() { return 0; }
-oreset() { printf 'MODULES=()\nHOOKS=(base systemd plymouth autodetect kms keyboard block filesystems fsck)\n' > "$MKINITCPIO_CONF"; : > "$KERNEL_CMDLINE"; rm -rf "$MODPROBE_DIR"; : > "$OHOME/.config/hypr/custom/env.lua"; ENABLED=""; }
+oreset() { printf 'MODULES=()\nHOOKS=(base systemd plymouth autodetect kms keyboard block filesystems fsck)\n' > "$MKINITCPIO_CONF"; : > "$KERNEL_CMDLINE"; rm -rf "$MODPROBE_DIR"; : > "$OHOME/.config/hypr/custom/env.lua"; : > "$OHOME/.config/hypr/custom/general.lua"; ENABLED=""; }
 
 oreset; FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 48 [Radeon RX 9070 XT] [1002:7550] (rev c0)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
@@ -185,12 +210,13 @@ chk_str pregcn-cmdline "$( [[ "$CL" == *"amdgpu.si_support=1"* && "$CL" == *"amd
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))
-CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
+CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"; GV="$(cat "$OHOME/.config/hypr/custom/general.lua")"
 chk_str turing-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo yes || echo no )" "yes"
 chk_str turing-modules "$( [[ "$ML" == *"nvidia_drm"* ]] && echo yes || echo no )" "yes"
 chk_str turing-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str turing-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
 chk_str turing-env "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo yes || echo no )" "yes"
+chk_str turing-cursor "$( [[ "$GV" == *'no_hardware_cursors = true'* ]] && echo yes || echo no )" "yes"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
@@ -220,10 +246,11 @@ chk_str hybrid-i915-once "$(count 'i915\.modeset=1' "$CL")" "1"
 oreset; _gpu_nvidia_has_driver() { return 1; }
 FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))
-CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
+CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"; GV="$(cat "$OHOME/.config/hypr/custom/general.lua")"
 chk_str nouveau-no-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo present || echo absent )" "absent"
 chk_str nouveau-no-modeset "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo present || echo absent )" "absent"
 chk_str nouveau-no-env "$( [[ "$EV" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str nouveau-no-cursor "$( [[ "$GV" == *'no_hardware_cursors'* ]] && echo present || echo absent )" "absent"
 _gpu_nvidia_has_driver() { return 0; }
 
 oreset; _gpu_swap_partuuid() { echo "1234-abcd"; }

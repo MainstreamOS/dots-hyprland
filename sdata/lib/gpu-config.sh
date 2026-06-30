@@ -237,6 +237,25 @@ hypr_env_upsert() {
     fi
 }
 
+# ── hypr_config_upsert <user_home> <marker> <lua_line> ──────────────────────
+# Idempotent append of an hl.config({...}) line into custom/general.lua, keyed on
+# a unique marker so it lands at most once. No-op when the file is absent.
+hypr_config_upsert() {
+    local general_lua="$1/.config/hypr/custom/general.lua" marker="$2" line="$3"
+    [[ -f "$general_lua" ]] || return 0
+    grep -q "$marker" "$general_lua" || printf '%s\n' "$line" >> "$general_lua"
+}
+
+# ── hypr_env_retire <user_home> <key> ───────────────────────────────────────
+# Delete an hl.env("<key>", ...) line an older install wrote into custom/env.lua.
+# hypr_env_upsert only adds-if-absent, so retiring a dead/harmful key on an
+# upgraded machine needs an explicit removal. No-op when file/line is absent.
+hypr_env_retire() {
+    local env_lua="$1/.config/hypr/custom/env.lua" key="$2"
+    [[ -f "$env_lua" ]] || return 0
+    sed -i "/hl\.env(\"${key}\"/d" "$env_lua"
+}
+
 # Extra probes/wrappers (overridable for testing).
 _gpu_lspci_d()   { lspci -D 2>/dev/null || true; }
 _gpu_systemctl() { ${GPU_SUDO:-} systemctl "$@"; }
@@ -256,17 +275,38 @@ _gpu_nvidia_has_driver() {
         nvidia-580xx-utils nvidia-470xx-utils nvidia-390xx-utils >/dev/null 2>&1
 }
 
+# ── nvidia_write_qs_hint <user_home> ────────────────────────────────────────
+# Ship the QS_DISABLE_DMABUF escape hatch as a commented, opt-in line. It cures
+# the NVIDIA EGL dmabuf-import gray/blank Quickshell surface but forces the
+# slower SHM path, so it stays off until a user with the symptom uncomments it.
+nvidia_write_qs_hint() {
+    local env_lua="$1/.config/hypr/custom/env.lua"
+    [[ -f "$env_lua" ]] || return 0
+    grep -q 'QS_DISABLE_DMABUF' "$env_lua" || cat >> "$env_lua" <<'HINT'
+-- Gray/blank Quickshell on NVIDIA? Uncomment to force the SHM buffer path:
+-- hl.env("QS_DISABLE_DMABUF", "1")
+HINT
+}
+
 # ── nvidia_write_env <user_home> ────────────────────────────────────────────
-# The NVIDIA Wayland env set. The four base keys always; NVD_BACKEND=direct only
-# on turing/maxwell (newer-driver VA-API feature — the canonical gating).
+# NVIDIA Wayland env + Hyprland conf. LIBVA/GBM always; NVD_BACKEND on
+# turing/maxwell only. Cursors + GL anti-flicker go through Hyprland conf.
+# __GLX_VENDOR_LIBRARY_NAME is NOT set (GLX-only; no effect on the native
+# Wayland/Qt6 path and breaks XWayland windows/screenshare) and is retired from
+# older installs; same for the dead wlroots-era WLR_NO_HARDWARE_CURSORS.
 nvidia_write_env() {
     local uh="$1"
+    hypr_env_retire "$uh" __GLX_VENDOR_LIBRARY_NAME
+    hypr_env_retire "$uh" WLR_NO_HARDWARE_CURSORS
     hypr_env_upsert "$uh" LIBVA_DRIVER_NAME nvidia
     hypr_env_upsert "$uh" GBM_BACKEND nvidia-drm
-    hypr_env_upsert "$uh" __GLX_VENDOR_LIBRARY_NAME nvidia
-    hypr_env_upsert "$uh" WLR_NO_HARDWARE_CURSORS 1
+    hypr_config_upsert "$uh" no_hardware_cursors 'hl.config({ cursor = { no_hardware_cursors = true } })'
+    hypr_config_upsert "$uh" nvidia_anti_flicker 'hl.config({ opengl = { nvidia_anti_flicker = true } })'
     case "$NVIDIA_GEN" in
         turing|maxwell) hypr_env_upsert "$uh" NVD_BACKEND direct ;;
+    esac
+    case "$NVIDIA_GEN" in
+        maxwell) nvidia_write_qs_hint "$uh" ;;
     esac
 }
 
