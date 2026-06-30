@@ -441,7 +441,9 @@ ApplicationWindow {
     // ── Action: mount the network share defined by the form ────────
     function startMountNetwork() {
         if (root.busy) return
-        if (!root.netHost || !root.netShare) {
+        const host = (root.netHost || "").trim()
+        const share = (root.netShare || "").trim()
+        if (!host || !share) {
             root.resultKind = "error"
             root.status = Translation.tr("Host and share/path are required.")
             return
@@ -449,28 +451,28 @@ ApplicationWindow {
         const mp = root.netMountpoint && root.netMountpoint.length > 0
             ? root.netMountpoint
             : networkMountpointDefault()
-        const labelRaw = (root.netLabel || root.netShare || "share").trim()
+        const labelRaw = (root.netLabel || share || "share").trim()
 
         if (root.netProtocol === "smb") {
             const userArg = root.netGuest ? "guest" : (root.netUsername || "guest")
             mountProc.command = [
                 "pkexec", "/usr/local/bin/disk-mounter",
                 "mount-smb",
-                root.netHost, root.netShare, mp, labelRaw, userArg, "fstab"
+                host, share, mp, labelRaw, userArg, "fstab"
             ]
             mountProc.pendingPassword = root.netGuest ? "" : root.netPassword
         } else {  // nfs
             mountProc.command = [
                 "pkexec", "/usr/local/bin/disk-mounter",
                 "mount-nfs",
-                root.netHost, root.netShare, mp, labelRaw, "fstab"
+                host, share, mp, labelRaw, "fstab"
             ]
             mountProc.pendingPassword = ""
         }
         mountProc.outputBuf = ""
         root.busy = true
         root.resultKind = ""
-        root.status = Translation.tr("Connecting to ") + root.netHost + "…"
+        root.status = Translation.tr("Connecting to ") + host + "…"
         // stdinEnabled must be flipped on BEFORE running goes true so the
         // child process has a connected stdin handle to read from.
         mountProc.stdinEnabled = mountProc.pendingPassword.length > 0

@@ -24,7 +24,7 @@ IconImage {
     Process {
         id: faviconDownloadProcess
         running: false
-        command: ["bash", "-c", `[ -f ${faviconFilePath} ] || curl -s '${root.faviconUrl}' -o '${faviconFilePath}' -L -H 'User-Agent: ${downloadUserAgent}'`]
+        command: ["bash", "-c", '[ -f "$1" ] || curl -s "$2" -o "$1" -L -H "User-Agent: $3"', "favicon", faviconFilePath, root.faviconUrl, downloadUserAgent]
         onExited: (exitCode, exitStatus) => {
             root.urlToLoad = root.faviconFilePath
         }

@@ -53,6 +53,30 @@ escape_for_fstab() {
     printf '%s' "$s"
 }
 
+die() { log "ERROR: $*"; exit 22; }
+
+# Reject caller-supplied fields that would break the fstab grammar (whitespace,
+# '#') before they are written to /etc/fstab as root.
+reject_fstab_unsafe() {  # $1=field name  $2=value
+    if [[ "$2" == *[[:space:]]* || "$2" == *'#'* ]]; then
+        die "$1 contains whitespace or '#'"
+    fi
+}
+
+# Labels keep spaces; only a control char or '#' would inject into the options.
+reject_label_unsafe() {  # $1=field name  $2=value
+    if [[ "$2" == *[[:cntrl:]]* || "$2" == *'#'* ]]; then
+        die "$1 contains a control character or '#'"
+    fi
+}
+
+# Constrain the root-created/mounted/chowned mountpoint to a safe path under /mnt.
+validate_mountpoint() {  # $1=mountpoint
+    if [[ ! "$1" =~ ^/mnt/[A-Za-z0-9._/-]+$ || "$1" == *..* ]]; then
+        die "mountpoint must be a safe path under /mnt/ (no '..')"
+    fi
+}
+
 # Resolve the human who invoked pkexec so we can chown native-ownership
 # filesystems and stamp the FAT-family mount options with their uid/gid.
 resolve_caller() {
@@ -94,6 +118,11 @@ mount_block() {
         exit 64
     fi
     local device="$1" fstype="$2" uuid="$3" mountpoint="$4" label="$5" fstab_mode="$6"
+
+    validate_mountpoint "$mountpoint"
+    reject_fstab_unsafe uuid "$uuid"
+    reject_fstab_unsafe fstype "$fstype"
+    reject_label_unsafe label "$label"
 
     [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
     resolve_caller
@@ -178,6 +207,12 @@ mount_smb() {
     fi
     local host="$1" share="$2" mountpoint="$3" label="$4" username="$5" fstab_mode="$6"
 
+    validate_mountpoint "$mountpoint"
+    reject_fstab_unsafe host "$host"
+    reject_label_unsafe share "$share"
+    reject_label_unsafe label "$label"
+    reject_label_unsafe username "$username"
+
     command -v mount.cifs >/dev/null || { log "ERROR: mount.cifs not found — install cifs-utils."; exit 5; }
     resolve_caller
 
@@ -189,9 +224,9 @@ mount_smb() {
     # extensions). file_mode/dir_mode default to a sensible 0644/0755.
     local mount_opts="rw,nofail,uid=$caller_uid,gid=$caller_gid,file_mode=0644,dir_mode=0755,_netdev,$gvfs_opts"
 
-    # Source spec uses //host/share. UNC must keep its backslashes-as-
-    # forward-slashes — fstab is happy with that form. No escaping needed
-    # for the source field since slashes are allowed in column 1.
+    # Source spec uses //host/share with forward slashes (kept verbatim in
+    # fstab column 1). The mount takes the raw source; the fstab write escapes
+    # it so a share name with spaces can't shift the row's columns.
     local source="//${host}/${share}"
 
     if [[ "$username" == "guest" || -z "$username" ]]; then
@@ -220,7 +255,7 @@ mount_smb() {
         # source URL might have a different host/share spelling so we key
         # on the mountpoint instead.
         sed -i "\# ${mountpoint} #d" /etc/fstab
-        printf '%s %s cifs %s 0 0\n' "$source" "$mountpoint" "$mount_opts" >> /etc/fstab
+        printf '%s %s cifs %s 0 0\n' "$(escape_for_fstab "$source")" "$mountpoint" "$mount_opts" >> /etc/fstab
     fi
     echo "Mounted $source at $mountpoint"
 }
@@ -232,6 +267,11 @@ mount_nfs() {
         exit 64
     fi
     local host="$1" export_path="$2" mountpoint="$3" label="$4" fstab_mode="$5"
+
+    validate_mountpoint "$mountpoint"
+    reject_fstab_unsafe host "$host"
+    reject_label_unsafe export "$export_path"
+    reject_label_unsafe label "$label"
 
     command -v mount.nfs >/dev/null || command -v mount.nfs4 >/dev/null \
         || { log "ERROR: mount.nfs not found — install nfs-utils."; exit 5; }
@@ -252,7 +292,7 @@ mount_nfs() {
 
     if [[ "$fstab_mode" == "fstab" ]]; then
         sed -i "\# ${mountpoint} #d" /etc/fstab
-        printf '%s %s nfs %s 0 0\n' "$source" "$mountpoint" "$mount_opts" >> /etc/fstab
+        printf '%s %s nfs %s 0 0\n' "$(escape_for_fstab "$source")" "$mountpoint" "$mount_opts" >> /etc/fstab
     fi
     echo "Mounted $source at $mountpoint"
 }
@@ -264,6 +304,8 @@ unmount() {
         exit 64
     fi
     local mountpoint="$1" mode="$2"
+
+    validate_mountpoint "$mountpoint"
 
     # Grab the source device BEFORE umount, while it's still resolvable
     # via the live mount table. We need this to detect LUKS mappers

@@ -177,7 +177,7 @@ Button {
                                 const userAgent = Config.options?.networking?.userAgent ?? ""
                                 const userAgentHeader = userAgent ? ` -H 'User-Agent: ${StringUtils.shellSingleQuoteEscape(userAgent)}'` : ""
                                 Quickshell.execDetached(["bash", "-c", 
-                                    `mkdir -p '${targetPath}' && curl '${StringUtils.shellSingleQuoteEscape(root.imageData.file_url)}'${userAgentHeader} -o '${targetPath}/${root.fileName}' && notify-send '${Translation.tr("Download complete")}' '${root.downloadPath}/${root.fileName}' -a 'Shell'`
+                                    `mkdir -p '${StringUtils.shellSingleQuoteEscape(targetPath)}' && curl '${StringUtils.shellSingleQuoteEscape(root.imageData.file_url)}'${userAgentHeader} -o '${StringUtils.shellSingleQuoteEscape(targetPath)}/${StringUtils.shellSingleQuoteEscape(root.fileName)}' && notify-send '${Translation.tr("Download complete")}' '${StringUtils.shellSingleQuoteEscape(root.downloadPath)}/${StringUtils.shellSingleQuoteEscape(root.fileName)}' -a 'Shell'`
                                 ])
                             }
                         }
