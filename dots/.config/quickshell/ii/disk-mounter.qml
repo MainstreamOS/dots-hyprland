@@ -616,6 +616,23 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
                 RippleButton {
                     buttonRadius: Appearance.rounding.normal
+                    implicitWidth: 90
+                    implicitHeight: 36
+                    enabled: !root.busy
+                    colBackground: Appearance.colors.colSecondaryContainer
+                    colBackgroundHover: Appearance.colors.colSecondaryContainerHover
+                    onClicked: root.deselectDrive()
+                    contentItem: Item {
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("Close")
+                            color: Appearance.colors.colOnSecondaryContainer
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+                RippleButton {
+                    buttonRadius: Appearance.rounding.normal
                     implicitWidth: root.selectedUnformatted ? 160 : 130
                     implicitHeight: 36
                     enabled: !root.busy && root.selectedPath.length > 0
