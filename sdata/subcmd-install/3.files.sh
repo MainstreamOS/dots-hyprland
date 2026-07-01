@@ -588,6 +588,12 @@ function setup_proton_ge(){
   # Safe to re-run: skips the download when the latest tag is already installed,
   # and never clobbers existing per-game compat-tool overrides in config.vdf.
 
+  # ── Skip unless Steam is installed ──────────────────────────────────────────
+  if ! command -v steam &>/dev/null; then
+    echo -e "${STY_BLUE}[$0]: Steam not installed — skipping Proton GE.${STY_RST}"
+    return 0
+  fi
+
   echo -e "${STY_CYAN}[$0]: Checking for latest GE-Proton release...${STY_RST}"
 
   local _missing=()
