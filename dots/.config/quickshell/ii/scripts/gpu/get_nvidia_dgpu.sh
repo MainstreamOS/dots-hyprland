@@ -11,25 +11,42 @@ if ! command -v nvidia-smi &> /dev/null; then
 fi
 
 # Check if GPU is suspended/powered off
-# Note: nvidia-smi will fail if GPU is in D3cold, so we check power state first
-POWER_STATE_FILE="/sys/class/drm/card0/device/power_state"
-if [[ -f "$POWER_STATE_FILE" ]]; then
-  state=$(cat "$POWER_STATE_FILE" 2>/dev/null || echo "unknown")
+# Note: nvidia-smi will fail if GPU is in D3cold (and querying would wake a
+# runtime-suspended card), so check the NVIDIA card's power state first.
+for dev in /sys/class/drm/card[0-9]*/device; do
+  [[ "$(cat "$dev/vendor" 2>/dev/null)" == "0x10de" ]] || continue
+  state=$(cat "$dev/power_state" 2>/dev/null || echo "unknown")
   if [[ "$state" == "d3cold" ]]; then
     echo '{}'
     exit 0
   fi
-fi
+done
 
-# Query all GPU info in one call for efficiency
-gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "NVIDIA GPU")
-gpu_usage=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "0")
-vram_used_mib=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "0")
-vram_total_mib=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "0")
-temperature=$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "null")
-power_draw=$(nvidia-smi --query-gpu=power.draw --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "null")
-power_limit=$(nvidia-smi --query-gpu=power.limit --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "null")
-fan_speed=$(nvidia-smi --query-gpu=fan.speed --format=csv,noheader,nounits 2>/dev/null | head -n1 || echo "null")
+# Query all GPU info in one call. nvidia-smi prints its failure text to
+# stdout, so gate on the exit code rather than the output.
+if ! query_out=$(nvidia-smi \
+  --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit,fan.speed \
+  --format=csv,noheader,nounits 2>/dev/null); then
+  echo '{}'
+  exit 0
+fi
+query_out=${query_out%%$'\n'*}
+if [[ -z "$query_out" ]]; then
+  echo '{}'
+  exit 0
+fi
+IFS=',' read -r gpu_name gpu_usage vram_used_mib vram_total_mib temperature power_draw power_limit fan_speed <<< "$query_out"
+
+# Fields report "[N/A]"/"[Not Supported]" on some cards — map non-numeric values
+num_or() { local v="${1//[[:space:]]/}"; [[ "$v" =~ ^[0-9.]+$ ]] && echo "$v" || echo "$2"; }
+gpu_name="${gpu_name:-NVIDIA GPU}"
+gpu_usage=$(num_or "${gpu_usage:-}" 0)
+vram_used_mib=$(num_or "${vram_used_mib:-}" 0)
+vram_total_mib=$(num_or "${vram_total_mib:-}" 0)
+temperature=$(num_or "${temperature:-}" null)
+power_draw=$(num_or "${power_draw:-}" null)
+power_limit=$(num_or "${power_limit:-}" null)
+fan_speed=$(num_or "${fan_speed:-}" null)
 
 # Convert MiB to GB
 vram_used_gb=$(awk -v u="$vram_used_mib" 'BEGIN{printf "%.1f", u/1024}')

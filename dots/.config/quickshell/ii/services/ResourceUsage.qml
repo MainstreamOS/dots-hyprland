@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import qs
 import qs.modules.common
 import QtQuick
 import Quickshell
@@ -63,14 +64,24 @@ Singleton {
         updateCpuUsageHistory();
     }
 
+    // Poll only while something actually displays the data: the bar resources
+    // widget or the overlay resources widget (open or pinned). Mirrors the
+    // users' own Loader/visible gates.
+    readonly property bool barWatching: Config.options.bar.resources.enable
+        && GlobalStates.barOpen && !GlobalStates.screenLocked
+    readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
+        && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
+
     Timer {
-        interval: 1
-        running: true
+        interval: Config.options?.resources?.updateInterval ?? 3000
+        running: root.barWatching || root.overlayWatching
         repeat: true
+        triggeredOnStart: true
         onTriggered: {
             // Reload files
             fileMeminfo.reload();
             fileStat.reload();
+            fileCpuinfo.reload();
 
             // Parse memory and swap usage
             const textMeminfo = fileMeminfo.text();
@@ -110,7 +121,6 @@ Singleton {
             tempProc.running = true
 
             root.updateHistories();
-            interval = Config.options?.resources?.updateInterval ?? 3000;
         }
     }
 

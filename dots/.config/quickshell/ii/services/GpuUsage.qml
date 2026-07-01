@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import qs
 import qs.modules.common
 import QtQuick
 import Quickshell
@@ -58,34 +59,25 @@ Singleton {
         }
     }
 
-    function updateHistories() {
-        if (iGpuAvailable) updateiGpuUsageHistory()
-        if (dGpuAvailable) updatedGpuUsageHistory()
-    }
+    // Poll only while something actually displays the data: the bar resources
+    // widget (with a GPU layout selected) or the overlay resources widget
+    // (open or pinned). Mirrors the users' own Loader/visible gates.
+    readonly property bool barWatching: Config.options.bar.resources.enable
+        && Config.options.bar.resources.gpuLayout !== -1
+        && GlobalStates.barOpen && !GlobalStates.screenLocked
+    readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
+        && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
 
     Timer {
-        interval: 1
-        running: Config.options?.resources?.enableGpu !== false
+        interval: Config.options?.resources?.updateInterval ?? 3000
+        running: (Config.options?.resources?.enableGpu !== false)
+            && (root.barWatching || root.overlayWatching)
+            && (root.iGpuAvailable || root.dGpuAvailable)
         repeat: true
+        triggeredOnStart: true
         onTriggered: {
-        
-            if(Config.options.bar.resources.gpuLayout == -1){ //disabled gpu
-                this.repeat = false
-            }
-            
-            if (iGpuAvailable) {
-                iGpuinfoProc.running = true
-            }
-
-            if (dGpuAvailable) {
-                dGpuinfoProc.running = true
-            }
-
-            // History updates after data is received in onStreamFinished handlers
-            interval = Config.options?.resources?.updateInterval ?? 3000
-            
-
-            interval = Config.options?.resources?.updateInterval ?? 3000;
+            if (root.iGpuAvailable) iGpuinfoProc.running = true;
+            if (root.dGpuAvailable) dGpuinfoProc.running = true;
         }
     }
 
