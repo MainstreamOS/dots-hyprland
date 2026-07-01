@@ -76,9 +76,15 @@ reject_label_unsafe() {  # $1=field name  $2=value
 
 # Constrain the root-created/mounted/chowned mountpoint to a safe path under /mnt.
 validate_mountpoint() {  # $1=mountpoint
-    if [[ ! "$1" =~ ^/mnt/[A-Za-z0-9._/-]+$ || "$1" == *..* ]]; then
-        die "mountpoint must be a safe path under /mnt/ (no '..')"
+    if [[ ! "$1" =~ ^/mnt/[A-Za-z0-9._/-]+$ ]]; then
+        die "mountpoint must be a safe path under /mnt/"
     fi
+    # The regex alone lets '.', '..' and empty segments through (/mnt/.,
+    # /mnt/./x, /mnt//x) — those normalise to /mnt itself or escape it.
+    local seg IFS=/
+    for seg in ${1#/mnt/}; do
+        [[ -z "$seg" || "$seg" == "." || "$seg" == ".." ]] && die "mountpoint has an invalid path segment"
+    done
 }
 
 # Resolve the human who invoked pkexec so we can chown native-ownership
@@ -115,6 +121,16 @@ strip_fstab_match() {
     sed -i "\#^${key}\b#d" /etc/fstab
 }
 
+# Remove any fstab row whose mountpoint (column 2) equals $1, anchored on the
+# column rather than a space-wrapped substring, leaving comments/others intact.
+strip_fstab_mountpoint() {  # $1=mountpoint
+    [[ -f /etc/fstab ]] || return 0
+    local tmp; tmp="$(mktemp)"
+    awk -v mp="$1" '$0 ~ /^[[:space:]]*#/ || $2 != mp' /etc/fstab > "$tmp"
+    cat "$tmp" > /etc/fstab
+    rm -f "$tmp"
+}
+
 # ── Subcommand: mount-block ───────────────────────────────────────────────
 mount_block() {
     if [[ $# -ne 6 ]]; then
@@ -129,6 +145,10 @@ mount_block() {
     reject_label_unsafe label "$label"
 
     [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
+    # Resolve the device from the UUID we will mount, so a hostile caller can't
+    # aim the relabel/chown at a different device than the one being mounted.
+    local resolved; resolved="$(blkid -U "$uuid" 2>/dev/null || true)"
+    [[ -n "$resolved" && -b "$resolved" ]] && device="$resolved"
     resolve_caller
 
     # Optional relabel. If $label is non-empty AND differs from the current
@@ -240,7 +260,7 @@ format_mount() {
     if mountpoint -q "$mountpoint" 2>/dev/null; then
         umount "$mountpoint" 2>/dev/null || umount -l "$mountpoint" 2>/dev/null || true
     fi
-    [[ -f /etc/fstab ]] && sed -i "\# ${mountpoint} #d" /etc/fstab
+    strip_fstab_mountpoint "$mountpoint"
 
     # Clear residual signatures (empty partition table, stale superblock) so
     # mkfs starts from a truly clean device.
@@ -342,7 +362,7 @@ mount_smb() {
         # Strip any earlier line for the same mountpoint (column 2) — the
         # source URL might have a different host/share spelling so we key
         # on the mountpoint instead.
-        sed -i "\# ${mountpoint} #d" /etc/fstab
+        strip_fstab_mountpoint "$mountpoint"
         printf '%s %s cifs %s 0 0\n' "$(escape_for_fstab "$source")" "$mountpoint" "$mount_opts" >> /etc/fstab
     fi
     echo "Mounted $source at $mountpoint"
@@ -379,7 +399,7 @@ mount_nfs() {
     mount -t nfs -o "$mount_opts" "$source" "$mountpoint"
 
     if [[ "$fstab_mode" == "fstab" ]]; then
-        sed -i "\# ${mountpoint} #d" /etc/fstab
+        strip_fstab_mountpoint "$mountpoint"
         printf '%s %s nfs %s 0 0\n' "$(escape_for_fstab "$source")" "$mountpoint" "$mount_opts" >> /etc/fstab
     fi
     echo "Mounted $source at $mountpoint"
@@ -443,7 +463,7 @@ unmount() {
     fi
 
     if [[ "$mode" == "remove-fstab" ]]; then
-        sed -i "\# ${mountpoint} #d" /etc/fstab
+        strip_fstab_mountpoint "$mountpoint"
 
         # SMB credentials we wrote for this mountpoint, if any.
         local creds_file; creds_file="$(creds_path_for_mountpoint "$mountpoint")"
