@@ -61,8 +61,6 @@ ApplicationWindow {
     property string mountedPopupText: ""
     property var encrypted: []        // LUKS / BitLocker — read-only listing
     property string selectedPath: ""  // /dev/... of the picked drive
-    property string selectedFstype: ""
-    property string selectedUuid: ""
     property string selectedExistingLabel: ""
     property string newLabel: ""
 
@@ -283,8 +281,6 @@ ApplicationWindow {
                     || root.unformatted.some(d => d.path === root.selectedPath)
                 if (root.selectedPath && !stillListed) {
                     root.selectedPath = ""
-                    root.selectedFstype = ""
-                    root.selectedUuid = ""
                     root.selectedExistingLabel = ""
                     root.newLabel = ""
                     root.selectedUnformatted = false
@@ -447,8 +443,6 @@ ApplicationWindow {
     // ── Action: clear the current selection (closes the Rename section) ─
     function deselectDrive() {
         root.selectedPath = ""
-        root.selectedFstype = ""
-        root.selectedUuid = ""
         root.selectedExistingLabel = ""
         root.newLabel = ""
         root.selectedUnformatted = false
@@ -469,6 +463,7 @@ ApplicationWindow {
     function startMountLocal() {
         if (root.busy || !root.selectedPath) return
         const drive = root.drives.find(d => d.path === root.selectedPath)
+            || root.osDrives.find(d => d.path === root.selectedPath)
         if (!drive) return
         const labelRaw = (root.newLabel || drive.label || drive.name).trim()
         const labelSafe = sanitizeMountSegment(labelRaw) || "drive"
@@ -837,8 +832,6 @@ ApplicationWindow {
                                         root.deselectDrive()
                                     } else {
                                         root.selectedPath = modelData.path
-                                        root.selectedFstype = modelData.fstype
-                                        root.selectedUuid = modelData.uuid
                                         root.selectedExistingLabel = modelData.label
                                         root.newLabel = root.suggestedLabel(modelData)
                                         root.selectedUnformatted = false
@@ -955,8 +948,6 @@ ApplicationWindow {
                                         root.deselectDrive()
                                     } else {
                                         root.selectedPath = modelData.path
-                                        root.selectedFstype = modelData.fstype
-                                        root.selectedUuid = modelData.uuid
                                         root.selectedExistingLabel = modelData.label
                                         root.newLabel = root.suggestedLabel(modelData)
                                         root.selectedUnformatted = false
@@ -1160,8 +1151,6 @@ ApplicationWindow {
                                         root.deselectDrive()
                                     } else {
                                         root.selectedPath = uRow.modelData.path
-                                        root.selectedFstype = ""
-                                        root.selectedUuid = ""
                                         root.selectedExistingLabel = ""
                                         root.newLabel = root.suggestedLabel(uRow.modelData)
                                         root.selectedUnformatted = true
