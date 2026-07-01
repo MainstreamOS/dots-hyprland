@@ -56,7 +56,7 @@ ApplicationWindow {
     property var drives: []           // storage drives (not on an OS disk)
     property var osDrives: []         // partitions on a disk that has an ESP
     property var unformatted: []      // partitions with no filesystem
-    property bool   selectedUnformatted: false  // picked drive is a blank one to format
+    readonly property bool selectedUnformatted: root.unformatted.some(d => d.path === root.selectedPath)
     property bool   mountedPopupShown: false
     property string mountedPopupText: ""
     property var encrypted: []        // LUKS / BitLocker — read-only listing
@@ -283,7 +283,6 @@ ApplicationWindow {
                     root.selectedPath = ""
                     root.selectedExistingLabel = ""
                     root.newLabel = ""
-                    root.selectedUnformatted = false
                 }
             }
         }
@@ -445,7 +444,6 @@ ApplicationWindow {
         root.selectedPath = ""
         root.selectedExistingLabel = ""
         root.newLabel = ""
-        root.selectedUnformatted = false
     }
 
     // ── Auto-scroll the Local list so a picked drive's action block shows ─
@@ -640,6 +638,78 @@ ApplicationWindow {
         }
     }
 
+    // Shared selectable drive row — used by the Storage / OS / Unformatted
+    // lists. Renders a blank drive (no fstype) or a formatted one.
+    Component {
+        id: driveRow
+        RippleButton {
+            id: rowBtn
+            required property var modelData
+            readonly property bool blank: (modelData.fstype || "") === ""
+            readonly property bool isSelected: root.selectedPath === modelData.path
+            readonly property color titleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1
+            readonly property color subtitleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
+            width: ListView.view ? ListView.view.width : implicitWidth
+            implicitHeight: 54
+            buttonRadius: Appearance.rounding.small
+            toggled: isSelected
+            onClicked: {
+                if (isSelected) {
+                    root.deselectDrive()
+                } else {
+                    root.selectedPath = modelData.path
+                    root.selectedExistingLabel = modelData.label
+                    root.newLabel = root.suggestedLabel(modelData)
+                }
+            }
+            contentItem: Item {
+                anchors.fill: parent
+                Item {
+                    id: rowIconSlot
+                    width: 24
+                    height: 24
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: root.isEncrypted(rowBtn.modelData.fstype)
+                            ? "lock"
+                            : (rowBtn.modelData.transport === "usb"
+                                ? "usb"
+                                : (rowBtn.modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"))
+                        iconSize: 22
+                        color: rowBtn.titleColor
+                    }
+                }
+                StyledText {
+                    anchors.left: rowIconSlot.right
+                    anchors.leftMargin: 12
+                    anchors.bottom: parent.verticalCenter
+                    anchors.bottomMargin: 1
+                    text: rowBtn.blank
+                        ? root.humanSize(rowBtn.modelData.size) + " " + Translation.tr("Drive")
+                        : root.friendlyTitle(rowBtn.modelData)
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: rowBtn.titleColor
+                    font.weight: Font.Medium
+                }
+                StyledText {
+                    anchors.left: rowIconSlot.right
+                    anchors.leftMargin: 12
+                    anchors.top: parent.verticalCenter
+                    anchors.topMargin: 1
+                    text: rowBtn.blank
+                        ? rowBtn.modelData.path + " · " + Translation.tr("Unformatted")
+                        : root.friendlySubtitle(rowBtn.modelData)
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: rowBtn.subtitleColor
+                    opacity: rowBtn.isSelected ? 0.8 : 1.0
+                }
+            }
+        }
+    }
+
     // ── Layout ─────────────────────────────────────────────────────
     ColumnLayout {
         anchors.fill: parent
@@ -751,19 +821,17 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 12
 
-                Flickable {
+                StyledFlickable {
                     id: localFlick
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     contentWidth: width
                     contentHeight: localScrollCol.implicitHeight
-                    boundsBehavior: Flickable.StopAtBounds
                     onContentHeightChanged: {
                         const maxY = Math.max(0, contentHeight - height)
                         if (contentY > maxY) contentY = maxY
                     }
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                     ColumnLayout {
                         id: localScrollCol
                         width: localFlick.width
@@ -811,82 +879,14 @@ ApplicationWindow {
                             spacing: 4
                             model: root.drives
 
-                            delegate: RippleButton {
-                                id: dvRow
-                                required property var modelData
-                                readonly property bool isSelected: root.selectedPath === modelData.path
-                                readonly property color titleColor:
-                                    isSelected ? Appearance.m3colors.m3onPrimary
-                                               : Appearance.colors.colOnLayer1
-                                readonly property color subtitleColor:
-                                    isSelected ? Appearance.m3colors.m3onPrimary
-                                               : Appearance.colors.colSubtext
-                                readonly property real subtitleOpacity:
-                                    isSelected ? 0.8 : 1.0
-                                width: driveList.width
-                                implicitHeight: 54
-                                buttonRadius: Appearance.rounding.small
-                                toggled: isSelected
-                                onClicked: {
-                                    if (dvRow.isSelected) {
-                                        root.deselectDrive()
-                                    } else {
-                                        root.selectedPath = modelData.path
-                                        root.selectedExistingLabel = modelData.label
-                                        root.newLabel = root.suggestedLabel(modelData)
-                                        root.selectedUnformatted = false
-                                    }
-                                }
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    Item {
-                                        id: iconSlot
-                                        width: 24
-                                        height: 24
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 12
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: root.isEncrypted(modelData.fstype)
-                                                ? "lock"
-                                                : (modelData.transport === "usb"
-                                                    ? "usb"
-                                                    : (modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"))
-                                            iconSize: 22
-                                            color: dvRow.titleColor
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.left: iconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.bottom: parent.verticalCenter
-                                        anchors.bottomMargin: 1
-                                        text: root.friendlyTitle(modelData)
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: dvRow.titleColor
-                                        font.weight: Font.Medium
-                                    }
-                                    StyledText {
-                                        anchors.left: iconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.top: parent.verticalCenter
-                                        anchors.topMargin: 1
-                                        text: root.friendlySubtitle(modelData)
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        color: dvRow.subtitleColor
-                                        opacity: dvRow.subtitleOpacity
-                                    }
-                                }
-                            }
+                            delegate: driveRow
                         }
                     }
                 }
 
                 Loader {
                     Layout.fillWidth: true
-                    active: root.selectedPath.length > 0 && !root.selectedUnformatted
-                        && root.drives.some(d => d.path === root.selectedPath)
+                    active: root.drives.some(d => d.path === root.selectedPath)
                     visible: active
                     sourceComponent: renameMountBlock
                     onActiveChanged: if (active) root.revealBlock(this)
@@ -933,72 +933,14 @@ ApplicationWindow {
                             spacing: 4
                             interactive: count > 4
                             model: root.osDrives
-                            delegate: RippleButton {
-                                id: osRow
-                                required property var modelData
-                                readonly property bool isSelected: root.selectedPath === modelData.path
-                                readonly property color titleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1
-                                readonly property color subtitleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                                width: osDriveList.width
-                                implicitHeight: 54
-                                buttonRadius: Appearance.rounding.small
-                                toggled: isSelected
-                                onClicked: {
-                                    if (osRow.isSelected) {
-                                        root.deselectDrive()
-                                    } else {
-                                        root.selectedPath = modelData.path
-                                        root.selectedExistingLabel = modelData.label
-                                        root.newLabel = root.suggestedLabel(modelData)
-                                        root.selectedUnformatted = false
-                                    }
-                                }
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    Item {
-                                        id: osIconSlot
-                                        width: 24
-                                        height: 24
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 12
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: osRow.modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"
-                                            iconSize: 22
-                                            color: osRow.titleColor
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.left: osIconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.bottom: parent.verticalCenter
-                                        anchors.bottomMargin: 1
-                                        text: root.friendlyTitle(osRow.modelData)
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: osRow.titleColor
-                                        font.weight: Font.Medium
-                                    }
-                                    StyledText {
-                                        anchors.left: osIconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.top: parent.verticalCenter
-                                        anchors.topMargin: 1
-                                        text: root.friendlySubtitle(osRow.modelData)
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        color: osRow.subtitleColor
-                                        opacity: osRow.isSelected ? 0.8 : 1.0
-                                    }
-                                }
-                            }
+                            delegate: driveRow
                         }
                     }
                 }
 
                 Loader {
                     Layout.fillWidth: true
-                    active: root.selectedPath.length > 0 && !root.selectedUnformatted
-                        && root.osDrives.some(d => d.path === root.selectedPath)
+                    active: root.osDrives.some(d => d.path === root.selectedPath)
                     visible: active
                     sourceComponent: renameMountBlock
                     onActiveChanged: if (active) root.revealBlock(this)
@@ -1136,64 +1078,7 @@ ApplicationWindow {
                             spacing: 4
                             interactive: count > 4
                             model: root.unformatted
-                            delegate: RippleButton {
-                                id: uRow
-                                required property var modelData
-                                readonly property bool isSelected: root.selectedUnformatted && root.selectedPath === modelData.path
-                                readonly property color titleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1
-                                readonly property color subtitleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                                width: unformattedList.width
-                                implicitHeight: 54
-                                buttonRadius: Appearance.rounding.small
-                                toggled: isSelected
-                                onClicked: {
-                                    if (uRow.isSelected) {
-                                        root.deselectDrive()
-                                    } else {
-                                        root.selectedPath = uRow.modelData.path
-                                        root.selectedExistingLabel = ""
-                                        root.newLabel = root.suggestedLabel(uRow.modelData)
-                                        root.selectedUnformatted = true
-                                    }
-                                }
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    Item {
-                                        id: uIconSlot
-                                        width: 24
-                                        height: 24
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 12
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: uRow.modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"
-                                            iconSize: 22
-                                            color: uRow.titleColor
-                                        }
-                                    }
-                                    StyledText {
-                                        anchors.left: uIconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.bottom: parent.verticalCenter
-                                        anchors.bottomMargin: 1
-                                        text: root.humanSize(uRow.modelData.size) + " " + Translation.tr("Drive")
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: uRow.titleColor
-                                        font.weight: Font.Medium
-                                    }
-                                    StyledText {
-                                        anchors.left: uIconSlot.right
-                                        anchors.leftMargin: 12
-                                        anchors.top: parent.verticalCenter
-                                        anchors.topMargin: 1
-                                        text: uRow.modelData.path + " · " + Translation.tr("Unformatted")
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        color: uRow.subtitleColor
-                                        opacity: uRow.isSelected ? 0.8 : 1.0
-                                    }
-                                }
-                            }
+                            delegate: driveRow
                         }
                         StyledText {
                             Layout.fillWidth: true
@@ -1208,7 +1093,7 @@ ApplicationWindow {
 
                 Loader {
                     Layout.fillWidth: true
-                    active: root.selectedUnformatted && root.selectedPath.length > 0
+                    active: root.unformatted.some(d => d.path === root.selectedPath)
                     visible: active
                     sourceComponent: renameMountBlock
                     onActiveChanged: if (active) root.revealBlock(this)
@@ -1826,30 +1711,17 @@ ApplicationWindow {
     }
 
     // ── "Disk mounted" confirmation popup ──────────────────────────
-    Rectangle {
+    // Loader-wrapped: WindowDialog only collapses via onShowChanged, so
+    // placing it directly would render + block on load. Instantiate on demand.
+    Loader {
         anchors.fill: parent
-        visible: root.mountedPopupShown
         z: 100
-        color: Qt.rgba(0, 0, 0, 0.45)
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: root.mountedPopupShown = false
-        }
-        Rectangle {
-            anchors.centerIn: parent
-            width: 320
-            implicitHeight: popupCol.implicitHeight + 40
-            radius: Appearance.rounding.normal
-            color: Appearance.m3colors.m3background
-            border.width: 1
-            border.color: Appearance.colors.colOutlineVariant
-            MouseArea { anchors.fill: parent }
-            ColumnLayout {
-                id: popupCol
-                anchors.centerIn: parent
-                width: parent.width - 40
-                spacing: 12
+        active: root.mountedPopupShown
+        sourceComponent: Component {
+            WindowDialog {
+                show: true
+                onDismiss: root.mountedPopupShown = false
+
                 MaterialSymbol {
                     Layout.alignment: Qt.AlignHCenter
                     text: "check_circle"
