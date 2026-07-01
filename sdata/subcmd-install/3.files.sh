@@ -582,7 +582,7 @@ function install_google_sans_flex(){
 }
 
 function setup_proton_ge(){
-  # Download the latest GE-Proton release into ~/.steam/root/compatibilitytools.d
+  # Download the latest GE-Proton release into ~/.local/share/Steam/compatibilitytools.d
   # and preseed Steam's global compat-tool default to that version.
   #
   # Safe to re-run: skips the download when the latest tag is already installed,
@@ -622,7 +622,8 @@ function setup_proton_ge(){
   echo -e "${STY_CYAN}[$0]: Latest GE-Proton: $tag${STY_RST}"
 
   # ── Download + extract (skip if already present) ───────────────────────────
-  local compat_dir="$HOME/.steam/root/compatibilitytools.d"
+  local steam_store="$HOME/.local/share/Steam"
+  local compat_dir="$steam_store/compatibilitytools.d"
   local install_dir="$compat_dir/$tag"
 
   if [[ -d "$install_dir" ]]; then
@@ -674,7 +675,7 @@ for a in json.load(sys.stdin)['assets']:
   # ── Preseed Steam config ───────────────────────────────────────────────────
   # Sets the "0" (global default) CompatToolMapping entry only.
   # Existing per-game overrides and all other Steam settings are left alone.
-  local config_dir="$HOME/.steam/root/config"
+  local config_dir="$steam_store/config"
   local config_vdf="$config_dir/config.vdf"
   x mkdir -p "$config_dir"
 
@@ -749,6 +750,11 @@ PYEOF
       echo -e "${STY_YELLOW}[$0]: Could not patch $config_vdf — set Proton version manually in Steam.${STY_RST}"
     fi
   fi
+
+  # ── Link ~/.steam to the Steam data dir ────────────────────────────────────
+  x mkdir -p "$HOME/.steam"
+  x ln -sfnT "$steam_store" "$HOME/.steam/steam"
+  x ln -sfnT "$steam_store" "$HOME/.steam/root"
 }
 
 #####################################################################################
