@@ -53,8 +53,12 @@ ApplicationWindow {
     property int currentTab: 0
 
     // ── Local-tab state ────────────────────────────────────────────
-    property var drives: []           // populated by lsblk parse
+    property var drives: []           // storage drives (not on an OS disk)
+    property var osDrives: []         // partitions on a disk that has an ESP
     property var unformatted: []      // partitions with no filesystem
+    property bool   selectedUnformatted: false  // picked drive is a blank one to format
+    property bool   mountedPopupShown: false
+    property string mountedPopupText: ""
     property var encrypted: []        // LUKS / BitLocker — read-only listing
     property string selectedPath: ""  // /dev/... of the picked drive
     property string selectedFstype: ""
@@ -182,7 +186,7 @@ ApplicationWindow {
     // to entries that have a real filesystem and aren't mounted.
     Process {
         id: scanProc
-        command: ["bash", "-c", "lsblk -J -b -o NAME,PATH,SIZE,TYPE,MOUNTPOINT,LABEL,FSTYPE,UUID,PARTTYPE,TRAN,HOTPLUG"]
+        command: ["bash", "-c", "lsblk -J -b -o NAME,PATH,SIZE,TYPE,MOUNTPOINT,LABEL,FSTYPE,UUID,PARTTYPE,PARTTYPENAME,TRAN,HOTPLUG"]
         stdout: StdioCollector {
             onStreamFinished: {
                 let parsed
@@ -194,6 +198,7 @@ ApplicationWindow {
                 }
                 const systemParttypes = new Set([
                     "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", // EFI System Partition
+                    "0xef",                                 // EFI System Partition (MBR/hybrid)
                     "21686148-6449-6e6f-744e-656564454649", // BIOS boot
                     "e3c9e316-0b5c-4db8-817d-f92df00215ae", // Microsoft Reserved
                     "de94bba4-06d1-4d40-a16a-bfd50179d6ac", // Windows Recovery
@@ -206,7 +211,15 @@ ApplicationWindow {
                     if (v === false || v === 0 || v === "0" || v === "false") return "0"
                     return ""
                 }
-                function walk(node, inheritedTran, inheritedHotplug) {
+                function isEfiNode(n) {
+                    const pt = (n.parttype || "").toLowerCase()
+                    return pt === "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" || pt === "0xef" ||
+                        (n.parttypename || "").toUpperCase().indexOf("EFI") >= 0
+                }
+                function subtreeHasEfi(n) {
+                    return isEfiNode(n) || (n.children || []).some(subtreeHasEfi)
+                }
+                function walk(node, inheritedTran, inheritedHotplug, bootDisk) {
                     const isLeaf = !node.children || node.children.length === 0
                     const tran = (node.tran || inheritedTran || "").toLowerCase()
                     const ownHot = normHot(node.hotplug)
@@ -222,31 +235,34 @@ ApplicationWindow {
                             uuid: node.uuid || "",
                             mountpoint: node.mountpoint || "",
                             parttype: (node.parttype || "").toLowerCase(),
+                            parttypename: (node.parttypename || "").toUpperCase(),
                             transport: tran,
-                            hotplug: hotplug
+                            hotplug: hotplug,
+                            bootDisk: bootDisk
                         })
                     }
-                    if (node.children) node.children.forEach(c => walk(c, tran, hotplug))
+                    if (node.children) node.children.forEach(c => walk(c, tran, hotplug, bootDisk))
                 }
-                if (parsed.blockdevices) parsed.blockdevices.forEach(d => walk(d, "", "0"))
+                if (parsed.blockdevices) parsed.blockdevices.forEach(d => walk(d, "", "0", subtreeHasEfi(d)))
                 // Common base filter (USB / hotplug / system-partition / label).
                 function baseFilter(d) {
                     return d.transport !== "usb" &&
                         d.hotplug !== "1" &&
                         !systemParttypes.has(d.parttype) &&
+                        (d.parttypename || "").indexOf("EFI") === -1 &&
                         (d.label || "").toUpperCase().indexOf("EFI") === -1 &&
                         (d.label || "").toUpperCase().indexOf("USB") === -1
                 }
-                // Available drives: mountable + currently-unmounted +
-                // not encrypted (encrypted lands in its own bucket).
-                root.drives = flat.filter(d =>
-                    d.uuid && d.fstype && !d.mountpoint &&
-                    d.fstype !== "swap" &&
-                    d.fstype !== "iso9660" &&
-                    d.fstype !== "udf" &&
-                    !root.isEncrypted(d.fstype) &&
-                    baseFilter(d)
-                )
+                // Mountable leaf: unmounted, has a filesystem, not swap/optical,
+                // not encrypted, passes the base filter. Split into plain storage
+                // vs partitions on a disk that carries an ESP (an OS disk).
+                function mountableLeaf(d) {
+                    return d.uuid && d.fstype && !d.mountpoint &&
+                        d.fstype !== "swap" && d.fstype !== "iso9660" && d.fstype !== "udf" &&
+                        !root.isEncrypted(d.fstype) && baseFilter(d)
+                }
+                root.drives   = flat.filter(d => mountableLeaf(d) && !d.bootDisk)
+                root.osDrives = flat.filter(d => mountableLeaf(d) &&  d.bootDisk)
                 // Encrypted (read-only). These show up with a lock icon
                 // + a hint pointing the user at gnome-disks / kde-partition-
                 // manager because we don't ship an unlock flow ourselves.
@@ -262,12 +278,16 @@ ApplicationWindow {
                     d.size > 0 &&
                     baseFilter(d)
                 )
-                if (root.selectedPath && !root.drives.some(d => d.path === root.selectedPath)) {
+                const stillListed = root.drives.some(d => d.path === root.selectedPath)
+                    || root.osDrives.some(d => d.path === root.selectedPath)
+                    || root.unformatted.some(d => d.path === root.selectedPath)
+                if (root.selectedPath && !stillListed) {
                     root.selectedPath = ""
                     root.selectedFstype = ""
                     root.selectedUuid = ""
                     root.selectedExistingLabel = ""
                     root.newLabel = ""
+                    root.selectedUnformatted = false
                 }
             }
         }
@@ -287,7 +307,13 @@ ApplicationWindow {
         id: fstabScanProc
         command: ["bash", "-c",
             "awk '$0 !~ /^[[:space:]]*#/ && NF>=4 && $2 ~ /^\\/mnt\\// " +
-            "{printf \"%s\\t%s\\t%s\\t%s\\n\", $1, $2, $3, $4}' /etc/fstab"]
+            "{printf \"%s\\t%s\\t%s\\t%s\\n\", $1, $2, $3, $4}' /etc/fstab | " +
+            "while IFS=$'\\t' read -r src mp fstype opts; do conn=1; case \"$src\" in " +
+            "UUID=*) [ -e \"/dev/disk/by-uuid/${src#UUID=}\" ] || conn=0 ;; " +
+            "LABEL=*) [ -e \"/dev/disk/by-label/${src#LABEL=}\" ] || conn=0 ;; " +
+            "PARTUUID=*) [ -e \"/dev/disk/by-partuuid/${src#PARTUUID=}\" ] || conn=0 ;; " +
+            "/dev/*) [ -b \"$src\" ] || conn=0 ;; esac; " +
+            "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$src\" \"$mp\" \"$fstype\" \"$opts\" \"$conn\"; done"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const lines = (this.text || "").split("\n").filter(l => l.length > 0)
@@ -297,7 +323,8 @@ ApplicationWindow {
                         source: parts[0] || "",
                         mountpoint: parts[1] || "",
                         fstype: parts[2] || "",
-                        options: parts[3] || ""
+                        options: parts[3] || "",
+                        connected: (parts[4] || "1") !== "0"
                     }
                 })
             }
@@ -368,6 +395,8 @@ ApplicationWindow {
             if (code === 0) {
                 root.resultKind = "success"
                 root.status = lastLine || Translation.tr("Mounted successfully")
+                root.mountedPopupText = lastLine
+                root.mountedPopupShown = true
                 // Refresh every list — the freshly mounted drive should
                 // disappear from Available (Local) AND appear in Mounted.
                 scanProc.running = true
@@ -415,6 +444,27 @@ ApplicationWindow {
         }
     }
 
+    // ── Action: clear the current selection (closes the Rename section) ─
+    function deselectDrive() {
+        root.selectedPath = ""
+        root.selectedFstype = ""
+        root.selectedUuid = ""
+        root.selectedExistingLabel = ""
+        root.newLabel = ""
+        root.selectedUnformatted = false
+    }
+
+    // ── Auto-scroll the Local list so a picked drive's action block shows ─
+    function revealBlock(loader) {
+        if (!loader) return
+        Qt.callLater(function() {
+            const p = loader.mapToItem(localFlick.contentItem, 0, 0)
+            const bottom = p.y + loader.height
+            const maxY = Math.max(0, localFlick.contentHeight - localFlick.height)
+            localFlick.contentY = Math.max(0, Math.min(bottom - localFlick.height, maxY))
+        })
+    }
+
     // ── Action: mount the picked local block device ────────────────
     function startMountLocal() {
         if (root.busy || !root.selectedPath) return
@@ -434,6 +484,28 @@ ApplicationWindow {
         root.busy = true
         root.resultKind = ""
         root.status = Translation.tr("Working on it… you may see a password prompt.")
+        mountProc.stdinEnabled = false
+        mountProc.running = true
+    }
+
+    // ── Action: format a blank device as ext4, then mount it ───────
+    function startFormatLocal(path) {
+        if (root.busy || !path) return
+        const drive = root.unformatted.find(d => d.path === path)
+        if (!drive) return
+        const labelRaw = (root.newLabel || drive.name || "drive").trim()
+        const labelSafe = sanitizeMountSegment(labelRaw) || "drive"
+        const mountPoint = "/mnt/" + labelSafe
+        mountProc.command = [
+            "pkexec", "/usr/local/bin/disk-mounter",
+            "format-mount",
+            drive.path, mountPoint, labelRaw, "fstab"
+        ]
+        mountProc.outputBuf = ""
+        mountProc.pendingPassword = ""
+        root.busy = true
+        root.resultKind = ""
+        root.status = Translation.tr("Formatting and mounting… you may see a password prompt.")
         mountProc.stdinEnabled = false
         mountProc.running = true
     }
@@ -489,6 +561,88 @@ ApplicationWindow {
         root.resultKind = ""
         root.status = Translation.tr("Removing ") + mountpoint + "…"
         unmountProc.running = true
+    }
+
+    // Rename + Mount block, dropped in below whichever category holds the
+    // currently-selected drive (via a Loader per mountable category).
+    Component {
+        id: renameMountBlock
+        ColumnLayout {
+            spacing: 12
+            Rectangle {
+                Layout.fillWidth: true
+                color: Appearance.colors.colLayer1
+                radius: Appearance.rounding.normal
+                border.width: 1
+                border.color: Appearance.colors.colOutlineVariant
+                implicitHeight: rmCol.implicitHeight + 24
+                ColumnLayout {
+                    id: rmCol
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 10
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        StyledText {
+                            Layout.preferredWidth: 110
+                            text: Translation.tr("Rename to")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: root.newLabel
+                            onTextEdited: root.newLabel = text
+                            placeholderText: Translation.tr("e.g. Photos, Backups")
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        MaterialSymbol {
+                            text: "auto_awesome"
+                            iconSize: 16
+                            color: Appearance.colors.colSubtext
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("This drive will be ready every time you log in, as \"") +
+                                (root.newLabel || root.selectedExistingLabel || "Drive") +
+                                Translation.tr("\".")
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                RippleButton {
+                    buttonRadius: Appearance.rounding.normal
+                    implicitWidth: root.selectedUnformatted ? 160 : 130
+                    implicitHeight: 36
+                    enabled: !root.busy && root.selectedPath.length > 0
+                    toggled: enabled
+                    onClicked: root.selectedUnformatted
+                        ? root.startFormatLocal(root.selectedPath)
+                        : root.startMountLocal()
+                    contentItem: Item {
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: root.busy
+                                ? Translation.tr("Working…")
+                                : (root.selectedUnformatted ? Translation.tr("Format & Mount") : Translation.tr("Mount"))
+                            color: Appearance.m3colors.m3onPrimary
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ── Layout ─────────────────────────────────────────────────────
@@ -602,16 +756,36 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 12
 
-                // Available drives list
-                Rectangle {
+                Flickable {
+                    id: localFlick
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    clip: true
+                    contentWidth: width
+                    contentHeight: localScrollCol.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    onContentHeightChanged: {
+                        const maxY = Math.max(0, contentHeight - height)
+                        if (contentY > maxY) contentY = maxY
+                    }
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    ColumnLayout {
+                        id: localScrollCol
+                        width: localFlick.width
+                        spacing: 12
+
+                // Storage drives list
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: root.drives.length > 0
                     color: Appearance.colors.colLayer1
                     radius: Appearance.rounding.normal
                     border.width: 1
                     border.color: Appearance.colors.colOutlineVariant
+                    implicitHeight: storageCol.implicitHeight + 24
 
                     ColumnLayout {
+                        id: storageCol
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 8
@@ -621,15 +795,13 @@ ApplicationWindow {
                             MaterialSymbol { text: "storage"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
                             StyledText {
                                 Layout.fillWidth: true
-                                text: Translation.tr("Available drives")
+                                text: Translation.tr("Storage Drives")
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnLayer1
                                 font.weight: Font.Medium
                             }
                             StyledText {
-                                text: root.drives.length === 0
-                                    ? Translation.tr("None found")
-                                    : root.drives.length + " " + Translation.tr("found")
+                                text: root.drives.length + " " + Translation.tr("found")
                                 font.pixelSize: Appearance.font.pixelSize.small
                                 color: Appearance.colors.colSubtext
                             }
@@ -638,7 +810,8 @@ ApplicationWindow {
                         ListView {
                             id: driveList
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
+                            Layout.preferredHeight: Math.min(count, 6) * 58
+                            Layout.maximumHeight: 6 * 58
                             clip: true
                             spacing: 4
                             model: root.drives
@@ -660,11 +833,16 @@ ApplicationWindow {
                                 buttonRadius: Appearance.rounding.small
                                 toggled: isSelected
                                 onClicked: {
-                                    root.selectedPath = modelData.path
-                                    root.selectedFstype = modelData.fstype
-                                    root.selectedUuid = modelData.uuid
-                                    root.selectedExistingLabel = modelData.label
-                                    root.newLabel = root.suggestedLabel(modelData)
+                                    if (dvRow.isSelected) {
+                                        root.deselectDrive()
+                                    } else {
+                                        root.selectedPath = modelData.path
+                                        root.selectedFstype = modelData.fstype
+                                        root.selectedUuid = modelData.uuid
+                                        root.selectedExistingLabel = modelData.label
+                                        root.newLabel = root.suggestedLabel(modelData)
+                                        root.selectedUnformatted = false
+                                    }
                                 }
                                 contentItem: Item {
                                     anchors.fill: parent
@@ -710,6 +888,129 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: root.selectedPath.length > 0 && !root.selectedUnformatted
+                        && root.drives.some(d => d.path === root.selectedPath)
+                    visible: active
+                    sourceComponent: renameMountBlock
+                    onActiveChanged: if (active) root.revealBlock(this)
+                }
+
+                // Operating System Drives (partitions on a disk that has an ESP).
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: root.osDrives.length > 0
+                    color: Appearance.colors.colLayer1
+                    radius: Appearance.rounding.normal
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+                    implicitHeight: osCol.implicitHeight + 24
+
+                    ColumnLayout {
+                        id: osCol
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 8
+
+                        RowLayout {
+                            spacing: 8
+                            MaterialSymbol { text: "install_desktop"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: Translation.tr("Operating System Drives")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer1
+                                font.weight: Font.Medium
+                            }
+                            StyledText {
+                                text: root.osDrives.length + " " + Translation.tr("found")
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                            }
+                        }
+                        ListView {
+                            id: osDriveList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(count, 4) * 58
+                            Layout.maximumHeight: 4 * 58
+                            clip: true
+                            spacing: 4
+                            interactive: count > 4
+                            model: root.osDrives
+                            delegate: RippleButton {
+                                id: osRow
+                                required property var modelData
+                                readonly property bool isSelected: root.selectedPath === modelData.path
+                                readonly property color titleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1
+                                readonly property color subtitleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
+                                width: osDriveList.width
+                                implicitHeight: 54
+                                buttonRadius: Appearance.rounding.small
+                                toggled: isSelected
+                                onClicked: {
+                                    if (osRow.isSelected) {
+                                        root.deselectDrive()
+                                    } else {
+                                        root.selectedPath = modelData.path
+                                        root.selectedFstype = modelData.fstype
+                                        root.selectedUuid = modelData.uuid
+                                        root.selectedExistingLabel = modelData.label
+                                        root.newLabel = root.suggestedLabel(modelData)
+                                        root.selectedUnformatted = false
+                                    }
+                                }
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    Item {
+                                        id: osIconSlot
+                                        width: 24
+                                        height: 24
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        MaterialSymbol {
+                                            anchors.centerIn: parent
+                                            text: osRow.modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"
+                                            iconSize: 22
+                                            color: osRow.titleColor
+                                        }
+                                    }
+                                    StyledText {
+                                        anchors.left: osIconSlot.right
+                                        anchors.leftMargin: 12
+                                        anchors.bottom: parent.verticalCenter
+                                        anchors.bottomMargin: 1
+                                        text: root.friendlyTitle(osRow.modelData)
+                                        font.pixelSize: Appearance.font.pixelSize.normal
+                                        color: osRow.titleColor
+                                        font.weight: Font.Medium
+                                    }
+                                    StyledText {
+                                        anchors.left: osIconSlot.right
+                                        anchors.leftMargin: 12
+                                        anchors.top: parent.verticalCenter
+                                        anchors.topMargin: 1
+                                        text: root.friendlySubtitle(osRow.modelData)
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        color: osRow.subtitleColor
+                                        opacity: osRow.isSelected ? 0.8 : 1.0
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: root.selectedPath.length > 0 && !root.selectedUnformatted
+                        && root.osDrives.some(d => d.path === root.selectedPath)
+                    visible: active
+                    sourceComponent: renameMountBlock
+                    onActiveChanged: if (active) root.revealBlock(this)
                 }
 
                 // Encrypted drives (read-only listing).
@@ -838,39 +1139,76 @@ ApplicationWindow {
                         ListView {
                             id: unformattedList
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(count, 4) * 32
-                            Layout.maximumHeight: 4 * 32
+                            Layout.preferredHeight: Math.min(count, 4) * 58
+                            Layout.maximumHeight: 4 * 58
                             clip: true
-                            spacing: 2
+                            spacing: 4
                             interactive: count > 4
                             model: root.unformatted
-                            delegate: Item {
+                            delegate: RippleButton {
+                                id: uRow
                                 required property var modelData
+                                readonly property bool isSelected: root.selectedUnformatted && root.selectedPath === modelData.path
+                                readonly property color titleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1
+                                readonly property color subtitleColor: isSelected ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
                                 width: unformattedList.width
-                                implicitHeight: 30
-                                MaterialSymbol {
-                                    id: uIcon
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 4
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "horizontal_rule"
-                                    iconSize: 14
-                                    color: Appearance.colors.colSubtext
+                                implicitHeight: 54
+                                buttonRadius: Appearance.rounding.small
+                                toggled: isSelected
+                                onClicked: {
+                                    if (uRow.isSelected) {
+                                        root.deselectDrive()
+                                    } else {
+                                        root.selectedPath = uRow.modelData.path
+                                        root.selectedFstype = ""
+                                        root.selectedUuid = ""
+                                        root.selectedExistingLabel = ""
+                                        root.newLabel = root.suggestedLabel(uRow.modelData)
+                                        root.selectedUnformatted = true
+                                    }
                                 }
-                                StyledText {
-                                    anchors.left: uIcon.right
-                                    anchors.leftMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.path + " · " + root.humanSize(modelData.size)
-                                    font.pixelSize: Appearance.font.pixelSize.small
-                                    color: Appearance.colors.colOnLayer1
-                                    opacity: 0.85
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    Item {
+                                        id: uIconSlot
+                                        width: 24
+                                        height: 24
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        MaterialSymbol {
+                                            anchors.centerIn: parent
+                                            text: uRow.modelData.path.indexOf("nvme") >= 0 ? "memory" : "hard_drive_2"
+                                            iconSize: 22
+                                            color: uRow.titleColor
+                                        }
+                                    }
+                                    StyledText {
+                                        anchors.left: uIconSlot.right
+                                        anchors.leftMargin: 12
+                                        anchors.bottom: parent.verticalCenter
+                                        anchors.bottomMargin: 1
+                                        text: root.humanSize(uRow.modelData.size) + " " + Translation.tr("Drive")
+                                        font.pixelSize: Appearance.font.pixelSize.normal
+                                        color: uRow.titleColor
+                                        font.weight: Font.Medium
+                                    }
+                                    StyledText {
+                                        anchors.left: uIconSlot.right
+                                        anchors.leftMargin: 12
+                                        anchors.top: parent.verticalCenter
+                                        anchors.topMargin: 1
+                                        text: uRow.modelData.path + " · " + Translation.tr("Unformatted")
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        color: uRow.subtitleColor
+                                        opacity: uRow.isSelected ? 0.8 : 1.0
+                                    }
                                 }
                             }
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: Translation.tr("These partitions need to be formatted before they can be mounted.")
+                            text: Translation.tr("Select a blank drive to name and format it as Ext4, then mount.")
                             font.pixelSize: Appearance.font.pixelSize.smaller
                             color: Appearance.colors.colSubtext
                             opacity: 0.8
@@ -879,79 +1217,25 @@ ApplicationWindow {
                     }
                 }
 
-                // Drive settings (rename) + Mount button
-                Rectangle {
+                Loader {
                     Layout.fillWidth: true
-                    visible: root.selectedPath.length > 0
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: settingsCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: settingsCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-                            StyledText {
-                                Layout.preferredWidth: 110
-                                text: Translation.tr("Rename to")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                            }
-                            MaterialTextField {
-                                Layout.fillWidth: true
-                                text: root.newLabel
-                                onTextEdited: root.newLabel = text
-                                placeholderText: Translation.tr("e.g. Photos, Backups")
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            MaterialSymbol {
-                                text: "auto_awesome"
-                                iconSize: 16
-                                color: Appearance.colors.colSubtext
-                            }
-                            StyledText {
-                                Layout.fillWidth: true
-                                text: Translation.tr("This drive will be ready every time you log in, as \"") +
-                                    (root.newLabel || root.selectedExistingLabel || "Drive") +
-                                    Translation.tr("\".")
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.colors.colSubtext
-                                wrapMode: Text.WordWrap
-                            }
-                        }
-                    }
+                    active: root.selectedUnformatted && root.selectedPath.length > 0
+                    visible: active
+                    sourceComponent: renameMountBlock
+                    onActiveChanged: if (active) root.revealBlock(this)
                 }
 
-                // Local-tab Mount button (footer area)
-                RowLayout {
+                StyledText {
                     Layout.fillWidth: true
-                    spacing: 8
-                    Item { Layout.fillWidth: true }
-                    RippleButton {
-                        buttonRadius: Appearance.rounding.normal
-                        implicitWidth: 130
-                        implicitHeight: 36
-                        enabled: !root.busy && root.selectedPath.length > 0
-                        toggled: enabled
-                        onClicked: root.startMountLocal()
-                        contentItem: Item {
-                            StyledText {
-                                anchors.centerIn: parent
-                                text: root.busy ? Translation.tr("Working…") : Translation.tr("Mount")
-                                color: Appearance.m3colors.m3onPrimary
-                                font.weight: Font.Medium
-                            }
-                        }
+                    Layout.topMargin: 8
+                    visible: root.drives.length === 0 && root.osDrives.length === 0
+                        && root.encrypted.length === 0 && root.unformatted.length === 0
+                    text: Translation.tr("No drives found. Plug in a drive to mount it.")
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.WordWrap
+                }
                     }
                 }
             }
@@ -1387,7 +1671,9 @@ ApplicationWindow {
                                         return "hard_drive_2"
                                     }
                                     iconSize: 22
-                                    color: Appearance.colors.colOnLayer1
+                                    color: modelData.connected === false
+                                        ? Appearance.colors.colSubtext
+                                        : Appearance.colors.colOnLayer1
                                 }
                                 ColumnLayout {
                                     anchors.left: mIcon.right
@@ -1396,13 +1682,30 @@ ApplicationWindow {
                                     anchors.rightMargin: 12
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: 1
-                                    StyledText {
+                                    RowLayout {
                                         Layout.fillWidth: true
-                                        text: modelData.mountpoint
-                                        font.pixelSize: Appearance.font.pixelSize.normal
-                                        color: Appearance.colors.colOnLayer1
-                                        font.weight: Font.Medium
-                                        elide: Text.ElideMiddle
+                                        spacing: 6
+                                        StyledText {
+                                            Layout.fillWidth: modelData.connected !== false
+                                            text: modelData.mountpoint
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: modelData.connected === false
+                                                ? Appearance.colors.colSubtext
+                                                : Appearance.colors.colOnLayer1
+                                            font.weight: Font.Medium
+                                            elide: Text.ElideMiddle
+                                        }
+                                        StyledText {
+                                            visible: modelData.connected === false
+                                            text: Translation.tr("(Disconnected)")
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            color: Appearance.colors.colError
+                                            font.weight: Font.Medium
+                                        }
+                                        Item {
+                                            visible: modelData.connected === false
+                                            Layout.fillWidth: true
+                                        }
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
@@ -1519,12 +1822,80 @@ ApplicationWindow {
                 implicitWidth: 100
                 implicitHeight: 36
                 enabled: !root.busy
+                colBackground: Appearance.colors.colSecondaryContainer
+                colBackgroundHover: Appearance.colors.colSecondaryContainerHover
                 onClicked: root.close()
                 contentItem: Item {
                     StyledText {
                         anchors.centerIn: parent
                         text: Translation.tr("Close")
-                        color: Appearance.colors.colOnLayer0
+                        color: Appearance.colors.colOnSecondaryContainer
+                    }
+                }
+            }
+        }
+    }
+
+    // ── "Disk mounted" confirmation popup ──────────────────────────
+    Rectangle {
+        anchors.fill: parent
+        visible: root.mountedPopupShown
+        z: 100
+        color: Qt.rgba(0, 0, 0, 0.45)
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: root.mountedPopupShown = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 320
+            implicitHeight: popupCol.implicitHeight + 40
+            radius: Appearance.rounding.normal
+            color: Appearance.m3colors.m3background
+            border.width: 1
+            border.color: Appearance.colors.colOutlineVariant
+            MouseArea { anchors.fill: parent }
+            ColumnLayout {
+                id: popupCol
+                anchors.centerIn: parent
+                width: parent.width - 40
+                spacing: 12
+                MaterialSymbol {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "check_circle"
+                    iconSize: 48
+                    color: Appearance.colors.colPrimary
+                }
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Translation.tr("Disk mounted")
+                    font.pixelSize: Appearance.font.pixelSize.larger
+                    font.weight: Font.Medium
+                    color: Appearance.colors.colOnLayer1
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: root.mountedPopupText.length > 0
+                    text: root.mountedPopupText
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                }
+                RippleButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: 100
+                    implicitHeight: 34
+                    toggled: true
+                    buttonRadius: Appearance.rounding.small
+                    onClicked: root.mountedPopupShown = false
+                    contentItem: Item {
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("OK")
+                            color: Appearance.colors.colOnPrimary
+                        }
                     }
                 }
             }

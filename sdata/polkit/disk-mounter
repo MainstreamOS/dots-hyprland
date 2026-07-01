@@ -12,6 +12,10 @@
 #   mount-block <device> <fstype> <uuid> <mountpoint> <label> <fstab|nofstab>
 #       Local block device (HDD/SSD partition). Optionally relabels the FS.
 #
+#   format-mount <device> <mountpoint> <label> <fstab|nofstab>
+#       Format a provably-blank device as ext4, then mount it like mount-block.
+#       Refuses any device that isn't empty (see ensure_device_blank).
+#
 #   mount-smb   <host> <share> <mountpoint> <label> <username|guest> <fstab|nofstab>
 #       SMB/CIFS share. When username != "guest", the password is read from
 #       stdin (NOT passed on the command line so it never appears in /proc/ps).
@@ -174,6 +178,90 @@ mount_block() {
         printf 'UUID=%s %s %s %s 0 2\n' "$uuid" "$mountpoint" "$fstype" "$mount_opts" >> /etc/fstab
     fi
     echo "Mounted $device at $mountpoint"
+}
+
+# Refuse to act on anything that holds real data: not mounted, no child
+# partitions, no recognized filesystem, and not part of the running system
+# disk. Residual signatures on an otherwise-blank disk (an empty partition
+# table, a stale superblock left from a previous format) are cleared by the
+# format step rather than refused here. This is the hard gate the format flow
+# relies on — it never trusts the caller's claim that a device is blank.
+ensure_device_blank() {  # $1=device
+    local dev="$1"
+
+    local mnt
+    mnt="$(lsblk -nro MOUNTPOINT "$dev" 2>/dev/null | grep -v '^$' | head -n1 || true)"
+    [[ -n "$mnt" ]] && die "$dev is mounted at $mnt — refusing to format"
+
+    [[ "$(lsblk -nro NAME "$dev" 2>/dev/null | wc -l)" -gt 1 ]] \
+        && die "$dev has partitions — refusing to format a partitioned device"
+
+    local existing
+    existing="$(blkid -p -s TYPE -o value "$dev" 2>/dev/null || true)"
+    [[ -n "$existing" ]] && die "$dev already holds a $existing filesystem — refusing to format"
+
+    local mp src disk
+    for mp in / /boot /boot/efi /efi; do
+        # --nofsroot strips the btrfs "[/@]" subvolume suffix so the source is
+        # a plain device path; the %%\[* is belt-and-suspenders for other fs.
+        src="$(findmnt -nro SOURCE --nofsroot "$mp" 2>/dev/null || true)"
+        src="${src%%\[*}"
+        [[ -z "$src" ]] && continue
+        disk="/dev/$(lsblk -nro PKNAME "$src" 2>/dev/null | head -n1)"
+        [[ "$dev" == "$src" || "$dev" == "$disk" ]] \
+            && die "$dev is part of the running system disk — refusing to format"
+    done
+}
+
+# ── Subcommand: format-mount ──────────────────────────────────────────────
+# Format a provably-blank device as ext4, then hand off to mount-block to mount
+# it and (optionally) add the fstab entry. Only ever runs mkfs after the device
+# clears ensure_device_blank.
+format_mount() {
+    if [[ $# -ne 4 ]]; then
+        log "usage: format-mount <device> <mountpoint> <label> <fstab|nofstab>"
+        exit 64
+    fi
+    local device="$1" mountpoint="$2" label="$3" fstab_mode="$4"
+
+    validate_mountpoint "$mountpoint"
+    reject_label_unsafe label "$label"
+    [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
+    command -v mkfs.ext4 >/dev/null || { log "mkfs.ext4 not found (install e2fsprogs)"; exit 2; }
+
+    ensure_device_blank "$device"
+
+    # Replace any prior setup so a reformat doesn't strand a stale fstab line.
+    # Clear the drive's old UUID entry (if it still carries one) and unmount +
+    # drop anything at the target mountpoint; mount-block re-adds the fresh row.
+    local old_uuid
+    old_uuid="$(blkid -p -s UUID -o value "$device" 2>/dev/null || true)"
+    [[ -n "$old_uuid" ]] && strip_fstab_match "UUID=${old_uuid}"
+    if mountpoint -q "$mountpoint" 2>/dev/null; then
+        umount "$mountpoint" 2>/dev/null || umount -l "$mountpoint" 2>/dev/null || true
+    fi
+    [[ -f /etc/fstab ]] && sed -i "\# ${mountpoint} #d" /etc/fstab
+
+    # Clear residual signatures (empty partition table, stale superblock) so
+    # mkfs starts from a truly clean device.
+    wipefs -a "$device" >/dev/null 2>&1 || true
+
+    # ext4 labels cap at 16 bytes; keep the label within that so mkfs and the
+    # downstream relabel agree and the operation never aborts on a long name.
+    local fslabel="${label:0:16}"
+    log "Formatting $device as ext4..."
+    if [[ -n "$fslabel" ]]; then
+        mkfs.ext4 -q -L "$fslabel" "$device"
+    else
+        mkfs.ext4 -q "$device"
+    fi
+    udevadm settle 2>/dev/null || true
+
+    local uuid
+    uuid="$(blkid -p -s UUID -o value "$device" 2>/dev/null || true)"
+    [[ -n "$uuid" ]] || die "format succeeded but no UUID resolved for $device"
+
+    mount_block "$device" ext4 "$uuid" "$mountpoint" "$fslabel" "$fstab_mode"
 }
 
 # ── Credentials dir (SMB only) ────────────────────────────────────────────
@@ -368,13 +456,14 @@ unmount() {
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────
-[[ $# -lt 1 ]] && { log "usage: $0 {mount-block|mount-smb|mount-nfs|unmount} ..."; exit 64; }
+[[ $# -lt 1 ]] && { log "usage: $0 {mount-block|format-mount|mount-smb|mount-nfs|unmount} ..."; exit 64; }
 
 sub="$1"; shift
 case "$sub" in
-    mount-block) mount_block "$@" ;;
-    mount-smb)   mount_smb   "$@" ;;
-    mount-nfs)   mount_nfs   "$@" ;;
-    unmount)     unmount     "$@" ;;
+    mount-block)  mount_block  "$@" ;;
+    format-mount) format_mount "$@" ;;
+    mount-smb)    mount_smb    "$@" ;;
+    mount-nfs)    mount_nfs    "$@" ;;
+    unmount)      unmount      "$@" ;;
     *) log "Unknown subcommand: $sub"; exit 64 ;;
 esac
