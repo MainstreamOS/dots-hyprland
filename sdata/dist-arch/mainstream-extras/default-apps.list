@@ -21,6 +21,7 @@ MAINSTREAM_DEFAULT_APPS=(
   "org.gnome.Calendar|GNOME Calendar|Clean, easy-to-use calendar app"
   "org.gnome.SimpleScan|Simple Scan|Straightforward scanning utility"
   "org.gnome.font-viewer|GNOME Font Viewer|Preview and install fonts"
+  "nautilus|Files|GNOME file manager"
   "nautilus-copy-path|Nautilus Copy Path|Right-click Copy path / URI / name / content in Files"
   "nautilus-admin-gtk4|Nautilus Open as Administrator|Right-click Open / Edit as Administrator in Files (pkexec-backed)"
   "io.gitlab.adhami3310.Impression|Impression|Write disk images to USB drives"
