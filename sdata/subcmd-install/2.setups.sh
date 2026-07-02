@@ -799,9 +799,12 @@ function setup_plymouth(){
 
 # Shared GPU detection + config library -- the single source of truth for both
 # the dots ./setup and archiso install paths (sdata/lib/gpu-config.sh). On the
-# live system, writes go through sudo.
+# live system, writes go through sudo. The small-ESP early-KMS guard is
+# disabled here: dots installs use the host's existing boot setup (no UKI on
+# the ESP), so ESP size does not constrain the initramfs.
 source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
 GPU_SUDO=sudo
+GPU_EARLY_KMS_ESP_THRESHOLD=0
 
 function setup_gpu_autoconfig(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then

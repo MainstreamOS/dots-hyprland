@@ -337,9 +337,10 @@ nvidia_enable_services() {
 # the init hooks make the temp filesystem usable (ArchWiki). KMS/full-res is kept
 # by nvidia_drm.modeset=1 on the cmdline; the modules load via udev on the real
 # root, after which suspend/hibernate VRAM preservation works. Remove the kms
-# hook so udev autodetect doesn't early-load nvidia_drm in its place. Dropping the
-# in-initramfs nvidia modules also shrinks the UKI, retiring the old small-ESP
-# guard. AMD/Intel still get early KMS via their explicit MODULES entries.
+# hook so udev autodetect doesn't early-load nvidia_drm in its place. Dropping
+# the in-initramfs nvidia modules also shrinks the UKI. AMD/Intel still get
+# early KMS via their explicit MODULES entries, guarded by the small-ESP check
+# in gpu_apply_autoconfig.
 nvidia_defer_kms() {
     mkinitcpio_remove_hook kms
 }
@@ -385,24 +386,37 @@ _gpu_swap_partuuid() {
 # resume= for hibernation. Mirrors dots setup_gpu_autoconfig. Does NOT rebuild
 # the initramfs or write the base cmdline -- the caller owns those. NVIDIA is
 # deliberately NOT early-loaded (early-loading breaks hibernation); KMS is kept
-# by nvidia_drm.modeset=1. Any GPU_EARLY_KMS_* seams a caller sets are no-ops.
+# by nvidia_drm.modeset=1.
+#
+# Small-ESP guard: explicit MODULES entries make the initramfs/UKI carry the
+# full GPU module + firmware set (explicit modules bypass autodetect, so e.g.
+# amdgpu pulls every ASIC generation's firmware). On a small reused ESP
+# (Windows dual-boot: 100-260 MiB) that UKI no longer fits and the write
+# ENOSPCs. When the mounted ESP is under GPU_EARLY_KMS_ESP_THRESHOLD MiB
+# (default 512; 0 disables the guard), skip the explicit MODULES — the kms
+# hook still early-loads the present card with autodetect-trimmed firmware.
 gpu_apply_autoconfig() {
     local -a cmdline_args=()
+    local esp_threshold="${GPU_EARLY_KMS_ESP_THRESHOLD:-512}" early_kms=true esp_mib
+    esp_mib="$(_gpu_esp_mib)"
+    if [[ "$esp_threshold" -gt 0 && "$esp_mib" -gt 0 && "$esp_mib" -lt "$esp_threshold" ]]; then
+        early_kms=false
+    fi
     # Intel first so i915 precedes nvidia in MODULES.
     if [[ $HAS_INTEL == true ]]; then
         # i915 is the kernel default for Alchemist/Iris-Xe and older; on the rare
         # Xe2 card (Battlemage/Lunar Lake) it is a harmless no-op and xe auto-loads.
         # No i915.modeset cmdline token: the param was deprecated in 6.12 (warns)
         # and KMS is already the -1 auto default; early KMS comes from MODULES.
-        mkinitcpio_add_modules i915
+        [[ $early_kms == true ]] && mkinitcpio_add_modules i915 || true
     fi
     if [[ $HAS_AMD == true ]]; then
         if [[ $IS_OLD_AMD == true ]]; then
             write_modprobe_conf amd
-            mkinitcpio_add_modules amdgpu radeon
+            [[ $early_kms == true ]] && mkinitcpio_add_modules amdgpu radeon || true
             cmdline_args+=("amdgpu.si_support=1" "amdgpu.cik_support=1")
         else
-            mkinitcpio_add_modules amdgpu
+            [[ $early_kms == true ]] && mkinitcpio_add_modules amdgpu || true
             cmdline_args+=("amdgpu.modeset=1")
             [[ $IS_RDNA4 == true ]] && cmdline_args+=("amdgpu.sg_display=0") || true
         fi
@@ -416,7 +430,7 @@ gpu_apply_autoconfig() {
         nvidia_enable_services "$_pw"
     fi
     # PRIME for hybrid.
-    if [[ $IS_HYBRID == true ]]; then
+    if [[ $IS_HYBRID == true && $early_kms == true ]]; then
         if [[ $HAS_NVIDIA == true && $HAS_INTEL == true ]]; then
             mkinitcpio_add_modules i915
         elif [[ $HAS_NVIDIA == true && $HAS_AMD == true ]]; then

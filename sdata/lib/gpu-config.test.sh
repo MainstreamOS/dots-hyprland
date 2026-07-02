@@ -7,10 +7,11 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/gpu-config.sh"
 
 # Drive detection from fixture globals instead of real hardware.
-FIX_LSPCI=""; FIX_SYSVENDOR=""
+FIX_LSPCI=""; FIX_SYSVENDOR=""; FIX_ESP_MIB=0
 _gpu_lspci_nn()   { printf '%s\n' "$FIX_LSPCI"; }
 _gpu_lspci()      { printf '%s\n' "$FIX_LSPCI"; }
 _gpu_sys_vendor() { printf '%s' "$FIX_SYSVENDOR"; }
+_gpu_esp_mib()    { echo "$FIX_ESP_MIB"; }
 
 FAILS=0; CASES=0
 run() { FIX_SYSVENDOR="$2"; FIX_LSPCI="$3"; CASES=$((CASES + 1)); gpu_detect || true; }
@@ -273,6 +274,31 @@ FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"
 chk_str resume-added "$( [[ "$CL" == *"resume=PARTUUID=1234-abcd"* ]] && echo yes || echo no )" "yes"
 _gpu_swap_partuuid() { echo ""; }
+
+# Small-ESP guard: explicit early-KMS MODULES are skipped when the mounted ESP
+# is under the threshold; modprobe/cmdline config is unaffected. Threshold 0
+# disables the guard.
+oreset; FIX_ESP_MIB=100
+FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str smallesp-no-amdgpu "$( [[ "$ML" == *"amdgpu"* ]] && echo present || echo absent )" "absent"
+chk_str smallesp-cmdline-kept "$( [[ "$CL" == *"amdgpu.modeset=1"* ]] && echo yes || echo no )" "yes"
+
+oreset; FIX_ESP_MIB=100
+FIX_LSPCI="00:02.0 VGA compatible controller [0300]: Intel Corporation AlderLake-S GT1 [UHD Graphics 770] [8086:4680] (rev 0c)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str smallesp-no-i915 "$( [[ "$ML" == *"i915"* ]] && echo present || echo absent )" "absent"
+
+oreset; FIX_ESP_MIB=1024
+FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str bigesp-amdgpu "$( [[ "$ML" == *"amdgpu"* ]] && echo yes || echo no )" "yes"
+
+oreset; FIX_ESP_MIB=100; GPU_EARLY_KMS_ESP_THRESHOLD=0
+FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str guard-off-amdgpu "$( [[ "$ML" == *"amdgpu"* ]] && echo yes || echo no )" "yes"
+unset GPU_EARLY_KMS_ESP_THRESHOLD; FIX_ESP_MIB=0
 rm -rf "$OTMP"
 
 echo "----"
