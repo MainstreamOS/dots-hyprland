@@ -270,7 +270,7 @@ fi
 
 # ── 5. Mainstream dotfiles (updatems) ───────────────────────────────────────
 # /usr/local/bin/updatems is a per-user command that checks for a new
-# release tag (mainstream-*) on the upstream MainstreamOS/dots-hyprland
+# release tag (plain version numbers) on the upstream MainstreamOS/dots-hyprland
 # repo and, when one is detected, runs `./setup exp-update` against the
 # clone at ~/.cache/dots-hyprland with --non-interactive
 # --default-choice backup so file conflicts back up to

@@ -11,7 +11,11 @@
 #   1. If ~/.cache/dots-hyprland is missing, auto-clone
 #      https://github.com/MainstreamOS/dots-hyprland.git (branch
 #      mainstream) into that path.
-#   2. Fetch tags from origin and pick the latest mainstream-* tag.
+#   2. Fetch tags from origin and pick the latest release tag. Releases
+#      are plain major.minor.patch version numbers (1.0.0 and up); the
+#      pre-1.0.0 mainstream-* tag series is retired — 1.0.0 carries a
+#      mainstream-1.0.0 twin tag so installs still on the old pattern
+#      pick up this switch, then track number tags from there.
 #   3. Compare against the last-applied marker
 #      (~/.cache/dots-hyprland/.updatems-applied-tag). No bump => no-op.
 #   4. On bump: auto-stash any dirty state (left on the stack for the
@@ -43,13 +47,13 @@
 # Environment overrides (mostly useful for testing):
 #   MAINSTREAM_DOTFILES_REPO         git URL (default: upstream MainstreamOS)
 #   MAINSTREAM_DOTFILES_BRANCH       branch to track (default: mainstream)
-#   MAINSTREAM_DOTFILES_TAG_PATTERN  glob for tag matching (default: mainstream-*)
+#   MAINSTREAM_DOTFILES_TAG_PATTERN  glob for tag matching (default: [0-9]*)
 #   MAINSTREAM_DOTFILES_DIR          clone path (default: ~/.cache/dots-hyprland)
 set -u
 
 REPO_URL="${MAINSTREAM_DOTFILES_REPO:-https://github.com/MainstreamOS/dots-hyprland.git}"
 REPO_BRANCH="${MAINSTREAM_DOTFILES_BRANCH:-mainstream}"
-TAG_PATTERN="${MAINSTREAM_DOTFILES_TAG_PATTERN:-mainstream-*}"
+TAG_PATTERN="${MAINSTREAM_DOTFILES_TAG_PATTERN:-[0-9]*}"
 CLONE_DIR="${MAINSTREAM_DOTFILES_DIR:-$HOME/.cache/dots-hyprland}"
 MARKER="${CLONE_DIR}/.updatems-applied-tag"
 
@@ -115,7 +119,9 @@ git fetch --tags --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /' || die "gi
 # ── 3. Pick the latest tag matching the pattern ────────────────────────────
 # Strip peeled-tag suffixes (^{}), filter to the configured pattern,
 # version-sort, take the highest. `${TAG_PATTERN//\*/.+}` is a cheap
-# glob→regex conversion that's good enough for our `mainstream-*` case.
+# glob→regex conversion; the default `[0-9]*` becomes `[0-9].+`, matching
+# plain version tags (1.0.0, 1.2.10, ...) while excluding the retired
+# mainstream-* series. sort -V orders them semver-correctly.
 LATEST_TAG=$(git ls-remote --tags origin 2>/dev/null \
     | awk '{print $2}' \
     | grep -vE '\^\{\}$' \
