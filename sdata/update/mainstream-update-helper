@@ -90,10 +90,24 @@ cleanup() {
     rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
     # A user-stopped update may have killed pacman mid-transaction;
     # without this the next pacman invocation refuses to start until
-    # the user manually removes the lock.
-    rm -f /var/lib/pacman/db.lck 2>/dev/null
+    # the user manually removes the lock. Only clear it when no package
+    # manager is still alive — the lock may belong to another running
+    # pacman, and deleting it under a live transaction risks concurrent
+    # database writes.
+    if ! pgrep -x pacman >/dev/null 2>&1; then
+        rm -f /var/lib/pacman/db.lck 2>/dev/null
+    fi
 }
 trap cleanup EXIT INT TERM HUP
+
+# Bail out early when another package manager already holds the database
+# lock — every pacman step below would fail against it, and the exit trap
+# must never clear a lock owned by a live foreign process.
+if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
+    echo ">>> Another package manager is running (pacman database is locked)."
+    echo ">>> Let it finish or stop it, then run the update again."
+    exit 1
+fi
 
 # Broad NOPASSWD scoped to the calling user, active only while this
 # helper is running. The narrow alternative (NOPASSWD on /usr/bin/pacman
