@@ -229,6 +229,12 @@ ContentPage {
                 link: "https://github.com/xCaptaiN09/pixie-sddm"
             }
             ForkCard {
+                image: `${Directories.home}/.local/share/icons/about-bluemancz.png`
+                name: "hyprmod"
+                subtitle: Translation.tr("BlueManCZ — Keybinds Settings")
+                link: "https://github.com/BlueManCZ/hyprmod"
+            }
+            ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-archlinux.png`
                 name: "Arch Linux"
                 subtitle: Translation.tr("Base distribution & archiso")
