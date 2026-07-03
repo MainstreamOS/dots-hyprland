@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-gnome
 pkgver=1.0
-pkgrel=5
+pkgrel=6
 pkgdesc='Mainstream OS Gnome Dependencies'
 provides=('illogical-impulse-gnome')
 replaces=('illogical-impulse-gnome')
@@ -16,6 +16,8 @@ depends=(
   fuse2
   ffmpegthumbnailer
   gnome-keyring
+  libsecret
+  seahorse
 )
 optdepends=(
   'nautilus: GNOME file manager (Files)'
