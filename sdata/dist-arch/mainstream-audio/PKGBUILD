@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-audio
 pkgver=1.0
-pkgrel=9
+pkgrel=10
 pkgdesc='Mainstream OS Audio Dependencies'
 provides=('illogical-impulse-audio')
 replaces=('illogical-impulse-audio')
@@ -16,6 +16,7 @@ depends=(
   libdbusmenu-gtk3
   playerctl
   alsa-utils
+  rtkit
 )
 source=(
   '51-disable-hdmi-default.conf'
