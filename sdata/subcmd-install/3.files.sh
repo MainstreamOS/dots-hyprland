@@ -763,6 +763,121 @@ PYEOF
   x ln -sfnT "$steam_store" "$HOME/.steam/root"
 }
 
+function apply_os_only_prune(){
+  # Mirror of the ISO's OS-only install method: the default apps are not
+  # installed, so drop the shipped .desktop overrides that would point at
+  # nothing and prune the dock's pinned defaults down to apps that actually
+  # resolve. Presence is only checked — nothing is ever uninstalled, so apps
+  # the user already has keep their entries and pins.
+  local desktop_dir="$XDG_DATA_HOME/applications"
+  local cleanup_map=(
+    "gimp:gimp.desktop:org.gimp.GIMP.desktop"
+    "mpv:mpv.desktop"
+    "spotify:spotify.desktop"
+    "resources:net.nokyan.Resources.desktop"
+    "impression:io.gitlab.adhami3310.Impression.desktop"
+    "chromium:chromium.desktop"
+  )
+  local entry pkg df present
+  for entry in "${cleanup_map[@]}"; do
+    IFS=':' read -ra _parts <<< "$entry"
+    pkg="${_parts[0]}"
+    present=false
+    pacman -Qq "$pkg" &>/dev/null && present=true
+    if [[ "$present" == false ]]; then
+      for df in "${_parts[@]:1}"; do
+        if [[ -f "/var/lib/flatpak/exports/share/applications/$df" ]] || \
+           [[ -f "$XDG_DATA_HOME/flatpak/exports/share/applications/$df" ]]; then
+          present=true; break
+        fi
+      done
+    fi
+    if [[ "$present" == false ]]; then
+      for df in "${_parts[@]:1}"; do
+        if [[ -f "$desktop_dir/$df" ]]; then
+          try rm -f "$desktop_dir/$df"
+          echo -e "${STY_BLUE}[$0]: OS-only: removed $df ($pkg not installed)${STY_RST}"
+        fi
+      done
+    fi
+  done
+
+  local config_qml="$XDG_CONFIG_HOME/quickshell/ii/modules/common/Config.qml"
+  if [[ ! -f "$config_qml" ]]; then
+    echo -e "${STY_BLUE}[$0]: OS-only: Config.qml not deployed; dock prune skipped.${STY_RST}"
+    return 0
+  fi
+  python3 - "$config_qml" "$XDG_CONFIG_HOME/quickshell/ii/config.json" <<'PYEOF' || echo -e "${STY_YELLOW}[$0]: OS-only dock prune failed; dock defaults left as-is.${STY_RST}"
+import json, os, re, sys
+
+qml_path, json_path = sys.argv[1], sys.argv[2]
+home = os.path.expanduser("~")
+exempt = {"settings", "welcome-tutorial"}
+app_dirs = [
+    "/usr/share/applications",
+    "/usr/local/share/applications",
+    os.environ.get("XDG_DATA_HOME", f"{home}/.local/share") + "/applications",
+    "/var/lib/flatpak/exports/share/applications",
+    f"{home}/.local/share/flatpak/exports/share/applications",
+]
+
+available = set()
+for directory in app_dirs:
+    try:
+        for entry in os.listdir(directory):
+            if entry.endswith(".desktop"):
+                available.add(entry[:-8].lower())
+    except OSError:
+        pass
+
+def keep(app_id):
+    if app_id.startswith("folder:"):
+        return True
+    if app_id.lower() in exempt:
+        return True
+    return app_id.lower() in available
+
+pat = re.compile(r'(property\s+list<string>\s+pinnedApps\s*:\s*\[)(.*?)(\])', re.DOTALL)
+src = open(qml_path, encoding="utf-8").read()
+dropped = []
+
+def rewrite(m):
+    head, body, tail = m.group(1), m.group(2), m.group(3)
+    ids = re.findall(r'"([^"]+)"', body)
+    if "settings" not in ids:            # dock array only; leave launcher alone
+        return m.group(0)
+    kept = [i for i in ids if keep(i)]
+    if kept == ids:
+        return m.group(0)
+    dropped.extend(i for i in ids if i not in kept)
+    new_body = "\n                    " + ", ".join(f'"{i}"' for i in kept) + ",\n                "
+    return head + new_body + tail
+
+new = pat.sub(rewrite, src)
+if dropped:
+    open(qml_path, "w", encoding="utf-8").write(new)
+    print("[os-only] pruned dock defaults: " + ", ".join(dropped))
+else:
+    print("[os-only] dock defaults already clean")
+
+if os.path.isfile(json_path):
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        pins = cfg.get("dock", {}).get("pinnedApps")
+        if isinstance(pins, list):
+            kept = [i for i in pins if keep(i)]
+            if kept != pins:
+                cfg["dock"]["pinnedApps"] = kept
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, indent=4)
+                print("[os-only] pruned existing dock pins: "
+                      + ", ".join(i for i in pins if i not in kept))
+    except (ValueError, OSError):
+        print("[os-only] config.json unreadable; existing dock pins left as-is")
+PYEOF
+}
+
 #####################################################################################
 # In case some dirs does not exists
 for i in "$XDG_BIN_HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"; do
@@ -794,6 +909,11 @@ case "${EXPERIMENTAL_FILES_SCRIPT}" in
   true)source sdata/subcmd-install/3.files-exp.sh;;
   *)source sdata/subcmd-install/3.files-legacy.sh;;
 esac
+
+if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then
+  showfun apply_os_only_prune
+  v apply_os_only_prune
+fi
 
 if [[ ! "$OS_GROUP_ID" == "fedora" ]]; then
   showfun install_google_sans_flex

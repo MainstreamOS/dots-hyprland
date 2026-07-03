@@ -220,8 +220,13 @@ install-local-pkgbuild() {
       sudo pacman -S --needed --noconfirm lib32-vulkan-swrast || true
     fi
 
-    printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     local _flathub_added=false
+    if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then
+      printf "${STY_CYAN}[$0]: OS-only install — skipping default apps (mainstream-extras optdepends).${STY_RST}\n"
+      optdepends=()
+    else
+      printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
+    fi
     for dep in "${optdepends[@]}"; do
       local pkg="${dep%%:*}"
       if _is_kde_blocked "$pkg"; then

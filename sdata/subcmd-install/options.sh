@@ -26,6 +26,11 @@ Options for install:
       --skip-miscconf       Skip copying the dirs and files to \".configs\" except for
                             Quickshell, Fish and Hyprland
       --core                Alias of --skip-{fish,miscconf,fontconfig}
+      --os-only             OS-only install: skip the default apps
+                            (Mainstream extras) and prune the dock pins to
+                            apps that are actually installed, mirroring the
+                            ISO's OS-only install method. Never removes
+                            packages you already have.
       --fontset <set>       Use a set of pre-defined font and config (currently only fontconfig).
                             Possible values of <set>: $(ls -A ${REPO_ROOT}/dots-extra/fontsets)
 ${STY_CYAN}
@@ -47,7 +52,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -88,6 +93,7 @@ while true ; do
     --skip-fontconfig) SKIP_FONTCONFIG=true;shift;;
     --skip-miscconf) SKIP_MISCCONF=true;shift;;
     --core) SKIP_FISH=true;SKIP_FONTCONFIG=true;SKIP_MISCCONF=true;shift;;
+    --os-only) OS_ONLY_INSTALL=true;shift;;
     --exp-files) EXPERIMENTAL_FILES_SCRIPT=true;shift;;
     --via-nix) INSTALL_VIA_NIX=true;shift;;
     
