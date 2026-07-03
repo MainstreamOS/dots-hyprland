@@ -1907,6 +1907,7 @@ except Exception:
 
                         StyledToolTip {
                             visible: !monitorSection.vrrSupported
+                            y: (parent.height - implicitHeight) / 2
                             text: Translation.tr("VRR is not supported by this display or driver.")
                         }
 
@@ -2029,6 +2030,7 @@ except Exception:
 
                         StyledToolTip {
                             visible: !monitorSection.tenBitSupported
+                            y: (parent.height - implicitHeight) / 2
                             text: Translation.tr("10-bit colour is not supported by this display or driver.")
                         }
 
