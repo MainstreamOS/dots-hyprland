@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Fonts
-Exec=gnome-font-viewer %u
+Exec=sh -c "command -v gnome-font-viewer >/dev/null 2>&1 && exec gnome-font-viewer \\"\\$@\\" || exec flatpak run org.gnome.font-viewer \\"\\$@\\"" gnome-font-viewer %u
 Icon=org.gnome.font-viewer
 Type=Application
 DBusActivatable=true
