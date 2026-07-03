@@ -29,10 +29,10 @@
 #      rebuilt + installed via `makepkg -sCi --noconfirm`. exp-update's
 #      non-interactive default for -p is "build only packages with
 #      changed PKGBUILDs" — no-op when no PKGBUILD has changed, which
-#      is the common case. Required because the [mainstream] pacman
-#      repo is file://-based and frozen at install time; without -p
-#      package fixes (audio hot-plug init, etc.) would land in the
-#      cache clone but never reach the live system.
+#      is the common case. Required because the mainstream-* PKGBUILD
+#      packages (metas + the quickshell/microtex -git builds) are not
+#      served by the [mainstream] binary repo; rebuilding them from
+#      the clone is their only update path.
 #   5. Write the new tag to the marker on success.
 #
 # Exit codes:
@@ -47,13 +47,22 @@
 # Environment overrides (mostly useful for testing):
 #   MAINSTREAM_DOTFILES_REPO         git URL (default: upstream MainstreamOS)
 #   MAINSTREAM_DOTFILES_BRANCH       branch to track (default: mainstream)
-#   MAINSTREAM_DOTFILES_TAG_PATTERN  glob for tag matching (default: [0-9]*)
+#   MAINSTREAM_DOTFILES_TAG_PATTERN  glob for tag matching (default: strict
+#                                    major.minor.patch release tags)
 #   MAINSTREAM_DOTFILES_DIR          clone path (default: ~/.cache/dots-hyprland)
 set -u
 
 REPO_URL="${MAINSTREAM_DOTFILES_REPO:-https://github.com/MainstreamOS/dots-hyprland.git}"
 REPO_BRANCH="${MAINSTREAM_DOTFILES_BRANCH:-mainstream}"
-TAG_PATTERN="${MAINSTREAM_DOTFILES_TAG_PATTERN:-[0-9]*}"
+# Release tags are plain semver (1.0.0, 1.2.10, ...). The major is capped at
+# two digits so upstream date tags (2026.05.11) that reach the fork through a
+# merge can never outrank a release; a custom glob via
+# MAINSTREAM_DOTFILES_TAG_PATTERN overrides the default.
+if [[ -n "${MAINSTREAM_DOTFILES_TAG_PATTERN:-}" ]]; then
+    TAG_REGEX="^${MAINSTREAM_DOTFILES_TAG_PATTERN//\*/.+}$"
+else
+    TAG_REGEX='^[0-9]{1,2}\.[0-9]+\.[0-9]+$'
+fi
 CLONE_DIR="${MAINSTREAM_DOTFILES_DIR:-$HOME/.cache/dots-hyprland}"
 MARKER="${CLONE_DIR}/.updatems-applied-tag"
 
@@ -116,21 +125,19 @@ cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
 say "Fetching tags from origin/$REPO_BRANCH..."
 git fetch --tags --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /' || die "git fetch failed"
 
-# ── 3. Pick the latest tag matching the pattern ────────────────────────────
-# Strip peeled-tag suffixes (^{}), filter to the configured pattern,
-# version-sort, take the highest. `${TAG_PATTERN//\*/.+}` is a cheap
-# glob→regex conversion; the default `[0-9]*` becomes `[0-9].+`, matching
-# plain version tags (1.0.0, 1.2.10, ...) while excluding the retired
-# mainstream-* series. sort -V orders them semver-correctly.
+# ── 3. Pick the latest release tag ─────────────────────────────────────────
+# Strip peeled-tag suffixes (^{}), keep release tags (excludes the retired
+# mainstream-* series and any upstream date tags), version-sort, take the
+# highest. sort -V orders semver correctly.
 LATEST_TAG=$(git ls-remote --tags origin 2>/dev/null \
     | awk '{print $2}' \
     | grep -vE '\^\{\}$' \
     | sed -E 's|refs/tags/||' \
-    | grep -E "^${TAG_PATTERN//\*/.+}$" \
+    | grep -E "$TAG_REGEX" \
     | sort -V | tail -n1 || true)
 
 if [[ -z "$LATEST_TAG" ]]; then
-    warn "No remote tags match '$TAG_PATTERN' — nothing to update."
+    warn "No remote tags match '$TAG_REGEX' — nothing to update."
     exit 0
 fi
 say "Latest remote tag: $LATEST_TAG"
@@ -138,6 +145,11 @@ say "Latest remote tag: $LATEST_TAG"
 # ── 4. Compare against marker ──────────────────────────────────────────────
 APPLIED_TAG=""
 [[ -f "$MARKER" ]] && APPLIED_TAG=$(<"$MARKER")
+# Fresh installs have no marker yet: the ISO build stamps its baked release
+# into /etc/mainstream-dotfiles-tag. Adopt it so the first update only
+# applies when a genuinely newer release exists, instead of re-applying the
+# whole just-installed tree over the user's configs.
+[[ -z "$APPLIED_TAG" && -r /etc/mainstream-dotfiles-tag ]] && APPLIED_TAG=$(</etc/mainstream-dotfiles-tag)
 say "Last-applied:      ${APPLIED_TAG:-<none>}"
 
 if [[ "$LATEST_TAG" == "$APPLIED_TAG" && $FORCE -eq 0 ]]; then
