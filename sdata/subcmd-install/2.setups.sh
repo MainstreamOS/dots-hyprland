@@ -461,21 +461,17 @@ v gsettings set org.gnome.desktop.wm.preferences button-layout ":"
 # Set mpv as default video player for all video MIME types
 function setup_default_video_player(){
   local video_types=(
-    video/mp4
-    video/x-matroska
-    video/webm
-    video/x-msvideo
-    video/mpeg
-    video/ogg
-    video/quicktime
-    video/x-flv
-    video/3gpp
-    video/3gpp2
-    video/x-ms-wmv
-    video/x-ms-asf
-    video/mp2t
-    video/vnd.mpegurl
-    video/x-m4v
+    video/3gp video/3gpp video/3gpp2 video/avi video/divx video/dv
+    video/fli video/flv video/mkv video/mp2t video/mp4 video/mp4v-es
+    video/mpeg video/msvideo video/ogg video/quicktime video/vnd.avi
+    video/vnd.divx video/vnd.mpegurl video/vnd.rn-realvideo video/webm
+    video/x-avi video/x-flc video/x-flic video/x-flv video/x-m4v
+    video/x-matroska video/x-mpeg2 video/x-mpeg3 video/x-ms-afs
+    video/x-ms-asf video/x-msvideo video/x-ms-wmv video/x-ms-wmx
+    video/x-ms-wvxvideo video/x-ogm video/x-ogm+ogg video/x-theora
+    video/x-theora+ogg
+    application/x-matroska application/x-ogm application/x-ogm-video
+    application/vnd.rn-realmedia application/vnd.rn-realmedia-vbr
   )
   for mime in "${video_types[@]}"; do
     v xdg-mime default mpv.desktop "$mime"
