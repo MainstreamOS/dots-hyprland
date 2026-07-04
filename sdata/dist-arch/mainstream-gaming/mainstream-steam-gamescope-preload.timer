@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger the first-boot Steam gamescope client preload off the boot path
+
+[Timer]
+OnBootSec=90
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
@@ -23,8 +23,14 @@ source=(
   gamescope-session.desktop
   gamescope-session-steam.desktop
   gamescope-drm.conf
+  mainstream-steam-gamescope-preload
+  mainstream-steam-gamescope-preload.service
+  mainstream-steam-gamescope-preload.timer
 )
 sha256sums=(
+  SKIP
+  SKIP
+  SKIP
   SKIP
   SKIP
   SKIP
@@ -62,4 +68,14 @@ package() {
 
   install -Dm644 "$srcdir/gamescope-drm.conf" \
                  "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@.service.d/10-gamescope-drm.conf"
+
+  install -Dm755 "$srcdir/mainstream-steam-gamescope-preload" \
+                 "$pkgdir/usr/bin/mainstream-steam-gamescope-preload"
+  install -Dm644 "$srcdir/mainstream-steam-gamescope-preload.service" \
+                 "$pkgdir/usr/lib/systemd/system/mainstream-steam-gamescope-preload.service"
+  install -Dm644 "$srcdir/mainstream-steam-gamescope-preload.timer" \
+                 "$pkgdir/usr/lib/systemd/system/mainstream-steam-gamescope-preload.timer"
+  install -d "$pkgdir/usr/lib/systemd/system/timers.target.wants"
+  ln -s ../mainstream-steam-gamescope-preload.timer \
+        "$pkgdir/usr/lib/systemd/system/timers.target.wants/mainstream-steam-gamescope-preload.timer"
 }

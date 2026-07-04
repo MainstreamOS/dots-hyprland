@@ -1,0 +1,12 @@
+[Unit]
+Description=Preload the Steam gamescope client on first boot
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/mainstream-gaming/steam-preload.done
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=1800
+ExecStart=/usr/bin/mainstream-steam-gamescope-preload

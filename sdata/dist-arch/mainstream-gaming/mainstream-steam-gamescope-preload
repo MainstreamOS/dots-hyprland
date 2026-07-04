@@ -1,0 +1,83 @@
+#!/bin/bash
+# Mainstream OS — first-boot Steam gamescope client preload
+#
+# On any installation where Steam is installed, pre-fetch Steam's Deck-branch
+# (gamescope / Big Picture) client so the first launch of the gamescope Steam
+# session isn't spent downloading it. Runs off the boot-critical path via
+# mainstream-steam-gamescope-preload.timer and retries each boot until it
+# succeeds, after which a marker stops it.
+#
+# Best-effort throughout: no Steam, no network, or a failed fetch just leaves the
+# first session to download normally. A Console-mode seed already provides the
+# Deck client, so a seeded install records success without downloading.
+set -u
+
+MARKER=/var/lib/mainstream-gaming/steam-preload.done
+[[ -e "$MARKER" ]] && exit 0
+
+mark_done() { install -d -m0755 /var/lib/mainstream-gaming; : > "$MARKER"; }
+
+# Only relevant once Steam is installed. Without it, do nothing and leave the
+# marker unset so a later boot retries (the user may install Steam afterwards).
+command -v steam >/dev/null 2>&1 || pacman -Qq steam >/dev/null 2>&1 || exit 0
+
+# The gaming account is the lowest-uid human user, matching
+# gaming-mode-arm-check's default_human_user().
+user="$(getent passwd 2>/dev/null \
+    | awk -F: '$3 >= 1000 && $3 < 60000 { print $3":"$1 }' \
+    | sort -t: -n | head -1 | cut -d: -f2)"
+[[ -n "$user" ]] || exit 0
+home="$(getent passwd "$user" | cut -d: -f6)"
+[[ -d "$home" ]] || exit 0
+
+# Already have the Deck client (Console-mode seed, a previous run, or a manual
+# gaming launch) — nothing to fetch.
+manifest="$home/.local/share/Steam/package/steam_client_steamdeck_stable_ubuntu12.installed"
+[[ -s "$manifest" ]] && { mark_done; exit 0; }
+
+# Wait for the network; if it never comes up this boot, leave the marker unset so
+# the next boot retries.
+if command -v nm-online >/dev/null 2>&1; then
+    nm-online -s -t 60 >/dev/null 2>&1 || exit 0
+else
+    for _ in $(seq 1 20); do
+        ping -c1 -W2 steamcdn-a.akamaihd.net >/dev/null 2>&1 && break
+        sleep 3
+    done
+fi
+
+# A virtual display is needed to run the client updater. Pull it on demand rather
+# than carrying Xvfb on every system.
+if ! command -v xvfb-run >/dev/null 2>&1; then
+    pacman -Sy --needed --noconfirm xorg-server-xvfb >/dev/null 2>&1 || exit 0
+fi
+
+# Pre-extract the bootstrap (so Steam skips its own and can't clobber the branch
+# marker), then force the Deck branch so the pre-fetch matches what the gamescope
+# session downloads (steam_client_steamdeck_stable_ubuntu12).
+runuser -u "$user" -- bash -lc '
+    if [ ! -e ~/.local/share/Steam/steam.sh ] && [ -f /usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz ]; then
+        mkdir -p ~/.local/share/Steam
+        tar -xf /usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz -C ~/.local/share/Steam 2>/dev/null
+    fi
+    mkdir -p ~/.local/share/Steam/package
+    echo steamdeck_stable > ~/.local/share/Steam/package/beta
+' || exit 0
+
+# Launch Steam headless; it reads package/beta and downloads the Deck client.
+# Poll for the manifest, then stop Steam. Bounded so a stall can't run forever.
+runuser -u "$user" -- bash -lc 'setsid xvfb-run -a steam -silent </dev/null >/dev/null 2>&1 &' \
+    >/dev/null 2>&1 || exit 0
+
+for _ in $(seq 1 180); do
+    [[ -s "$manifest" ]] && break
+    sleep 5
+done
+
+runuser -u "$user" -- steam -shutdown >/dev/null 2>&1 || true
+sleep 3
+pkill -u "$user" -f steam 2>/dev/null || true
+pkill -u "$user" -f Xvfb  2>/dev/null || true
+
+[[ -s "$manifest" ]] && mark_done
+exit 0
