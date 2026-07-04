@@ -29,6 +29,7 @@ MAINSTREAM_DEFAULT_APPS=(
   "mpv|mpv|Lightweight, scriptable video player"
   "mpv-modernz|mpv ModernZ|Modern OSC skin for mpv"
   "mpv-thumbfast-git|mpv thumbfast|Thumbnail previews on the mpv seekbar"
+  "mpv-mpris|mpv MPRIS|Media-key and player-widget control for mpv over D-Bus"
   "com.spotify.Client|Spotify|Official music streaming client"
   "org.gnome.Loupe|Loupe|Modern GNOME image viewer with smooth zoom and gesture support"
   "steam|Steam|Valve's game distribution platform with Proton compatibility"
