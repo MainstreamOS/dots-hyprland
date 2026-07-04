@@ -31,6 +31,10 @@ Options for install:
                             apps that are actually installed, mirroring the
                             ISO's OS-only install method. Never removes
                             packages you already have.
+      --console             Console (gaming) install: install Steam and the
+                            32-bit gaming stack, boot straight into the Steam
+                            gamescope session, and pre-fetch the Deck client,
+                            mirroring the ISO's Console install method.
       --fontset <set>       Use a set of pre-defined font and config (currently only fontconfig).
                             Possible values of <set>: $(ls -A ${REPO_ROOT}/dots-extra/fontsets)
 ${STY_CYAN}
@@ -52,7 +56,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -94,6 +98,7 @@ while true ; do
     --skip-miscconf) SKIP_MISCCONF=true;shift;;
     --core) SKIP_FISH=true;SKIP_FONTCONFIG=true;SKIP_MISCCONF=true;shift;;
     --os-only) OS_ONLY_INSTALL=true;shift;;
+    --console) CONSOLE_MODE_INSTALL=true;shift;;
     --exp-files) EXPERIMENTAL_FILES_SCRIPT=true;shift;;
     --via-nix) INSTALL_VIA_NIX=true;shift;;
     

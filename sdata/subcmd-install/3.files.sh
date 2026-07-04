@@ -581,6 +581,82 @@ function install_google_sans_flex(){
   record_installed "$target_dir"
 }
 
+function _console_preload_steam_deck_client(){
+  # Pre-fetch Steam's Deck-branch (gamescope / Big Picture) client so the first
+  # boot into gaming isn't spent downloading it. Headless via Xvfb, best-effort;
+  # on any failure the first-boot preload timer (mainstream-gaming) is the
+  # fallback. Mirrors the ISO Console install's live download.
+  local steam_dir="$HOME/.local/share/Steam"
+  local manifest="$steam_dir/package/steam_client_steamdeck_stable_ubuntu12.installed"
+  if [[ -s "$manifest" ]]; then
+    echo -e "${STY_BLUE}[$0]: Steam Deck client already present — skipping pre-fetch.${STY_RST}"
+    return 0
+  fi
+  if ! command -v xvfb-run >/dev/null 2>&1; then
+    try sudo pacman -Sy --needed --noconfirm xorg-server-xvfb || return 0
+  fi
+  mkdir -p "$steam_dir/package"
+  if [[ ! -e "$steam_dir/steam.sh" && -f /usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz ]]; then
+    tar -xf /usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz -C "$steam_dir" 2>/dev/null || true
+  fi
+  echo steamdeck_stable > "$steam_dir/package/beta"
+  echo -e "${STY_CYAN}[$0]: Pre-fetching the Steam gamescope client (this can take a few minutes)...${STY_RST}"
+  setsid xvfb-run -a steam -silent </dev/null >/dev/null 2>&1 &
+  local _i
+  for _i in $(seq 1 180); do
+    [[ -s "$manifest" ]] && break
+    sleep 5
+  done
+  steam -shutdown >/dev/null 2>&1 || true
+  sleep 3
+  pkill -u "$USER" -f steam 2>/dev/null || true
+  pkill -u "$USER" -f Xvfb  2>/dev/null || true
+  if [[ -s "$manifest" ]]; then
+    echo -e "${STY_GREEN}[$0]: Steam gamescope client ready.${STY_RST}"
+    record_installed "$steam_dir" || true
+  else
+    echo -e "${STY_YELLOW}[$0]: Client not fully fetched — the first-boot preload will finish it.${STY_RST}"
+  fi
+}
+
+function setup_console_mode(){
+  # Mirror of the ISO's Console install: install Steam and the 32-bit gaming
+  # stack, boot straight into the Steam gamescope session on first boot, and
+  # pre-fetch the Deck client. mainstream-gaming (always installed) provides the
+  # gaming-mode-* tooling and the sddm arm-check; setup_sddm_pixie and
+  # setup_gamescope (2.setups.sh) already installed SDDM and the gamescope
+  # runtime by the time this runs.
+  [[ "${CONSOLE_MODE_INSTALL:-false}" == true ]] || return 0
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then
+    echo -e "${STY_YELLOW}[$0]: Console mode is Arch-only. Skipping.${STY_RST}"
+    return 0
+  fi
+  ms_section "Setting up Console (gaming) mode..."
+
+  # 1. Steam + the 32-bit gaming stack (the heavy half kept out of the base
+  #    install). gaming-mode-install ships with mainstream-gaming.
+  if [[ -x /usr/bin/gaming-mode-install ]]; then
+    try sudo /usr/bin/gaming-mode-install
+  else
+    echo -e "${STY_YELLOW}[$0]: gaming-mode-install missing — installing Steam directly.${STY_RST}"
+    try sudo pacman -Sy --needed --noconfirm steam
+  fi
+
+  # 2. Boot straight into the Steam gamescope session. gaming-mode-arm-check (an
+  #    sddm ExecStartPre from mainstream-gaming) reads boot-target on the first
+  #    cold boot and arms the autologin.
+  if [[ -x /usr/bin/gaming-mode-switch ]]; then
+    try sudo /usr/bin/gaming-mode-switch set boot-target gaming
+  else
+    echo -e "${STY_YELLOW}[$0]: gaming-mode-switch missing — cannot set boot-to-gaming (is mainstream-gaming installed?).${STY_RST}"
+  fi
+
+  # 3. Pre-provision the Deck client so the first boot isn't a download.
+  if command -v steam >/dev/null 2>&1; then
+    _console_preload_steam_deck_client || true
+  fi
+}
+
 function setup_proton_ge(){
   # Download the latest GE-Proton release into ~/.local/share/Steam/compatibilitytools.d
   # and preseed Steam's global compat-tool default to that version.
@@ -942,6 +1018,9 @@ if declare -F setup_gpu_hypr_tweaks >/dev/null 2>&1; then
   showfun setup_gpu_hypr_tweaks
   v setup_gpu_hypr_tweaks
 fi
+
+showfun setup_console_mode
+v setup_console_mode
 
 showfun setup_proton_ge
 v setup_proton_ge
