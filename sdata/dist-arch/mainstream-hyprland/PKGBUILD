@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-hyprland
 pkgver=1.0
-pkgrel=6
+pkgrel=7
 pkgdesc='Mainstream OS Hyprland-related packages'
 provides=('illogical-impulse-hyprland')
 replaces=('illogical-impulse-hyprland')
@@ -10,6 +10,7 @@ arch=(any)
 license=(None)
 depends=(
   hyprland
+  hyprpolkitagent
   hyprsunset
   wl-clipboard
 )

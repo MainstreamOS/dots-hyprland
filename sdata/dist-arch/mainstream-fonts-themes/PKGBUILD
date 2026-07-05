@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-fonts-themes
 pkgver=1.0
-pkgrel=8
+pkgrel=9
 pkgdesc='Mainstream OS Fonts and Theming Dependencies'
 provides=('illogical-impulse-fonts-themes')
 replaces=('illogical-impulse-fonts-themes')
@@ -11,6 +11,7 @@ license=(None)
 depends=(
   adw-gtk-theme-git
   kvantum
+  qt6ct
   papirus-icon-theme
   eza
   fish
