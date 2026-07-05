@@ -192,7 +192,7 @@ ContentPage {
 
         function pickAndApplyLoginImage() {
             imagePickerProc.command = ["bash", "-c",
-                'kdialog --getopenfilename "$1" "Image Files (*.png *.jpg *.jpeg *.webp *.bmp)" --title "$2"',
+                'zenity --file-selection --filename="$1/" --file-filter="Image Files | *.png *.jpg *.jpeg *.webp *.bmp" --title="$2"',
                 "--", Directories.home, Translation.tr("Choose login image")
             ]
             imagePickerProc.running = true
