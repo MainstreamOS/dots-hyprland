@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for the Uninstall Apps helper's privileged remove step.
+
+    Listing and previewing a removal are read-only pacman queries and run
+    unprivileged, so no authentication is involved there. Only the actual
+    `remove` subcommand is invoked via pkexec and matches this action.
+
+    `allow_active = auth_admin_keep` means: in an active local session the
+    user authenticates as an admin ONCE, then removing several apps in a
+    row within ~5 minutes doesn't re-prompt. `allow_inactive` and
+    `allow_any` keep the full-strength prompt for non-active/non-local
+    sessions where caching could be abused.
+
+    The exec.path annotation binds this policy to the system-installed
+    helper; pkexec invocations of /usr/local/bin/app-remover match it.
+-->
+<policyconfig>
+    <vendor>Mainstream OS</vendor>
+    <vendor_url>https://mainstreamos.org</vendor_url>
+    <icon_name>system-software-install</icon_name>
+
+    <action id="org.mainstreamos.app-remover">
+        <description>Uninstall an application</description>
+        <description xml:lang="en_US">Uninstall an application</description>
+        <message>Authentication is required to uninstall an application</message>
+        <message xml:lang="en_US">Authentication is required to uninstall an application</message>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/app-remover</annotate>
+        <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+    </action>
+</policyconfig>

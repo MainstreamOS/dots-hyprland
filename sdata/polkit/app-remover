@@ -1,0 +1,293 @@
+#!/usr/bin/env bash
+# app-remover — list and uninstall user-installed applications for the
+# "Uninstall Apps" quickshell app (~/.config/quickshell/ii/app-remover.qml).
+# Installed at /usr/local/bin/app-remover.
+#
+# Subcommand dispatch:
+#
+#   list
+#       Emit a JSON array of removable apps: explicitly-installed packages
+#       that ship a visible /usr/share/applications/*.desktop launcher and
+#       are not protected. Runs UNPRIVILEGED (read-only pacman queries).
+#
+#   preview <pkg>
+#       Print, one per line, the packages that removing <pkg> would take
+#       (the app plus any now-unneeded private dependencies). Needs root
+#       because pacman locks the db even for a dry run, so the UI calls it
+#       via pkexec.
+#
+#   remove <pkg>
+#       pacman -Rns the package after re-validating that neither it nor its
+#       cascade touches a protected component. Invoked via pkexec.
+#
+#   remove-flatpak <app-id> <system|user>
+#       flatpak uninstall the app, then sweep runtimes nothing needs anymore.
+#       The system installation is invoked via pkexec (root talks to the
+#       flatpak system helper directly); a user installation belongs to the
+#       invoking user and MUST run unprivileged.
+#
+#   cleanup <desktop-id>
+#       Delete the user-level .desktop override for a just-removed app (the
+#       launcher customizations shipped in ~/.local/share/applications, e.g.
+#       mpv's "Videos" entry) and refresh the desktop database so no dangling
+#       launcher entry or stale mimeinfo survives the app. Runs UNPRIVILEGED —
+#       the override lives in the invoking user's home.
+#
+#   list also carries flatpak apps whose exported .desktop is visible — the
+#   same set the launcher shows — tagged kind:"flatpak" with their
+#   installation, so the UI can route removal.
+#
+# Protection is defense-in-depth: pacman itself refuses to remove anything
+# another package still depends on, and on top of that this helper refuses
+# the base / base-devel / mainstream groups plus a denylist of critical
+# leaf packages (compositor, greeter, graphics, network) that nothing
+# depends on but that would break the desktop if removed.
+
+set -euo pipefail
+
+APPLICATIONS_DIR=/usr/share/applications
+
+log() { echo "[app-remover] $*" >&2; }
+die() { log "ERROR: $*"; exit 22; }
+
+# Critical LEAF packages pacman's own dependency check won't guard.
+DENYLIST=(
+    hyprland hypridle hyprlock hyprpicker hyprsunset hyprshot
+    sddm plymouth mkinitcpio limine efibootmgr
+    limine-snapper-sync limine-mkinitcpio-hook snapper
+    networkmanager wpa_supplicant pipewire pipewire-pulse pipewire-alsa wireplumber
+    mesa nvidia-open nvidia-utils vulkan-radeon vulkan-intel intel-media-driver
+    xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
+    polkit hyprpolkitagent seatd
+    bash zsh sudo systemd dbus
+)
+
+# App bundles: mainstream-* metas that represent one user-facing app
+# (meta + plugins/extensions). They own no .desktop themselves, so the
+# list presents them through the first dependency that ships one, and
+# their members never appear as individual entries.
+APP_BUNDLES=(mainstream-mpv mainstream-nautilus)
+
+is_bundle() {  # $1 = pkgname
+    local b
+    for b in "${APP_BUNDLES[@]}"; do [ "$b" = "$1" ] && return 0; done
+    return 1
+}
+
+# base + base-devel + mainstream group members, plus the denylist, minus
+# the removable app bundles, sorted.
+protected_set() {
+    {
+        pacman -Qqg base base-devel mainstream 2>/dev/null || true
+        printf '%s\n' "${DENYLIST[@]}"
+    } | sort -u | grep -vxF -f <(printf '%s\n' "${APP_BUNDLES[@]}")
+}
+
+is_protected() {  # $1 = pkgname
+    protected_set | grep -qxF -- "$1"
+}
+
+# First visible Application launcher a package owns, or nothing.
+primary_desktop() {  # $1 = pkgname
+    local f
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        if grep -qiE '^NoDisplay=true' "$f"; then continue; fi
+        if grep -qiE '^Hidden=true' "$f"; then continue; fi
+        if ! grep -qiE '^Type=Application' "$f"; then continue; fi
+        printf '%s' "$f"
+        return 0
+    done < <(pacman -Qlq "$1" 2>/dev/null | grep -E "^${APPLICATIONS_DIR}/[^/]+\.desktop$" || true)
+    return 0
+}
+
+# Value of the first unlocalised "Key=" line in a desktop file.
+desktop_value() {  # $1 = file  $2 = key
+    awk -v k="$2=" 'index($0, k) == 1 { print substr($0, length(k) + 1); exit }' "$1"
+}
+
+# Sum of the installed sizes a bundle removal would reclaim (its whole
+# cascade when the dry run resolves, else just the meta itself).
+bundle_size() {  # $1 = bundle pkgname
+    local members
+    members="$(pacman -Rs --print --print-format '%n' -- "$1" 2>/dev/null)" || members="$1"
+    pacman -Qi $members 2>/dev/null | awk '
+        /^Installed Size/ { v=$4; u=$5; if (u=="KiB") v/=1024; else if (u=="GiB") v*=1024; s+=v }
+        END { printf "%.2f MiB", s }'
+}
+
+cmd_list() {
+    _list_entries | jq 'sort_by(.name | ascii_downcase)'
+}
+
+_list_entries() {
+    local protected explicit desktop_owned candidates
+    protected="$(protected_set)"
+    explicit="$(pacman -Qeq | sort)"
+    desktop_owned="$(pacman -Qo "$APPLICATIONS_DIR"/*.desktop 2>/dev/null | awk '{print $(NF-1)}' | sort -u)"
+    candidates="$(comm -12 <(printf '%s\n' "$explicit") <(printf '%s\n' "$desktop_owned"))"
+    candidates="$(comm -23 <(printf '%s\n' "$candidates") <(printf '%s\n' "$protected"))"
+
+    # Installed app bundles list once via a representative member's desktop
+    # file; every direct member is suppressed from the individual list.
+    local entries="" b dep deps rep suppress=" "
+    for b in "${APP_BUNDLES[@]}"; do
+        pacman -Qq -- "$b" >/dev/null 2>&1 || continue
+        deps="$(pacman -Qi "$b" 2>/dev/null | awk -F': *' '/^Depends On/{print $2}')"
+        [ "$deps" = "None" ] && continue
+        rep=""
+        for dep in $deps; do
+            dep="${dep%%[<>=]*}"
+            suppress="$suppress$dep "
+            [ -z "$rep" ] && rep="$(primary_desktop "$dep")"
+        done
+        [ -n "$rep" ] && entries+="$b"$'\t'"$rep"$'\n'
+    done
+    while IFS= read -r b; do
+        [ -n "$b" ] || continue
+        case "$suppress" in *" $b "*) continue ;; esac
+        rep="$(primary_desktop "$b")"
+        [ -n "$rep" ] || continue
+        entries+="$b"$'\t'"$rep"$'\n'
+    done <<< "$candidates"
+    entries="$(printf '%s' "$entries" | sort)"
+
+    # User-level .desktop overrides shadow system entries (XDG precedence),
+    # so the launcher may show a different name/icon than the packaged file
+    # (e.g. mpv is shown as "Videos" with the Totem icon). Adopt those here
+    # so the list matches what the user sees in the launcher.
+    local user_apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+
+    local first=1 pkg dfile did name icon comment size override oname oicon
+    printf '['
+    while IFS=$'\t' read -r pkg dfile; do
+        [ -n "$pkg" ] && [ -n "$dfile" ] || continue
+        did="$(basename "$dfile" .desktop)"
+        name="$(desktop_value "$dfile" Name)"
+        icon="$(desktop_value "$dfile" Icon)"
+        comment="$(desktop_value "$dfile" Comment)"
+        override="$user_apps/$did.desktop"
+        if [ -f "$override" ]; then
+            oname="$(desktop_value "$override" Name)"
+            oicon="$(desktop_value "$override" Icon)"
+            [ -n "$oname" ] && name="$oname"
+            [ -n "$oicon" ] && icon="$oicon"
+        fi
+        [ -n "$name" ] || name="$pkg"
+        if is_bundle "$pkg"; then
+            size="$(bundle_size "$pkg")"
+        else
+            size="$(pacman -Qi "$pkg" 2>/dev/null | awk -F': *' '/^Installed Size/{print $2; exit}')"
+        fi
+        if [ "$first" -eq 1 ]; then first=0; else printf ','; fi
+        jq -nc --arg pkg "$pkg" --arg did "$did" --arg name "$name" --arg icon "$icon" \
+            --arg comment "$comment" --arg size "$size" \
+            '{pkg:$pkg,desktopId:$did,name:$name,icon:$icon,comment:$comment,size:$size,kind:"native"}'
+    done <<< "$entries"
+
+    # Flatpak apps whose exported launcher entry is visible — the same set
+    # the launcher shows.
+    local app fname fsize finst fdir fdfile
+    if command -v flatpak >/dev/null 2>&1; then
+        while IFS=$'\t' read -r app fname fsize finst; do
+            [ -n "$app" ] || continue
+            case "$finst" in
+                system) fdir=/var/lib/flatpak/exports/share/applications ;;
+                user)   fdir="${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/exports/share/applications" ;;
+                *)      continue ;;
+            esac
+            fdfile="$fdir/$app.desktop"
+            [ -f "$fdfile" ] || continue
+            grep -qiE '^NoDisplay=true' "$fdfile" && continue
+            name="$(desktop_value "$fdfile" Name)"
+            [ -n "$name" ] || name="$fname"
+            icon="$(desktop_value "$fdfile" Icon)"
+            [ -n "$icon" ] || icon="$app"
+            comment="$(desktop_value "$fdfile" Comment)"
+            override="$user_apps/$app.desktop"
+            if [ -f "$override" ]; then
+                oname="$(desktop_value "$override" Name)"
+                oicon="$(desktop_value "$override" Icon)"
+                [ -n "$oname" ] && name="$oname"
+                [ -n "$oicon" ] && icon="$oicon"
+            fi
+            if [ "$first" -eq 1 ]; then first=0; else printf ','; fi
+            jq -nc --arg pkg "$app" --arg did "$app" --arg name "$name" --arg icon "$icon" \
+                --arg comment "$comment" --arg size "$fsize" --arg inst "$finst" \
+                '{pkg:$pkg,desktopId:$did,name:$name,icon:$icon,comment:$comment,size:$size,kind:"flatpak",installation:$inst}'
+        done < <(flatpak list --app --columns=application,name,size,installation 2>/dev/null)
+    fi
+    printf ']\n'
+}
+
+cmd_preview() {  # $1 = pkg
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die "no package given"
+    is_protected "$pkg" && die "$pkg is a protected system component"
+    pacman -Qq -- "$pkg" >/dev/null 2>&1 || die "$pkg is not installed"
+    # Read-only dry run (no root needed). On a dependency break pacman exits
+    # non-zero with its reason on stderr; pass that through so the UI can
+    # explain why the app can't be removed instead of offering a Remove button.
+    local out rc
+    out="$(pacman -Rs --print --print-format '%n' -- "$pkg" 2>&1)" && rc=0 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        printf '%s\n' "$out" >&2
+        exit "$rc"
+    fi
+    printf '%s\n' "$out"
+}
+
+cmd_remove() {  # $1 = pkg
+    local pkg="${1:-}"
+    [ -n "$pkg" ] || die "no package given"
+    is_protected "$pkg" && die "$pkg is a protected system component"
+    pacman -Qq -- "$pkg" >/dev/null 2>&1 || die "$pkg is not installed"
+
+    local cascade bad
+    cascade="$(pacman -Rs --print --print-format '%n' -- "$pkg" 2>/dev/null || true)"
+    bad="$(comm -12 <(printf '%s\n' "$cascade" | sort -u) <(protected_set))"
+    [ -z "$bad" ] || die "removal would affect protected packages: $(echo $bad)"
+
+    pacman -Rns --noconfirm -- "$pkg"
+    echo "Removed: $(echo $cascade | tr '\n' ' ')"
+}
+
+cmd_cleanup() {  # $1 = desktop id
+    local did="${1:-}"
+    [ -n "$did" ] || die "no desktop id given"
+    case "$did" in */*|.*) die "invalid desktop id" ;; esac
+    [ "$EUID" -ne 0 ] || die "cleanup must run unprivileged"
+    local user_apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    local f="$user_apps/$did.desktop"
+    if [ -f "$f" ]; then
+        rm -f -- "$f"
+        command -v update-desktop-database >/dev/null 2>&1 && \
+            update-desktop-database "$user_apps" 2>/dev/null || true
+        echo "Removed launcher override for $did"
+    else
+        echo "No launcher override for $did"
+    fi
+}
+
+cmd_remove_flatpak() {  # $1 = app id  $2 = installation
+    local app="${1:-}" inst="${2:-}"
+    [ -n "$app" ] || die "no app id given"
+    printf '%s' "$app" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]+$' || die "invalid app id"
+    case "$inst" in
+        system) [ "$EUID" -eq 0 ] || die "system flatpak removal must run via pkexec" ;;
+        user)   [ "$EUID" -ne 0 ] || die "user flatpak removal must run unprivileged" ;;
+        *)      die "installation must be system or user" ;;
+    esac
+    flatpak uninstall --"$inst" -y --noninteractive -- "$app"
+    flatpak uninstall --"$inst" --unused -y --noninteractive >/dev/null 2>&1 || true
+    echo "Removed: $app"
+}
+
+case "${1:-}" in
+    list)           shift; cmd_list ;;
+    preview)        shift; cmd_preview "${1:-}" ;;
+    remove)         shift; cmd_remove "${1:-}" ;;
+    remove-flatpak) shift; cmd_remove_flatpak "${1:-}" "${2:-}" ;;
+    cleanup)        shift; cmd_cleanup "${1:-}" ;;
+    *)              die "unknown subcommand: ${1:-} (expected list|preview|remove|remove-flatpak|cleanup)" ;;
+esac

@@ -1,0 +1,10 @@
+// Allow admin users in an active local session to uninstall applications
+// without a password. The helper refuses system and Mainstream components,
+// and pacman refuses anything another package still depends on; SSH and
+// inactive sessions keep the full authentication prompt.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.mainstreamos.app-remover" &&
+        subject.isInGroup("wheel") && subject.active && subject.local) {
+        return polkit.Result.YES;
+    }
+});

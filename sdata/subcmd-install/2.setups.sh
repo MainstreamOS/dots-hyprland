@@ -75,6 +75,22 @@ function setup_disk_mounter(){
   fi
 }
 
+function setup_app_remover(){
+  # Install the privileged helper + polkit policy used by the
+  # ~/.config/quickshell/ii/app-remover.qml app ("Uninstall Apps").
+  #
+  # Listing and previewing a removal are read-only and run unprivileged;
+  # only the `remove` subcommand is invoked via pkexec, so the policy's
+  # allow_active=auth_admin_keep caches the first admin prompt when the
+  # user removes several apps in a row.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/app-remover" \
+      /usr/local/bin/app-remover
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.app-remover.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.app-remover.policy
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/50-app-remover.rules" \
+      /usr/share/polkit-1/rules.d/50-app-remover.rules
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -334,6 +350,9 @@ v setup_sddm_bg_polkit
 
 showfun setup_disk_mounter
 v setup_disk_mounter
+
+showfun setup_app_remover
+v setup_app_remover
 
 if command -v systemctl >/dev/null 2>&1; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.

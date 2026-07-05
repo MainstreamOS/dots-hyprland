@@ -23,6 +23,8 @@ Singleton {
         const title = toplevel.title || "";
         if (title === Translation.tr("Mainstream Settings")) return "settings";
         if (title === Translation.tr("Welcome to Mainstream")) return "welcome-tutorial";
+        if (title === Translation.tr("Uninstall Apps")) return "app-remover";
+        if (title === Translation.tr("Auto Drive Mount")) return "disk-mounter";
         return toplevel.appId;
     }
 
