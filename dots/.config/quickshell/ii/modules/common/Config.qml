@@ -498,10 +498,10 @@ Singleton {
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
                 property list<string> pinnedApps: [ // IDs of pinned entries.
                     // Match Hyprland's reported window class:
-                    //   - Native apps usually use a lowercase short name (kitty, mpv, steam).
-                    //   - Flatpak apps use the reverse-DNS app-ref (com.spotify.Client,
-                    //     com.google.Chrome). Mixing both in the same list is fine — each
-                    //     entry just has to match what the running window actually reports.
+                    //   - Most native apps use a lowercase short name (kitty, mpv, steam).
+                    //   - GNOME apps report their reverse-DNS app-id (org.gnome.Nautilus)
+                    //     whether native or Flatpak, so those ids are stable across both.
+                    //   - Spotify is the one Flatpak in the default set (com.spotify.Client).
                     // Keep this in sync with the Default Apps preselect in
                     // netinstall.conf so the dock has launchers for the apps a fresh
                     // install actually ships.
