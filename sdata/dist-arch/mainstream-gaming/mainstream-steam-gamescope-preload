@@ -46,10 +46,12 @@ else
     done
 fi
 
-# A virtual display is needed to run the client updater. Pull it on demand rather
-# than carrying Xvfb on every system.
+# A virtual display is needed to run the client updater. Pull it on demand and
+# drop it again after the fetch rather than carrying Xvfb on every system.
+pulled_xvfb=0
 if ! command -v xvfb-run >/dev/null 2>&1; then
-    pacman -Sy --needed --noconfirm xorg-server-xvfb >/dev/null 2>&1 || exit 0
+    pacman -S --needed --noconfirm xorg-server-xvfb >/dev/null 2>&1 || exit 0
+    pulled_xvfb=1
 fi
 
 # Pre-extract the bootstrap (so Steam skips its own and can't clobber the branch
@@ -78,6 +80,9 @@ runuser -u "$user" -- steam -shutdown >/dev/null 2>&1 || true
 sleep 3
 pkill -u "$user" -f steam 2>/dev/null || true
 pkill -u "$user" -f Xvfb  2>/dev/null || true
+if [[ "$pulled_xvfb" -eq 1 ]]; then
+    pacman -Rns --noconfirm xorg-server-xvfb >/dev/null 2>&1 || true
+fi
 
 [[ -s "$manifest" ]] && mark_done
 exit 0

@@ -592,8 +592,10 @@ function _console_preload_steam_deck_client(){
     echo -e "${STY_BLUE}[$0]: Steam Deck client already present — skipping pre-fetch.${STY_RST}"
     return 0
   fi
+  local pulled_xvfb=0
   if ! command -v xvfb-run >/dev/null 2>&1; then
-    try sudo pacman -Sy --needed --noconfirm xorg-server-xvfb || return 0
+    try sudo pacman -S --needed --noconfirm xorg-server-xvfb || return 0
+    pulled_xvfb=1
   fi
   mkdir -p "$steam_dir/package"
   if [[ ! -e "$steam_dir/steam.sh" && -f /usr/lib/steam/bootstraplinux_ubuntu12_32.tar.xz ]]; then
@@ -611,6 +613,9 @@ function _console_preload_steam_deck_client(){
   sleep 3
   pkill -u "$USER" -f steam 2>/dev/null || true
   pkill -u "$USER" -f Xvfb  2>/dev/null || true
+  if [[ "$pulled_xvfb" -eq 1 ]]; then
+    sudo pacman -Rns --noconfirm xorg-server-xvfb >/dev/null 2>&1 || true
+  fi
   if [[ -s "$manifest" ]]; then
     echo -e "${STY_GREEN}[$0]: Steam gamescope client ready.${STY_RST}"
     record_installed "$steam_dir" || true
