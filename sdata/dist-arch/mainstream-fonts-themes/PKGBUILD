@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-fonts-themes
 pkgver=1.0
-pkgrel=7
+pkgrel=8
 pkgdesc='Mainstream OS Fonts and Theming Dependencies'
 provides=('illogical-impulse-fonts-themes')
 replaces=('illogical-impulse-fonts-themes')
@@ -20,9 +20,20 @@ depends=(
   noto-fonts
   otf-space-grotesk
   starship
-  ttf-jetbrains-mono-nerd
+  ttf-jetbrains-mono
+  ttf-nerd-fonts-symbols-mono
   ttf-material-symbols-variable-git
   ttf-readex-pro
   ttf-rubik-vf
   ttf-twemoji
 )
+source=(60-jetbrainsmono-nerd-alias.conf)
+sha256sums=('f3360fd769c515671e6db5be5a5bbea1e2f45363b41bb82c285df3ae9fd50686')
+
+package() {
+  install -Dm644 "$srcdir/60-jetbrainsmono-nerd-alias.conf" \
+      "$pkgdir/usr/share/fontconfig/conf.avail/60-jetbrainsmono-nerd-alias.conf"
+  install -d "$pkgdir/etc/fonts/conf.d"
+  ln -s /usr/share/fontconfig/conf.avail/60-jetbrainsmono-nerd-alias.conf \
+      "$pkgdir/etc/fonts/conf.d/60-jetbrainsmono-nerd-alias.conf"
+}
