@@ -497,14 +497,18 @@ Singleton {
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
                 property list<string> pinnedApps: [ // IDs of pinned entries.
-                    // Match Hyprland's reported window class:
-                    //   - Most native apps use a lowercase short name (kitty, mpv, spotify).
-                    //   - GNOME apps report their reverse-DNS app-id (org.gnome.Nautilus)
-                    //     whether native or Flatpak, so those ids are stable across both.
+                    // Pin ids must resolve a desktop entry directly (byId), so a
+                    // pinned button can launch before the app has ever run:
+                    //   - Most native apps: the lowercase entry id (kitty, mpv).
+                    //   - GNOME apps: the reverse-DNS app-id (org.gnome.Nautilus),
+                    //     identical whether native or Flatpak.
+                    //   - spotify-launcher: the entry id; the running client
+                    //     reports class "spotify", which TaskbarApps.resolveAppId
+                    //     maps back to this pin.
                     // Keep this in sync with the Default Apps preselect in
                     // netinstall.conf so the dock has launchers for the apps a fresh
                     // install actually ships.
-                    "chromium", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify", "settings", "kitty", "org.gnome.Software",]
+                    "chromium", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify-launcher", "settings", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
                 property JsonObject contextMenuVolume: JsonObject {
                     property bool enable: true

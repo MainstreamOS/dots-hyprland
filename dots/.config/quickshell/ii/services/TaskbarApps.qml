@@ -19,6 +19,10 @@ Singleton {
     // happens to be at index 0. Translation.tr() is used on both
     // sides so non-English locales keep matching.
     function resolveAppId(toplevel) {
+        // The Spotify client reports the bare "spotify" class while the
+        // entry that launches it is spotify-launcher — group them so the
+        // running window merges with the default pin.
+        if ((toplevel.appId || "").toLowerCase() === "spotify") return "spotify-launcher";
         if (toplevel.appId !== "org.quickshell") return toplevel.appId;
         const title = toplevel.title || "";
         if (title === Translation.tr("Mainstream Settings")) return "settings";
