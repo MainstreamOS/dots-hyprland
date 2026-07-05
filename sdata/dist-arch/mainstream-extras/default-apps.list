@@ -25,7 +25,7 @@ MAINSTREAM_DEFAULT_APPS=(
   "impression|Impression|Write disk images to USB drives"
   "gnome-text-editor|GNOME Text Editor|Simple, modern text editor"
   "mainstream-mpv|MPV|Lightweight, scriptable video player"
-  "com.spotify.Client|Spotify|Official music streaming client"
+  "spotify-launcher|Spotify|Official music streaming client"
   "loupe|Loupe|Modern GNOME image viewer with smooth zoom and gesture support"
   "steam|Steam|Valve's game distribution platform with Proton compatibility"
 )

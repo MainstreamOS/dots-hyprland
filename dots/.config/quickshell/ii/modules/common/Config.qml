@@ -498,14 +498,13 @@ Singleton {
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
                 property list<string> pinnedApps: [ // IDs of pinned entries.
                     // Match Hyprland's reported window class:
-                    //   - Most native apps use a lowercase short name (kitty, mpv, steam).
+                    //   - Most native apps use a lowercase short name (kitty, mpv, spotify).
                     //   - GNOME apps report their reverse-DNS app-id (org.gnome.Nautilus)
                     //     whether native or Flatpak, so those ids are stable across both.
-                    //   - Spotify is the one Flatpak in the default set (com.spotify.Client).
                     // Keep this in sync with the Default Apps preselect in
                     // netinstall.conf so the dock has launchers for the apps a fresh
                     // install actually ships.
-                    "chromium", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "com.spotify.Client", "settings", "kitty", "org.gnome.Software",]
+                    "chromium", "org.gnome.Nautilus", "org.gnome.TextEditor", "mpv", "spotify", "settings", "kitty", "org.gnome.Software",]
                 property list<string> ignoredAppRegexes: []
                 property JsonObject contextMenuVolume: JsonObject {
                     property bool enable: true
