@@ -1021,6 +1021,22 @@ function setup_inotify_limits(){
 showfun setup_inotify_limits
 v setup_inotify_limits
 
+# Compressed-RAM swap (zram) sized to RAM up to 32 GiB, plus the sysctls it
+# wants: high swappiness (zram pages are cheap to reclaim) and no swap
+# readahead. An existing zram-generator config is left alone.
+function setup_zram_swap(){
+  [[ "$OS_GROUP_ID" == "arch" ]] || return 0
+  x sudo pacman -S --needed --noconfirm zram-generator
+  if [[ ! -e /etc/systemd/zram-generator.conf && ! -d /etc/systemd/zram-generator.conf.d ]]; then
+    x sudo bash -c "printf '[zram0]\nzram-size = min(ram, 32768)\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf"
+  fi
+  try sudo systemctl daemon-reload
+  try sudo systemctl start systemd-zram-setup@zram0.service
+  x sudo bash -c "printf 'vm.swappiness = 180\nvm.page-cluster = 0\n' > /etc/sysctl.d/99-mainstream-zram.conf && sysctl --system >/dev/null 2>&1 || true"
+}
+showfun setup_zram_swap
+v setup_zram_swap
+
 # mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
 # Replaces plasma-browser-integration with a lightweight (~2MB binary)
 # alternative that doesn't drag in the KDE chain. Always installed —
