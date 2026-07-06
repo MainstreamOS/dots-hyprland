@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=5
+pkgrel=6
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
@@ -23,11 +23,13 @@ source=(
   gamescope-session.desktop
   gamescope-session-steam.desktop
   gamescope-drm.conf
+  ntsync.conf
   mainstream-steam-gamescope-preload
   mainstream-steam-gamescope-preload.service
   mainstream-steam-gamescope-preload.timer
 )
 sha256sums=(
+  SKIP
   SKIP
   SKIP
   SKIP
@@ -68,6 +70,9 @@ package() {
 
   install -Dm644 "$srcdir/gamescope-drm.conf" \
                  "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@.service.d/10-gamescope-drm.conf"
+
+  install -Dm644 "$srcdir/ntsync.conf" \
+                 "$pkgdir/usr/lib/modules-load.d/ntsync.conf"
 
   install -Dm755 "$srcdir/mainstream-steam-gamescope-preload" \
                  "$pkgdir/usr/bin/mainstream-steam-gamescope-preload"

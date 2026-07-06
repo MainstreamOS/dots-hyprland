@@ -4,6 +4,7 @@ post_install() {
     # reload so the drop-in is picked up, and leave /etc/sddm.conf at the no-User base
     # with the greeter pointed at Hyprland without waiting for a reboot.
     systemctl daemon-reload >/dev/null 2>&1 || true
+    modprobe ntsync >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-seed-session >/dev/null 2>&1 || true
 }
@@ -14,6 +15,7 @@ post_upgrade() {
     # the Hyprland greeter default.
     rm -f /etc/sddm.conf.d/zz-gaming.conf
     systemctl daemon-reload >/dev/null 2>&1 || true
+    modprobe ntsync >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-seed-session >/dev/null 2>&1 || true
 }
