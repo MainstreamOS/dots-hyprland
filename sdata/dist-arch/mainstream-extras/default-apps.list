@@ -18,7 +18,7 @@ MAINSTREAM_DEFAULT_APPS=(
   "gnome-disk-utility|GNOME Disks|Manage drives, partitions, and disk images"
   "gnome-software|GNOME Software|Graphical app store for Flatpak and system packages"
   "gnome-calculator|GNOME Calculator|Simple and scientific calculator"
-  "gnome-calendar|GNOME Calendar|Clean, easy-to-use calendar app"
+  "mainstream-calendar|Calendar|Clean, easy-to-use calendar app with online account sync"
   "simple-scan|Simple Scan|Straightforward scanning utility"
   "gnome-font-viewer|GNOME Font Viewer|Preview and install fonts"
   "mainstream-nautilus|Files|GNOME file manager with Copy Path and Open as Administrator"

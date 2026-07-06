@@ -66,7 +66,7 @@ DENYLIST=(
 # (meta + plugins/extensions). They own no .desktop themselves, so the
 # list presents them through the first dependency that ships one, and
 # their members never appear as individual entries.
-APP_BUNDLES=(mainstream-mpv mainstream-nautilus)
+APP_BUNDLES=(mainstream-mpv mainstream-nautilus mainstream-calendar)
 
 is_bundle() {  # $1 = pkgname
     local b
@@ -112,7 +112,7 @@ bundle_size() {  # $1 = bundle pkgname
     local members
     members="$(pacman -Rs --print --print-format '%n' -- "$1" 2>/dev/null)" || members="$1"
     pacman -Qi $members 2>/dev/null | awk '
-        /^Installed Size/ { v=$4; u=$5; if (u=="KiB") v/=1024; else if (u=="GiB") v*=1024; s+=v }
+        /^Installed Size/ { v=$4; u=$5; if (u=="B") v/=1048576; else if (u=="KiB") v/=1024; else if (u=="GiB") v*=1024; s+=v }
         END { printf "%.2f MiB", s }'
 }
 

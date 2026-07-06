@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-gnome
 pkgver=1.0
-pkgrel=8
+pkgrel=11
 pkgdesc='Mainstream OS Gnome Dependencies'
 provides=('illogical-impulse-gnome')
 replaces=('illogical-impulse-gnome')

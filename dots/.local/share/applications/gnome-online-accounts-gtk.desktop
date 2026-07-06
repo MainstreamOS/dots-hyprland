@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Online Accounts
+Exec=gnome-online-accounts-gtk
+Icon=org.gnome.Settings
+NoDisplay=true
+Categories=GNOME;GTK;Settings;
