@@ -17,6 +17,7 @@ Singleton {
     id: root
 
     property var eventsByDate: ({})
+    property bool accountsAppAvailable: false
 
     function keyFor(year, month, day) { // JS 0-based month, like Todo
         return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
@@ -76,5 +77,14 @@ Singleton {
         onTriggered: root.refresh()
     }
 
-    Component.onCompleted: refresh()
+    Process {
+        id: accountsCheckProc
+        command: ["sh", "-c", "command -v gnome-online-accounts-gtk"]
+        onExited: (exitCode, exitStatus) => root.accountsAppAvailable = (exitCode === 0)
+    }
+
+    Component.onCompleted: {
+        refresh()
+        accountsCheckProc.running = true
+    }
 }

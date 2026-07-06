@@ -1,5 +1,6 @@
 import qs
 import qs.services
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import "calendar_layout.js" as CalendarLayout
@@ -67,6 +68,20 @@ Item {
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: false
+            }
+            CalendarHeaderButton {
+                forceCircle: true
+                visible: CalendarEvents.accountsAppAvailable
+                tooltipText: Translation.tr("Online Accounts")
+                downAction: () => {
+                    Quickshell.execDetached(["gnome-online-accounts-gtk"]);
+                }
+                contentItem: MaterialSymbol {
+                    text: "person_add"
+                    iconSize: Appearance.font.pixelSize.larger
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Appearance.colors.colOnLayer1
+                }
             }
             CalendarHeaderButton {
                 forceCircle: true
