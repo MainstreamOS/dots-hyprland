@@ -647,7 +647,13 @@ function setup_console_mode(){
     try sudo pacman -Sy --needed --noconfirm steam
   fi
 
-  # 2. Boot straight into the Steam gamescope session. gaming-mode-arm-check (an
+  # 2. Controller support, like the ISO Console install: the Xbox Bluetooth
+  #    driver and the game-devices udev rules, one command per package so a
+  #    missing repo entry skips that package without losing the other.
+  try sudo pacman -S --needed --noconfirm mainstream-xpadneo
+  try sudo pacman -S --needed --noconfirm game-devices-udev
+
+  # 3. Boot straight into the Steam gamescope session. gaming-mode-arm-check (an
   #    sddm ExecStartPre from mainstream-gaming) reads boot-target on the first
   #    cold boot and arms the autologin.
   if [[ -x /usr/bin/gaming-mode-switch ]]; then
@@ -656,7 +662,7 @@ function setup_console_mode(){
     echo -e "${STY_YELLOW}[$0]: gaming-mode-switch missing — cannot set boot-to-gaming (is mainstream-gaming installed?).${STY_RST}"
   fi
 
-  # 3. Pre-provision the Deck client so the first boot isn't a download.
+  # 4. Pre-provision the Deck client so the first boot isn't a download.
   if command -v steam >/dev/null 2>&1; then
     _console_preload_steam_deck_client || true
   fi
