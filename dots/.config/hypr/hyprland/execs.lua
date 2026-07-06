@@ -9,7 +9,7 @@ hl.on("hyprland.start", function ()
     -- xdg-desktop-autostart.target includes Discord and friends — qs would
     -- not spawn until every autostart app finished launching. The target
     -- itself activates immediately; only the wanted units keep starting.
-    hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start --no-block hyprland-session.target && qs -c $qsConfig")
+    hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start --no-block hyprland-session.target && qs -n -c $qsConfig")
 
     -- Bar, wallpaper
     hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
