@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=13
+pkgrel=14
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -21,6 +21,7 @@ depends=(
   jq
   xdg-user-dirs
   ntfs-3g
+  ntfsprogs
   dosfstools
   exfatprogs
   xfsprogs
