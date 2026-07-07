@@ -85,7 +85,7 @@ local function applyPluginConfig()
                     workspace_gap = 100,
                     wallpaper = 2,           -- 0: global only, 1: per-workspace only, 2: both
                     -- switchwall.sh rewrites this line on every wallpaper change.
-                    wallpaper_path = HOME .. "/.config/quickshell/ii/assets/images/default_wallpaper.png",
+                    wallpaper_path = HOME .. "/.config/quickshell/ii/assets/images/default_wallpaper.webp",
                     blur = true,
                     shadow = {
                         enabled = true,

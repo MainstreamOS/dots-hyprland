@@ -4,7 +4,7 @@ QUICKSHELL_CONFIG_NAME="ii"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-DEFAULT_WALLPAPER="$XDG_CONFIG_HOME/quickshell/$QUICKSHELL_CONFIG_NAME/assets/images/default_wallpaper.png"
+DEFAULT_WALLPAPER="$XDG_CONFIG_HOME/quickshell/$QUICKSHELL_CONFIG_NAME/assets/images/default_wallpaper.webp"
 
 if [ ! -f "$DEFAULT_WALLPAPER" ]; then
   echo "Error: Default wallpaper not found at $DEFAULT_WALLPAPER"

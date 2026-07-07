@@ -233,7 +233,7 @@ Variants {
                 // Fall back to the bundled default wallpaper when no path is set
                 // (e.g. a fresh install before a wallpaper has been chosen), so the
                 // background is never blank.
-                source: bgRoot.wallpaperSafetyTriggered ? "" : (bgRoot.wallpaperPath || Quickshell.shellPath("assets/images/default_wallpaper.png"))
+                source: bgRoot.wallpaperSafetyTriggered ? "" : (bgRoot.wallpaperPath || Quickshell.shellPath("assets/images/default_wallpaper.webp"))
                 fillMode: Image.PreserveAspectCrop
                 Behavior on x {
                     NumberAnimation {
