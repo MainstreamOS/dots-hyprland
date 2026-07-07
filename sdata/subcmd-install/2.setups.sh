@@ -239,7 +239,7 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Installing AMD GPU drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-mesa-driver
+            x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-mesa-driver libva-utils
             # 32-bit Vulkan so Steam/multilib apps don't pull lib32-nvidia-utils
             # as the provider on AMD (best-effort: needs multilib, which Steam needs too).
             try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon
@@ -260,8 +260,9 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Installing Intel GPU drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver
+            x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
             try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel
+            try sudo pacman -S --needed --noconfirm vpl-gpu-rt
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers intel-media-driver
