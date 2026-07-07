@@ -66,7 +66,7 @@ DENYLIST=(
 # (meta + plugins/extensions). They own no .desktop themselves, so the
 # list presents them through the first dependency that ships one, and
 # their members never appear as individual entries.
-APP_BUNDLES=(mainstream-mpv mainstream-nautilus mainstream-calendar)
+APP_BUNDLES=(mainstream-mpv mainstream-nautilus mainstream-calendar mainstream-obs)
 
 is_bundle() {  # $1 = pkgname
     local b
