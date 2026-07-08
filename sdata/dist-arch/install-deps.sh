@@ -343,6 +343,7 @@ metapkgs+=(./sdata/dist-arch/mainstream-quickshell-git)
 metapkgs+=(./sdata/dist-arch/mainstream-extras)
 metapkgs+=(./sdata/dist-arch/mainstream-bibata-modern-classic-bin)
 metapkgs+=(./sdata/dist-arch/mainstream-gaming)
+metapkgs+=(./sdata/dist-arch/mainstream-welcome-installer)
 
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"

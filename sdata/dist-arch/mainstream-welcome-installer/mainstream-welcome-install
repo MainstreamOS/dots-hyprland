@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# mainstream-welcome-install — run the Welcome app's selected installs back-to-back
+# in the background, popping a desktop notification as each finishes. Invoked once
+# via pkexec (one auth prompt); runs as root and drops to the user where needed.
+#
+# Everything it does is logged (timestamps + per-step markers + exit codes) to
+# /var/log/mainstream-welcome-install.log and the journal, so a failed install can be
+# traced after the fact:  tail -f /var/log/mainstream-welcome-install.log
+#
+# Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs resolve resolve-studio
+
+set -uo pipefail
+
+[[ $EUID -eq 0 ]] || { echo "must run as root (via pkexec)" >&2; exit 1; }
+
+# Survive logout and the Welcome window closing: re-exec inside a transient
+# system scope managed by systemd, detached from the login session.
+if [[ -z ${MW_IN_SCOPE:-} ]] && command -v systemd-run >/dev/null 2>&1; then
+  exec systemd-run --scope --quiet --collect \
+    --setenv=MW_IN_SCOPE=1 --setenv=PKEXEC_UID="${PKEXEC_UID:-}" \
+    -- "$0" "$@"
+fi
+
+# The unprivileged caller (pkexec exports PKEXEC_UID).
+RUID=${PKEXEC_UID:-}
+[[ -n $RUID ]] || { echo "PKEXEC_UID not set — launch via pkexec" >&2; exit 1; }
+RUSER=$(id -un "$RUID") || { echo "cannot resolve calling user" >&2; exit 1; }
+RHOME=$(getent passwd "$RUID" | cut -d: -f6)
+
+# zz- so this NOPASSWD grant sorts AFTER 10-installer's "%wheel ... ALL" — sudoers is
+# last-match-wins, so an earlier (00-) file would be overridden by the wheel password rule.
+SUDOERS_TMP=/etc/sudoers.d/zz-mainstream-welcome-resolve
+cleanup() { rm -f "$SUDOERS_TMP"; }
+trap cleanup EXIT
+
+LOGFILE=/var/log/mainstream-welcome-install.log
+{ : >>"$LOGFILE"; } 2>/dev/null || LOGFILE="${TMPDIR:-/tmp}/mainstream-welcome-install.log"
+exec > >(tee -a "$LOGFILE") 2>&1
+log() { printf '%s :: %s\n' "$(date '+%F %T')" "$*"; }
+
+# Fire a notification in the caller's session bus.
+notify() {  # title  body  [urgency]
+  runuser -u "$RUSER" -- env \
+    XDG_RUNTIME_DIR="/run/user/$RUID" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$RUID/bus" \
+    notify-send -a "Mainstream" -u "${3:-normal}" "$1" "${2:-}" 2>/dev/null || true
+}
+
+# Locate install-davinci-resolve (system path first, then the caller's ~/.local/bin).
+resolve_bin() {
+  if command -v install-davinci-resolve >/dev/null 2>&1; then
+    command -v install-davinci-resolve
+  elif [[ -x "$RHOME/.local/bin/install-davinci-resolve" ]]; then
+    echo "$RHOME/.local/bin/install-davinci-resolve"
+  fi
+}
+
+pac() { log "run: pacman -S --needed --noconfirm $*"; pacman -S --needed --noconfirm "$@"; }
+
+install_gaming() {
+  notify "Installing Desktop Gaming…" "Steam and the 32-bit gaming stack"
+  local pkgs=(steam mangohud lib32-mangohud vulkan-icd-loader lib32-vulkan-icd-loader lib32-mesa)
+  local gpu; gpu=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
+  case "$gpu" in *\[1002:*) pkgs+=(vulkan-radeon lib32-vulkan-radeon) ;; esac
+  case "$gpu" in *\[8086:*) pkgs+=(vulkan-intel lib32-vulkan-intel) ;; esac
+  case "$gpu" in *\[10de:*) pkgs+=(lib32-nvidia-utils) ;; esac
+  log "detected GPU line: ${gpu:-<none>}"
+  log "packages: ${pkgs[*]}"
+  if pac "${pkgs[@]}"; then notify "Desktop Gaming installed" "Steam and the gaming stack are ready."
+  else notify "Desktop Gaming install failed" "See $LOGFILE." critical; fi
+}
+
+install_gamescope() {
+  notify "Setting up Steam Big Picture…" "gamescope session (Super + G)"
+  pac mainstream-gaming
+  if [[ -x /usr/bin/gaming-mode-install ]]; then
+    log "running gaming-mode-install (pulls Steam + the 32-bit stack)"
+    if gaming-mode-install; then
+      if [[ -x /usr/bin/mainstream-steam-gamescope-preload ]]; then
+        log "preseeding the Steam Deck client for a fast first Super + G"
+        notify "Steam Big Picture — prefetching…" "Fetching the Steam Deck client so the first Super + G is instant."
+        local prc=0
+        mainstream-steam-gamescope-preload || prc=$?
+        log "mainstream-steam-gamescope-preload exited: $prc"
+      else
+        log "mainstream-steam-gamescope-preload NOT FOUND — first Super + G will be slower"
+      fi
+      notify "Steam Big Picture ready" "Press Super + G to launch."
+    else
+      log "gaming-mode-install FAILED"
+      notify "Steam Big Picture setup failed" "See $LOGFILE." critical
+    fi
+  else
+    log "gaming-mode-install MISSING — did 'pac mainstream-gaming' fail? is [mainstream] configured?"
+    notify "Steam Big Picture setup failed" "gaming-mode-install not found." critical
+  fi
+}
+
+install_obs() {
+  notify "Installing OBS Studio…" "mainstream-obs"
+  if pac mainstream-obs; then notify "OBS Studio installed" "Find it in your apps."
+  else notify "OBS install failed" "See $LOGFILE." critical; fi
+}
+
+install_resolve() {  # "" | --studio
+  local flag=$1 name="DaVinci Resolve"
+  [[ $flag == --studio ]] && name="DaVinci Resolve Studio"
+  local bin; bin=$(resolve_bin)
+  if [[ -z $bin ]]; then
+    log "install-davinci-resolve NOT FOUND (checked PATH and $RHOME/.local/bin)"
+    notify "$name unavailable" "install-davinci-resolve not found." critical; return
+  fi
+  log "installer: $bin   args: ${flag:-<none>} -y --anon   (running as $RUSER)"
+  notify "Installing $name…" "Large download — it keeps running in the background."
+  printf '%s ALL=(root) NOPASSWD: ALL\n' "$RUSER" > "$SUDOERS_TMP"
+  chmod 0440 "$SUDOERS_TMP"
+  log "granted temporary NOPASSWD sudo to $RUSER for the build"
+  local rc=0
+  runuser -l "$RUSER" -- "$bin" $flag -y --anon || rc=$?
+  rm -f "$SUDOERS_TMP"
+  log "$name installer exited: $rc"
+  if (( rc == 0 )); then notify "$name installed" "Launch it from your apps."
+  else notify "$name install failed" "See the log: $LOGFILE" critical; fi
+}
+
+run_item() {  # label  fn...
+  local label=$1; shift
+  log "════════ START: $label ════════"
+  local t0=$SECONDS rc=0
+  "$@" || rc=$?
+  log "════════ END: $label — exit $rc, $((SECONDS - t0))s ════════"
+}
+
+(( $# )) || { log "nothing selected — exiting"; exit 0; }
+
+log "=================================================================="
+log "mainstream-welcome-install starting"
+log "  user=$RUSER (uid $RUID)  home=$RHOME"
+log "  requested: $*"
+log "  log file: $LOGFILE"
+
+notify "Setting up your apps" "Installing your selections in the background — you'll get a notification as each one finishes."
+
+tasks=(); resolve_tasks=()
+for opt in "$@"; do
+  case $opt in
+    resolve|resolve-studio) resolve_tasks+=("$opt") ;;
+    *)                      tasks+=("$opt") ;;
+  esac
+done
+
+for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
+  case $opt in
+    gaming)          run_item "Desktop Gaming"          install_gaming ;;
+    gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
+    obs)             run_item "OBS Studio"              install_obs ;;
+    resolve)         run_item "DaVinci Resolve"         install_resolve "" ;;
+    resolve-studio)  run_item "DaVinci Resolve Studio"  install_resolve --studio ;;
+    *) log "unknown option: $opt" ;;
+  esac
+done
+
+log "all install tasks finished"
+notify "Installs finished" "All selected items are done."

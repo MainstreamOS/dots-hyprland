@@ -1,0 +1,33 @@
+groups=(mainstream)
+pkgname=mainstream-welcome-installer
+pkgver=1.0
+pkgrel=2
+pkgdesc='Mainstream OS Welcome app installers — one-click app installs + DaVinci Resolve'
+arch=(any)
+license=(MIT)
+depends=(
+  curl
+  jq
+  pciutils
+  polkit
+  libnotify
+  fakeroot
+  libarchive
+  patchelf
+)
+source=(
+  install-davinci-resolve
+  mainstream-welcome-install
+  mainstream-welcome.rules
+)
+sha256sums=(
+  SKIP
+  SKIP
+  SKIP
+)
+
+package() {
+  install -Dm755 "$srcdir/install-davinci-resolve"   "$pkgdir/usr/bin/install-davinci-resolve"
+  install -Dm755 "$srcdir/mainstream-welcome-install" "$pkgdir/usr/bin/mainstream-welcome-install"
+  install -Dm644 "$srcdir/mainstream-welcome.rules"   "$pkgdir/usr/share/polkit-1/rules.d/49-mainstream-welcome.rules"
+}

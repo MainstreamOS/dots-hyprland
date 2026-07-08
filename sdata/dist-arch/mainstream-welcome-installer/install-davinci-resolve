@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+# install-davinci-resolve — detect the GPU, install the right OpenCL runtime, then
+# fetch and install the latest DaVinci Resolve (or Studio with --studio) as a
+# proper pacman package. The download is placed only on this machine; nothing is
+# redistributed. Studio still needs the user's own license to unlock.
+
+set -euo pipefail
+
+readonly PROG=${0##*/}
+
+STUDIO=0
+GPU_OVERRIDE=""
+OPENCL_OVERRIDE=""
+REG_NAME=""
+REG_EMAIL=""
+REG_COUNTRY="us"
+REG_PHONE="202-555-0100"
+ANON=0
+ASSUME_YES=0
+KEEP=0
+ROCM_MODE=""
+ROCM_VERSION="7.1.1"
+# Real Blackmagic download-page id, sent as the Referer their gate expects; the
+# register request itself is keyed by the per-product downloadId in the URL path.
+readonly REFERID="ee1da4f13df74d72b6da783ead2ed875"
+
+# ---------------------------------------------------------------- output helpers
+if [[ -t 1 ]]; then
+  c_b=$'\e[1m'; c_g=$'\e[32m'; c_y=$'\e[33m'; c_r=$'\e[31m'; c_d=$'\e[2m'; c_0=$'\e[0m'
+else
+  c_b=""; c_g=""; c_y=""; c_r=""; c_d=""; c_0=""
+fi
+_ts()  { [[ -t 1 ]] || date '+%T '; }
+info() { printf '%s%s==>%s %s\n' "$(_ts)" "$c_g$c_b" "$c_0" "$*"; }
+step() { printf '%s%s  ->%s %s\n' "$(_ts)" "$c_b" "$c_0" "$*"; }
+warn() { printf '%s%swarning:%s %s\n' "$(_ts)" "$c_y$c_b" "$c_0" "$*" >&2; }
+die()  { printf '%s%serror:%s %s\n' "$(_ts)" "$c_r$c_b" "$c_0" "$*" >&2; exit 1; }
+
+check_free() {  # path  need_gib  what
+  local avail
+  avail=$(df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc '0-9')
+  [[ -n $avail ]] || return 0
+  (( avail >= $2 )) || die "not enough free space for $3: need ~$2 GB, have ${avail} GB on $(df --output=target "$1" 2>/dev/null | tail -1). Free some space and re-run."
+}
+
+confirm() {
+  (( ASSUME_YES )) && return 0
+  local reply
+  read -r -p "$1 [y/N] " reply || return 1
+  [[ $reply == [yY] || $reply == [yY][eE][sS] ]]
+}
+
+usage() {
+  cat <<EOF
+${c_b}$PROG${c_0} — install the latest DaVinci Resolve with GPU + OpenCL set up for you.
+
+Usage: $PROG [--studio] [options]
+
+  --studio            Install DaVinci Resolve Studio (needs your paid license).
+                      Default is the free edition.
+  --gpu <vendor>      Force GPU vendor: nvidia | amd | intel (default: auto-detect).
+  --opencl <pkg>      Override the OpenCL package to install for this GPU.
+  --name "<name>"     Registration name for the Blackmagic download.
+  --email <addr>      Registration email for the Blackmagic download.
+  --country <cc>      Registration country code (default: us).
+  --anon              Use placeholder registration data instead of prompting.
+                      (Convenient, but it spoofs Blackmagic's registration gate.)
+  -y, --yes           Assume yes to prompts.
+  --keep              Keep the downloaded installer + build files.
+  --rocm-pin          Downgrade + hold the ROCm OpenCL stack at a Resolve-compatible
+                      version (default 7.1.1) to dodge the ROCm 7.2 regression. Exits.
+  --rocm-unpin        Remove the ROCm hold (then run 'sudo pacman -Syu'). Exits.
+  --rocm-version VER  Target version for --rocm-pin (default 7.1.1).
+  -h, --help          This help.
+
+The free edition needs no license. Studio downloads the same installer but only
+unlocks with your license key/dongle. Blackmagic requires registration to
+download; by default this asks for your real name and email.
+EOF
+}
+
+# ------------------------------------------------------------------- parse args
+need_val() { [[ -n ${2:-} ]] || die "option $1 needs a value"; }
+while (( $# )); do
+  case $1 in
+    --studio) STUDIO=1; shift ;;
+    --gpu) need_val "$1" "${2:-}"; GPU_OVERRIDE=$2; shift 2 ;;
+    --opencl) need_val "$1" "${2:-}"; OPENCL_OVERRIDE=$2; shift 2 ;;
+    --name) need_val "$1" "${2:-}"; REG_NAME=$2; shift 2 ;;
+    --email) need_val "$1" "${2:-}"; REG_EMAIL=$2; shift 2 ;;
+    --country) need_val "$1" "${2:-}"; REG_COUNTRY=$2; shift 2 ;;
+    --anon) ANON=1; shift ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
+    --keep) KEEP=1; shift ;;
+    --rocm-pin) ROCM_MODE=pin; shift ;;
+    --rocm-unpin) ROCM_MODE=unpin; shift ;;
+    --rocm-version) need_val "$1" "${2:-}"; ROCM_VERSION=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown argument: $1 (see --help)" ;;
+  esac
+done
+
+(( EUID == 0 )) && die "run as your normal user, not root — $PROG uses sudo only where needed."
+for c in curl jq lspci sudo pacman makepkg bsdtar; do
+  command -v "$c" >/dev/null 2>&1 || die "missing required command: $c"
+done
+
+# One sudo prompt, kept warm for the whole run so nothing re-prompts mid-build.
+# Skip the prompt when sudo is already passwordless (the Welcome installer grants
+# NOPASSWD) — `sudo -v` would still demand a password there under verifypw=all,
+# which fails with no terminal.
+sudo -n true 2>/dev/null || sudo -v || die "this needs sudo to install packages."
+( while sudo -n true 2>/dev/null; do sleep 50; kill -0 "$$" 2>/dev/null || exit 0; done ) &
+SUDO_KEEPALIVE=$!
+
+NOCONFIRM=(); (( ASSUME_YES )) && NOCONFIRM=(--noconfirm)
+
+FINISHED=0
+cleanup() {
+  [[ -n ${SUDO_KEEPALIVE:-} ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null
+  if [[ -n ${BUILD_DIR:-} ]]; then
+    if (( FINISHED )) && ! (( KEEP )); then
+      rm -rf "$BUILD_DIR"
+    else
+      warn "build files kept at: $BUILD_DIR (download cached at ${ZIP:-n/a})"
+    fi
+  fi
+  return 0
+}
+trap cleanup EXIT
+
+# ------------------------------------------------ ROCm pin (7.2 regression fix)
+# ROCm 7.2 breaks Resolve's OpenCL (ROCm issue #5970); 7.1.1 is the last good line.
+ROCM_PKGS=(rocm-core rocm-llvm rocm-device-libs comgr hsa-rocr rocprofiler-register rocm-opencl-runtime)
+
+rocm_archive_filename() {  # pkg version -> archive filename (href form) or empty
+  local pkg=$1 ver=${2//./\\.}
+  curl -fsSL "https://archive.archlinux.org/packages/${pkg:0:1}/${pkg}/" 2>/dev/null \
+    | grep -oE "${pkg}-([0-9]+%3A)?${ver}-[0-9]+-x86_64\\.pkg\\.tar\\.zst" \
+    | sort -V | tail -1
+}
+
+rocm_ignore_add() {
+  local p
+  if grep -qE '^[[:space:]]*IgnorePkg[[:space:]]*=' /etc/pacman.conf; then
+    for p in "${ROCM_PKGS[@]}"; do
+      grep -qE "^[[:space:]]*IgnorePkg.*[= ]${p}( |$)" /etc/pacman.conf \
+        || sudo sed -i -E "s/^([[:space:]]*IgnorePkg[[:space:]]*=.*)/\\1 ${p}/" /etc/pacman.conf
+    done
+  else
+    sudo sed -i "/^\\[options\\]/a IgnorePkg = ${ROCM_PKGS[*]}" /etc/pacman.conf
+  fi
+}
+
+rocm_pin() {
+  local ver=$1 dir f url name files=() p
+  info "Pinning the ROCm OpenCL stack to ${c_b}${ver}${c_0} (last Resolve-compatible line)…"
+  dir=$(mktemp -d "$HOME/.cache/rocm-pin.XXXXXX")
+  for p in "${ROCM_PKGS[@]}"; do
+    f=$(rocm_archive_filename "$p" "$ver")
+    [[ -n $f ]] || { rm -rf "$dir"; die "no ${ver} build of ${p} in the Arch archive — check --rocm-version."; }
+    url="https://archive.archlinux.org/packages/${p:0:1}/${p}/${f}"
+    name=$(printf '%s' "$f" | sed 's/%3A/:/g')
+    step "fetching ${name}"
+    curl -fSL --retry 3 -o "$dir/$name" "$url" || { rm -rf "$dir"; die "download failed: $url"; }
+    files+=("$dir/$name")
+  done
+  info "Installing the downgraded stack in one transaction…"
+  sudo pacman -U "${NOCONFIRM[@]}" "${files[@]}" \
+    || { rm -rf "$dir"; die "pacman -U failed — a dependent ROCm package may need pinning too."; }
+  rocm_ignore_add
+  rm -rf "$dir"
+  info "${c_g}${c_b}ROCm pinned to ${ver} and held from upgrades.${c_0}"
+  step "Undo with: ${c_b}${PROG} --rocm-unpin${c_0}"
+  step "Ensure the ROCm ICD is active (not RustiCL): if you disabled it, run"
+  step "  ${c_b}sudo mv /etc/OpenCL/vendors/amdocl64.icd.off /etc/OpenCL/vendors/amdocl64.icd${c_0}"
+}
+
+rocm_unpin() {
+  local p
+  info "Removing the ROCm version hold…"
+  for p in "${ROCM_PKGS[@]}"; do
+    sudo sed -i -E "s/([[:space:]]*IgnorePkg[[:space:]]*=.*)[[:space:]]${p}([[:space:]]|\$)/\\1\\2/g" /etc/pacman.conf
+  done
+  sudo sed -i -E 's/^([[:space:]]*IgnorePkg[[:space:]]*=)[[:space:]]*$/#\1/' /etc/pacman.conf
+  info "Hold removed. Run ${c_b}sudo pacman -Syu${c_0} to return ROCm to current."
+}
+
+case ${ROCM_MODE} in
+  pin)   rocm_pin "$ROCM_VERSION"; exit 0 ;;
+  unpin) rocm_unpin; exit 0 ;;
+esac
+
+# ------------------------------------------------------------- 1. detect the GPU
+detect_gpu() {
+  if [[ -n $GPU_OVERRIDE ]]; then
+    printf '%s\n' "$GPU_OVERRIDE"; return
+  fi
+  local found=() vid
+  # PCI vendor id from every VGA (0300) / 3D (0302) controller
+  while IFS= read -r vid; do
+    case $vid in
+      *10de*) found+=(nvidia) ;;
+      *1002*) found+=(amd) ;;
+      *8086*) found+=(intel) ;;
+    esac
+  done < <(lspci -mm -d ::0300 -n 2>/dev/null; lspci -mm -d ::0302 -n 2>/dev/null)
+  # Prefer a dedicated compute GPU: nvidia > amd > intel
+  local g
+  for g in nvidia amd intel; do
+    for f in "${found[@]:-}"; do [[ $f == "$g" ]] && { printf '%s\n' "$g"; return; }; done
+  done
+  return 1
+}
+
+GPU=$(detect_gpu) || die "could not detect a supported GPU. Pass --gpu nvidia|amd|intel."
+case $GPU in nvidia|amd|intel) ;; *) die "unsupported --gpu '$GPU' (use nvidia, amd, or intel)";; esac
+info "GPU: ${c_b}${GPU}${c_0}"
+
+# --------------------------------------------------- 2. install the OpenCL runtime
+opencl_pkg_for() {
+  case $1 in
+    nvidia) echo opencl-nvidia ;;
+    amd)    echo rocm-opencl-runtime ;;
+    intel)  echo intel-compute-runtime ;;
+  esac
+}
+is_rdna4() {  # RX 9070/9060-class (Navi 4x, gfx1200/gfx1201) — ROCm 7.2 breaks Resolve on these
+  lspci 2>/dev/null | grep -iE 'VGA|Display|3D' | grep -qiE 'Navi 4[0-9]' && return 0
+  clinfo 2>/dev/null | grep -qiE 'gfx120[0-9]' && return 0
+  return 1
+}
+
+if [[ $GPU == amd && -z $OPENCL_OVERRIDE ]] && is_rdna4; then
+  info "OpenCL runtime: ${c_b}ROCm ${ROCM_VERSION} (pinned)${c_0}"
+  warn "RDNA4 GPU detected — ROCm 7.2 breaks Resolve on it, pinning ROCm ${ROCM_VERSION}."
+  rocm_pin "$ROCM_VERSION"
+else
+  OPENCL_PKG=${OPENCL_OVERRIDE:-$(opencl_pkg_for "$GPU")}
+  info "OpenCL runtime: ${c_b}${OPENCL_PKG}${c_0}"
+  if pacman -Qq "$OPENCL_PKG" >/dev/null 2>&1; then
+    step "already installed"
+  else
+    step "installing $OPENCL_PKG"
+    sudo pacman -S --needed "${NOCONFIRM[@]}" "$OPENCL_PKG"
+  fi
+  if [[ $GPU == amd && -z $OPENCL_OVERRIDE ]]; then
+    warn "AMD OpenCL for Resolve is card-specific. If Resolve won't launch, re-run with"
+    warn "--opencl opencl-mesa (+ export RUSTICL_ENABLE=radeonsi), or --rocm-pin."
+  fi
+fi
+
+# ------------------------------------------------ 3. resolve version + download
+if (( STUDIO )); then
+  SLUG="davinci-resolve-studio"; PRODUCT="DaVinci Resolve Studio"; ARCH_BASE="DaVinci_Resolve_Studio"
+  PKGNAME="davinci-resolve-studio"; LICENSE_REF="LicenseRef-Commercial"
+  CONFLICTS="'davinci-resolve' 'davinci-resolve-beta' 'davinci-resolve-studio-beta'"
+else
+  SLUG="davinci-resolve"; PRODUCT="DaVinci Resolve"; ARCH_BASE="DaVinci_Resolve"
+  PKGNAME="davinci-resolve"; LICENSE_REF="LicenseRef-Commercial"
+  CONFLICTS="'davinci-resolve-studio' 'davinci-resolve-beta' 'davinci-resolve-studio-beta'"
+fi
+
+info "Looking up the latest ${PRODUCT}…"
+RELEASE=$(curl -fsSL "https://www.blackmagicdesign.com/api/support/latest-stable-version/${SLUG}/linux") \
+  || die "could not reach Blackmagic's version API."
+DOWNLOAD_ID=$(jq -r '.linux.downloadId // empty' <<<"$RELEASE")
+_maj=$(jq -r '.linux.major // empty' <<<"$RELEASE")
+_min=$(jq -r '.linux.minor // empty' <<<"$RELEASE")
+_rel=$(jq -r '.linux.releaseNum // empty' <<<"$RELEASE")
+[[ -n $DOWNLOAD_ID && -n $_maj && -n $_min && -n $_rel ]] || die "unexpected API response: $RELEASE"
+VER="${_maj}.${_min}.${_rel}"
+step "latest is ${c_b}${PRODUCT} ${VER}${c_0}"
+
+if pacman -Qi "$PKGNAME" >/dev/null 2>&1; then
+  CURRENT=$(pacman -Q "$PKGNAME" | awk '{print $2}')
+  step "installed: $CURRENT"
+  confirm "Reinstall/upgrade $PKGNAME to $VER-1?" || { info "Nothing to do."; exit 0; }
+fi
+
+ARCHIVE="${ARCH_BASE}_${VER}_Linux.zip"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/mainstream-resolve"
+ZIP="$CACHE_DIR/$ARCHIVE"
+mkdir -p "$CACHE_DIR"
+
+if [[ -f $ZIP ]] && bsdtar -tf "$ZIP" >/dev/null 2>&1; then
+  info "Reusing cached download: ${c_b}${ZIP}${c_0}"
+else
+  # registration data (only needed when we actually have to download)
+  if (( ANON )); then
+    REG_NAME=${REG_NAME:-"Mainstream User"}
+    REG_EMAIL=${REG_EMAIL:-"resolve@mainstreamos.org"}
+    warn "Using placeholder registration data (--anon)."
+  else
+    [[ -n $REG_NAME  ]] || read -r -p "Registration name for Blackmagic: " REG_NAME
+    [[ -n $REG_EMAIL ]] || read -r -p "Registration email for Blackmagic: " REG_EMAIL
+  fi
+  [[ -n $REG_NAME && -n $REG_EMAIL ]] || die "registration name and email are required (or use --anon)."
+  REG_NAME=${REG_NAME#"${REG_NAME%%[![:space:]]*}"}   # trim leading whitespace
+  REG_NAME=${REG_NAME%"${REG_NAME##*[![:space:]]}"}   # trim trailing whitespace
+  REG_FIRST=${REG_NAME%% *}; [[ -n $REG_FIRST ]] || REG_FIRST="Mainstream"
+  REG_LAST=${REG_NAME#* }; [[ $REG_LAST == "$REG_NAME" || -z $REG_LAST ]] && REG_LAST="User"
+
+  UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+  REG_STATE="CA"; [[ $REG_COUNTRY == us ]] || REG_STATE=""
+  REQ_JSON=$(jq -nc \
+    --arg fn "$REG_FIRST" --arg ln "$REG_LAST" --arg em "$REG_EMAIL" \
+    --arg ph "$REG_PHONE" --arg co "$REG_COUNTRY" --arg st "$REG_STATE" --arg pr "$PRODUCT" \
+    '{firstname:$fn,lastname:$ln,email:$em,phone:$ph,country:$co,street:"1 Main St",state:$st,city:"City",product:$pr}')
+
+  info "Requesting the download link…"
+  DL_URL=$(curl -fsS \
+    -H 'Accept: application/json, text/plain, */*' \
+    -H 'Origin: https://www.blackmagicdesign.com' \
+    -H "User-Agent: $UA" \
+    -H 'Content-Type: application/json;charset=UTF-8' \
+    -H "Referer: https://www.blackmagicdesign.com/support/download/${REFERID}/Linux" \
+    --data-ascii "$REQ_JSON" \
+    "https://www.blackmagicdesign.com/api/register/${REG_COUNTRY}/download/${DOWNLOAD_ID}") \
+    || die "the registration/download request failed (network/HTTP error)."
+  if [[ $DL_URL != https://* ]]; then
+    die "Blackmagic did not return a download link — the registration was likely rejected. Try a real --name/--email, or --country us. (response: ${DL_URL:0:160})"
+  fi
+
+  check_free "$CACHE_DIR" 13 "the DaVinci installer download"
+  info "Downloading ${c_b}${ARCHIVE}${c_0} (large; resumes if interrupted)…"
+  curl -fL -C - --retry 3 --retry-delay 3 -H "User-Agent: $UA" -o "$ZIP" "$DL_URL" \
+    || die "download failed (partial kept for resume: $ZIP)."
+  bsdtar -tf "$ZIP" >/dev/null 2>&1 \
+    || die "downloaded archive is incomplete/corrupt — re-run to resume, or delete $ZIP to start over."
+fi
+
+# Build on disk (under the cache dir), never in /tmp — Resolve's extraction needs
+# ~50 GB peak and /tmp is often tmpfs (RAM-backed) and far smaller.
+BUILD_DIR=$(mktemp -d "$CACHE_DIR/build.XXXXXX")
+
+# --------------------------------------------- 4. build + install as a package
+check_free "$BUILD_DIR" 50 "unpacking + building the package"
+info "Packaging with makepkg (installs dependencies + the Arch compatibility fix)…"
+
+cat >"$BUILD_DIR/PKGBUILD" <<PKGBUILD
+pkgname=${PKGNAME}
+pkgver=${VER}
+pkgrel=1
+pkgdesc='Professional A/V post-production software suite from Blackmagic Design'
+arch=('x86_64')
+url='https://www.blackmagicdesign.com/products/davinciresolve'
+license=('${LICENSE_REF}')
+depends=('glu' 'fuse2' 'opencl-driver' 'qt5-x11extras' 'qt5-svg'
+         'qt5-quickcontrols2' 'qt5-multimedia' 'libxcrypt-compat' 'xmlsec'
+         'jre-openjdk' 'ffmpeg4.4' 'gst-plugins-bad-libs' 'python-numpy' 'tbb'
+         'apr-util' 'luajit' 'libc++' 'libc++abi')
+makedepends=('libarchive' 'patchelf')
+conflicts=(${CONFLICTS})
+options=('!strip')
+source=("file://${ZIP}")
+sha256sums=('SKIP')
+_pkgname=resolve
+
+prepare() {
+  local _run
+  _run=\$(find . -maxdepth 1 -name 'DaVinci_Resolve*_Linux.run' -print -quit)
+  [[ -n \$_run ]] || { echo 'no DaVinci .run found in the archive' >&2; return 1; }
+  chmod u+x "\$_run"
+  "\$_run" --appimage-extract >/dev/null
+  rm -f "\$_run"
+  chmod -R u+rwX,go+rX,go-w squashfs-root
+  rm -rf squashfs-root/installer squashfs-root/installer* squashfs-root/AppRun squashfs-root/AppRun*
+
+  local _paths=("libs" "libs/plugins/sqldrivers" "libs/plugins/xcbglintegrations"
+                "libs/plugins/imageformats" "libs/plugins/platforms" "libs/Fusion"
+                "plugins" "bin"
+                "BlackmagicRAWSpeedTest/BlackmagicRawAPI"
+                "BlackmagicRAWSpeedTest/plugins/platforms"
+                "BlackmagicRAWSpeedTest/plugins/imageformats"
+                "BlackmagicRAWSpeedTest/plugins/mediaservice"
+                "BlackmagicRAWSpeedTest/plugins/audio"
+                "BlackmagicRAWSpeedTest/plugins/xcbglintegrations"
+                "BlackmagicRAWSpeedTest/plugins/bearer"
+                "BlackmagicRAWPlayer/BlackmagicRawAPI"
+                "BlackmagicRAWPlayer/plugins/mediaservice"
+                "BlackmagicRAWPlayer/plugins/imageformats"
+                "BlackmagicRAWPlayer/plugins/audio"
+                "BlackmagicRAWPlayer/plugins/platforms"
+                "BlackmagicRAWPlayer/plugins/xcbglintegrations"
+                "BlackmagicRAWPlayer/plugins/bearer"
+                "Onboarding/plugins/xcbglintegrations"
+                "Onboarding/plugins/qtwebengine"
+                "Onboarding/plugins/platforms"
+                "Onboarding/plugins/imageformats")
+  local _i
+  for _i in "\${!_paths[@]}"; do _paths[\$_i]="/opt/\${_pkgname}/\${_paths[\$_i]}"; done
+  local _f
+  while IFS= read -r -d '' _f; do
+    [[ -f \$_f && \$(od -t x1 -N 4 "\$_f") == *"7f 45 4c 46"* ]] || continue
+    patchelf --set-rpath "\$(IFS=":"; echo "\${_paths[*]}:\\\$ORIGIN")" "\$_f" 2>/dev/null || true
+  done < <(find squashfs-root -type f -size -32M -print0)
+
+  # Use Arch's system glib stack instead of Resolve's bundled (crashes on Arch pango)
+  rm -f squashfs-root/libs/libglib-2.0.so.0 squashfs-root/libs/libgio-2.0.so.0 \
+        squashfs-root/libs/libgmodule-2.0.so.0
+  ln -sf /usr/lib/libglib-2.0.so.0     squashfs-root/libs/libglib-2.0.so.0
+  ln -sf /usr/lib/libgio-2.0.so.0      squashfs-root/libs/libgio-2.0.so.0
+  ln -sf /usr/lib/libgmodule-2.0.so.0  squashfs-root/libs/libgmodule-2.0.so.0
+  ln -sf /usr/lib/libgdk_pixbuf-2.0.so.0 squashfs-root/libs/libgdk_pixbuf-2.0.so.0
+
+  while IFS= read -r -d '' _f; do
+    sed -i "s|RESOLVE_INSTALL_LOCATION|/opt/\${_pkgname}|g" "\$_f"
+  done < <(find squashfs-root -type f '(' -name '*.desktop' -o -name '*.directory' -o -name '*.menu' ')' -print0)
+  echo "StartupWMClass=resolve" >> squashfs-root/share/DaVinciResolve.desktop
+}
+
+package() {
+  install -d -m 0755 "\${pkgdir}/opt/\${_pkgname}"
+  cp -rf squashfs-root/* "\${pkgdir}/opt/\${_pkgname}"
+  # Runtime dirs Resolve writes into (chowned to the user after install).
+  local _d
+  for _d in configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT "Apple Immersive/Calibration"; do
+    install -d -m 0755 "\${pkgdir}/opt/\${_pkgname}/\$_d"
+  done
+  install -Dm644 squashfs-root/share/default-config.dat "\${pkgdir}/opt/\${_pkgname}/configs/config.dat"
+  install -Dm644 squashfs-root/share/log-conf.xml       "\${pkgdir}/opt/\${_pkgname}/configs/log-conf.xml"
+  install -Dm644 squashfs-root/share/default_cm_config.bin "\${pkgdir}/opt/\${_pkgname}/DolbyVision/default_cm_config.bin"
+  install -d -m 0755 "\${pkgdir}/usr/bin"
+  ln -s "/opt/\${_pkgname}/bin/resolve" "\${pkgdir}/usr/bin/${PKGNAME}"
+  install -D -m 0644 "squashfs-root/share/DaVinciResolve.desktop" \
+    "\${pkgdir}/usr/share/applications/DaVinciResolve.desktop"
+  install -D -m 0644 "squashfs-root/graphics/DV_Resolve.png" \
+    "\${pkgdir}/usr/share/icons/hicolor/128x128/apps/davinci-resolve.png"
+  sed -i 's#Icon=.*#Icon=davinci-resolve#' \
+    "\${pkgdir}/usr/share/applications/DaVinciResolve.desktop"
+  if [[ -d squashfs-root/share/etc/udev/rules.d ]]; then
+    install -d -m 0755 "\${pkgdir}/usr/lib/udev/rules.d"
+    install -m 0644 squashfs-root/share/etc/udev/rules.d/*.rules \
+      "\${pkgdir}/usr/lib/udev/rules.d/" 2>/dev/null || true
+  fi
+}
+PKGBUILD
+
+( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ) || die "makepkg failed."
+FINISHED=1
+
+# Resolve writes runtime state into /opt/resolve; hand those dirs to the user
+# so it doesn't fail with "Failed to create application support directories".
+info "Setting runtime directory ownership…"
+_owner=$(id -un)
+_rt=(configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT "Apple Immersive")
+for _d in "${_rt[@]}"; do
+  [[ -d "/opt/resolve/$_d" ]] && sudo chown -R "$_owner":root "/opt/resolve/$_d"
+done
+
+# Studio only: install the community VAAPI encoder IOPlugin (nowrep/dvcp-vaapi) on
+# every GPU, regardless of the current card, so it is already in place if the user
+# later switches graphics vendors — AMD/Intel then get hardware AV1/H.265/H.264 encode
+# in the Deliver tab via VAAPI; NVIDIA uses Resolve's own encoder. Best-effort; never fatal.
+if (( STUDIO )); then
+  info "Installing the VAAPI encoder plugin (VAAPI hardware encode, for any GPU)…"
+  _dvcp_url=$(curl -fsSL https://api.github.com/repos/nowrep/dvcp-vaapi/releases/latest 2>/dev/null \
+    | jq -r '[.assets[] | select(.name | endswith(".zip")) | .browser_download_url][0] // empty')
+  if [[ -n ${_dvcp_url:-} ]]; then
+    _dvcp_zip=$(mktemp --suffix=.zip)
+    if curl -fSL --retry 3 -o "$_dvcp_zip" "$_dvcp_url" \
+       && sudo install -d -m 0755 /opt/resolve/IOPlugins \
+       && sudo bsdtar -xf "$_dvcp_zip" -C /opt/resolve/IOPlugins; then
+      step "VAAPI encoder plugin installed → Deliver tab shows VAAPI encoders."
+    else
+      warn "VAAPI plugin install failed — skipped (Resolve itself is fine)."
+    fi
+    rm -f "$_dvcp_zip"
+  else
+    warn "could not find a dvcp-vaapi release — skipping the VAAPI plugin."
+  fi
+fi
+
+info "${c_g}${c_b}${PRODUCT} ${VER} installed.${c_0}"
+step "Launch it from the menu, or run: ${c_b}${PKGNAME}${c_0}"
+(( STUDIO )) && step "Studio: activate with your Blackmagic license on first launch."
+step "Remove later with: ${c_b}sudo pacman -Rns ${PKGNAME}${c_0}"

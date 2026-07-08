@@ -46,7 +46,28 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 8   // bump as you add more cards
+    readonly property int cardCount: 9   // bump as you add more cards
+
+    // Install page (card 1): which apps the user ticked to install in the background.
+    readonly property int installCardIndex: 1
+    property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false })
+    readonly property int installCount: {
+        var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
+    }
+    function toggleInstall(key) {
+        var s = Object.assign({}, installSelections); s[key] = !s[key];
+        if (s[key] && (key === "resolve" || key === "resolve-studio"))
+            s[key === "resolve" ? "resolve-studio" : "resolve"] = false;
+        if (s[key] && (key === "gaming" || key === "gamescope"))
+            s[key === "gaming" ? "gamescope" : "gaming"] = false;
+        installSelections = s;
+    }
+    function runInstalls() {
+        if (installCount === 0) return;
+        var opts = [];
+        for (var k in installSelections) if (installSelections[k]) opts.push(k);
+        Quickshell.execDetached(["sh", "-c", "pkexec /usr/bin/mainstream-welcome-install \"$@\"; :", "sh"].concat(opts));
+    }
 
     // Shared asset dir for the cards' screenshots/icons.
     readonly property string imageDir: Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
@@ -234,6 +255,7 @@ ApplicationWindow {
                 // animations) up front. Once shown, a card stays loaded so
                 // navigating back to it is instant.
                 LazyCard { sourceComponent: card0Comp }
+                LazyCard { sourceComponent: cardInstallComp }
                 LazyCard { sourceComponent: card1Comp }
                 LazyCard { sourceComponent: card2Comp }
                 LazyCard { sourceComponent: card3Comp }
@@ -245,6 +267,7 @@ ApplicationWindow {
             }
 
             Component { id: card0Comp; Card0Setup {} }
+            Component { id: cardInstallComp; Card1Install {} }
             Component { id: card1Comp; Card1BarTour {} }
             Component { id: card2Comp; Card2Workspaces {} }
             Component { id: card3Comp; Card3DockAndDrawer {} }
@@ -303,12 +326,15 @@ ApplicationWindow {
             Item { Layout.fillWidth: true }
 
             RippleButton {
+                id: nextBtn
+                readonly property bool installMode: root.currentCard === root.installCardIndex && root.installCount > 0
                 buttonRadius: Appearance.rounding.normal
-                implicitWidth: 110
+                implicitWidth: installMode ? 152 : 110
                 implicitHeight: 38
                 colBackground: Appearance.m3colors.m3primary
                 colBackgroundHover: Appearance.m3colors.m3primary
                 onClicked: {
+                    if (nextBtn.installMode) root.runInstalls()
                     if (root.currentCard < root.cardCount - 1) root.currentCard++
                     else root.close()
                 }
@@ -316,15 +342,173 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
-                    text: root.currentCard < root.cardCount - 1
-                        ? Translation.tr("Next")
-                        : Translation.tr("Done")
+                    text: root.currentCard >= root.cardCount - 1
+                        ? Translation.tr("Done")
+                        : (nextBtn.installMode ? Translation.tr("Install / Next") : Translation.tr("Next"))
                     color: Appearance.m3colors.m3onPrimary
                 }
             }
         }
     }
 
+
+    // ---- Install page (card 1) ----
+    // A selectable, checkbox-style option card, styled like the Calamares
+    // installmethod cards; toggles an entry in root.installSelections.
+    component InstallOption : Rectangle {
+        id: optRoot
+        property string optKey
+        property string optTitle
+        property string optDesc
+        property string optIcon
+        readonly property bool selected: (root.installSelections[optKey] === true)
+        Layout.fillWidth: true
+        Layout.preferredHeight: 74
+        radius: Appearance.rounding.normal
+        color: selected
+            ? ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.85)
+            : Appearance.colors.colLayer1
+        border.width: selected ? 2 : 1
+        border.color: selected ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+        Behavior on color { ColorAnimation { duration: 150 } }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.toggleInstall(optRoot.optKey)
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 12
+            MaterialSymbol {
+                text: optRoot.optIcon
+                iconSize: 26
+                color: optRoot.selected ? Appearance.m3colors.m3primary : Appearance.colors.colOnLayer0
+            }
+            ColumnLayout {
+                spacing: 1
+                Layout.fillWidth: true
+                StyledText {
+                    text: optRoot.optTitle
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.weight: Font.Medium
+                    color: Appearance.colors.colOnLayer0
+                }
+                StyledText {
+                    text: optRoot.optDesc
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+            }
+            MaterialSymbol {
+                text: optRoot.selected ? "check_circle" : "radio_button_unchecked"
+                fill: optRoot.selected ? 1 : 0
+                iconSize: 24
+                color: optRoot.selected ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
+            }
+        }
+    }
+
+    component InstallCategory : StyledText {
+        font.pixelSize: Appearance.font.pixelSize.large
+        font.weight: Font.Medium
+        color: Appearance.colors.colOnLayer0
+        Layout.topMargin: 2
+    }
+
+    component Card1Install : Item {
+        id: installCard
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 28
+            spacing: 8
+
+            StyledText {
+                text: Translation.tr("Set up your apps")
+                font.pixelSize: Appearance.font.pixelSize.huge
+                font.weight: Font.Medium
+                color: Appearance.colors.colOnLayer0
+            }
+            StyledText {
+                text: Translation.tr("Pick anything you'd like installed — you can always add these later.")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colSubtext
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: noteRow.implicitHeight + 18
+                radius: Appearance.rounding.normal
+                color: ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.9)
+                RowLayout {
+                    id: noteRow
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+                    MaterialSymbol { text: "info"; iconSize: 22; color: Appearance.m3colors.m3primary; Layout.alignment: Qt.AlignTop }
+                    StyledText {
+                        text: Translation.tr("These install in the background — feel free to keep going through the tour. You'll get a notification when each one finishes.")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colOnLayer0
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            InstallCategory { text: Translation.tr("Gaming") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                InstallOption {
+                    optKey: "gaming"; optIcon: "sports_esports"
+                    optTitle: Translation.tr("Desktop Gaming")
+                    optDesc: Translation.tr("Steam, Proton and GPU drivers — play on your desktop.")
+                }
+                InstallOption {
+                    optKey: "gamescope"; optIcon: "stadia_controller"
+                    optTitle: Translation.tr("Desktop + Big Picture")
+                    optDesc: Translation.tr("Includes everything in Desktop Gaming but adds a Console style gamescope session on pressing Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.")
+                }
+            }
+
+            InstallCategory { text: Translation.tr("Video Editing") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                InstallOption {
+                    optKey: "resolve"; optIcon: "movie"
+                    optTitle: Translation.tr("DaVinci Resolve")
+                    optDesc: Translation.tr("Free edition. Large download.")
+                }
+                InstallOption {
+                    optKey: "resolve-studio"; optIcon: "video_settings"
+                    optTitle: Translation.tr("DaVinci Resolve Studio")
+                    optDesc: Translation.tr("Paid edition (needs your license). Large download.")
+                }
+            }
+
+            InstallCategory { text: Translation.tr("Content Creation") }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                InstallOption {
+                    optKey: "obs"; optIcon: "videocam"
+                    optTitle: Translation.tr("OBS Studio")
+                    optDesc: Translation.tr("mainstream-obs — record and stream.")
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            Item { Layout.fillHeight: true }
+        }
+    }
 
     // Faint pill background shared by every bar section in card 2 —
     // matches the real shell's BarGroup.qml (colLayer1 with a touch
