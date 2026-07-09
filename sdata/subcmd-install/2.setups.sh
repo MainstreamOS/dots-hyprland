@@ -280,7 +280,7 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Virtual machine detected. Installing VM display drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            x sudo pacman -S --needed --noconfirm mesa xf86-video-vmware
+            x sudo pacman -S --needed --noconfirm mesa
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers xorg-x11-drv-vmware
