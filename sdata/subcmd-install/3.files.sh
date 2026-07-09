@@ -223,7 +223,7 @@ function _build_hyprland_plugin_fresh(){
       git init -b "$branch" >/dev/null 2>&1
       git remote add origin "$repo_url" >/dev/null 2>&1
     fi
-    git pull origin "$branch"
+    git fetch origin "$branch" && git reset --hard FETCH_HEAD
   ); then
     echo -e "${STY_YELLOW}[$0]: $name: cannot build (clone/pull failed — network issue?)${STY_RST}"
     return 1
