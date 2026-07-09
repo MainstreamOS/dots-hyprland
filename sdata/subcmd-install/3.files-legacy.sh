@@ -111,8 +111,4 @@ fi
 xdg-mime default org.gnome.Nautilus.desktop inode/directory
 xdg-user-dirs-update
 
-install_file "dots/.local/share/icons/illogical-impulse.svg" "${XDG_DATA_HOME}"/icons/illogical-impulse.svg
-install_file "dots/.local/share/icons/hicolor/scalable/apps/mainstream-logo.svg" "${XDG_DATA_HOME}"/icons/hicolor/scalable/apps/mainstream-logo.svg
-install_file "dots/.local/share/icons/hicolor/scalable/apps/mainstream-settings.svg" "${XDG_DATA_HOME}"/icons/hicolor/scalable/apps/mainstream-settings.svg
-install_file "dots/.local/share/icons/hicolor/scalable/apps/mainstream-tutorial.svg" "${XDG_DATA_HOME}"/icons/hicolor/scalable/apps/mainstream-tutorial.svg
-install_file "dots/.local/share/icons/xcaptain09.png" "${XDG_DATA_HOME}"/icons/xcaptain09.png
+install_dir "dots/.local/share/icons" "${XDG_DATA_HOME}"/icons
