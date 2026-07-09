@@ -1038,6 +1038,16 @@ function setup_zram_swap(){
 showfun setup_zram_swap
 v setup_zram_swap
 
+# Silence the hardware-watchdog banner systemd-shutdown prints at the end of
+# every poweroff/reboot. The cmdline nowatchdog only disables the lockup
+# detector, not the /dev/watchdog device systemd arms via RebootWatchdogSec;
+# pin it off so nothing is armed and no banner is printed on the way down.
+function setup_quiet_shutdown(){
+  x sudo bash -c "mkdir -p /etc/systemd/system.conf.d && printf '[Manager]\nRebootWatchdogSec=0\n' > /etc/systemd/system.conf.d/50-mainstream-no-shutdown-watchdog.conf"
+}
+showfun setup_quiet_shutdown
+v setup_quiet_shutdown
+
 # mpris-hyprland: per-tab MPRIS bridge for Firefox/Zen/LibreWolf/etc.
 # Replaces plasma-browser-integration with a lightweight (~2MB binary)
 # alternative that doesn't drag in the KDE chain. Always installed —
