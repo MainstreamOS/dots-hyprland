@@ -27,8 +27,20 @@ def main():
         print("[]")
         return 0
 
-    days_back = int(sys.argv[1]) if len(sys.argv) > 1 else 45
-    days_forward = int(sys.argv[2]) if len(sys.argv) > 2 else 120
+    args = sys.argv[1:]
+    do_sync = False
+    if args and args[0] == "--sync":
+        do_sync = True
+        args = args[1:]
+
+    def _int(value, default):
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    days_back = _int(args[0], 45) if len(args) > 0 else 45
+    days_forward = _int(args[1], 120) if len(args) > 1 else 120
     now = datetime.now()
     t0 = int((now - timedelta(days=days_back)).timestamp())
     t1 = int((now + timedelta(days=days_forward)).timestamp())
@@ -74,6 +86,13 @@ def main():
                 source, ECal.ClientSourceType.EVENTS, 3, None)
             if client is None:
                 continue
+
+            if do_sync:
+                try:
+                    if client.check_refresh_supported():
+                        client.refresh_sync(None)
+                except Exception:
+                    pass
 
             def cb(comp, start, end, *_args, _n=cal_name, _c=cal_color):
                 summary = None

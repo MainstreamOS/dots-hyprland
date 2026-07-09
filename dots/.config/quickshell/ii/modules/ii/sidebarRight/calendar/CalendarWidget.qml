@@ -85,6 +85,29 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
+                tooltipText: Translation.tr("Sync calendars")
+                downAction: () => {
+                    CalendarEvents.sync();
+                }
+                contentItem: MaterialSymbol {
+                    id: syncSymbol
+                    text: "sync"
+                    iconSize: Appearance.font.pixelSize.larger
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Appearance.colors.colOnLayer1
+                    RotationAnimator {
+                        target: syncSymbol
+                        from: 0
+                        to: 360
+                        duration: 1000
+                        loops: Animation.Infinite
+                        running: CalendarEvents.syncing
+                        onRunningChanged: if (!running) syncSymbol.rotation = 0
+                    }
+                }
+            }
+            CalendarHeaderButton {
+                forceCircle: true
                 downAction: () => {
                     monthShift--;
                 }

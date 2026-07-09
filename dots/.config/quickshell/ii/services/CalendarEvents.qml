@@ -18,6 +18,8 @@ Singleton {
 
     property var eventsByDate: ({})
     property bool accountsAppAvailable: false
+    readonly property bool syncing: fetchProc.running && _syncMode
+    property bool _syncMode: false
 
     function keyFor(year, month, day) { // JS 0-based month, like Todo
         return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
@@ -33,12 +35,23 @@ Singleton {
     }
 
     function refresh() {
-        if (!fetchProc.running) fetchProc.running = true
+        if (fetchProc.running) return
+        root._syncMode = false
+        fetchProc.running = true
+    }
+
+    function sync() {
+        if (fetchProc.running) return
+        root._syncMode = true
+        fetchProc.running = true
     }
 
     Process {
         id: fetchProc
-        command: [FileUtils.trimFileProtocol(`${Directories.scriptPath}/calendar/eds-events.py`)]
+        command: {
+            const script = FileUtils.trimFileProtocol(`${Directories.scriptPath}/calendar/eds-events.py`)
+            return root._syncMode ? [script, "--sync"] : [script]
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
