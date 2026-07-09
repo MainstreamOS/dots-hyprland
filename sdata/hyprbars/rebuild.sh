@@ -23,10 +23,10 @@
 #           run (/var/cache/hyprbars/last-good-ref).
 #        b. An exact `v<HYPR_VER>` tag if upstream has shipped one.
 #        c. The highest `v<MAJOR>.<MINOR>.*` tag.
-#        d. `main`.
-#        e. Walk backward through `main` commit-by-commit until one
-#           builds. Capped at WALK_DEPTH commits to avoid runaway loops
-#           against a permanently-broken upstream.
+#        d. The default branch (`mainstream` on the MainstreamOS fork).
+#        e. Walk backward through the default branch commit-by-commit
+#           until one builds. Capped at WALK_DEPTH commits to avoid
+#           runaway loops against a permanently-broken source.
 #
 #   3. The first working ref is cached as last-known-good for the next
 #      run. Subsequent rebuilds short-circuit on step 2a.
@@ -37,7 +37,10 @@
 # self-heals by walking history and updating the cache.
 #
 # /etc/hyprbars.conf overrides (sourced as bash, all optional):
-#   HYPRBARS_REPO=<git url>   default: hyprwm/hyprland-plugins
+#   HYPRBARS_REPO=<git url>   default: MainstreamOS/hyprland-plugins
+#   HYPRBARS_DEFAULT_BRANCH=<name>   default: mainstream (override to
+#                                    "main" when HYPRBARS_REPO points at
+#                                    upstream hyprwm/hyprland-plugins)
 #   HYPRBARS_REF=<tag/sha>    explicit pin; disables auto-fallback
 #   WALK_DEPTH=<N>            commits to try in step 2e (default 50)
 #
@@ -71,8 +74,9 @@ STATUS_DIR=/var/lib/hyprbars
 STATUS_FILE="$STATUS_DIR/status"
 LOG_PFX="[hyprbars-rebuild]"
 
-HYPRBARS_REPO="https://github.com/hyprwm/hyprland-plugins"
+HYPRBARS_REPO="https://github.com/MainstreamOS/hyprland-plugins"
 HYPRBARS_REF=""
+HYPRBARS_DEFAULT_BRANCH="mainstream"
 WALK_DEPTH=50
 
 # shellcheck disable=SC1090
@@ -175,7 +179,7 @@ auto_detect_refs() {
     highest=$(git -C "$SRC_DIR" tag -l "v${mm}.*" | sort -V | tail -n1)
     [[ -n "$highest" ]] && echo "$highest"
 
-    echo "main"
+    echo "$HYPRBARS_DEFAULT_BRANCH"
 }
 
 # ------------------------------------------------------------------
@@ -236,7 +240,7 @@ if [[ -n "$HYPRBARS_REF" ]]; then
         exit 1
     fi
 else
-    # Stage 1: try the candidate list (cache → tags → main)
+    # Stage 1: try the candidate list (cache → tags → default branch)
     seen=""
     while IFS= read -r ref; do
         [[ -z "$ref" ]] && continue
@@ -249,9 +253,9 @@ else
         fi
     done < <(auto_detect_refs)
 
-    # Stage 2: walk backward through main if everything above failed
+    # Stage 2: walk backward through the default branch if everything above failed
     if [[ -z "$SUCCESS_REF" ]]; then
-        log "All candidate refs failed — walking back through main (max $WALK_DEPTH commits)..."
+        log "All candidate refs failed — walking back through $HYPRBARS_DEFAULT_BRANCH (max $WALK_DEPTH commits)..."
         attempt=0
         while IFS= read -r commit; do
             attempt=$((attempt + 1))
@@ -262,8 +266,8 @@ else
                 SUCCESS_REF="$commit"
                 break
             fi
-        done < <(git -C "$SRC_DIR" log --format=%H origin/main 2>/dev/null \
-                || git -C "$SRC_DIR" log --format=%H main)
+        done < <(git -C "$SRC_DIR" log --format=%H "origin/$HYPRBARS_DEFAULT_BRANCH" 2>/dev/null \
+                || git -C "$SRC_DIR" log --format=%H "$HYPRBARS_DEFAULT_BRANCH")
     fi
 fi
 
