@@ -151,7 +151,7 @@ GENERAL_CONF="$XDG_CONFIG_HOME/hypr/hyprland/general.lua"
 CUSTOM_CONF="$XDG_CONFIG_HOME/hypr/custom/general.lua"
 if [ -f "$DECO_JSON" ]; then
     python3 - "$DECO_JSON" "$GENERAL_CONF" "$CUSTOM_CONF" <<'PY' || dlog "decoration restore failed"
-import json, re, sys
+import json, os, re, sys
 deco_path, general, custom = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     flags = json.load(open(deco_path))
@@ -214,14 +214,9 @@ except FileNotFoundError: pass
 
 if "titleBars" in flags:
     try:
-        text = open(custom).read()
-        # Lua-form hyprbars directive: hl.plugin.load("...hyprbars.so")
-        if flags["titleBars"]:
-            text = re.sub(r'^([ \t]*)--\s*(hl\.plugin\.load\([^)]*hyprbars\.so[^)]*\))', r'\1\2', text, flags=re.M)
-        else:
-            text = re.sub(r'^([ \t]*)(?!--)(hl\.plugin\.load\([^)]*hyprbars\.so[^)]*\))', r'\1-- \2', text, flags=re.M)
-        open(custom, "w").write(text)
-    except FileNotFoundError: pass
+        flag = os.path.join(os.path.dirname(custom), "titlebars.enabled")
+        open(flag, "w").write("1" if flags["titleBars"] else "0")
+    except OSError: pass
 PY
 fi
 

@@ -382,7 +382,8 @@ ContentPage {
             `    if rm: flags["roundCorners"] = int(rm.group(1)) > 0\n` +
             `except FileNotFoundError: pass\n` +
             `try:\n` +
-            `    flags["titleBars"] = bool(re.search(r"^[ \\t]*hl\\.plugin\\.load\\([^)]*hyprbars\\.so", open(custom).read(), re.M))\n` +
+            `    fp = os.path.join(os.path.dirname(custom), "titlebars.enabled")\n` +
+            `    flags["titleBars"] = (open(fp).read().strip() != "0") if os.path.exists(fp) else True\n` +
             `except FileNotFoundError: pass\n` +
             `with open(out_path, "w") as f: json.dump(flags, f, indent=2)\n` +
             `PY\n` +

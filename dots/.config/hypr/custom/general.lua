@@ -1,6 +1,7 @@
 -- Custom general overrides + plugin loading.
--- Settings → Interface panel rewrites the hyprbars plugin-load line in here
--- via Python regex; keep the shape stable. The Lua config manager cannot
+-- The Title Bars toggle sets plugin:hyprbars:enabled via the titlebars.enabled
+-- flag read below; it does NOT rewrite the load line (which stays permanently
+-- active). The Lua config manager cannot
 -- read or write plugin config values for plugins still on the V1 plugin
 -- API (HyprlandAPI::addConfigValue, addConfigKeyword, getConfigValue) —
 -- those calls are hard-gated to CONFIG_LEGACY in Hyprland 0.55
@@ -10,8 +11,7 @@
 -- Status of our plugins:
 --   * scrolloverview — V1, NOT yet ported. Runs on compiled defaults.
 --   * hyprbars       — V2-ported in MainstreamOS/hyprland-plugins fork.
---     Settable from Lua via hl.config({ plugin = { hyprbars = { ... } } })
---     once the load directive is uncommented.
+--     Settable from Lua via hl.config({ plugin = { hyprbars = { ... } } }).
 
 local HOME = os.getenv("HOME") or ""
 
@@ -39,9 +39,10 @@ end
 local scrolloverviewSo = HOME .. "/.local/share/hyprland/plugins/scrolloverview.so"
 hl.plugin.load(scrolloverviewSo)
 
--- hyprbars plugin. Same install path. Active by default — the
--- Title Bars toggle in Settings → Interface → Decorations toggles the
--- `-- ` prefix on this exact line via TitleBars.qml's self-healing path.
+-- hyprbars plugin. Same install path. Always loaded — never unloaded at
+-- runtime (a runtime unload leaves a dangling mouse-move hook that crashes
+-- the compositor). The Title Bars toggle flips plugin:hyprbars:enabled from
+-- the titlebars.enabled flag read below, applied on hyprctl reload.
 hl.plugin.load(HOME .. "/.local/share/hyprland/plugins/hyprbars.so")
 
 -- Plugin config — applied DEFERRED via timer (not at parse time).
@@ -67,6 +68,17 @@ hl.plugin.load(HOME .. "/.local/share/hyprland/plugins/hyprbars.so")
 local function keyAvailable(name)
     local _, err = hl.get_config(name)
     return err == nil
+end
+
+-- Title Bars on/off persists in a flag file next to this config
+-- ("1"/"0", absent = enabled). Read fresh on every reload so the Settings
+-- toggle takes effect via `hyprctl reload` — with NO plugin unload.
+local function titleBarsEnabled()
+    local f = io.open(HOME .. "/.config/hypr/custom/titlebars.enabled", "r")
+    if not f then return true end
+    local v = f:read("*l")
+    f:close()
+    return v ~= "0"
 end
 
 local function applyPluginConfig()
@@ -103,12 +115,14 @@ local function applyPluginConfig()
 
     -- hyprbars config + buttons — also probed before apply.
     if hyprbarsActive() and keyAvailable("plugin:hyprbars:bar_height") then
+        local tbOn = titleBarsEnabled()
         hl.config({
             plugin = {
                 hyprbars = {
+                    enabled = tbOn,
                     bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
                     bar_title_enabled = false,
-                    bar_height = 30,
+                    bar_height = tbOn and 30 or 0,
                     bar_padding = 10,
                     bar_button_padding = 5,
                     bar_precedence_over_border = true,
@@ -131,7 +145,7 @@ local function applyPluginConfig()
         --
         -- movetoworkspacesilent has no direct equivalent in hl.dsp; only
         -- two buttons until upstream adds it (or a Lua-side wrapper).
-        if hyprbarsActive() then
+        if hyprbarsActive() and tbOn then
             -- Action strings are shell commands run via the legacy `exec`
             -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
             -- subshell, so the Lua expression after `hyprctl dispatch` must

@@ -418,19 +418,20 @@ function setup_hyprland_plugins(){
   # custom/general.lua (shipped with the dots). We prepend the load directive
   # to the same file — Hyprland requires the .so to be loaded before its
   # settings block is parsed, otherwise the config is silently ignored.
+  # hyprbars stays loaded always; the Title Bars toggle flips
+  # plugin:hyprbars:enabled via the titlebars.enabled flag, not this line.
   local _general_lua="$HOME/.config/hypr/custom/general.lua"
   if [[ -f "$_general_lua" ]]; then
     if ! grep -qE 'hl\.plugin\.load.*hyprbars\.so' "$_general_lua"; then
       local _tmp; _tmp=$(mktemp)
       {
         echo "-- hyprbars plugin load directive (built from source at install time)"
-        echo "-- TitleBars.qml toggles the comment prefix on this exact line."
-        echo "-- hl.plugin.load(\"${plugin_path}\")"
+        echo "hl.plugin.load(\"${plugin_path}\")"
         echo ""
         cat "$_general_lua"
       } > "$_tmp"
       mv "$_tmp" "$_general_lua"
-      echo -e "${STY_CYAN}[$0]: Added commented hl.plugin.load(\"${plugin_path}\") to $_general_lua (enable via Title Bars toggle)${STY_RST}"
+      echo -e "${STY_CYAN}[$0]: Added hl.plugin.load(\"${plugin_path}\") to $_general_lua${STY_RST}"
     else
       echo -e "${STY_BLUE}[$0]: $_general_lua already loads hyprbars; skipping.${STY_RST}"
     fi
