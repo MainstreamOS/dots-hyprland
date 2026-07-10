@@ -17,6 +17,7 @@ Singleton {
     property bool mediaControlsOpen: false
     property bool mediaTransferActive: false
     property var mediaTransferUrls: []
+    property bool mediaReceiveActive: false
     property bool osdBrightnessOpen: false
     property bool osdVolumeOpen: false
     property bool oskOpen: false
@@ -83,6 +84,27 @@ Singleton {
         }
     }
 
+    // Right-click on the bar media widget (and the localsend IPC) lands
+    // here. First use arms the receiver and opens its panel; once armed it
+    // only toggles the panel's visibility — the receiver itself (and any
+    // in-flight transfer) is stopped exclusively by the panel's Turn off
+    // button, so hiding the panel can never end a receive.
+    function toggleReceiveView() {
+        if (!LocalSend.receiveActive) {
+            LocalSend.startReceive();
+            GlobalStates.mediaReceiveActive = true;
+            GlobalStates.mediaControlsOpen = true;
+            return;
+        }
+        const showing = GlobalStates.mediaControlsOpen && GlobalStates.mediaReceiveActive;
+        if (showing) {
+            GlobalStates.mediaControlsOpen = false;
+        } else {
+            GlobalStates.mediaReceiveActive = true;
+            GlobalStates.mediaControlsOpen = true;
+        }
+    }
+
     onMediaControlsOpenChanged: {
         if (!GlobalStates.mediaControlsOpen) {
             // Keep transfer state while a send is in flight so the user can
@@ -93,6 +115,14 @@ Singleton {
                 GlobalStates.mediaTransferActive = false;
                 GlobalStates.mediaTransferUrls = [];
                 LocalSend.reset();
+            }
+            // The receive VIEW resets on close, but the receiver itself stays
+            // armed — closing the popup must not stop accepting files. An
+            // in-flight incoming session keeps the view so reopening the
+            // popup (or the next auto-open) lands back on live progress.
+            if (!LocalSend.receiveSessionActive) {
+                GlobalStates.mediaReceiveActive = false;
+                LocalSend.receiveClearDone();
             }
         }
     }

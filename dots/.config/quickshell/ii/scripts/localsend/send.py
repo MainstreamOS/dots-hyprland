@@ -27,14 +27,10 @@ import sys
 import urllib.parse
 import uuid
 
-ALIAS = "Quickshell Bar"
-SELF_PORT = 53317
+from common import device_info, emit
+
 PROGRESS_INTERVAL = 65536
 CHUNK_SIZE = 65536
-
-
-def emit(line):
-    print(line, flush=True)
 
 
 def decode_path(arg):
@@ -91,16 +87,7 @@ def main():
     payload_files = {fid: {k: v for k, v in m.items() if not k.startswith("_")}
                      for fid, m in files_meta.items()}
     payload = {
-        "info": {
-            "alias": ALIAS,
-            "version": "2.0",
-            "deviceModel": "Hyprland",
-            "deviceType": "desktop",
-            "fingerprint": "qs-" + uuid.uuid4().hex[:16],
-            "port": SELF_PORT,
-            "protocol": protocol,
-            "download": False,
-        },
+        "info": device_info(protocol=protocol),
         "files": payload_files,
     }
     body = json.dumps(payload).encode()

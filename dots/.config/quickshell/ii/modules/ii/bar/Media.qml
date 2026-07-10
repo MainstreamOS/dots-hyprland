@@ -34,8 +34,10 @@ Item {
                 activePlayer.togglePlaying();
             } else if (event.button === Qt.BackButton) {
                 activePlayer.previous();
-            } else if (event.button === Qt.ForwardButton || event.button === Qt.RightButton) {
+            } else if (event.button === Qt.ForwardButton) {
                 activePlayer.next();
+            } else if (event.button === Qt.RightButton) {
+                GlobalStates.toggleReceiveView();
             } else if (event.button === Qt.LeftButton) {
                 GlobalStates.mediaControlsOpen = !GlobalStates.mediaControlsOpen
             }
@@ -77,22 +79,26 @@ Item {
             id: mediaCircProg
             Layout.alignment: Qt.AlignVCenter
             lineWidth: Appearance.rounding.unsharpen
-            value: activePlayer?.position / activePlayer?.length
+            value: LocalSend.receiveSessionActive ? LocalSend.receiveProgressFraction
+                : activePlayer?.position / activePlayer?.length
             implicitSize: 20
-            colPrimary: Appearance.colors.colOnSecondaryContainer
+            colPrimary: LocalSend.receiveActive ? Appearance.colors.colPrimary
+                : Appearance.colors.colOnSecondaryContainer
             enableAnimation: false
 
             Item {
                 anchors.centerIn: parent
                 width: mediaCircProg.implicitSize
                 height: mediaCircProg.implicitSize
-                
+
                 MaterialSymbol {
                     anchors.centerIn: parent
                     fill: 1
-                    text: activePlayer?.isPlaying ? "pause" : "music_note"
+                    text: LocalSend.receiveActive ? "download"
+                        : activePlayer?.isPlaying ? "pause" : "music_note"
                     iconSize: Appearance.font.pixelSize.normal
-                    color: Appearance.m3colors.m3onSecondaryContainer
+                    color: LocalSend.receiveActive ? Appearance.colors.colPrimary
+                        : Appearance.m3colors.m3onSecondaryContainer
                 }
             }
         }

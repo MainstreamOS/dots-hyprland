@@ -2,23 +2,54 @@
 """
 Continuous LocalSend discovery via UDP multicast on 224.0.0.167:53317.
 
-Sends an announce packet every ANNOUNCE_INTERVAL seconds and listens forever
-for replies. Each unique remote device (by fingerprint) is printed once as a
-JSON line on stdout. Runs until the process is killed.
+Peers respond to an announcement at the ADVERTISED port — the official app
+prefers an HTTP POST to /api/localsend/v2/register there, with a UDP reply
+as fallback. Advertising 53317 would hand those replies to the receiver
+(when armed) or to nothing (when not), so this process advertises its own
+ephemeral port and answers both reply styles there itself. Multicast
+announces from peers still arrive on the group socket. Each unique remote
+device (by fingerprint) is printed once as a JSON line on stdout. Runs
+until the process is killed.
 """
 
 import json
+import select
 import socket
-import struct
 import sys
 import threading
-import time
-import uuid
+from http.server import ThreadingHTTPServer
 
-MULTICAST_ADDR = "224.0.0.167"
-MULTICAST_PORT = 53317
+from common import (FINGERPRINT, PORT, LocalSendHandler, device_info,
+                    join_multicast_socket, start_announcer)
+
 ANNOUNCE_INTERVAL = 2.0
-SELF_FINGERPRINT = "qs-discover-" + uuid.uuid4().hex[:12]
+
+_print_lock = threading.Lock()
+_seen = set()
+_locals = set()
+
+
+def emit_device(info, address):
+    if not isinstance(info, dict):
+        return
+    fp = info.get("fingerprint") or ""
+    if not fp or fp == FINGERPRINT:
+        return
+    if address in _locals:
+        return
+    with _print_lock:
+        if fp in _seen:
+            return
+        _seen.add(fp)
+        print(json.dumps({
+            "address": address,
+            "port": int(info.get("port") or PORT),
+            "alias": info.get("alias") or "",
+            "fingerprint": fp,
+            "deviceType": info.get("deviceType") or "",
+            "deviceModel": info.get("deviceModel") or "",
+            "protocol": info.get("protocol") or "http",
+        }), flush=True)
 
 
 def local_ips():
@@ -39,88 +70,71 @@ def local_ips():
     return ips
 
 
-def announcer(sock, payload, stop_event):
-    while not stop_event.is_set():
+class RegisterHandler(LocalSendHandler):
+
+    def do_POST(self):
+        body = self._read_body()
+        if self.path.split("?")[0] == "/api/localsend/v2/register":
+            try:
+                emit_device(json.loads(body or b"{}"), self.client_address[0])
+            except Exception:
+                pass
+            self._json(200, device_info())
+        else:
+            self._empty(404)
+
+
+def bind_reply_pair():
+    # The UDP reply socket and the /register HTTP listener must share one
+    # port number, since both reply styles target the single advertised
+    # port. Grab an ephemeral UDP port, then bind TCP to the same number;
+    # retry with a fresh port if that number is taken on TCP.
+    for _ in range(20):
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        udp.bind(("", 0))
+        port = udp.getsockname()[1]
         try:
-            sock.sendto(payload, (MULTICAST_ADDR, MULTICAST_PORT))
+            httpd = ThreadingHTTPServer(("", port), RegisterHandler)
+            return udp, httpd, port
         except OSError:
-            pass
-        stop_event.wait(ANNOUNCE_INTERVAL)
+            udp.close()
+    raise OSError("no usable reply port")
 
 
 def main():
-    locals_ = local_ips()
-    seen = set()
+    global _locals
+    _locals = local_ips()
 
-    announce = {
-        "alias": "Quickshell Bar",
-        "version": "2.0",
-        "deviceModel": "Hyprland",
-        "deviceType": "desktop",
-        "fingerprint": SELF_FINGERPRINT,
-        "port": MULTICAST_PORT,
-        "protocol": "http",
-        "download": False,
-        "announce": True,
-    }
-    payload = json.dumps(announce).encode()
+    udp, httpd, reply_port = bind_reply_pair()
+    payload = json.dumps(device_info(announce=True, port=reply_port)).encode()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    except (AttributeError, OSError):
-        pass
-    sock.bind(("", MULTICAST_PORT))
-
-    mreq = struct.pack("4sl", socket.inet_aton(MULTICAST_ADDR), socket.INADDR_ANY)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+    rx = join_multicast_socket()
 
     stop_event = threading.Event()
-    threading.Thread(
-        target=announcer, args=(sock, payload, stop_event), daemon=True
-    ).start()
+    start_announcer(udp, payload, stop_event, ANNOUNCE_INTERVAL)
+    threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5}, daemon=True).start()
 
-    sock.settimeout(0.5)
     try:
         while True:
-            try:
-                data, addr = sock.recvfrom(8192)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            try:
-                info = json.loads(data.decode("utf-8", "replace"))
-            except Exception:
-                continue
-            if not isinstance(info, dict):
-                continue
-            fp = info.get("fingerprint") or ""
-            if fp == SELF_FINGERPRINT:
-                continue
-            if addr[0] in locals_:
-                continue
-            if fp in seen:
-                continue
-            seen.add(fp)
-            out = {
-                "address": addr[0],
-                "port": int(info.get("port") or MULTICAST_PORT),
-                "alias": info.get("alias") or "",
-                "fingerprint": fp,
-                "deviceType": info.get("deviceType") or "",
-                "deviceModel": info.get("deviceModel") or "",
-                "protocol": info.get("protocol") or "http",
-            }
-            print(json.dumps(out), flush=True)
+            readable, _, _ = select.select([rx, udp], [], [], 0.5)
+            for sock in readable:
+                try:
+                    data, addr = sock.recvfrom(8192)
+                except OSError:
+                    continue
+                try:
+                    info = json.loads(data.decode("utf-8", "replace"))
+                except Exception:
+                    continue
+                emit_device(info, addr[0])
     finally:
         stop_event.set()
-        try:
-            sock.close()
-        except Exception:
-            pass
+        httpd.shutdown()
+        for sock in (rx, udp):
+            try:
+                sock.close()
+            except Exception:
+                pass
 
     return 0
 

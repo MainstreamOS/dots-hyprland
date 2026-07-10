@@ -82,6 +82,30 @@ Scope {
                 postSendRevertTimer.restart();
             }
         }
+        // Receive choreography: the service only tracks protocol state; the
+        // popup raises the ReceivePanel when a session starts, finishes, or
+        // fails, and puts the view away when the receiver is turned off.
+        function onReceiveSessionActiveChanged() {
+            if (LocalSend.receiveSessionActive) root.showReceiveView();
+        }
+        function onReceiveCompleted(fileCount) {
+            root.showReceiveView();
+        }
+        function onReceiveErrorChanged() {
+            if (LocalSend.receiveError.length > 0) root.showReceiveView();
+        }
+        function onReceiveActiveChanged() {
+            if (!LocalSend.receiveActive && GlobalStates.mediaReceiveActive
+                && LocalSend.receiveError.length === 0) {
+                GlobalStates.mediaReceiveActive = false;
+                GlobalStates.mediaControlsOpen = false;
+            }
+        }
+    }
+
+    function showReceiveView() {
+        GlobalStates.mediaReceiveActive = true;
+        GlobalStates.mediaControlsOpen = true;
     }
 
     Loader {
@@ -99,10 +123,16 @@ Scope {
 
             exclusionMode: ExclusionMode.Ignore
             exclusiveZone: 0
+            // Single home for the transfer > receive > player precedence;
+            // height, mask, and every view's visible read from here.
+            readonly property Item shownItem: GlobalStates.mediaTransferActive ? transferPanel
+                : GlobalStates.mediaReceiveActive ? receivePanel
+                : playerColumnLayout
+
             implicitWidth: root.widgetWidth
-            implicitHeight: GlobalStates.mediaTransferActive
-                ? transferPanel.height
-                : playerColumnLayout.implicitHeight
+            implicitHeight: shownItem === playerColumnLayout
+                ? playerColumnLayout.implicitHeight
+                : shownItem.height
             color: "transparent"
             WlrLayershell.namespace: "quickshell:mediaControls"
 
@@ -120,7 +150,7 @@ Scope {
             }
 
             mask: Region {
-                item: GlobalStates.mediaTransferActive ? transferPanel : playerColumnLayout
+                item: panelWindow.shownItem
             }
 
             Component.onCompleted: {
@@ -170,7 +200,7 @@ Scope {
 
             FileTransferPanel {
                 id: transferPanel
-                visible: GlobalStates.mediaTransferActive
+                visible: panelWindow.shownItem === transferPanel
                 anchors.top: parent.top
                 anchors.left: parent.left
                 fileUrls: GlobalStates.mediaTransferUrls
@@ -179,10 +209,20 @@ Scope {
                 targetHeight: root.widgetHeight
             }
 
+            ReceivePanel {
+                id: receivePanel
+                visible: panelWindow.shownItem === receivePanel
+                anchors.top: parent.top
+                anchors.left: parent.left
+                radius: root.popupRounding
+                targetWidth: root.widgetWidth
+                targetHeight: root.widgetHeight
+            }
+
             ColumnLayout {
                 id: playerColumnLayout
                 anchors.fill: parent
-                visible: !GlobalStates.mediaTransferActive
+                visible: panelWindow.shownItem === playerColumnLayout
                 spacing: -Appearance.sizes.elevationMargin // Shadow overlap okay
 
                 Repeater {
@@ -243,6 +283,20 @@ Scope {
                     }
                 }
             }
+        }
+    }
+
+    IpcHandler {
+        target: "localsend"
+
+        function receiveToggle(): void {
+            GlobalStates.toggleReceiveView();
+        }
+        function receiveOn(): void {
+            if (!LocalSend.receiveActive) GlobalStates.toggleReceiveView();
+        }
+        function receiveOff(): void {
+            LocalSend.stopReceive();
         }
     }
 
