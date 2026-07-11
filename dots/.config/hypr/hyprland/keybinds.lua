@@ -244,8 +244,7 @@ hl.bind("SUPER + code:86", function() zoomfunction(0.3) end, {repeating = true} 
 --#!
 --##! Apps
 -- Fork overhaul (f9dec549): W→wallpaper selector, B→browser.
-hl.bind("SUPER + Return", hl.dsp.exec_cmd(terminal), {description = "Terminal"} )
-hl.bind("SUPER + T", hl.dsp.exec_cmd(terminal) )
+hl.bind("SUPER + T", hl.dsp.exec_cmd(terminal), {description = "Terminal"} )
 hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd(terminal) )
 hl.bind("SUPER + E", hl.dsp.exec_cmd(fileManager), {description = "File manager"} )
 hl.bind("SUPER + B", hl.dsp.exec_cmd(browser), {description = "Browser"} )
