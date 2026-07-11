@@ -174,7 +174,13 @@ def read_cmdline(pid: int) -> list[str]:
     # legitimate interior/trailing empty-string args survive the round trip.
     if parts and parts[-1] == b"":
         parts.pop()
-    return [p.decode("utf-8", "replace") for p in parts]
+    argv = [p.decode("utf-8", "replace") for p in parts]
+    # Chromium/Electron rewrites argv into one space-joined block; restore
+    # would exec that single element verbatim as a nonexistent "binary".
+    # Recover by splitting when the lone element is not a real path.
+    if len(argv) == 1 and " " in argv[0] and not os.path.exists(argv[0]):
+        argv = [t for t in argv[0].split(" ") if t]
+    return argv
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
