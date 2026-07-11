@@ -49,11 +49,15 @@ apply_kitty() {
     sed -i "s/${colorlist[$i]} #/${colorvalues[$i]#\#}/g" "$STATE_DIR"/user/generated/terminal/kitty-theme.conf
   done
 
-  # Reload
-  if ! pgrep -f kitty >/dev/null; then
-    return
-  fi
-  kill -SIGUSR1 $(pidof kitty)
+  # Reload. pgrep/pidof read every /proc/*/cmdline and hang while any task
+  # sits wedged in the kernel holding its mm lock; /proc/*/comm reads don't.
+  local p comm kitty_pids=""
+  for p in /proc/[0-9]*; do
+    read -r comm < "$p/comm" 2>/dev/null || continue
+    [[ "$comm" == "kitty" ]] && kitty_pids="$kitty_pids ${p#/proc/}"
+  done
+  [[ -n "$kitty_pids" ]] && kill -SIGUSR1 $kitty_pids
+  return 0
 }
 
 apply_anyterm() {
