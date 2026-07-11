@@ -227,7 +227,17 @@ Item {
                         active: root.hasWindows && !root.isFolder
                         Layout.fillWidth: true
                         sourceComponent: ColumnLayout {
+                            id: moveToWorkspaceBlock
                             spacing: 0
+
+                            // Offer the workspace group the user is currently in
+                            // (same group-of-N math as the bar's indicator): on
+                            // workspace 12 the row reads 11-20, on 34 it reads
+                            // 31-40. Special workspaces (negative ids) fall back
+                            // to the first group.
+                            readonly property int workspacesShown: Config.options.bar.workspaces.shown
+                            readonly property int activeWorkspaceId: Hyprland.monitorFor(root.QsWindow.window?.screen)?.activeWorkspace?.id ?? 1
+                            readonly property int workspaceBase: Math.max(0, Math.floor((activeWorkspaceId - 1) / workspacesShown)) * workspacesShown
 
                             ContextMenuItem {
                                 Layout.fillWidth: true
@@ -244,23 +254,24 @@ Item {
                                 spacing: 2
 
                                 Repeater {
-                                    model: 10
+                                    model: moveToWorkspaceBlock.workspacesShown
                                     delegate: RippleButton {
                                         id: wsButton
                                         required property int index
+                                        readonly property int workspaceValue: moveToWorkspaceBlock.workspaceBase + index + 1
                                         implicitWidth: 28
                                         implicitHeight: 28
                                         buttonRadius: Appearance.rounding.small
                                         contentItem: StyledText {
                                             anchors.centerIn: parent
-                                            text: String(wsButton.index + 1)
+                                            text: String(wsButton.workspaceValue)
                                             font.pixelSize: Appearance.font.pixelSize.small
                                             horizontalAlignment: Text.AlignHCenter
                                             color: Appearance.m3colors.m3onSurface
                                         }
                                         onClicked: {
                                             // 0.55 Lua dispatch; follow = false keeps "silent" semantics.
-                                            const ws = wsButton.index + 1;
+                                            const ws = wsButton.workspaceValue;
                                             for (const toplevel of root.appToplevel.toplevels) {
                                                 const addr = `0x${toplevel.HyprlandToplevel?.address}`;
                                                 Hyprland.dispatch(
