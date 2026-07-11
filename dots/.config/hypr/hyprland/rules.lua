@@ -26,6 +26,10 @@ hl.window_rule({match = {title = "^(.*)(wants to save)$" },                  cen
 hl.window_rule({match = {title = "^(.*)(wants to save)$" },                  float = true})
 hl.window_rule({match = {title = "^(.*)(wants to open)$" },                  center = true})
 hl.window_rule({match = {title = "^(.*)(wants to open)$" },                  float = true})
+-- Keep hidden games rendering — alt-tabbing must not freeze multiplayer
+-- ticks or starve OBS game capture (rate: misc:render_unfocused_fps).
+hl.window_rule({match = {class = "^(steam_app_.*)$" },                       render_unfocused = true})
+
 hl.window_rule({match = {class = "^(blueberry\\.py)$" },                     float = true})
 hl.window_rule({match = {class = "^(guifetch)$" },                           float = true}) -- FlafyDev/guifetch
 hl.window_rule({match = {class = "^(pavucontrol)$" },                        float = true})
