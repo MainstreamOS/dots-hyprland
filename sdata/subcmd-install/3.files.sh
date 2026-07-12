@@ -262,7 +262,15 @@ function _build_hyprland_plugin_fresh(){
     return 1
   fi
 
-  cp -f "$build_dir/$so_filename" "$plugin_dir/$so_filename"
+  # Replace via rename: a truncating copy would corrupt the mapping of a
+  # plugin the running session has loaded and crash the compositor. The
+  # rename swaps the inode atomically; a live session keeps the old copy
+  # until relaunch.
+  local _staged_so
+  _staged_so=$(mktemp -p "$plugin_dir" ".${so_filename}.XXXXXX")
+  cp -f "$build_dir/$so_filename" "$_staged_so"
+  chmod 755 "$_staged_so"
+  mv -f "$_staged_so" "$plugin_dir/$so_filename"
   echo -e "${STY_GREEN}[$0]: $name: built freshly against current hyprland → $plugin_dir/$so_filename${STY_RST}"
   return 0
 }
