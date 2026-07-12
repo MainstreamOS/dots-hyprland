@@ -38,11 +38,11 @@ import qs.modules.common.functions
 ApplicationWindow {
     id: root
     visible: true
-    width: 760
+    width: 620
     height: 700
-    minimumWidth: 760
+    minimumWidth: 620
     minimumHeight: 700
-    maximumWidth: 760
+    maximumWidth: 620
     maximumHeight: 700
     color: Appearance.m3colors.m3background
     title: Translation.tr("Auto Drive Mount")
@@ -595,8 +595,6 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 color: Appearance.colors.colLayer1
                 radius: Appearance.rounding.normal
-                border.width: 1
-                border.color: Appearance.colors.colOutlineVariant
                 implicitHeight: rmCol.implicitHeight + 24
                 ColumnLayout {
                     id: rmCol
@@ -694,8 +692,6 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 color: Appearance.colors.colLayer1
                 radius: Appearance.rounding.normal
-                border.width: 1
-                border.color: Appearance.colors.colOutlineVariant
                 implicitHeight: umCol.implicitHeight + 24
                 ColumnLayout {
                     id: umCol
@@ -811,6 +807,8 @@ ApplicationWindow {
             width: ListView.view ? ListView.view.width : implicitWidth
             implicitHeight: 54
             buttonRadius: Appearance.rounding.small
+            colBackground: Appearance.colors.colLayer1
+            colBackgroundHover: Appearance.colors.colLayer1Hover
             toggled: isSelected
             onClicked: {
                 if (isSelected) {
@@ -870,36 +868,44 @@ ApplicationWindow {
     }
 
     // ── Layout ─────────────────────────────────────────────────────
-    ColumnLayout {
+    // Mirrors the settings app's chrome: m3background window, content on
+    // a rounded m3surfaceContainerLow pane, section-style headers, rows
+    // directly on the pane.
+    property real contentPadding: 8
+
+    Rectangle {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 14
+        anchors.margins: root.contentPadding
+        color: Appearance.m3colors.m3surfaceContainerLow
+        radius: Appearance.rounding.windowRounding - root.contentPadding
 
-        // Titlebar — title left, refresh right
-        Item {
+        ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 20
+        spacing: 12
+
+        // Section header — title left, refresh right
+        RowLayout {
             Layout.fillWidth: true
-            implicitHeight: Math.max(titleText.implicitHeight, refreshBtn.implicitHeight)
+            spacing: 6
 
-            StyledText {
-                id: titleText
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: 4
-                text: Translation.tr("Auto Drive Mount")
-                color: Appearance.colors.colOnLayer0
-                font {
-                    family: Appearance.font.family.title
-                    pixelSize: Appearance.font.pixelSize.title
-                    variableAxes: Appearance.font.variableAxes.title
-                }
+            MaterialSymbol {
+                text: "hard_drive_2"
+                iconSize: Appearance.font.pixelSize.hugeass
+                color: Appearance.colors.colOnSecondaryContainer
             }
+            StyledText {
+                text: Translation.tr("Auto Drive Mount")
+                font.pixelSize: Appearance.font.pixelSize.larger
+                font.weight: Font.Medium
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            Item { Layout.fillWidth: true }
             RippleButton {
                 id: refreshBtn
                 buttonRadius: Appearance.rounding.full
                 implicitWidth: 35
                 implicitHeight: 35
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
                 enabled: !root.busy
                 onClicked: {
                     // Refresh whichever lists are relevant for the
@@ -913,7 +919,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     text: "refresh"
                     iconSize: 20
-                    color: Appearance.colors.colOnLayer0
+                    color: Appearance.colors.colOnLayer1
                 }
                 StyledToolTip { text: Translation.tr("Refresh") }
             }
@@ -955,14 +961,14 @@ ApplicationWindow {
                                 text: modelData.icon
                                 iconSize: 18
                                 color: isCurrent ? Appearance.m3colors.m3onPrimary
-                                                 : Appearance.colors.colOnLayer0
+                                                 : Appearance.colors.colOnLayer1
                             }
                             StyledText {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: modelData.label
                                 font.weight: Font.Medium
                                 color: isCurrent ? Appearance.m3colors.m3onPrimary
-                                                 : Appearance.colors.colOnLayer0
+                                                 : Appearance.colors.colOnLayer1
                             }
                         }
                     }
@@ -997,29 +1003,20 @@ ApplicationWindow {
                         spacing: 12
 
                 // Storage drives list
-                Rectangle {
+                ColumnLayout {
+                    id: storageCol
                     Layout.fillWidth: true
                     visible: root.drives.length > 0
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: storageCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: storageCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
-                            MaterialSymbol { text: "storage"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            MaterialSymbol { text: "storage"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Storage Drives")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1040,7 +1037,6 @@ ApplicationWindow {
 
                             delegate: driveRow
                         }
-                    }
                 }
 
                 Loader {
@@ -1052,29 +1048,20 @@ ApplicationWindow {
                 }
 
                 // Operating System Drives (partitions on a disk that has an ESP).
-                Rectangle {
+                ColumnLayout {
+                    id: osCol
                     Layout.fillWidth: true
                     visible: root.osDrives.length > 0
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: osCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: osCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
-                            MaterialSymbol { text: "install_desktop"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            MaterialSymbol { text: "install_desktop"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Operating System Drives")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1094,7 +1081,6 @@ ApplicationWindow {
                             model: root.osDrives
                             delegate: driveRow
                         }
-                    }
                 }
 
                 Loader {
@@ -1110,33 +1096,24 @@ ApplicationWindow {
                 // keyfile on disk, no crypttab entry — the tradeoffs that
                 // kept auto-unlock out of the app), mounts the filesystem
                 // inside, and re-locks the container on removal.
-                Rectangle {
+                ColumnLayout {
+                    id: encryptedCol
                     Layout.fillWidth: true
                     visible: root.encrypted.length > 0
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: encryptedCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: encryptedCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
                             MaterialSymbol {
                                 text: "lock"
                                 iconSize: 18
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                             }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Encrypted")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1164,7 +1141,6 @@ ApplicationWindow {
                             opacity: 0.8
                             wrapMode: Text.WordWrap
                         }
-                    }
                 }
 
                 Loader {
@@ -1176,33 +1152,24 @@ ApplicationWindow {
                 }
 
                 // Unformatted partitions (read-only listing)
-                Rectangle {
+                ColumnLayout {
+                    id: unformattedCol
                     Layout.fillWidth: true
                     visible: root.unformatted.length > 0
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: unformattedCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: unformattedCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
                             MaterialSymbol {
                                 text: "deployed_code"
                                 iconSize: 18
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                             }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Unformatted")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1230,7 +1197,6 @@ ApplicationWindow {
                             opacity: 0.8
                             wrapMode: Text.WordWrap
                         }
-                    }
                 }
 
                 Loader {
@@ -1261,27 +1227,23 @@ ApplicationWindow {
                 spacing: 12
 
                 // Discovered hosts via avahi-browse
-                Rectangle {
+                ColumnLayout {
                     Layout.fillWidth: true
+                    // Nested layouts default to fillHeight: true — without
+                    // the explicit false this section splits the tab's spare
+                    // space with the form instead of staying at 150.
+                    Layout.fillHeight: false
                     Layout.preferredHeight: 150
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
-                            MaterialSymbol { text: "lan"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            MaterialSymbol { text: "lan"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Found on your network")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1306,6 +1268,8 @@ ApplicationWindow {
                                 width: discoveredList.width
                                 implicitHeight: 32
                                 buttonRadius: Appearance.rounding.small
+                                colBackground: Appearance.colors.colLayer1
+                                colBackgroundHover: Appearance.colors.colLayer1Hover
                                 onClicked: {
                                     // Fill the form's host field with this
                                     // entry. Prefer the resolved IP because
@@ -1347,42 +1311,30 @@ ApplicationWindow {
                             opacity: 0.8
                             wrapMode: Text.WordWrap
                         }
-                    }
                 }
 
                 // Manual entry form
                 //
-                // The form rectangle's outer ColumnLayout has three children:
-                // a fixed header row, a Flickable that scrolls the field
-                // rows (because all of them together exceed the available
-                // height once Username/Password show in non-guest mode),
-                // and a fixed Mount button row at the bottom. clip:true on
-                // the rectangle prevents the scrolling region from
-                // visually bleeding over the Close button below.
-                Rectangle {
+                // The form's ColumnLayout has three children: a fixed header
+                // row, a Flickable that scrolls the field rows (because all
+                // of them together exceed the available height once
+                // Username/Password show in non-guest mode), and a fixed
+                // Mount button row at the bottom.
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
+                    spacing: 10
 
                         // ── Fixed header ─────────────────────────────
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
-                            MaterialSymbol { text: "add_link"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            MaterialSymbol { text: "add_link"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Add a network share")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                         }
@@ -1604,7 +1556,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-                    }
                 }
             }
 
@@ -1612,31 +1563,23 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 12
 
-                Rectangle {
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
+                    spacing: 8
 
                         RowLayout {
                             spacing: 8
                             MaterialSymbol {
                                 text: "folder_special"
                                 iconSize: 18
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                             }
                             StyledText {
                                 Layout.fillWidth: true
                                 text: Translation.tr("Auto-mounted drives")
                                 font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
+                                color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
@@ -1671,9 +1614,7 @@ ApplicationWindow {
                                 width: mountedList.width
                                 implicitHeight: 56
                                 radius: Appearance.rounding.small
-                                color: Appearance.colors.colLayer2
-                                border.width: 1
-                                border.color: Appearance.colors.colOutlineVariant
+                                color: Appearance.colors.colLayer1
 
                                 MaterialSymbol {
                                     id: mIcon
@@ -1765,7 +1706,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -1849,6 +1789,7 @@ ApplicationWindow {
                     }
                 }
             }
+        }
         }
     }
 
