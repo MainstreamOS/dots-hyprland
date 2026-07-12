@@ -222,99 +222,64 @@ ApplicationWindow {
         onExited: (exitCode, exitStatus) => root.refresh()
     }
 
-    Component.onCompleted: listProc.running = true
+    Component.onCompleted: {
+        MaterialThemeLoader.reapplyTheme()
+        listProc.running = true
+    }
 
     // ── Layout ─────────────────────────────────────────────────────
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 18
-        spacing: 14
+    // Mirrors the settings app's chrome: m3background window, content on
+    // a rounded m3surfaceContainerLow pane, section-style header, rows
+    // directly on the pane.
+    property real contentPadding: 8
 
-        // Header
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: root.contentPadding
+        color: Appearance.m3colors.m3surfaceContainerLow
+        radius: Appearance.rounding.windowRounding - root.contentPadding
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+        // Section header
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 6
             MaterialSymbol {
                 text: "delete_sweep"
-                iconSize: 32
-                color: Appearance.colors.colPrimary
+                iconSize: Appearance.font.pixelSize.hugeass
+                color: Appearance.colors.colOnSecondaryContainer
             }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 1
-                StyledText {
-                    text: Translation.tr("Uninstall Apps")
-                    font.pixelSize: Appearance.font.pixelSize.larger
-                    font.weight: Font.Medium
-                    color: Appearance.colors.colOnLayer1
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    text: Translation.tr("Remove apps you installed. System and Mainstream components are protected.")
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    color: Appearance.colors.colSubtext
-                    wrapMode: Text.WordWrap
-                }
+            StyledText {
+                text: Translation.tr("Uninstall Apps")
+                font.pixelSize: Appearance.font.pixelSize.larger
+                font.weight: Font.Medium
+                color: Appearance.colors.colOnSecondaryContainer
             }
+            Item { Layout.fillWidth: true }
+        }
+        StyledText {
+            Layout.fillWidth: true
+            text: Translation.tr("Remove apps you installed. System and Mainstream components are protected.")
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
         }
 
-        // Search box
-        Rectangle {
+        // Search field
+        MaterialTextField {
+            id: filterInput
             Layout.fillWidth: true
-            implicitHeight: 42
-            radius: Appearance.rounding.normal
-            color: Appearance.colors.colLayer1
-            border.width: 1
-            border.color: filterInput.activeFocus ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 8
-                MaterialSymbol {
-                    text: "search"
-                    iconSize: 20
-                    color: Appearance.colors.colSubtext
-                }
-                TextInput {
-                    id: filterInput
-                    Layout.fillWidth: true
-                    verticalAlignment: TextInput.AlignVCenter
-                    clip: true
-                    color: Appearance.colors.colOnLayer1
-                    selectionColor: Appearance.colors.colPrimary
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    StyledText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: filterInput.text.length === 0
-                        text: Translation.tr("Search apps…")
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        color: Appearance.colors.colSubtext
-                    }
-                }
-                MaterialSymbol {
-                    visible: filterInput.text.length > 0
-                    text: "close"
-                    iconSize: 18
-                    color: Appearance.colors.colSubtext
-                    MouseArea {
-                        anchors.fill: parent
-                        anchors.margins: -6
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: filterInput.text = ""
-                    }
-                }
-            }
+            placeholderText: Translation.tr("Search apps…")
         }
 
         // App list
-        Rectangle {
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Appearance.rounding.normal
-            color: Appearance.colors.colLayer1
-            border.width: 1
-            border.color: Appearance.colors.colOutlineVariant
 
             // Empty / loading placeholder
             ColumnLayout {
@@ -343,9 +308,8 @@ ApplicationWindow {
             StyledListView {
                 id: appList
                 anchors.fill: parent
-                anchors.margins: 6
                 clip: true
-                spacing: 4
+                spacing: 2
                 visible: root.filteredApps.length > 0
                 model: root.filteredApps
 
@@ -354,7 +318,7 @@ ApplicationWindow {
                     width: appList.width
                     implicitHeight: 60
                     radius: Appearance.rounding.small
-                    color: rowHover.hovered ? Appearance.colors.colLayer2 : "transparent"
+                    color: rowHover.hovered ? Appearance.colors.colLayer1Hover : "transparent"
 
                     HoverHandler { id: rowHover }
 
@@ -518,6 +482,7 @@ ApplicationWindow {
                     }
                 }
             }
+        }
         }
     }
 
