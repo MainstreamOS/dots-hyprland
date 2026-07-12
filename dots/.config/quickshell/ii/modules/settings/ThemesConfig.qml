@@ -1211,14 +1211,17 @@ ContentPage {
             }
             StyledComboBox {
                 Layout.preferredWidth: 200
-                model: [
-                    Translation.tr("Off"),
-                    Translation.tr("Follow Night Light"),
-                    Translation.tr("Set hours"),
-                ]
-                readonly property var modeIndex: ({ "off": 0, "nightlight": 1, "manual": 2 })
-                readonly property var indexMode: ["off", "nightlight", "manual"]
-                currentIndex: modeIndex[Config.options.appearance.themeSchedule.mode] ?? 0
+                // "Follow Night Light" is only offered while Night Light
+                // itself is enabled; a stored "nightlight" mode with Night
+                // Light disabled displays as Off.
+                readonly property bool nightLightAvailable: (Config.options.light.night.mode ?? "disabled") !== "disabled"
+                model: nightLightAvailable
+                    ? [Translation.tr("Off"), Translation.tr("Follow Night Light"), Translation.tr("Set hours")]
+                    : [Translation.tr("Off"), Translation.tr("Set hours")]
+                readonly property var indexMode: nightLightAvailable
+                    ? ["off", "nightlight", "manual"]
+                    : ["off", "manual"]
+                currentIndex: Math.max(0, indexMode.indexOf(Config.options.appearance.themeSchedule.mode))
                 onActivated: index => {
                     Config.options.appearance.themeSchedule.mode = indexMode[index]
                 }
