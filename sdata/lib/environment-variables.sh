@@ -12,6 +12,14 @@ STY_BLUE='\e[34m'
 STY_PURPLE='\e[35m'
 STY_CYAN='\e[36m'
 
+# The Linux console can't render truecolor, but its 16-color palette can
+# be repainted per-VT: remap the cyan slots (normal + bright, for bold) to
+# the brand blue so styled text shows #008dbe on a real TTY. Terminal
+# emulators never see this (TERM != linux) and keep their own theme.
+if [[ "${TERM:-}" == "linux" ]] && [[ -t 1 ]]; then
+    printf '\e]P6008dbe\e]PE008dbe'
+fi
+
 STY_BOLD='\e[1m'
 STY_FAINT='\e[2m'
 STY_SLANT='\e[3m'
