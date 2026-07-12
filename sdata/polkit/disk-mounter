@@ -24,6 +24,12 @@
 #   mount-nfs   <host> <export> <mountpoint> <label> <fstab|nofstab>
 #       NFS export. No credentials — access is gated server-side by IP.
 #
+#   unlock-mount <device> <mountpoint> <label> <fstab|nofstab>
+#       LUKS / BitLocker container. The passphrase is read from stdin (never
+#       argv) and used once to open a session mapper — no keyfile is written
+#       and no crypttab entry is added, so the drive re-locks on unmount or
+#       reboot. The filesystem inside then mounts like mount-block.
+#
 #   unmount     <mountpoint> <remove-fstab|keep>
 #       Lazy-umount the mountpoint. When mode="remove-fstab", also strips the
 #       fstab entry pointing at it and removes any associated credentials file.
@@ -415,6 +421,94 @@ mount_nfs() {
     echo "Mounted $source at $mountpoint"
 }
 
+# ── Subcommand: unlock-mount ──────────────────────────────────────────────
+unlock_mount() {
+    if [[ $# -ne 4 ]]; then
+        log "usage: unlock-mount <device> <mountpoint> <label> <fstab|nofstab>"
+        exit 64
+    fi
+    local device="$1" mountpoint="$2" label="$3" fstab_mode="$4"
+
+    validate_mountpoint "$mountpoint"
+    reject_label_unsafe label "$label"
+    [[ -b "$device" ]] || { log "Not a block device: $device"; exit 1; }
+    command -v cryptsetup >/dev/null || { log "cryptsetup not found"; exit 2; }
+
+    local ctype
+    ctype="$(blkid -p -s TYPE -o value "$device" 2>/dev/null || true)"
+    local open_type=""
+    case "$ctype" in
+        crypto_LUKS) open_type="luks" ;;
+        BitLocker)   open_type="bitlk" ;;
+        *) die "$device is not a supported encrypted container (found: ${ctype:-nothing})" ;;
+    esac
+
+    local cuuid
+    cuuid="$(blkid -p -s UUID -o value "$device" 2>/dev/null || true)"
+    local mapper_name="luks-${cuuid:-$(sanitize_segment "$(basename "$device")")}"
+    local mapper_dev="/dev/mapper/$mapper_name"
+
+    local we_opened=0
+    if [[ ! -e "$mapper_dev" ]]; then
+        # The passphrase arrives on stdin so it never appears in
+        # /proc/<pid>/cmdline; --key-file=- takes stdin verbatim, so pass
+        # it through printf with no trailing newline.
+        local passphrase=""
+        IFS= read -r passphrase || true
+        [[ -n "$passphrase" ]] || die "empty passphrase"
+        if ! printf '%s' "$passphrase" | \
+                cryptsetup open --type "$open_type" --key-file=- "$device" "$mapper_name"; then
+            echo "Wrong passphrase for $device — try again"
+            exit 7
+        fi
+        passphrase=""
+        we_opened=1
+    fi
+    udevadm settle 2>/dev/null || true
+
+    # Only close a mapper this run opened — never one the user unlocked
+    # elsewhere (gnome-disks, a prior session).
+    close_if_ours() {
+        if [[ "$we_opened" == 1 ]]; then
+            cryptsetup close "$mapper_name" 2>/dev/null || true
+        fi
+    }
+
+    local fstype uuid
+    fstype="$(blkid -p -s TYPE -o value "$mapper_dev" 2>/dev/null || true)"
+    uuid="$(blkid -p -s UUID -o value "$mapper_dev" 2>/dev/null || true)"
+    if [[ -z "$fstype" || -z "$uuid" ]]; then
+        close_if_ours
+        die "no mountable filesystem inside $device"
+    fi
+
+    # A previous session may have left an fstab row for this UUID — systemd
+    # can then race us and mount it the moment the mapper appears. Treat
+    # "already mounted" as success, both before and after our own attempt.
+    # findmnt exits 1 on no match; the `|| true` keeps errexit+pipefail
+    # from killing the script on the normal nothing-mounted-yet path.
+    already_mounted_at() { findmnt -rn -o TARGET -S "UUID=$uuid" 2>/dev/null | head -n1 || true; }
+    local mounted_at; mounted_at="$(already_mounted_at)"
+    if [[ -n "$mounted_at" ]]; then
+        echo "Unlocked $device — already mounted at $mounted_at"
+        return 0
+    fi
+
+    # Re-exec for the mount so mount-block runs in a fresh shell where
+    # errexit is live — `if ! (mount_block ...)` would suppress set -e
+    # inside the subshell and let a failed mount fall through as success.
+    if ! bash "$0" mount-block "$mapper_dev" "$fstype" "$uuid" "$mountpoint" "$label" "$fstab_mode"; then
+        mounted_at="$(already_mounted_at)"
+        if [[ -n "$mounted_at" ]]; then
+            echo "Unlocked $device — mounted at $mounted_at"
+            return 0
+        fi
+        close_if_ours
+        die "unlocked $device but mounting failed"
+    fi
+    echo "Unlocked $device and mounted at $mountpoint"
+}
+
 # ── Subcommand: unmount ───────────────────────────────────────────────────
 unmount() {
     if [[ $# -ne 2 ]]; then
@@ -486,7 +580,7 @@ unmount() {
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────
-[[ $# -lt 1 ]] && { log "usage: $0 {mount-block|format-mount|mount-smb|mount-nfs|unmount} ..."; exit 64; }
+[[ $# -lt 1 ]] && { log "usage: $0 {mount-block|format-mount|mount-smb|mount-nfs|unlock-mount|unmount} ..."; exit 64; }
 
 sub="$1"; shift
 case "$sub" in
@@ -494,6 +588,7 @@ case "$sub" in
     format-mount) format_mount "$@" ;;
     mount-smb)    mount_smb    "$@" ;;
     mount-nfs)    mount_nfs    "$@" ;;
+    unlock-mount) unlock_mount "$@" ;;
     unmount)      unmount      "$@" ;;
     *) log "Unknown subcommand: $sub"; exit 64 ;;
 esac

@@ -59,10 +59,13 @@ ApplicationWindow {
     readonly property bool selectedUnformatted: root.unformatted.some(d => d.path === root.selectedPath)
     property bool   mountedPopupShown: false
     property string mountedPopupText: ""
-    property var encrypted: []        // LUKS / BitLocker — read-only listing
+    property var encrypted: []        // LUKS / BitLocker — locked containers
+    readonly property bool selectedEncrypted: root.encrypted.some(d => d.path === root.selectedPath)
     property string selectedPath: ""  // /dev/... of the picked drive
     property string selectedExistingLabel: ""
     property string newLabel: ""
+    property string unlockPassword: ""
+    onSelectedPathChanged: unlockPassword = ""
 
     // ── Network-tab state ──────────────────────────────────────────
     // discoveredHosts: list of {name, address} entries from avahi-browse.
@@ -261,9 +264,9 @@ ApplicationWindow {
                 }
                 root.drives   = flat.filter(d => mountableLeaf(d) && !d.bootDisk)
                 root.osDrives = flat.filter(d => mountableLeaf(d) &&  d.bootDisk)
-                // Encrypted (read-only). These show up with a lock icon
-                // + a hint pointing the user at gnome-disks / kde-partition-
-                // manager because we don't ship an unlock flow ourselves.
+                // Encrypted containers, unlockable in place: selecting one
+                // reveals a passphrase + rename block wired to the helper's
+                // unlock-mount subcommand.
                 root.encrypted = flat.filter(d =>
                     d.uuid && d.fstype && !d.mountpoint &&
                     root.isEncrypted(d.fstype) &&
@@ -279,6 +282,7 @@ ApplicationWindow {
                 const stillListed = root.drives.some(d => d.path === root.selectedPath)
                     || root.osDrives.some(d => d.path === root.selectedPath)
                     || root.unformatted.some(d => d.path === root.selectedPath)
+                    || root.encrypted.some(d => d.path === root.selectedPath)
                 if (root.selectedPath && !stillListed) {
                     root.selectedPath = ""
                     root.selectedExistingLabel = ""
@@ -503,6 +507,31 @@ ApplicationWindow {
         mountProc.running = true
     }
 
+    // ── Action: unlock the picked encrypted drive, then mount it ───
+    function startUnlockLocal() {
+        if (root.busy || !root.selectedPath || root.unlockPassword.length === 0) return
+        const drive = root.encrypted.find(d => d.path === root.selectedPath)
+        if (!drive) return
+        const labelRaw = (root.newLabel || drive.label || drive.name).trim()
+        const labelSafe = sanitizeMountSegment(labelRaw) || "drive"
+        const mountPoint = "/mnt/" + labelSafe
+        mountProc.command = [
+            "pkexec", "/usr/local/bin/disk-mounter",
+            "unlock-mount",
+            drive.path, mountPoint, labelRaw, "fstab"
+        ]
+        mountProc.outputBuf = ""
+        mountProc.pendingPassword = root.unlockPassword
+        root.unlockPassword = ""
+        root.busy = true
+        root.resultKind = ""
+        root.status = Translation.tr("Unlocking… you may see a password prompt.")
+        // stdinEnabled must be flipped on BEFORE running goes true so the
+        // child process has a connected stdin handle to read from.
+        mountProc.stdinEnabled = true
+        mountProc.running = true
+    }
+
     // ── Action: mount the network share defined by the form ────────
     function startMountNetwork() {
         if (root.busy) return
@@ -646,6 +675,119 @@ ApplicationWindow {
                             text: root.busy
                                 ? Translation.tr("Working…")
                                 : (root.selectedUnformatted ? Translation.tr("Format & Mount") : Translation.tr("Mount"))
+                            color: Appearance.m3colors.m3onPrimary
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Passphrase + Rename + Unlock block, dropped in below the Encrypted
+    // category when the selected drive is a locked container.
+    Component {
+        id: unlockMountBlock
+        ColumnLayout {
+            spacing: 12
+            Rectangle {
+                Layout.fillWidth: true
+                color: Appearance.colors.colLayer1
+                radius: Appearance.rounding.normal
+                border.width: 1
+                border.color: Appearance.colors.colOutlineVariant
+                implicitHeight: umCol.implicitHeight + 24
+                ColumnLayout {
+                    id: umCol
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 10
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        StyledText {
+                            Layout.preferredWidth: 110
+                            text: Translation.tr("Passphrase")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: root.unlockPassword
+                            echoMode: TextInput.Password
+                            onTextEdited: root.unlockPassword = text
+                            onAccepted: root.startUnlockLocal()
+                            placeholderText: Translation.tr("The drive's encryption passphrase")
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        StyledText {
+                            Layout.preferredWidth: 110
+                            text: Translation.tr("Rename to")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: root.newLabel
+                            onTextEdited: root.newLabel = text
+                            placeholderText: Translation.tr("e.g. Photos, Backups")
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        MaterialSymbol {
+                            text: "lock_open"
+                            iconSize: 16
+                            color: Appearance.colors.colSubtext
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("Unlocks just for this session — the drive locks again when removed or on reboot, and mounts as \"") +
+                                (root.newLabel || root.selectedExistingLabel || "Drive") +
+                                Translation.tr("\" whenever you unlock it.")
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                RippleButton {
+                    buttonRadius: Appearance.rounding.normal
+                    implicitWidth: 90
+                    implicitHeight: 36
+                    enabled: !root.busy
+                    colBackground: Appearance.colors.colSecondaryContainer
+                    colBackgroundHover: Appearance.colors.colSecondaryContainerHover
+                    onClicked: root.deselectDrive()
+                    contentItem: Item {
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("Close")
+                            color: Appearance.colors.colOnSecondaryContainer
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+                RippleButton {
+                    buttonRadius: Appearance.rounding.normal
+                    implicitWidth: 160
+                    implicitHeight: 36
+                    enabled: !root.busy && root.selectedPath.length > 0 && root.unlockPassword.length > 0
+                    toggled: enabled
+                    onClicked: root.startUnlockLocal()
+                    contentItem: Item {
+                        StyledText {
+                            anchors.centerIn: parent
+                            text: root.busy ? Translation.tr("Working…") : Translation.tr("Unlock & Mount")
                             color: Appearance.m3colors.m3onPrimary
                             font.weight: Font.Medium
                         }
@@ -963,14 +1105,11 @@ ApplicationWindow {
                     onActiveChanged: if (active) root.revealBlock(this)
                 }
 
-                // Encrypted drives (read-only listing).
-                //
-                // The app intentionally doesn't ship its own LUKS unlock
-                // flow — that path involves a keyfile or a TPM-bound
-                // setup, both of which have security implications worth
-                // a deliberate decision from the user. So we surface the
-                // drive's existence (lock icon + "Encrypted" label) and
-                // point at gnome-disks / kde-partition-manager instead.
+                // Encrypted drives. Selecting one reveals the passphrase +
+                // rename block; the helper opens a session-only mapper (no
+                // keyfile on disk, no crypttab entry — the tradeoffs that
+                // kept auto-unlock out of the app), mounts the filesystem
+                // inside, and re-locks the container on removal.
                 Rectangle {
                     Layout.fillWidth: true
                     visible: root.encrypted.length > 0
@@ -1009,45 +1148,31 @@ ApplicationWindow {
                         ListView {
                             id: encryptedList
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(count, 4) * 32
-                            Layout.maximumHeight: 4 * 32
+                            Layout.preferredHeight: Math.min(count, 4) * 58
+                            Layout.maximumHeight: 4 * 58
                             clip: true
-                            spacing: 2
+                            spacing: 4
                             interactive: count > 4
                             model: root.encrypted
-                            delegate: Item {
-                                required property var modelData
-                                width: encryptedList.width
-                                implicitHeight: 30
-                                MaterialSymbol {
-                                    id: eIcon
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 4
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "lock"
-                                    iconSize: 14
-                                    color: Appearance.colors.colSubtext
-                                }
-                                StyledText {
-                                    anchors.left: eIcon.right
-                                    anchors.leftMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.path + " · " + root.friendlyFstype(modelData.fstype) + " · " + root.humanSize(modelData.size)
-                                    font.pixelSize: Appearance.font.pixelSize.small
-                                    color: Appearance.colors.colOnLayer1
-                                    opacity: 0.85
-                                }
-                            }
+                            delegate: driveRow
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: Translation.tr("Encrypted drives need to be unlocked first. Open the Disks app (gnome-disks) and choose Unlock from the partition menu.")
+                            text: Translation.tr("Select an encrypted drive to unlock it with its passphrase and mount it.")
                             font.pixelSize: Appearance.font.pixelSize.smaller
                             color: Appearance.colors.colSubtext
                             opacity: 0.8
                             wrapMode: Text.WordWrap
                         }
                     }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: root.selectedEncrypted
+                    visible: active
+                    sourceComponent: unlockMountBlock
+                    onActiveChanged: if (active) root.revealBlock(this)
                 }
 
                 // Unformatted partitions (read-only listing)
@@ -1736,16 +1861,29 @@ ApplicationWindow {
         active: root.mountedPopupShown
         sourceComponent: Component {
             WindowDialog {
-                show: true
+                id: mountedDialog
+                // WindowDialog snapshots backgroundHeight once when `show`
+                // flips true. Compute it from our own items (the message
+                // gets an explicit width so its wrapped height resolves
+                // synchronously) and only flip show after every binding is
+                // initialized — otherwise a two-line message overflows the
+                // frozen too-small background.
+                show: false
+                Component.onCompleted: show = true
                 onDismiss: root.mountedPopupShown = false
+                backgroundHeight: popupIcon.implicitHeight + popupTitle.implicitHeight
+                    + (popupMsg.visible ? popupMsg.implicitHeight + 16 : 0)
+                    + popupBtn.implicitHeight + 16 * 2 + Appearance.rounding.large * 2
 
                 MaterialSymbol {
+                    id: popupIcon
                     Layout.alignment: Qt.AlignHCenter
                     text: "check_circle"
                     iconSize: 48
                     color: Appearance.colors.colPrimary
                 }
                 StyledText {
+                    id: popupTitle
                     Layout.alignment: Qt.AlignHCenter
                     text: Translation.tr("Disk mounted")
                     font.pixelSize: Appearance.font.pixelSize.larger
@@ -1753,7 +1891,9 @@ ApplicationWindow {
                     color: Appearance.colors.colOnLayer1
                 }
                 StyledText {
-                    Layout.fillWidth: true
+                    id: popupMsg
+                    Layout.alignment: Qt.AlignHCenter
+                    width: mountedDialog.backgroundWidth - Appearance.rounding.large * 2
                     visible: root.mountedPopupText.length > 0
                     text: root.mountedPopupText
                     horizontalAlignment: Text.AlignHCenter
@@ -1762,6 +1902,7 @@ ApplicationWindow {
                     color: Appearance.colors.colSubtext
                 }
                 RippleButton {
+                    id: popupBtn
                     Layout.alignment: Qt.AlignHCenter
                     implicitWidth: 100
                     implicitHeight: 34
