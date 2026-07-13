@@ -128,7 +128,7 @@ case ${SUBCMD_NAME} in
     # Set trap to cleanup when this subcommand exits
     trap 'sudo_stop_keepalive; ms_visual_end' EXIT INT TERM
     ms_logo
-    ms_section "Mainstream installer · dependencies"
+    ms_section "Mainstream installer · dependencies${MS_MODE_SUFFIX:-}"
     ms_preflight_network
     ms_visual_begin
     if [[ "${SKIP_ALLDEPS}" != true ]]; then
@@ -146,7 +146,7 @@ case ${SUBCMD_NAME} in
     # Set trap to cleanup when this subcommand exits
     trap 'sudo_stop_keepalive; ms_visual_end' EXIT INT TERM
     ms_logo
-    ms_section "Mainstream installer · setup"
+    ms_section "Mainstream installer · setup${MS_MODE_SUFFIX:-}"
     ms_visual_begin
     if [[ "${SKIP_ALLSETUPS}" != true ]]; then
       source ${SUBCMD_DIR}/2.setups.sh
@@ -160,7 +160,7 @@ case ${SUBCMD_NAME} in
     pause
     trap 'ms_visual_end' EXIT INT TERM
     ms_logo
-    ms_section "Mainstream installer · files"
+    ms_section "Mainstream installer · files${MS_MODE_SUFFIX:-}"
     ms_visual_begin
     if [[ "${SKIP_ALLFILES}" != true ]]; then
       source ${SUBCMD_DIR}/3.files.sh

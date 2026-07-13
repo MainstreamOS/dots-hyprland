@@ -114,3 +114,9 @@ while true ; do
     *) echo -e "$0: Wrong parameters.";exit 1;;
   esac
 done
+
+# Run-mode marker appended to the installer headers so the user can see
+# at a glance that the intended install method is the one running.
+MS_MODE_SUFFIX=""
+if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then MS_MODE_SUFFIX="${MS_MODE_SUFFIX} · --os-only"; fi
+if [[ "${CONSOLE_MODE_INSTALL:-false}" == true ]]; then MS_MODE_SUFFIX="${MS_MODE_SUFFIX} · --console"; fi

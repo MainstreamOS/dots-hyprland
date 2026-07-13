@@ -7,7 +7,7 @@
 
 clear 2>/dev/null || true
 ms_logo
-ms_section "Mainstream installer"
+ms_section "Mainstream installer${MS_MODE_SUFFIX:-}"
 ms_hint "Arch, approachable. Hyprland, at home."
 printf "\n"
 ms_step_raw "step 1 — install dependencies"
