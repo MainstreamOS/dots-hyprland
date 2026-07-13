@@ -51,6 +51,7 @@ hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SOURCE@ togg
 hl.bind("SUPER + W", hl.dsp.global("quickshell:wallpaperSelectorToggle"), {description = "Toggle wallpaper selector"} )
 hl.bind("SUPER + ALT + W", hl.dsp.global("quickshell:wallpaperSelectorRandom"), {description = "Select random wallpaper"} )
 hl.bind("SUPER + W", hl.dsp.exec_cmd(qsIsAlive.." || "..qsScripts.."/colors/switchwall.sh") )
+hl.bind("CTRL + SUPER + T", hl.dsp.exec_cmd(qsScripts.."/colors/switchwall.sh"), {description = "Pick wallpaper image"} )
 -- Light/dark toggle — added by upstream merge (CTRL+SUPER+SHIFT+D powertoys-style).
 -- Wired to a GlobalShortcut in MaterialThemeLoader.qml; same name keeps that intact.
 hl.bind("CTRL + SUPER + SHIFT + D", hl.dsp.global("quickshell:toggleLightDark"), {description = "Toggle light/dark mode"} )
