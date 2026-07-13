@@ -300,10 +300,6 @@ hl.bind("SHIFT + Print", hl.dsp.exec_cmd(
 --# AI
 hl.bind("SUPER + SHIFT + ALT + mouse:273", hl.dsp.exec_cmd(hyprScripts.."/ai/primary-buffer-query.sh"), {description = "Generate AI summary for selected text"} )
 
---##! User
-hl.bind("CTRL + SUPER + Slash", hl.dsp.exec_cmd("xdg-open ~/.config/illogical-impulse/config.json"), {description = "Edit shell config"} )
-hl.bind("CTRL + SUPER + ALT + Slash", hl.dsp.exec_cmd("xdg-open ~/.config/hypr/custom/keybinds.lua"), {description = "Edit extra keybinds"} )
-
 --# Cursed stuff
 --## Make window not amogus large
 hl.bind("CTRL + SUPER + Backslash", hl.dsp.window.resize({x = 640, y = 480}) )
