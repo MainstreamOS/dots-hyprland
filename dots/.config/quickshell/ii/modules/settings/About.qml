@@ -237,7 +237,7 @@ ContentPage {
             ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-archlinux.png`
                 name: "Arch Linux"
-                subtitle: Translation.tr("Base distribution & archiso")
+                subtitle: Translation.tr("Base distribution")
                 link: "https://archlinux.org"
                 donateLink: "https://github.com/sponsors/archlinux"
             }
