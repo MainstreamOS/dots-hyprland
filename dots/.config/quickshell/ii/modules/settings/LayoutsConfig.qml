@@ -13,9 +13,20 @@ ContentPage {
     forceWidth: true
 
     property string currentLayout: "dwindle"
+    // Both arrays grow and shrink together in blocks of ten via the +/-
+    // controls under the matrix; length is always a multiple of ten.
     property var workspaceLayouts: ["dwindle","dwindle","dwindle","dwindle","dwindle",
                                     "dwindle","dwindle","dwindle","dwindle","dwindle"]
     property var workspaceFloats: [false,false,false,false,false,false,false,false,false,false]
+
+    function resizeWorkspaceArrays(count) {
+        const layouts = workspaceLayouts.slice(0, count)
+        const floats = workspaceFloats.slice(0, count)
+        while (layouts.length < count) layouts.push("dwindle")
+        while (floats.length < count) floats.push(false)
+        workspaceLayouts = layouts
+        workspaceFloats = floats
+    }
 
     readonly property bool perWorkspace: currentLayout === "per_workspace"
     // Targets the Lua-config tree introduced in Hyprland 0.55.
@@ -74,7 +85,7 @@ ContentPage {
                 const m = data.match(/workspace\s*=\s*"(\d+)"\s*,\s*layout\s*=\s*"([^"]+)"/)
                 if (m) {
                     const idx = parseInt(m[1]) - 1
-                    if (idx >= 0 && idx < 10) {
+                    if (idx >= 0) {
                         readWsConf.parsed[idx] = m[2]
                     }
                 }
@@ -82,8 +93,9 @@ ContentPage {
         }
         onExited: {
             if (parsed.length > 0) {
+                root.resizeWorkspaceArrays(Math.max(10, Math.ceil(parsed.length / 10) * 10))
                 const layouts = root.workspaceLayouts.slice()
-                for (let i = 0; i < 10; i++) {
+                for (let i = 0; i < layouts.length; i++) {
                     if (parsed[i]) layouts[i] = parsed[i]
                 }
                 root.workspaceLayouts = layouts
@@ -103,16 +115,21 @@ ContentPage {
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readFloatRulesProc.buf += data + "\n" }
         onExited: {
-            const floats = [false,false,false,false,false,false,false,false,false,false]
+            const idxs = []
             const re = /hl\.window_rule\(\{\s*match\s*=\s*\{\s*workspace\s*=\s*"(\d+)"\s*\}\s*,\s*float\s*=\s*true\s*\}\)\s*--\s*ii-float-rule/g
             let m
             while ((m = re.exec(readFloatRulesProc.buf)) !== null) {
                 const idx = parseInt(m[1]) - 1
-                if (idx >= 0 && idx < 10) floats[idx] = true
+                if (idx >= 0) idxs.push(idx)
             }
+            const maxIdx = idxs.length > 0 ? Math.max(...idxs) : -1
+            if (maxIdx >= root.workspaceLayouts.length)
+                root.resizeWorkspaceArrays(Math.ceil((maxIdx + 1) / 10) * 10)
+            const floats = new Array(root.workspaceLayouts.length).fill(false)
+            for (const idx of idxs) floats[idx] = true
             root.workspaceFloats = floats
 
-            // If all 10 are float, set global float indicator
+            // If every controlled workspace is float, set the global float indicator
             if (floats.every(f => f))
                 root.currentLayout = "float"
         }
@@ -126,16 +143,22 @@ ContentPage {
         onExited: Quickshell.execDetached(["hyprctl", "reload"])
     }
 
+    // One python list line per controlled workspace, from the live array.
+    function wsRuleLinesPy() {
+        let py = ""
+        for (let i = 0; i < root.workspaceLayouts.length; i++) {
+            py += "    'hl.workspace_rule({ workspace = \"" + (i + 1) + "\", layout = \"" + root.workspaceLayouts[i] + "\" })',\n"
+        }
+        return py
+    }
+
     function enablePerWorkspace() {
         // Write workspaces.lua with per-workspace hl.workspace_rule() lines,
         // then uncomment the `tryRequire("workspaces")` line in hyprland.lua.
         let py =
             "import sys, re\n" +
             "ws_lua, hy_lua = sys.argv[1], sys.argv[2]\n" +
-            "ws_lines = [\n"
-        for (let i = 0; i < 10; i++) {
-            py += "    'hl.workspace_rule({ workspace = \"" + (i + 1) + "\", layout = \"" + root.workspaceLayouts[i] + "\" })',\n"
-        }
+            "ws_lines = [\n" + wsRuleLinesPy()
         py +=
             "]\n" +
             "open(ws_lua, 'w').write('\\n'.join(ws_lines) + '\\n')\n" +
@@ -190,11 +213,11 @@ ContentPage {
         root.currentLayout = name
         if (name === "float") {
             // Float is an overlay — just add float rules, don't touch the tiling layout
-            root.setFloatRules([true,true,true,true,true,true,true,true,true,true])
+            root.setFloatRules(new Array(root.workspaceLayouts.length).fill(true))
             return
         }
         // Clear float rules when switching to a non-float layout
-        root.setFloatRules([false,false,false,false,false,false,false,false,false,false])
+        root.setFloatRules(new Array(root.workspaceLayouts.length).fill(false))
         if (name === "per_workspace") {
             enablePerWorkspace()
         } else {
@@ -280,17 +303,31 @@ ContentPage {
         root.setFloatRules(floats)
 
         // Write workspaces.lua
-        let py =
+        writeWorkspacesLua()
+    }
+
+    function writeWorkspacesLua() {
+        const py =
             "import sys\n" +
             "path = sys.argv[1]\n" +
-            "lines = [\n"
-        for (let i = 0; i < 10; i++) {
-            py += "    'hl.workspace_rule({ workspace = \"" + (i + 1) + "\", layout = \"" + root.workspaceLayouts[i] + "\" })',\n"
-        }
-        py += "]\nopen(path, 'w').write('\\n'.join(lines) + '\\n')\n"
+            "lines = [\n" + wsRuleLinesPy() +
+            "]\nopen(path, 'w').write('\\n'.join(lines) + '\\n')\n"
         writeWsConfProc.command = ["python3", "-c", py, root.workspacesConf]
         writeWsConfProc.running = false
         writeWsConfProc.running = true
+    }
+
+    function addWorkspaceGroup() {
+        resizeWorkspaceArrays(workspaceLayouts.length + 10)
+        setFloatRules(workspaceFloats.slice())
+        writeWorkspacesLua()
+    }
+
+    function removeWorkspaceGroup() {
+        if (workspaceLayouts.length <= 10) return
+        resizeWorkspaceArrays(workspaceLayouts.length - 10)
+        setFloatRules(workspaceFloats.slice())
+        writeWorkspacesLua()
     }
 
     ContentSection {
@@ -1040,6 +1077,52 @@ ContentPage {
                             font.pixelSize: Appearance.font.pixelSize.normal
                             color: Appearance.colors.colOnLayer1
                         }
+                        Item { Layout.fillWidth: true }
+                        MouseArea {
+                            visible: root.workspaceLayouts.length > 10
+                            enabled: root.perWorkspace
+                            implicitWidth: 26
+                            implicitHeight: 26
+                            hoverEnabled: true
+                            cursorShape: root.perWorkspace ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: root.removeWorkspaceGroup()
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Appearance.rounding.small
+                                color: parent.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer2
+                                border.width: 1
+                                border.color: Appearance.colors.colOutlineVariant
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "remove"
+                                    iconSize: Appearance.font.pixelSize.normal
+                                    color: Appearance.colors.colOnLayer2
+                                }
+                            }
+                        }
+                        MouseArea {
+                            enabled: root.perWorkspace
+                            implicitWidth: 26
+                            implicitHeight: 26
+                            hoverEnabled: true
+                            cursorShape: root.perWorkspace ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: root.addWorkspaceGroup()
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Appearance.rounding.small
+                                color: parent.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer2
+                                border.width: 1
+                                border.color: Appearance.colors.colOutlineVariant
+                                Behavior on color { ColorAnimation { duration: 100 } }
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "add"
+                                    iconSize: Appearance.font.pixelSize.normal
+                                    color: Appearance.colors.colOnLayer2
+                                }
+                            }
+                        }
                     }
 
                     Rectangle {
@@ -1048,9 +1131,9 @@ ContentPage {
                         color: Appearance.colors.colOutlineVariant; opacity: 0.4
                     }
 
-                    // One row per workspace (1–10)
+                    // One row per controlled workspace
                     Repeater {
-                        model: 10
+                        model: root.workspaceLayouts.length
                         RowLayout {
                             id: wsRow
                             required property int index
@@ -1103,7 +1186,7 @@ ContentPage {
                                     }
                                     // Active when THIS workspace's layout matches THIS pill's key
                                     readonly property bool active: modelData.key === "float"
-                                        ? root.workspaceFloats[wsRow.wsIdx]
+                                        ? root.workspaceFloats[wsRow.wsIdx] === true
                                         : (!root.workspaceFloats[wsRow.wsIdx] && root.workspaceLayouts[wsRow.wsIdx] === modelData.key)
 
                                     Rectangle {
