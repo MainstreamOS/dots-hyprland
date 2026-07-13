@@ -55,6 +55,7 @@ ContentPage {
     property string hyprlandGeneralPath: `${Quickshell.env("HOME")}/.config/hypr/hyprland/general.lua`
     property string defaultMonitor: ""
     property var confBitdepth: ({})
+    property var confScale: ({})
     property var confVrr: ({})
     property var confPositionMode: ({})
     property var confColorMode: ({})
@@ -367,6 +368,7 @@ print(json.dumps(result))
             // for-byte (preserving comments, ordering, etc.).
             displayConfigPage.lastReadMonitorsConf = readConfProc.output;
             let bitdepthResult = {};
+            let scaleResult = {};
             let vrrResult = {};
             let positionModeResult = {};
             let colorModeResult = {};
@@ -403,6 +405,7 @@ print(json.dumps(result))
                         let name = currentBlock["output"];
                         if (name) {
                             if (currentBlock["bitdepth"])  bitdepthResult[name]    = parseInt(currentBlock["bitdepth"]);
+                            if (currentBlock["scale"])     scaleResult[name]       = parseFloat(currentBlock["scale"]);
                             if (currentBlock["vrr"])       vrrResult[name]         = parseInt(currentBlock["vrr"]);
                             if (currentBlock["cm"])        colorModeResult[name]   = currentBlock["cm"];
                             if (currentBlock["max_luminance"])     maxLuminanceResult[name]    = parseFloat(currentBlock["max_luminance"]);
@@ -437,6 +440,7 @@ print(json.dumps(result))
             });
 
             displayConfigPage.confBitdepth      = bitdepthResult;
+            displayConfigPage.confScale         = scaleResult;
             displayConfigPage.confVrr            = vrrResult;
             displayConfigPage.confPositionMode   = positionModeResult;
             displayConfigPage.confColorMode      = colorModeResult;
@@ -454,6 +458,14 @@ print(json.dumps(result))
             Object.keys(maxLuminanceResult).forEach(n => { calibrated[n] = true; });
             displayConfigPage.hdrCalibratedMonitors = calibrated;
             displayConfigPage.workspaceAssignments = wsAssignments;
+            // Show the extra 10-workspace rows for any binding beyond 10 so
+            // reopened pages don't hide (and Apply doesn't drop) them.
+            let rc = Object.assign({}, displayConfigPage.wsRowCounts);
+            for (const ws in wsAssignments) {
+                const mon = wsAssignments[ws];
+                rc[mon] = Math.max(rc[mon] ?? 1, Math.ceil(parseInt(ws) / 10));
+            }
+            displayConfigPage.wsRowCounts = rc;
             displayConfigPage.wsBindingMode = hasAnyWsBinding ? "custom" : "default";
             readConfProc.output = "";
             // Only refresh monitors after conf is parsed so initPending gets correct values
@@ -466,24 +478,16 @@ print(json.dumps(result))
         monitorProc.running = true;
     }
 
-    // Snap scale to exact rational values to avoid floating point drift
+    // Snap scale to the nearest 1/120 to avoid floating point drift —
+    // Wayland's fractional-scale protocol expresses every scale in 120ths,
+    // so this is the finest grid a scale can actually take effect at.
     function snapScale(scale) {
-        const knownScales = [1.0, 1.25, 1.5, 5/3, 1.875, 2.0];
-        return knownScales.reduce((prev, curr) =>
-            Math.abs(curr - scale) < Math.abs(prev - scale) ? curr : prev);
+        return Math.round(scale * 120) / 120;
     }
 
     function buildMonitorBlock(name, m, mon) {
         let snapped = snapScale(m.scale);
-        const scaleMap = {
-            [1.0]:   "1.0",
-            [1.25]:  "1.25",
-            [1.5]:   "1.5",
-            [5/3]:   "1.666667",
-            [1.875]: "1.875",
-            [2.0]:   "2.0"
-        };
-        let scale = scaleMap[snapped] ?? snapped.toFixed(4);
+        let scale = (Math.round(snapped * 1e6) / 1e6).toString();
         let isDefault = name === displayConfigPage.defaultMonitor;
         let pos = isDefault ? "0x0" : (m.positionMode ?? `${m.x}x${m.y}`);
         let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
@@ -562,9 +566,9 @@ print(json.dumps(result))
         // Append workspace-monitor bindings if in custom mode (Lua syntax).
         if (wsBindingMode === "custom") {
             let wsLines = [];
-            for (let ws = 1; ws <= 10; ws++) {
-                let assigned = workspaceAssignments[ws];
-                if (assigned) wsLines.push(`hl.workspace_rule({ workspace = "${ws}", monitor = "${assigned}" })`);
+            const bound = Object.keys(workspaceAssignments).map(Number).filter(n => n >= 1).sort((a, b) => a - b);
+            for (const ws of bound) {
+                wsLines.push(`hl.workspace_rule({ workspace = "${ws}", monitor = "${workspaceAssignments[ws]}" })`);
             }
             if (wsLines.length > 0) blocks.push(wsLines.join("\n"));
         }
@@ -669,7 +673,9 @@ print(json.dumps(result))
                 refreshRate: monitor.refreshRate,
                 x: monitor.x,
                 y: monitor.y,
-                scale: monitor.scale,
+                // monitors.lua holds the exact value; hyprctl's JSON rounds
+                // scale to 2 decimals, which corrupts 1.875 and friends.
+                scale: confScale[name] ?? monitor.scale,
                 transform: monitor.transform,
                 enabled: !monitor.disabled,
                 bitdepth: confBitdepth[name] ?? 8,
@@ -1636,14 +1642,38 @@ except Exception:
 
                         property bool popupOpen: scalePopup.visible
 
-                        readonly property var scaleOptions: [
-                            { label: "100%", value: 1.0   },
-                            { label: "125%", value: 1.25  },
-                            { label: "150%", value: 1.5   },
-                            { label: "167%", value: 5/3   },
-                            { label: "188%", value: 1.875 },
-                            { label: "200%", value: 2.0   },
-                        ]
+                        // Only scales that render pixel-perfectly on this
+                        // monitor make the list: a scale must be a multiple of
+                        // 1/120 (Wayland apps receive scales in 120ths) AND
+                        // divide the mode into whole logical pixels. Each
+                        // panel shows only its clean steps from this ladder.
+                        readonly property var scaleOptions: {
+                            const w = monitorSection.pending.width  ?? monitorSection.mon.width;
+                            const h = monitorSection.pending.height ?? monitorSection.mon.height;
+                            const ladder = [
+                                { label: "100%", k: 120 },
+                                { label: "107%", k: 128 },
+                                { label: "120%", k: 144 },
+                                { label: "125%", k: 150 },
+                                { label: "133%", k: 160 },
+                                { label: "150%", k: 180 },
+                                { label: "160%", k: 192 },
+                                { label: "167%", k: 200 },
+                                { label: "188%", k: 225 },
+                                { label: "200%", k: 240 },
+                            ];
+                            const opts = ladder
+                                .filter(o => (w * 120) % o.k === 0 && (h * 120) % o.k === 0)
+                                .map(o => ({ label: o.label, value: o.k / 120 }));
+                            // Keep a saved legacy scale (e.g. 188% from the old
+                            // fixed list) selectable on its monitor.
+                            const cur = monitorSection.pending.scale ?? monitorSection.mon.scale;
+                            if (cur && !opts.some(o => Math.abs(o.value - cur) < 0.006)) {
+                                opts.push({ label: `${Math.round(cur * 100)}%`, value: cur });
+                                opts.sort((a, b) => a.value - b.value);
+                            }
+                            return opts;
+                        }
 
                         Rectangle {
                             anchors.fill: parent
@@ -1706,7 +1736,7 @@ except Exception:
                                         width: ListView.view.width
                                         height: 36
                                         radius: Appearance.rounding.small
-                                        property bool isCurrent: Math.abs((monitorSection.pending.scale ?? monitorSection.mon.scale) - modelData.value) < 0.001
+                                        property bool isCurrent: Math.abs((monitorSection.pending.scale ?? monitorSection.mon.scale) - modelData.value) < 0.006
                                         color: scaleDelegate.containsMouse
                                             ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
                                             : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
@@ -3190,7 +3220,9 @@ except Exception:
                     let a = Object.assign({}, displayConfigPage.workspaceAssignments);
                     let start = rowIndex * 10 + 1;
                     let end   = rowIndex * 10 + 10;
-                    for (let ws = start; ws <= end; ws++) delete a[ws];
+                    for (let ws = start; ws <= end; ws++) {
+                        if (a[ws] === monitorSection.monName) delete a[ws];
+                    }
                     displayConfigPage.workspaceAssignments = a;
                 }
 

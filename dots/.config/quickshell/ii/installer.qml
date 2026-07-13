@@ -125,9 +125,9 @@ ApplicationWindow {
     }
 
     function snapScale(scale) {
-        const knownScales = [1.0, 1.25, 1.5, 5/3, 1.875, 2.0];
-        return knownScales.reduce((prev, curr) =>
-            Math.abs(curr - scale) < Math.abs(prev - scale) ? curr : prev);
+        // Nearest 1/120 — the grid Wayland scales actually land on. Keeps
+        // DisplayConfig-written values like 4/3 intact on round-trip.
+        return Math.round(scale * 120) / 120;
     }
 
     // Build one multi-line `hl.monitor({ ... })` block. Mirrors the shape
@@ -138,15 +138,7 @@ ApplicationWindow {
     // installer UI and stay on Hyprland's auto-detected defaults.
     function buildMonitorBlock(name, m, mon) {
         let snapped = snapScale(m.scale);
-        const scaleMap = {
-            [1.0]:   "1.0",
-            [1.25]:  "1.25",
-            [1.5]:   "1.5",
-            [5/3]:   "1.666667",
-            [1.875]: "1.875",
-            [2.0]:   "2.0"
-        };
-        let scale = scaleMap[snapped] ?? snapped.toFixed(4);
+        let scale = (Math.round(snapped * 1e6) / 1e6).toString();
         let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
 
         let lines = [];
