@@ -42,8 +42,9 @@ Scope { // Scope
             implicitWidth: cheatsheetBackground.width + Appearance.sizes.elevationMargin * 2
             implicitHeight: cheatsheetBackground.height + Appearance.sizes.elevationMargin * 2
             WlrLayershell.namespace: "quickshell:cheatsheet"
-            // Setting this value makes it take its sweet time to open
-            // WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            // OnDemand made opening slow; Exclusive delivers keys without that
+            // penalty (same as Overview) and the window only exists while open.
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
             color: "transparent"
 
             mask: Region {
@@ -52,6 +53,7 @@ Scope { // Scope
 
             Component.onCompleted: {
                 GlobalFocusGrab.addDismissable(cheatsheetRoot);
+                searchField.forceActiveFocus();
             }
             Component.onDestruction: {
                 GlobalFocusGrab.removeDismissable(cheatsheetRoot);
@@ -81,8 +83,7 @@ Scope { // Scope
                 Keys.onPressed: event => { // Esc to close
                     if (event.key === Qt.Key_Escape) {
                         cheatsheetRoot.hide();
-                    }
-                    if (event.modifiers === Qt.ControlModifier) {
+                    } else if (event.modifiers === Qt.ControlModifier) {
                         if (event.key === Qt.Key_PageDown) {
                             tabBar.incrementCurrentIndex();
                             event.accepted = true;
@@ -96,6 +97,20 @@ Scope { // Scope
                             tabBar.setCurrentIndex((tabBar.currentIndex - 1 + root.tabButtonList.length) % root.tabButtonList.length);
                             event.accepted = true;
                         }
+                    } else if (event.key === Qt.Key_Slash) {
+                        searchField.forceActiveFocus();
+                        event.accepted = true;
+                    } else if (event.key === Qt.Key_Backspace) {
+                        if (searchField.text.length > 0) {
+                            searchField.text = searchField.text.substring(0, searchField.text.length - 1);
+                        }
+                        searchField.forceActiveFocus();
+                        event.accepted = true;
+                    } else if (!(event.modifiers & Qt.ControlModifier) && event.text.length > 0 && !/[\x00-\x1f\x7f]/.test(event.text)) {
+                        searchField.text += event.text;
+                        searchField.cursorPosition = searchField.text.length;
+                        searchField.forceActiveFocus();
+                        event.accepted = true;
                     }
                 }
 
@@ -140,6 +155,19 @@ Scope { // Scope
                                 property alias source: swipeView.currentIndex
                             }
                         }
+                        ToolbarTextField {
+                            id: searchField
+                            placeholderText: focus ? Translation.tr("Search keybinds") : Translation.tr("Type to search")
+                            clip: true
+                            font.pixelSize: Appearance.font.pixelSize.small
+
+                            Keys.onPressed: event => {
+                                if (event.key === Qt.Key_Escape && text.length > 0) {
+                                    text = "";
+                                    event.accepted = true;
+                                }
+                            }
+                        }
                     }
 
                     SwipeView { // Content pages
@@ -170,7 +198,9 @@ Scope { // Scope
                             }
                         }
 
-                        CheatsheetKeybinds {}
+                        CheatsheetKeybinds {
+                            searchQuery: searchField.text
+                        }
                     }
                 }
             }

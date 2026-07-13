@@ -25,11 +25,12 @@ import Quickshell
 Item {
     id: root
     readonly property var keybinds: HyprlandKeybinds.keybinds
+    property string searchQuery: ""
     property real spacing: 20
     property real titleSpacing: 7
     property real padding: 4
-    implicitWidth: row.implicitWidth + padding * 2
-    implicitHeight: row.implicitHeight + padding * 2
+    implicitWidth: Math.max(row.implicitWidth, noResults.visible ? noResults.implicitWidth : 0) + padding * 2
+    implicitHeight: Math.max(row.implicitHeight, noResults.visible ? noResults.implicitHeight : 0) + padding * 2
 
     // Symbol maps — see http://xahlee.info/comp/unicode_computing_symbols.html
     // and https://www.nerdfonts.com/cheat-sheet for the glyph sources.
@@ -86,12 +87,44 @@ Item {
     Config.options.cheatsheet.useMouseSymbol ? mouseSymbolMap : {},
     )
 
+    // Same tree shape as `keybinds`, keeping only binds whose description,
+    // section name, or key combo (raw or substituted) matches the query.
+    readonly property var filteredKeybinds: {
+        const q = root.searchQuery.replace(/\s*\+\s*/g, " ").trim().toLowerCase();
+        if (q.length === 0) return root.keybinds;
+        const columns = [];
+        for (const column of (root.keybinds.children || [])) {
+            const sections = [];
+            for (const section of (column.children || [])) {
+                const binds = (section.keybinds || []).filter(bind => {
+                    const keys = (bind.mods || []).concat(bind.key || []);
+                    const keyText = keys.concat(keys.map(k => root.keySubstitutions[k] || k)).join(" ").toLowerCase();
+                    return (bind.comment || "").toLowerCase().includes(q)
+                        || (section.name || "").toLowerCase().includes(q)
+                        || keyText.includes(q);
+                });
+                if (binds.length > 0) sections.push({ "name": section.name, "keybinds": binds });
+            }
+            if (sections.length > 0) columns.push({ "children": sections });
+        }
+        return { "children": columns };
+    }
+
+    StyledText {
+        id: noResults
+        anchors.centerIn: parent
+        visible: root.searchQuery.trim().length > 0 && (root.filteredKeybinds.children || []).length === 0
+        text: Translation.tr("No keybinds match your search")
+        color: Appearance.colors.colSubtext
+        font.pixelSize: Appearance.font.pixelSize.larger
+    }
+
     Row { // Keybind columns
         id: row
         spacing: root.spacing
 
         Repeater {
-            model: root.keybinds.children
+            model: root.filteredKeybinds.children
 
             delegate: Column { // One column from each top-level `--#!` block
                 spacing: root.spacing
