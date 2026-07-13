@@ -528,6 +528,14 @@ Singleton {
                 }
             }
 
+            property JsonObject gestures: JsonObject { // Touchpad gestures; values map to hl.gesture() blocks in hypr/hyprland/general.lua
+                property string swipe3: "move" // "move" | "workspace" | "resize" | "none"
+                property string pinch3: "float" // "float" | "fullscreen" | "close" | "none"
+                property string horizontal4: "workspace" // "workspace" | "special" | "none"
+                property string up4: "overviewOpen" // "overviewOpen" | "fullscreen" | "special" | "none"
+                property string down4: "overviewClose" // "overviewClose" | "close" | "none"
+            }
+
             property JsonObject language: JsonObject {
                 property string ui: "auto" // UI language. "auto" for system locale, or specific language code like "zh_CN", "en_US"
                 property JsonObject translator: JsonObject {

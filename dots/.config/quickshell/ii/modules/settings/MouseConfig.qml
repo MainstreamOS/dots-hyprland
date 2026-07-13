@@ -24,10 +24,104 @@ ContentPage {
     // Targets the Lua-config tree introduced in Hyprland 0.55.
     readonly property string envConf:
         Quickshell.env("HOME") + "/.config/hypr/custom/env.lua"
+    readonly property string hyprGeneralConf:
+        Quickshell.env("HOME") + "/.config/hypr/hyprland/general.lua"
 
     Component.onCompleted: {
         mouseProc.running = false; mouseProc.running = true
         tpProc.running    = false; tpProc.running    = true
+        root.applyGestures()
+    }
+
+    // ── Touchpad gestures ─────────────────────────────────────────────────────
+    // Each slot in Config.options.gestures maps to one hl.gesture() block.
+    // Hyprland rejects re-defining a fingers+direction pair ("overshadowed"),
+    // so changes rewrite the whole marker-fenced block in hyprland/general.lua
+    // and take effect via a full hyprctl reload.
+    function gestureBlock() {
+        const g = Config.options.gestures
+        const lua = {
+            swipe3: {
+                move:      '{\n    fingers = 3,\n    direction = "swipe",\n    action = "move"\n}',
+                workspace: '{\n    fingers = 3,\n    direction = "horizontal",\n    action = "workspace"\n}',
+                resize:    '{\n    fingers = 3,\n    direction = "swipe",\n    action = "resize"\n}'
+            },
+            pinch3: {
+                float:      '{\n    fingers = 3,\n    direction = "pinch",\n    action = "float"\n}',
+                fullscreen: '{\n    fingers = 3,\n    direction = "pinch",\n    action = "fullscreen"\n}',
+                close:      '{\n    fingers = 3,\n    direction = "pinch",\n    action = "close"\n}'
+            },
+            horizontal4: {
+                workspace: '{\n    fingers = 4,\n    direction = "horizontal",\n    action = "workspace"\n}',
+                special:   '{\n    fingers = 4,\n    direction = "horizontal",\n    action = "special"\n}'
+            },
+            up4: {
+                overviewOpen: '{\n    fingers = 4,\n    direction = "up",\n    action = function()\n        hl.dispatch(hl.dsp.global("quickshell:overviewWorkspacesToggle"))\n    end\n}',
+                fullscreen:   '{\n    fingers = 4,\n    direction = "up",\n    action = "fullscreen"\n}',
+                special:      '{\n    fingers = 4,\n    direction = "up",\n    action = "special"\n}'
+            },
+            down4: {
+                overviewClose: '{\n    fingers = 4,\n    direction = "down",\n    action = function()\n        hl.dispatch(hl.dsp.global("quickshell:overviewWorkspacesClose"))\n    end\n}',
+                close:         '{\n    fingers = 4,\n    direction = "down",\n    action = "close"\n}'
+            }
+        }
+        const lines = []
+        for (const slot of ["swipe3", "pinch3", "horizontal4", "up4", "down4"]) {
+            // Unknown values (hand-edited config.json) fall back to the slot's
+            // default — the first key — so the file always matches what the
+            // combo's index-0 fallback displays. The own-property guard keeps
+            // Object.prototype members ("constructor") out of the Lua.
+            let val = g[slot]
+            if (val !== "none" && !Object.prototype.hasOwnProperty.call(lua[slot], val))
+                val = Object.keys(lua[slot])[0]
+            const body = lua[slot][val]
+            if (body) lines.push("hl.gesture(" + body + ")")
+        }
+        return lines.join("\n")
+    }
+
+    // Exit codes: 0 = rewritten (reload), 1 = marker block missing (surface
+    // an error), 2 = file already matches (no-op — lets Component.onCompleted
+    // run this as a cheap self-heal after dots updates reset general.lua).
+    function applyGestures() {
+        const py =
+            "import sys, re, os\n" +
+            "path, block = sys.argv[1], sys.argv[2]\n" +
+            "text = open(path).read()\n" +
+            "pat = re.compile(r'(?s)(-- BEGIN gestures[^\\n]*\\n).*?(-- END gestures)')\n" +
+            "new, n = pat.subn(lambda m: m.group(1) + block + ('\\n' if block else '') + m.group(2), text, count=1)\n" +
+            "if n == 0:\n" +
+            "    sys.exit(1)\n" +
+            "if new == text:\n" +
+            "    sys.exit(2)\n" +
+            "tmp = path + '.tmp'\n" +
+            "f = open(tmp, 'w')\n" +
+            "f.write(new)\n" +
+            "f.close()\n" +
+            "os.replace(tmp, path)\n"
+        gestureWriter.command = ["python3", "-c", py, root.hyprGeneralConf, gestureBlock()]
+        gestureWriter.running = false
+        gestureWriter.running = true
+    }
+
+    Process {
+        id: gestureWriter
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) {
+                gestureReload.running = false
+                gestureReload.running = true
+            } else if (exitCode === 1) {
+                Quickshell.execDetached(["notify-send",
+                    Translation.tr("Gesture settings"),
+                    Translation.tr("Couldn't update %1 — its gestures marker block is missing.").arg(root.hyprGeneralConf),
+                    "-a", "Shell"])
+            }
+        }
+    }
+
+    Process {
+        id: gestureReload
+        command: ["hyprctl", "reload"]
     }
 
     // Strip surrounding quotes and trailing comma from a Lua value token.
@@ -636,6 +730,103 @@ ContentPage {
                         }
                     }
                 }
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Gestures")
+            Layout.topMargin: 20
+
+            component GestureRow: ConfigRow {
+                id: gestureRow
+                property string icon
+                property string label
+                property string slot
+                property var options: []
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+
+                OptionalMaterialSymbol {
+                    icon: gestureRow.icon
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 6
+                    text: gestureRow.label
+                    color: Appearance.colors.colOnSecondaryContainer
+                }
+                StyledComboBox {
+                    textRole: "displayName"
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: 220
+                    model: gestureRow.options
+                    enabled: !Config.themeApplyInProgress
+                    currentIndex: {
+                        const idx = gestureRow.options.findIndex(o => o.value === Config.options.gestures[gestureRow.slot])
+                        return idx !== -1 ? idx : 0
+                    }
+                    onActivated: index => {
+                        if (Config.themeApplyInProgress) return
+                        Config.options.gestures[gestureRow.slot] = gestureRow.options[index].value
+                        root.applyGestures()
+                    }
+                }
+            }
+
+            GestureRow {
+                icon: "swipe"
+                label: Translation.tr("Three-finger swipe")
+                slot: "swipe3"
+                options: [
+                    { displayName: Translation.tr("Move window"),       value: "move" },
+                    { displayName: Translation.tr("Switch workspaces"), value: "workspace" },
+                    { displayName: Translation.tr("Resize window"),     value: "resize" },
+                    { displayName: Translation.tr("Do Nothing"),        value: "none" }
+                ]
+            }
+            GestureRow {
+                icon: "pinch"
+                label: Translation.tr("Three-finger pinch")
+                slot: "pinch3"
+                options: [
+                    { displayName: Translation.tr("Toggle floating"), value: "float" },
+                    { displayName: Translation.tr("Fullscreen"),      value: "fullscreen" },
+                    { displayName: Translation.tr("Close window"),    value: "close" },
+                    { displayName: Translation.tr("Do Nothing"),      value: "none" }
+                ]
+            }
+            GestureRow {
+                icon: "swipe_right"
+                label: Translation.tr("Four-finger swipe sideways")
+                slot: "horizontal4"
+                options: [
+                    { displayName: Translation.tr("Switch workspaces"), value: "workspace" },
+                    { displayName: Translation.tr("Special workspace"), value: "special" },
+                    { displayName: Translation.tr("Do Nothing"),        value: "none" }
+                ]
+            }
+            GestureRow {
+                icon: "swipe_up"
+                label: Translation.tr("Four-finger swipe up")
+                slot: "up4"
+                options: [
+                    { displayName: Translation.tr("Open overview"),     value: "overviewOpen" },
+                    { displayName: Translation.tr("Fullscreen"),        value: "fullscreen" },
+                    { displayName: Translation.tr("Special workspace"), value: "special" },
+                    { displayName: Translation.tr("Do Nothing"),        value: "none" }
+                ]
+            }
+            GestureRow {
+                icon: "swipe_down"
+                label: Translation.tr("Four-finger swipe down")
+                slot: "down4"
+                options: [
+                    { displayName: Translation.tr("Close overview"), value: "overviewClose" },
+                    { displayName: Translation.tr("Close window"),   value: "close" },
+                    { displayName: Translation.tr("Do Nothing"),     value: "none" }
+                ]
             }
         }
     }

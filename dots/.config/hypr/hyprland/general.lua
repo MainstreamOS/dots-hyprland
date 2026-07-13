@@ -6,6 +6,7 @@ hl.monitor({
     scale = 1
 })
 
+-- BEGIN gestures — rewritten by Settings → Mouse; change them there
 hl.gesture({
     fingers = 3,
     direction = "swipe",
@@ -35,6 +36,7 @@ hl.gesture({
         hl.dispatch(hl.dsp.global("quickshell:overviewWorkspacesClose"))
     end
 })
+-- END gestures
 
 hl.config({
     gestures = {
@@ -266,7 +268,8 @@ hl.config({
         off_window_axis_events = 2,
 
         touchpad = {
-            natural_scroll = true,
+            -- natural_scroll lives in custom/env.lua (Settings → Mouse writes
+            -- it there); a duplicate here would win on every hyprctl reload.
             disable_while_typing = true,
             clickfinger_behavior = true,
             scroll_factor = 0.7
