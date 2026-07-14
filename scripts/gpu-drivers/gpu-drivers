@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# =============================================================================
+# gpu-drivers — (re)install the GPU drivers for the graphics card currently in
+# this machine. Handy after swapping cards: re-detects the GPU and installs the
+# matching driver packages from the repos (the NVIDIA branch is chosen by the
+# card's generation via the shared gpu-config library).
+#
+# Installs driver PACKAGES ONLY — each driver's own pacman hooks handle its
+# module/initramfs setup. It does not touch the kernel cmdline, modprobe.d, or
+# Hyprland config.
+# =============================================================================
+
+set -uo pipefail
+
+# Single source of truth for GPU detection + NVIDIA driver classification,
+# shared with the installer. Present at /usr/local/lib on installed systems;
+# fall back to the repo copy when run from a dots checkout.
+GPU_LIB="/usr/local/lib/gpu-config.sh"
+if [[ ! -r "$GPU_LIB" ]]; then
+    _here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+    for _c in "$_here/../../sdata/lib/gpu-config.sh" "$_here/../lib/gpu-config.sh"; do
+        [[ -r "$_c" ]] && { GPU_LIB="$_c"; break; }
+    done
+fi
+
+if [[ $(id -u) -ne 0 ]]; then
+    exec sudo -- "$0" "$@"
+fi
+
+if [[ ! -r "$GPU_LIB" ]]; then
+    echo "gpu-drivers: shared GPU library not found (expected /usr/local/lib/gpu-config.sh)." >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$GPU_LIB"
+
+run() { echo "+ $*"; "$@"; }
+
+echo "Detecting the GPU and installing matching drivers (packages only)."
+echo "Update the system first (sudo pacman -Syu) so the drivers match your"
+echo "installed libraries."
+echo
+
+if ! gpu_detect; then
+    echo "gpu-drivers: no GPU detected via lspci — nothing to do." >&2
+    exit 1
+fi
+echo "Detected: AMD=$HAS_AMD Intel=$HAS_INTEL NVIDIA=$HAS_NVIDIA Hybrid=$IS_HYBRID VM=$IS_VM"
+echo
+
+fail=0
+did_vendor=false
+
+if [[ $HAS_NVIDIA == true ]]; then
+    did_vendor=true
+    gpu_classify_nvidia_driver
+    echo "NVIDIA generation $NVIDIA_GEN -> driver family $NVIDIA_DRIVER_FAMILY"
+    if (( ${#NVIDIA_REPO_PKGS[@]} > 0 )); then
+        repo=() lib32=()
+        for _p in "${NVIDIA_REPO_PKGS[@]}"; do
+            case "$_p" in lib32-*) lib32+=("$_p") ;; *) repo+=("$_p") ;; esac
+        done
+        [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && repo+=(egl-wayland) || true
+        run pacman -S --needed --noconfirm "${repo[@]}" || fail=1
+        (( ${#lib32[@]} > 0 )) && { run pacman -S --needed --noconfirm "${lib32[@]}" || true; }
+    else
+        # Frozen legacy branch (nvidia-580xx/470xx/390xx) from [mainstream]; the
+        # -dkms package builds against the kernel, so headers + dkms come first.
+        run pacman -S --needed --noconfirm linux-headers dkms || fail=1
+        if ! run pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
+            echo "Legacy NVIDIA branch $NVIDIA_DRIVER_FAMILY unavailable — installing nouveau instead."
+            run pacman -S --needed --noconfirm xf86-video-nouveau mesa || fail=1
+        fi
+    fi
+    [[ $IS_HYBRID == true ]] && { run pacman -S --needed --noconfirm nvidia-prime || true; }
+fi
+
+if [[ $HAS_AMD == true ]]; then
+    did_vendor=true
+    run pacman -S --needed --noconfirm mesa vulkan-radeon libva-utils || fail=1
+    run pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon || true
+fi
+
+if [[ $HAS_INTEL == true ]]; then
+    did_vendor=true
+    run pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils || fail=1
+    run pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel || true
+    run pacman -S --needed --noconfirm vpl-gpu-rt || true
+fi
+
+if [[ $did_vendor == false ]]; then
+    # VM / virtio / unrecognized — the mesa software stack.
+    run pacman -S --needed --noconfirm mesa || fail=1
+fi
+
+# Guarantee a vulkan provider so a later Steam --noconfirm install can't pull
+# lib32-nvidia-utils as the provider on non-NVIDIA hardware.
+pacman -T vulkan-driver >/dev/null 2>&1 || { run pacman -S --needed --noconfirm vulkan-swrast || true; }
+pacman -T lib32-vulkan-driver >/dev/null 2>&1 || { run pacman -S --needed --noconfirm lib32-vulkan-swrast || true; }
+
+echo
+if (( fail != 0 )); then
+    echo "gpu-drivers: one or more required driver packages failed — see the log above." >&2
+    exit 1
+fi
+echo "Done. Reboot to load the new GPU drivers."

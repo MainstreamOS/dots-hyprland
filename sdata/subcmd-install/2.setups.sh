@@ -172,6 +172,10 @@ function detect_gpu_vendors(){
 
 function setup_gpu_drivers(){
   local vendors
+  x sudo install -m 755 "${REPO_ROOT}/scripts/gpu-drivers/gpu-drivers" /usr/local/bin/gpu-drivers
+  if sudo visudo -cf "${REPO_ROOT}/scripts/gpu-drivers/zz-gpu-drivers" >/dev/null 2>&1; then
+    x sudo install -m 0440 -o root -g root "${REPO_ROOT}/scripts/gpu-drivers/zz-gpu-drivers" /etc/sudoers.d/zz-gpu-drivers
+  fi
   vendors=$(detect_gpu_vendors)
 
   if [[ -z "$vendors" ]]; then
