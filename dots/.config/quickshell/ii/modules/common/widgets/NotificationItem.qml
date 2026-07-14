@@ -232,7 +232,7 @@ Item { // Notification item area
                         id: actionsFlickable
                         anchors.fill: parent
                         implicitHeight: actionRowLayout.implicitHeight
-                        contentWidth: actionRowLayout.implicitWidth
+                        contentWidth: Math.max(actionRowLayout.implicitWidth, actionsFlickable.width)
 
                         Behavior on opacity {
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -247,6 +247,7 @@ Item { // Notification item area
                         RowLayout {
                             id: actionRowLayout
                             Layout.alignment: Qt.AlignBottom
+                            width: Math.max(implicitWidth, actionsFlickable.width)
 
                             NotificationActionButton {
                                 Layout.fillWidth: true
