@@ -42,6 +42,7 @@ Singleton {
     }
     readonly property string monitorSourceString: monitorSourceToString(monitorSource)
     property var recognizedTrack: ({ title:"", subtitle:"", url:""})
+    property string artPath: ""
     property bool manuallyStopped: false
 
     function handleRecognition(jsonText) {
@@ -52,9 +53,30 @@ Singleton {
                 subtitle: obj.track.subtitle,
                 url: obj.track.url
             }
-            musicReconizedProc.running = true
+            var art = ""
+            try { art = obj.track.images.coverarthq || obj.track.images.coverart || "" } catch(eArt) {}
+            root.artPath = ""
+            if (art.length > 0) {
+                const dest = `/tmp/quickshell/songrec-albumart-${Date.now()}.jpg`
+                artDownloadProc.dest = dest
+                artDownloadProc.command = ["bash", "-c", `mkdir -p /tmp/quickshell && curl -sfL --max-time 8 -o '${dest}' '${art.replace(/'/g, "")}'`]
+                artDownloadProc.running = false
+                artDownloadProc.running = true
+            } else {
+                musicReconizedProc.running = true
+            }
         } catch(e) {
             Quickshell.execDetached(["notify-send", Translation.tr("Couldn't recognize music"), Translation.tr("Perhaps what you're listening to is too niche"), "-a", "Shell"])
+        }
+    }
+
+    Process {
+        id: artDownloadProc
+        property string dest: ""
+        running: false
+        onExited: (exitCode) => {
+            root.artPath = (exitCode === 0) ? artDownloadProc.dest : ""
+            musicReconizedProc.running = true
         }
     }
 
@@ -81,14 +103,14 @@ Singleton {
     Process {
         id: musicReconizedProc
         running: false
-        command: [
-            "notify-send",
-            Translation.tr("Music Recognized"), 
-            root.recognizedTrack.title + " - " + root.recognizedTrack.subtitle, 
-            "-A", "Shazam",
-            "-A", "YouTube",
-            "-a", "Shell"
-        ]
+        command: {
+            let c = ["notify-send",
+                Translation.tr("Music Recognized"),
+                root.recognizedTrack.title + " - " + root.recognizedTrack.subtitle]
+            if (root.artPath.length > 0) c.push("-h", "string:image-path:" + root.artPath)
+            c.push("-A", "Shazam", "-A", "YouTube", "-a", "Shell")
+            return c
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 if (this.text === "") return
