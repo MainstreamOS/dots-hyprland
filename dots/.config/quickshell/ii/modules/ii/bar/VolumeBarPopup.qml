@@ -181,18 +181,26 @@ LazyLoader {
                     opacity: 0.5
                 }
 
-                // App list
-                ColumnLayout {
+                // App list — like the sidebar's Audio output dialog: six
+                // channels at once, and when more exist the seventh peeks in
+                // half-cut so it reads as scrollable.
+                StyledListView {
+                    id: appList
+                    readonly property int maxVisible: 6
                     Layout.fillWidth: true
+                    Layout.preferredHeight: {
+                        if (count === 0) return 0;
+                        const per = (contentHeight + spacing) / count;
+                        const rows = count > maxVisible ? maxVisible + 0.5 : count;
+                        return Math.round(rows * per - spacing);
+                    }
+                    visible: count > 0
+                    clip: true
                     spacing: 4
-                    visible: appRepeater.count > 0
-
-                    Repeater {
-                        id: appRepeater
-                        model: ScriptModel { values: Audio.outputAppNodes }
-                        delegate: Item {
+                    model: ScriptModel { values: Audio.outputAppNodes }
+                    delegate: Item {
                             required property var modelData
-                            Layout.fillWidth: true
+                            width: appList.width
                             implicitHeight: appRow.implicitHeight
 
                             PwObjectTracker { objects: [modelData] }
@@ -258,7 +266,6 @@ LazyLoader {
                                 }
                             }
                         }
-                    }
                 }
 
                 // Device selector
