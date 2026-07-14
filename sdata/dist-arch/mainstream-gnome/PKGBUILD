@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-gnome
 pkgver=1.0
-pkgrel=11
+pkgrel=12
 pkgdesc='Mainstream OS Gnome Dependencies'
 provides=('illogical-impulse-gnome')
 replaces=('illogical-impulse-gnome')
@@ -13,6 +13,7 @@ depends=(
   gvfs-smb
   gvfs-mtp
   ffmpegthumbnailer
+  gst-libav
   gnome-keyring
   libsecret
 )
