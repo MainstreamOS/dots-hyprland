@@ -22,8 +22,10 @@ ApiStrategy {
             ],
             "stream": true,
             "tools": tools,
-            "temperature": temperature,
         };
+        if (model.sendTemperature) {
+            baseData.temperature = temperature;
+        }
         return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
     }
 

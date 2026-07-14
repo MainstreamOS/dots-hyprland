@@ -23,7 +23,7 @@ Singleton {
     property Component geminiApiStrategy: GeminiApiStrategy {}
     property Component openaiApiStrategy: OpenAiApiStrategy {}
     property Component mistralApiStrategy: MistralApiStrategy {}
-    property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
+    property Component anthropicApiStrategy: AnthropicApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -235,7 +235,7 @@ Singleton {
             "search": [],
             "none": [],
         },
-        "claude-code": {
+        "anthropic": {
             "functions": [],
             "search": [],
             "none": []
@@ -300,18 +300,32 @@ Singleton {
             "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
             "api_format": "mistral",
         }),
-        "claude-code": aiModelComponent.createObject(this, {
-            "name": "Claude Code",
-            "icon": "terminal",
-            "description": Translation.tr("Online | Anthropic's Claude via the Claude Code CLI\nRequires the claude CLI to be installed"),
-            "homepage": "https://docs.anthropic.com/en/docs/claude-code",
-            "endpoint": "",
-            "model": "claude-code",
+        "claude": aiModelComponent.createObject(this, {
+            "name": "Claude",
+            "icon": "spark-symbolic",
+            "description": Translation.tr("Online | Anthropic's Claude Opus 4.8 over the Messages API"),
+            "homepage": "https://www.anthropic.com/claude",
+            "endpoint": "https://api.anthropic.com/v1/messages",
+            "model": "claude-opus-4-8",
             "requires_key": true,
             "key_id": "anthropic",
             "key_get_link": "https://console.anthropic.com/settings/keys",
             "key_get_description": Translation.tr("**Instructions**: Log into your Anthropic account, go to API Keys, click Create Key"),
-            "api_format": "claude-code",
+            "api_format": "anthropic",
+        }),
+        "codex": aiModelComponent.createObject(this, {
+            "name": "Codex",
+            "icon": "openai-symbolic",
+            "description": Translation.tr("Online | OpenAI's GPT-5.6 over the Chat Completions API"),
+            "homepage": "https://platform.openai.com",
+            "endpoint": "https://api.openai.com/v1/chat/completions",
+            "model": "gpt-5.6",
+            "sendTemperature": false,
+            "requires_key": true,
+            "key_id": "openai",
+            "key_get_link": "https://platform.openai.com/api-keys",
+            "key_get_description": Translation.tr("**Instructions**: Log into your OpenAI account, open the API keys page, click Create new secret key"),
+            "api_format": "openai",
         }),
     }
     property var modelList: Object.keys(root.models)
@@ -321,7 +335,7 @@ Singleton {
         "openai": openaiApiStrategy.createObject(this),
         "gemini": geminiApiStrategy.createObject(this),
         "mistral": mistralApiStrategy.createObject(this),
-        "claude-code": claudeCodeApiStrategy.createObject(this),
+        "anthropic": anthropicApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -591,10 +605,6 @@ Singleton {
         root.tokenCount.input = -1;
         root.tokenCount.output = -1;
         root.tokenCount.total = -1;
-        // Reset Claude Code session so next message starts fresh
-        if (root.apiStrategies["claude-code"]) {
-            root.apiStrategies["claude-code"].sessionId = "";
-        }
     }
 
     FileView {
@@ -613,7 +623,6 @@ Singleton {
                 root.postResponseHook();
                 root.postResponseHook = null; // Reset hook after use
             }
-            root.saveChat("lastSession")
             root.responseFinished()
         }
 
@@ -678,16 +687,11 @@ Singleton {
 
             /* Create command string */
             let scriptRequestContent = ""
-            if (model.api_format === "claude-code") {
-                scriptRequestContent = requester.currentStrategy.buildScriptRequestContent(
-                    model, filteredMessageArray, root.systemPrompt, root.temperature);
-            } else {
-                scriptRequestContent += `curl --no-buffer "${endpoint}"`
-                    + ` ${headerString}`
-                    + (authHeader ? ` ${authHeader}` : "")
-                    + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
-                    + "\n"
-            }
+            scriptRequestContent += `curl --no-buffer "${endpoint}"`
+                + ` ${headerString}`
+                + (authHeader ? ` ${authHeader}` : "")
+                + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
+                + "\n"
             
             /* Send the request */
             const scriptContent = requester.currentStrategy.finalizeScriptContent(scriptShebang + scriptFileSetupContent + scriptRequestContent)

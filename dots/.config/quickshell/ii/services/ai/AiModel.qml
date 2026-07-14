@@ -29,4 +29,5 @@ QtObject {
     property string api_format: "openai"
     property var tools
     property var extraParams: ({})
+    property bool sendTemperature: true
 }
