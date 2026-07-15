@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import qs.services
 
 /**
  * Dispatcher category metadata for the keybinds editor.
@@ -15,34 +16,34 @@ QtObject {
     id: root
 
     readonly property var bindTypes: [
-        { id: "bind",     label: "Normal",        desc: "Triggers on key press" },
-        { id: "binde",    label: "Repeat",        desc: "Repeats while held (volume, resize)" },
-        { id: "bindl",    label: "Locked",        desc: "Works even when screen is locked" },
-        { id: "bindr",    label: "Release",       desc: "Triggers on key release" },
-        { id: "bindn",    label: "Non-consuming", desc: "Key event passes through to windows" },
-        { id: "bindm",    label: "Mouse",         desc: "Mouse button bind (move/resize)" },
-        { id: "bindd",    label: "Described",     desc: "Bind with a description (cheatsheet)" },
-        { id: "bindid",   label: "Ignore-mods Desc", desc: "Ignore mods + has description" },
-        { id: "bindit",   label: "Transparent",   desc: "Doesn't block other binds" },
-        { id: "binditn",  label: "Trans Non-cons", desc: "Transparent + non-consuming" },
-        { id: "bindle",   label: "Locked Repeat", desc: "Locked + repeats while held" },
-        { id: "bindld",   label: "Locked Desc",   desc: "Locked + described" },
-        { id: "bindp",    label: "Pass",          desc: "Pass key through" },
-        { id: "bindln",   label: "Locked Non-cons", desc: "Locked + non-consuming" }
+        { id: "bind",     label: Translation.tr("Normal"),        desc: Translation.tr("Triggers on key press") },
+        { id: "binde",    label: Translation.tr("Repeat"),        desc: Translation.tr("Repeats while held (volume, resize)") },
+        { id: "bindl",    label: Translation.tr("Locked"),        desc: Translation.tr("Works even when screen is locked") },
+        { id: "bindr",    label: Translation.tr("Release"),       desc: Translation.tr("Triggers on key release") },
+        { id: "bindn",    label: Translation.tr("Non-consuming"), desc: Translation.tr("Key event passes through to windows") },
+        { id: "bindm",    label: Translation.tr("Mouse"),         desc: Translation.tr("Mouse button bind (move/resize)") },
+        { id: "bindd",    label: Translation.tr("Described"),     desc: Translation.tr("Bind with a description (cheatsheet)") },
+        { id: "bindid",   label: Translation.tr("Ignore-mods Desc"), desc: Translation.tr("Ignore mods + has description") },
+        { id: "bindit",   label: Translation.tr("Transparent"),   desc: Translation.tr("Doesn't block other binds") },
+        { id: "binditn",  label: Translation.tr("Trans Non-cons"), desc: Translation.tr("Transparent + non-consuming") },
+        { id: "bindle",   label: Translation.tr("Locked Repeat"), desc: Translation.tr("Locked + repeats while held") },
+        { id: "bindld",   label: Translation.tr("Locked Desc"),   desc: Translation.tr("Locked + described") },
+        { id: "bindp",    label: Translation.tr("Pass"),          desc: Translation.tr("Pass key through") },
+        { id: "bindln",   label: Translation.tr("Locked Non-cons"), desc: Translation.tr("Locked + non-consuming") }
     ]
 
     readonly property var mouseButtonPresets: [
-        { value: "mouse:272", label: "Left button"   },
-        { value: "mouse:273", label: "Right button"  },
-        { value: "mouse:274", label: "Middle button" },
-        { value: "mouse:275", label: "Back"          },
-        { value: "mouse:276", label: "Forward"       }
+        { value: "mouse:272", label: Translation.tr("Left button")   },
+        { value: "mouse:273", label: Translation.tr("Right button")  },
+        { value: "mouse:274", label: Translation.tr("Middle button") },
+        { value: "mouse:275", label: Translation.tr("Back")          },
+        { value: "mouse:276", label: Translation.tr("Forward")       }
     ]
 
     // Dispatchers that make sense for `bindm` (mouse drag).
     readonly property var bindmDispatchers: ({
-        "movewindow":   "Move window",
-        "resizewindow": "Resize window"
+        "movewindow":   Translation.tr("Move window"),
+        "resizewindow": Translation.tr("Resize window")
     })
 
     // Argument widget types — drives _buildArgWidget in the dialog.
@@ -59,151 +60,151 @@ QtObject {
     readonly property var categories: [
         {
             id: "apps",
-            label: "Launch Application",
+            label: Translation.tr("Launch Application"),
             icon: "terminal",
             dispatchers: [
-                { id: "exec",  label: "Run command",     argType: "command" },
-                { id: "execr", label: "Run raw command", argType: "command" }
+                { id: "exec",  label: Translation.tr("Run command"),     argType: "command" },
+                { id: "execr", label: Translation.tr("Run raw command"), argType: "command" }
             ]
         },
         {
             id: "window_mgmt",
-            label: "Window Management",
+            label: Translation.tr("Window Management"),
             icon: "select_window",
             dispatchers: [
-                { id: "killactive",       label: "Close window",         argType: "none" },
-                { id: "forcekillactive",  label: "Force kill window",    argType: "none" },
-                { id: "togglefloating",   label: "Toggle floating",      argType: "none" },
-                { id: "fullscreen",       label: "Toggle fullscreen",    argType: "fullscreen_mode" },
-                { id: "fullscreenstate",  label: "Set fullscreen state", argType: "text" },
-                { id: "fakefullscreen",   label: "Toggle fake fullscreen", argType: "none" },
-                { id: "pin",              label: "Pin window",           argType: "none" },
-                { id: "centerwindow",     label: "Center window",        argType: "none" },
-                { id: "pseudo",           label: "Toggle pseudo-tiling", argType: "none" },
-                { id: "layoutmsg",        label: "Layout message",       argType: "text" }
+                { id: "killactive",       label: Translation.tr("Close window"),         argType: "none" },
+                { id: "forcekillactive",  label: Translation.tr("Force kill window"),    argType: "none" },
+                { id: "togglefloating",   label: Translation.tr("Toggle floating"),      argType: "none" },
+                { id: "fullscreen",       label: Translation.tr("Toggle fullscreen"),    argType: "fullscreen_mode" },
+                { id: "fullscreenstate",  label: Translation.tr("Set fullscreen state"), argType: "text" },
+                { id: "fakefullscreen",   label: Translation.tr("Toggle fake fullscreen"), argType: "none" },
+                { id: "pin",              label: Translation.tr("Pin window"),           argType: "none" },
+                { id: "centerwindow",     label: Translation.tr("Center window"),        argType: "none" },
+                { id: "pseudo",           label: Translation.tr("Toggle pseudo-tiling"), argType: "none" },
+                { id: "layoutmsg",        label: Translation.tr("Layout message"),       argType: "text" }
             ]
         },
         {
             id: "workspace_nav",
-            label: "Workspace Navigation",
+            label: Translation.tr("Workspace Navigation"),
             icon: "grid_view",
             dispatchers: [
-                { id: "workspace",                label: "Switch workspace",          argType: "workspace" },
-                { id: "movetoworkspace",          label: "Move window to workspace",  argType: "workspace" },
-                { id: "movetoworkspacesilent",    label: "Move window silently",      argType: "workspace" },
-                { id: "togglespecialworkspace",   label: "Toggle scratchpad",         argType: "optional_text" }
+                { id: "workspace",                label: Translation.tr("Switch workspace"),          argType: "workspace" },
+                { id: "movetoworkspace",          label: Translation.tr("Move window to workspace"),  argType: "workspace" },
+                { id: "movetoworkspacesilent",    label: Translation.tr("Move window silently"),      argType: "workspace" },
+                { id: "togglespecialworkspace",   label: Translation.tr("Toggle scratchpad"),         argType: "optional_text" }
             ]
         },
         {
             id: "window_focus",
-            label: "Focus and Move Windows",
+            label: Translation.tr("Focus and Move Windows"),
             icon: "open_with",
             dispatchers: [
-                { id: "movefocus",          label: "Move focus",          argType: "direction" },
-                { id: "movewindow",         label: "Move window",         argType: "direction" },
-                { id: "swapwindow",         label: "Swap window",         argType: "direction" },
-                { id: "movewindoworgroup",  label: "Move window or group", argType: "direction" },
-                { id: "resizeactive",       label: "Resize window",       argType: "text" },
-                { id: "cyclenext",          label: "Cycle focus next",    argType: "none" },
-                { id: "swapnext",           label: "Swap with next",      argType: "none" },
-                { id: "focuscurrentorlast", label: "Focus last window",   argType: "none" },
-                { id: "focusurgentorlast",  label: "Focus urgent/last",   argType: "none" }
+                { id: "movefocus",          label: Translation.tr("Move focus"),          argType: "direction" },
+                { id: "movewindow",         label: Translation.tr("Move window"),         argType: "direction" },
+                { id: "swapwindow",         label: Translation.tr("Swap window"),         argType: "direction" },
+                { id: "movewindoworgroup",  label: Translation.tr("Move window or group"), argType: "direction" },
+                { id: "resizeactive",       label: Translation.tr("Resize window"),       argType: "text" },
+                { id: "cyclenext",          label: Translation.tr("Cycle focus next"),    argType: "none" },
+                { id: "swapnext",           label: Translation.tr("Swap with next"),      argType: "none" },
+                { id: "focuscurrentorlast", label: Translation.tr("Focus last window"),   argType: "none" },
+                { id: "focusurgentorlast",  label: Translation.tr("Focus urgent/last"),   argType: "none" }
             ]
         },
         {
             id: "mouse_button",
-            label: "Mouse Button",
+            label: Translation.tr("Mouse Button"),
             icon: "mouse",
             // Empty here — the dialog reads bindmDispatchers directly when in mouse mode.
             dispatchers: []
         },
         {
             id: "grouping",
-            label: "Window Grouping",
+            label: Translation.tr("Window Grouping"),
             icon: "select_all",
             dispatchers: [
-                { id: "togglegroup",         label: "Toggle group",          argType: "none" },
-                { id: "changegroupactive",   label: "Cycle group member",    argType: "group_dir" },
-                { id: "moveoutofgroup",      label: "Remove from group",     argType: "none" },
-                { id: "moveintogroup",       label: "Move into group",       argType: "direction" },
-                { id: "movegroupwindow",     label: "Reorder in group",      argType: "group_dir" },
-                { id: "lockgroups",          label: "Lock all groups",       argType: "text" },
-                { id: "lockactivegroup",     label: "Lock active group",     argType: "text" },
-                { id: "denywindowfromgroup", label: "Deny window from group", argType: "text" }
+                { id: "togglegroup",         label: Translation.tr("Toggle group"),          argType: "none" },
+                { id: "changegroupactive",   label: Translation.tr("Cycle group member"),    argType: "group_dir" },
+                { id: "moveoutofgroup",      label: Translation.tr("Remove from group"),     argType: "none" },
+                { id: "moveintogroup",       label: Translation.tr("Move into group"),       argType: "direction" },
+                { id: "movegroupwindow",     label: Translation.tr("Reorder in group"),      argType: "group_dir" },
+                { id: "lockgroups",          label: Translation.tr("Lock all groups"),       argType: "text" },
+                { id: "lockactivegroup",     label: Translation.tr("Lock active group"),     argType: "text" },
+                { id: "denywindowfromgroup", label: Translation.tr("Deny window from group"), argType: "text" }
             ]
         },
         {
             id: "monitor",
-            label: "Monitor Control",
+            label: Translation.tr("Monitor Control"),
             icon: "monitor",
             dispatchers: [
-                { id: "focusmonitor",                  label: "Focus monitor",            argType: "text" },
-                { id: "movecurrentworkspacetomonitor", label: "Move workspace to monitor", argType: "text" },
-                { id: "moveworkspacetomonitor",        label: "Move specific workspace to monitor", argType: "text" },
-                { id: "swapactiveworkspaces",          label: "Swap workspaces between monitors", argType: "text" },
-                { id: "focusworkspaceoncurrentmonitor", label: "Focus workspace on current monitor", argType: "workspace" },
-                { id: "dpms",                          label: "Screen on/off",            argType: "dpms" }
+                { id: "focusmonitor",                  label: Translation.tr("Focus monitor"),            argType: "text" },
+                { id: "movecurrentworkspacetomonitor", label: Translation.tr("Move workspace to monitor"), argType: "text" },
+                { id: "moveworkspacetomonitor",        label: Translation.tr("Move specific workspace to monitor"), argType: "text" },
+                { id: "swapactiveworkspaces",          label: Translation.tr("Swap workspaces between monitors"), argType: "text" },
+                { id: "focusworkspaceoncurrentmonitor", label: Translation.tr("Focus workspace on current monitor"), argType: "workspace" },
+                { id: "dpms",                          label: Translation.tr("Screen on/off"),            argType: "dpms" }
             ]
         },
         {
             id: "session",
-            label: "Session",
+            label: Translation.tr("Session"),
             icon: "computer",
             dispatchers: [
-                { id: "exit",   label: "Exit Hyprland",     argType: "none" },
-                { id: "pass",   label: "Pass key to window", argType: "text" },
-                { id: "global", label: "Global shortcut",   argType: "text" },
-                { id: "submap", label: "Enter submap",      argType: "text" }
+                { id: "exit",   label: Translation.tr("Exit Hyprland"),     argType: "none" },
+                { id: "pass",   label: Translation.tr("Pass key to window"), argType: "text" },
+                { id: "global", label: Translation.tr("Global shortcut"),   argType: "text" },
+                { id: "submap", label: Translation.tr("Enter submap"),      argType: "text" }
             ]
         },
         {
             id: "advanced",
-            label: "Other",
+            label: Translation.tr("Other"),
             icon: "more_horiz",
             dispatchers: []
         }
     ]
 
     readonly property var workspacePresets: [
-        { value: "1",  label: "Workspace 1" },
-        { value: "2",  label: "Workspace 2" },
-        { value: "3",  label: "Workspace 3" },
-        { value: "4",  label: "Workspace 4" },
-        { value: "5",  label: "Workspace 5" },
-        { value: "6",  label: "Workspace 6" },
-        { value: "7",  label: "Workspace 7" },
-        { value: "8",  label: "Workspace 8" },
-        { value: "9",  label: "Workspace 9" },
-        { value: "10", label: "Workspace 10" },
-        { value: "+1", label: "Next workspace" },
-        { value: "-1", label: "Previous workspace" },
-        { value: "previous", label: "Last visited" },
-        { value: "empty",    label: "First empty" },
-        { value: "special",  label: "Special (scratchpad)" }
+        { value: "1",  label: Translation.tr("Workspace 1") },
+        { value: "2",  label: Translation.tr("Workspace 2") },
+        { value: "3",  label: Translation.tr("Workspace 3") },
+        { value: "4",  label: Translation.tr("Workspace 4") },
+        { value: "5",  label: Translation.tr("Workspace 5") },
+        { value: "6",  label: Translation.tr("Workspace 6") },
+        { value: "7",  label: Translation.tr("Workspace 7") },
+        { value: "8",  label: Translation.tr("Workspace 8") },
+        { value: "9",  label: Translation.tr("Workspace 9") },
+        { value: "10", label: Translation.tr("Workspace 10") },
+        { value: "+1", label: Translation.tr("Next workspace") },
+        { value: "-1", label: Translation.tr("Previous workspace") },
+        { value: "previous", label: Translation.tr("Last visited") },
+        { value: "empty",    label: Translation.tr("First empty") },
+        { value: "special",  label: Translation.tr("Special (scratchpad)") }
     ]
 
     readonly property var fullscreenModes: [
-        { value: "0", label: "Fullscreen" },
-        { value: "1", label: "Maximize" },
-        { value: "2", label: "Fullscreen (no gaps)" }
+        { value: "0", label: Translation.tr("Fullscreen") },
+        { value: "1", label: Translation.tr("Maximize") },
+        { value: "2", label: Translation.tr("Fullscreen (no gaps)") }
     ]
 
     readonly property var directionChoices: [
-        { value: "l", icon: "arrow_back",    label: "Left" },
-        { value: "d", icon: "arrow_downward", label: "Down" },
-        { value: "u", icon: "arrow_upward",   label: "Up" },
-        { value: "r", icon: "arrow_forward",  label: "Right" }
+        { value: "l", icon: "arrow_back",    label: Translation.tr("Left") },
+        { value: "d", icon: "arrow_downward", label: Translation.tr("Down") },
+        { value: "u", icon: "arrow_upward",   label: Translation.tr("Up") },
+        { value: "r", icon: "arrow_forward",  label: Translation.tr("Right") }
     ]
 
     readonly property var groupDirChoices: [
-        { value: "f", label: "Forward" },
-        { value: "b", label: "Back" }
+        { value: "f", label: Translation.tr("Forward") },
+        { value: "b", label: Translation.tr("Back") }
     ]
 
     readonly property var dpmsChoices: [
-        { value: "on",     label: "On" },
-        { value: "off",    label: "Off" },
-        { value: "toggle", label: "Toggle" }
+        { value: "on",     label: Translation.tr("On") },
+        { value: "off",    label: Translation.tr("Off") },
+        { value: "toggle", label: Translation.tr("Toggle") }
     ]
 
     // Flat lookup tables built lazily.
