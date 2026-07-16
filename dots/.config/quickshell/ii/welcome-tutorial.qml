@@ -6066,7 +6066,7 @@ readonly property var drawerApps: root.drawerApps
                                 materialIcon: "help"
                                 mainText: Translation.tr("Docs")
                                 onClicked: {
-                                    Qt.openUrlExternally("https://mainstreamos.org/docs")
+                                    Qt.openUrlExternally("https://mainstreamos.org/#desktop")
                                 }
                             }
                             RippleButtonWithIcon {

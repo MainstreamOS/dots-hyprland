@@ -150,7 +150,7 @@ ContentPage {
             RippleButtonWithIcon {
                 materialIcon: "auto_stories"
                 mainText: Translation.tr("Documentation")
-                onClicked: Qt.openUrlExternally("https://mainstreamos.org/docs")
+                onClicked: Qt.openUrlExternally("https://mainstreamos.org/#desktop")
             }
             RippleButtonWithIcon {
                 materialIcon: "adjust"
