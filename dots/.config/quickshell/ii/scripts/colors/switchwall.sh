@@ -108,7 +108,7 @@ VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=
 
 is_video() {
     local extension="${1##*.}"
-    [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" ]] && return 0 || return 1
+    [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "m4v" || "$extension" == "ogv" ]] && return 0 || return 1
 }
 
 # pkill/pgrep read every /proc/*/cmdline, which hangs whenever any task is

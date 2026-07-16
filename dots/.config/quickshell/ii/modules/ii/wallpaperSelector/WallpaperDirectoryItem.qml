@@ -107,14 +107,14 @@ MouseArea {
                 Loader {
                     id: videoIconLoader
                     active: root.isVideo && root.useThumbnail
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.margins: 8
-                    sourceComponent: MaterialSymbol {
-                        text: "video_library"
-                        color: Appearance.colors.colPrimary
-                        font.pixelSize: Appearance.font.pixelSize.large
-                        fill: 1
+                    anchors.centerIn: parent
+                    sourceComponent: Text {
+                        text: "▶"
+                        color: "#ffffff"
+                        font.pixelSize: 28
+                        style: Text.Raised
+                        styleColor: "#000000"
+                        opacity: 0.7
                     }
                 }
 
