@@ -246,6 +246,15 @@ ContentPage {
             }
         }
 
+        ConfigSwitch {
+            buttonIcon: "panorama_fish_eye"
+            text: Translation.tr('Large circular app icons')
+            checked: Config.options.bar.workspaces.circleAppIcons
+            onCheckedChanged: {
+                Config.options.bar.workspaces.circleAppIcons = checked;
+            }
+        }
+
         ConfigSpinBox {
             icon: "view_column"
             text: Translation.tr("Workspaces shown")

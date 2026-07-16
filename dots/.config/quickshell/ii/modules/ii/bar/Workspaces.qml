@@ -10,6 +10,8 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Widgets
+import Qt5Compat.GraphicalEffects
 
 ButtonMouseArea {
     id: root
@@ -26,7 +28,7 @@ ButtonMouseArea {
     property real workspaceButtonWidth: 26
     property real activeWorkspaceMargin: 2
     property real activeWorkspaceSize: workspaceButtonWidth - activeWorkspaceMargin * 2
-    property real workspaceIconSize: workspaceButtonWidth * 0.69
+    property real workspaceIconSize: workspaceButtonWidth * (Config.options.bar.workspaces.circleAppIcons ? 0.69 : 0.57)
     property real workspaceIconSizeShrinked: workspaceButtonWidth * 0.55
     property real workspaceIconOpacityShrinked: 1
     property real workspaceIconMarginShrinked: -4
@@ -291,64 +293,107 @@ ButtonMouseArea {
                     id: wsApp
                     property var biggestWindow: wsModel.biggestWindow[index]
                     property var mainAppIconSource: Quickshell.iconPath(AppSearch.guessIcon(biggestWindow?.class), "image-missing")
+                    readonly property color contentColor: (wsModel.occupied[index] && wsModel.getWorkspaceIdAt(index) !== wsModel.fakeWorkspace) ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1Inactive
+                    property real cornerMargin: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons && wsApp.biggestWindow) ? (root.workspaceButtonWidth - root.workspaceIconSize) / 2 : root.workspaceIconMarginShrinked
+                    Behavior on cornerMargin {
+                        animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
+                    }
 
-                    AppIcon {
-                        id: appIcon
-                        property real cornerMargin: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons && wsApp.biggestWindow) ? (root.workspaceButtonWidth - root.workspaceIconSize) / 2 : root.workspaceIconMarginShrinked
-                        anchors {
-                            bottom: parent.bottom
-                            right: parent.right
-                            bottomMargin: (parent.implicitHeight - root.workspaceButtonWidth) / 2 + cornerMargin
-                            rightMargin: (parent.implicitWidth - root.workspaceButtonWidth) / 2 + cornerMargin
-                        }
-
-                        animated: !wsApp.biggestWindow // Prevent the "image-missing" icon
-                        visible: false // Prevent dupe: the colorizer already copies the icon
-
-                        source: wsApp.mainAppIconSource
-                        implicitSize: NumberUtils.roundToEven(root.workspaceIconSize)
-
-                        Behavior on opacity {
-                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                        }
-                        Behavior on cornerMargin {
-                            animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
+                    // ── Circular mode: hidden AppIcon copied through a colorizer + circle mask ──
+                    Loader {
+                        anchors.fill: parent
+                        active: Config.options.bar.workspaces.circleAppIcons
+                        sourceComponent: Item {
+                            anchors.fill: parent
+                            AppIcon {
+                                id: appIcon
+                                anchors {
+                                    bottom: parent.bottom
+                                    right: parent.right
+                                    bottomMargin: (wsApp.implicitHeight - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    rightMargin: (wsApp.implicitWidth - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                }
+                                animated: !wsApp.biggestWindow
+                                visible: false
+                                source: wsApp.mainAppIconSource
+                                implicitSize: NumberUtils.roundToEven(root.workspaceIconSize)
+                            }
+                            Circle {
+                                id: iconMask
+                                visible: false
+                                layer.enabled: true
+                                diameter: appIcon.implicitSize
+                            }
+                            Loader {
+                                anchors.fill: appIcon
+                                sourceComponent: Colorizer {
+                                    implicitWidth: appIcon.implicitWidth
+                                    implicitHeight: appIcon.implicitHeight
+                                    colorizationColor: Appearance.m3colors.darkmode ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
+                                    colorization: Config.options.bar.workspaces.monochromeIcons ? 0.8 : 0.5
+                                    brightness: 0
+                                    source: appIcon
+                                    opacity: !Config.options?.bar.workspaces.showAppIcons ? 0 : (wsApp.biggestWindow && !root.superPressAndHeld) ? 1 : wsApp.biggestWindow ? root.workspaceIconOpacityShrinked : 0
+                                    visible: opacity > 0
+                                    scale: ((!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons) ? root.workspaceIconSize : root.workspaceIconSizeShrinked) / root.workspaceIconSize
+                                    Behavior on opacity {
+                                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                                    }
+                                    Behavior on scale {
+                                        animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
+                                    }
+                                    maskEnabled: true
+                                    maskSource: iconMask
+                                    maskThresholdMin: 0.5
+                                    maskSpreadAtMin: 1
+                                }
+                            }
                         }
                     }
 
-                    Circle {
-                        id: iconMask
-                        visible: false
-                        layer.enabled: true
-                        diameter: appIcon.implicitSize
-                    }
-
-                    Loader { // Somehow putting this multieffect in a loader prevents it from not showing up
-                        id: colorizer
-                        anchors.fill: appIcon
-                        sourceComponent: Colorizer {
-                            implicitWidth: appIcon.implicitWidth
-                            implicitHeight: appIcon.implicitHeight
-                            colorizationColor: Appearance.m3colors.darkmode ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
-                            colorization: Config.options.bar.workspaces.monochromeIcons ? 0.8 : 0.5
-                            brightness: 0
-                            source: appIcon
-
-                            opacity: !Config.options?.bar.workspaces.showAppIcons ? 0 : (wsApp.biggestWindow && !root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons) ? 1 : wsApp.biggestWindow ? root.workspaceIconOpacityShrinked : 0
+                    // ── Default mode: IconImage rendered directly, with a light monochrome overlay (the old look) ──
+                    Loader {
+                        anchors.fill: parent
+                        active: !Config.options.bar.workspaces.circleAppIcons
+                        sourceComponent: Item {
+                            anchors.fill: parent
+                            opacity: !Config.options?.bar.workspaces.showAppIcons ? 0 : (wsApp.biggestWindow && !root.superPressAndHeld) ? 1 : wsApp.biggestWindow ? root.workspaceIconOpacityShrinked : 0
                             visible: opacity > 0
-                            scale: ((!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons) ? root.workspaceIconSize : root.workspaceIconSizeShrinked) / root.workspaceIconSize
-
                             Behavior on opacity {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                             }
-                            Behavior on scale {
-                                animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
+                            IconImage {
+                                id: plainAppIcon
+                                anchors {
+                                    bottom: parent.bottom
+                                    right: parent.right
+                                    bottomMargin: (wsApp.implicitHeight - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    rightMargin: (wsApp.implicitWidth - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                }
+                                source: wsApp.mainAppIconSource
+                                implicitSize: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons) ? root.workspaceIconSize : root.workspaceIconSizeShrinked
+                                Behavior on implicitSize {
+                                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                                }
                             }
-
-                            maskEnabled: true
-                            maskSource: iconMask
-                            maskThresholdMin: 0.5
-                            maskSpreadAtMin: 1
+                            Loader {
+                                active: Config.options.bar.workspaces.monochromeIcons
+                                anchors.fill: plainAppIcon
+                                sourceComponent: Item {
+                                    Desaturate {
+                                        id: desaturatedIcon
+                                        visible: false
+                                        anchors.fill: parent
+                                        source: plainAppIcon
+                                        desaturation: 0.8
+                                    }
+                                    ColorOverlay {
+                                        anchors.fill: desaturatedIcon
+                                        source: desaturatedIcon
+                                        color: ColorUtils.transparentize(wsApp.contentColor, 0.9)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -358,11 +403,8 @@ ButtonMouseArea {
 
     FadeLoader {
         anchors.centerIn: parent
-        shown: wsModel.specialWorkspaceActive
+        shown: false
         scale: 0.8 + 0.2 * root.specialBlur
-
-        opacity: root.specialBlur
-        Behavior on opacity {} // Don't animate, as specialBlur is already animated
 
         sourceComponent: Pill {
             anchors.centerIn: parent
@@ -371,20 +413,12 @@ ButtonMouseArea {
                 const base = root.workspaceButtonWidth * Math.min(1.35, wsModel.shownCount); // Who tf only configures only 2 workspaces shown anyway?
                 if (root.vertical)
                     return base;
-                return specialWsText.implicitWidth + undirectionalWidth;
+                return root.workspaceButtonWidth;
             }
             color: Appearance.colors.colPrimary
 
             implicitWidth: root.vertical ? undirectionalWidth : undirectionalLength
             implicitHeight: root.vertical ? undirectionalLength : undirectionalWidth
-
-            StyledText {
-                id: specialWsText
-                anchors.centerIn: parent
-                text: (!root.vertical ? wsModel.specialWorkspaceName : "S")
-                color: Appearance.colors.colOnPrimary
-                font.pixelSize: root.specialTextSize
-            }
 
             Behavior on undirectionalLength {
                 animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
