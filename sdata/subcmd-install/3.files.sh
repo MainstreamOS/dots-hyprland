@@ -1006,6 +1006,11 @@ case "${EXPERIMENTAL_FILES_SCRIPT}" in
   *)source sdata/subcmd-install/3.files-legacy.sh;;
 esac
 
+# Starter Mainstream wallpapers for Super+W
+if [[ -d dots/Pictures/Wallpapers ]]; then
+  v rsync_dir__ignore_existing dots/Pictures/Wallpapers "$HOME/Pictures/Wallpapers"
+fi
+
 if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then
   showfun apply_os_only_prune
   v apply_os_only_prune
