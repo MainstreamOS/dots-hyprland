@@ -94,8 +94,6 @@ ContentPage {
                     id: wallpaperPreviewImage
                     visible: !parent.isVideo
                     anchors.fill: parent
-                    sourceSize.width: parent.implicitWidth
-                    sourceSize.height: parent.implicitHeight
                     fillMode: Image.PreserveAspectCrop
                     source: parent.isVideo ? "" : Config.options.background.wallpaperPath
                     cache: false
