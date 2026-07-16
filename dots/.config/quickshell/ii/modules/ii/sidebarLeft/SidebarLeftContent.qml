@@ -107,10 +107,26 @@ Item {
         Component {
             id: placeholder
             Item {
-                StyledText {
+                Column {
                     anchors.centerIn: parent
-                    text: root.animeCloset ? Translation.tr("Nothing") : Translation.tr("Enjoy your empty sidebar...")
-                    color: Appearance.colors.colSubtext
+                    width: parent.width - 40
+                    spacing: 4
+                    StyledText {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: root.animeCloset ? Translation.tr("Nothing") : Translation.tr("Your sidebar is empty")
+                        color: Appearance.colors.colSubtext
+                    }
+                    StyledText {
+                        visible: !root.animeCloset
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: Translation.tr("Add tabs from Settings → Interface → Left Sidebar")
+                        color: Appearance.colors.colSubtext
+                        opacity: 0.8
+                    }
                 }
             }
         }
