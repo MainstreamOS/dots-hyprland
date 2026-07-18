@@ -160,8 +160,8 @@ ContentPage {
             }
             RippleButtonWithIcon {
                 materialIcon: "forum"
-                mainText: Translation.tr("Discussions")
-                onClicked: Qt.openUrlExternally("https://github.com/MainstreamOS/dots-hyprland/discussions")
+                mainText: Translation.tr("Discord")
+                onClicked: Qt.openUrlExternally("https://discord.gg/WJ3AUK5Aqd")
             }
             RippleButtonWithIcon {
                 materialIcon: "policy"
