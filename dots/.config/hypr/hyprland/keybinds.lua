@@ -133,7 +133,15 @@ for i = 1, 6 do
 end
 
 hl.bind("SUPER + ALT + S", hl.dsp.window.move({workspace = "special:special", follow = false}), {description = "Send to scratchpad"} )
-hl.bind("CTRL + SUPER + S", hl.dsp.workspace.toggle_special("special") )
+hl.bind("CTRL + SUPER + S", function()
+ local w = hl.get_active_window()
+ if w and w.workspace and w.workspace.special then
+ local m = hl.get_active_monitor()
+ local t = m and m.active_workspace
+ if t then return hl.dispatch(hl.dsp.window.move({workspace = tostring(t.id), follow = true}) ) end
+ end
+ hl.dispatch(hl.dsp.window.move({workspace = "special", follow = false}) )
+end, {description = "Minimize / restore window"} )
 
 --##! Virtual machines
 hl.define_submap("virtual-machine", function()
