@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
@@ -199,18 +200,34 @@ Item {
                     }
 
                     // Per-app volume slider + mute (only when app has active audio streams)
+                    // Three rows at once; when more exist the fourth shows
+                    // mostly-cut so the list clearly reads as scrollable —
+                    // same treatment as the bar's volume popup, shorter
+                    // because this menu also carries windows and workspace
+                    // actions.
                     Loader {
                         active: root.hasAudioStreams && !root.isFolder
                         Layout.fillWidth: true
-                        sourceComponent: ColumnLayout {
+                        sourceComponent: StyledListView {
+                            id: volList
+                            readonly property int maxVisible: 3
+                            clip: true
                             spacing: 0
-                            Repeater {
-                                model: ScriptModel { values: root.audioGroups }
-                                delegate: ContextMenuVolumeRow {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    nodes: modelData
-                                }
+                            implicitWidth: 200
+                            implicitHeight: {
+                                if (count === 0) return 0;
+                                const per = (contentHeight + spacing) / count;
+                                const rows = count > maxVisible ? maxVisible + 0.7 : count;
+                                return Math.round(rows * per - spacing);
+                            }
+                            ScrollBar.vertical: StyledScrollBar {
+                                policy: volList.count > volList.maxVisible ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                            }
+                            model: ScriptModel { values: root.audioGroups }
+                            delegate: ContextMenuVolumeRow {
+                                required property var modelData
+                                width: volList.width
+                                nodes: modelData
                             }
                         }
                     }
