@@ -21,6 +21,35 @@ Singleton {
 	property MprisPlayer activePlayer: trackedPlayer ?? Mpris.players.values[0] ?? null;
 	signal trackChanged(reverse: bool);
 
+	// Most-recently-active bus names, newest first — lets the popup show only
+	// the last few players. Stored as names, not player refs, so entries from
+	// closed players can't dangle; orderByRecency simply never matches them.
+	property var recentPlayerNames: [];
+	// Last observed isPlaying per bus. Bumps only fire on a false→true
+	// transition: the browser bridge periodically re-emits state for players
+	// that never stopped, and those re-notifications must not reorder.
+	property var __wasPlaying: ({});
+	function notePlaybackChange(player) {
+		const name = player?.dbusName ?? '';
+		if (!name) return;
+		const was = root.__wasPlaying[name] === true;
+		const now = player.isPlaying === true;
+		root.__wasPlaying[name] = now;
+		if (now && !was) root.bumpRecentPlayer(player);
+	}
+	function bumpRecentPlayer(player) {
+		const name = player?.dbusName ?? '';
+		if (!name || !isRealPlayer(player)) return;
+		root.recentPlayerNames = [name, ...root.recentPlayerNames.filter(n => n !== name)].slice(0, 16);
+	}
+	function orderByRecency(list) {
+		const rank = name => {
+			const i = root.recentPlayerNames.indexOf(name);
+			return i === -1 ? root.recentPlayerNames.length : i;
+		};
+		return [...list].sort((a, b) => rank(a.dbusName) - rank(b.dbusName));
+	}
+
 	property bool __reverse: false;
 
 	property var activeTrack;
@@ -96,6 +125,7 @@ Singleton {
 			target: modelData;
 
 			Component.onCompleted: {
+				root.notePlaybackChange(modelData);
 				if (root.trackedPlayer == null || modelData.isPlaying) {
 					root.trackedPlayer = modelData;
 				}
@@ -114,6 +144,14 @@ Singleton {
 						trackedPlayer = Mpris.players.values[0];
 					}
 				}
+			}
+
+			// Recency rides on the isPlaying PROPERTY change, not
+			// playbackStateChanged: the state signal fires while isPlaying
+			// still holds its old value, so a starting player reads as
+			// not-playing there and never gets bumped.
+			function onIsPlayingChanged() {
+				root.notePlaybackChange(modelData);
 			}
 
 			function onPlaybackStateChanged() {
@@ -201,6 +239,7 @@ Singleton {
 
 	function setActivePlayer(player: MprisPlayer) {
 		const targetPlayer = player ?? Mpris.players[0];
+		root.bumpRecentPlayer(targetPlayer);
 		console.log(`[Mpris] Active player ${targetPlayer} << ${activePlayer}`)
 
 		if (targetPlayer && this.activePlayer) {

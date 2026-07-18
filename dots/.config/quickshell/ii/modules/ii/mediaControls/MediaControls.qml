@@ -17,7 +17,15 @@ Scope {
     property bool visible: false
     readonly property MprisPlayer activePlayer: MprisController.activePlayer
     readonly property var realPlayers: MprisController.players
-    readonly property var meaningfulPlayers: filterDuplicatePlayers(realPlayers)
+    // Recency-ordered and capped: with per-tab browser players the full list
+    // grows unbounded, so only the most recently played few are shown. Any
+    // older player re-enters the moment it plays or is selected. The local
+    // read of recentPlayerNames makes the recency dependency explicit so the
+    // binding re-evaluates on every bump.
+    readonly property var meaningfulPlayers: {
+        const order = MprisController.recentPlayerNames;
+        return filterDuplicatePlayers(MprisController.orderByRecency(realPlayers)).slice(0, Config.options.media.maxShownPlayers);
+    }
     readonly property real osdWidth: Appearance.sizes.osdWidth
     readonly property real widgetWidth: Appearance.sizes.mediaControlsWidth
     readonly property real widgetHeight: Appearance.sizes.mediaControlsHeight
