@@ -75,11 +75,19 @@ Scope {
         }
     }
 
+    // One overview per screen: surfaces are torn down and rebuilt with their
+    // output, so a DP re-train across suspend/DPMS can't orphan the window.
+    Variants {
+        id: overviewVariants
+        model: Quickshell.screens
+
     PanelWindow {
         id: panelWindow
+        required property ShellScreen modelData
+        screen: modelData
         property string searchingText: ""
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
-        property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
+        property bool monitorIsFocused: ((Hyprland.focusedMonitor?.id ?? monitor?.id) === monitor?.id)
 
         // ── Surface lifecycle ────────────────────────────────────────────
         // When Config.options.overview.keepSurfaceAlive is true (default),
@@ -103,7 +111,7 @@ Scope {
         // null mask = capture (open), empty Region = click-through (closed).
         // Gate on overviewOpen only, NOT the fade-out opacity — capturing while
         // contentFade fades out swallowed the next click (dead dock button).
-        mask: GlobalStates.overviewOpen
+        mask: (GlobalStates.overviewOpen && monitorIsFocused)
             ? null
             : passthroughRegion
         Region { id: passthroughRegion }
@@ -118,7 +126,7 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         // Exclusive while open holds the keyboard (search/Escape) now that the
         // focus grab is gone; None while closed (click-through surface).
-        WlrLayershell.keyboardFocus: GlobalStates.overviewOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: (GlobalStates.overviewOpen && monitorIsFocused) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         color: "transparent"
 
         // Full-screen so the dim overlay covers app windows behind the overview.
@@ -167,7 +175,7 @@ Scope {
         Item {
             id: contentFade
             anchors.fill: parent
-            opacity: GlobalStates.overviewOpen ? 1 : 0
+            opacity: (GlobalStates.overviewOpen && panelWindow.monitorIsFocused) ? 1 : 0
             property bool appDragging: false
             Behavior on opacity {
                 NumberAnimation {
@@ -400,7 +408,7 @@ Scope {
                     id: overviewLoader
                     Layout.alignment: Qt.AlignHCenter
                     anchors.horizontalCenter: parent.horizontalCenter
-                    active: GlobalStates.overviewOpen && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
+                    active: GlobalStates.overviewOpen && panelWindow.monitorIsFocused && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
                     Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
                     opacity: appDrawer.expanded ? 0 : 1
                     Behavior on opacity {
@@ -576,13 +584,15 @@ Scope {
 
     }   // end PanelWindow
 
+    }   // end Variants
+
     function toggleClipboard() {
         if (GlobalStates.overviewOpen && overviewScope.dontAutoCancelSearch) {
             GlobalStates.overviewOpen = false;
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
-        panelWindow.setSearchingText(Config.options.search.prefix.clipboard);
+        for (const w of overviewVariants.instances) w.setSearchingText(Config.options.search.prefix.clipboard);
         GlobalStates.overviewOpen = true;
     }
 
@@ -592,7 +602,7 @@ Scope {
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
-        panelWindow.setSearchingText(Config.options.search.prefix.emojis);
+        for (const w of overviewVariants.instances) w.setSearchingText(Config.options.search.prefix.emojis);
         GlobalStates.overviewOpen = true;
     }
 
