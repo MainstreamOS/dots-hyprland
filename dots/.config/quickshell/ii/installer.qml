@@ -282,9 +282,12 @@ ApplicationWindow {
 
                     // ── Internet notice ──
                     NoticeBox {
+                        readonly property bool online: Network.ethernet || Network.active !== null
                         Layout.fillWidth: true
-                        materialIcon: "wifi"
-                        text: Translation.tr("An internet connection is required for full installation. Please connect to Wi-Fi below before starting the installer.")
+                        materialIcon: online ? "check_circle" : "wifi"
+                        text: online
+                            ? Translation.tr("Internet connected — you're ready to install.")
+                            : Translation.tr("An internet connection is required for full installation. Please connect to Wi-Fi below before starting the installer.")
                     }
 
                     // ── Display section ──
