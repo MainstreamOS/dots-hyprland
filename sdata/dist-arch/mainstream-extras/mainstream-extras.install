@@ -12,6 +12,9 @@ _migrate() {
     done
     systemctl daemon-reload 2>/dev/null || true
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+    if [ -d /run/systemd/system ]; then
+        systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+    fi
 }
 
 post_install() {
