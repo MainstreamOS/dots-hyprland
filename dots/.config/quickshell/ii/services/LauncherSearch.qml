@@ -289,7 +289,7 @@ Singleton {
                         // captured toplevel — a fixed sleep was racy under load.
                         // Ceiling is 25 × 20ms = 500ms; we wtype anyway after.
                         const cmd = addr
-                            ? `hyprctl dispatch focuswindow address:${addr} >/dev/null 2>&1; `
+                            ? `hyprctl dispatch 'hl.dsp.focus({ window = "address:${addr}" })' >/dev/null 2>&1; `
                               + `for _ in $(seq 1 25); do `
                               + `[ "$(hyprctl activewindow -j 2>/dev/null | jq -r .address 2>/dev/null)" = "${addr}" ] && break; `
                               + `sleep 0.02; `

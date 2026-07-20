@@ -182,8 +182,8 @@ ApplicationWindow {
                         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
                     if (!titleRegex) return;
                     recenterMoveProc.command = [
-                        "hyprctl", "dispatch", "movewindowpixel",
-                        `exact ${tx} ${ty},title:^${titleRegex}$`
+                        "hyprctl", "dispatch",
+                        `hl.dsp.window.move({ x = ${tx}, y = ${ty}, window = [[title:^${titleRegex}$]] })`
                     ];
                     recenterMoveProc.running = false;
                     recenterMoveProc.running = true;

@@ -352,10 +352,10 @@ Scope {
                         }
                     } else if (event.key === Qt.Key_Left) {
                         if (!panelWindow.searchingText)
-                            Hyprland.dispatch("workspace r-1");
+                            Hyprland.dispatch(`hl.dsp.focus({ workspace = "r-1" })`);
                     } else if (event.key === Qt.Key_Right) {
                         if (!panelWindow.searchingText)
-                            Hyprland.dispatch("workspace r+1");
+                            Hyprland.dispatch(`hl.dsp.focus({ workspace = "r+1" })`);
                     }
                 }
                     
