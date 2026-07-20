@@ -1,0 +1,23 @@
+_migrate() {
+    rm -f /etc/pacman.d/hooks/95-hyprbars-rebuild.hook \
+          /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
+    rm -rf /usr/local/lib/hyprbars /usr/local/lib/scrolloverview
+    rm -f /usr/local/bin/limine-restore-auto
+    ln -sf /usr/bin/limine-restore-auto /usr/local/bin/limine-restore-auto
+    for n in hyprbars scrolloverview; do
+        if [ -f "/usr/local/bin/$n-status-notify" ] && [ ! -L "/usr/local/bin/$n-status-notify" ]; then
+            rm -f "/usr/local/bin/$n-status-notify"
+        fi
+        [ -e "/usr/local/bin/$n-status-notify" ] || ln -sf "/usr/bin/$n-status-notify" "/usr/local/bin/$n-status-notify"
+    done
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+}
+
+post_install() {
+    _migrate
+}
+
+post_upgrade() {
+    _migrate
+}

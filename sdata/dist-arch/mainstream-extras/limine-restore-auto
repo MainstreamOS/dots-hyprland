@@ -1,0 +1,49 @@
+#!/usr/bin/expect -f
+# limine-restore-auto
+# Non-interactive wrapper for limine-snapper-sync --restore.
+# Drives the interactive prompts, covering both the pre-1.31 text UI and
+# the 1.31+ menu UI:
+#   restore menu [r/l/c]          → r
+#   mismatch menu [s/r/c]         → r  (restore anyway)
+#   legacy confirm "Your input:"  → y
+#   snapshot/backup description   → Enter (accept default) — reads from /dev/tty, requires expect
+#   snapshot ID picker            → c  (not booted from a snapshot; bail out)
+#   delete unused files [y/N]     → n
+#   reboot [y/N]                  → n  (caller handles reboot)
+#   close terminal [y/N]          → y
+# SUDO_ASKPASS must be set in the calling environment when not already root.
+# Exit code is propagated from the spawned process so the QML Process.onExited
+# handler can distinguish success (0) from failure reliably; 124 = timed out
+# waiting for output, 125 = a prompt kept rejecting our answer.
+
+log_user 1
+set timeout 300
+set answers 0
+
+proc answer {text} {
+    global answers
+    if {[incr answers] > 25} { exit 125 }
+    send -- $text
+}
+
+spawn sudo -A /usr/lib/limine/limine-snapper-sync --restore
+
+expect {
+    -re {Choice \[r/l/c\]: $}                       { answer "r\r"; exp_continue }
+    -re {Choice \[s/r/c\]: $}                       { answer "r\r"; exp_continue }
+    -re {Your input: $}                             { answer "y\r"; exp_continue }
+    -re {Enter snapshot description[^\n]*$}         { answer "\r";  exp_continue }
+    -re {Description for backup subvolume[^\n]*:\s*$} { answer "\r";  exp_continue }
+    -re {type \[ID\][^\n]*cancel[^\n]*$}            { answer "c\r"; exp_continue }
+    -re {unused files\? \[y/N\]: $}                 { answer "n\r"; exp_continue }
+    -re {[Rr]eboot[^\n]*\[y/N\][^\n]*$}             { answer "n\r"; exp_continue }
+    -re {Close the terminal[^\n]*\[y/N\]: $}        { answer "y\r"; exp_continue }
+    timeout { exit 124 }
+    eof
+}
+
+# Wait for the process to fully exit and capture its exit code.
+# Without this, expect exits 0 on eof regardless of the child's status.
+catch wait result
+set exit_code [lindex $result 3]
+exit $exit_code

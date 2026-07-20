@@ -46,7 +46,7 @@ ContentPage {
         // sudo -S reads the password from stdin (written in
         // onRunningChanged below). Drops the SUDO_ASKPASS dance —
         // matches the Update panel's authentication pattern.
-        command: ["sudo", "-S", "/usr/local/bin/limine-restore-auto"]
+        command: ["sudo", "-S", "/usr/bin/limine-restore-auto"]
         stdout: SplitParser {
             onRead: data => { root.outputText += data + "\n"; }
         }
