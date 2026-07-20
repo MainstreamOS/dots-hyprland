@@ -262,12 +262,14 @@ Item {
                     MouseArea {
                         id: dragArea
                         anchors.fill: parent
-                        hoverEnabled: true
+                        enabled: !window.closing
+                        hoverEnabled: !window.closing
                         onEntered: hovered = true // For hover color change
                         onExited: hovered = false // For hover color change
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                         drag.target: parent
                         onPressed: (mouse) => {
+                            if (mouse.button !== Qt.LeftButton) return
                             root.draggingFromWorkspace = windowData?.workspace.id
                             window.pressed = true
                             window.Drag.active = true
@@ -276,7 +278,8 @@ Item {
                             window.Drag.hotSpot.y = mouse.y
                             // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
                         }
-                        onReleased: {
+                        onReleased: (mouse) => {
+                            if (mouse.button !== Qt.LeftButton) return
                             const targetWorkspace = root.draggingTargetWorkspace
                             window.pressed = false
                             window.Drag.active = false
@@ -286,7 +289,7 @@ Item {
                                 updateWindowPosition.restart()
                             }
                             else {
-                                if (!window.windowData.floating) {
+                                if (!window.windowData?.floating) {
                                     updateWindowPosition.restart()
                                     return
                                 }
@@ -303,6 +306,7 @@ Item {
                                 Hyprland.dispatch(`hl.dsp.focus({window = "address:${windowData.address}"})`)
                                 event.accepted = true
                             } else if (event.button === Qt.MiddleButton) {
+                                window.closing = true
                                 Hyprland.dispatch(`hl.dsp.window.close({window = "address:${windowData.address}"})`)
                                 event.accepted = true
                             }
@@ -310,7 +314,7 @@ Item {
 
                         StyledToolTip {
                             extraVisibleCondition: false
-                            alternativeVisibleCondition: dragArea.containsMouse && !window.Drag.active
+                            alternativeVisibleCondition: dragArea.containsMouse && !window.Drag.active && !window.closing
                             text: `${windowData?.title}\n[${windowData?.class}] ${windowData?.xwayland ? "[XWayland] " : ""}`
                         }
                     }

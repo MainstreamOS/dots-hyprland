@@ -12,6 +12,7 @@ import Quickshell.Wayland
 
 Item { // Window
     id: root
+    property bool closing: false
     property var toplevel
     property var windowData
     property var monitorData
@@ -104,7 +105,7 @@ Item { // Window
     ScreencopyView {
         id: windowPreview
         anchors.fill: parent
-        captureSource: GlobalStates.overviewOpen ? root.toplevel : null
+        captureSource: (GlobalStates.overviewOpen && !root.closing) ? root.toplevel : null
         live: true
         // PQ-to-sRGB tone-mapping when HDR Always On
         layer.enabled: GlobalStates.hdrActive
