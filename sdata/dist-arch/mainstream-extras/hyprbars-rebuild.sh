@@ -149,7 +149,8 @@ build_at_ref() {
     git -C "$SRC_DIR" reset --hard >/dev/null 2>&1 || true
     git -C "$SRC_DIR" clean -fdx >/dev/null 2>&1 || true
 
-    if ! git -C "$SRC_DIR" checkout --quiet "$ref" 2>/dev/null \
+    if ! git -C "$SRC_DIR" checkout --quiet "origin/${ref}" 2>/dev/null \
+       && ! git -C "$SRC_DIR" checkout --quiet "$ref" 2>/dev/null \
        && ! git -C "$SRC_DIR" checkout --quiet "tags/${ref}" 2>/dev/null; then
         return 1
     fi
