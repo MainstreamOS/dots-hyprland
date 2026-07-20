@@ -9,8 +9,8 @@
 -- addConfigValueV2 before their config keys become settable from Lua.
 --
 -- Status of our plugins:
---   * scrolloverview — V1, NOT yet ported. Runs on compiled defaults.
---   * hyprbars       — V2-ported in MainstreamOS/hyprland-plugins fork.
+--   * scrolloverview — V2-ported in the MainstreamOS/hyprland-scroll-overview fork.
+--   * hyprbars       — V2-ported upstream in hyprwm/hyprland-plugins.
 --     Settable from Lua via hl.config({ plugin = { hyprbars = { ... } } }).
 
 local HOME = os.getenv("HOME") or ""

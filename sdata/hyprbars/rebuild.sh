@@ -37,10 +37,10 @@
 # self-heals by walking history and updating the cache.
 #
 # /etc/hyprbars.conf overrides (sourced as bash, all optional):
-#   HYPRBARS_REPO=<git url>   default: MainstreamOS/hyprland-plugins
-#   HYPRBARS_DEFAULT_BRANCH=<name>   default: mainstream (override to
-#                                    "main" when HYPRBARS_REPO points at
-#                                    upstream hyprwm/hyprland-plugins)
+#   HYPRBARS_REPO=<git url>   default: hyprwm/hyprland-plugins
+#   HYPRBARS_DEFAULT_BRANCH=<name>   default: main (override alongside
+#                                    HYPRBARS_REPO when building from a
+#                                    fork that uses another branch)
 #   HYPRBARS_REF=<tag/sha>    explicit pin; disables auto-fallback
 #   WALK_DEPTH=<N>            commits to try in step 2e (default 15)
 #
@@ -74,9 +74,9 @@ STATUS_DIR=/var/lib/hyprbars
 STATUS_FILE="$STATUS_DIR/status"
 LOG_PFX="[hyprbars-rebuild]"
 
-HYPRBARS_REPO="https://github.com/MainstreamOS/hyprland-plugins"
+HYPRBARS_REPO="https://github.com/hyprwm/hyprland-plugins"
 HYPRBARS_REF=""
-HYPRBARS_DEFAULT_BRANCH="mainstream"
+HYPRBARS_DEFAULT_BRANCH="main"
 WALK_DEPTH=15
 
 # shellcheck disable=SC1090
