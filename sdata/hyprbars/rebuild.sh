@@ -42,7 +42,7 @@
 #                                    "main" when HYPRBARS_REPO points at
 #                                    upstream hyprwm/hyprland-plugins)
 #   HYPRBARS_REF=<tag/sha>    explicit pin; disables auto-fallback
-#   WALK_DEPTH=<N>            commits to try in step 2e (default 50)
+#   WALK_DEPTH=<N>            commits to try in step 2e (default 15)
 #
 # Exit codes:
 #   * exit 1 - operator action required: missing build deps, can't read
@@ -77,7 +77,7 @@ LOG_PFX="[hyprbars-rebuild]"
 HYPRBARS_REPO="https://github.com/MainstreamOS/hyprland-plugins"
 HYPRBARS_REF=""
 HYPRBARS_DEFAULT_BRANCH="mainstream"
-WALK_DEPTH=50
+WALK_DEPTH=15
 
 # shellcheck disable=SC1090
 [[ -r "$CONFIG_FILE" ]] && . "$CONFIG_FILE"

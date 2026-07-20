@@ -44,7 +44,7 @@
 #                                          to "main" when SCROLLOVERVIEW_REPO
 #                                          points at upstream yayuuu/...)
 #   SCROLLOVERVIEW_REF=<tag/sha>    explicit pin; disables auto-fallback
-#   WALK_DEPTH=<N>                  commits to try in step 2f (default 50)
+#   WALK_DEPTH=<N>                  commits to try in step 2f (default 15)
 #
 # Exit codes:
 #   * exit 1 - operator action required: missing build deps, can't read
@@ -80,7 +80,7 @@ LOG_PFX="[scrolloverview-rebuild]"
 SCROLLOVERVIEW_REPO="https://github.com/MainstreamOS/hyprland-scroll-overview"
 SCROLLOVERVIEW_REF=""
 SCROLLOVERVIEW_DEFAULT_BRANCH="mainstream"
-WALK_DEPTH=50
+WALK_DEPTH=15
 
 # shellcheck disable=SC1090
 [[ -r "$CONFIG_FILE" ]] && . "$CONFIG_FILE"
