@@ -96,7 +96,7 @@ TARGETS=()
 for home_dir in /home/*; do
     [[ -d "$home_dir" ]] || continue
     so="$home_dir/.local/share/hyprland/plugins/hyprbars.so"
-    [[ -f "$so" ]] && TARGETS+=("$so")
+    [[ -f "$so" || -f "$so.stale" ]] && TARGETS+=("$so")
 done
 
 if (( ${#TARGETS[@]} == 0 )); then
@@ -116,6 +116,8 @@ NPROC=$(nproc 2>/dev/null || echo 1)
 HYPR_VER=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
 [[ -n "$HYPR_VER" ]] || { err "could not read Hyprland version"; exit 1; }
 log "Installed Hyprland: $HYPR_VER"
+mkdir -p /var/lib/hyprland-plugins
+printf '%s\n' "$HYPR_VER" > /var/lib/hyprland-plugins/hyprland-version
 
 mkdir -p "$(dirname "$SRC_DIR")"
 
@@ -185,6 +187,23 @@ auto_detect_refs() {
 # ------------------------------------------------------------------
 # Status-file helpers (read by /usr/local/bin/hyprbars-status-notify)
 # ------------------------------------------------------------------
+# A stale plugin built for an older Hyprland segfaults the compositor at
+# dlopen — a missing one only produces a load-error banner. When a rebuild
+# fails for a NEW Hyprland version, move version-mismatched plugins aside so
+# the next login survives; a later successful rebuild reinstalls them.
+quarantine_stale_targets() {
+    local hypr_ver="$1" target built_for stamp
+    for target in "${TARGETS[@]}"; do
+        [[ -f "$target" ]] || continue
+        stamp="$target.builtfor"
+        built_for=""
+        [[ -r "$stamp" ]] && built_for="$(<"$stamp")"
+        if [[ "$built_for" != "$hypr_ver" ]]; then
+            mv -f "$target" "$target.stale" &&                 log "quarantined $target (built for ${built_for:-unknown}, Hyprland is $hypr_ver)"
+        fi
+    done
+}
+
 write_status_failed() {
     local hypr_ver="$1"
     mkdir -p "$STATUS_DIR"
@@ -237,6 +256,7 @@ if [[ -n "$HYPRBARS_REF" ]]; then
         err "full log: $BUILD_LOG"
         tail -n 20 "$BUILD_LOG" >&2
         write_status_failed "$HYPR_VER"
+    quarantine_stale_targets "$HYPR_VER"
         exit 1
     fi
 else
@@ -282,6 +302,7 @@ if [[ -z "$SUCCESS_REF" ]]; then
     err "to pin a known-good ref manually, set HYPRBARS_REF=<sha> in $CONFIG_FILE."
     tail -n 20 "$BUILD_LOG" >&2
     write_status_failed "$HYPR_VER"
+    quarantine_stale_targets "$HYPR_VER"
     log "exiting 0 (transient upstream lag, not a system error)."
     exit 0
 fi
@@ -298,6 +319,9 @@ for target in "${TARGETS[@]}"; do
     user_home="${target%/.local/share/hyprland/plugins/hyprbars.so}"
     user="$(stat -c '%U' "$user_home")"
     install -m 755 -o "$user" -g "$user" "$BUILT_SO" "$target"
+    printf '%s\n' "$HYPR_VER" > "$target.builtfor"
+    chown "$user:$user" "$target.builtfor"
+    rm -f "$target.stale"
     log "Updated $target (owner: $user)"
 done
 

@@ -36,14 +36,36 @@ end
 -- Super+O and the bar's top-left hot corner. The MainstreamOS fork uses
 -- addConfigValueV2 so its keys are settable from this Lua config and
 -- switchwall.sh's wallpaper_path rewrite is honored at runtime.
+-- Refuse to load a plugin stamped for a different Hyprland than the one
+-- this system has installed — a version-mismatched .so segfaults the
+-- compositor at dlopen and locks the user out at SDDM. Stamps are written
+-- by the rebuild hooks; when either file is missing the check passes open.
+local function plugin_matches_hyprland(so)
+    local sf = io.open(so .. ".builtfor", "r")
+    if not sf then return true end
+    local built = sf:read("*l") or ""
+    sf:close()
+    local ef = io.open("/var/lib/hyprland-plugins/hyprland-version", "r")
+    if not ef then return true end
+    local expect = ef:read("*l") or ""
+    ef:close()
+    if built == "" or expect == "" then return true end
+    return built == expect
+end
+
 local scrolloverviewSo = HOME .. "/.local/share/hyprland/plugins/scrolloverview.so"
-hl.plugin.load(scrolloverviewSo)
+if plugin_matches_hyprland(scrolloverviewSo) then
+    hl.plugin.load(scrolloverviewSo)
+end
 
 -- hyprbars plugin. Same install path. Always loaded — never unloaded at
 -- runtime (a runtime unload leaves a dangling mouse-move hook that crashes
 -- the compositor). The Title Bars toggle flips plugin:hyprbars:enabled from
 -- the titlebars.enabled flag read below, applied on hyprctl reload.
-hl.plugin.load(HOME .. "/.local/share/hyprland/plugins/hyprbars.so")
+local hyprbarsSo = HOME .. "/.local/share/hyprland/plugins/hyprbars.so"
+if plugin_matches_hyprland(hyprbarsSo) then
+    hl.plugin.load(hyprbarsSo)
+end
 
 -- Plugin config — applied DEFERRED via timer (not at parse time).
 --
