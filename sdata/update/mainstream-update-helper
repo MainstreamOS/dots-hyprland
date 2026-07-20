@@ -277,7 +277,13 @@ fi
 # .update-backups/ rather than blocking on a prompt. No-op when
 # already at the latest tag. Auto-clones the repo on first run.
 # Runs as the calling user (updatems refuses root).
-if [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
+if [[ "$SKIP_DOTFILES" -eq 0 && "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]]; then
+    echo ""
+    echo "── Dotfiles: deferred — the system package update failed, and dotfile"
+    echo "   releases can depend on packages it would have installed. Re-run the"
+    echo "   update once the package step succeeds."
+    DOTFILES_DEFERRED=1
+elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Mainstream dotfiles — updatems"
@@ -403,8 +409,13 @@ printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTE
 printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
 printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC")"
 printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC")"
-printf "  %-30s %s\n" "Dotfiles (updatems):"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
-printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
+if [[ "${DOTFILES_DEFERRED:-0}" -eq 1 ]]; then
+    printf "  %-30s %s\n" "Dotfiles (updatems):"          "deferred (system update failed)"
+    printf "  %-30s %s\n" "System bits (updatems-system):" "deferred (system update failed)"
+else
+    printf "  %-30s %s\n" "Dotfiles (updatems):"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
+    printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
+fi
 printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
 
 # Exit-code priority. Primary failures (pacman, aur, flatpak) override
