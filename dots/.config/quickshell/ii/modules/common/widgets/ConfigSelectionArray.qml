@@ -9,6 +9,7 @@ Flow {
     id: root
     Layout.fillWidth: true
     spacing: 2
+    property real buttonWidth: 0
     property list<var> options: [
         {
             "displayName": "Option 1",
@@ -31,6 +32,7 @@ Flow {
             id: paletteButton
             required property var modelData
             required property int index
+            baseWidth: root.buttonWidth > 0 ? root.buttonWidth : (contentItem.implicitWidth + horizontalPadding * 2)
             onYChanged: {
                 if (index === 0) {
                     paletteButton.leftmost = true

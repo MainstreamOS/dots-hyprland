@@ -22,40 +22,47 @@ GroupButton {
     colBackgroundHover: Appearance.colors.colSecondaryContainerHover
     colBackgroundActive: Appearance.colors.colSecondaryContainerActive
 
-    contentItem: RowLayout {
-        spacing: 4 * (root.buttonText?.length > 0)
+    contentItem: Item {
+        implicitWidth: contentRow.implicitWidth
+        implicitHeight: contentRow.implicitHeight
 
-        Loader {
-            Layout.alignment: Qt.AlignVCenter
-            active: root.buttonIcon && root.buttonIcon.length > 0
-            visible: active
-            sourceComponent: Item {
-                implicitWidth: materialSymbol.implicitWidth
-                MaterialSymbol {
-                    id: materialSymbol
-                    anchors.centerIn: parent
-                    text: root.buttonIcon
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+        RowLayout {
+            id: contentRow
+            anchors.centerIn: parent
+            spacing: 4 * (root.buttonText?.length > 0)
+
+            Loader {
+                Layout.alignment: Qt.AlignVCenter
+                active: root.buttonIcon && root.buttonIcon.length > 0
+                visible: active
+                sourceComponent: Item {
+                    implicitWidth: materialSymbol.implicitWidth
+                    MaterialSymbol {
+                        id: materialSymbol
+                        anchors.centerIn: parent
+                        text: root.buttonIcon
+                        iconSize: Appearance.font.pixelSize.larger
+                        color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+                    }
                 }
             }
-        }
 
-        Item {
-            implicitWidth: root.buttonText?.length > 0 ? textItem.implicitWidth : 0
-            implicitHeight: textMetrics.height // Force height to that of regular text
+            Item {
+                implicitWidth: root.buttonText?.length > 0 ? textItem.implicitWidth : 0
+                implicitHeight: textMetrics.height // Force height to that of regular text
 
-            TextMetrics {
-                id: textMetrics
-                font.family: Appearance.font.family.main
-                text: "Abc"
-            }
+                TextMetrics {
+                    id: textMetrics
+                    font.family: Appearance.font.family.main
+                    text: "Abc"
+                }
 
-            StyledText {
-                id: textItem
-                anchors.centerIn: parent
-                color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
-                text: root.buttonText
+                StyledText {
+                    id: textItem
+                    anchors.centerIn: parent
+                    color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+                    text: root.buttonText
+                }
             }
         }
     }

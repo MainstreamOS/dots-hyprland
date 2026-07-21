@@ -311,14 +311,18 @@ ContentPage {
                 color: Appearance.colors.colOnLayer1
             }
             ConfigSelectionArray {
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 222
+                buttonWidth: 110
                 currentValue: root.leftHanded ? "right" : "left"
                 onSelected: val => {
                     root.leftHanded = val === "right"
                     root.applyInput("left_handed", root.leftHanded ? 1 : 0)
                 }
                 options: [
-                    { displayName: Translation.tr("Left"),  value: "left"  },
-                    { displayName: Translation.tr("Right"), value: "right" },
+                    { displayName: Translation.tr("Left"),  icon: "left_click",  value: "left"  },
+                    { displayName: Translation.tr("Right"), icon: "right_click", value: "right" },
                 ]
             }
         }
