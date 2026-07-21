@@ -203,6 +203,12 @@ for size in 16x16 22x22 24x24 32x32 48x48 64x64; do
     esac
     ln -s "$icon" "$target_dir/$alias"
   done
+
+  for icon in "$source_dir"/user-"$folder_color"-*.svg; do
+    [ -e "$icon" ] || continue
+    name="$(basename "$icon")"
+    ln -s "$icon" "$target_dir/user-${name#user-$folder_color-}"
+  done
 done
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
