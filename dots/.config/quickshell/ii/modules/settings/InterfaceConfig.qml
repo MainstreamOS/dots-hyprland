@@ -36,6 +36,8 @@ ContentPage {
     property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
 
+    property int  cursorSize:      24
+
     function runPy(py, args) {
         Quickshell.execDetached(["python3", "-c", py, ...args])
     }
@@ -717,6 +719,65 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 }))
                 currentIndex: root.sysCursorThemes.indexOf(root.sysCurrentCursor)
                 onActivated: index => root.applySystemLook("cursor", model[index].value)
+            }
+        }
+    }
+
+    Process {
+        running: true
+        command: ["gsettings", "get", "org.gnome.desktop.interface", "cursor-size"]
+        stdout: SplitParser {
+            onRead: data => {
+                const n = parseInt(String(data).trim())
+                if (!isNaN(n) && n > 0)
+                    root.cursorSize = n
+            }
+        }
+    }
+
+    function applyCursorSize(size) {
+        root.cursorSize = size
+        Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
+        Quickshell.execDetached(["bash", "-c",
+            "theme=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null); theme=${theme#\\'}; theme=${theme%\\'}; [ -n \"$theme\" ] || theme=Bibata-Modern-Classic; hyprctl setcursor \"$theme\" \"$0\"",
+            String(size)])
+    }
+
+    // ── Cursor ────────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "highlight_mouse_cursor"
+        title: Translation.tr("Cursor")
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "straighten"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Cursor Size")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Small"),          value: 16 },
+                    { displayName: Translation.tr("Default"),        value: 24 },
+                    { displayName: Translation.tr("Large"),          value: 32 },
+                    { displayName: Translation.tr("Larger"),         value: 48 },
+                    { displayName: Translation.tr("Largest"),        value: 64 },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === root.cursorSize)
+                    return idx !== -1 ? idx : 1
+                }
+                onActivated: index => root.applyCursorSize(model[index].value)
             }
         }
     }

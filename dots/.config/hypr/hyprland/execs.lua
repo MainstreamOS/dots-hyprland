@@ -28,8 +28,8 @@ hl.on("hyprland.start", function ()
     hl.exec_cmd("wl-paste --type text --watch bash -c 'cliphist store && qs -c $qsConfig ipc call cliphistService update'")
     hl.exec_cmd("wl-paste --type image --watch bash -c 'cliphist store && qs -c $qsConfig ipc call cliphistService update'")
 
-    -- Cursor: follow the theme picked in Settings (gsettings), falling back
-    -- to the shipped default.
+    -- Cursor: follow the theme and size picked in Settings (gsettings),
+    -- falling back to the shipped defaults.
     local cursor_theme = "Bibata-Modern-Classic"
     local gs = io.popen("gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null")
     if gs then
@@ -40,7 +40,17 @@ hl.on("hyprland.start", function ()
             if line ~= "" then cursor_theme = line end
         end
     end
-    hl.exec_cmd("hyprctl setcursor " .. cursor_theme .. " 24")
+    local cursor_size = "24"
+    local gz = io.popen("gsettings get org.gnome.desktop.interface cursor-size 2>/dev/null")
+    if gz then
+        local sz = gz:read("*l")
+        gz:close()
+        if sz then
+            sz = sz:gsub("%s+", "")
+            if sz:match("^%d+$") then cursor_size = sz end
+        end
+    end
+    hl.exec_cmd("hyprctl setcursor " .. cursor_theme .. " " .. cursor_size)
 
     -- Gaming Mode: strip any autologin User= from /etc/sddm.conf so normal
     -- boots/logouts reach the SDDM password greeter (no-op on a fresh desktop).
