@@ -87,6 +87,17 @@ if ! command -v steam >/dev/null 2>&1; then
     fi
 fi
 
+# Gamescope needs a hardware Vulkan device and refuses the llvmpipe software
+# rasterizer -- in a VM without Vulkan passthrough the session switch would tear
+# down the desktop only to bounce off gamescope and land on the greeter. Check
+# up front and explain instead.
+if command -v vulkaninfo >/dev/null 2>&1; then
+    if ! vulkaninfo --summary 2>/dev/null | grep -i 'deviceName' | grep -qiv 'llvmpipe'; then
+        notify -c "This system has no hardware 3D (Vulkan) support, so Gaming Mode can't start. In a virtual machine, enable 3D acceleration with Vulkan support -- or try Mainstream on real hardware."
+        exit 1
+    fi
+fi
+
 # 2. Generate a per-GPU session config once; the user can edit it afterwards.
 #    The gamescope-session-plus runtime sources every ~/.config/environment.d/*.conf.
 conf_dir="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d"

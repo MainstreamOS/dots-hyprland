@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=6
+pkgrel=7
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
@@ -9,6 +9,7 @@ depends=(
   gamescope
   gamescope-session-git
   gamescope-session-steam-git
+  vulkan-tools
 )
 source=(
   gaming-mode
