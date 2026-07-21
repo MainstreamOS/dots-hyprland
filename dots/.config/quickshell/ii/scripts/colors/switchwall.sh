@@ -37,12 +37,20 @@ handle_kde_material_you_colors() {
 pre_process() {
     local mode_flag="$1"
     # Set GNOME color-scheme if mode_flag is dark or light
+    # Only steer the widget theme while the user is on the stock adw-gtk3
+    # pair — a manual pick in Settings > Themes > System look wins.
+    local current_gtk
+    current_gtk="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")"
     if [[ "$mode_flag" == "dark" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
-        gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
+        case "$current_gtk" in adw-gtk3|adw-gtk3-dark|"")
+            gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark' ;;
+        esac
     elif [[ "$mode_flag" == "light" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
-        gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3'
+        case "$current_gtk" in adw-gtk3|adw-gtk3-dark|"")
+            gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3' ;;
+        esac
     fi
 
     if [ ! -d "$CACHE_DIR"/user/generated ]; then

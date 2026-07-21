@@ -209,12 +209,26 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -f -t "$theme_dir" >/dev/null 2>&1 || true
 fi
 
-if command -v gsettings >/dev/null 2>&1; then
+# Respect a manually chosen non-Papirus icon theme (Settings > Themes >
+# System look): keep generating the recolored set, but don't switch to it.
+apply_icon_theme=1
+case "$current_theme" in
+  ""|Papirus*|papirus*) ;;
+  *) apply_icon_theme=0 ;;
+esac
+
+if [ "$apply_icon_theme" = "1" ] && command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.interface icon-theme "$base_theme" >/dev/null 2>&1 || true
   gsettings set org.gnome.desktop.interface icon-theme "$theme_name" >/dev/null 2>&1 || true
 fi
 
-if command -v kwriteconfig6 >/dev/null 2>&1; then
+if [ "$apply_icon_theme" = "1" ]; then
+  for qtconf in "$HOME/.config/qt6ct/qt6ct.conf" "$HOME/.config/qt5ct/qt5ct.conf"; do
+    [ -f "$qtconf" ] && sed -i "s/^icon_theme=.*/icon_theme=$theme_name/" "$qtconf" 2>/dev/null || true
+  done
+fi
+
+if [ "$apply_icon_theme" = "1" ] && command -v kwriteconfig6 >/dev/null 2>&1; then
   kwriteconfig6 --file kdeglobals --group Icons --key Theme "$theme_name" >/dev/null 2>&1 || true
 elif command -v kwriteconfig5 >/dev/null 2>&1; then
   kwriteconfig5 --file kdeglobals --group Icons --key Theme "$theme_name" >/dev/null 2>&1 || true

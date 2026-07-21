@@ -554,6 +554,173 @@ ContentPage {
         }
     }
 
+    // ── System look (widget / icon / cursor themes) ──────────────────────────
+    property var sysGtkThemes: []
+    property var sysIconThemes: []
+    property var sysCursorThemes: []
+    property string sysCurrentGtk: ""
+    property string sysCurrentIcon: ""
+    property string sysCurrentCursor: ""
+
+    Process {
+        id: systemLookScanProc
+        running: true
+        command: ["python3", "-c", `
+import glob, os, json, subprocess
+def cur(key):
+    try:
+        return subprocess.run(["gsettings","get","org.gnome.desktop.interface",key],capture_output=True,text=True).stdout.strip().strip("'")
+    except Exception:
+        return ""
+home = os.path.expanduser("~")
+gtk, icons, cursors = set(), set(), set()
+for base in ["/usr/share/themes", home+"/.themes", home+"/.local/share/themes"]:
+    for d in glob.glob(base+"/*"):
+        if os.path.isdir(d+"/gtk-3.0") or os.path.isdir(d+"/gtk-4.0"):
+            gtk.add(os.path.basename(d))
+for base in ["/usr/share/icons", home+"/.icons", home+"/.local/share/icons"]:
+    for d in glob.glob(base+"/*"):
+        if not os.path.isfile(d+"/index.theme"):
+            continue
+        name = os.path.basename(d)
+        try:
+            subs = [x for x in os.listdir(d) if os.path.isdir(os.path.join(d,x))]
+        except Exception:
+            continue
+        if "cursors" in subs:
+            cursors.add(name)
+        if [x for x in subs if x != "cursors"]:
+            icons.add(name)
+print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(cursors),
+    "curGtk":cur("gtk-theme"),"curIcon":cur("icon-theme"),"curCursor":cur("cursor-theme")}))
+`]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const d = JSON.parse(text);
+                    root.sysGtkThemes = d.gtk;
+                    root.sysIconThemes = d.icons;
+                    root.sysCursorThemes = d.cursors;
+                    root.sysCurrentGtk = d.curGtk;
+                    root.sysCurrentIcon = d.curIcon;
+                    root.sysCurrentCursor = d.curCursor;
+                } catch (e) {
+                    console.log("[ThemesConfig] system look scan failed: " + e);
+                }
+            }
+        }
+    }
+
+    function applySystemLook(kind, value) {
+        if (kind === "gtk") {
+            Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", value]);
+            root.sysCurrentGtk = value;
+        } else if (kind === "icon") {
+            Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", value]);
+            // Qt side reads qt6ct, not gsettings — keep them in step so the
+            // shell and Qt apps follow the same theme (after their next start).
+            Quickshell.execDetached(["bash", "-c",
+                'for c in "$HOME/.config/qt6ct/qt6ct.conf" "$HOME/.config/qt5ct/qt5ct.conf"; do [ -f "$c" ] && sed -i "s/^icon_theme=.*/icon_theme=$0/" "$c"; done', value]);
+            Quickshell.execDetached(["kwriteconfig6", "--file", "kdeglobals", "--group", "Icons", "--key", "Theme", value]);
+            root.sysCurrentIcon = value;
+        } else if (kind === "cursor") {
+            Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", value]);
+            Quickshell.execDetached(["hyprctl", "setcursor", value, "24"]);
+            root.sysCurrentCursor = value;
+        }
+    }
+
+
+    ContentSection {
+        icon: "palette"
+        title: Translation.tr("System look")
+        Layout.fillWidth: true
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "widgets"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("App style")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                id: gtkThemeCombo
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.sysGtkThemes.map(t => ({
+                    displayName: t.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                    value: t
+                }))
+                currentIndex: root.sysGtkThemes.indexOf(root.sysCurrentGtk)
+                onActivated: index => root.applySystemLook("gtk", model[index].value)
+            }
+        }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "interests"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Icons")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                id: iconThemeCombo
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.sysIconThemes.map(t => ({
+                    displayName: t.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                    value: t
+                }))
+                currentIndex: root.sysIconThemes.indexOf(root.sysCurrentIcon)
+                onActivated: index => root.applySystemLook("icon", model[index].value)
+            }
+        }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "mouse"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Mouse cursor")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                id: cursorThemeCombo
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.sysCursorThemes.map(t => ({
+                    displayName: t.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                    value: t
+                }))
+                currentIndex: root.sysCursorThemes.indexOf(root.sysCurrentCursor)
+                onActivated: index => root.applySystemLook("cursor", model[index].value)
+            }
+        }
+    }
+
     // ── Left Hot Corner ──────────────────────────────────────────────────────
     ContentSection {
         icon: "ads_click"
