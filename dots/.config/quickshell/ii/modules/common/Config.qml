@@ -490,6 +490,12 @@ Singleton {
                 property string code: "0;P;d;1;0l;10;0o;2;1b;0"
             }
 
+            property JsonObject cursor: JsonObject {
+                property string shakeMode: "off" // "off" | "zoom" (magnifier) | "grow" (cursor icon)
+                property real shakeZoomFactor: 2.0
+                property real shakeGrowFactor: 2.5
+            }
+
             property JsonObject dock: JsonObject {
                 property bool enable: true
                 property bool monochromeIcons: false

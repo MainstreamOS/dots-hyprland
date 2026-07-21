@@ -780,6 +780,39 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onActivated: index => root.applyCursorSize(model[index].value)
             }
         }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "vibration"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Shake to Locate")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Disabled"),       value: "off" },
+                    { displayName: Translation.tr("Magnifier Zoom"),  value: "zoom" },
+                    { displayName: Translation.tr("Cursor Grows"),    value: "grow" },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.cursor.shakeMode)
+                    return idx !== -1 ? idx : 0
+                }
+                onActivated: index => {
+                    Config.options.cursor.shakeMode = model[index].value
+                }
+            }
+        }
     }
 
     // ── Left Hot Corner ──────────────────────────────────────────────────────

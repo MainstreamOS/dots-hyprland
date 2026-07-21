@@ -22,6 +22,25 @@ ShellRoot {
     // Stuff for every panel family
     ReloadPopup {}
 
+    // Shake-to-locate cursor helper: runs only while enabled, and resets the
+    // cursor zoom if it's killed mid-magnify.
+    Process {
+        id: cursorShakeProc
+        running: Config.options.cursor.shakeMode !== "off"
+        command: ["python3", Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/cursor/shake-zoom.py",
+            Config.options.cursor.shakeMode,
+            String(Config.options.cursor.shakeZoomFactor),
+            String(Config.options.cursor.shakeGrowFactor)]
+        // Quickshell doesn't relaunch on a command-only change, so restart
+        // when the mode/factor changes while the feature is on.
+        onCommandChanged: {
+            if (running) {
+                running = false
+                Qt.callLater(() => running = Qt.binding(() => Config.options.cursor.shakeMode !== "off"))
+            }
+        }
+    }
+
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
