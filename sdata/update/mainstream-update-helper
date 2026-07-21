@@ -192,6 +192,14 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo "═══════════════════════════════════════════════════════════"
     pacman -Syu --noconfirm
     PACMAN_RC=$?
+    if [[ "$PACMAN_RC" -ne 0 ]]; then
+        echo ""
+        echo "── pacman failed (corrupted cache or busy database are the usual"
+        echo "   transient causes) — retrying once..."
+        sleep 5
+        pacman -Syu --noconfirm
+        PACMAN_RC=$?
+    fi
 else
     echo ""
     echo "── System packages: skipped (per --skip-system)"

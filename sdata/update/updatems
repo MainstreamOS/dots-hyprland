@@ -123,7 +123,7 @@ cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
 
 # ── 2. Fetch tags from origin ───────────────────────────────────────────────
 say "Fetching tags from origin/$REPO_BRANCH..."
-git fetch --tags --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /' || die "git fetch failed"
+git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /' || die "git fetch failed"
 
 # ── 3. Pick the latest release tag ─────────────────────────────────────────
 # Strip peeled-tag suffixes (^{}), keep release tags (excludes the retired
@@ -179,10 +179,23 @@ fi
 # exist in our clone.
 say "Pointing $REPO_BRANCH at $LATEST_TAG..."
 git checkout "$REPO_BRANCH" 2>/dev/null || git checkout -B "$REPO_BRANCH" "origin/$REPO_BRANCH"
+# exp-update decides which files to re-apply from the LAST reflog hop
+# (HEAD@{1}..HEAD), so that hop must span last-applied -> target. Park
+# HEAD on the applied base first, then jump to the target in one move.
+# 1.0.3 was applied with a truncated hop on some installs (tag-then-pull
+# split the range), and those installs still run the pre-fix updatems when
+# they apply the tag after it.
+BASE_REF="$APPLIED_TAG"
+case "$APPLIED_TAG" in 1.0.3|1.0.4) BASE_REF="1.0.2" ;; esac
+if [[ -n "$BASE_REF" ]] && git rev-parse --verify "refs/tags/$BASE_REF" >/dev/null 2>&1; then
+    git reset --hard "refs/tags/$BASE_REF" >/dev/null || true
+fi
 git reset --hard "$LATEST_TAG" || die "git reset --hard $LATEST_TAG failed"
 
 say "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)..."
-./setup exp-update --skip-notice --non-interactive --default-choice backup -p
+# The clone is pinned to $LATEST_TAG above; a pull inside exp-update would
+# overshoot the tag to the branch tip and shrink the reflog hop.
+DOTS_SKIP_PULL=1 ./setup exp-update --skip-notice --non-interactive --default-choice backup -p
 RC=$?
 
 # ── 7. Update marker on success ────────────────────────────────────────────

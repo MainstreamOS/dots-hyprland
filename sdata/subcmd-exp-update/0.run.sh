@@ -823,6 +823,10 @@ load_ignore_patterns
 # Step 1: Pull latest commits
 log_header "Pulling Latest Changes"
 
+if [[ "${DOTS_SKIP_PULL:-0}" == "1" ]]; then
+  log_info "Repository pinned by caller (DOTS_SKIP_PULL=1): skipping pull"
+else
+
 current_branch=$(git branch --show-current)
 if [[ -z "$current_branch" ]]; then
   log_warning "In detached HEAD state. Checking out main/master branch..."
@@ -887,6 +891,8 @@ if git remote get-url origin &>/dev/null; then
 else
   log_warning "No remote 'origin' configured. Skipping pull operation."
   log_info "This appears to be a local-only repository."
+fi
+
 fi
 
 # Step 2: Handle package building
