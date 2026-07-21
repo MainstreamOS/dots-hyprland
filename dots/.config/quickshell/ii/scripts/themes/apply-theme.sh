@@ -98,6 +98,7 @@ trap cleanup EXIT
 TMP=$(mktemp --tmpdir="$(dirname "$SHELL_CONFIG")" config.json.XXXXXX)
 PRESERVE_THEME_SCHED=""
 PRESERVE_LIGHT_NIGHT=""
+PRESERVE_CURSOR=""
 if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     # Preserve the entire light.night object — schedule, automatic flag,
@@ -106,12 +107,16 @@ if [ -f "$SHELL_CONFIG" ]; then
     # also drops .light.night from new theme snapshots; this preserve
     # path is what protects older snapshots that still carry those keys.
     PRESERVE_LIGHT_NIGHT=$(jq -c '.light.night // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    # Shake-to-locate (cursor.*) is user behavior, kept out of theme snapshots
+    # and preserved live here so applying a theme never changes it.
+    PRESERVE_CURSOR=$(jq -c '.cursor // empty' "$SHELL_CONFIG" 2>/dev/null || true)
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
 [ -n "$WP_ABS" ]                  && { JQ_FILTER+=' | .background.wallpaperPath = $p';            JQ_ARGS+=(--arg p "$WP_ABS"); }
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
+[ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }
 if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
 else
@@ -218,6 +223,25 @@ if "titleBars" in flags:
         open(flag, "w").write("1" if flags["titleBars"] else "0")
     except OSError: pass
 PY
+fi
+
+# ── 5b. Restore interface look (gsettings) if the theme snapshotted it ──────
+# Themes saved before this feature have no interface.json → live gsettings are
+# left alone. Applied AFTER switchwall so the saved App style / Icons / Mouse
+# cursor / cursor size win over matugen's icon-theme recolor.
+IFACE_JSON="$THEME_DIR/interface.json"
+if [ -f "$IFACE_JSON" ] && command -v gsettings >/dev/null 2>&1; then
+    GTK_THEME=$(jq -r '.gtkTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
+    ICON_THEME=$(jq -r '.iconTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
+    CURSOR_THEME=$(jq -r '.cursorTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
+    CURSOR_SIZE=$(jq -r '.cursorSize // empty' "$IFACE_JSON" 2>/dev/null || true)
+    [ -n "$GTK_THEME" ]    && gsettings set org.gnome.desktop.interface gtk-theme    "$GTK_THEME"    2>/dev/null || true
+    [ -n "$ICON_THEME" ]   && gsettings set org.gnome.desktop.interface icon-theme   "$ICON_THEME"   2>/dev/null || true
+    [ -n "$CURSOR_THEME" ] && gsettings set org.gnome.desktop.interface cursor-theme "$CURSOR_THEME" 2>/dev/null || true
+    [ -n "$CURSOR_SIZE" ]  && gsettings set org.gnome.desktop.interface cursor-size  "$CURSOR_SIZE"  2>/dev/null || true
+    # gsettings alone doesn't repaint the Hyprland cursor — push it live.
+    [ -n "$CURSOR_THEME" ] && [ -n "$CURSOR_SIZE" ] && command -v hyprctl >/dev/null 2>&1 \
+        && hyprctl setcursor "$CURSOR_THEME" "$CURSOR_SIZE" >/dev/null 2>&1 || true
 fi
 
 # ── 6. Record last-applied (consumed by ThemesConfig for ordering) ─────────

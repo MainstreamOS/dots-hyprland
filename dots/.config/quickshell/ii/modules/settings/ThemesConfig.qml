@@ -339,7 +339,22 @@ ContentPage {
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            // Snapshot the four interface-look gsettings (App style / Icons /
+            // Mouse cursor / cursor size) so a saved theme carries the whole
+            // look. Shake-to-locate is user behavior, stripped above.
+            `python3 - "$DIR/interface.json" <<'PYIF'\n` +
+            `import subprocess, json, sys\n` +
+            `def g(k):\n` +
+            `    out = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", k], capture_output=True, text=True).stdout.strip()\n` +
+            `    return out.strip("'")\n` +
+            `cs = g("cursor-size")\n` +
+            `try:\n` +
+            `    cs = int(cs)\n` +
+            `except ValueError:\n` +
+            `    pass\n` +
+            `json.dump({"cursorSize": cs, "gtkTheme": g("gtk-theme"), "iconTheme": g("icon-theme"), "cursorTheme": g("cursor-theme")}, open(sys.argv[1], "w"), indent=2)\n` +
+            `PYIF\n` +
             (wpTrimmed ? `WP='${wpTrimmed}'\n` +
                          `EXT="\${WP##*.}"\n` +
                          `cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
