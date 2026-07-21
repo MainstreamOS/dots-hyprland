@@ -57,6 +57,7 @@ ContentPage {
     property var confBitdepth: ({})
     property var confScale: ({})
     property var confVrr: ({})
+    property var confMirror: ({})
     property var confPositionMode: ({})
     property var confColorMode: ({})
     property var confMaxLuminance:    ({})
@@ -370,6 +371,7 @@ print(json.dumps(result))
             let bitdepthResult = {};
             let scaleResult = {};
             let vrrResult = {};
+            let mirrorResult = {};
             let positionModeResult = {};
             let colorModeResult = {};
             let maxLuminanceResult    = {};
@@ -407,6 +409,7 @@ print(json.dumps(result))
                             if (currentBlock["bitdepth"])  bitdepthResult[name]    = parseInt(currentBlock["bitdepth"]);
                             if (currentBlock["scale"])     scaleResult[name]       = parseFloat(currentBlock["scale"]);
                             if (currentBlock["vrr"])       vrrResult[name]         = parseInt(currentBlock["vrr"]);
+                            if (currentBlock["mirror"])    mirrorResult[name]      = currentBlock["mirror"];
                             if (currentBlock["cm"])        colorModeResult[name]   = currentBlock["cm"];
                             if (currentBlock["max_luminance"])     maxLuminanceResult[name]    = parseFloat(currentBlock["max_luminance"]);
                             if (currentBlock["max_avg_luminance"]) maxAvgLuminanceResult[name] = parseFloat(currentBlock["max_avg_luminance"]);
@@ -442,6 +445,7 @@ print(json.dumps(result))
             displayConfigPage.confBitdepth      = bitdepthResult;
             displayConfigPage.confScale         = scaleResult;
             displayConfigPage.confVrr            = vrrResult;
+            displayConfigPage.confMirror         = mirrorResult;
             displayConfigPage.confPositionMode   = positionModeResult;
             displayConfigPage.confColorMode      = colorModeResult;
             displayConfigPage.confMaxLuminance    = maxLuminanceResult;
@@ -513,6 +517,7 @@ print(json.dumps(result))
             lines.push(`    transform = ${m.transform},`);
             if (bitdepth !== 8)          lines.push(`    bitdepth = ${bitdepth},`);
             if ((m.vrr ?? 0) !== 0)      lines.push(`    vrr = ${m.vrr},`);
+            if (m.mirror)                lines.push(`    mirror = "${m.mirror}",`);
             // "Fullscreen Only" (1, default): don't write cm=hdr — Hyprland's
             // render:cm_auto_hdr (default 1) handles fullscreen HDR switching.
             // "Always On" (2): write cm=hdr/hdredid as usual.
@@ -680,6 +685,7 @@ print(json.dumps(result))
                 enabled: !monitor.disabled,
                 bitdepth: confBitdepth[name] ?? 8,
                 vrr: confVrr[name] ?? 0,
+                mirror: confMirror[name] ?? "",
                 positionMode: isDefault ? undefined : (confPositionMode[name] ?? "auto-center-right"),
                 // If hdrMode is "Fullscreen Only" (1), cm=hdr isn't in the config file,
                 // but the UI still needs to show HDR as the active color mode.
@@ -1866,6 +1872,121 @@ except Exception:
                                             onClicked: {
                                                 displayConfigPage.updatePending(monitorSection.monName, "transform", modelData.value);
                                                 rotationPopup.close();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Appearance.m3colors.m3outlineVariant; opacity: 0.5 }
+
+                    // ── Row: Duplicate screen ─────────────────────────────
+                    Item {
+                        id: mirrorRow
+                        Layout.fillWidth: true
+                        implicitHeight: 44
+                        visible: displayConfigPage.monitors.length > 1
+
+                        property bool popupOpen: mirrorPopup.visible
+
+                        readonly property var mirrorOptions: {
+                            let opts = [{ label: Translation.tr("Off (extend)"), value: "" }];
+                            for (const other of displayConfigPage.monitors) {
+                                if (other.name === monitorSection.monName) continue;
+                                const otherMirror = (displayConfigPage.pendingChanges[other.name]?.mirror) ?? "";
+                                if (otherMirror === monitorSection.monName) continue;
+                                opts.push({ label: other.name, value: other.name });
+                            }
+                            return opts;
+                        }
+
+                        property string mirrorLabel: {
+                            let v = monitorSection.pending.mirror ?? "";
+                            return v === "" ? Translation.tr("Off (extend)") : v;
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: mirrorArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
+                            Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                        }
+
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
+                            spacing: 8
+                            StyledText {
+                                text: Translation.tr("Duplicate screen")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer2
+                            }
+                            Item { Layout.fillWidth: true }
+                            StyledText {
+                                text: mirrorRow.mirrorLabel
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                            }
+                            MaterialSymbol {
+                                text: "keyboard_arrow_down"
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: Appearance.colors.colSubtext
+                                rotation: mirrorRow.popupOpen ? 180 : 0
+                                Behavior on rotation { NumberAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                            }
+                        }
+
+                        MouseArea {
+                            id: mirrorArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: mirrorPopup.visible ? mirrorPopup.close() : mirrorPopup.open()
+                        }
+
+                        Popup {
+                            id: mirrorPopup
+                            y: mirrorRow.height + 4
+                            width: mirrorRow.width
+                            padding: 8
+                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
+                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
+                            background: Item {
+                                StyledRectangularShadow { target: mirBg }
+                                Rectangle { id: mirBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
+                            }
+                            contentItem: Loader {
+                                active: mirrorPopup.visible
+                                sourceComponent: ListView {
+                                    implicitHeight: contentHeight
+                                    clip: true
+                                    spacing: 2
+                                    model: mirrorRow.mirrorOptions
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: ListView.view.width
+                                        height: 36
+                                        radius: Appearance.rounding.small
+                                        property bool isCurrent: (monitorSection.pending.mirror ?? "") === modelData.value
+                                        color: mirDelegate.containsMouse
+                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
+                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
+                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
+                                        StyledText {
+                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
+                                            text: modelData.label
+                                            font.pixelSize: Appearance.font.pixelSize.normal
+                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
+                                        }
+                                        MouseArea {
+                                            id: mirDelegate
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                displayConfigPage.updatePending(monitorSection.monName, "mirror", modelData.value);
+                                                mirrorPopup.close();
                                             }
                                         }
                                     }
