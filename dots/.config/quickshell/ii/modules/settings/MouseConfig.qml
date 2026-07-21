@@ -338,6 +338,8 @@ ContentPage {
             }
             StyledComboBox {
                 textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
                 model: [
                     { displayName: Translation.tr("Slowest"), value: -1.0 },
                     { displayName: Translation.tr("Slow"),    value: -0.5 },
