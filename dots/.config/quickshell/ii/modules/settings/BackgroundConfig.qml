@@ -218,13 +218,10 @@ ContentPage {
                 }
             }
 
-            MaterialTextArea {
-                Layout.fillWidth: true
-                placeholderText: Translation.tr("Font family")
-                text: Config.options.background.widgets.clock.digital.font.family
-                wrapMode: TextEdit.Wrap
-                onTextChanged: {
-                    Config.options.background.widgets.clock.digital.font.family = text;
+            FontPicker {
+                value: Config.options.background.widgets.clock.digital.font.family
+                onFontSelected: family => {
+                    Config.options.background.widgets.clock.digital.font.family = family;
                 }
             }
 
