@@ -442,36 +442,13 @@ function setup_fonts(){
   local main_family="Google Sans Flex"
   local mono_family="JetBrains Mono NF"
   local reading_family="Readex Pro"
-  local main_pango="${main_family} Medium 11 @opsz=11,wght=500"
-  local gtk_font="${main_family} Medium 11"
-
-  # --- GNOME/GTK interface fonts (gsettings) ---
-  # font-name is the UI default, document-font-name is used for text-body
-  # views (some GTK apps fall back to it for large-text regions), and
-  # monospace-font-name drives terminal/code widgets. @opsz/wght are pango
-  # 1.52+ variable-font axis overrides.
-  v gsettings set org.gnome.desktop.interface font-name            "${main_pango}"
-  v gsettings set org.gnome.desktop.interface document-font-name   "${reading_family} 11"
-  v gsettings set org.gnome.desktop.interface monospace-font-name  "${mono_family} 11"
-
-  # --- GTK3 / GTK4 settings.ini ---
-  # Belt-and-suspenders with gsettings: some GTK3 apps (and some sandboxed
-  # launch paths) read settings.ini but not the DConf schema.
-  local _gtk3="$HOME/.config/gtk-3.0/settings.ini"
-  local _gtk4="$HOME/.config/gtk-4.0/settings.ini"
-  mkdir -p "$(dirname "$_gtk3")" "$(dirname "$_gtk4")"
-  local _f
-  for _f in "$_gtk3" "$_gtk4"; do
-    if [[ -f "$_f" ]] && grep -q '^\[Settings\]' "$_f"; then
-      if grep -q '^gtk-font-name=' "$_f"; then
-        sed -i "s|^gtk-font-name=.*|gtk-font-name=${gtk_font}|" "$_f"
-      else
-        sed -i "/^\[Settings\]/a gtk-font-name=${gtk_font}" "$_f"
-      fi
-    else
-      printf '[Settings]\ngtk-font-name=%s\n' "${gtk_font}" > "$_f"
-    fi
-  done
+  # --- GNOME/GTK interface fonts (gsettings + settings.ini) ---
+  # Seed them through the same helper the shell uses at runtime (Fonts picker /
+  # theme apply) so all three paths produce identical output. Families are
+  # passed explicitly because the shell config.json it would otherwise read
+  # is not deployed yet at this point in the install.
+  v bash "${REPO_ROOT}/dots/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh" \
+      "${main_family}" "${mono_family}" "${reading_family}"
 
   # --- System-wide install of the main font ---
   # End-4's illogical-impulse-fonts drop Google Sans Flex into the user font
