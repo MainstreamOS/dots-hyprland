@@ -4,6 +4,17 @@
 printf "\n"
 ms_section "Configuring..."
 
+# Shared GPU detection + config library -- the single source of truth for both
+# the dots ./setup and archiso install paths (sdata/lib/gpu-config.sh). Sourced
+# up top so setup_gpu_drivers and every later GPU helper have gpu_detect /
+# gpu_classify_nvidia_driver available. On the live system writes go through
+# sudo. The small-ESP early-KMS guard is disabled here: dots installs use the
+# host's existing boot setup (no UKI on the ESP), so ESP size doesn't constrain
+# the initramfs.
+source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
+GPU_SUDO=sudo
+GPU_EARLY_KMS_ESP_THRESHOLD=0
+
 function prepare_systemd_user_service(){
   if [[ ! -e "/usr/lib/systemd/user/ydotool.service" ]]; then
     x sudo ln -s /usr/lib/systemd/{system,user}/ydotool.service
@@ -144,13 +155,13 @@ function detect_gpu_vendors(){
   if command -v lspci >/dev/null 2>&1; then
     local gpu_lines
     gpu_lines=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
-    if echo "$gpu_lines" | grep -qi 'nvidia'; then
+    if echo "$gpu_lines" | grep -qiE '\[10de:'; then
       vendors+=(nvidia)
     fi
-    if echo "$gpu_lines" | grep -qi 'amd\|ati\|radeon'; then
+    if echo "$gpu_lines" | grep -qiE '\[1002:'; then
       vendors+=(amd)
     fi
-    if echo "$gpu_lines" | grep -qi 'intel'; then
+    if echo "$gpu_lines" | grep -qiE '\[8086:'; then
       vendors+=(intel)
     fi
   else
@@ -816,15 +827,6 @@ function setup_plymouth(){
   _initramfs_rebuild
   echo -e "${STY_GREEN}[$0]: Plymouth BGRT theme configured.${STY_RST}"
 }
-
-# Shared GPU detection + config library -- the single source of truth for both
-# the dots ./setup and archiso install paths (sdata/lib/gpu-config.sh). On the
-# live system, writes go through sudo. The small-ESP early-KMS guard is
-# disabled here: dots installs use the host's existing boot setup (no UKI on
-# the ESP), so ESP size does not constrain the initramfs.
-source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
-GPU_SUDO=sudo
-GPU_EARLY_KMS_ESP_THRESHOLD=0
 
 function setup_gpu_autoconfig(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
