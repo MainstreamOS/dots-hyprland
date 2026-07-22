@@ -713,7 +713,7 @@ Singleton {
 
             property JsonObject overview: JsonObject {
                 property bool enable: true
-                property real scale: 0.18 // Relative to screen size
+                property real size: 100 // Percent of the largest grid that fits the screen (100 = fill)
                 property real rows: 2
                 property real columns: 5
                 property bool orderRightLeft: false

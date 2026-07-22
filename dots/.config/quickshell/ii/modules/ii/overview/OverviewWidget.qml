@@ -25,7 +25,13 @@ Item {
     property var windowByAddress: HyprlandData.windowByAddress
     property var windowAddresses: HyprlandData.addresses
     property var monitorData: HyprlandData.monitors.find(m => m.id === root.monitor?.id)
-    property real scale: Config.options.overview.scale
+    // Per-workspace scale that fits the whole grid on screen: `size` (1–100%)
+    // picks how much of the largest-that-fits to use. 100% fills ~90% of the
+    // screen; the scale shrinks automatically as rows/columns grow so the grid
+    // never overflows. The default 5×2 at 100% resolves to the historic 0.18.
+    property real scale: (Config.options.overview.size / 100)
+                         * Math.min(0.9 / Math.max(1, Config.options.overview.columns),
+                                    0.9 / Math.max(1, Config.options.overview.rows))
     property color activeBorderColor: Appearance.colors.colSecondary
 
     property real workspaceImplicitWidth: (monitorData?.transform % 2 === 1) ? 

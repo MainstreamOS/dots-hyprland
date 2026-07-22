@@ -515,13 +515,13 @@ ContentPage {
         */
         ConfigSpinBox {
             icon: "loupe"
-            text: Translation.tr("Scale (%)")
-            value: Config.options.overview.scale * 100
-            from: 1
+            text: Translation.tr("Size (%)")
+            value: Config.options.overview.size
+            from: 25
             to: 100
-            stepSize: 1
+            stepSize: 5
             onValueChanged: {
-                Config.options.overview.scale = value / 100;
+                Config.options.overview.size = value;
             }
         }
         ConfigRow {
