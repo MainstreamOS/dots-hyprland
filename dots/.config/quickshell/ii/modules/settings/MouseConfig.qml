@@ -326,6 +326,32 @@ ContentPage {
                 ]
             }
         }
+
+        ConfigRow {
+            StyledText {
+                Layout.fillWidth: true
+                text: Translation.tr("Shake to Locate")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colOnLayer1
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Disabled"),       value: "off" },
+                    { displayName: Translation.tr("Magnifier Zoom"),  value: "zoom" },
+                    { displayName: Translation.tr("Cursor Grows"),    value: "grow" },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.cursor.shakeMode)
+                    return idx !== -1 ? idx : 0
+                }
+                onActivated: index => {
+                    Config.options.cursor.shakeMode = model[index].value
+                }
+            }
+        }
     }
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
