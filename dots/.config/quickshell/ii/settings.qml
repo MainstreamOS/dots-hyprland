@@ -25,47 +25,56 @@ ApplicationWindow {
     property bool showNextTime: false
     property var pages: [
         {
+            group: 1,
             name: Translation.tr("Quick"),
             icon: "instant_mix",
             component: "modules/settings/QuickConfig.qml"
         },
         {
+            group: 1,
             name: "Wi-Fi",
             icon: "wifi",
             component: "modules/settings/WifiConfig.qml"
         },
         {
+            group: 1,
             name: Translation.tr("Bluetooth"),
             icon: "bluetooth",
             component: "modules/settings/BluetoothConfig.qml"
         },
         {
+            group: 2,
             name: Translation.tr("Bar"),
             icon: "toast",
             iconRotation: 180,
             component: "modules/settings/BarConfig.qml"
         },
         {
+            group: 2,
             name: Translation.tr("Interface"),
             icon: "bottom_app_bar",
             component: "modules/settings/InterfaceConfig.qml"
         },
         {
+            group: 2,
             name: Translation.tr("Background"),
             icon: "texture",
             component: "modules/settings/BackgroundConfig.qml"
         },
         {
+            group: 2,
             name: Translation.tr("Decorations"),
             icon: "palette",
             component: "modules/settings/DecorationsConfig.qml"
         },
         {
+            group: 2,
             name: Translation.tr("Themes"),
             icon: "style",
             component: "modules/settings/ThemesConfig.qml"
         },
         {
+            group: 3,
             name: Translation.tr("Display"),
             icon: "monitor",
             component: "modules/settings/DisplayConfig.qml",
@@ -80,46 +89,55 @@ ApplicationWindow {
             asynchronous: true
         },
         {
+            group: 3,
             name: Translation.tr("Layouts"),
             icon: "view_quilt",
             component: "modules/settings/LayoutsConfig.qml"
         },
         {
+            group: 3,
             name: Translation.tr("Keybinds"),
             icon: "keyboard",
             component: "modules/settings/KeybindsConfig.qml"
         },
         {
+            group: 3,
             name: Translation.tr("Mouse"),
             icon: "mouse",
             component: "modules/settings/MouseConfig.qml"
         },
         {
+            group: 3,
             name: Translation.tr("Power"),
             icon: "bolt",
             component: "modules/settings/PowerConfig.qml"
         },
         {
+            group: 4,
             name: Translation.tr("Accounts"),
             icon: "manage_accounts",
             component: "modules/settings/AccountsConfig.qml"
         },
         {
+            group: 4,
             name: Translation.tr("Services"),
             icon: "settings",
             component: "modules/settings/ServicesConfig.qml"
         },
         {
+            group: 4,
             name: Translation.tr("Update"),
             icon: "system_update_alt",
             component: "modules/settings/UpdateConfig.qml"
         },
         {
+            group: 4,
             name: Translation.tr("Recovery"),
             icon: "healing",
             component: "modules/settings/RecoverConfig.qml"
         },
         {
+            group: 5,
             name: Translation.tr("About"),
             icon: "info",
             component: "modules/settings/About.qml"
@@ -328,84 +346,32 @@ ApplicationWindow {
                     width: navRailFlickable.width
                     spacing: 0
 
-                    // Group 1: Quick, Wi-Fi, Bluetooth (Indices 0, 1, 2)
                     Repeater {
-                        model: root.pages.slice(0, 3)
-                        SettingsNavButton {
-                            required property var index
+                        model: root.pages
+                        delegate: ColumnLayout {
+                            required property int index
                             required property var modelData
-                            toggled: root.currentPage === index
-                            onPressed: root.currentPage = index
-                            buttonIcon: modelData.icon
-                            buttonText: modelData.name
-                        }
-                    }
+                            Layout.fillWidth: true
+                            spacing: 0
 
-                    // Separator 1
-                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
-                                color: Appearance.m3colors.m3outlineVariant }
+                            // Divider whenever the group changes — driven off each
+                            // page's `group`, so pages can be added, removed, or
+                            // reordered without touching hardcoded indices.
+                            Rectangle {
+                                visible: index > 0 && root.pages[index - 1].group !== modelData.group
+                                Layout.fillWidth: true
+                                Layout.margins: 12
+                                implicitHeight: 1
+                                opacity: 0.3
+                                color: Appearance.m3colors.m3outlineVariant
+                            }
 
-                    // Group 2: Bar, Interface, Background, Decorations, Themes (Indices 3-7)
-                    Repeater {
-                        model: root.pages.slice(3, 8)
-                        SettingsNavButton {
-                            required property var index
-                            required property var modelData
-                            toggled: root.currentPage === (index + 3)
-                            onPressed: root.currentPage = (index + 3)
-                            buttonIcon: modelData.icon
-                            buttonText: modelData.name
-                        }
-                    }
-
-                    // Separator 2
-                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
-                                color: Appearance.m3colors.m3outlineVariant }
-
-                    // Group 3: Display, Layouts, Keybinds, Mouse, Power (Indices 8-12)
-                    Repeater {
-                        model: root.pages.slice(8, 13)
-                        SettingsNavButton {
-                            required property var index
-                            required property var modelData
-                            toggled: root.currentPage === (index + 8)
-                            onPressed: root.currentPage = (index + 8)
-                            buttonIcon: modelData.icon
-                            buttonText: modelData.name
-                        }
-                    }
-
-                    // Separator 3
-                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
-                                color: Appearance.m3colors.m3outlineVariant }
-
-                    // Group 4: Accounts, Services, Update, Recovery (Indices 13-16)
-                    Repeater {
-                        model: root.pages.slice(13, 17)
-                        SettingsNavButton {
-                            required property var index
-                            required property var modelData
-                            toggled: root.currentPage === (index + 13)
-                            onPressed: root.currentPage = (index + 13)
-                            buttonIcon: modelData.icon
-                            buttonText: modelData.name
-                        }
-                    }
-
-                    // Separator 4
-                    Rectangle { Layout.fillWidth: true; height: 1; opacity: 0.3; Layout.margins: 12
-                                color: Appearance.m3colors.m3outlineVariant }
-
-                    // Group 5: About (Index 17)
-                    Repeater {
-                        model: root.pages.slice(17)
-                        SettingsNavButton {
-                            required property var index
-                            required property var modelData
-                            toggled: root.currentPage === (index + 17)
-                            onPressed: root.currentPage = (index + 17)
-                            buttonIcon: modelData.icon
-                            buttonText: modelData.name
+                            SettingsNavButton {
+                                toggled: root.currentPage === index
+                                onPressed: root.currentPage = index
+                                buttonIcon: modelData.icon
+                                buttonText: modelData.name
+                            }
                         }
                     }
                 } // ColumnLayout navRail
