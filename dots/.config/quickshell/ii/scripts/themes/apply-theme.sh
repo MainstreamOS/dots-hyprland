@@ -244,6 +244,10 @@ if [ -f "$IFACE_JSON" ] && command -v gsettings >/dev/null 2>&1; then
         && hyprctl setcursor "$CURSOR_THEME" "$CURSOR_SIZE" >/dev/null 2>&1 || true
 fi
 
+# ── 5c. Mirror the theme's shell fonts into the GTK/Qt interface fonts ──────
+# Reads the just-restored config.json; no-op if apply-gtk-font.sh is absent.
+[ -x "$SCRIPT_DIR/apply-gtk-font.sh" ] && bash "$SCRIPT_DIR/apply-gtk-font.sh" 2>/dev/null || true
+
 # ── 6. Record last-applied (consumed by ThemesConfig for ordering) ─────────
 mkdir -p "$THEMES_DIR"
 printf '%s' "$SLUG" > "$LAST_APPLIED.tmp" && mv -f "$LAST_APPLIED.tmp" "$LAST_APPLIED"

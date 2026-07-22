@@ -632,6 +632,22 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
     }
 
+    // GTK/Qt apps read the interface gsettings fonts, not the shell config, so
+    // push the chosen shell fonts through apply-gtk-font.sh (same mapping as the
+    // installer). Debounced because the Fonts pickers fire per keystroke.
+    readonly property string gtkFontScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh"
+    function applyGtkFont() {
+        Quickshell.execDetached([root.gtkFontScript,
+            (Config.options.appearance.fonts.main || "").trim(),
+            (Config.options.appearance.fonts.monospace || "").trim(),
+            (Config.options.appearance.fonts.reading || "").trim()]);
+    }
+    Timer {
+        id: gtkFontDebounce
+        interval: 400
+        onTriggered: root.applyGtkFont()
+    }
+
 
     ContentSection {
         icon: "palette"
@@ -1950,6 +1966,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 wrapMode: TextEdit.NoWrap
                 onTextChanged: {
                     Config.options.appearance.fonts.main = text;
+                    gtkFontDebounce.restart();
                 }
             }
         }
@@ -1995,6 +2012,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 wrapMode: TextEdit.NoWrap
                 onTextChanged: {
                     Config.options.appearance.fonts.monospace = text;
+                    gtkFontDebounce.restart();
                 }
             }
         }
@@ -2025,6 +2043,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 wrapMode: TextEdit.NoWrap
                 onTextChanged: {
                     Config.options.appearance.fonts.reading = text;
+                    gtkFontDebounce.restart();
                 }
             }
         }

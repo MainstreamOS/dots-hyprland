@@ -52,6 +52,9 @@ hl.on("hyprland.start", function ()
     end
     hl.exec_cmd("hyprctl setcursor " .. cursor_theme .. " " .. cursor_size)
 
+    -- GTK/Qt interface fonts follow the shell's font choice (config.json).
+    hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh")
+
     -- Gaming Mode: strip any autologin User= from /etc/sddm.conf so normal
     -- boots/logouts reach the SDDM password greeter (no-op on a fresh desktop).
     -- Redundant with the sddm.service ExecStartPre (gaming-mode-arm-check), the
