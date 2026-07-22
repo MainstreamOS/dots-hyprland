@@ -493,7 +493,7 @@ ContentPage {
 
     ContentSection {
         icon: "overview_key"
-        title: Translation.tr("Overview")
+        title: Translation.tr("Launcher Overview")
 
         ConfigSwitch {
             buttonIcon: "check"
