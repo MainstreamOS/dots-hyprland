@@ -1,3 +1,15 @@
+_fix_plugin_configs() {
+    for c in hyprbars scrolloverview; do
+        etc="/etc/$c.conf"
+        tmpl="/usr/share/mainstream/$c.conf"
+        [ -e "$etc" ] || { [ -r "$tmpl" ] && install -Dm644 "$tmpl" "$etc"; }
+        if [ -f "$etc" ]; then
+            up=$(echo "$c" | tr '[:lower:]' '[:upper:]')
+            sed -i "s/^\\(${up}_REF=\\)/#\\1/" "$etc" 2>/dev/null || true
+        fi
+    done
+}
+
 _migrate() {
     rm -f /etc/pacman.d/hooks/95-hyprbars-rebuild.hook \
           /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
@@ -10,10 +22,18 @@ _migrate() {
         fi
         [ -e "/usr/local/bin/$n-status-notify" ] || ln -sf "/usr/bin/$n-status-notify" "/usr/local/bin/$n-status-notify"
     done
+    _fix_plugin_configs
     systemctl daemon-reload 2>/dev/null || true
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+        for u in /home/*; do
+            for p in hyprbars scrolloverview; do
+                if [ -f "$u/.local/share/hyprland/plugins/$p.so.stale" ]; then
+                    systemctl start --no-block "$p-rebuild.service" 2>/dev/null || true
+                fi
+            done
+        done
     fi
 }
 

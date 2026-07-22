@@ -1,0 +1,54 @@
+# Maintainer: mainstreamos <https://github.com/MainstreamOS>
+groups=(mainstream)
+pkgname=mainstream-system
+pkgver=1.0
+pkgrel=1
+pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
+arch=(any)
+license=(None)
+depends=(
+  git
+  make
+  gcc
+  pkgconf
+  expect
+)
+install=mainstream-system.install
+source=(
+  hyprbars-rebuild.sh
+  hyprbars-status-notify.sh
+  hyprbars-rebuild.service
+  hyprbars-rebuild.timer
+  95-hyprbars-rebuild.hook
+  scrolloverview-rebuild.sh
+  scrolloverview-status-notify.sh
+  scrolloverview-rebuild.service
+  scrolloverview-rebuild.timer
+  95-scrolloverview-rebuild.hook
+  limine-restore-auto
+  mainstream.preset
+  hyprbars.conf
+  scrolloverview.conf
+  mainstream-repair
+)
+sha256sums=(
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+)
+
+package() {
+  install -Dm755 "$srcdir/hyprbars-rebuild.sh"            "$pkgdir/usr/lib/mainstream/hyprbars/rebuild.sh"
+  install -Dm755 "$srcdir/scrolloverview-rebuild.sh"      "$pkgdir/usr/lib/mainstream/scrolloverview/rebuild.sh"
+  install -Dm755 "$srcdir/hyprbars-status-notify.sh"      "$pkgdir/usr/bin/hyprbars-status-notify"
+  install -Dm755 "$srcdir/scrolloverview-status-notify.sh" "$pkgdir/usr/bin/scrolloverview-status-notify"
+  install -Dm755 "$srcdir/limine-restore-auto"           "$pkgdir/usr/bin/limine-restore-auto"
+  install -Dm755 "$srcdir/mainstream-repair"            "$pkgdir/usr/bin/mainstream-repair"
+  install -Dm644 "$srcdir/hyprbars-rebuild.service"      "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.service"
+  install -Dm644 "$srcdir/hyprbars-rebuild.timer"        "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.timer"
+  install -Dm644 "$srcdir/scrolloverview-rebuild.service" "$pkgdir/usr/lib/systemd/system/scrolloverview-rebuild.service"
+  install -Dm644 "$srcdir/scrolloverview-rebuild.timer"  "$pkgdir/usr/lib/systemd/system/scrolloverview-rebuild.timer"
+  install -Dm644 "$srcdir/95-hyprbars-rebuild.hook"      "$pkgdir/usr/share/libalpm/hooks/95-hyprbars-rebuild.hook"
+  install -Dm644 "$srcdir/95-scrolloverview-rebuild.hook" "$pkgdir/usr/share/libalpm/hooks/95-scrolloverview-rebuild.hook"
+  install -Dm644 "$srcdir/mainstream.preset"             "$pkgdir/usr/lib/systemd/system-preset/80-mainstream.preset"
+  install -Dm644 "$srcdir/hyprbars.conf"                 "$pkgdir/usr/share/mainstream/hyprbars.conf"
+  install -Dm644 "$srcdir/scrolloverview.conf"           "$pkgdir/usr/share/mainstream/scrolloverview.conf"
+}

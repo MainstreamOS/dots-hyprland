@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# mainstream-repair — repair the install to the latest tagged release: pin the
+# dotfiles clone to the newest release tag, re-provision with install-setups,
+# re-assert the core package + plugin configs, and rebuild the Hyprland plugin
+# machinery. Root entry point (invoked via pkexec/sudo -S from the Recovery
+# panel); drops to the calling user for the parts that must not run as root.
+set -u
+
+ORIG_USER="${SUDO_USER:-}"
+if [[ -z "$ORIG_USER" && -n "${PKEXEC_UID:-}" ]]; then
+    ORIG_USER=$(getent passwd "$PKEXEC_UID" | cut -d: -f1)
+fi
+if [[ -z "$ORIG_USER" || "$ORIG_USER" == "root" ]]; then
+    echo "mainstream-repair: refusing to run without a non-root caller (invoke via pkexec or sudo -S)." >&2
+    exit 1
+fi
+ORIG_HOME=$(getent passwd "$ORIG_USER" | cut -d: -f6)
+[[ -n "$ORIG_HOME" && -d "$ORIG_HOME" ]] || { echo "mainstream-repair: cannot resolve home for $ORIG_USER" >&2; exit 1; }
+
+CLONE_DIR="${MAINSTREAM_DOTFILES_DIR:-$ORIG_HOME/.cache/dots-hyprland}"
+TAG_REGEX='^[0-9]{1,2}\.[0-9]+\.[0-9]+$'
+
+TEMP_SUDOERS="/etc/sudoers.d/99-mainstream-repair-active"
+rm -f "$TEMP_SUDOERS"
+cleanup() {
+    rm -f "$TEMP_SUDOERS"
+    if ! pgrep -x pacman >/dev/null 2>&1; then
+        rm -f /var/lib/pacman/db.lck 2>/dev/null
+    fi
+}
+trap cleanup EXIT INT TERM HUP
+
+if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
+    echo ">>> Another package manager is running (pacman database is locked). Try again shortly." >&2
+    exit 1
+fi
+
+cat > "$TEMP_SUDOERS" <<EOF
+Defaults:$ORIG_USER verifypw = any
+$ORIG_USER ALL=(ALL) NOPASSWD: ALL
+EOF
+chmod 0440 "$TEMP_SUDOERS"
+
+run_as_user() {
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+        MAINSTREAM_DOTFILES_DIR="$CLONE_DIR" MS_VISUAL=0 \
+        SUDO_ASKPASS=/bin/false DISPLAY= WAYLAND_DISPLAY= "$@"
+}
+
+rc=0
+
+echo "== Repair Install =="
+echo "Re-provisioning from the latest tagged release, then rebuilding components."
+echo
+
+echo "[1/4] Pinning the dotfiles clone to the latest release tag..."
+if [[ ! -d "$CLONE_DIR/.git" ]]; then
+    echo "    no dotfiles clone at $CLONE_DIR — open the Update page once to bootstrap it, then retry." >&2
+    exit 1
+fi
+run_as_user git -C "$CLONE_DIR" fetch --tags --force --prune origin 2>&1 | sed 's/^/    /' \
+    || echo "    (tag fetch failed — using the current checkout)"
+LATEST_TAG=$(run_as_user git -C "$CLONE_DIR" tag 2>/dev/null | grep -E "$TAG_REGEX" | sort -V | tail -n1)
+if [[ -n "$LATEST_TAG" ]]; then
+    run_as_user git -C "$CLONE_DIR" stash push --include-untracked -m "mainstream-repair auto-stash" >/dev/null 2>&1 || true
+    if run_as_user git -C "$CLONE_DIR" reset --hard "$LATEST_TAG" >/dev/null 2>&1; then
+        echo "    pinned to $LATEST_TAG"
+    else
+        echo "    could not pin to $LATEST_TAG — running the current checkout"
+    fi
+else
+    echo "    no release tag found — running the current checkout"
+fi
+echo
+
+echo "[2/4] Running ./setup install-setups (non-interactive)..."
+run_as_user bash -c "cd '$CLONE_DIR' && ./setup install-setups --force" 2>&1 | sed 's/^/    /'
+[[ ${PIPESTATUS[0]} -eq 0 ]] || rc=1
+echo
+
+echo "[3/4] Re-asserting the core package + plugin configs..."
+pacman -S --needed --noconfirm --overwrite '/usr/*' mainstream-system 2>&1 | sed 's/^/    /'
+if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+    echo "    mainstream-system present"
+else
+    echo "    could not pull mainstream-system (offline or not yet in the repo) — continuing with what's on disk"
+fi
+for c in hyprbars scrolloverview; do
+    etc="/etc/$c.conf"
+    tmpl="/usr/share/mainstream/$c.conf"
+    [[ ! -e "$etc" && -r "$tmpl" ]] && install -Dm644 "$tmpl" "$etc" && echo "    seeded $etc from template"
+    if [[ -f "$etc" ]]; then
+        up=$(echo "$c" | tr '[:lower:]' '[:upper:]')
+        if grep -q "^${up}_REF=" "$etc" 2>/dev/null; then
+            sed -i "s/^\\(${up}_REF=\\)/#\\1/" "$etc" && echo "    un-pinned $etc (${up}_REF was set)"
+        fi
+    fi
+done
+systemctl daemon-reload 2>/dev/null || true
+systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
+echo "    timers preset + started"
+echo
+
+echo "[4/4] Rebuilding Hyprland plugins against the current compositor..."
+for p in hyprbars scrolloverview; do
+    rb="/usr/lib/mainstream/$p/rebuild.sh"
+    echo "    --- $p ---"
+    if [[ -x "$rb" ]]; then
+        "$rb" 2>&1 | sed 's/^/      /'
+        [[ ${PIPESTATUS[0]} -eq 0 ]] || rc=1
+    else
+        echo "      rebuild script missing ($rb)"
+        rc=1
+    fi
+done
+echo
+for p in hyprbars scrolloverview; do
+    st="/var/lib/$p/status"
+    if [[ -f "$st" ]]; then
+        echo "    $p: $(grep '^state=' "$st" 2>/dev/null | cut -d= -f2- || echo unknown)"
+    else
+        echo "    $p: ok"
+    fi
+done
+echo
+
+if [[ "$rc" -eq 0 ]]; then
+    echo "Repair complete. Restart Hyprland (or log out and back in) to load rebuilt components."
+else
+    echo "Repair finished with errors — see the log above."
+fi
+exit "$rc"

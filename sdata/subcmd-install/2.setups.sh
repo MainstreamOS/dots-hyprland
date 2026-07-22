@@ -1079,6 +1079,18 @@ function setup_mpris_hyprland(){
 showfun setup_mpris_hyprland
 v setup_mpris_hyprland
 
+function setup_mainstream_system(){
+  if [[ "$OS_GROUP_ID" != "arch" ]]; then return 0; fi
+  if pacman -Qq mainstream-system &>/dev/null; then
+    echo -e "${STY_GREEN}[$0]: mainstream-system already installed — skipping.${STY_RST}"
+    return 0
+  fi
+  x sudo pacman -S --needed --noconfirm --overwrite '/usr/*' mainstream-system \
+    || echo -e "${STY_YELLOW}[$0]: mainstream-system not available yet (repo may not carry it) — continuing.${STY_RST}"
+}
+showfun setup_mainstream_system
+v setup_mainstream_system
+
 showfun teardown_pacman_nopasswd
 v teardown_pacman_nopasswd
 

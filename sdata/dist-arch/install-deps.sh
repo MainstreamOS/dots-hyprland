@@ -340,6 +340,7 @@ metapkgs=(./sdata/dist-arch/mainstream-{audio,backlight,basic,fonts-themes,gnome
 metapkgs+=(./sdata/dist-arch/mainstream-hyprland)
 metapkgs+=(./sdata/dist-arch/mainstream-microtex-git)
 metapkgs+=(./sdata/dist-arch/mainstream-quickshell-git)
+metapkgs+=(./sdata/dist-arch/mainstream-system)
 metapkgs+=(./sdata/dist-arch/mainstream-extras)
 metapkgs+=(./sdata/dist-arch/mainstream-bibata-modern-classic-bin)
 metapkgs+=(./sdata/dist-arch/mainstream-gaming)

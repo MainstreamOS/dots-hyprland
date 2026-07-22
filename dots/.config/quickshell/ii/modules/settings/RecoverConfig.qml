@@ -36,9 +36,41 @@ ContentPage {
         isRunning = true;
     }
 
+    function startRepair() {
+        if (isRunning) return;
+        outputText = "";
+        repairProc.command = ["pkexec", "/usr/bin/mainstream-repair"];
+        repairProc.running = true;
+        isRunning = true;
+    }
+
     Process {
         id: rebootProc
         command: ["systemctl", "reboot"]
+    }
+
+    // Privileged install repair: re-asserts the plugin machinery + configs
+    // and rebuilds the Hyprland plugins via pkexec (its own polkit prompt),
+    // streaming into the same output pane as the snapshot restore.
+    Process {
+        id: repairProc
+        stdout: SplitParser {
+            onRead: data => { root.outputText += data + "\n"; }
+        }
+        stderr: SplitParser {
+            onRead: data => { root.outputText += data + "\n"; }
+        }
+        onExited: (exitCode, exitStatus) => {
+            root.isRunning = false;
+            root.outputText = root.outputText.replace(/\s+$/, "");
+            if (exitCode === 0) {
+                root.outputText += "\n\n" + Translation.tr("Repair complete. Restart Hyprland for rebuilt components to load.");
+            } else if (exitCode === 126 || exitCode === 127) {
+                root.outputText += "\n\n" + Translation.tr("Repair was cancelled or not authorized.");
+            } else {
+                root.outputText += "\n\n" + Translation.tr("Repair finished with exit code %1.").arg(exitCode);
+            }
+        }
     }
 
     Process {
@@ -142,6 +174,12 @@ ContentPage {
         title: Translation.tr("System Restore")
 
         headerExtra: [
+            RippleButtonWithIcon {
+                materialIcon: "build"
+                mainText: Translation.tr("Repair Install")
+                enabled: !root.isRunning
+                onClicked: root.startRepair()
+            },
             RippleButtonWithIcon {
                 materialIcon: "content_copy"
                 mainText: Translation.tr("Copy")

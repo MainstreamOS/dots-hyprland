@@ -73,6 +73,27 @@ ok()   { printf '%s OK%s  %s\n' "$c_green"  "$c_rst" "$*"; }
 warn() { printf '%s ! %s  %s\n' "$c_yellow" "$c_rst" "$*" >&2; }
 die()  { printf '%s X %s  %s\n' "$c_red"    "$c_rst" "$*" >&2; exit 1; }
 
+# Guarantee the mainstream-system core package (the plugin-rebuild machinery)
+# is installed. --overwrite covers the one-time file handoff for machines that
+# still own those paths via the old mainstream-extras. No-op once installed.
+ensure_mainstream_system() {
+    command -v pacman >/dev/null 2>&1 || return 0
+    pacman -Qq mainstream-system >/dev/null 2>&1 && return 0
+    local d="$CLONE_DIR/sdata/dist-arch/mainstream-system"
+    [[ -f "$d/PKGBUILD" ]] || return 0
+    say "Ensuring mainstream-system (core machinery) is installed..."
+    ( cd "$d" && makepkg -f --noconfirm ) || { warn "mainstream-system build failed (continuing)"; return 0; }
+    local pkg; pkg=$(ls -1t "$d"/mainstream-system-*.pkg.tar.zst 2>/dev/null | head -1)
+    [[ -n "$pkg" ]] || { warn "mainstream-system: no built package found"; return 0; }
+    if sudo pacman -U --noconfirm \
+            --overwrite '/usr/*' \
+            "$pkg"; then
+        ok "mainstream-system installed"
+    else
+        warn "mainstream-system install failed (continuing)"
+    fi
+}
+
 # Refuse root — the dotfiles install is per-user.
 [[ $EUID -ne 0 ]] || die "updatems must not run as root; run as your user account."
 
@@ -197,6 +218,9 @@ say "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)..."
 # overshoot the tag to the branch tip and shrink the reflog hop.
 DOTS_SKIP_PULL=1 ./setup exp-update --skip-notice --non-interactive --default-choice backup -p
 RC=$?
+
+# Make sure the core machinery package landed, whatever exp-update's -p pass did.
+ensure_mainstream_system
 
 # ── 7. Update marker on success ────────────────────────────────────────────
 if [[ $RC -eq 0 ]]; then
