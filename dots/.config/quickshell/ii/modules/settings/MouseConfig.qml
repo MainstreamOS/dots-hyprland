@@ -313,8 +313,9 @@ ContentPage {
             ConfigSelectionArray {
                 Layout.fillWidth: false
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 222
+                Layout.preferredWidth: 220
                 buttonWidth: 110
+                spacing: 0
                 currentValue: root.leftHanded ? "right" : "left"
                 onSelected: val => {
                     root.leftHanded = val === "right"
