@@ -221,6 +221,46 @@ mkinitcpio_remove_hook() {
     fi
 }
 
+# ── mkinitcpio_add_hook <hook> [<after>] ────────────────────────────────────
+# Idempotent insert of a HOOKS entry: right after <after> when that hook is
+# present, else before the closing paren. Scoped to the HOOKS line.
+mkinitcpio_add_hook() {
+    local conf="${MKINITCPIO_CONF:-/etc/mkinitcpio.conf}" hook="$1" after="${2:-}"
+    grep -qE "^HOOKS=\([^)]*\b${hook}\b" "$conf" && return 0
+    if [[ -n "$after" ]] && grep -qE "^HOOKS=\([^)]*\b${after}\b" "$conf"; then
+        ${GPU_SUDO:-} sed -i -E "/^HOOKS=\(/ s/\b${after}\b/& ${hook}/" "$conf"
+    else
+        ${GPU_SUDO:-} sed -i -E "/^HOOKS=\(/ s/\)/ ${hook})/" "$conf"
+    fi
+}
+
+# ── nvidia_strip_gsp_firmware ───────────────────────────────────────────────
+# Pre-Turing NVIDIA cards (Maxwell/Pascal/Volta and older) never load the
+# ~100 MB GSP firmware that nouveau — and the proprietary driver — declare, yet
+# mkinitcpio bundles every firmware a loaded module lists, inflating the UKI
+# until it no longer fits a small reused dual-boot ESP and the write ENOSPCs.
+# Install a build hook that drops the GSP blobs from the initramfs (BUILDROOT
+# only, so the on-disk firmware and package ownership are untouched and it keeps
+# working across updates). No-op on Turing+ (which needs GSP) and with no NVIDIA.
+nvidia_strip_gsp_firmware() {
+    case "${NVIDIA_GEN:-none}" in
+        maxwell|kepler|fermi|prefermi) ;;
+        *) return 0 ;;
+    esac
+    local dir="${INITCPIO_INSTALL_DIR:-/etc/initcpio/install}"
+    ${GPU_SUDO:-} mkdir -p "$dir"
+    ${GPU_SUDO:-} tee "$dir/strip-nvidia-gsp" >/dev/null <<'HOOKEOF'
+#!/bin/bash
+build() {
+    rm -f "$BUILDROOT"/usr/lib/firmware/nvidia/*/gsp_*.bin*
+}
+help() {
+    echo "Drops the unused NVIDIA GSP firmware (Turing+ only) from the initramfs."
+}
+HOOKEOF
+    mkinitcpio_add_hook strip-nvidia-gsp kms
+}
+
 # ── hypr_env_upsert <user_home> <key> <value> ───────────────────────────────
 # Idempotent append of hl.env("KEY","VALUE") into <user_home>/.config/hypr/
 # custom/env.lua. Skips (return 0) when the file is absent (pre-dotfiles). In
@@ -429,6 +469,7 @@ gpu_apply_autoconfig() {
         [[ "$NVIDIA_GEN" == turing ]] && _pw=true || true
         nvidia_enable_services "$_pw"
     fi
+    nvidia_strip_gsp_firmware
     # PRIME for hybrid.
     if [[ $IS_HYBRID == true && $early_kms == true ]]; then
         if [[ $HAS_NVIDIA == true && $HAS_INTEL == true ]]; then

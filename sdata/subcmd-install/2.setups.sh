@@ -206,6 +206,11 @@ function setup_gpu_drivers(){
             # Maxwell/Kepler/Fermi -> frozen legacy branch, pre-Fermi -> nouveau.
             # modprobe options + cmdline + mkinitcpio modules are handled by setup_gpu_autoconfig later.
             gpu_detect || true
+            # Pre-Turing cards drag ~100 MB of unused GSP firmware into the UKI,
+            # overflowing a small reused dual-boot ESP. Drop it now, before the
+            # first UKI is built in setup_limine_snapper (setup_gpu_autoconfig
+            # only runs later).
+            nvidia_strip_gsp_firmware
             gpu_classify_nvidia_driver
             echo -e "${STY_CYAN}[$0]: NVIDIA generation ${NVIDIA_GEN} -> driver family ${NVIDIA_DRIVER_FAMILY}${STY_RST}"
             if [[ ${#NVIDIA_REPO_PKGS[@]} -gt 0 ]]; then

@@ -191,13 +191,13 @@ chk_str breadcrumb-y "$( [[ "$BC" == *"- driver Y failed"* ]] && echo yes || ech
 rm -rf "$NTMP"
 
 # ── orchestration: gpu_apply_autoconfig + gpu_apply_hypr_tweaks per card ─────
-OTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$OTMP/mkinitcpio.conf" KERNEL_CMDLINE="$OTMP/cmdline" MODPROBE_DIR="$OTMP/modprobe.d"
+OTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$OTMP/mkinitcpio.conf" KERNEL_CMDLINE="$OTMP/cmdline" MODPROBE_DIR="$OTMP/modprobe.d" INITCPIO_INSTALL_DIR="$OTMP/initcpio"
 OHOME="$OTMP/home"; mkdir -p "$OHOME/.config/hypr/custom"; FIX_SYSVENDOR=""
 _gpu_swap_partuuid() { echo ""; }
 _gpu_systemctl() { [[ "$1" == enable ]] && ENABLED="$ENABLED ${2%.service}"; return 0; }
 # Orchestration nvidia cases assume a proprietary driver is installed.
 _gpu_nvidia_has_driver() { return 0; }
-oreset() { printf 'MODULES=()\nHOOKS=(base systemd plymouth autodetect kms keyboard block filesystems fsck)\n' > "$MKINITCPIO_CONF"; : > "$KERNEL_CMDLINE"; rm -rf "$MODPROBE_DIR"; : > "$OHOME/.config/hypr/custom/env.lua"; : > "$OHOME/.config/hypr/custom/general.lua"; ENABLED=""; }
+oreset() { printf 'MODULES=()\nHOOKS=(base systemd plymouth autodetect kms keyboard block filesystems fsck)\n' > "$MKINITCPIO_CONF"; : > "$KERNEL_CMDLINE"; rm -rf "$MODPROBE_DIR" "$INITCPIO_INSTALL_DIR"; : > "$OHOME/.config/hypr/custom/env.lua"; : > "$OHOME/.config/hypr/custom/general.lua"; ENABLED=""; }
 
 oreset; FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 48 [Radeon RX 9070 XT] [1002:7550] (rev c0)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
@@ -220,6 +220,7 @@ chk_str turing-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes |
 chk_str turing-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
 chk_str turing-env "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo yes || echo no )" "yes"
 chk_str turing-cursor "$( [[ "$GV" == *'no_hardware_cursors = true'* ]] && echo yes || echo no )" "yes"
+chk_str turing-no-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" ]] && echo present || echo absent )" "absent"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
@@ -232,6 +233,7 @@ oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation 
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1))
 chk_str maxwell-gen "$NVIDIA_GEN" "maxwell"
 chk_str maxwell-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
+chk_str maxwell-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" && "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *"strip-nvidia-gsp"* ]] && echo yes || echo no )" "yes"
 chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
