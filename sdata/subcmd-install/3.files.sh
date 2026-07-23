@@ -855,6 +855,16 @@ PYEOF
 
   # ── Link ~/.steam to the Steam data dir ────────────────────────────────────
   x mkdir -p "$HOME/.steam"
+  # A prior Steam run can leave ~/.steam/{steam,root} as real directories, which
+  # ln -sfnT can't overwrite; clear a stale one first (these only point at the
+  # data in $steam_store) so the last install step doesn't abort.
+  for _steam_link in "$HOME/.steam/steam" "$HOME/.steam/root"; do
+    if [[ -e "$_steam_link" && ! -L "$_steam_link" ]]; then
+      rmdir "$_steam_link" 2>/dev/null \
+        || mv --backup=numbered -T "$_steam_link" "$_steam_link.pre-mainstream" 2>/dev/null \
+        || true
+    fi
+  done
   x ln -sfnT "$steam_store" "$HOME/.steam/steam"
   x ln -sfnT "$steam_store" "$HOME/.steam/root"
 }
