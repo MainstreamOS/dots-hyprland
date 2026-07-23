@@ -297,6 +297,7 @@ MouseArea {
                         keyNavigationWraps: true
                         boundsBehavior: Flickable.StopAtBounds
                         bottomMargin: extraOptions.implicitHeight
+                        cacheBuffer: cellHeight * 2
                         ScrollBar.vertical: StyledScrollBar {}
 
                         Component.onCompleted: {
