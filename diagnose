@@ -95,6 +95,12 @@ x Hyprland --version
 x _check_quickshell_version
 x _check_PKGBUILD_version
 
+e "Checking GPU state"
+x nvidia-smi --query-gpu=name,memory.total,memory.used,memory.free --format=csv
+x nvidia-smi
+x coredumpctl list --since=-24h --no-pager
+x sh -c 'dmesg 2>/dev/null | grep -i nvkms | tail -n 40'
+
 e "Finished. Output saved as \"$output_file\"."
 if ! command -v curl 2>&1 >>/dev/null ;then echo "\"curl\" not found, pastebin upload unavailable.";exit;fi
 echo "(Optional) Do you agree to upload the file \"$output_file\" to the online pastebin (https://0x0.st)?"
