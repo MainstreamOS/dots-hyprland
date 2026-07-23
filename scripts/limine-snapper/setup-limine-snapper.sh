@@ -258,6 +258,17 @@ grep -q "machine-id=$(tr -d '\n' < /etc/machine-id)" "$ESP/limine.conf" || error
 
 relabel_limine_nvram_entry "Mainstream OS" "$ESP"
 
+# Register Windows when it shares this ESP (Install alongside). limine's
+# FIND_BOOTLOADERS never probes Microsoft's bootmgfw.efi, so a dual-boot Windows
+# install stays invisible in the menu unless it is added explicitly.
+if [[ -f "$ESP/EFI/Microsoft/Boot/bootmgfw.efi" ]] && command -v limine-entry-tool &>/dev/null \
+    && ! grep -qi bootmgfw "$ESP/limine.conf" 2>/dev/null; then
+    info "Windows detected on the ESP — adding a 'Windows' limine boot entry..."
+    limine-entry-tool --add-efi "Windows" "$ESP/EFI/Microsoft/Boot/bootmgfw.efi" \
+        --comment "Windows Boot Manager" --priority 15 --quiet --no-mutex --no-hooks 2>&1 \
+        || warn "Could not add the Windows boot entry."
+fi
+
 info "Limine installed and boot entries generated"
 
 # --- Step 2: Now safe to remove old bootloaders ---
