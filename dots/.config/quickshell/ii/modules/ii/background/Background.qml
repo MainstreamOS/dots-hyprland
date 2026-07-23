@@ -253,8 +253,8 @@ Variants {
                     // unchanged — only the pixel buffer gets denser, which
                     // costs proportional VRAM but keeps detail when the GPU
                     // resamples during pan.
-                    width: bgRoot.scaledWallpaperWidth * Math.max(1, bgRoot.monitor?.scale ?? 1)
-                    height: bgRoot.scaledWallpaperHeight * Math.max(1, bgRoot.monitor?.scale ?? 1)
+                    width: Math.min(bgRoot.wallpaperWidth, bgRoot.scaledWallpaperWidth * Math.max(1, bgRoot.monitor?.scale ?? 1))
+                    height: Math.min(bgRoot.wallpaperHeight, bgRoot.scaledWallpaperHeight * Math.max(1, bgRoot.monitor?.scale ?? 1))
                 }
                 width: bgRoot.scaledWallpaperWidth
                 height: bgRoot.scaledWallpaperHeight
@@ -280,7 +280,7 @@ Variants {
                     radius: GlobalStates.screenLocked
                         ? Config.options.lock.blur.radius
                         : (GlobalStates.overviewOpen ? Config.options.lock.blur.radius : 0)
-                    samples: radius * 2 + 1
+                    samples: Config.options.lock.blur.radius * 2 + 1
                     Behavior on radius {
                         NumberAnimation {
                             duration: Appearance.animation.elementMoveFast.duration
