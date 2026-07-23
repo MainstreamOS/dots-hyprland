@@ -5,6 +5,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
+import qs.modules.settings.bar
 
 ContentPage {
     forceWidth: true
@@ -22,7 +23,15 @@ ContentPage {
         }
     }
     */
-    
+
+    // ── Widget layout ─────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "reorder"
+        title: Translation.tr("Widget layout")
+
+        BarLayoutEditor {}
+    }
+
     // ── Time & Date ───────────────────────────────────────────────────────────
     ContentSection {
         icon: "nest_clock_farsight_analog"
@@ -203,19 +212,6 @@ ContentPage {
     }
 
     ContentSection {
-        icon: "monitor_heart"
-        title: Translation.tr("Resource usage")
-        ConfigSwitch {
-            buttonIcon: "check"
-            text: Translation.tr("Enable")
-            checked: Config.options.bar.resources.enable
-            onCheckedChanged: {
-                Config.options.bar.resources.enable = checked;
-            }
-        }
-    }
-
-    ContentSection {
         icon: "workspaces"
         title: Translation.tr("Workspaces")
 
@@ -386,14 +382,6 @@ ContentPage {
     ContentSection {
         icon: "cloud"
         title: Translation.tr("Weather")
-        ConfigSwitch {
-            buttonIcon: "check"
-            text: Translation.tr("Enable")
-            checked: Config.options.bar.weather.enable
-            onCheckedChanged: {
-                Config.options.bar.weather.enable = checked;
-            }
-        }
         ConfigRow {
             ConfigSwitch {
                 buttonIcon: "assistant_navigation"
@@ -457,20 +445,6 @@ ContentPage {
             checked: Config.options.tray.monochromeIcons
             onCheckedChanged: {
                 Config.options.tray.monochromeIcons = checked;
-            }
-        }
-    }
-
-    ContentSection {
-        icon: "volume_up"
-        title: Translation.tr("Volume Control")
-
-        ConfigSwitch {
-            buttonIcon: "volume_up"
-            text: Translation.tr('Show volume icon in bar')
-            checked: Config.options.bar.volumeControl.enable
-            onCheckedChanged: {
-                Config.options.bar.volumeControl.enable = checked;
             }
         }
     }

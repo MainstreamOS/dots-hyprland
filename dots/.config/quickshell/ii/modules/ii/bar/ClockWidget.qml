@@ -18,6 +18,7 @@ Item {
 
         StyledText {
             font.pixelSize: Appearance.font.pixelSize.large
+            font.features: { "tnum": 1 }
             color: Appearance.colors.colOnLayer1
             text: DateTime.time
         }

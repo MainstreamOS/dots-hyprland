@@ -61,6 +61,44 @@ Singleton {
         obj[keys[keys.length - 1]] = convertedValue;
     }
 
+    // Which widgets the bar shows used to be decided by a switch per widget.
+    // It is decided by the bar's layout now, and a settings file written before
+    // that changed has the old switches and no layout at all — so an update
+    // would quietly hand everyone the stock arrangement, taking away a widget
+    // someone had turned on and giving back one they had turned off. Carry
+    // their answers into the layout the once, recognising an older file by its
+    // missing layout. Every later write includes one, so this cannot repeat.
+    readonly property var _legacyBarSwitches: ({
+        "resources": ["resources", "enable"],
+        "volume": ["volumeControl", "enable"]
+    })
+
+    function seedBarLayoutFromLegacySwitches() {
+        let stored = null
+        try {
+            stored = JSON.parse(configFileView.text())
+        } catch (e) {
+            return
+        }
+        if (!stored || !stored.bar || stored.bar.layout !== undefined) return
+
+        for (const section of ["left", "center", "right"]) {
+            const groups = JSON.parse(JSON.stringify(root.options.bar.layout[section] ?? []))
+            let touched = false
+            for (const group of groups) {
+                for (const widget of (group.widgets ?? [])) {
+                    const path = root._legacyBarSwitches[widget.id]
+                    if (!path) continue
+                    const wanted = stored.bar[path[0]]?.[path[1]]
+                    if (typeof wanted !== "boolean" || widget.enabled === wanted) continue
+                    widget.enabled = wanted
+                    touched = true
+                }
+            }
+            if (touched) root.options.bar.layout[section] = groups
+        }
+    }
+
     Timer {
         id: fileReloadTimer
         interval: root.readWriteDelay
@@ -112,7 +150,10 @@ Singleton {
             if (root._reloading) return
             fileWriteTimer.restart()
         }
-        onLoaded: root.ready = true
+        onLoaded: {
+            root.ready = true
+            root.seedBarLayoutFromLegacySwitches()
+        }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
                 writeAdapter();
@@ -324,8 +365,31 @@ Singleton {
                 property bool showBackground: true
                 property bool verbose: true
                 property bool vertical: false
+                // Per-section widget layout. Each section is an ordered list
+                // of groups; each group is one pill and holds an ordered list
+                // of widgets ({ id, enabled }). Widgets in the same group share
+                // a pill (combined); separate groups are separate pills. In the
+                // center, the middle group is kept screen-centered. Recognized
+                // ids: sidebarButton, activeWindow, resources, media,
+                // workspaces, clock, utilButtons, battery, indicators, volume,
+                // tray, timers, weather, spacer.
+                property JsonObject layout: JsonObject {
+                    property list<var> left: [
+                        { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
+                    ]
+                    property list<var> center: [
+                        { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
+                        { "widgets": [ {"id": "workspaces", "enabled": true} ] },
+                        { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] }
+                    ]
+                    property list<var> right: [
+                        { "widgets": [ {"id": "weather", "enabled": true} ] },
+                        { "widgets": [ {"id": "spacer", "enabled": true} ] },
+                        { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
+                    ]
+                }
+                property string layoutEditorMode: "simple" // "simple" or "custom"
                 property JsonObject resources: JsonObject {
-                    property bool enable: false
                     property bool alwaysShowSwap: true
                     property bool alwaysShowCpu: false
                     property bool alwaysShowGPU: false
@@ -422,7 +486,6 @@ Singleton {
                     property bool clickToShow: false
                 }
                 property JsonObject volumeControl: JsonObject {
-                    property bool enable: true
                 }
             }
 
