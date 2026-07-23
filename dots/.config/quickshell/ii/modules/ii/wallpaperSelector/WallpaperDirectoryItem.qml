@@ -69,6 +69,11 @@ MouseArea {
                     sourceComponent: ThumbnailImage {
                         id: thumbnailImage
                         generateThumbnail: false
+                        // Bucket the cache by logical size, matching the bulk generator in
+                        // WallpaperSelectorContent. The inherited default keys off sourceSize
+                        // (logical x DPR), which at a fractional scale lands in a different
+                        // freedesktop size-class than the generator wrote -> blank tiles.
+                        thumbnailSizeName: Images.thumbnailSizeNameForDimensions(width, height)
                         sourcePath: fileModelData.filePath
 
                         cache: false
