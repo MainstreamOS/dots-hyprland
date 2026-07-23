@@ -107,6 +107,7 @@ Item { // Window
         anchors.fill: parent
         captureSource: (GlobalStates.overviewOpen && !root.closing) ? root.toplevel : null
         live: true
+        constraintSize: Qt.size(Math.max(1, root.targetWindowWidth), Math.max(1, root.targetWindowHeight))
         // PQ-to-sRGB tone-mapping when HDR Always On
         layer.enabled: GlobalStates.hdrActive
         layer.effect: ShaderEffect {
