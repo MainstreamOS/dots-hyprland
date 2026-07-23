@@ -15,7 +15,10 @@ fi
 # --- Configuration ---
 SNAPPER_SPACE_LIMIT="0.2"       # 20% of drive
 SNAPPER_NUMBER_LIMIT="5"        # Max 5 snapshots
-ESP="/boot"                     # EFI System Partition mount point
+# EFI System Partition mount point — detect it (an install-alongside / dual-boot
+# system shares the pre-existing ESP at /boot/efi; a whole-disk install uses /boot).
+ESP="$(bootctl --print-esp-path 2>/dev/null || true)"
+[[ -n "$ESP" ]] || ESP="$([[ -d /boot/efi ]] && echo /boot/efi || echo /boot)"
 
 # --- Colors ---
 RED='\033[0;31m'
