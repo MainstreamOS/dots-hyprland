@@ -105,7 +105,7 @@ post_process() {
     handle_kde_material_you_colors &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
     set_sddm_background "$wallpaper_path"
-    set_scrolloverview_wallpaper "$wallpaper_path"
+    set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
 }
 
 CUSTOM_DIR="$XDG_CONFIG_HOME/hypr/custom"
@@ -184,15 +184,36 @@ set_thumbnail_path() {
 # insertion.
 set_scrolloverview_wallpaper() {
     local path="$1"
+    local screen_width="$2"
+    local screen_height="$3"
     local target="$XDG_CONFIG_HOME/hypr/custom/general.lua"
     [[ -z "$path" || ! -f "$target" ]] && return
+
+    # The plugin uploads its wallpaper twice (sharp + pre-blurred), so hand it a
+    # monitor-sized copy rather than the raw source (often 4K, and a video the
+    # plugin can't decode). Shrink-only ('>') keeps the visible result identical.
+    local plugin_path="$path"
+    local src="$path"
+    if is_video "$src"; then
+        local thumb="$THUMBNAIL_DIR/$(basename "$src").jpg"
+        [[ -f "$thumb" ]] && src="$thumb"
+    fi
+    if [[ -f "$src" && "$screen_width" =~ ^[0-9]+$ && "$screen_height" =~ ^[0-9]+$ ]]; then
+        local scaled="$CACHE_DIR/user/generated/scrolloverview_$(basename "$src").jpg"
+        mkdir -p "$CACHE_DIR/user/generated"
+        if command -v magick &>/dev/null; then
+            magick "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
+        elif command -v convert &>/dev/null; then
+            convert "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
+        fi
+    fi
 
     if grep -qE '^[[:space:]]*wallpaper_path[[:space:]]*=' "$target"; then
         local tmpfile
         tmpfile="$(mktemp)"
         # Lua form: `wallpaper_path = "...",` (with quotes and trailing comma).
         # Preserves leading indent so the value stays inside the parent table.
-        awk -v new="$path" '
+        awk -v new="$plugin_path" '
             /^[[:space:]]*wallpaper_path[[:space:]]*=/ {
                 match($0, /^[[:space:]]*/)
                 printf "%swallpaper_path = \"%s\",\n", substr($0, 1, RLENGTH), new
