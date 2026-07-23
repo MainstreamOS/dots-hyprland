@@ -28,6 +28,7 @@ Singleton {
     property list<string> wallpapers: [] // List of absolute file paths (without file://)
     readonly property bool thumbnailGenerationRunning: thumbgenProc.running
     property real thumbnailGenerationProgress: 0
+    property bool videoApplied: false
 
     signal changed()
     signal thumbnailGenerated(directory: string)
@@ -51,6 +52,8 @@ Singleton {
         target: Config
         function onReadyChanged() { // Apply wallpaper on config ready if it's a video
             if (!Config.ready || !root.isVideoFile(Config.options.background.wallpaperPath.toLowerCase())) return;
+            if (root.videoApplied) return;
+            root.videoApplied = true;
             root.apply(Config.options.background.wallpaperPath, Appearance.m3colors.darkmode);
         }
     }
