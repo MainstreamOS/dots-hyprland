@@ -159,7 +159,16 @@ EOF
 }
 
 write_limine_header() {
-    print_limine_header > "$ESP/limine.conf"
+    # Only seed a fresh header when there is no limine.conf yet. If one already
+    # exists (a re-run, or Windows/limine-update wrote one), refresh the header
+    # in place WITHOUT dropping its boot entries — an unconditional overwrite
+    # here would leave the config header-only ("no valid entries") until
+    # limine-update repopulated it.
+    if [[ -f "$ESP/limine.conf" ]]; then
+        ensure_limine_header
+    else
+        print_limine_header > "$ESP/limine.conf"
+    fi
 }
 
 ensure_limine_header() {
