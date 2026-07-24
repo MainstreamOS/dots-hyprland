@@ -7,6 +7,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
+import qs.modules.settings.display
 
 ContentPage {
     id: displayConfigPage
@@ -1569,72 +1570,23 @@ except Exception:
                             onClicked: modePopup.visible ? modePopup.close() : modePopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: modePopup
-                            y: modeRow.height + 4
-                            width: modeRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: modeBg }
-                                Rectangle { id: modeBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
+                            maxVisibleRows: 8
+                            options: modeRow.modeModel
+                            currentIndex: {
+                                let p = monitorSection.pending;
+                                let m = monitorSection.mon;
+                                return modeRow.modeModel.findIndex(o =>
+                                    o.width === (p.width ?? m.width) &&
+                                    o.height === (p.height ?? m.height) &&
+                                    Math.abs(o.refreshRate - (p.refreshRate ?? m.refreshRate)) < 0.1);
                             }
-                            // ListView is wrapped in a Loader so the
-                            // delegate-Rectangle for each available
-                            // mode (often 30+ entries) only instantiates
-                            // when the popup actually opens — the page's
-                            // first-paint cost was dominated by these
-                            // never-visible delegates being built up
-                            // front. Same pattern repeats for the other
-                            // 7 popups in this file.
-                            contentItem: Loader {
-                                active: modePopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: Math.min(contentHeight, 300)
-                                    clip: true
-                                    spacing: 2
-                                    model: modeRow.modeModel
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: {
-                                            let p = monitorSection.pending;
-                                            let m = monitorSection.mon;
-                                            return modelData.width === (p.width ?? m.width) &&
-                                                   modelData.height === (p.height ?? m.height) &&
-                                                   Math.abs(modelData.refreshRate - (p.refreshRate ?? m.refreshRate)) < 0.1;
-                                        }
-                                        color: modeDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: modeDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePendingBatch(monitorSection.monName, {
-                                                    width: modelData.width,
-                                                    height: modelData.height,
-                                                    refreshRate: modelData.refreshRate,
-                                                });
-                                                modePopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            onSelected: (modelData, index) => displayConfigPage.updatePendingBatch(monitorSection.monName, {
+                                width: modelData.width,
+                                height: modelData.height,
+                                refreshRate: modelData.refreshRate,
+                            })
                         }
                     }
 
@@ -1718,54 +1670,12 @@ except Exception:
                             onClicked: scalePopup.visible ? scalePopup.close() : scalePopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: scalePopup
-                            y: scaleRow.height + 4
-                            width: scaleRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: scaleBg }
-                                Rectangle { id: scaleBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: scalePopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: scaleRow.scaleOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: Math.abs((monitorSection.pending.scale ?? monitorSection.mon.scale) - modelData.value) < 0.006
-                                        color: scaleDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: scaleDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "scale", modelData.value);
-                                                scalePopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            maxVisibleRows: 4
+                            options: scaleRow.scaleOptions
+                            currentIndex: scaleRow.scaleOptions.findIndex(o => Math.abs(o.value - (monitorSection.pending.scale ?? monitorSection.mon.scale)) < 0.006)
+                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "scale", modelData.value)
                         }
                     }
 
@@ -1829,54 +1739,11 @@ except Exception:
                             onClicked: rotationPopup.visible ? rotationPopup.close() : rotationPopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: rotationPopup
-                            y: rotationRow.height + 4
-                            width: rotationRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: rotBg }
-                                Rectangle { id: rotBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: rotationPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: rotationRow.rotationOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.transform ?? monitorSection.mon.transform) === modelData.value
-                                        color: rotDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: rotDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "transform", modelData.value);
-                                                rotationPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            options: rotationRow.rotationOptions
+                            currentIndex: rotationRow.rotationOptions.findIndex(o => o.value === (monitorSection.pending.transform ?? monitorSection.mon.transform))
+                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "transform", modelData.value)
                         }
                     }
 
@@ -1944,54 +1811,11 @@ except Exception:
                             onClicked: mirrorPopup.visible ? mirrorPopup.close() : mirrorPopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: mirrorPopup
-                            y: mirrorRow.height + 4
-                            width: mirrorRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: mirBg }
-                                Rectangle { id: mirBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: mirrorPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: mirrorRow.mirrorOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.mirror ?? "") === modelData.value
-                                        color: mirDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: mirDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "mirror", modelData.value);
-                                                mirrorPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            options: mirrorRow.mirrorOptions
+                            currentIndex: mirrorRow.mirrorOptions.findIndex(o => o.value === (monitorSection.pending.mirror ?? ""))
+                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "mirror", modelData.value)
                         }
                     }
 
@@ -2062,54 +1886,11 @@ except Exception:
                             text: Translation.tr("VRR is not supported by this display or driver.")
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: vrrPopup
-                            y: vrrRow.height + 4
-                            width: vrrRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: vrrBg }
-                                Rectangle { id: vrrBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: vrrPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: vrrRow.vrrOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.vrr ?? 0) === modelData.value
-                                        color: vrrDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: vrrDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "vrr", modelData.value);
-                                                vrrPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            options: vrrRow.vrrOptions
+                            currentIndex: vrrRow.vrrOptions.findIndex(o => o.value === (monitorSection.pending.vrr ?? 0))
+                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "vrr", modelData.value)
                         }
                     }
 
@@ -2185,55 +1966,13 @@ except Exception:
                             text: Translation.tr("10-bit colour is not supported by this display or driver.")
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: tenBitPopup
-                            y: tenBitRow.height + 4
-                            width: tenBitRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: tenBitBg }
-                                Rectangle { id: tenBitBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: tenBitPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: tenBitRow.tenBitOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: tenBitRow.is10bit === modelData.value
-                                        color: tenBitDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: tenBitDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                let current10bit = (displayConfigPage.pendingChanges[monitorSection.monName]?.bitdepth ?? 8) === 10;
-                                                if (current10bit === modelData.value) { tenBitPopup.close(); return; }
-                                                displayConfigPage.updatePending(monitorSection.monName, "bitdepth", modelData.value ? 10 : 8);
-                                                tenBitPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
+                            options: tenBitRow.tenBitOptions
+                            currentIndex: tenBitRow.tenBitOptions.findIndex(o => o.value === tenBitRow.is10bit)
+                            onSelected: (modelData, index) => {
+                                if (tenBitRow.is10bit === modelData.value) return;
+                                displayConfigPage.updatePending(monitorSection.monName, "bitdepth", modelData.value ? 10 : 8);
                             }
                         }
                     }
@@ -2319,54 +2058,11 @@ except Exception:
                             onClicked: positionPopup.visible ? positionPopup.close() : positionPopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: positionPopup
-                            y: positionRow.height + 4
-                            width: positionRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: posBg }
-                                Rectangle { id: posBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: positionPopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: positionRow.positionOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.positionMode ?? "auto-center-right") === modelData.value
-                                        color: posDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: posDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePending(monitorSection.monName, "positionMode", modelData.value);
-                                                positionPopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            options: positionRow.positionOptions
+                            currentIndex: positionRow.positionOptions.findIndex(o => o.value === (monitorSection.pending.positionMode ?? "auto-center-right"))
+                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "positionMode", modelData.value)
                         }
                     }
                 }
@@ -2567,57 +2263,14 @@ except Exception:
                             onClicked: hdrModePopup.visible ? hdrModePopup.close() : hdrModePopup.open()
                         }
 
-                        Popup {
+                        SelectPopup {
                             id: hdrModePopup
-                            y: hdrModeRow.height + 4
-                            width: hdrModeRow.width
-                            padding: 8
-                            enter: Transition { PropertyAnimation { properties: "opacity"; to: 1; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            exit:  Transition { PropertyAnimation { properties: "opacity"; to: 0; duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve } }
-                            background: Item {
-                                StyledRectangularShadow { target: hdrModeBg }
-                                Rectangle { id: hdrModeBg; anchors.fill: parent; radius: Appearance.rounding.normal; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                            contentItem: Loader {
-                                active: hdrModePopup.visible
-                                sourceComponent: ListView {
-                                    implicitHeight: contentHeight
-                                    clip: true
-                                    spacing: 2
-                                    model: hdrModeRow.hdrModeOptions
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        required property int index
-                                        width: ListView.view.width
-                                        height: 36
-                                        radius: Appearance.rounding.small
-                                        property bool isCurrent: (monitorSection.pending.hdrMode || 1) === modelData.value
-                                        color: hdrModeDelegate.containsMouse
-                                            ? (isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer3Hover)
-                                            : (isCurrent ? Appearance.colors.colSecondaryContainer : "transparent")
-                                        Behavior on color { ColorAnimation { duration: Appearance.animation.elementMoveFast.duration } }
-                                        StyledText {
-                                            anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 12 }
-                                            text: modelData.label
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer3
-                                        }
-                                        MouseArea {
-                                            id: hdrModeDelegate
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                displayConfigPage.updatePendingBatch(monitorSection.monName, {
-                                                    hdrMode: modelData.value,
-                                                    bitdepth: 10,  // force 10-bit for HDR
-                                                });
-                                                hdrModePopup.close();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            options: hdrModeRow.hdrModeOptions
+                            currentIndex: hdrModeRow.hdrModeOptions.findIndex(o => o.value === (monitorSection.pending.hdrMode || 1))
+                            onSelected: (modelData, index) => displayConfigPage.updatePendingBatch(monitorSection.monName, {
+                                hdrMode: modelData.value,
+                                bitdepth: 10,
+                            })
                         }
                     }
 
