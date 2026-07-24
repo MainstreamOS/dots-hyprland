@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import qs
 import qs.modules.common
+import qs.modules.common.functions
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -67,7 +68,7 @@ Singleton {
     // Poll only while something actually displays the data: the bar resources
     // widget or the overlay resources widget (open or pinned). Mirrors the
     // users' own Loader/visible gates.
-    readonly property bool barWatching: Config.options.bar.resources.enable
+    readonly property bool barWatching: ObjectUtils.layoutHasEnabledWidget(Config.options.bar.layout, "resources")
         && GlobalStates.barOpen && !GlobalStates.screenLocked
     readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
         && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
