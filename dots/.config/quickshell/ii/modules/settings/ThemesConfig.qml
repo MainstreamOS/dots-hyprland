@@ -44,7 +44,15 @@ ContentPage {
 
     // While an apply is in flight the card buttons are disabled so a user
     // can't pile-up successive applies before the previous one settles.
+    //
+    // applyingSlug can't carry that on its own: it is cleared by the process
+    // that *asks* the shell to apply a theme, and that returns as soon as the
+    // request has been accepted — a few tens of milliseconds into a run
+    // lasting well over a second. The shared apply state tracks the run
+    // itself, so between them the whole thing is covered.
     property string applyingSlug: ""
+    property string requestedSlug: ""
+    readonly property bool applyInFlight: root.applyingSlug.length > 0 || Config.themeApplyInProgress
 
     // An action that isn't available right now wears the unselected look from
     // the Clock style selector — secondary container at full strength — rather
@@ -74,6 +82,10 @@ ContentPage {
         root.statusMessage = msg
         statusTimer.interval = timeoutMs ?? root.statusTimeoutMs
         statusTimer.restart()
+    }
+    function clearStatus() {
+        statusTimer.stop()
+        root.statusMessage = ""
     }
     Timer {
         id: statusTimer
@@ -449,19 +461,64 @@ ContentPage {
     // ── Apply theme (via shell IPC — atomic, race-free) ─────────────────────
     Process { id: ipcApplyProc }
     function applyTheme(theme) {
-        if (root.applyingSlug) return
+        if (root.applyInFlight) return
         root.applyingSlug = theme.slug
+        root.requestedSlug = theme.slug
         ipcApplyProc.command = ["qs", "-c", "ii", "ipc", "call", "themes", "apply", theme.slug]
         ipcApplyProc.running = false
         ipcApplyProc.running = true
         // Optimistic UI update — the script also writes last-applied.txt.
         root.lastAppliedSlug = theme.slug
-        root.showStatus(Translation.tr("Applying theme: %1").arg(theme.name))
+        // Ends when the apply reports back rather than on a fixed timer, which
+        // otherwise expires part-way through some runs and lingers after others.
+        root.showStatus(Translation.tr("Applying theme: %1").arg(theme.name), 30000)
+        applyLockoutTimer.restart()
     }
     Connections {
         target: ipcApplyProc
-        function onExited() {
+        // A non-zero exit means the request never reached the shell, so nothing
+        // is running and the cards can go live again straight away. A clean exit
+        // only means the run has started; the apply state below ends it.
+        function onExited(exitCode) {
+            if (exitCode !== 0) {
+                root.applyingSlug = ""
+                root.requestedSlug = ""
+                root.showStatus(Translation.tr("Couldn't apply that theme — your previous one is still in place"), 8000)
+            }
+        }
+    }
+    Connections {
+        target: Config
+        function onThemeApplyInProgressChanged() {
+            if (Config.themeApplyInProgress) return
             root.applyingSlug = ""
+            if (root.requestedSlug.length > 0) applyOutcomeTimer.restart()
+        }
+    }
+    // If the run never reports itself finished the cards would stay disabled
+    // for the rest of the session, so give up waiting eventually.
+    Timer {
+        id: applyLockoutTimer
+        interval: 30000
+        onTriggered: root.applyingSlug = ""
+    }
+    // Whether the theme took is decided by which slug the run left recorded: a
+    // theme that fails validation is rolled back and the previous one restored.
+    // The signals for this live in the shell process that does the applying,
+    // not in this one, so the shared record is what carries the answer across.
+    // It is written just before the run reports itself finished and reaches
+    // this page through a file watcher, hence the pause before reading it.
+    Timer {
+        id: applyOutcomeTimer
+        interval: 300
+        onTriggered: {
+            const wanted = root.requestedSlug
+            root.requestedSlug = ""
+            if (wanted.length === 0) return
+            if (root.lastAppliedSlug === wanted)
+                root.clearStatus()
+            else
+                root.showStatus(Translation.tr("Couldn't apply that theme — your previous one is still in place"), 8000)
         }
     }
 
@@ -991,7 +1048,7 @@ finally:
                     required property var modelData
                     required property int index
                     readonly property bool isActive: modelData.slug === root.lastAppliedSlug
-                    readonly property bool busy: root.applyingSlug.length > 0
+                    readonly property bool busy: root.applyInFlight
                     Layout.fillWidth: true
                     Layout.preferredHeight: 260
                     radius: Appearance.rounding.normal

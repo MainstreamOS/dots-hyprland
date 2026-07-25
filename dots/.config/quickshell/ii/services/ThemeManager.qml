@@ -124,6 +124,10 @@ Singleton {
     Process {
         id: applyProc
         property string pendingSlug: ""
+        // apply-theme.sh explains why it rolled back. With nowhere to put that
+        // output the channel is closed and the explanation is discarded, which
+        // leaves a failed apply with nothing to report but a number.
+        stderr: StdioCollector { id: applyStderr }
         onExited: (exitCode, exitStatus) => {
             Config.blockWrites = false
             // Force a re-read of the generated colors.json. Matugen writes via
@@ -133,7 +137,18 @@ Singleton {
             if (exitCode === 0) {
                 root.applied(applyProc.pendingSlug)
             } else {
-                root.applyFailed(applyProc.pendingSlug, "exit " + exitCode)
+                const reason = (applyStderr.text ?? "").trim()
+                root.applyFailed(applyProc.pendingSlug, reason.length > 0 ? reason : "exit " + exitCode)
+                // A theme that rolls back puts the previous one back and says
+                // nothing, so the desktop simply doesn't change and the user is
+                // left to guess. The Settings page can't be relied on to carry
+                // this — applies are started over IPC and land in this process,
+                // not in the one drawing that page, which may not even be open.
+                console.log("[ThemeManager] apply failed for " + applyProc.pendingSlug + ": " + reason)
+                Quickshell.execDetached(["notify-send",
+                    Translation.tr("Couldn't apply that theme"),
+                    Translation.tr("Your previous theme is still in place."),
+                    "-a", "Shell"])
             }
         }
     }
