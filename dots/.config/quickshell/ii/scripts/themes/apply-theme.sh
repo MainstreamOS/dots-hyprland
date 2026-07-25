@@ -44,6 +44,18 @@ write_apply_state() {
     printf '%s' "$1" > "$APPLY_STATE_FILE.tmp" 2>/dev/null || return 0
     mv -f "$APPLY_STATE_FILE.tmp" "$APPLY_STATE_FILE" 2>/dev/null || return 0
 }
+# Serialise applies. Two runs at once interleave their writes to config.json,
+# colors.json and last-applied.txt, and whichever theme wins one file is not
+# necessarily the one that wins the others — the grid then marks a theme the
+# desktop isn't wearing. Reachable whenever a second apply starts before the
+# first finishes, such as the Day/Night scheduler firing while a theme is
+# being applied by hand. Wait rather than give up so the later pick still
+# lands, and carry on unlocked if flock isn't available.
+APPLY_LOCK_FILE="$XDG_RUNTIME_DIR/quickshell-theme-apply.lock"
+if command -v flock >/dev/null 2>&1 && exec 9>"$APPLY_LOCK_FILE" 2>/dev/null; then
+    flock -w 120 9 2>/dev/null || dlog "lock wait timed out; applying anyway"
+fi
+
 write_apply_state "applying"
 
 [ -d "$THEME_DIR" ] || { write_apply_state "idle"; echo "theme dir missing: $THEME_DIR" >&2; exit 3; }
