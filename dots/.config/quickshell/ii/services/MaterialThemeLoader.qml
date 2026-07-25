@@ -38,6 +38,30 @@ Singleton {
         resetFilePathNextWallpaperChange.enabled = true
     }
 
+    // Colours are regenerated partway through a theme apply, while the rest of
+    // the desktop is still being rewritten. Painting them the moment they land
+    // shows an intermediate state that is replaced again a moment later, so
+    // hold them back and repaint with everything else once the run reports
+    // itself finished.
+    property bool colorsHeld: false
+
+    function applyColorsWhenSettled(fileContent) {
+        if (Config.themeApplyInProgress) {
+            root.colorsHeld = true
+            return
+        }
+        root.applyColors(fileContent)
+    }
+
+    Connections {
+        target: Config
+        function onThemeApplyInProgressChanged() {
+            if (Config.themeApplyInProgress || !root.colorsHeld) return
+            root.colorsHeld = false
+            root.applyColors(themeFileView.text())
+        }
+    }
+
     Connections {
         id: resetFilePathNextWallpaperChange
         enabled: false
@@ -55,7 +79,7 @@ Singleton {
         repeat: false
         running: false
         onTriggered: {
-            root.applyColors(themeFileView.text())
+            root.applyColorsWhenSettled(themeFileView.text())
         }
     }
 
@@ -69,7 +93,7 @@ Singleton {
         }
         onLoadedChanged: {
             const fileContent = themeFileView.text()
-            root.applyColors(fileContent)
+            root.applyColorsWhenSettled(fileContent)
         }
         onLoadFailed: root.resetFilePathNextTime();
     }

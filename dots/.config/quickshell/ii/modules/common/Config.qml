@@ -19,6 +19,13 @@ Singleton {
     // reverts wallpaperPath or other just-applied fields.
     property bool themeApplyInProgress: false
 
+    // Applying a theme rewrites this file and then regenerates the colours a
+    // second or so later. Reacting to each write as it lands repaints the whole
+    // desktop twice — once restyled but still wearing the old palette, then
+    // again once the new palette arrives. Hold the reload until the run reports
+    // itself finished so the change is seen once.
+    property bool _reloadDeferred: false
+
     // Guard to suppress the self-echo: FileView.reload() mutates adapter
     // properties which fires adapterUpdated, which would otherwise schedule a
     // writeAdapter() of content we *just read from disk*. Harmless in isolation
@@ -99,14 +106,43 @@ Singleton {
         }
     }
 
+    function reloadFromFile() {
+        root._reloading = true
+        configFileView.reload()
+        Qt.callLater(() => { root._reloading = false })
+    }
+
+    onThemeApplyInProgressChanged: {
+        if (root.themeApplyInProgress) {
+            applyWatchdogTimer.restart()
+            return
+        }
+        applyWatchdogTimer.stop()
+        if (root._reloadDeferred) {
+            root._reloadDeferred = false
+            root.reloadFromFile()
+        }
+    }
+
+    // A run that is killed outright never reports itself finished, which would
+    // otherwise leave reads and writes held back for the rest of the session.
+    Timer {
+        id: applyWatchdogTimer
+        interval: 60000
+        repeat: false
+        onTriggered: root.themeApplyInProgress = false
+    }
+
     Timer {
         id: fileReloadTimer
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
-            root._reloading = true
-            configFileView.reload()
-            Qt.callLater(() => { root._reloading = false })
+            if (root.themeApplyInProgress) {
+                root._reloadDeferred = true
+                return
+            }
+            root.reloadFromFile()
         }
     }
 
