@@ -324,6 +324,7 @@ switch() {
 
             # Set wallpaper path (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
+                [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
                 set_wallpaper_path "$imgpath"
             fi
 
@@ -358,6 +359,7 @@ switch() {
             generate_colors_material_args=(--path "$imgpath")
             # Update wallpaper path in config (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
+                [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
                 set_wallpaper_path "$imgpath"
             fi
             remove_restore
@@ -383,6 +385,34 @@ switch() {
             generate_colors_material_args+=(--mode "$mode_flag")
         fi
     fi
+    # Deciding which scheme suits the picture means decoding it at full size,
+    # which is a noticeable wait on a machine that has just been asked to change
+    # the wallpaper. Nothing above needs the answer, and the picture is already
+    # on screen by now, so it is worked out here rather than beforehand.
+    # If type_flag is 'auto', detect scheme type from image (after imgpath is set)
+    if [[ "$type_flag" == "auto" ]]; then
+        if [[ -n "$imgpath" && -f "$imgpath" ]]; then
+            detected_type="$(detect_scheme_type_from_image "$imgpath")"
+            # Only use detected_type if it's valid
+            valid_detected=0
+            for t in "${allowed_types[@]}"; do
+                if [[ "$detected_type" == "$t" && "$detected_type" != "auto" ]]; then
+                    valid_detected=1
+                    break
+                fi
+            done
+            if [[ $valid_detected -eq 1 ]]; then
+                type_flag="$detected_type"
+            else
+                echo "[switchwall] Warning: Could not auto-detect a valid scheme, defaulting to 'scheme-tonal-spot'" >&2
+                type_flag="scheme-tonal-spot"
+            fi
+        else
+            echo "[switchwall] Warning: No image to auto-detect scheme from, defaulting to 'scheme-tonal-spot'" >&2
+            type_flag="scheme-tonal-spot"
+        fi
+    fi
+
     [[ -n "$type_flag" ]] && matugen_args+=(--type "$type_flag") && generate_colors_material_args+=(--scheme "$type_flag")
     generate_colors_material_args+=(--termscheme "$terminalscheme" --blend_bg_fg)
     generate_colors_material_args+=(--cache "$STATE_DIR/user/generated/color.txt")
@@ -567,36 +597,11 @@ main() {
         imgpath="$(zenity --file-selection --filename="$PWD/" --title='Choose wallpaper')"
     fi
 
-    if [[ -n "$imgpath" && -z "$noswitch_flag" ]]; then
-        set_accent_color ""
-        color_flag=""
-        color=""
-    fi
-
-    # If type_flag is 'auto', detect scheme type from image (after imgpath is set)
-    if [[ "$type_flag" == "auto" ]]; then
-        if [[ -n "$imgpath" && -f "$imgpath" ]]; then
-            detected_type="$(detect_scheme_type_from_image "$imgpath")"
-            # Only use detected_type if it's valid
-            valid_detected=0
-            for t in "${allowed_types[@]}"; do
-                if [[ "$detected_type" == "$t" && "$detected_type" != "auto" ]]; then
-                    valid_detected=1
-                    break
-                fi
-            done
-            if [[ $valid_detected -eq 1 ]]; then
-                type_flag="$detected_type"
-            else
-                echo "[switchwall] Warning: Could not auto-detect a valid scheme, defaulting to 'scheme-tonal-spot'" >&2
-                type_flag="scheme-tonal-spot"
-            fi
-        else
-            echo "[switchwall] Warning: No image to auto-detect scheme from, defaulting to 'scheme-tonal-spot'" >&2
-            type_flag="scheme-tonal-spot"
-        fi
-    fi
-
+    # Settle on which file is actually going to be used before anything reads
+    # it. This used to run after the scheme had already been worked out, so a
+    # wallpaper with a matching -dark or -light sibling had its colours taken
+    # from whichever one the caller happened to name rather than the one that
+    # ends up on screen.
     # If mode_flag is dark or light, try to find a variant with that mode suffix
     if [[ "$mode_flag" == "dark" || "$mode_flag" == "light" ]]; then
         # Get directory, filename without extension, and extension
@@ -619,6 +624,15 @@ main() {
         elif [[ -f "$new_stripped_imgpath" ]]; then
             imgpath="$new_stripped_imgpath"
         fi
+    fi
+
+    if [[ -n "$imgpath" && -z "$noswitch_flag" ]]; then
+        # Recorded rather than written here: the write happens next to the
+        # wallpaper path so the two land together and the shell reads the file
+        # once instead of twice.
+        clear_accent_color=1
+        color_flag=""
+        color=""
     fi
 
     switch "$imgpath" "$mode_flag" "$type_flag" "$color_flag" "$color"
