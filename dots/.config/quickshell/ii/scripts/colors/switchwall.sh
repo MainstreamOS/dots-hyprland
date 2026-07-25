@@ -102,10 +102,30 @@ post_process() {
     local screen_height="$2"
     local wallpaper_path="$3"
 
-    handle_kde_material_you_colors &
-    "$SCRIPT_DIR/code/material-code-set-color.sh" &
-    set_sddm_background "$wallpaper_path"
-    set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
+    # A theme apply holds its lock on file descriptor 9 and every child inherits
+    # it, so anything still running once the apply exits would keep that lock
+    # held and stall the next one. Background work closes it with 9>&-.
+    #
+    # Logs rather than the caller's stdout, so a helper that misbehaves leaves
+    # something to read instead of scrolling past in whatever launched us.
+    local logdir="$STATE_DIR/user/generated"
+    mkdir -p "$logdir"
+    handle_kde_material_you_colors >"$logdir/kde-material-you-colors.log" 2>&1 9>&- &
+    "$SCRIPT_DIR/code/material-code-set-color.sh" >"$logdir/material-code.log" 2>&1 9>&- &
+    # Both of these re-encode the wallpaper with ImageMagick, and between them
+    # they cost more than everything the desktop actually needs. Neither result
+    # is on screen while the wallpaper is being changed — one is the login
+    # background, the other is only drawn once the overview is opened — so they
+    # run alongside the rest instead of holding it up. Their own lock keeps two
+    # runs in quick succession from finishing out of order and leaving a stale
+    # image behind.
+    (
+        if command -v flock >/dev/null 2>&1 && exec 8>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-wallpaper-derivatives.lock"; then
+            flock 8
+        fi
+        set_sddm_background "$wallpaper_path"
+        set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
+    ) >/dev/null 2>&1 9>&- &
 }
 
 CUSTOM_DIR="$XDG_CONFIG_HOME/hypr/custom"

@@ -345,13 +345,20 @@ PY2
     # freshly generated kitty-theme.conf AND issues a new Wayland surface
     # commit that clears the stuck state and restores input responsiveness.
     # No kitty process is killed; the signal is handled gracefully by kitty.
-    sleep 0.3
-    # comm-file matching instead of pkill: cmdline scans hang while any task
-    # is wedged in the kernel holding its mm lock; comm reads don't.
-    for _p in /proc/[0-9]*; do
-        read -r _comm < "$_p/comm" 2>/dev/null || continue
-        [[ "$_comm" == "kitty" ]] && kill -SIGUSR1 "${_p#/proc/}" 2>/dev/null
-    done
+    #
+    # Nothing else waits on this, so it settles on its own rather than holding
+    # the run open -- the wait is measured from the reload either way. It closes
+    # the lock on descriptor 9 first, or it would keep the next apply waiting on
+    # a lock this one has already finished with.
+    (
+        sleep 0.3
+        # comm-file matching instead of pkill: cmdline scans hang while any task
+        # is wedged in the kernel holding its mm lock; comm reads don't.
+        for _p in /proc/[0-9]*; do
+            read -r _comm < "$_p/comm" 2>/dev/null || continue
+            [[ "$_comm" == "kitty" ]] && kill -SIGUSR1 "${_p#/proc/}" 2>/dev/null
+        done
+    ) >/dev/null 2>&1 9>&- &
 
 fi
 
