@@ -61,6 +61,20 @@ write_apply_state "applying"
 [ -d "$THEME_DIR" ] || { write_apply_state "idle"; echo "theme dir missing: $THEME_DIR" >&2; exit 3; }
 [ -f "$THEME_DIR/config.json" ] || { write_apply_state "idle"; echo "theme config missing" >&2; exit 4; }
 
+# Record the pick before doing the work, not after. Readers watch this file to
+# decide which theme to mark as active, and the rest of an apply takes long
+# enough that leaving the previous slug in place makes them show the old theme
+# for several seconds — a settings page that already moved to the new one gets
+# pulled back and then forward again. rollback() puts the old value back if the
+# apply doesn't survive validation.
+write_last_applied() {
+    [ -n "$1" ] || return 0
+    mkdir -p "$THEMES_DIR"
+    printf '%s' "$1" > "$LAST_APPLIED.tmp" 2>/dev/null && mv -f "$LAST_APPLIED.tmp" "$LAST_APPLIED" 2>/dev/null || return 0
+}
+PREV_APPLIED=$(cat "$LAST_APPLIED" 2>/dev/null || true)
+write_last_applied "$SLUG"
+
 # Resolve wallpaper (stored as meta.wallpaperFile, relative to $THEME_DIR) and
 # the dark/light mode the theme was saved under. Empty MODE = pre-feature theme,
 # in which case switchwall falls back to the GNOME color-scheme setting.
@@ -90,6 +104,7 @@ rollback() {
         BACKUP=""
         dlog "rollback: restored backup over $SHELL_CONFIG"
     fi
+    write_last_applied "$PREV_APPLIED"
     exit 5
 }
 
@@ -260,9 +275,8 @@ fi
 # Reads the just-restored config.json; no-op if apply-gtk-font.sh is absent.
 [ -x "$SCRIPT_DIR/apply-gtk-font.sh" ] && bash "$SCRIPT_DIR/apply-gtk-font.sh" 2>/dev/null || true
 
-# ── 6. Record last-applied (consumed by ThemesConfig for ordering) ─────────
-mkdir -p "$THEMES_DIR"
-printf '%s' "$SLUG" > "$LAST_APPLIED.tmp" && mv -f "$LAST_APPLIED.tmp" "$LAST_APPLIED"
+# ── 6. Re-assert last-applied (recorded up front; see write_last_applied) ──
+write_last_applied "$SLUG"
 
 # ── 7. Apply decorations live, reload hyprland, then restore kitty ──────────
 if command -v hyprctl >/dev/null 2>&1; then
