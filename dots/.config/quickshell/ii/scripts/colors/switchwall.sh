@@ -408,11 +408,25 @@ switch() {
         [[ "$term_fg_boost" != "null" && -n "$term_fg_boost" ]] && generate_colors_material_args+=(--term_fg_boost "$term_fg_boost")
     fi
 
-    matugen "${matugen_args[@]}"
     source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
     mkdir -p "$STATE_DIR"/user/generated
     generated_colors_tmp=$(mktemp "$STATE_DIR"/user/generated/material_colors.scss.XXXXXX)
-    if python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" \
+    # The stylesheet is written to one side and moved into place only once it
+    # has been checked, so a run that ends anywhere in between leaves the
+    # half-written copy behind to accumulate.
+    trap 'rm -f "$generated_colors_tmp"' EXIT INT TERM HUP
+    # These two read the same wallpaper and neither reads anything the other
+    # writes, so running one after the other only made the wait longer. Start
+    # the stylesheet first and let matugen work at the same time; the result is
+    # collected below before anything depends on it.
+    python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" &
+    generated_colors_pid=$!
+
+    matugen "${matugen_args[@]}"
+
+    wait "$generated_colors_pid"
+    generated_colors_status=$?
+    if [[ $generated_colors_status -eq 0 ]] \
         && grep -Eq '^\$onBackground: #[[:xdigit:]]{6};$' "$generated_colors_tmp"; then
         mv "$generated_colors_tmp" "$STATE_DIR"/user/generated/material_colors.scss
     else
@@ -451,9 +465,34 @@ main() {
 
     detect_scheme_type_from_image() {
         local img="$1"
+        # The answer is one of two scheme names decided by a single number
+        # measured off the picture, so it can't change while the file doesn't.
+        # Arriving at it means starting a Python interpreter and decoding the
+        # image at full size, and the same unchanged wallpaper gets asked about
+        # on every theme apply and every light/dark toggle, so keep the last
+        # answer and the file it belongs to.
+        local cache="$STATE_DIR/user/generated/scheme-for-image.cache"
+        local key cached_key cached_value
+        key="$(stat -c '%n:%Y:%s' "$img" 2>/dev/null)"
+        if [[ -n "$key" && -f "$cache" ]]; then
+            IFS=$'\t' read -r cached_key cached_value < "$cache" 2>/dev/null || true
+            if [[ "$cached_key" == "$key" && -n "$cached_value" ]]; then
+                printf '%s' "$cached_value"
+                return 0
+            fi
+        fi
+
         source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
-        "$SCRIPT_DIR"/scheme_for_image.py "$img" 2>/dev/null | tr -d '\n'
+        local detected
+        detected="$("$SCRIPT_DIR"/scheme_for_image.py "$img" 2>/dev/null | tr -d '\n')"
         deactivate
+
+        if [[ -n "$detected" && -n "$key" ]]; then
+            mkdir -p "$(dirname "$cache")"
+            printf '%s\t%s\n' "$key" "$detected" > "$cache.tmp" 2>/dev/null \
+                && mv -f "$cache.tmp" "$cache" 2>/dev/null || rm -f "$cache.tmp" 2>/dev/null
+        fi
+        printf '%s' "$detected"
     }
 
     while [[ $# -gt 0 ]]; do
