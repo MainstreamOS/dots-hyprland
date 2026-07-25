@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-widgets
 pkgver=1.0
-pkgrel=9
+pkgrel=10
 pkgdesc='Mainstream OS Widget Dependencies'
 provides=('illogical-impulse-widgets')
 replaces=('illogical-impulse-widgets')
@@ -12,6 +12,7 @@ depends=(
   fuzzel
   glib2
   imagemagick
+  mpvpaper
   hypridle
   hyprlock
   hyprpicker
