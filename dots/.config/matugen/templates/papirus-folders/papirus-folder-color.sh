@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -u
 
+# Rebuilding the folder icons takes about two thirds of a second, and matugen
+# waits for whatever it is told to run afterwards -- so this used to sit in the
+# middle of every wallpaper change and every theme apply, ahead of the colours
+# the desktop was waiting for. Nothing needs the icons to be ready before the
+# rest of the change lands, so the first invocation hands the work to a detached
+# copy of itself and returns. Descriptors 8 and 9 carry locks belonging to
+# whoever started the chain; the copy closes them so it can't outlive its own
+# run and stall the next one.
+if [ -z "${PAPIRUS_FOLDER_DETACHED:-}" ] && command -v setsid >/dev/null 2>&1; then
+    PAPIRUS_FOLDER_DETACHED=1 setsid bash "$0" >/dev/null 2>&1 </dev/null 8>&- 9>&- &
+    exit 0
+fi
+
 folder_color="${PAPIRUS_FOLDER_COLOR:-}"
 source_hex="${PAPIRUS_SOURCE_HEX:-}"
 theme_name="${PAPIRUS_MATUGEN_THEME:-Papirus-Matugen}"
@@ -140,8 +153,23 @@ if [ ! -d "/usr/share/icons/$base_theme" ]; then
   base_theme="Papirus-Dark"
 fi
 
+# The icon set depends only on which of the seventeen folder colours was
+# picked and which Papirus variant it is layered over. Wallpapers that land on
+# the same colour -- most of a light or dark theme's neighbours do -- would
+# otherwise delete and relink four hundred icons to produce byte-identical
+# output, and flip the icon theme away and back, making every open application
+# reload its icons for nothing.
+if [ "$folder_color" = "$(cat "$state_file" 2>/dev/null)" ] \
+   && [ "$base_theme" = "$(cat "$state_file.base" 2>/dev/null)" ] \
+   && [ -f "$theme_dir/index.theme" ] \
+   && [ -e "$theme_dir/64x64/places/folder.svg" ]; then
+    printf '#%s\n' "$source_hex" > "$state_file.hex"
+    exit 0
+fi
+
 mkdir -p "$theme_dir"
 printf '%s\n' "$folder_color" > "$state_file"
+printf '%s\n' "$base_theme" > "$state_file.base"
 printf '#%s\n' "$source_hex" > "$state_file.hex"
 
 cat > "$theme_dir/index.theme" <<EOF

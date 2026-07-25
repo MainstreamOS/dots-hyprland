@@ -52,7 +52,7 @@ write_apply_state() {
 # being applied by hand. Wait rather than give up so the later pick still
 # lands, and carry on unlocked if flock isn't available.
 APPLY_LOCK_FILE="$XDG_RUNTIME_DIR/quickshell-theme-apply.lock"
-if command -v flock >/dev/null 2>&1 && exec 9>"$APPLY_LOCK_FILE" 2>/dev/null; then
+if command -v flock >/dev/null 2>&1 && { exec 9>"$APPLY_LOCK_FILE"; } 2>/dev/null; then
     flock -w 120 9 2>/dev/null || dlog "lock wait timed out; applying anyway"
 fi
 
