@@ -46,6 +46,13 @@ ContentPage {
     // can't pile-up successive applies before the previous one settles.
     property string applyingSlug: ""
 
+    // An action that isn't available right now wears the unselected look from
+    // the Clock style selector — secondary container at full strength — rather
+    // than fading toward the background, so it still reads as a button you
+    // could reach for once whatever is blocking it clears.
+    readonly property color colUnavailable: Appearance.colors.colSecondaryContainer
+    readonly property color colOnUnavailable: Appearance.colors.colOnSecondaryContainer
+
     // True whenever the Day/Night Themes scheduler is in charge of the
     // active theme (any mode other than "off"). When this is true:
     //   - the per-card "Apply" button in the theme grid is disabled so
@@ -63,8 +70,9 @@ ContentPage {
     readonly property bool scheduleActive: (Config.options?.appearance?.themeSchedule?.mode ?? "off") !== "off"
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    function showStatus(msg) {
+    function showStatus(msg, timeoutMs) {
         root.statusMessage = msg
+        statusTimer.interval = timeoutMs ?? root.statusTimeoutMs
         statusTimer.restart()
     }
     Timer {
@@ -537,11 +545,306 @@ ContentPage {
         }
     }
 
+    // ── Export / import ─────────────────────────────────────────────────────
+    // A theme travels as a single .mtheme file: a gzipped tar of the theme
+    // directory, flat, so the receiving side never has to guess at layout.
+    property bool ioBusy: false
+
+    // Shared sanitiser for both directions. A saved theme's config.json is a
+    // snapshot of the whole live config, which carries keys that describe the
+    // machine rather than the look — absolute paths under one user's home, and
+    // the same user-level meta-state doCapture() already strips. Sending those
+    // to someone else would point their screenshots at a home directory that
+    // doesn't exist, so they come out on export and are re-pointed at local
+    // values on import. wallpaperPath goes too: apply-theme.sh recomputes it
+    // from the bundled wallpaper, and import writes the local copy's path.
+    readonly property string pyPortable: `
+import json, os
+
+FORMAT_VERSION = 1
+
+STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
+         ("screenRecord", "savePath"), ("screenSnip", "savePath"),
+         ("background", "thumbnailPath"), ("background", "wallpaperPath")]
+
+def theme_installed(kind, name, cursors=False):
+    # kind is the shared-data subdirectory a look lives in ("themes" for widget
+    # styles, "icons" for icon and cursor sets). A cursor set is an icon
+    # directory that actually carries a cursors/ folder.
+    home = os.path.expanduser("~")
+    for base in ("/usr/share/" + kind,
+                 os.path.join(home, ".local/share", kind),
+                 os.path.join(home, "." + kind)):
+        path = os.path.join(base, name)
+        if os.path.isdir(path) and (not cursors or os.path.isdir(os.path.join(path, "cursors"))):
+            return True
+    return False
+
+def drop(d, path):
+    cur = d
+    for p in path[:-1]:
+        cur = cur.get(p) if isinstance(cur, dict) else None
+        if not isinstance(cur, dict):
+            return
+    if isinstance(cur, dict):
+        cur.pop(path[-1], None)
+
+def portable(cfg):
+    for p in STRIP:
+        drop(cfg, p)
+    return cfg
+`
+
+    Process {
+        id: exportProc
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => exportProc.buf += data }
+        onExited: {
+            root.ioBusy = false
+            const line = (exportProc.buf || "").trim().split("\n").filter(l => l.length).pop() || ""
+            if (line.startsWith("OK|"))
+                root.showStatus(Translation.tr("Theme exported to %1").arg(line.slice(3)))
+            else if (line !== "CANCEL")
+                root.showStatus(Translation.tr("Couldn't export that theme"))
+        }
+    }
+
+    function exportTheme(theme) {
+        if (root.ioBusy) return
+        root.ioBusy = true
+        // Values reach bash as positional arguments, never spliced into the
+        // script text, so a theme named with quotes can't break the command.
+        const script =
+            `SLUG="$1"\n` +
+            `OUT=$(zenity --file-selection --save --confirm-overwrite ` +
+            `--title="Export theme" --filename="$HOME/$SLUG.mtheme" ` +
+            `--file-filter="Mainstream theme | *.mtheme" 2>/dev/null) || { echo CANCEL; exit 0; }\n` +
+            `[ -n "$OUT" ] || { echo CANCEL; exit 0; }\n` +
+            `case "$OUT" in *.mtheme) ;; *) OUT="$OUT.mtheme" ;; esac\n` +
+            `python3 - '${root.themesDir}'/"$SLUG" "$OUT" <<'PY'\n` +
+            root.pyPortable +
+            `import io, sys, tarfile
+theme_dir, out_path = sys.argv[1], sys.argv[2]
+KEEP = ("interface.json", "decorations.json", "preview.png")
+
+def entry(tar, name, obj):
+    blob = json.dumps(obj, indent=2).encode()
+    info = tarfile.TarInfo(name)
+    info.size = len(blob)
+    info.mode = 0o644
+    tar.addfile(info, io.BytesIO(blob))
+
+cfg = portable(json.load(open(os.path.join(theme_dir, "config.json"))))
+meta = json.load(open(os.path.join(theme_dir, "meta.json")))
+# Stamp the layout this archive was written against, so a future reader can
+# recognise a theme it only partly understands instead of applying it blind.
+meta["formatVersion"] = FORMAT_VERSION
+with tarfile.open(out_path, "w:gz") as tar:
+    entry(tar, "config.json", cfg)
+    entry(tar, "meta.json", meta)
+    for n in sorted(os.listdir(theme_dir)):
+        p = os.path.join(theme_dir, n)
+        if os.path.isfile(p) and (n in KEEP or n.startswith("wallpaper.")):
+            tar.add(p, arcname=n)
+print("OK|" + out_path)
+` +
+            `PY\n`
+        exportProc.command = ["bash", "-c", script, "export-theme", theme.slug]
+        exportProc.running = false
+        exportProc.running = true
+    }
+
+    Process {
+        id: importProc
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => importProc.buf += data }
+        onExited: {
+            root.ioBusy = false
+            const line = (importProc.buf || "").trim().split("\n").filter(l => l.length).pop() || ""
+            if (line.startsWith("OK|")) {
+                root.refreshThemes()
+                let result = null
+                try { result = JSON.parse(line.slice(3)) } catch (e) { result = null }
+                const name = result?.name ?? ""
+                const missing = result?.missing ?? []
+                if (missing.length > 0) {
+                    // Name what was left out and how to get the rest, rather
+                    // than quietly importing a partial look.
+                    const parts = missing.map(m => Translation.tr("%1 (%2)").arg(m.name).arg(m.what))
+                    root.showStatus((missing.length === 1
+                        ? Translation.tr("Imported %1 without %2 — not installed on this system. Install it, then import the file again for the complete theme.")
+                        : Translation.tr("Imported %1 without %2 — not installed on this system. Install them, then import the file again for the complete theme."))
+                        .arg(name).arg(parts.join(", ")), 15000)
+                } else if (result?.newer) {
+                    root.showStatus(Translation.tr("Imported %1. It was made by a newer version, so parts of it may not apply.").arg(name), 12000)
+                } else {
+                    root.showStatus(Translation.tr("Theme imported: %1").arg(name))
+                }
+            } else if (line === "ERR|notatheme") {
+                root.showStatus(Translation.tr("That file isn't a Mainstream theme"))
+            } else if (line !== "CANCEL") {
+                root.showStatus(Translation.tr("Couldn't import that theme"))
+            }
+        }
+    }
+
+    function importTheme() {
+        if (root.ioBusy) return
+        root.ioBusy = true
+        const script =
+            `IN=$(zenity --file-selection --title="Import theme" ` +
+            `--file-filter="Mainstream theme | *.mtheme" ` +
+            `--file-filter="All files | *" 2>/dev/null) || { echo CANCEL; exit 0; }\n` +
+            `[ -n "$IN" ] || { echo CANCEL; exit 0; }\n` +
+            `python3 - "$IN" '${root.themesDir}' '${root.shellConfigPath}' <<'PY'\n` +
+            root.pyPortable +
+            `import re, shutil, sys, tarfile, tempfile, time
+archive, themes_dir, live_config = sys.argv[1], sys.argv[2], sys.argv[3]
+EXACT = {"meta.json", "config.json", "interface.json", "decorations.json", "preview.png"}
+
+def wanted(n):
+    return n in EXACT or (n.startswith("wallpaper.") and len(n) > len("wallpaper."))
+
+def fail():
+    print("ERR|notatheme")
+    sys.exit(0)
+
+# Staged inside the themes directory so the final publish is a same-filesystem
+# rename — a half-written theme never appears in the grid.
+tmp = tempfile.mkdtemp(prefix=".importing-", dir=themes_dir)
+try:
+    try:
+        tar = tarfile.open(archive, "r:*")
+    except Exception:
+        fail()
+    with tar:
+        picked, seen = [], set()
+        for m in tar.getmembers():
+            # Only ever write a basename we recognise, so nothing in the
+            # archive can choose its own destination.
+            n = os.path.basename(m.name)
+            if not m.isfile() or n in seen or not wanted(n):
+                continue
+            seen.add(n)
+            m.name = n
+            picked.append(m)
+        if "meta.json" not in seen or "config.json" not in seen:
+            fail()
+        tar.extractall(tmp, members=picked, filter="data")
+
+    try:
+        meta = json.load(open(os.path.join(tmp, "meta.json")))
+        cfg = json.load(open(os.path.join(tmp, "config.json")))
+    except Exception:
+        fail()
+    if not isinstance(meta, dict) or not isinstance(cfg, dict):
+        fail()
+
+    # Importing never overwrites: a clashing name lands as "Name (2)".
+    base_slug = re.sub(r"[^a-z0-9]+", "-", str(meta.get("slug") or meta.get("name") or "theme").lower()).strip("-") or "theme"
+    base_name = str(meta.get("name") or base_slug).strip() or base_slug
+    slug, name, n = base_slug, base_name, 1
+    while os.path.exists(os.path.join(themes_dir, slug)):
+        n += 1
+        slug = base_slug + "-" + str(n)
+        name = base_name + " (" + str(n) + ")"
+    dest = os.path.join(themes_dir, slug)
+
+    try:
+        live = json.load(open(live_config))
+    except Exception:
+        live = {}
+    wp = next((f for f in sorted(os.listdir(tmp)) if f.startswith("wallpaper.")), "")
+
+    cfg = portable(cfg)
+    if wp:
+        cfg.setdefault("background", {})["wallpaperPath"] = os.path.join(dest, wp)
+    else:
+        keep = (live.get("background") or {}).get("wallpaperPath")
+        if keep:
+            cfg.setdefault("background", {})["wallpaperPath"] = keep
+    for section, key in (("screenRecord", "savePath"), ("screenSnip", "savePath")):
+        local = (live.get(section) or {}).get(key)
+        if local:
+            cfg.setdefault(section, {})[key] = local
+
+    # A look the machine doesn't have would otherwise be written into gsettings
+    # as a name nothing can resolve, leaving the desktop on a fallback and, for
+    # widget styles, stopping the light/dark switch from steering them at all.
+    # Drop those entries so the importer keeps what already works, and say what
+    # was left out.
+    missing = []
+    iface_path = os.path.join(tmp, "interface.json")
+    if os.path.isfile(iface_path):
+        try:
+            iface = json.load(open(iface_path))
+        except Exception:
+            iface = None
+        if isinstance(iface, dict):
+            for key, kind, cursors, label in (("gtkTheme", "themes", False, "app style"),
+                                              ("iconTheme", "icons", False, "icons"),
+                                              ("cursorTheme", "icons", True, "cursor")):
+                value = iface.get(key)
+                if value and not theme_installed(kind, str(value), cursors):
+                    missing.append({"what": label, "name": str(value)})
+                    iface.pop(key, None)
+            if missing:
+                json.dump(iface, open(iface_path, "w"), indent=2)
+
+    meta["slug"], meta["name"], meta["wallpaperFile"] = slug, name, wp
+    meta["created"] = int(time.time() * 1000)
+    try:
+        newer = int(meta.get("formatVersion") or 0) > FORMAT_VERSION
+    except (TypeError, ValueError):
+        newer = False
+    json.dump(meta, open(os.path.join(tmp, "meta.json"), "w"), indent=2)
+    json.dump(cfg, open(os.path.join(tmp, "config.json"), "w"), indent=2)
+
+    os.rename(tmp, dest)
+    tmp = None
+
+    index = []
+    for d in sorted(os.listdir(themes_dir)):
+        mp = os.path.join(themes_dir, d, "meta.json")
+        if os.path.isdir(os.path.join(themes_dir, d)) and os.path.isfile(mp):
+            try:
+                index.append(json.load(open(mp)))
+            except Exception:
+                pass
+    json.dump(index, open(os.path.join(themes_dir, "index.json"), "w"), indent=2)
+    print("OK|" + json.dumps({"name": name, "missing": missing, "newer": newer}))
+finally:
+    if tmp and os.path.isdir(tmp):
+        shutil.rmtree(tmp, ignore_errors=True)
+` +
+            `PY\n`
+        importProc.command = ["bash", "-c", script, "import-theme"]
+        importProc.running = false
+        importProc.running = true
+    }
+
     // ── UI ───────────────────────────────────────────────────────────────────
     ContentSection {
         icon: "style"
         title: Translation.tr("Themes")
         Layout.fillWidth: true
+
+        // Import acts on the collection rather than any one theme, so it
+        // belongs on the section header beside the title, not in the grid.
+        headerExtra: [
+            RippleButtonWithIcon {
+                materialIcon: "file_open"
+                mainText: Translation.tr("Import theme")
+                enabled: !root.ioBusy
+                // Pair the container with the on-secondary icon and label the
+                // component already uses, instead of the default dark layer.
+                colBackground: Appearance.colors.colSecondaryContainer
+                colBackgroundHover: Appearance.colors.colSecondaryContainerHover
+                onClicked: root.importTheme()
+            }
+        ]
 
         StyledText {
             Layout.fillWidth: true
@@ -550,7 +853,7 @@ ContentPage {
             wrapMode: Text.WordWrap
             color: Appearance.colors.colSubtext
             font.pixelSize: Appearance.font.pixelSize.small
-            text: Translation.tr("A theme is a snapshot of your current look — wallpaper, colors, UI changes, and window decorations. Tap \"Save current as theme\" to capture what's on screen, then switch between saved themes any time with one tap. Use \"Update\" on the active theme to overwrite it with your latest tweaks.")
+            text: Translation.tr("A theme is a snapshot of your current look — wallpaper, colors, UI changes, and window decorations. Tap \"Save current as theme\" to capture what's on screen, then switch between saved themes any time with one tap. Use \"Update\" on the active theme to overwrite it with your latest tweaks. You can also export a theme to a file and import it again later or on another computer. The wallpaper is included.")
         }
 
         // Status line
@@ -559,6 +862,7 @@ ContentPage {
             text: root.statusMessage
             color: Appearance.colors.colOnLayer1
             font.pixelSize: Appearance.font.pixelSize.small
+            wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
 
@@ -758,15 +1062,13 @@ ContentPage {
                                 // RippleButton's default buttonColor fully
                                 // transparentizes the container when enabled=
                                 // false, which makes the Apply button vanish
-                                // into the card background — confusing UX. Use
-                                // the M3 filled-button disabled spec instead
-                                // (onSurface tint at 12% alpha) so the button
-                                // stays visibly a button, just clearly inactive.
+                                // into the card background — confusing UX.
+                                opacity: 1
                                 buttonColor: enabled
                                     ? ColorUtils.transparentize(toggled
                                         ? (hovered ? colBackgroundToggledHover : colBackgroundToggled)
                                         : (hovered ? colBackgroundHover : colBackground), 0)
-                                    : ColorUtils.applyAlpha(Appearance.m3colors.m3onSurface, 0.12)
+                                    : root.colUnavailable
                                 onClicked: themeCard.isActive
                                     ? root.beginSave(themeCard.modelData.slug)
                                     : root.applyTheme(themeCard.modelData)
@@ -777,14 +1079,8 @@ ContentPage {
                                         MaterialSymbol {
                                             text: themeCard.isActive ? "refresh" : "check"
                                             iconSize: Appearance.font.pixelSize.larger
-                                            // Match the container's M3 disabled
-                                            // treatment — neutral onSurface tint
-                                            // when disabled (busy or gated by
-                                            // schedule) instead of the bright
-                                            // colOnPrimary that's only legible
-                                            // on the primary background.
                                             color: themeCard.busy || (root.scheduleActive && !themeCard.isActive)
-                                                ? Appearance.m3colors.m3onSurface
+                                                ? root.colOnUnavailable
                                                 : Appearance.colors.colOnPrimary
                                             fill: 1
                                         }
@@ -792,19 +1088,54 @@ ContentPage {
                                             text: themeCard.isActive ? Translation.tr("Update") : Translation.tr("Apply")
                                             font.pixelSize: Appearance.font.pixelSize.small
                                             color: themeCard.busy || (root.scheduleActive && !themeCard.isActive)
-                                                ? Appearance.m3colors.m3onSurface
+                                                ? root.colOnUnavailable
                                                 : Appearance.colors.colOnPrimary
                                         }
                                     }
                                 }
                             }
+                            // Icon-only so the two labelled actions keep the
+                            // width they need; the tooltip carries the label.
                             RippleButton {
+                                id: exportButton
+                                Layout.preferredWidth: 40
+                                Layout.preferredHeight: 34
+                                buttonRadius: Appearance.rounding.full
+                                enabled: !themeCard.busy && !root.ioBusy
+                                colBackground: Appearance.colors.colPrimary
+                                colBackgroundHover: Appearance.colors.colPrimaryHover
+                                opacity: 1
+                                buttonColor: enabled
+                                    ? (hovered ? colBackgroundHover : colBackground)
+                                    : root.colUnavailable
+                                onClicked: root.exportTheme(themeCard.modelData)
+                                contentItem: Item {
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "upload"
+                                        iconSize: Appearance.font.pixelSize.larger
+                                        color: exportButton.enabled
+                                            ? Appearance.colors.colOnPrimary
+                                            : root.colOnUnavailable
+                                        fill: 1
+                                    }
+                                }
+                                StyledToolTip {
+                                    text: Translation.tr("Export theme to a file")
+                                }
+                            }
+                            RippleButton {
+                                id: deleteButton
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 buttonRadius: Appearance.rounding.full
-                                enabled: !themeCard.busy
+                                enabled: !themeCard.busy && !root.ioBusy
                                 colBackground: Appearance.colors.colPrimary
                                 colBackgroundHover: Appearance.colors.colPrimaryHover
+                                opacity: 1
+                                buttonColor: enabled
+                                    ? (hovered ? colBackgroundHover : colBackground)
+                                    : root.colUnavailable
                                 onClicked: root.deleteTheme(themeCard.modelData)
                                 contentItem: Item {
                                     RowLayout {
@@ -813,13 +1144,17 @@ ContentPage {
                                         MaterialSymbol {
                                             text: "delete"
                                             iconSize: Appearance.font.pixelSize.larger
-                                            color: Appearance.colors.colOnPrimary
+                                            color: deleteButton.enabled
+                                                ? Appearance.colors.colOnPrimary
+                                                : root.colOnUnavailable
                                             fill: 1
                                         }
                                         StyledText {
                                             text: Translation.tr("Delete")
                                             font.pixelSize: Appearance.font.pixelSize.small
-                                            color: Appearance.colors.colOnPrimary
+                                            color: deleteButton.enabled
+                                                ? Appearance.colors.colOnPrimary
+                                                : root.colOnUnavailable
                                         }
                                     }
                                 }
@@ -1386,18 +1721,25 @@ ContentPage {
                         }
                     }
                     RippleButton {
+                        id: saveConfirmButton
                         buttonRadius: Appearance.rounding.full
                         implicitHeight: 36
                         padding: 10
                         colBackground: Appearance.m3colors.m3primary
                         enabled: !root.countingDown && (root.pendingUpdateSlug !== "" || root.saveThemeName.trim().length > 0)
+                        opacity: 1
+                        buttonColor: enabled
+                            ? (hovered ? colBackgroundHover : colBackground)
+                            : root.colUnavailable
                         onClicked: root.startCountdownAndCapture()
                         contentItem: StyledText {
                             anchors.centerIn: parent
                             text: root.countingDown
                                 ? Translation.tr("%1…").arg(root.countdownLeft)
                                 : Translation.tr("Save")
-                            color: Appearance.m3colors.m3onPrimary
+                            color: saveConfirmButton.enabled
+                                ? Appearance.m3colors.m3onPrimary
+                                : root.colOnUnavailable
                         }
                     }
                 }
