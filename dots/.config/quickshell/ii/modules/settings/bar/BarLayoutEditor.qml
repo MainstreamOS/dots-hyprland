@@ -43,6 +43,8 @@ Item {
         { id: "spacer",        name: Translation.tr("Flexible space"),    icon: "space_bar" },
     ]
 
+    readonly property real tokenHeight: 35
+
     // Structural widgets pinned in place — shown as a small marker, not draggable/toggleable.
     readonly property var lockedModules: ["sidebarButton", "spacer"]
     // Widgets with no vertical rendering — hidden from the editor while the bar is vertical.
@@ -220,7 +222,9 @@ Item {
         Layout.fillWidth: !vertical
         Layout.fillHeight: vertical
         implicitWidth: vertical ? (edge ? 0 : 6) : 0
-        implicitHeight: vertical ? 0 : (newGroup ? 12 : 8)
+        // The vertical ones sit in a Flow, which has no fillHeight to give
+        // them, so they carry a token's height of their own.
+        implicitHeight: vertical ? root.tokenHeight : (newGroup ? 12 : 8)
         Component.onCompleted: root.dropSlots.push(slot)
         Component.onDestruction: {
             const i = root.dropSlots.indexOf(slot);
@@ -249,14 +253,18 @@ Item {
         readonly property bool isDragSource: root.dragInfo && root.dragInfo.section === section && root.dragInfo.gi === gi && root.dragInfo.wi === wi
         required property bool roundLeft
         required property bool roundRight
+        // Set when the group had to break across rows: the tokens stop being
+        // segments of one stadium and become chips sharing a container, so
+        // they round on every corner instead of only at the ends.
+        property bool wrapped: false
         readonly property real endRadius: implicitHeight / 2
-        property real leftRadius: tok.roundLeft ? endRadius : Appearance.rounding.unsharpenmore
-        property real rightRadius: tok.roundRight ? endRadius : Appearance.rounding.unsharpenmore
+        property real leftRadius: tok.wrapped ? Appearance.rounding.small : (tok.roundLeft ? endRadius : Appearance.rounding.unsharpenmore)
+        property real rightRadius: tok.wrapped ? Appearance.rounding.small : (tok.roundRight ? endRadius : Appearance.rounding.unsharpenmore)
         Behavior on leftRadius { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
         Behavior on rightRadius { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-        Layout.fillHeight: true
         implicitWidth: tok.locked ? 60 : (tokRow.implicitWidth + 24)
-        implicitHeight: 35
+        implicitHeight: root.tokenHeight
+        height: implicitHeight
         topLeftRadius: tok.leftRadius
         bottomLeftRadius: tok.leftRadius
         topRightRadius: tok.rightRadius
@@ -442,60 +450,69 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 2
 
-                                // A group can hold more widgets than the section
-                                // box is wide. Scroll rather than let the pill
-                                // run outside it — and only clip when it
-                                // actually overflows, so the pill's shadow
-                                // isn't cut off the rest of the time.
-                                Flickable {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: pillWrapper.implicitHeight
-                                    contentWidth: pillWrapper.implicitWidth
-                                    contentHeight: height
-                                    clip: contentWidth > width
-                                    interactive: contentWidth > width
-                                    flickableDirection: Flickable.HorizontalFlick
-                                    boundsBehavior: Flickable.StopAtBounds
+                                Item { // wrapper holds the raised pill + its shadow behind it
+                                    id: pillWrapper
+                                    Layout.preferredWidth: pillContainer.implicitWidth
+                                    Layout.preferredHeight: pillContainer.implicitHeight
 
-                                    Item { // wrapper holds the raised pill + its shadow behind it
-                                        id: pillWrapper
-                                        implicitWidth: pillContainer.implicitWidth
-                                        implicitHeight: pillContainer.implicitHeight
+                                    StyledRectangularShadow { target: pillContainer }
 
-                                        StyledRectangularShadow { target: pillContainer }
+                                    Rectangle {
+                                        id: pillContainer // one group = one raised pill
+                                        // A group can hold more widgets than the section box is
+                                        // wide, so the row breaks rather than running off the
+                                        // end. Adding up what the tokens asked for tells us
+                                        // whether it will, without asking the Flow — whose own
+                                        // width is what decides the answer.
+                                        readonly property real maxWidth: gBox.width
+                                        readonly property real rawWidth: {
+                                            let w = 0;
+                                            for (let i = 0; i < pillFlow.children.length; i++) {
+                                                const c = pillFlow.children[i];
+                                                if (c && c.visible && c.implicitWidth)
+                                                    w += c.implicitWidth;
+                                            }
+                                            return w;
+                                        }
+                                        readonly property bool wrapped: rawWidth > maxWidth
+                                        readonly property real inset: wrapped ? 4 : 0
+                                        implicitWidth: (wrapped ? maxWidth : rawWidth)
+                                        implicitHeight: pillFlow.implicitHeight + inset * 2
+                                        radius: wrapped ? Appearance.rounding.large : Appearance.rounding.full
+                                        color: Appearance.colors.colLayer3
 
-                                        Rectangle {
-                                            id: pillContainer // one group = one raised stadium pill
-                                            implicitWidth: pillRow.implicitWidth
-                                            implicitHeight: 35
-                                            radius: Appearance.rounding.full
-                                            color: Appearance.colors.colLayer3
+                                        Flow {
+                                            id: pillFlow
+                                            x: pillContainer.inset
+                                            y: pillContainer.inset
+                                            width: parent.width - pillContainer.inset * 2
+                                            spacing: pillContainer.wrapped ? 4 : 0
 
-                                            RowLayout {
-                                                id: pillRow
-                                                anchors.fill: parent
-                                                spacing: 0
+                                            DropLine { vertical: true; edge: true; target: ({ section: secCol.modelData, gi: gBox.index, wi: 0, newGroup: false }) }
 
-                                                DropLine { vertical: true; edge: true; target: ({ section: secCol.modelData, gi: gBox.index, wi: 0, newGroup: false }) }
-
-                                                Repeater {
-                                                    model: root.shownWidgetsOf(gBox.modelData)
-                                                    delegate: RowLayout {
-                                                        id: tokWrap
-                                                        required property var modelData
-                                                        required property int index
-                                                        Layout.fillHeight: true
-                                                        spacing: 0
-                                                        WidgetToken {
-                                                            section: secCol.modelData
-                                                            gi: gBox.index
-                                                            wi: tokWrap.modelData.wi
-                                                            roundLeft: tokWrap.modelData.first
-                                                            roundRight: tokWrap.modelData.last
-                                                            entry: tokWrap.modelData
-                                                        }
-                                                        DropLine { vertical: true; edge: tokWrap.modelData.last; target: ({ section: secCol.modelData, gi: gBox.index, wi: tokWrap.modelData.wi + 1, newGroup: false }) }
+                                            Repeater {
+                                                model: root.shownWidgetsOf(gBox.modelData)
+                                                // A layout rather than a Row: the drop line that
+                                                // marks the end of a group is deliberately zero
+                                                // wide, and a positioner leaves anything that
+                                                // narrow sitting at the origin — which would put
+                                                // the target for "add to the end of this group"
+                                                // on top of the target for its start.
+                                                delegate: RowLayout {
+                                                    id: tokWrap
+                                                    required property var modelData
+                                                    required property int index
+                                                    spacing: 0
+                                                    WidgetToken {
+                                                        section: secCol.modelData
+                                                        gi: gBox.index
+                                                        wi: tokWrap.modelData.wi
+                                                        roundLeft: tokWrap.modelData.first
+                                                        roundRight: tokWrap.modelData.last
+                                                        wrapped: pillContainer.wrapped
+                                                        entry: tokWrap.modelData
                                                     }
+                                                    DropLine { vertical: true; edge: tokWrap.modelData.last; target: ({ section: secCol.modelData, gi: gBox.index, wi: tokWrap.modelData.wi + 1, newGroup: false }) }
                                                 }
                                             }
                                         }
