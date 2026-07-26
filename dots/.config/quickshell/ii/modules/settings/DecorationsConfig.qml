@@ -30,6 +30,63 @@ ContentPage {
     property string sysCurrentCursor: ""
 
     readonly property string gtkFontScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh"
+    readonly property string cursorSizeScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/cursor/cursor-sizes.py"
+
+    // The sizes the chosen cursor theme can actually be drawn at. A cursor
+    // theme is a set of bitmaps, so asking for a size it doesn't carry gets
+    // the nearest one it does — offering the same five sizes for every theme
+    // means some of them quietly do nothing. Empty means no restriction: the
+    // theme is scalable, or isn't one we can read.
+    property var cursorSizesAvailable: []
+
+    // The sizes offered, snapped to what the theme has and with the duplicates
+    // that snapping creates removed. A theme carrying all five keeps all five.
+    readonly property var cursorSizeOptions: {
+        const wanted = [
+            { displayName: Translation.tr("Small"),   value: 16 },
+            { displayName: Translation.tr("Default"), value: 24 },
+            { displayName: Translation.tr("Large"),   value: 32 },
+            { displayName: Translation.tr("Larger"),  value: 48 },
+            { displayName: Translation.tr("Largest"), value: 64 },
+        ];
+        const have = root.cursorSizesAvailable;
+        if (!have || have.length === 0) return wanted;
+        let best = ({});
+        for (const option of wanted) {
+            let nearest = have[0];
+            for (const size of have)
+                if (Math.abs(size - option.value) < Math.abs(nearest - option.value))
+                    nearest = size;
+            const distance = Math.abs(nearest - option.value);
+            // When two labels land on the same size, keep the one that asked
+            // for it most nearly — 24 stays "Default" rather than "Small".
+            if (best[nearest] === undefined || distance < best[nearest].distance)
+                best[nearest] = { displayName: option.displayName, value: nearest, distance: distance };
+        }
+        return Object.keys(best)
+            .map(size => best[size])
+            .sort((a, b) => a.value - b.value)
+            .map(entry => ({ displayName: entry.displayName, value: entry.value }));
+    }
+
+    function refreshCursorSizes() {
+        cursorSizesProc.running = false;
+        // Set rather than bound: a bound command isn't guaranteed to have been
+        // re-evaluated by the time the process starts, and starting it with no
+        // theme name reads as "this theme has no sizes".
+        cursorSizesProc.command = ["python3", root.cursorSizeScript, root.sysCurrentCursor];
+        cursorSizesProc.running = true;
+    }
+    Process {
+        id: cursorSizesProc
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => cursorSizesProc.buf += data + "\n" }
+        onExited: root.cursorSizesAvailable = (cursorSizesProc.buf || "")
+            .split("\n").map(l => parseInt(l.trim()))
+            .filter(n => !isNaN(n) && n > 0)
+    }
+    onSysCurrentCursorChanged: if (root.sysCurrentCursor.length > 0) root.refreshCursorSizes()
 
     Component.onCompleted: decoReader.running = true
 
@@ -247,7 +304,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             root.sysCurrentIcon = value;
         } else if (kind === "cursor") {
             Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", value]);
-            Quickshell.execDetached(["hyprctl", "setcursor", value, "24"]);
+            // Keep the size the user picked; sending a fixed one here reset it
+            // behind their back every time they tried a different cursor.
+            Quickshell.execDetached(["hyprctl", "setcursor", value, String(root.cursorSize)]);
             root.sysCurrentCursor = value;
         }
     }
@@ -523,16 +582,18 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 textRole: "displayName"
                 Layout.fillWidth: false
                 Layout.preferredWidth: 220
-                model: [
-                    { displayName: Translation.tr("Small"),          value: 16 },
-                    { displayName: Translation.tr("Default"),        value: 24 },
-                    { displayName: Translation.tr("Large"),          value: 32 },
-                    { displayName: Translation.tr("Larger"),         value: 48 },
-                    { displayName: Translation.tr("Largest"),        value: 64 },
-                ]
+                model: root.cursorSizeOptions
                 currentIndex: {
-                    const idx = model.findIndex(item => item.value === root.cursorSize)
-                    return idx !== -1 ? idx : 1
+                    const exact = model.findIndex(item => item.value === root.cursorSize)
+                    if (exact !== -1) return exact
+                    // The saved size may be one this theme can't draw, in which
+                    // case show the entry it is actually being drawn at rather
+                    // than a size that isn't among the choices.
+                    let nearest = 0
+                    for (let i = 1; i < model.length; i++)
+                        if (Math.abs(model[i].value - root.cursorSize) < Math.abs(model[nearest].value - root.cursorSize))
+                            nearest = i
+                    return nearest
                 }
                 onActivated: index => root.applyCursorSize(model[index].value)
             }
