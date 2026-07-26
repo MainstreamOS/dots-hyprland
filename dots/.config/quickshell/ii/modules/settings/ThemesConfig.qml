@@ -78,10 +78,19 @@ ContentPage {
     readonly property bool scheduleActive: (Config.options?.appearance?.themeSchedule?.mode ?? "off") !== "off"
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    // A timeout of zero leaves the message up. Most of these are confirmations
+    // worth a few seconds, but one asks the user to go and install something
+    // and come back, which is no use if it has faded by the time they read it.
+    // Leaving the page takes it away, since the page is rebuilt on return, and
+    // applying a theme replaces it with news of that instead.
     function showStatus(msg, timeoutMs) {
         root.statusMessage = msg
-        statusTimer.interval = timeoutMs ?? root.statusTimeoutMs
-        statusTimer.restart()
+        statusTimer.stop()
+        const timeout = timeoutMs ?? root.statusTimeoutMs
+        if (timeout > 0) {
+            statusTimer.interval = timeout
+            statusTimer.restart()
+        }
     }
     function clearStatus() {
         statusTimer.stop()
@@ -733,7 +742,7 @@ print("OK|" + out_path)
                     root.showStatus((missing.length === 1
                         ? Translation.tr("Imported %1 without %2 — not installed on this system. Install it, then import the file again for the complete theme.")
                         : Translation.tr("Imported %1 without %2 — not installed on this system. Install them, then import the file again for the complete theme."))
-                        .arg(name).arg(parts.join(", ")), 15000)
+                        .arg(name).arg(parts.join(", ")), 0)
                 } else if (result?.newer) {
                     root.showStatus(Translation.tr("Imported %1. It was made by a newer version, so parts of it may not apply.").arg(name), 12000)
                 } else {
