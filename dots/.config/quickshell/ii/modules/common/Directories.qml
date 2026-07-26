@@ -43,8 +43,12 @@ Singleton {
     property string dotfilesClone: FileUtils.trimFileProtocol(
         Quickshell.env("MAINSTREAM_DOTFILES_DIR") || `${Directories.genericCache}/dots-hyprland`)
     property string appliedTagPath: `${Directories.dotfilesClone}/.updatems-applied-tag`
-    property string releaseManifestPath: `${Directories.dotfilesClone}/.release-manifest.json`
-    property string releaseNotifyStatePath: `${Directories.dotfilesClone}/.release-notify-state.json`
+    // Not in the clone beside the tag: updatems stashes untracked files and
+    // resets that tree on every run, and re-clones it outright when it has to,
+    // so a record of what has already been announced would not survive an
+    // update — which is exactly when it matters.
+    property string releaseManifestPath: FileUtils.trimFileProtocol(`${Directories.cache}/updates/release-manifest.json`)
+    property string releaseNotifyStatePath: FileUtils.trimFileProtocol(`${Directories.state}/user/release-notify-state.json`)
     property string settingsAppPath: FileUtils.trimFileProtocol(`${Directories.config}/quickshell/ii/settings.qml`)
     property string generatedMaterialThemePath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/colors.json`)
     property string generatedWallpaperCategoryPath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/wallpaper/category.txt`)
