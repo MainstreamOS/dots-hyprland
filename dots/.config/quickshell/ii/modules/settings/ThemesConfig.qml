@@ -384,9 +384,16 @@ ContentPage {
             `    pass\n` +
             `json.dump({"cursorSize": cs, "gtkTheme": g("gtk-theme"), "iconTheme": g("icon-theme"), "cursorTheme": g("cursor-theme")}, open(sys.argv[1], "w"), indent=2)\n` +
             `PYIF\n` +
+            // Updating the theme that is currently applied means the live
+            // wallpaper already is this theme's own copy of it, and copying a
+            // file over itself is an error rather than a no-op. Under `set -e`
+            // that ended the save right here — after the config and the
+            // interface look were written, but before the wallpaper, the
+            // screenshot and the metadata — so an update changed some of the
+            // theme and left the rest, including the preview, as it was.
             (wpTrimmed ? `WP='${wpTrimmed}'\n` +
                          `EXT="\${WP##*.}"\n` +
-                         `cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
+                         `[ "$WP" -ef "$DIR/wallpaper.$EXT" ] || cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
             // Screenshot of primary focused monitor. Always overwrites
