@@ -913,14 +913,36 @@ finally:
             text: Translation.tr("A theme is a snapshot of your current look — wallpaper, colors, UI changes, and window decorations. Tap \"Save current as theme\" to capture what's on screen, then switch between saved themes any time with one tap. Use \"Update\" on the active theme to overwrite it with your latest tweaks. You can also export a theme to a file and import it again later or on another computer. The wallpaper is included.")
         }
 
-        // Status line
-        StyledText {
+        // What just happened — a theme applied, saved, deleted, exported or
+        // imported. Carried the same way as the Day/Night notice below so the
+        // page has one voice for telling the user something, with its own icon
+        // to separate a thing that has happened from a thing that is disabled.
+        Rectangle {
             visible: root.statusMessage.length > 0
-            text: root.statusMessage
-            color: Appearance.colors.colOnLayer1
-            font.pixelSize: Appearance.font.pixelSize.small
-            wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            radius: Appearance.rounding.small
+            color: Qt.rgba(Appearance.m3colors.m3primary.r, Appearance.m3colors.m3primary.g, Appearance.m3colors.m3primary.b, 0.12)
+            implicitHeight: statusRow.implicitHeight + 16
+            RowLayout {
+                id: statusRow
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                MaterialSymbol {
+                    text: "info"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.m3colors.m3primary
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colOnLayer1
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    text: root.statusMessage
+                }
+            }
         }
 
         // Schedule-active lock banner. Tells the user why the Apply buttons
