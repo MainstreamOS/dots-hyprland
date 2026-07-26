@@ -18,8 +18,7 @@ from what was actually released:
 
             Declare it for anything that matters. Inference only reads commit
             subjects, so a security fix committed as "fix: ..." would ship as a
-            patch, take a white dot, and be filtered out entirely for anyone
-            who asked to hear about security releases only. Because the
+            patch and be understated wherever the kind is used. Because the
             manifest is rebuilt from tags, a wrong call is fixed by retagging.
 
   summary   the subject of the commit the tag points at
@@ -65,10 +64,10 @@ def release_tags(repo):
 def tag_date(repo, tag):
     """When the release was published.
 
-    The desktop escalates the dot colour by how long a release has been out, so
-    this wants to be when the tag was created, not when the commit under it
-    happened to be written. git reports the commit date for lightweight tags,
-    which is the best available answer for those.
+    The publication date, not the authorship date: a tag can point at a commit
+    written weeks earlier, and consumers age a release from when it shipped.
+    git reports the commit date for lightweight tags, which is the best
+    available answer for those.
     """
     return git(repo, "for-each-ref", "--format=%(creatordate:short)",
                f"refs/tags/{tag}").strip()
@@ -159,7 +158,6 @@ def build(repo, limit):
     if limit:
         releases = releases[:limit]
     return {
-        "schema": 1,
         "latest": releases[0]["version"],
         "releases": releases,
     }
