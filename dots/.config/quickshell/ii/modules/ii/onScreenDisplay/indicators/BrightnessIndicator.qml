@@ -13,5 +13,5 @@ OsdValueIndicator {
     rotateIcon: true
     scaleIcon: true
     name: Translation.tr("Brightness")
-    value: root.brightnessMonitor?.brightness ?? 50
+    value: root.brightnessMonitor?.brightness ?? 0.5
 }
