@@ -14,7 +14,7 @@ MouseArea {
     readonly property bool isLow: percentage <= Config.options.battery.low / 100
 
     implicitWidth: batteryProgress.implicitWidth
-    implicitHeight: Appearance.sizes.barHeight
+    implicitHeight: Appearance.sizes.baseBarHeight
 
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
     // Right-click toggles the power-mode popup (Performance / Balanced /

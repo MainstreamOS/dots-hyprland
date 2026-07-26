@@ -17,7 +17,7 @@ Item {
 
     Layout.fillHeight: true
     implicitWidth: rowLayout.implicitWidth + rowLayout.spacing * 2
-    implicitHeight: Appearance.sizes.barHeight
+    implicitHeight: Appearance.sizes.baseBarHeight
 
     Timer {
         running: activePlayer?.playbackState == MprisPlaybackState.Playing

@@ -11,7 +11,7 @@ MouseArea {
     id: root
     property bool hovered: false
     implicitWidth: rowLayout.implicitWidth + 4 * 2
-    implicitHeight: Appearance.sizes.barHeight
+    implicitHeight: Appearance.sizes.baseBarHeight
 
     acceptedButtons: Qt.LeftButton | Qt.RightButton
     hoverEnabled: !Config.options.bar.tooltips.clickToShow

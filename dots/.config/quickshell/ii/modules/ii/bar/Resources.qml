@@ -9,7 +9,7 @@ MouseArea {
     property bool borderless: Config.options.bar.borderless
     property bool alwaysShowAllResources: false
     implicitWidth: rowLayout.implicitWidth + rowLayout.anchors.leftMargin + rowLayout.anchors.rightMargin
-    implicitHeight: Appearance.sizes.barHeight
+    implicitHeight: Appearance.sizes.baseBarHeight
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
     acceptedButtons: Qt.LeftButton
     onClicked: Session.launchTaskManager()
