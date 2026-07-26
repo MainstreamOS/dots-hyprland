@@ -4,26 +4,41 @@ import Quickshell
 Singleton {
     id: root
 
+    // One group of a model-driven bar layout, read as { id, enabled } entries.
+    // Tolerant of the legacy string / items group forms.
+    function layoutGroupWidgets(g) {
+        if (!g) return [];
+        if (typeof g === "string") return [{ id: g, enabled: true }];
+        const entries = (g.widgets !== undefined) ? g.widgets
+            : (g.items !== undefined) ? g.items
+            : [];
+        return Array.prototype.slice.call(entries)
+            .map(w => (typeof w === "string") ? ({ id: w, enabled: true }) : w)
+            .filter(w => w);
+    }
+
     // Whether a widget id is present and enabled in a model-driven bar layout
     // ({ left, center, right } lists of { widgets: [{ id, enabled }] } groups).
-    // Tolerant of the legacy string / items group forms.
     function layoutHasEnabledWidget(layout, id) {
+        return root.layoutFindWidget(layout, id, w => w.enabled);
+    }
+
+    // Whether a widget id appears at all, however it is spelled and whether or
+    // not it is switched on.
+    function layoutHasWidget(layout, id) {
+        return root.layoutFindWidget(layout, id, () => true);
+    }
+
+    function layoutFindWidget(layout, id, accept) {
         if (!layout) return false;
         const sections = [layout.left, layout.center, layout.right];
         for (let s = 0; s < sections.length; s++) {
-            const section = sections[s];
-            if (!section) continue;
-            const groups = Array.prototype.slice.call(section);
+            if (!sections[s]) continue;
+            const groups = Array.prototype.slice.call(sections[s]);
             for (let i = 0; i < groups.length; i++) {
-                const g = groups[i];
-                const widgets = (g && g.widgets) ? g.widgets
-                    : (typeof g === "string") ? [{ id: g, enabled: true }]
-                    : (g && g.items) ? g.items.map(x => (typeof x === "string") ? ({ id: x, enabled: true }) : x)
-                    : [];
-                for (let j = 0; j < widgets.length; j++) {
-                    const w = widgets[j];
-                    if (w && w.id === id && w.enabled) return true;
-                }
+                const widgets = root.layoutGroupWidgets(groups[i]);
+                for (let j = 0; j < widgets.length; j++)
+                    if (widgets[j].id === id && accept(widgets[j])) return true;
             }
         }
         return false;

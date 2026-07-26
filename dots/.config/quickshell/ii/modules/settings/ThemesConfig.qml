@@ -365,10 +365,16 @@ ContentPage {
             //                                theme — undoing the manual apply.
             //                                Treat the whole night block as
             //                                user-level state.)
+            //   - bar.seededWidgets        (a per-machine record of which bar
+            //                                widgets have already been offered;
+            //                                carrying it into an exported theme
+            //                                would tell another machine it had
+            //                                already been given widgets it has
+            //                                never seen.)
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.

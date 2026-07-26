@@ -126,6 +126,7 @@ TMP=$(mktemp --tmpdir="$(dirname "$SHELL_CONFIG")" config.json.XXXXXX)
 PRESERVE_THEME_SCHED=""
 PRESERVE_LIGHT_NIGHT=""
 PRESERVE_CURSOR=""
+PRESERVE_SEEDED=""
 if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     # Preserve the entire light.night object — schedule, automatic flag,
@@ -137,6 +138,10 @@ if [ -f "$SHELL_CONFIG" ]; then
     # Shake-to-locate (cursor.*) is user behavior, kept out of theme snapshots
     # and preserved live here so applying a theme never changes it.
     PRESERVE_CURSOR=$(jq -c '.cursor // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    # Record of which bar widgets have already been offered to this machine.
+    # A snapshot taken before a widget existed doesn't have it, so restoring one
+    # would hand the shell back its one chance to add a widget the user removed.
+    PRESERVE_SEEDED=$(jq -c '.bar.seededWidgets // empty' "$SHELL_CONFIG" 2>/dev/null || true)
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -144,6 +149,7 @@ JQ_ARGS=()
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }
+[ -n "$PRESERVE_SEEDED" ]         && { JQ_FILTER+=' | .bar.seededWidgets = $seeded';               JQ_ARGS+=(--argjson seeded "$PRESERVE_SEEDED"); }
 if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
 else

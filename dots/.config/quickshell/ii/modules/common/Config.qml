@@ -85,10 +85,11 @@ Singleton {
         try {
             stored = JSON.parse(configFileView.text())
         } catch (e) {
-            return
+            return false
         }
-        if (!stored || !stored.bar || stored.bar.layout !== undefined) return
+        if (!stored || !stored.bar || stored.bar.layout !== undefined) return false
 
+        let changed = false
         for (const section of ["left", "center", "right"]) {
             const groups = JSON.parse(JSON.stringify(root.options.bar.layout[section] ?? []))
             let touched = false
@@ -102,30 +103,37 @@ Singleton {
                     touched = true
                 }
             }
-            if (touched) root.options.bar.layout[section] = groups
+            if (touched) {
+                root.options.bar.layout[section] = groups
+                changed = true
+            }
         }
+        return changed
     }
 
     // A widget added after someone saved a layout would never appear for them,
     // because their stored list is used as-is. Slot it in once, just after the
     // widget it belongs next to, so an upgrade doesn't quietly leave half a
-    // feature switched off.
+    // feature switched off. Which ids have had their turn is recorded, because
+    // "the layout doesn't mention it" is also what someone who deleted it looks
+    // like — without the record every reload would put it straight back.
+    // Returns true when the config changed and needs saving.
     function seedBarLayoutWidget(id, section, after) {
-        const layout = root.options.bar.layout
-        if (!layout) return
-        for (const name of ["left", "center", "right"]) {
-            for (const group of (layout[name] ?? []))
-                if ((group.widgets ?? []).some(widget => widget.id === id)) return
-        }
+        const bar = root.options.bar
+        if (!bar?.layout || bar.seededWidgets.indexOf(id) !== -1) return false
+        bar.seededWidgets = bar.seededWidgets.concat([id])
+        if (ObjectUtils.layoutHasWidget(bar.layout, id)) return true
 
-        const groups = JSON.parse(JSON.stringify(layout[section] ?? []))
-        if (groups.length === 0) return
-        let target = groups.findIndex(group => (group.widgets ?? []).some(w => w.id === after))
-        if (target === -1) target = groups.length - 1
-        const widgets = groups[target].widgets ?? (groups[target].widgets = [])
-        const at = widgets.findIndex(widget => widget.id === after)
-        widgets.splice(at === -1 ? widgets.length : at + 1, 0, { "id": id, "enabled": true })
-        layout[section] = groups
+        // Only ever splice into a group already written the canonical way. The
+        // string and items forms are hand-written, and quietly restructuring
+        // someone's file to fit a new widget in is worse than not fitting it in.
+        const groups = JSON.parse(JSON.stringify(bar.layout[section] ?? []))
+        const target = groups.findIndex(group => (group.widgets ?? []).some(w => w.id === after))
+        if (target === -1) return true
+        const widgets = groups[target].widgets
+        widgets.splice(widgets.findIndex(widget => widget.id === after) + 1, 0, { "id": id, "enabled": true })
+        bar.layout[section] = groups
+        return true
     }
 
     function reloadFromFile() {
@@ -210,8 +218,12 @@ Singleton {
         }
         onLoaded: {
             root.ready = true
-            root.seedBarLayoutFromLegacySwitches()
-            root.seedBarLayoutWidget("releaseUpdates", "right", "weather")
+            // Both seeders run here, where _reloading may still be set and would
+            // swallow the write that onAdapterUpdated would otherwise schedule.
+            // Ask for the save directly; fileWriteTimer still honours the guards.
+            const legacy = root.seedBarLayoutFromLegacySwitches()
+            const seeded = root.seedBarLayoutWidget("releaseUpdates", "right", "weather")
+            if (legacy || seeded) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -431,7 +443,7 @@ Singleton {
                 // center, the middle group is kept screen-centered. Recognized
                 // ids: sidebarButton, activeWindow, resources, media,
                 // workspaces, clock, utilButtons, battery, indicators, volume,
-                // tray, timers, weather, spacer.
+                // tray, timers, weather, releaseUpdates, spacer.
                 property JsonObject layout: JsonObject {
                     property list<var> left: [
                         { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
@@ -442,11 +454,16 @@ Singleton {
                         { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] }
                     ]
                     property list<var> right: [
-                        { "widgets": [ {"id": "weather", "enabled": true} ] },
+                        { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] },
                         { "widgets": [ {"id": "spacer", "enabled": true} ] },
                         { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
                     ]
                 }
+                // Widget ids the layout above has already been offered, so a
+                // widget taken out of the layout stays out. Must start empty:
+                // an older file has no such key and reads back this default,
+                // and only an empty one means "nothing has been offered yet".
+                property list<string> seededWidgets: []
                 property string layoutEditorMode: "simple" // "simple" or "custom"
                 property JsonObject resources: JsonObject {
                     property bool alwaysShowSwap: true
