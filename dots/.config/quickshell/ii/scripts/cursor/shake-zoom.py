@@ -24,17 +24,24 @@ WINDOW = 0.6          # seconds a reversal stays "recent"
 MIN_SEG = 30          # px a swing must cover to count as a reversal
 MIN_REVERSALS = 4     # reversals within WINDOW to trigger the zoom
 HOLD = 1.0 if MODE == "grow" else 3.0   # seconds the effect holds after a shake (per mode)
+SUPERVISE = 1.0       # seconds between "is anyone still watching us" checks
+TAKEOVER = 3.0        # seconds to wait for an older watcher to step aside
+DEAD_AFTER = 5.0      # seconds of unanswered polls before the compositor counts as gone
 
 
-def _sock_path():
+def _runtime_dir():
+    return os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
+
+
+def _instance():
     sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
-    base = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()), "hypr")
+    base = os.path.join(_runtime_dir(), "hypr")
     if not sig:
         try:
             sig = sorted(os.listdir(base))[0]
         except Exception:
-            return None
-    return os.path.join(base, sig, ".socket.sock")
+            return None, None
+    return os.path.join(base, sig, ".socket.sock"), sig
 
 
 _PATH = None
@@ -60,15 +67,21 @@ def cursorpos(path=None):
 _orig_nohw = 2
 
 
+def _hyprctl(*args):
+    # Bounded, because these also run on the way out: a wedged compositor
+    # must not be able to hold the exit path open.
+    try:
+        subprocess.run(["hyprctl", *args], capture_output=True, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def _set_nohw(value):
-    subprocess.run(["hyprctl", "eval", "hl.config({ cursor = { no_hardware_cursors = %d } })" % value], capture_output=True)
+    _hyprctl("eval", "hl.config({ cursor = { no_hardware_cursors = %d } })" % value)
 
 
 def set_zoom(factor):
-    subprocess.run(
-        ["hyprctl", "eval", "hl.config({ cursor = { zoom_factor = %g } })" % factor],
-        capture_output=True,
-    )
+    _hyprctl("eval", "hl.config({ cursor = { zoom_factor = %g } })" % factor)
 
 
 def _cursor_theme_size():
@@ -97,14 +110,14 @@ def activate():
     if MODE == "grow":
         _base_theme, _base_size = _cursor_theme_size()
         _set_nohw(1)
-        subprocess.run(["hyprctl", "setcursor", _base_theme, str(int(_base_size * GROW_FACTOR))], capture_output=True)
+        _hyprctl("setcursor", _base_theme, str(int(_base_size * GROW_FACTOR)))
     else:
         set_zoom(ZOOM_FACTOR)
 
 
 def deactivate():
     if MODE == "grow":
-        subprocess.run(["hyprctl", "setcursor", _base_theme, str(_base_size)], capture_output=True)
+        _hyprctl("setcursor", _base_theme, str(_base_size))
         _set_nohw(_orig_nohw)
     else:
         set_zoom(1)
@@ -174,39 +187,106 @@ class ShakeDetector:
         return len(self.reversals) >= MIN_REVERSALS
 
 
+_active = False
+
+
+def _cleanup(*_):
+    # Only undo what we actually did: an idle watcher that restored the cursor
+    # here would stomp settings a newer watcher is legitimately holding.
+    if _active:
+        deactivate()
+    sys.exit(0)
+
+
+def _is_watcher(pid):
+    try:
+        with open("/proc/%d/cmdline" % pid, "rb") as f:
+            return b"shake-zoom.py" in f.read()
+    except OSError:
+        return False
+
+
+def _claim(sig):
+    # One watcher per compositor. The shell restarts this on every mode or
+    # factor change, and a crashed shell leaves its old watcher orphaned, so a
+    # new invocation takes the previous one's place instead of stacking a
+    # second 60 Hz poller onto the same socket.
+    fd = os.open(os.path.join(_runtime_dir(), "shake-zoom.%s.lock" % sig), os.O_RDWR | os.O_CREAT, 0o600)
+    deadline = time.time() + TAKEOVER
+    asked = set()
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_SET)  # a failed read below leaves the offset past 0
+            os.write(fd, str(os.getpid()).encode())
+            return fd
+        except OSError:
+            pass
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            holder = int(os.read(fd, 32) or 0)
+        except (OSError, ValueError):
+            holder = 0
+        # The pid check keeps a recycled pid from taking the signal.
+        if holder and holder != os.getpid() and holder not in asked and _is_watcher(holder):
+            asked.add(holder)
+            try:
+                os.kill(holder, signal.SIGTERM)
+            except OSError:
+                pass
+        if time.time() >= deadline:
+            os.close(fd)
+            return None
+        time.sleep(0.05)
+
+
 def main():
     global _PATH
-    path = _sock_path()
+    path, sig = _instance()
     if not path:
         return
     _PATH = path
 
-    def _cleanup(*_):
-        deactivate()
-        sys.exit(0)
-
     signal.signal(signal.SIGTERM, _cleanup)
     signal.signal(signal.SIGINT, _cleanup)
 
-    global _base_theme, _base_size, _orig_nohw
+    # Claim before reading the baseline below, so an outgoing watcher has
+    # already restored the real values by the time we sample them.
+    lock = _claim(sig)
+    if lock is None:
+        return
+
+    global _base_theme, _base_size, _orig_nohw, _active
     _base_theme, _base_size = _cursor_theme_size()
     try:
         _orig_nohw = json.loads(subprocess.run(
             ["hyprctl", "getoption", "cursor:no_hardware_cursors", "-j"],
-            capture_output=True, text=True).stdout).get("int", 2)
+            capture_output=True, text=True, timeout=2).stdout).get("int", 2)
     except Exception:
         _orig_nohw = 2
 
     det = ShakeDetector()
     prev = cursorpos(path)
-    active = False
+    parent = os.getppid()
     active_until = 0.0
+    answered = time.time()
+    supervised = 0.0
     while True:
         time.sleep(POLL)
         now = time.time()
+        # Nothing sends us a signal when the shell dies of anything other than
+        # a clean shutdown, so notice that we've been orphaned and leave.
+        if now - supervised >= SUPERVISE:
+            supervised = now
+            if os.getppid() != parent:
+                _cleanup()
         p = cursorpos(path)
         if p is None:
+            if now - answered > DEAD_AFTER:
+                _cleanup()  # compositor gone
             continue
+        answered = now
         if prev is None:
             prev = p
             continue
@@ -214,16 +294,16 @@ def main():
         dy = p[1] - prev[1]
         prev = p
         if det.feed(now, p[0], p[1], dx, dy):
-            if not active:
+            if not _active:
                 activate()
-                active = True
+                _active = True
                 active_until = now + HOLD
-        if active and now > active_until:
+        if _active and now > active_until:
             if MODE == "zoom" and _shift_held_throttled(now):
                 pass  # keep the zoom up as long as SHIFT is held
             else:
                 deactivate()
-                active = False
+                _active = False
                 det.reversals.clear()
 
 
