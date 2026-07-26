@@ -9,6 +9,25 @@ Singleton {
     id: root
     property string filePath: Directories.shellConfigPath
     property alias options: configOptionsJsonAdapter
+
+    // The bar as it ships. Declared here rather than inside the adapter so the
+    // settings page's "Reset to defaults" and a first run can't drift apart —
+    // they were separate copies, and adding a widget meant editing both.
+    readonly property var defaultBarLayout: ({
+        "left": [
+            { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
+        ],
+        "center": [
+            { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
+            { "widgets": [ {"id": "workspaces", "enabled": true} ] },
+            { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] }
+        ],
+        "right": [
+            { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] },
+            { "widgets": [ {"id": "spacer", "enabled": true} ] },
+            { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
+        ]
+    })
     property bool ready: false
     property int readWriteDelay: 50 // milliseconds
     property bool blockWrites: false
@@ -449,19 +468,9 @@ Singleton {
                 // workspaces, clock, utilButtons, battery, indicators, volume,
                 // tray, timers, weather, releaseUpdates, spacer.
                 property JsonObject layout: JsonObject {
-                    property list<var> left: [
-                        { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
-                    ]
-                    property list<var> center: [
-                        { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
-                        { "widgets": [ {"id": "workspaces", "enabled": true} ] },
-                        { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] }
-                    ]
-                    property list<var> right: [
-                        { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] },
-                        { "widgets": [ {"id": "spacer", "enabled": true} ] },
-                        { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
-                    ]
+                    property list<var> left: root.defaultBarLayout.left
+                    property list<var> center: root.defaultBarLayout.center
+                    property list<var> right: root.defaultBarLayout.right
                 }
                 // Widget ids the layout above has already been offered, so a
                 // widget taken out of the layout stays out. Must start empty:

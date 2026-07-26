@@ -12,19 +12,6 @@ Item {
     implicitHeight: mainColumn.implicitHeight
 
     readonly property var sectionIds: ["left", "center", "right"]
-    readonly property var defaults: ({
-        "left": [ { "widgets": [ {"id":"sidebarButton","enabled":true}, {"id":"activeWindow","enabled":true} ] } ],
-        "center": [
-            { "widgets": [ {"id":"resources","enabled":false}, {"id":"media","enabled":true} ] },
-            { "widgets": [ {"id":"workspaces","enabled":true} ] },
-            { "widgets": [ {"id":"clock","enabled":true}, {"id":"utilButtons","enabled":true}, {"id":"battery","enabled":true} ] }
-        ],
-        "right": [
-            { "widgets": [ {"id":"weather","enabled":true}, {"id":"releaseUpdates","enabled":true} ] },
-            { "widgets": [ {"id":"spacer","enabled":true} ] },
-            { "widgets": [ {"id":"timers","enabled":true}, {"id":"tray","enabled":true}, {"id":"volume","enabled":true}, {"id":"indicators","enabled":true} ] }
-        ]
-    })
     readonly property var moduleCatalog: [
         { id: "sidebarButton", name: Translation.tr("Sidebar button"),    icon: "left_panel_open" },
         { id: "activeWindow",  name: Translation.tr("Window title"),      icon: "select_window" },
@@ -151,7 +138,7 @@ Item {
         root.commit("center", g);
     }
     function resetDefaults() {
-        root.sectionIds.forEach(s => root.commit(s, JSON.parse(JSON.stringify(root.defaults[s]))));
+        root.sectionIds.forEach(s => root.commit(s, JSON.parse(JSON.stringify(Config.defaultBarLayout[s]))));
     }
     function applyDropTo(target) {
         if (!root.dragInfo || !target) return;
