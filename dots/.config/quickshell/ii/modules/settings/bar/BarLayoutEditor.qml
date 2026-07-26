@@ -48,7 +48,7 @@ Item {
     // Structural widgets pinned in place — shown as a small marker, not draggable/toggleable.
     readonly property var lockedModules: ["sidebarButton", "spacer"]
     // Widgets with no vertical rendering — hidden from the editor while the bar is vertical.
-    readonly property var verticalUnsupported: ["activeWindow", "utilButtons", "weather", "timers"]
+    readonly property var verticalUnsupported: ["activeWindow", "utilButtons", "weather", "timers", "releaseUpdates"]
 
     property var dragInfo: null   // { section, gi, wi, id }
     property var dragMeta: null
