@@ -6,6 +6,7 @@ StyledText {
     property real iconSize: Appearance?.font.pixelSize.small ?? 16
     property real fill: 0
     property real truncatedFill: fill.toFixed(1) // Reduce memory consumption spikes from constant font remapping
+    property real truncatedOpsz: Math.round(iconSize / 4) * 4
     renderType: Text.NativeRendering
     font {
         hintingPreference: Font.PreferNoHinting
@@ -16,7 +17,7 @@ StyledText {
             "FILL": truncatedFill,
             // "wght": font.weight,
             // "GRAD": 0,
-            "opsz": iconSize,
+            "opsz": truncatedOpsz,
         }
     }
 
