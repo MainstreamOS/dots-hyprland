@@ -36,10 +36,15 @@ LazyLoader {
         // it. A menu should close whatever you click next, the bar included.
         WlrLayershell.keyboardFocus: root.showOnHover ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
 
+        // Only the click-triggered popups take part: a hover popup closes when
+        // the pointer leaves and has nothing to tell the grab, so registering
+        // one and then listening for a dismissal it can never act on would put
+        // a connection on every bar widget you happen to hover over.
         Component.onCompleted: if (!root.showOnHover) GlobalFocusGrab.addDismissable(popupWindow)
-        Component.onDestruction: GlobalFocusGrab.removeDismissable(popupWindow)
+        Component.onDestruction: if (!root.showOnHover) GlobalFocusGrab.removeDismissable(popupWindow)
 
         Connections {
+            enabled: !root.showOnHover
             target: GlobalFocusGrab
             function onDismissed(): void {
                 root.dismissed();
