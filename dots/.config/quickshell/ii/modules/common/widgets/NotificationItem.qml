@@ -284,11 +284,15 @@ Item { // Notification item area
                                 }
                             }
 
+                            // Copying the text is what a notification offers when it
+                            // offers nothing else. Once it carries buttons of its
+                            // own they are what the row is for, and a third button
+                            // that only takes a copy of the wording gets in the way.
                             NotificationActionButton {
+                                visible: notificationObject.actions.length === 0
                                 Layout.fillWidth: true
                                 urgency: notificationObject.urgency
-                                implicitWidth: (notificationObject.actions.length == 0) ? ((actionsFlickable.width - actionRowLayout.spacing) / 2) : 
-                                    (contentItem.implicitWidth + leftPadding + rightPadding)
+                                implicitWidth: (actionsFlickable.width - actionRowLayout.spacing) / 2
 
                                 onClicked: {
                                     Quickshell.clipboardText = notificationObject.body

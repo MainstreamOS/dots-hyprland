@@ -106,6 +106,28 @@ Singleton {
         }
     }
 
+    // A widget added after someone saved a layout would never appear for them,
+    // because their stored list is used as-is. Slot it in once, just after the
+    // widget it belongs next to, so an upgrade doesn't quietly leave half a
+    // feature switched off.
+    function seedBarLayoutWidget(id, section, after) {
+        const layout = root.options.bar.layout
+        if (!layout) return
+        for (const name of ["left", "center", "right"]) {
+            for (const group of (layout[name] ?? []))
+                if ((group.widgets ?? []).some(widget => widget.id === id)) return
+        }
+
+        const groups = JSON.parse(JSON.stringify(layout[section] ?? []))
+        if (groups.length === 0) return
+        let target = groups.findIndex(group => (group.widgets ?? []).some(w => w.id === after))
+        if (target === -1) target = groups.length - 1
+        const widgets = groups[target].widgets ?? (groups[target].widgets = [])
+        const at = widgets.findIndex(widget => widget.id === after)
+        widgets.splice(at === -1 ? widgets.length : at + 1, 0, { "id": id, "enabled": true })
+        layout[section] = groups
+    }
+
     function reloadFromFile() {
         root._reloading = true
         configFileView.reload()
@@ -189,6 +211,7 @@ Singleton {
         onLoaded: {
             root.ready = true
             root.seedBarLayoutFromLegacySwitches()
+            root.seedBarLayoutWidget("releaseUpdates", "right", "weather")
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -983,6 +1006,14 @@ Singleton {
                 property int checkInterval: 120 // minutes
                 property int adviseUpdateThreshold: 75 // packages
                 property int stronglyAdviseUpdateThreshold: 200 // packages
+
+                property JsonObject release: JsonObject {
+                    // Set from the bar widget's right-click menu. Whether the
+                    // widget is there at all is the bar layout's business.
+                    property string notify: "both" // both | tray | notification
+                    property int checkIntervalHours: 6
+                    property string manifestUrl: "https://mainstreamos.org/releases.json"
+                }
             }
             
             property JsonObject wallpaperSelector: JsonObject {

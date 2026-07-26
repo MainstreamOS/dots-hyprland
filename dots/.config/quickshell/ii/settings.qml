@@ -145,9 +145,13 @@ ApplicationWindow {
     ]
     
     // Read deep-linking from environment variables (set by dialogs)
+    // A page may be named by its component file (UpdateConfig.qml) instead of
+    // its position, so callers don't have to track this list's ordering.
     property int initialPage: {
         const envPage = Quickshell.env("QS_SETTINGS_PAGE");
-        return envPage ? parseInt(envPage) : 0;
+        if (!envPage) return 0;
+        const named = root.pages.findIndex(page => page.component.endsWith(envPage));
+        return named !== -1 ? named : (parseInt(envPage) || 0);
     }
     property int initialTab: {
         const envTab = Quickshell.env("QS_SETTINGS_TAB");

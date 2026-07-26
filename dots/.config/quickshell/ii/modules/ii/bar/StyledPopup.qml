@@ -1,6 +1,7 @@
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import qs.services
 import QtQuick
 import QtQuick.Effects
 import Quickshell
@@ -18,11 +19,32 @@ LazyLoader {
     property bool forceShow: false
     property bool showOnHover: true
 
+    // A hover popup goes away with the pointer, but a click-triggered one has
+    // nothing to close it. Callers that set showOnHover false should clear
+    // their open flag from here, so clicking away puts the popup down.
+    signal dismissed()
+
     active: forceShow || (showOnHover && hoverTarget && hoverTarget.containsMouse)
 
     component: PanelWindow {
         id: popupWindow
         color: "transparent"
+
+        // Taking focus is what keeps the bar out of the grab: while every
+        // dismissable is unfocusable the grab also covers the persistent
+        // windows, and a click on the bar would then count as clicking inside
+        // it. A menu should close whatever you click next, the bar included.
+        WlrLayershell.keyboardFocus: root.showOnHover ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
+
+        Component.onCompleted: if (!root.showOnHover) GlobalFocusGrab.addDismissable(popupWindow)
+        Component.onDestruction: GlobalFocusGrab.removeDismissable(popupWindow)
+
+        Connections {
+            target: GlobalFocusGrab
+            function onDismissed(): void {
+                root.dismissed();
+            }
+        }
 
         anchors.left: !Config.options.bar.vertical || (Config.options.bar.vertical && !Config.options.bar.bottom)
         anchors.right: Config.options.bar.vertical && Config.options.bar.bottom

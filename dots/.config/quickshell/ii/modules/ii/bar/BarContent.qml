@@ -19,7 +19,7 @@ Item { // Bar content region
 
     // Modules that render without a surrounding pill (they carry their own
     // background, are flexible spacers, or fill the available width).
-    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "indicators", "volume", "tray", "spacer", "timers"]
+    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "indicators", "volume", "tray", "spacer", "timers", "releaseUpdates"]
 
     function moduleComponent(name) {
         switch (name) {
@@ -36,6 +36,7 @@ Item { // Bar content region
         case "tray": return comp_tray;
         case "timers": return comp_timers;
         case "weather": return comp_weather;
+        case "releaseUpdates": return comp_releaseUpdates;
         case "spacer": return comp_spacer;
         default: return null;
         }
@@ -60,6 +61,9 @@ Item { // Bar content region
         case "volume": return root.useShortenedForm === 0;
         case "weather": return root.useShortenedForm === 0;
         case "tray": return root.useShortenedForm === 0;
+        // Nothing to say while you're up to date, and the slot would otherwise
+        // hold space for an icon that isn't drawn.
+        case "releaseUpdates": return ReleaseUpdates.updateAvailable && ReleaseUpdates.wantTray;
         default: return true;
         }
     }
@@ -325,6 +329,11 @@ Item { // Bar content region
     }
 
     Component {
+        id: comp_releaseUpdates
+        ReleaseUpdatesIndicator {}
+    }
+
+    Component {
         id: comp_spacer
         Item {}
     }
@@ -547,6 +556,12 @@ Item { // Bar content region
             top: parent.top
             bottom: parent.bottom
             horizontalCenter: parent.horizontalCenter
+            // With an odd number of groups the middle one is pinned here and
+            // the flanks grow outward from it, so flanks of different widths
+            // leave the block as a whole sitting off centre. Lean by half
+            // their difference: the block is centred, at the cost of the
+            // middle group no longer being exactly so.
+            horizontalCenterOffset: (centerLeftFlank.width - centerRightFlank.width) / 2
         }
         implicitWidth: centerMidRow.implicitWidth
         width: implicitWidth

@@ -38,6 +38,14 @@ Singleton {
 	property string notesPath: FileUtils.trimFileProtocol(`${Directories.state}/user/notes.txt`)
 	property string conflictCachePath: FileUtils.trimFileProtocol(`${Directories.cache}/conflict-killer`)
     property string notificationsPath: FileUtils.trimFileProtocol(`${Directories.cache}/notifications/notifications.json`)
+    // updatems keeps its clone here and owns the applied-tag file, so this
+    // follows its rule rather than the Qt cache location — see sdata/update/updatems.
+    property string dotfilesClone: FileUtils.trimFileProtocol(
+        Quickshell.env("MAINSTREAM_DOTFILES_DIR") || `${Directories.genericCache}/dots-hyprland`)
+    property string appliedTagPath: `${Directories.dotfilesClone}/.updatems-applied-tag`
+    property string releaseManifestPath: `${Directories.dotfilesClone}/.release-manifest.json`
+    property string releaseNotifyStatePath: `${Directories.dotfilesClone}/.release-notify-state.json`
+    property string settingsAppPath: FileUtils.trimFileProtocol(`${Directories.config}/quickshell/ii/settings.qml`)
     property string generatedMaterialThemePath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/colors.json`)
     property string generatedWallpaperCategoryPath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/wallpaper/category.txt`)
     property string cliphistDecode: FileUtils.trimFileProtocol(`/tmp/quickshell/media/cliphist`)

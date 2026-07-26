@@ -10,6 +10,7 @@ import "modules/common"
 import "services"
 import "panelFamilies"
 
+import qs.modules.common.functions as CF
 import QtQuick
 import QtQuick.Window
 import Quickshell
@@ -26,18 +27,21 @@ ShellRoot {
     // cursor zoom if it's killed mid-magnify.
     Process {
         id: cursorShakeProc
-        running: Config.options.cursor.shakeMode !== "off"
-        command: ["python3", Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/cursor/shake-zoom.py",
+        readonly property bool wanted: Config.options.cursor.shakeMode !== "off"
+        command: ["python3", CF.FileUtils.trimFileProtocol(Directories.scriptPath) + "/cursor/shake-zoom.py",
             Config.options.cursor.shakeMode,
             String(Config.options.cursor.shakeZoomFactor),
             String(Config.options.cursor.shakeGrowFactor)]
-        // Quickshell doesn't relaunch on a command-only change, so restart
-        // when the mode/factor changes while the feature is on.
-        onCommandChanged: {
-            if (running) {
-                running = false
-                Qt.callLater(() => running = Qt.binding(() => Config.options.cursor.shakeMode !== "off"))
-            }
+
+        onWantedChanged: if (wanted !== running) running = wanted
+        Component.onCompleted: running = wanted
+        // Quickshell doesn't relaunch on a command-only change, so restart when
+        // the mode or factor changes. terminate() is asynchronous, so running is
+        // still true here — assign unguarded and let the relaunch happen once
+        // the child has actually exited.
+        onCommandChanged: if (running) {
+            running = false
+            Qt.callLater(() => running = wanted)
         }
     }
 
@@ -49,6 +53,7 @@ ShellRoot {
         Cliphist.refresh()
         Wallpapers.load()
         Updates.load()
+        ReleaseUpdates.load()
         ThemeManager.load()
         // Day/Night scheduler runs only here in the main shell — see the
         // _autoApplyEnabled comment in ThemeManager for why. Settings.qml
