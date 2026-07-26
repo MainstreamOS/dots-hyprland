@@ -129,10 +129,13 @@ Singleton {
         // string and items forms are hand-written, and quietly restructuring
         // someone's file to fit a new widget in is worse than not fitting it in.
         const groups = JSON.parse(JSON.stringify(bar.layout[section] ?? []))
-        const target = groups.findIndex(group => (group.widgets ?? []).some(w => w.id === after))
-        if (target === -1) return true
-        const widgets = groups[target].widgets
-        widgets.splice(widgets.findIndex(widget => widget.id === after) + 1, 0, { "id": id, "enabled": true })
+        let widgets = null, at = -1
+        for (const group of groups) {
+            at = (group.widgets ?? []).findIndex(w => w.id === after)
+            if (at !== -1) { widgets = group.widgets; break }
+        }
+        if (!widgets) return true
+        widgets.splice(at + 1, 0, { "id": id, "enabled": true })
         bar.layout[section] = groups
         return true
     }
