@@ -28,29 +28,9 @@ hl.on("hyprland.start", function ()
     hl.exec_cmd("wl-paste --type text --watch bash -c 'cliphist store && qs -c $qsConfig ipc call cliphistService update'")
     hl.exec_cmd("wl-paste --type image --watch bash -c 'cliphist store && qs -c $qsConfig ipc call cliphistService update'")
 
-    -- Cursor: follow the theme and size picked in Settings (gsettings),
-    -- falling back to the shipped defaults.
-    local cursor_theme = "Bibata-Modern-Classic"
-    local gs = io.popen("gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null")
-    if gs then
-        local line = gs:read("*l")
-        gs:close()
-        if line then
-            line = line:gsub("'", ""):gsub("%s+$", "")
-            if line ~= "" then cursor_theme = line end
-        end
-    end
-    local cursor_size = "24"
-    local gz = io.popen("gsettings get org.gnome.desktop.interface cursor-size 2>/dev/null")
-    if gz then
-        local sz = gz:read("*l")
-        gz:close()
-        if sz then
-            sz = sz:gsub("%s+", "")
-            if sz:match("^%d+$") then cursor_size = sz end
-        end
-    end
-    hl.exec_cmd("hyprctl setcursor " .. cursor_theme .. " " .. cursor_size)
+    -- Cursor: follow the theme and size picked in Settings, falling back to the
+    -- shipped ones when that choice names a theme this machine hasn't got.
+    hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/cursor/apply-cursor.sh")
 
     -- GTK/Qt interface fonts follow the shell's font choice (config.json).
     hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh")

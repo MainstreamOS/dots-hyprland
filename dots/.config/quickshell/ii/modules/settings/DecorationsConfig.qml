@@ -30,6 +30,7 @@ ContentPage {
     property string sysCurrentCursor: ""
 
     readonly property string gtkFontScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh"
+    readonly property string cursorScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/cursor/apply-cursor.sh"
     readonly property string cursorSizeScript: Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/cursor/cursor-sizes.py"
 
     // The sizes the chosen cursor theme can actually be drawn at. A cursor
@@ -326,9 +327,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
     function applyCursorSize(size) {
         root.cursorSize = size
         Quickshell.execDetached(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
-        Quickshell.execDetached(["bash", "-c",
-            "theme=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null); theme=${theme#\\'}; theme=${theme%\\'}; [ -n \"$theme\" ] || theme=Bibata-Modern-Classic; hyprctl setcursor \"$theme\" \"$0\"",
-            String(size)])
+        Quickshell.execDetached([root.cursorScript, String(size)])
     }
 
     function applyGtkFont() {
