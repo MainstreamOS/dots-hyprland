@@ -80,6 +80,15 @@ Item { // Bar content region
         return name === "spacer" || name === "activeWindow" || name === "media" || name === "clock" || (name === "resources" && root.useShortenedForm === 2);
     }
 
+    // Widgets whose own width comes and goes: a track title is there or it
+    // isn't, and readings change length as they change value. A group holding
+    // one of these gets a floor so the bar doesn't shift about underneath it.
+    // The clock is deliberately not one — its width barely moves, and giving
+    // it the floor leaves a pill twice the size of the time inside it.
+    function moduleWidthVolatile(name) {
+        return name === "media" || (name === "resources" && root.useShortenedForm === 2);
+    }
+
     // ---- group model helpers (tolerant of legacy flat/string layouts) ----
     function groupWidgets(g) {
         if (!g)
@@ -166,14 +175,15 @@ Item { // Bar content region
         // Whether anything showing in this group is the kind of widget that
         // takes whatever room it is given rather than only what it needs.
         readonly property bool takesSpace: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleFillWidth(w.id))
+        readonly property bool widthVolatile: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleWidthVolatile(w.id))
         visible: root.groupHasVisible(group)
         readonly property real contentWidth: chromeless ? chromelessRow.implicitWidth : pillLoader.implicitWidth
-        // A group beside the middle never falls below a set width, so one
-        // holding only media doesn't shrink to the width of its icon when
-        // nothing is playing and leave the two sides mismatched. It can still
-        // grow past it: put workspaces and media in the same group and both
-        // need room, which a set width would deny them.
-        implicitWidth: (centerSection && takesSpace) ? Math.max(root.centerSideModuleWidth, contentWidth) : contentWidth
+        // A group beside the middle whose contents change width never falls
+        // below a set width, so one holding only media doesn't shrink to the
+        // width of its icon when nothing is playing and leave the two sides
+        // mismatched. It can still grow past it: put workspaces and media in
+        // the same group and both need room, which a set width would deny them.
+        implicitWidth: (centerSection && widthVolatile) ? Math.max(root.centerSideModuleWidth, contentWidth) : contentWidth
         // Outside the centre a group has to be allowed to take the width its
         // widgets asked for, and to be squeezed below what they'd like. The
         // window title is the one that shows it: pinned to its own width it
