@@ -29,6 +29,14 @@ Singleton {
     // corner re-entry (e.g. the workspaceNumber overlay on a Super press) doesn't
     // re-ripple / re-dispatch while the plugin overview is already up.
     property bool scrollOverviewOpen: false
+    // Screen rounding as the corners should actually draw it. While the
+    // scroll-overview is up this reports 0 so the workspace cards don't show
+    // rounded-corner artifacts where rounded windows and rounded screen
+    // corners disagree. It is derived rather than written back into
+    // Config.options because Config flushes to config.json a few ms after any
+    // change: an override parked there becomes the user's saved setting the
+    // moment the shell is reloaded or crashes with the overview open.
+    readonly property int effectiveFakeScreenRounding: root.scrollOverviewOpen ? 0 : Config.options.appearance.fakeScreenRounding
     // When true alongside overviewOpen, the overview shows only the
     // workspace previews — search bar and app drawer chrome are hidden.
     // Set by Bar.qml's hot corner when its trigger is configured for
@@ -161,36 +169,19 @@ Singleton {
             if (event.name === "configreloaded")
                 scrollOverviewCheckProc.running = true;
 
-            // Scroll-overview (Hyprland plugin) emits these on open/close
-            // via g_pEventManager->postEvent. While the overview is up
-            // we force fakeScreenRounding to 0 so the workspace cards
-            // don't show rounded-corner artifacts where rounded windows
-            // and rounded screen corners disagree; the user's previous
-            // setting is captured on open and restored on close.
-            // _savedFakeScreenRounding == -1 is the "not currently
-            // overridden" sentinel — guards against double-open events
-            // accidentally clobbering the saved value.
+            // Scroll-overview (Hyprland plugin) emits these on open/close via
+            // g_pEventManager->postEvent. effectiveFakeScreenRounding follows
+            // this flag, so the screen corners hide for the overview's lifetime
+            // without anything having to be saved and put back.
             if (event.name === "scrolloverview") {
                 if (event.data === "open") {
                     root.scrollOverviewOpen = true;
-                    if (root._savedFakeScreenRounding < 0) {
-                        root._savedFakeScreenRounding = Config.options.appearance.fakeScreenRounding;
-                        Config.options.appearance.fakeScreenRounding = 0;
-                    }
                 } else if (event.data === "close") {
                     root.scrollOverviewOpen = false;
-                    if (root._savedFakeScreenRounding >= 0) {
-                        Config.options.appearance.fakeScreenRounding = root._savedFakeScreenRounding;
-                        root._savedFakeScreenRounding = -1;
-                    }
                 }
             }
         }
     }
-
-    // Saved fakeScreenRounding while a scroll-overview session is
-    // active; -1 when no override is in effect.
-    property int _savedFakeScreenRounding: -1
 
     // Determine whether scrolloverview is loaded right now. Re-run after every
     // configreload (which happens both for normal `hyprctl reload` and right
