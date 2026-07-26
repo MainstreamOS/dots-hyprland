@@ -745,6 +745,8 @@ print("OK|" + out_path)
                         .arg(name).arg(parts.join(", ")), 0)
                 } else if (result?.newer) {
                     root.showStatus(Translation.tr("Imported %1. It was made by a newer version, so parts of it may not apply.").arg(name), 12000)
+                } else if (result?.replaced) {
+                    root.showStatus(Translation.tr("Replaced your saved %1 with the imported one").arg(name))
                 } else {
                     root.showStatus(Translation.tr("Theme imported: %1").arg(name))
                 }
@@ -808,15 +810,15 @@ try:
     if not isinstance(meta, dict) or not isinstance(cfg, dict):
         fail()
 
-    # Importing never overwrites: a clashing name lands as "Name (2)".
-    base_slug = re.sub(r"[^a-z0-9]+", "-", str(meta.get("slug") or meta.get("name") or "theme").lower()).strip("-") or "theme"
-    base_name = str(meta.get("name") or base_slug).strip() or base_slug
-    slug, name, n = base_slug, base_name, 1
-    while os.path.exists(os.path.join(themes_dir, slug)):
-        n += 1
-        slug = base_slug + "-" + str(n)
-        name = base_name + " (" + str(n) + ")"
+    # A theme that matches one already saved replaces it. Importing the same
+    # file twice, or a newer copy of a theme from another machine, is meant to
+    # leave one entry rather than a row of near-identical names to tell apart.
+    # Keyed on the name the same way saving one is, so a theme called the same
+    # thing lands in the same place whatever the file happens to call its slug.
+    name = str(meta.get("name") or meta.get("slug") or "theme").strip() or "theme"
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "theme"
     dest = os.path.join(themes_dir, slug)
+    replaced = os.path.isdir(dest)
 
     try:
         live = json.load(open(live_config))
@@ -868,7 +870,20 @@ try:
     json.dump(meta, open(os.path.join(tmp, "meta.json"), "w"), indent=2)
     json.dump(cfg, open(os.path.join(tmp, "config.json"), "w"), indent=2)
 
-    os.rename(tmp, dest)
+    # Swap the finished copy in rather than writing over the old one where it
+    # stands, so an import that dies partway can't leave a theme made of half
+    # of each. The outgoing copy is only discarded once the new one is in place.
+    previous = dest + ".replaced"
+    shutil.rmtree(previous, ignore_errors=True)
+    if os.path.isdir(dest):
+        os.rename(dest, previous)
+    try:
+        os.rename(tmp, dest)
+    except OSError:
+        if os.path.isdir(previous):
+            os.rename(previous, dest)
+        raise
+    shutil.rmtree(previous, ignore_errors=True)
     tmp = None
 
     index = []
@@ -880,7 +895,7 @@ try:
             except Exception:
                 pass
     json.dump(index, open(os.path.join(themes_dir, "index.json"), "w"), indent=2)
-    print("OK|" + json.dumps({"name": name, "missing": missing, "newer": newer}))
+    print("OK|" + json.dumps({"name": name, "missing": missing, "newer": newer, "replaced": replaced}))
 finally:
     if tmp and os.path.isdir(tmp):
         shutil.rmtree(tmp, ignore_errors=True)
