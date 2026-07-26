@@ -89,6 +89,16 @@ Item { // Bar content region
         return name === "media" || (name === "resources" && root.useShortenedForm === 2);
     }
 
+    readonly property int mediaMinimumWidth: 140
+
+    // The stock centre-left pill: resources sat beside media and media took
+    // whatever room was left, so switching resources on never moved the bar.
+    function mediaYieldsIn(g) {
+        const ws = root.groupWidgets(g);
+        return ws.some(w => w.id === "media" && root.entryActive(w) && root.moduleVisible(w.id))
+            && ws.some(w => w.id === "resources" && root.entryActive(w) && root.moduleVisible(w.id));
+    }
+
     // ---- group model helpers (tolerant of legacy flat/string layouts) ----
     function groupWidgets(g) {
         if (!g)
@@ -151,13 +161,21 @@ Item { // Bar content region
     component BarModule: Loader {
         required property string moduleName
         property bool entryEnabled: true
+        // Set when this pill is the stock media-and-resources pairing, where
+        // media gives up room rather than the pill growing.
+        property bool yieldsToGroupMate: false
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
         // Media asks for a set amount rather than for as much as its track
         // title happens to need. That keeps the group a predictable size —
         // titles come and go and the bar shouldn't move when they do — while
-        // still letting media take any room the group has left over.
-        Layout.preferredWidth: moduleName === "media" ? Math.max(140, root.centerSideModuleWidth - 40) : -1
+        // still letting media take any room the group has left over. Sharing
+        // with resources is the exception: ask for the least it can live with
+        // and let the group's set width hand back whatever resources didn't
+        // use, which is how the two sat together before pills were arrangeable.
+        Layout.preferredWidth: moduleName !== "media" ? -1
+            : yieldsToGroupMate ? root.mediaMinimumWidth
+            : Math.max(root.mediaMinimumWidth, root.centerSideModuleWidth - 40)
         Layout.fillHeight: root.moduleFillHeight(moduleName)
         active: entryEnabled && root.moduleActive(moduleName)
         visible: active && root.moduleVisible(moduleName)
@@ -176,6 +194,7 @@ Item { // Bar content region
         // takes whatever room it is given rather than only what it needs.
         readonly property bool takesSpace: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleFillWidth(w.id))
         readonly property bool widthVolatile: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleWidthVolatile(w.id))
+        readonly property bool mediaYields: root.mediaYieldsIn(group)
         visible: root.groupHasVisible(group)
         readonly property real contentWidth: chromeless ? chromelessRow.implicitWidth : pillLoader.implicitWidth
         // A group beside the middle whose contents change width never falls
@@ -224,6 +243,7 @@ Item { // Bar content region
                         required property var modelData
                         moduleName: modelData.id
                         entryEnabled: modelData.enabled
+                        yieldsToGroupMate: pill.mediaYields
                     }
                 }
             }
