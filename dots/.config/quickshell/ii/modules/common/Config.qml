@@ -120,8 +120,9 @@ Singleton {
     // Returns true when the config changed and needs saving.
     function seedBarLayoutWidget(id, section, after) {
         const bar = root.options.bar
-        if (!bar?.layout || bar.seededWidgets.indexOf(id) !== -1) return false
-        bar.seededWidgets = bar.seededWidgets.concat([id])
+        const seeded = bar?.seededWidgets ?? []
+        if (!bar?.layout || seeded.indexOf(id) !== -1) return false
+        bar.seededWidgets = seeded.concat([id])
         if (ObjectUtils.layoutHasWidget(bar.layout, id)) return true
 
         // Only ever splice into a group already written the canonical way. The
