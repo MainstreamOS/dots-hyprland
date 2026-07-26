@@ -31,7 +31,10 @@ Singleton {
 
     property bool isLowAndNotCharging: isLow && !isCharging
     property bool isCriticalAndNotCharging: isCritical && !isCharging
-    property bool isSuspendingAndNotCharging: allowAutomaticSuspend && isSuspending && !isCharging
+    // Never on a made-up reading: test mode exists so a desktop with no battery
+    // can see what the indicator looks like, and putting the machine to sleep
+    // over a number someone typed to preview the low state is not a preview.
+    property bool isSuspendingAndNotCharging: !testMode && allowAutomaticSuspend && isSuspending && !isCharging
     property bool isFullAndCharging: isFull && isCharging
 
     property real energyRate: testMode
