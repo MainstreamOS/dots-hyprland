@@ -275,8 +275,10 @@ Item {
                             RippleButton {
                                 id: windowButton
                                 required property var modelData
+                                property bool captureSuppressed: false
                                 padding: 0
                                 middleClickAction: () => {
+                                    windowButton.captureSuppressed = true;
                                     windowButton.modelData?.close();
                                 }
                                 onClicked: {
@@ -341,6 +343,7 @@ Item {
                                                 color: Appearance.m3colors.m3onSurface
                                             }
                                             onClicked: {
+                                                windowButton.captureSuppressed = true;
                                                 root.hidePreview();
                                                 windowButton.modelData?.close();
                                             }
@@ -361,7 +364,7 @@ Item {
                                         ScreencopyView {
                                             id: screencopyView
                                             anchors.fill: parent
-                                            captureSource: windowButton.modelData
+                                            captureSource: windowButton.captureSuppressed ? null : windowButton.modelData
                                             live: true
                                             paintCursor: true
                                             constraintSize: Qt.size(root.maxWindowPreviewWidth, root.maxWindowPreviewHeight)
