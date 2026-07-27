@@ -16,7 +16,7 @@ MAINSTREAM_DEFAULT_APPS=(
   "chromium|Chromium|Open-source Chromium web browser — Google Chrome without the proprietary bits"
   "resources|Resources|Modern GTK4 system monitor for CPU, memory, GPU, and disks"
   "gnome-disk-utility|GNOME Disks|Manage drives, partitions, and disk images"
-  "gnome-software|GNOME Software|Graphical app store for Flatpak and system packages"
+  "gnome-software|GNOME Software|Graphical app store for browsing and installing Flatpak apps"
   "gnome-calculator|GNOME Calculator|Simple and scientific calculator"
   "mainstream-calendar|Calendar|Clean, easy-to-use calendar app with online account sync"
   "simple-scan|Simple Scan|Straightforward scanning utility"

@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-extras
 pkgver=1.0
-pkgrel=18
+pkgrel=19
 pkgdesc='Mainstream OS Extra Software'
 arch=(any)
 license=(None)
