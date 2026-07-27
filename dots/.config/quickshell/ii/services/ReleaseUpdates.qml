@@ -109,6 +109,11 @@ Singleton {
         // marker file was unreadable would be alarming and possibly wrong.
         if (current && manifest && Array.isArray(manifest.releases)) {
             for (const entry of manifest.releases) {
+                // The manifest can carry a version that is written up but not
+                // cut yet, so the website can show what is coming. It has no
+                // tag behind it, so offering it would send updatems after a
+                // release that cannot be fetched.
+                if (entry?.unreleased) continue;
                 const version = root.parseVersion(entry?.version);
                 if (version && root.newer(version, current)) found.push({ version: version, entry: entry });
             }
@@ -135,6 +140,10 @@ Singleton {
         notifyState.lastNotified = version;
         notifyStateFile.writeAdapter();
 
+        // Only summary and changes are read here. The manifest also carries the
+        // release's raw commit range for the website's technical view; merging
+        // any of that into changes would put commit subjects in a desktop
+        // notification on every installed machine.
         const summary = String(root.latest.summary ?? "");
         const changes = (root.latest.changes ?? []).slice(0, 3);
         let body = summary;
@@ -192,7 +201,7 @@ Singleton {
 
     Process {
         id: manifestFetcher
-        command: ["curl", "-sfL", "--max-time", "15", Config.options.updates.release.manifestUrl]
+        command: ["curl", "-sfL", "--compressed", "--max-time", "15", Config.options.updates.release.manifestUrl]
         stdout: StdioCollector {
             onStreamFinished: {
                 if (text.trim().length > 0) {

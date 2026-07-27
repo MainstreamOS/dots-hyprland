@@ -1,0 +1,91 @@
+{
+  "1.0.0": {
+    "summary": "The first Mainstream OS release: a Hyprland desktop and an Arch-based installer ISO",
+    "changes": [
+      "Configure the whole desktop from one Settings app instead of a config file",
+      "Enter a gamescope Steam Big Picture session with Super+G",
+      "Retheme the shell, apps, terminal and lock screen from your wallpaper",
+      "Boot back into an earlier Btrfs snapshot from the Limine menu",
+      "Preinstall GE-Proton and set it as Steam's default compatibility tool",
+      "Arrange monitors and set scale, HDR and ICC profiles in Settings",
+      "Give each workspace its own layout: dwindle, master, scrolling, monocle or float",
+      "Remap any keyboard shortcut from Settings instead of editing config files",
+      "Turn window title bars on or off without logging out",
+      "Save wallpaper, palette and decorations as themes that switch day and night",
+      "Start with a set of everyday apps, each one optional at install",
+      "Install more apps from a store with pictures instead of package names",
+      "Zoom out to a scrolling map of every workspace with Super+O",
+      "Send files to nearby devices by dropping them on the bar",
+      "Reopen your windows on their original workspaces after a reboot",
+      "Install from a graphical installer with a Get Started setup picker",
+      "Encrypt the whole system with LUKS2 and a boot passphrase",
+      "Install alongside Windows and add it to the boot menu",
+      "Detect the graphics card during install and fit matching drivers",
+      "Meet the desktop with a first-boot tour and one-click extra installs",
+      "Update packages, Flatpaks and the desktop from one Settings button",
+      "Install prebuilt signed packages instead of building from the AUR"
+    ]
+  },
+  "1.0.1": {
+    "summary": "Two small fixes for virtual machine guests and the installer's welcome screen",
+    "changes": [
+      "Copy and paste between your host and a QEMU/KVM virtual machine",
+      "The installer's welcome screen notes when you're already connected"
+    ]
+  },
+  "1.0.2": {
+    "summary": "A Hyprland update can no longer strand you at the login screen",
+    "changes": [
+      "Title bars and the overview stay off until they rebuild for a new Hyprland",
+      "Restore Snapshot in Settings now makes the snapshot you booted from permanent",
+      "Super plus scroll moves workspaces the way you scroll again"
+    ]
+  },
+  "1.0.3": {
+    "summary": "Safer update handling, fresher plugin rebuilds, and a quick-toggle fix",
+    "changes": [
+      "The desktop update is held back when the system package update fails",
+      "Title bar and overview plugins rebuild from the newest published source",
+      "Game mode shows its real state in the Classic quick toggles"
+    ]
+  },
+  "1.0.4": {
+    "summary": "The next update picks up the config and packages an earlier one missed",
+    "changes": [
+      "An update no longer applies just part of a release",
+      "A failed package sync is retried once before the update stops",
+      "Closing a window from the overview no longer risks crashing the shell"
+    ]
+  },
+  "1.0.5": {
+    "summary": "A one-click Repair Install, plus graphics driver and screen sharing fixes",
+    "changes": [
+      "Repair Install on the Recovery page re-runs setup and rebuilds plugins",
+      "Adding the desktop to existing Arch now fits the matching NVIDIA driver",
+      "Without hardware Vulkan, Gaming Mode explains itself instead of bouncing you to login",
+      "Screen sharing and recording keep working after the desktop restarts"
+    ]
+  },
+  "1.1.0": {
+    "date": "2026-07-27",
+    "kind": "feature",
+    "summary": "A bar you arrange, themes you can share, and a look you choose",
+    "changes": [
+      "Export a theme to a single file and import it on another computer",
+      "A saved theme now remembers your app style, icons and pointer",
+      "Applying a theme or wallpaper finishes in about a third of the time",
+      "Switching themes no longer flashes the new layout with the old colors",
+      "A theme that fails to apply now says so instead of doing nothing",
+      "Show, hide, reorder and group any widget on your bar",
+      "Drag two bar widgets together to combine them into one pill",
+      "Choose your app style, icon theme and mouse cursor in Settings",
+      "Pick fonts from a searchable list that shows each one in its typeface",
+      "Most apps now use the font you pick for the shell",
+      "Video wallpapers just play, with no package to install yourself",
+      "Pick a cursor size from the sizes your theme can actually draw",
+      "Turn on Shake to Locate to magnify or enlarge a lost cursor",
+      "Mirror one display onto another from the monitor settings",
+      "A bar icon and a notification tell you when a new release is out"
+    ]
+  }
+}

@@ -24,12 +24,56 @@ from what was actually released:
   summary   the subject of the commit the tag points at
   changes   the subjects of the commits since the previous release
 
+Commit subjects are a poor changelog for a release whose story isn't told one
+commit at a time — most of all the first one, which has no predecessor tag to
+diff against and so derives nothing at all. release-notes.json overrides either
+field for any version:
+
+    {"1.0.0": {"summary": "...", "changes": ["...", "..."]}}
+
+Only the versions named there are affected, and only the keys given, so the
+derived text stays the default and every deviation from it is visible in one
+file. Kind is deliberately not overridable — the tag stays the source of truth
+for how important a release is.
+
+Alongside that human-facing pair, every release also carries the unedited
+commit range behind it:
+
+  commits      "<short sha> <subject>" for each first-parent commit in the
+               release, in order, capped at TECH_CAP
+  commitNotes  sha -> commit body, only for the commits that wrote one
+  merges       merges the first-parent walk stepped over, omitted when none
+  commitsTotal the real commit count, present only when the cap truncated the
+               list, so a shortened list can't read as the whole story
+
+These three are for the technical track on the website, which is off by
+default and opt-in per reader. The desktop never reads them; it builds its
+notification from summary and changes alone. Like kind, they are deliberately
+not overridable from release-notes.json — their whole value is that anyone can
+reproduce them with one git log, so there is nowhere to write prose that only
+looks like a machine record.
+
+Per release:
+  1. Tag dots, with a Release-Kind trailer when inference would understate it.
+  2. Write summary and changes into release-notes.json if the commit subjects
+     don't tell the release's story on their own. Nothing technical goes there;
+     the commit range is already carried automatically.
+  3. Run this script. No new arguments.
+  4. Copy releases.json into the website repo and commit it by path.
+  5. Tag archiso with the same version, on the commit the ISO was built from.
+     From 1.1.0 onward. Nothing reads those tags yet — they exist so installer
+     and ISO commits can join the technical track later with a real range.
+     Never backfill one by date: archiso mirrors dots promptly, including work
+     that is on the branch but in no release, so a date-derived range claims
+     unreleased changes shipped.
+
 Usage:
-  build-release-manifest.py [--repo PATH] [--limit N] [-o releases.json]
+  build-release-manifest.py [--repo PATH] [--limit N] [--notes PATH] [-o releases.json]
 """
 
 import argparse
 import json
+import pathlib
 import re
 import subprocess
 import sys
@@ -41,6 +85,11 @@ PREFIX = re.compile(r"^[a-z0-9][a-z0-9 /+-]{0,24}(\([^)]{0,32}\))?:\s*")
 SECURITY_PREFIX = re.compile(r"^security(\([^)]*\))?\s*:", re.IGNORECASE)
 RELEASE_KIND = re.compile(r"^Release-Kind:\s*(\w+)\s*$", re.IGNORECASE | re.MULTILINE)
 KINDS = ("security", "feature", "patch")
+# Every installed desktop fetches this manifest on a timer, so the technical
+# track is bounded. Neither cap has ever been reached: the largest release so
+# far is six commits, three of which carry a body.
+TECH_CAP = 40
+BODY_CAP = 1000
 
 
 def git(repo, *args):
@@ -78,21 +127,44 @@ def tag_subject(repo, tag):
     return git(repo, "log", "-1", "--no-merges", "--format=%s", tag).strip()
 
 
-def subjects_between(repo, previous, tag):
-    """The commits a release introduced.
+def commits_between(repo, previous, tag):
+    """The commits a release introduced, as (sha, subject, body) triples.
 
     --first-parent is what keeps this honest. This fork merges from end-4
     upstream, and a plain log would list every commit those merges bring in —
     hundreds of someone else's subjects, crowding out the actual changes.
 
     The first release has no predecessor to diff against, and walking all the
-    way back would sweep in the entire history, so it stands alone.
+    way back would sweep in the entire history, so it has no range at all.
+
+    The record separator leads each entry rather than trailing it: %b runs to
+    the end of the record, so a trailing separator would let one commit's body
+    run into the next commit's sha.
     """
     if not previous:
-        return [tag_subject(repo, tag)]
-    out = git(repo, "log", "--first-parent", "--no-merges", "--format=%s",
+        return []
+    out = git(repo, "log", "--first-parent", "--no-merges",
+              "--format=%x1e%h%x1f%s%x1f%b", f"{previous}..{tag}")
+    commits = []
+    for record in out.split("\x1e"):
+        if not record.strip():
+            continue
+        sha, subject, body = (record.split("\x1f") + ["", ""])[:3]
+        commits.append((sha.strip(), subject.strip(), body.strip()))
+    return commits
+
+
+def merges_between(repo, previous, tag):
+    """How many merges the first-parent walk stepped over.
+
+    The commit list looks exhaustive, so on the day an upstream merge lands
+    inside a release range it has to be able to say that it isn't.
+    """
+    if not previous:
+        return 0
+    out = git(repo, "log", "--first-parent", "--merges", "--format=%h",
               f"{previous}..{tag}")
-    return [line.strip() for line in out.splitlines() if line.strip()]
+    return len([line for line in out.splitlines() if line.strip()])
 
 
 def humanise(subject):
@@ -132,33 +204,104 @@ def classify(repo, tag, version, previous_version, subjects):
     return "patch"
 
 
-def build(repo, limit):
+def load_notes(path):
+    """Curated overrides, keyed by version. Absent file means none."""
+    if not path or not pathlib.Path(path).is_file():
+        return {}
+    with open(path) as handle:
+        notes = json.load(handle)
+    if not isinstance(notes, dict):
+        raise SystemExit(f"{path}: expected an object keyed by version")
+    return notes
+
+
+def build(repo, limit, notes):
     tags = release_tags(repo)
     if not tags:
         raise SystemExit("no release tags found")
 
+    # A version can be written up before it is cut, so the website can show
+    # what is coming. Such an entry has to supply its own date and kind, since
+    # there is no tag to read them from, and it carries no commit range.
+    unknown = set(notes) - {tag for _, tag in tags}
+    upcoming = []
+    for version in sorted(unknown, key=lambda v: [int(p) for p in v.split(".")]
+                          if SEMVER.match(v) else [0], reverse=True):
+        note = notes[version]
+        if "date" in note and "kind" in note:
+            upcoming.append({
+                "version": version,
+                "date": note["date"],
+                "kind": note["kind"],
+                "summary": note.get("summary", ""),
+                "changes": [str(c) for c in note.get("changes", [])],
+                "commits": [],
+                "unreleased": True,
+            })
+        else:
+            print(f"warning: release-notes has no matching tag for {version!r} and no "
+                  f"date/kind to publish it as upcoming; ignoring", file=sys.stderr)
+
     releases = []
     for index, (version, tag) in enumerate(tags):
         previous_version, previous_tag = tags[index - 1] if index else (None, None)
-        subjects = subjects_between(repo, previous_tag, tag)
+        commits = commits_between(repo, previous_tag, tag)
+        # A first release has no range, so its own subject is all there is to
+        # classify on. Keyed off the missing predecessor rather than an empty
+        # list, so a tag placed on the same commit as the one before it
+        # reports an honest empty release instead of quoting itself.
+        subjects = [subject for _, subject, _ in commits]
+        if previous_tag is None:
+            subjects = [tag_subject(repo, tag)]
         summary = humanise(tag_subject(repo, tag))
         # The tag's own subject is the summary, so leaving it in changes too
-        # would make every consumer strip it back out — and it would cost one
-        # of the twenty slots on every release.
+        # would make every consumer strip it back out — and it would cost a
+        # slot on every release.
         changes = [c for c in (humanise(s) for s in subjects) if c != summary]
-        releases.append({
+
+        # A derived list is however long the range happened to be, so it is
+        # capped. A curated one is exactly what someone chose to say, so it is
+        # not — truncating that would drop deliberate text on the floor.
+        cap = len(changes)
+        note = notes.get(tag, {})
+        summary = note.get("summary", summary)
+        if "changes" in note:
+            changes = [str(c) for c in note["changes"]]
+            cap = len(changes)
+        else:
+            cap = 20
+
+        entry = {
             "version": tag,
             "date": tag_date(repo, tag),
             "kind": classify(repo, tag, version, previous_version, subjects),
             "summary": summary,
-            "changes": changes[:20],
-        })
+            "changes": [c for c in changes if c != summary][:cap],
+            "commits": [f"{sha} {subject}" for sha, subject, _ in commits[:TECH_CAP]],
+        }
+        # A capped list still looks exhaustive, so say when it isn't. The
+        # compare link on the page reaches the rest.
+        if len(commits) > TECH_CAP:
+            entry["commitsTotal"] = len(commits)
+        bodies = {sha: body[:BODY_CAP] for sha, _, body in commits[:TECH_CAP] if body}
+        if bodies:
+            entry["commitNotes"] = bodies
+        skipped = merges_between(repo, previous_tag, tag)
+        if skipped:
+            entry["merges"] = skipped
+        releases.append(entry)
 
     releases.reverse()
+    # latest names the newest RELEASED version and never an upcoming one. The
+    # desktop treats anything in the list that is newer than what is installed
+    # as available, so naming a version that has no tag would announce an
+    # update nobody can install.
+    latest = releases[0]["version"] if releases else ""
+    releases = upcoming + releases
     if limit:
         releases = releases[:limit]
     return {
-        "latest": releases[0]["version"],
+        "latest": latest,
         "releases": releases,
     }
 
@@ -168,10 +311,12 @@ def main():
     parser.add_argument("--repo", default=".")
     parser.add_argument("--limit", type=int, default=20,
                         help="keep only the newest N releases (0 for all)")
+    parser.add_argument("--notes", default=str(pathlib.Path(__file__).with_name("release-notes.json")),
+                        help="curated per-version overrides (default: alongside this script)")
     parser.add_argument("-o", "--output", default="-")
     args = parser.parse_args()
 
-    manifest = build(args.repo, args.limit)
+    manifest = build(args.repo, args.limit, load_notes(args.notes))
     text = json.dumps(manifest, indent=2) + "\n"
     if args.output == "-":
         sys.stdout.write(text)
