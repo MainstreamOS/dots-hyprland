@@ -126,10 +126,22 @@ ContentPage {
             }
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
-                StyledText {
-                    // Two literal backslashes are part of the brand name.
-                    text: "Mainstream OS\\\\"
-                    font.pixelSize: Appearance.font.pixelSize.title
+                RowLayout {
+                    spacing: 8
+                    StyledText {
+                        // Two literal backslashes are part of the brand name.
+                        text: "Mainstream OS\\\\"
+                        font.pixelSize: Appearance.font.pixelSize.title
+                    }
+                    StyledText {
+                        // Empty until the release marker has been read, and on
+                        // an install that has no marker at all.
+                        visible: ReleaseUpdates.installedVersion.length > 0
+                        text: ReleaseUpdates.installedVersion
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: Appearance.colors.colSubtext
+                        Layout.alignment: Qt.AlignBaseline
+                    }
                 }
                 StyledText {
                     font.pixelSize: Appearance.font.pixelSize.normal

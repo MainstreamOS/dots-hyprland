@@ -9,6 +9,9 @@ ColumnLayout {
     property string title
     property string icon: ""
     property bool mirrorIcon: false
+    // titleExtra sits against the title; headerExtra is pushed to the far end
+    // of the row by the spacer between them.
+    property alias titleExtra: titleExtraContainer.data
     property alias headerExtra: headerExtraContainer.data
     default property alias contentData: sectionContent.data
 
@@ -30,7 +33,12 @@ ColumnLayout {
             font.weight: Font.Medium
             color: Appearance.colors.colOnSecondaryContainer
         }
-        
+
+        RowLayout {
+            id: titleExtraContainer
+            spacing: 8
+        }
+
         Item { Layout.fillWidth: true }
         
         RowLayout {

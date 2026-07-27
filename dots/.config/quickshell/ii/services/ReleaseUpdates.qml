@@ -43,6 +43,12 @@ Singleton {
         return Translation.tr("Mainstream OS %1 is available").arg(version);
     }
 
+    // Settings reads installedVersion and latest to show which release it is
+    // on, which instantiates this singleton in that process too. Only the main
+    // shell announces, or opening Settings could raise a second notification
+    // for a release the user has already been told about.
+    property bool _announceEnabled: false
+
     function load() {}
 
     function refresh() {
@@ -118,7 +124,7 @@ Singleton {
 
         const releases = found.map(f => f.entry);
         root.pending = releases;
-        if (root.updateAvailable && root.wantNotification) root.maybeNotify();
+        if (root._announceEnabled && root.updateAvailable && root.wantNotification) root.maybeNotify();
     }
 
     // ---- notification ----------------------------------------------------

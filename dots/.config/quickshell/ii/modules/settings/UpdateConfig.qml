@@ -220,6 +220,21 @@ ContentPage {
         icon: "system_update_alt"
         title: Translation.tr("System Update")
 
+        titleExtra: [
+            StyledText {
+                // Reads "1.0.5 → 1.0.6" while a release is waiting and drops to
+                // the bare version once there is nothing to move to, so the
+                // arrow only ever points at a release that actually exists.
+                visible: ReleaseUpdates.installedVersion.length > 0
+                text: ReleaseUpdates.latest
+                    ? `${ReleaseUpdates.installedVersion} → ${ReleaseUpdates.latest.version}`
+                    : ReleaseUpdates.installedVersion
+                font.pixelSize: Appearance.font.pixelSize.small
+                font.family: Appearance.font.family.monospace
+                color: ReleaseUpdates.latest ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+            }
+        ]
+
         headerExtra: [
             RippleButtonWithIcon {
                 materialIcon: "content_copy"

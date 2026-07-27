@@ -54,6 +54,10 @@ ShellRoot {
         Wallpapers.load()
         Updates.load()
         ReleaseUpdates.load()
+        // Release announcements come from the main shell only — see the
+        // _announceEnabled comment in ReleaseUpdates. Settings reads the same
+        // singleton for its version display without ever setting this.
+        ReleaseUpdates._announceEnabled = true
         ThemeManager.load()
         // Day/Night scheduler runs only here in the main shell — see the
         // _autoApplyEnabled comment in ThemeManager for why. Settings.qml
