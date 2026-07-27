@@ -261,10 +261,20 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Installing AMD GPU drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-mesa-driver libva-utils
-            # 32-bit Vulkan so Steam/multilib apps don't pull lib32-nvidia-utils
-            # as the provider on AMD (best-effort: needs multilib, which Steam needs too).
-            try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon
+            # Pre-GCN runs the radeon module and mesa's r300/r600 gallium drivers;
+            # RADV is GCN1+ only. Omitting vulkan-radeon is deliberate — it provides
+            # 'vulkan-driver', which would satisfy the catch-all further down and
+            # suppress the lavapipe fallback, leaving an ICD that enumerates zero
+            # devices. VA-API/VDPAU are part of mesa itself now.
+            if [[ "${IS_OLD_AMD:-false}" == true ]]; then
+              x sudo pacman -S --needed --noconfirm mesa libva-utils
+              try sudo pacman -S --needed --noconfirm lib32-mesa
+            else
+              x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-utils
+              # 32-bit Vulkan so Steam/multilib apps don't pull lib32-nvidia-utils
+              # as the provider on AMD (best-effort: needs multilib, which Steam needs too).
+              try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon
+            fi
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers mesa-va-drivers

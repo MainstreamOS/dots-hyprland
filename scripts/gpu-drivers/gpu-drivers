@@ -77,8 +77,17 @@ fi
 
 if [[ $HAS_AMD == true ]]; then
     did_vendor=true
-    run pacman -S --needed --noconfirm mesa vulkan-radeon libva-utils || fail=1
-    run pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon || true
+    # Pre-GCN runs the radeon module and mesa's r300/r600 gallium drivers; RADV
+    # is GCN1+ only. Omitting vulkan-radeon is deliberate — it provides
+    # 'vulkan-driver', which would satisfy the catch-all below and suppress the
+    # lavapipe fallback, leaving an ICD that enumerates zero devices.
+    if [[ $IS_OLD_AMD == true ]]; then
+        run pacman -S --needed --noconfirm mesa libva-utils || fail=1
+        run pacman -S --needed --noconfirm lib32-mesa || true
+    else
+        run pacman -S --needed --noconfirm mesa vulkan-radeon libva-utils || fail=1
+        run pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon || true
+    fi
 fi
 
 if [[ $HAS_INTEL == true ]]; then
