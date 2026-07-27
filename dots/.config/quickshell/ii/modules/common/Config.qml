@@ -641,6 +641,7 @@ Singleton {
                     property bool enable: true
                     property string grouping: "perApp" // "perApp" (one bar controlling all of the app's streams) | "perStream" (one bar per audio stream/window)
                 }
+                property int launchAnimation: DockLaunchAnims.AnimType.Bounce
             }
 
             property JsonObject interactions: JsonObject {

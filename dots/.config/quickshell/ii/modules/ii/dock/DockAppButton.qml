@@ -174,6 +174,9 @@ DockButton {
                 appListRoot.showPreview(root);
             }
         } else {
+            // Only here: opening a folder or toggling a window preview is not a
+            // launch, and animating those would say something happened that did not.
+            launchAnims.play(Config.options.dock.launchAnimation);
             root.desktopEntry?.execute();
         }
     }
@@ -224,6 +227,9 @@ DockButton {
                     verticalCenter: parent.verticalCenter
                 }
                 active: !root.isSeparator && !root.isFolder
+                scale: launchAnims.scale
+                rotation: launchAnims.rot
+                transformOrigin: Item.Center
                 sourceComponent: IconImage {
                     id: appIconImage
                     source: Quickshell.iconPath(root.desktopEntry?.icon ?? AppSearch.guessIcon(root.lookupAppId), "image-missing")
@@ -294,6 +300,12 @@ DockButton {
             Loader {
                 active: Config.options.dock.monochromeIcons && !root.isFolder
                 anchors.fill: iconImageLoader
+                // anchors follow geometry, and scale/rotation are render
+                // transforms that leave geometry alone — so this has to repeat
+                // them or the tint sits still while the icon underneath moves.
+                scale: launchAnims.scale
+                rotation: launchAnims.rot
+                transformOrigin: Item.Center
                 sourceComponent: Item {
                     Desaturate {
                         id: desaturatedIcon
@@ -331,5 +343,9 @@ DockButton {
                 }
             }
         }
+    }
+
+    DockLaunchAnimations {
+        id: launchAnims
     }
 }

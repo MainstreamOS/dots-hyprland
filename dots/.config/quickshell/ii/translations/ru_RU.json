@@ -1519,5 +1519,10 @@
   "Removal cancelled.": "Removal cancelled.",
   "Focus urgent/last": "Focus urgent/last",
   "Think of each workspace as its own desk — put email on one, code on another, a game on a third. The dots in your bar show which desk you're on and which have apps open. Click one, press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + 1‑9</b>, or press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + scroll the mouse wheel</b> to switch between them.": "Think of each workspace as its own desk — put email on one, code on another, a game on a third. The dots in your bar show which desk you're on and which have apps open. Click one, press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + 1‑9</b>, or press <b>Super <font face='JetBrains Mono NF'>(󰖳)</font> + scroll the mouse wheel</b> to switch between them.",
-  "Large circular app icons": "Large circular app icons"
+  "Large circular app icons": "Large circular app icons",
+  "Bounce": "Bounce",
+  "Launch animation": "Launch animation",
+  "Pop": "Pop",
+  "Pulse": "Pulse",
+  "Wobble": "Wobble"
 }
