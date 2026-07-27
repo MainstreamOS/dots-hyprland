@@ -39,6 +39,33 @@ chk amd-apu HAS_AMD true; chk amd-apu AMD_DEC 5686; chk amd-apu IS_OLD_AMD false
 run amd-krackan "" "c5:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Krackan [Radeon 840M / 860M Graphics] [1002:1114] (rev c1)"
 chk amd-krackan HAS_AMD true; chk amd-krackan AMD_DEC 4372; chk amd-krackan IS_OLD_AMD false
 
+# Pre-GCN fusion APUs: ids sit above the 26112 ceiling and the HD 7xxx/8xxx
+# names dodge the pre-GCN name regex, so only the id windows catch them.
+run amd-llano "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Sumo [Radeon HD 6620G] [1002:9641]"
+chk amd-llano HAS_AMD true; chk amd-llano AMD_DEC 38465; chk amd-llano IS_OLD_AMD true
+run amd-wrestler "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Wrestler [Radeon HD 7340] [1002:9808]"
+chk amd-wrestler AMD_DEC 38920; chk amd-wrestler IS_OLD_AMD true
+run amd-trinity "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Trinity [Radeon HD 7660G] [1002:9900]"
+chk amd-trinity AMD_DEC 39168; chk amd-trinity IS_OLD_AMD true
+run amd-richland "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Richland [Radeon HD 8650G] [1002:990b]"
+chk amd-richland AMD_DEC 39179; chk amd-richland IS_OLD_AMD true
+run amd-trinity2 "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Trinity 2 [Radeon HD 7520G] [1002:9990]"
+chk amd-trinity2 AMD_DEC 39312; chk amd-trinity2 IS_OLD_AMD true
+run amd-richland2 "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Richland [Radeon HD 8550D] [1002:999d]"
+chk amd-richland2 AMD_DEC 39325; chk amd-richland2 IS_OLD_AMD true
+
+# GCN APUs on the same id pages must stay modern (amdgpu + RADV).
+run amd-kaveri "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Kaveri [Radeon R7 Graphics] [1002:1309]"
+chk amd-kaveri HAS_AMD true; chk amd-kaveri AMD_DEC 4873; chk amd-kaveri IS_OLD_AMD false
+run amd-kabini "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Kabini [Radeon HD 8400 / R3 Series] [1002:9830]"
+chk amd-kabini AMD_DEC 38960; chk amd-kabini IS_OLD_AMD false
+run amd-mullins "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Mullins [Radeon R4/R5 Graphics] [1002:9851]"
+chk amd-mullins AMD_DEC 38993; chk amd-mullins IS_OLD_AMD false
+run amd-carrizo "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Wani [Radeon R5/R6/R7 Graphics] [1002:9874]"
+chk amd-carrizo AMD_DEC 39028; chk amd-carrizo IS_OLD_AMD false
+run amd-stoney "" "00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Stoney [Radeon R2/R3/R4/R5 Graphics] [1002:98e4]"
+chk amd-stoney AMD_DEC 39140; chk amd-stoney IS_OLD_AMD false
+
 # 5-9. NVIDIA generation ladder
 run nv-turing "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 chk nv-turing HAS_NVIDIA true; chk nv-turing NVIDIA_PCI_DEC 7815; chk nv-turing NVIDIA_GEN turing
@@ -249,6 +276,17 @@ gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLI
 chk_str pregcn-modprobe "$( [[ -f "$MODPROBE_DIR/amdgpu.conf" ]] && echo yes || echo no )" "yes"
 chk_str pregcn-modules "$( [[ "$ML" == *"amdgpu"* && "$ML" == *"radeon"* ]] && echo yes || echo no )" "yes"
 chk_str pregcn-cmdline "$( [[ "$CL" == *"amdgpu.si_support=1"* && "$CL" == *"amdgpu.cik_support=1"* ]] && echo yes || echo no )" "yes"
+
+oreset; FIX_LSPCI="00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Trinity [Radeon HD 7660G] [1002:9900]"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str terascale-apu-radeon "$( [[ "$ML" == *"radeon"* ]] && echo yes || echo no )" "yes"
+chk_str terascale-apu-no-modeset "$( [[ "$CL" == *"amdgpu.modeset=1"* ]] && echo present || echo absent )" "absent"
+chk_str terascale-apu-modprobe "$( [[ -f "$MODPROBE_DIR/amdgpu.conf" ]] && echo yes || echo no )" "yes"
+
+oreset; FIX_LSPCI="00:01.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Wani [Radeon R5/R6/R7 Graphics] [1002:9874]"
+gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"
+chk_str carrizo-no-radeon "$( [[ "$ML" == *"radeon"* ]] && echo present || echo absent )" "absent"
+chk_str carrizo-modeset "$( [[ "$CL" == *"amdgpu.modeset=1"* ]] && echo yes || echo no )" "yes"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU104 [GeForce RTX 2080] [10de:1e87] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))

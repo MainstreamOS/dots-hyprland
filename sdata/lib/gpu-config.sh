@@ -34,8 +34,15 @@ _gpu_sys_vendor() { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
 # 0x1E03 RTX 2080 Ti 12GB are the lowest Turing IDs), 4928 Maxwell-Volta,
 # 4032 Kepler, 1728 Fermi, below Fermi -> prefermi (nouveau).
 # AMD "old" = pre-GCN: dec < 26112 AND NOT an APU (4864-5887 exemption), OR a
-# pre-GCN name (HD 2xxx-6xxx / RV / RS / R[67]xx); RDNA4 (Navi 4x / RX 9xxx /
-# gfx12) always forces modern.
+# pre-GCN name (HD 2xxx-6xxx / RV / RS / R[67]xx), OR one of the pre-GCN fusion
+# APU id windows (Llano/Sumo 0x9640-0x964f, Wrestler 0x9802-0x980a, Trinity/
+# Richland 0x9900-0x9919 and 0x9990-0x99a4). Those VLIW4/VLIW5 APUs sit well
+# above the 26112 ceiling and advertise HD 7xxx/8xxx names, so neither of the
+# first two tests sees them, yet they run the radeon module and predate RADV.
+# The GCN APUs sharing those pages stay modern by falling outside the windows:
+# Kabini/Temash 0x9830-0x983d, Mullins 0x9850-0x985f, Carrizo/Stoney
+# 0x9870-0x98e4, Kaveri 0x1300-0x131d. RDNA4 (Navi 4x / RX 9xxx / gfx12) always
+# forces modern.
 # Intel tiers track the two userspace boundaries that actually change packages:
 #   xe     Gen12+ / Arc (Tiger Lake, Alder/Raptor/Meteor/Arrow/Lunar Lake, DG1,
 #          Alchemist, Battlemage). Only tier the OpenCL compute runtime and the
@@ -100,6 +107,12 @@ gpu_detect() {
         # APU-exemption window (e.g. Krackan 0x1114), so rescue them by name.
         # 'Radeon NxxxM' / bare 'Radeon Graphics' never appear on pre-GCN parts.
         if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$lspci_names"; then IS_OLD_AMD=false; fi
+        # Pre-GCN fusion APUs (radeon module, no RADV) — exact id windows win
+        # over the name tests above; see the header for the GCN parts excluded.
+        if (( (AMD_DEC >= 16#9640 && AMD_DEC <= 16#964f) \
+           || (AMD_DEC >= 16#9802 && AMD_DEC <= 16#980a) \
+           || (AMD_DEC >= 16#9900 && AMD_DEC <= 16#9919) \
+           || (AMD_DEC >= 16#9990 && AMD_DEC <= 16#99a4) )); then IS_OLD_AMD=true; fi
         if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$lspci_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
     fi
 
