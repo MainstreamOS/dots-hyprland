@@ -122,7 +122,7 @@ cleanup() {
     if (( FINISHED )) && ! (( KEEP )); then
       rm -rf "$BUILD_DIR"
     else
-      warn "build files kept at: $BUILD_DIR (download cached at ${ZIP:-n/a})"
+      warn "build files kept at: $BUILD_DIR until the next install attempt (download cached at ${ZIP:-n/a})"
     fi
   fi
   return 0
@@ -227,7 +227,9 @@ opencl_pkg_for() {
 }
 is_rdna4() {  # RX 9070/9060-class (Navi 4x, gfx1200/gfx1201) — ROCm 7.2 breaks Resolve on these
   lspci 2>/dev/null | grep -iE 'VGA|Display|3D' | grep -qiE 'Navi 4[0-9]' && return 0
-  clinfo 2>/dev/null | grep -qiE 'gfx120[0-9]' && return 0
+  # A broken ICD makes clinfo block inside the loader rather than fail, and this
+  # runs before anything has told the user what it is waiting on.
+  timeout 5 clinfo 2>/dev/null | grep -qiE 'gfx120[0-9]' && return 0
   return 1
 }
 
@@ -249,6 +251,38 @@ else
     warn "--opencl opencl-mesa (+ export RUSTICL_ENABLE=radeonsi), or --rocm-pin."
   fi
 fi
+
+# Resolve exits with "Unsupported GPU Processing Mode" when it can see no OpenCL
+# device, and the PKGBUILD only depends on the virtual opencl-driver, which
+# opencl-mesa satisfies while being useless here — so a clean build proves
+# nothing. Checked before the multi-GB download so a broken stack costs seconds
+# instead of the whole transfer. Advisory only: never changes the exit status,
+# because the Welcome app turns any non-zero into a red "install failed" and a
+# missing compute device is not a failed install.
+verify_opencl() {
+  local platforms want
+  # A broken ICD blocks inside the loader rather than erroring, and clinfo exits
+  # 0 with no platforms at all, so the output is the signal, not the status.
+  platforms=$(timeout 10 clinfo -l 2>/dev/null || true)
+  case $GPU in
+    nvidia) want='NVIDIA|CUDA' ;;
+    amd)    want='AMD Accelerated Parallel Processing|gfx[0-9]|Radeon' ;;
+    intel)  want='Intel' ;;
+  esac
+  if grep -qE "$want" <<<"$platforms"; then
+    step "OpenCL device visible for $GPU"
+  else
+    warn "no OpenCL device for $GPU is visible yet — Resolve needs one to start."
+    warn "installed ICDs: $(ls /etc/OpenCL/vendors 2>/dev/null | tr '\n' ' ' || echo none)"
+    [[ -n $platforms ]] && warn "clinfo reports: $(tr '\n' ' ' <<<"$platforms")"
+  fi
+  # More than one ICD is legal but lets Resolve pick the wrong runtime.
+  local icds
+  icds=$(ls /etc/OpenCL/vendors/*.icd 2>/dev/null | wc -l)
+  (( icds > 1 )) && warn "$icds OpenCL runtimes are installed; Resolve may not pick the one you expect."
+  return 0
+}
+verify_opencl
 
 # ------------------------------------------------ 3. resolve version + download
 if (( STUDIO )); then
@@ -330,9 +364,25 @@ else
     || die "downloaded archive is incomplete/corrupt — re-run to resume, or delete $ZIP to start over."
 fi
 
+# A failed run leaves the whole tree behind — roughly 37 GB for Studio — and the
+# Welcome app's install button is a retry button, so one leftover is enough to
+# fail the 50 GB check below with a disk-space error that has nothing to do with
+# whatever actually went wrong. Swept unless --keep asked for the tree. The glob
+# matches only build dirs, never the resumable download. A live run is skipped
+# by its owner PID, since a terminal run and a Welcome run can overlap.
+if ! (( KEEP )); then
+  _swept=0
+  while IFS= read -r _old; do
+    if [[ -r "$_old/.owner" ]] && kill -0 "$(<"$_old/.owner")" 2>/dev/null; then continue; fi
+    rm -rf "$_old" && _swept=$(( _swept + 1 ))
+  done < <(find "$CACHE_DIR" -maxdepth 1 -type d -name 'build.??????' 2>/dev/null)
+  (( _swept )) && step "removed $_swept unfinished build tree(s) from an earlier attempt"
+fi
+
 # Build on disk (under the cache dir), never in /tmp — Resolve's extraction needs
 # ~50 GB peak and /tmp is often tmpfs (RAM-backed) and far smaller.
 BUILD_DIR=$(mktemp -d "$CACHE_DIR/build.XXXXXX")
+printf '%s\n' "$$" > "$BUILD_DIR/.owner"
 
 # --------------------------------------------- 4. build + install as a package
 check_free "$BUILD_DIR" 50 "unpacking + building the package"
@@ -348,7 +398,7 @@ url='https://www.blackmagicdesign.com/products/davinciresolve'
 license=('${LICENSE_REF}')
 depends=('glu' 'fuse2' 'opencl-driver' 'qt5-x11extras' 'qt5-svg'
          'qt5-quickcontrols2' 'qt5-multimedia' 'libxcrypt-compat' 'xmlsec'
-         'jre-openjdk' 'ffmpeg4.4' 'gst-plugins-bad-libs' 'python-numpy' 'tbb'
+         'jre-openjdk' 'ffmpeg4.4' 'gst-plugins-bad-libs' 'python-numpy' 'onetbb'
          'apr-util' 'luajit' 'libc++' 'libc++abi')
 makedepends=('libarchive' 'patchelf')
 conflicts=(${CONFLICTS})
@@ -421,13 +471,54 @@ package() {
   install -Dm644 squashfs-root/share/default-config.dat "\${pkgdir}/opt/\${_pkgname}/configs/config.dat"
   install -Dm644 squashfs-root/share/log-conf.xml       "\${pkgdir}/opt/\${_pkgname}/configs/log-conf.xml"
   install -Dm644 squashfs-root/share/default_cm_config.bin "\${pkgdir}/opt/\${_pkgname}/DolbyVision/default_cm_config.bin"
+  # A wrapper rather than a symlink, so there is somewhere owned by the package
+  # to put the fixes Resolve needs before it starts. exec keeps the WM class, so
+  # the StartupWMClass line prepare() appends still matches.
   install -d -m 0755 "\${pkgdir}/usr/bin"
-  ln -s "/opt/\${_pkgname}/bin/resolve" "\${pkgdir}/usr/bin/${PKGNAME}"
+  cat > "\${pkgdir}/usr/bin/${PKGNAME}" <<'WRAPPER'
+#!/usr/bin/env bash
+# Resolve bundles Qt 5.15 with no platformthemes plugins at all, while the
+# session sets QT_QPA_PLATFORMTHEME=qt6ct. Loading a mismatched theme plugin
+# into that Qt is a symbol clash, so drop both for this process only.
+unset QT_QPA_PLATFORMTHEME QT_STYLE_OVERRIDE
+
+# On a hybrid laptop the GL context comes from the iGPU while OpenCL runs on the
+# NVIDIA card, and clCreateContext with CL_GL_CONTEXT_KHR fails across that
+# split — Resolve hangs on the Color page. Route both to NVIDIA.
+#
+# Read at run time, not baked in at install, so a MUX switch or a dock is
+# picked up. Every gate matters: opencl-nvidia depends only on zlib, so this can
+# be an NVIDIA box with no GLX vendor library at all, and exporting the vendor
+# name there turns a working launch into a GLX failure.
+#
+# Two lspci calls, not one with two -d flags: lspci honours only the last -d,
+# which would silently narrow the check to 3D controllers and miss every card
+# that enumerates as VGA. No line continuations here either — this file is
+# written from an unquoted heredoc, which eats backslash-newline.
+_gpus=\$(lspci -mm -n -d ::0300 2>/dev/null; lspci -mm -n -d ::0302 2>/dev/null)
+_hybrid=0
+case \$_gpus in *10de*) case \$_gpus in *1002*|*8086*) _hybrid=1 ;; esac ;; esac
+[ -e /usr/lib/libGLX_nvidia.so.0 ] || _hybrid=0
+grep -q '^nvidia ' /proc/modules 2>/dev/null || _hybrid=0
+if [ "\$_hybrid" = 1 ]; then
+  export __NV_PRIME_RENDER_OFFLOAD=1
+  export __GLX_VENDOR_LIBRARY_NAME=nvidia
+  export __VK_LAYER_NV_optimus=NVIDIA_only
+fi
+
+exec /opt/_PKGDIR_/bin/resolve "\$@"
+WRAPPER
+  sed -i "s|_PKGDIR_|\${_pkgname}|" "\${pkgdir}/usr/bin/${PKGNAME}"
+  chmod 0755 "\${pkgdir}/usr/bin/${PKGNAME}"
   install -D -m 0644 "squashfs-root/share/DaVinciResolve.desktop" \
     "\${pkgdir}/usr/share/applications/DaVinciResolve.desktop"
   install -D -m 0644 "squashfs-root/graphics/DV_Resolve.png" \
     "\${pkgdir}/usr/share/icons/hicolor/128x128/apps/davinci-resolve.png"
   sed -i 's#Icon=.*#Icon=davinci-resolve#' \
+    "\${pkgdir}/usr/share/applications/DaVinciResolve.desktop"
+  # Route the menu entry through the wrapper too, or launching from the app grid
+  # bypasses every fix above and only a terminal launch gets them.
+  sed -i 's#^Exec=.*#Exec=/usr/bin/${PKGNAME} %u#' \
     "\${pkgdir}/usr/share/applications/DaVinciResolve.desktop"
   if [[ -d squashfs-root/share/etc/udev/rules.d ]]; then
     install -d -m 0755 "\${pkgdir}/usr/lib/udev/rules.d"
@@ -439,6 +530,17 @@ PKGBUILD
 
 ( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ) || die "makepkg failed."
 FINISHED=1
+
+# Resolve's bundled libcurl has /etc/pki/tls/certs/ca-bundle.crt compiled in as
+# its CA file — the Red Hat path, which Arch doesn't have. curl 7.82 gives up as
+# soon as that file won't load rather than falling back to its CA path, so Cloud
+# sign-in, the update check and the extras downloader all die with an opaque TLS
+# error. Point the whole tree at Arch's. Only ever creates what is missing.
+if [[ ! -e /etc/pki/tls ]]; then
+  info "Pointing Resolve's bundled TLS certificate path at the system store…"
+  sudo mkdir -p /etc/pki && sudo ln -sfn /etc/ssl /etc/pki/tls \
+    || warn "could not create /etc/pki/tls — Blackmagic Cloud sign-in may fail with a TLS error."
+fi
 
 # Resolve writes runtime state into /opt/resolve; hand those dirs to the user
 # so it doesn't fail with "Failed to create application support directories".

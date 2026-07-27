@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-welcome-installer
 pkgver=1.0
-pkgrel=2
+pkgrel=3
 pkgdesc='Mainstream OS Welcome app installers — one-click app installs + DaVinci Resolve'
 arch=(any)
 license=(MIT)
