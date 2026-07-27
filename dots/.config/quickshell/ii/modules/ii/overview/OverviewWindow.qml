@@ -13,6 +13,7 @@ import Quickshell.Wayland
 Item { // Window
     id: root
     property bool closing: false
+    property bool captureSuppressed: false
     property var toplevel
     property var windowData
     property var monitorData
@@ -91,6 +92,26 @@ Item { // Window
         animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
     }
 
+    // A client can refuse to close (unsaved-changes prompt), which leaves the
+    // tile inert, so hand the input back after a grace period. The capture
+    // stays down for the rest of this overview session: nothing here tells a
+    // refusal apart from a close still in flight, and re-attaching to a
+    // toplevel that then dies is the crash this guards against. The next
+    // overview open builds the tile again, preview and all.
+    onClosingChanged: {
+        if (!root.closing) return;
+        root.captureSuppressed = true;
+        closeGracePeriod.restart();
+    }
+
+    Timer {
+        id: closeGracePeriod
+        interval: 1000
+        repeat: false
+        running: false
+        onTriggered: root.closing = false
+    }
+
     // Live preview of every visible window, including fullscreen and
     // maximised ones (games, IDEs, browsers running solo on a workspace).
     //
@@ -105,7 +126,7 @@ Item { // Window
     ScreencopyView {
         id: windowPreview
         anchors.fill: parent
-        captureSource: (GlobalStates.overviewOpen && !root.closing) ? root.toplevel : null
+        captureSource: (GlobalStates.overviewOpen && !root.captureSuppressed) ? root.toplevel : null
         live: true
         constraintSize: Qt.size(Math.max(1, root.targetWindowWidth), Math.max(1, root.targetWindowHeight))
         // PQ-to-sRGB tone-mapping when HDR Always On
