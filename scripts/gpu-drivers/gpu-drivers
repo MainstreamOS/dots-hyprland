@@ -83,9 +83,20 @@ fi
 
 if [[ $HAS_INTEL == true ]]; then
     did_vendor=true
-    run pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils || fail=1
+    case "$INTEL_GEN" in
+        legacy)
+            run pacman -S --needed --noconfirm mesa vulkan-intel libva-intel-driver libva-utils || fail=1
+            ;;
+        xe)
+            run pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils || fail=1
+            run pacman -S --needed --noconfirm intel-compute-runtime ocl-icd || true
+            run pacman -S --needed --noconfirm vpl-gpu-rt || true
+            ;;
+        *)
+            run pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils || fail=1
+            ;;
+    esac
     run pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel || true
-    run pacman -S --needed --noconfirm vpl-gpu-rt || true
 fi
 
 if [[ $did_vendor == false ]]; then

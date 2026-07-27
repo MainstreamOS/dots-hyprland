@@ -196,6 +196,9 @@ function setup_gpu_drivers(){
 
   echo -e "${STY_CYAN}[$0]: Detected GPU vendor(s): ${vendors}${STY_RST}"
 
+  # Populates NVIDIA_GEN / INTEL_GEN for the per-vendor arms below.
+  gpu_detect || true
+
   for vendor in $vendors; do
     case "$vendor" in
       nvidia)
@@ -205,7 +208,6 @@ function setup_gpu_drivers(){
             # Pick the driver branch by GPU generation: Turing+ -> nvidia-open,
             # Maxwell/Kepler/Fermi -> frozen legacy branch, pre-Fermi -> nouveau.
             # modprobe options + cmdline + mkinitcpio modules are handled by setup_gpu_autoconfig later.
-            gpu_detect || true
             # Pre-Turing cards drag ~100 MB of unused GSP firmware into the UKI,
             # overflowing a small reused dual-boot ESP. Drop it now, before the
             # first UKI is built in setup_limine_snapper (setup_gpu_autoconfig
@@ -280,9 +282,20 @@ function setup_gpu_drivers(){
         echo -e "${STY_CYAN}[$0]: Installing Intel GPU drivers...${STY_RST}"
         case "$OS_GROUP_ID" in
           arch)
-            x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
+            case "${INTEL_GEN:-modern}" in
+              legacy)
+                x sudo pacman -S --needed --noconfirm mesa vulkan-intel libva-intel-driver libva-utils
+                ;;
+              xe)
+                x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
+                try sudo pacman -S --needed --noconfirm intel-compute-runtime ocl-icd
+                try sudo pacman -S --needed --noconfirm vpl-gpu-rt
+                ;;
+              *)
+                x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
+                ;;
+            esac
             try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel
-            try sudo pacman -S --needed --noconfirm vpl-gpu-rt
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers intel-media-driver

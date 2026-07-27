@@ -51,19 +51,59 @@ chk nv-fermi NVIDIA_PCI_DEC 1728; chk nv-fermi NVIDIA_GEN fermi
 run nv-prefermi "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
 chk nv-prefermi NVIDIA_PCI_DEC 1553; chk nv-prefermi NVIDIA_GEN prefermi
 
-# 10-12. Intel
+# 10-12. Intel generation ladder — xe (Gen12+), modern (Gen8-11), legacy (Gen4-7.5)
 run intel-arc "" "03:00.0 VGA compatible controller [0300]: Intel Corporation DG2 [Arc A770] [8086:56a0] (rev 08)"
-chk intel-arc HAS_INTEL true
-run intel-modern "" "00:02.0 VGA compatible controller [0300]: Intel Corporation AlderLake-S GT1 [UHD Graphics 770] [8086:4680] (rev 0c)"
-chk intel-modern HAS_INTEL true
+chk intel-arc HAS_INTEL true; chk intel-arc INTEL_GEN xe
+run intel-alderlake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation AlderLake-S GT1 [UHD Graphics 770] [8086:4680] (rev 0c)"
+chk intel-alderlake HAS_INTEL true; chk intel-alderlake INTEL_GEN xe
 run intel-presb "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Core Processor Integrated Graphics Controller [8086:0042] (rev 12)"
-chk intel-presb HAS_INTEL true
+chk intel-presb HAS_INTEL true; chk intel-presb INTEL_GEN legacy
+
+run intel-tigerlake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics] [8086:9a49] (rev 01)"
+chk intel-tigerlake INTEL_GEN xe
+run intel-battlemage "" "03:00.0 VGA compatible controller [0300]: Intel Corporation Battlemage G21 [Arc B580] [8086:e20b] (rev 05)"
+chk intel-battlemage INTEL_GEN xe
+run intel-lunarlake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Lunar Lake [Intel Graphics] [8086:64a0] (rev 04)"
+chk intel-lunarlake INTEL_GEN xe
+run intel-dg1 "" "03:00.0 VGA compatible controller [0300]: Intel Corporation DG1 [Iris Xe MAX Graphics] [8086:4905]"
+chk intel-dg1 INTEL_GEN xe
+
+# Gen9/Gen11 stay 'modern': iHD VA-API, but no OpenCL (upstream legacy1 only).
+run intel-skylake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 530 [8086:1912] (rev 06)"
+chk intel-skylake INTEL_GEN modern
+run intel-broadwell "" "00:02.0 VGA compatible controller [0300]: Intel Corporation HD Graphics 5500 [8086:1616] (rev 09)"
+chk intel-broadwell INTEL_GEN modern
+run intel-icelake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Iris Plus Graphics G7 [8086:8a52] (rev 07)"
+chk intel-icelake INTEL_GEN modern
+run intel-cherryview "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Atom/Celeron/Pentium Processor Graphics [8086:22b0] (rev 21)"
+chk intel-cherryview INTEL_GEN modern
+run intel-cometlake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation CometLake-U GT2 [UHD Graphics] [8086:9b41] (rev 02)"
+chk intel-cometlake INTEL_GEN modern
+run intel-elkhartlake "" "00:02.0 VGA compatible controller [0300]: Intel Corporation JasperLake [UHD Graphics] [8086:4e61] (rev 01)"
+chk intel-elkhartlake INTEL_GEN modern
+# Unrecognised id must fall to the safe middle tier, not to legacy.
+run intel-unknown "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Device [8086:ff01] (rev 01)"
+chk intel-unknown INTEL_GEN modern
+
+run intel-haswell "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Haswell-ULT Integrated Graphics Controller [8086:0a16] (rev 09)"
+chk intel-haswell INTEL_GEN legacy
+run intel-sandybridge "" "00:02.0 VGA compatible controller [0300]: Intel Corporation 2nd Generation Core Processor Family Integrated Graphics Controller [8086:0116] (rev 09)"
+chk intel-sandybridge INTEL_GEN legacy
+run intel-g45 "" "00:02.0 VGA compatible controller [0300]: Intel Corporation 4 Series Chipset Integrated Graphics Controller [8086:2e32] (rev 03)"
+chk intel-g45 INTEL_GEN legacy
+run intel-gm965 "" "00:02.0 VGA compatible controller [0300]: Intel Corporation Mobile GM965/GL960 Integrated Graphics Controller [8086:2a02] (rev 0c)"
+chk intel-gm965 INTEL_GEN legacy
+
+# No Intel present -> INTEL_GEN stays 'none'.
+run intel-absent "" "03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
+chk intel-absent HAS_INTEL false; chk intel-absent INTEL_GEN none
 
 # 13. Hybrid NVIDIA + Intel (laptop; dGPU shows as 3D controller)
 run hybrid-nv-intel "" "00:02.0 VGA compatible controller [0300]: Intel Corporation TigerLake-H GT1 [UHD Graphics] [8086:9a60] (rev 01)
 01:00.0 3D controller [0302]: NVIDIA Corporation GA106M [GeForce RTX 3060 Mobile] [10de:2503] (rev a1)"
 chk hybrid-nv-intel HAS_NVIDIA true; chk hybrid-nv-intel HAS_INTEL true; chk hybrid-nv-intel HAS_AMD false
 chk hybrid-nv-intel IS_HYBRID true; chk hybrid-nv-intel NVIDIA_GEN turing
+chk hybrid-nv-intel INTEL_GEN xe
 
 # 14. Hybrid NVIDIA + AMD
 run hybrid-nv-amd "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU106 [GeForce RTX 2070] [10de:1f02] (rev a1)

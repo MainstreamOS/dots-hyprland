@@ -29,17 +29,29 @@ _gpu_sys_vendor() { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
 #   HAS_NVIDIA HAS_AMD HAS_INTEL  IS_HYBRID  IS_VM
 #   NVIDIA_PCI_DEC (int)  NVIDIA_GEN (turing|maxwell|kepler|fermi|prefermi|none)
 #   AMD_DEC (int)         IS_OLD_AMD  IS_RDNA4
+#   INTEL_GEN (xe|modern|legacy|none)
 # Generation ladder (PCI device-id decimal): 7682 Turing+ (0x1E02 TITAN RTX /
 # 0x1E03 RTX 2080 Ti 12GB are the lowest Turing IDs), 4928 Maxwell-Volta,
 # 4032 Kepler, 1728 Fermi, below Fermi -> prefermi (nouveau).
 # AMD "old" = pre-GCN: dec < 26112 AND NOT an APU (4864-5887 exemption), OR a
 # pre-GCN name (HD 2xxx-6xxx / RV / RS / R[67]xx); RDNA4 (Navi 4x / RX 9xxx /
 # gfx12) always forces modern.
+# Intel tiers track the two userspace boundaries that actually change packages:
+#   xe     Gen12+ / Arc (Tiger Lake, Alder/Raptor/Meteor/Arrow/Lunar Lake, DG1,
+#          Alchemist, Battlemage). Only tier the OpenCL compute runtime and the
+#          VPL runtime support — both are Gen12-and-newer upstream.
+#   modern Gen8-Gen11 (Broadwell..Ice Lake). iHD VA-API, no OpenCL: upstream
+#          moved Gen8-11 compute to legacy1 packages that Arch does not ship.
+#   legacy Gen4-Gen7.5 (G45..Haswell). i965 VA-API — predates iHD entirely.
+# Intel device IDs are not monotonic, so the tiers match known id prefixes
+# newest-first and anything unrecognised falls to 'modern', which is the safe
+# middle: iHD works on every Gen8+ part and no compute runtime is assumed.
 # Returns 1 if no display device is found (lspci missing or none present).
 gpu_detect() {
     HAS_NVIDIA=false HAS_AMD=false HAS_INTEL=false IS_HYBRID=false IS_VM=false
     NVIDIA_PCI_DEC=0 NVIDIA_GEN=none
     AMD_DEC=0 IS_OLD_AMD=false IS_RDNA4=false
+    INTEL_GEN=none
 
     # Probe each lspci form once and reuse: -nn (with [vendor:device] IDs) for
     # the ID matches, plain names for the marketing-name regexes. Kept separate
@@ -89,6 +101,26 @@ gpu_detect() {
         # 'Radeon NxxxM' / bare 'Radeon Graphics' never appear on pre-GCN parts.
         if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$lspci_names"; then IS_OLD_AMD=false; fi
         if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$lspci_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
+    fi
+
+    if [[ $HAS_INTEL == true ]]; then
+        local intel_id intel_name
+        intel_id="$(grep -oE '8086:[0-9a-fA-F]{4}' <<<"$gpu_lines" | head -1 | cut -d: -f2 | tr 'A-F' 'a-f' || true)"
+        intel_name="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" | grep -i 'Intel' | head -1 || true)"
+        # 46 Alder Lake, 4c Rocket Lake, 56 DG2/Alchemist, 64 Lunar Lake,
+        # 7d Meteor/Arrow Lake, 9a Tiger Lake, a7 Raptor Lake, b0 Panther Lake,
+        # e2 Battlemage, 4905-4909 DG1. Gen9 'Iris Plus'/'Iris Pro' deliberately
+        # do not match the name test — only 'Iris Xe' is Gen12.
+        if [[ "$intel_id" =~ ^(46|4c|56|64|7d|9a|a7|b0|e2)[0-9a-f]{2}$ || "$intel_id" =~ ^490[5-9]$ ]] \
+            || grep -iqE '\bArc\b|Iris Xe|Alchemist|Battlemage|\bDG[12]\b' <<<"$intel_name"; then
+            INTEL_GEN=xe
+        # Ironlake/Sandy/Ivy/Haswell all live in 0xxx; Gen4 spans 2772-2e92.
+        # 0x22xx (Cherryview, Gen8) is excluded from the second range on purpose.
+        elif [[ "$intel_id" =~ ^0[0-9a-f]{3}$ || "$intel_id" =~ ^2[6-9a-e][0-9a-f]{2}$ ]]; then
+            INTEL_GEN=legacy
+        else
+            INTEL_GEN=modern
+        fi
     fi
 
     return 0
