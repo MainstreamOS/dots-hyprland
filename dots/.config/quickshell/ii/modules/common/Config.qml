@@ -130,35 +130,6 @@ Singleton {
         return changed
     }
 
-    // A widget added after someone saved a layout would never appear for them,
-    // because their stored list is used as-is. Slot it in once, just after the
-    // widget it belongs next to, so an upgrade doesn't quietly leave half a
-    // feature switched off. Which ids have had their turn is recorded, because
-    // "the layout doesn't mention it" is also what someone who deleted it looks
-    // like — without the record every reload would put it straight back.
-    // Returns true when the config changed and needs saving.
-    function seedBarLayoutWidget(id, section, after) {
-        const bar = root.options.bar
-        const seeded = bar?.seededWidgets ?? []
-        if (!bar?.layout || seeded.indexOf(id) !== -1) return false
-        bar.seededWidgets = seeded.concat([id])
-        if (ObjectUtils.layoutHasWidget(bar.layout, id)) return true
-
-        // Only ever splice into a group already written the canonical way. The
-        // string and items forms are hand-written, and quietly restructuring
-        // someone's file to fit a new widget in is worse than not fitting it in.
-        const groups = JSON.parse(JSON.stringify(bar.layout[section] ?? []))
-        let widgets = null, at = -1
-        for (const group of groups) {
-            at = (group.widgets ?? []).findIndex(w => w.id === after)
-            if (at !== -1) { widgets = group.widgets; break }
-        }
-        if (!widgets) return true
-        widgets.splice(at + 1, 0, { "id": id, "enabled": true })
-        bar.layout[section] = groups
-        return true
-    }
-
     function reloadFromFile() {
         root._reloading = true
         configFileView.reload()
@@ -241,12 +212,14 @@ Singleton {
         }
         onLoaded: {
             root.ready = true
-            // Both seeders run here, where _reloading may still be set and would
-            // swallow the write that onAdapterUpdated would otherwise schedule.
-            // Ask for the save directly; fileWriteTimer still honours the guards.
-            const legacy = root.seedBarLayoutFromLegacySwitches()
-            const seeded = root.seedBarLayoutWidget("releaseUpdates", "right", "weather")
-            if (legacy || seeded) fileWriteTimer.restart()
+            // The migration runs here, where _reloading may still be set and would
+            // swallow the write that onAdapterUpdated would otherwise schedule, so
+            // the save is asked for directly. It only fires for a file written
+            // before bar.layout existed, which a fresh install never has — nothing
+            // else may write this file at startup. A first login seeds the
+            // wallpaper path from outside a moment later, and that write only
+            // survives because it is the last one.
+            if (root.seedBarLayoutFromLegacySwitches()) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -472,11 +445,6 @@ Singleton {
                     property list<var> center: root.defaultBarLayout.center
                     property list<var> right: root.defaultBarLayout.right
                 }
-                // Widget ids the layout above has already been offered, so a
-                // widget taken out of the layout stays out. Must start empty:
-                // an older file has no such key and reads back this default,
-                // and only an empty one means "nothing has been offered yet".
-                property list<string> seededWidgets: []
                 property string layoutEditorMode: "simple" // "simple" or "custom"
                 property JsonObject resources: JsonObject {
                     property bool alwaysShowSwap: true

@@ -365,12 +365,10 @@ ContentPage {
             //                                theme — undoing the manual apply.
             //                                Treat the whole night block as
             //                                user-level state.)
-            //   - bar.seededWidgets        (a per-machine record of which bar
-            //                                widgets have already been offered;
-            //                                carrying it into an exported theme
-            //                                would tell another machine it had
-            //                                already been given widgets it has
-            //                                never seen.)
+            //   - bar.seededWidgets        (no longer written, but a theme
+            //                                exported while it was would carry a
+            //                                per-machine record onto a machine it
+            //                                does not describe.)
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
