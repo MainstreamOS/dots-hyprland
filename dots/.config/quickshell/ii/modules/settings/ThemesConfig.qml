@@ -19,13 +19,12 @@ ContentPage {
     readonly property string homePath: FileUtils.trimFileProtocol(Directories.home)
     readonly property string shellConfigDir: Directories.shellConfig
     readonly property string shellConfigPath: Directories.shellConfigPath
-    readonly property string themesDir: homePath + "/.config/mainstream/themes"
-    readonly property string themesIndex: themesDir + "/index.json"
-    readonly property string lastAppliedPath: themesDir + "/last-applied.txt"
+    readonly property string themesDir: ThemeLibrary.themesDir
+    readonly property string lastAppliedPath: ThemeLibrary.lastAppliedPath
 
     // ── State ────────────────────────────────────────────────────────────────
-    property var themes: []
-    property string lastAppliedSlug: ""
+    readonly property var themes: ThemeLibrary.themes
+    readonly property string lastAppliedSlug: ThemeLibrary.lastAppliedSlug
     property var orderedThemes: {
         if (!root.lastAppliedSlug) return root.themes
         const first = root.themes.find(t => t.slug === root.lastAppliedSlug)
@@ -170,57 +169,9 @@ ContentPage {
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
-    Component.onCompleted: ensureDirsProc.running = true
-
-    Process {
-        id: ensureDirsProc
-        command: ["bash", "-c",
-            `mkdir -p '${root.themesDir}' && ` +
-            `if [ ! -f '${root.themesIndex}' ]; then echo '[]' > '${root.themesIndex}'; fi`
-        ]
-        onExited: loadIndexProc.running = true
-    }
-
-    Process {
-        id: loadIndexProc
-        property string buf: ""
-        command: ["cat", root.themesIndex]
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => loadIndexProc.buf += data }
-        onExited: {
-            let parsed = []
-            try { parsed = JSON.parse(loadIndexProc.buf || "[]") } catch (e) { parsed = [] }
-            root.themes = parsed || []
-            loadLastAppliedProc.running = false
-            loadLastAppliedProc.running = true
-        }
-    }
-
-    Process {
-        id: loadLastAppliedProc
-        property string buf: ""
-        command: ["bash", "-c", `[ -f '${root.lastAppliedPath}' ] && cat '${root.lastAppliedPath}' || true`]
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => loadLastAppliedProc.buf += data }
-        onExited: root.lastAppliedSlug = (loadLastAppliedProc.buf || "").trim()
-    }
-
-    // Live-track last-applied.txt so this Settings page updates the
-    // "active" highlight in the Themes section the moment any apply
-    // happens — including ones the main shell's ThemeManager fires on
-    // its own (clock-minute crossings, Hyprsunset schedule transitions).
-    // Without this, the page only reflected applies it initiated itself.
-    FileView {
-        path: root.lastAppliedPath
-        watchChanges: true
-        onFileChanged: reload()
-        onLoaded: root.lastAppliedSlug = (text() || "").trim()
-        onLoadFailed: error => {
-            if (error == FileViewError.FileNotFound) root.lastAppliedSlug = ""
-        }
-    }
-
-    function refreshThemes() { loadIndexProc.running = false; loadIndexProc.running = true }
+    // The library itself lives in ThemeLibrary so it outlives this page being
+    // rebuilt. Opening the page is what puts its preview pins in place.
+    Component.onCompleted: ThemeLibrary.pinPreviews = true
 
     // ── Save theme (capture) ────────────────────────────────────────────────
     Process { id: saveProc }
@@ -471,9 +422,9 @@ ContentPage {
             root.saveDialogOpen = false
             root.pendingUpdateSlug = ""
             root.restoreWindowAfterShot()
-            if (root.lastSavedSlug) root.lastAppliedSlug = root.lastSavedSlug
+            if (root.lastSavedSlug) ThemeLibrary.lastAppliedSlug = root.lastSavedSlug
             root.lastSavedSlug = ""
-            root.refreshThemes()
+            ThemeLibrary.refresh()
             root.showStatus(Translation.tr("Theme saved"))
         }
     }
@@ -488,7 +439,7 @@ ContentPage {
         ipcApplyProc.running = false
         ipcApplyProc.running = true
         // Optimistic UI update — the script also writes last-applied.txt.
-        root.lastAppliedSlug = theme.slug
+        ThemeLibrary.lastAppliedSlug = theme.slug
         // Ends when the apply reports back rather than on a fixed timer, which
         // otherwise expires part-way through some runs and lingers after others.
         root.showStatus(Translation.tr("Applying theme: %1").arg(theme.name), 30000)
@@ -615,9 +566,9 @@ ContentPage {
             // If the deleted theme was the one marked as active, clear the
             // in-memory marker so no ghost "active" highlight lingers.
             if (deleteProc.deletingSlug === root.lastAppliedSlug) {
-                root.lastAppliedSlug = ""
+                ThemeLibrary.lastAppliedSlug = ""
             }
-            root.refreshThemes()
+            ThemeLibrary.refresh()
             root.showStatus(Translation.tr("Theme deleted"))
         }
     }
@@ -741,7 +692,7 @@ print("OK|" + out_path)
             root.ioBusy = false
             const line = (importProc.buf || "").trim().split("\n").filter(l => l.length).pop() || ""
             if (line.startsWith("OK|")) {
-                root.refreshThemes()
+                ThemeLibrary.refresh()
                 let result = null
                 try { result = JSON.parse(line.slice(3)) } catch (e) { result = null }
                 const name = result?.name ?? ""
@@ -1054,8 +1005,7 @@ finally:
                             fillMode: Image.PreserveAspectCrop
                             cache: false
                             source: Config.options.background.wallpaperPath || ""
-                            sourceSize.width: parent.width
-                            sourceSize.height: parent.height
+                            sourceSize: Qt.size(768, 432)
                             layer.enabled: true
                             layer.effect: OpacityMask {
                                 maskSource: Rectangle {
@@ -1124,11 +1074,9 @@ finally:
                             StyledImage {
                                 id: themePreview
                                 anchors.fill: parent
-                                fillMode: Image.PreserveAspectCrop
-                                cache: false
-                                source: "file://" + root.themesDir + "/" + themeCard.modelData.slug + "/preview.png?v=" + (themeCard.modelData.created || 0)
-                                sourceSize.width: parent.width
-                                sourceSize.height: parent.height
+                                fillMode: ThemeLibrary.previewFillMode
+                                source: ThemeLibrary.previewUrl(themeCard.modelData)
+                                sourceSize: ThemeLibrary.previewSourceSize
                                 layer.enabled: true
                                 layer.effect: OpacityMask {
                                     maskSource: Rectangle {
@@ -1376,14 +1324,10 @@ finally:
                             StyledImage {
                                 id: dayPreview
                                 anchors.fill: parent
-                                fillMode: Image.PreserveAspectCrop
-                                cache: false
+                                fillMode: ThemeLibrary.previewFillMode
                                 visible: dayCol.theme !== null
-                                source: dayCol.theme
-                                    ? "file://" + root.themesDir + "/" + dayCol.slug + "/preview.png?v=" + (dayCol.theme.created || 0)
-                                    : ""
-                                sourceSize.width: parent.width
-                                sourceSize.height: parent.height
+                                source: ThemeLibrary.previewUrl(dayCol.theme)
+                                sourceSize: ThemeLibrary.previewSourceSize
                                 layer.enabled: true
                                 layer.effect: OpacityMask {
                                     maskSource: Rectangle {
@@ -1556,14 +1500,10 @@ finally:
                             StyledImage {
                                 id: nightPreview
                                 anchors.fill: parent
-                                fillMode: Image.PreserveAspectCrop
-                                cache: false
+                                fillMode: ThemeLibrary.previewFillMode
                                 visible: nightCol.theme !== null
-                                source: nightCol.theme
-                                    ? "file://" + root.themesDir + "/" + nightCol.slug + "/preview.png?v=" + (nightCol.theme.created || 0)
-                                    : ""
-                                sourceSize.width: parent.width
-                                sourceSize.height: parent.height
+                                source: ThemeLibrary.previewUrl(nightCol.theme)
+                                sourceSize: ThemeLibrary.previewSourceSize
                                 layer.enabled: true
                                 layer.effect: OpacityMask {
                                     maskSource: Rectangle {
