@@ -38,18 +38,27 @@ end
 -- switchwall.sh's wallpaper_path rewrite is honored at runtime.
 -- Refuse to load a plugin stamped for a different Hyprland than the one
 -- this system has installed — a version-mismatched .so segfaults the
--- compositor at dlopen and locks the user out at SDDM. Stamps are written
--- by the rebuild hooks; when either file is missing the check passes open.
+-- compositor at dlopen and locks the user out at SDDM.
+--
+-- /var/lib/hyprland-plugins/hyprland-version records the Hyprland this
+-- system has installed; <plugin>.builtfor records the Hyprland each .so was
+-- compiled against. Both are pkgver-pkgrel from `pacman -Q hyprland`.
+--
+-- The system version gates the check. Absent, this is not a system whose
+-- plugins we manage (a hand-rolled or upstream install) and the check passes
+-- open. Present, every .so must carry a matching stamp — an unstamped .so
+-- has unknown provenance, which is the same conclusion quarantine_stale_targets
+-- reaches in the rebuild scripts when it moves a stampless plugin aside.
 local function plugin_matches_hyprland(so)
-    local sf = io.open(so .. ".builtfor", "r")
-    if not sf then return true end
-    local built = sf:read("*l") or ""
-    sf:close()
     local ef = io.open("/var/lib/hyprland-plugins/hyprland-version", "r")
     if not ef then return true end
     local expect = ef:read("*l") or ""
     ef:close()
-    if built == "" or expect == "" then return true end
+    if expect == "" then return true end
+    local sf = io.open(so .. ".builtfor", "r")
+    if not sf then return false end
+    local built = sf:read("*l") or ""
+    sf:close()
     return built == expect
 end
 

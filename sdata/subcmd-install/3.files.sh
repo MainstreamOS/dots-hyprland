@@ -168,6 +168,19 @@ function install_dir__sync_exclude(){
   fi
   v rsync_dir__sync_exclude $s $t "$@"
 }
+# The version both halves of the ABI guard are stamped with. pacman first
+# because it reports pkgrel and pkg-config does not; a pkgrel-only rebuild
+# changes the plugin ABI while the bare version stays put. Kept identical to
+# the rebuild scripts under sdata/*/rebuild.sh — the guard in
+# dots/.config/hypr/custom/general.lua compares what they write, so a format
+# that drifts between them fails closed.
+function _hyprland_stamp_version(){
+  local _v
+  _v=$(pacman -Q hyprland 2>/dev/null | awk '{print $2}')
+  [[ -n "$_v" ]] || _v=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
+  printf '%s' "$_v"
+}
+
 # _build_hyprland_plugin_fresh: clone/update + build a Hyprland plugin
 # from source against the *running* hyprland, install the produced .so
 # to its plugin path. Returns 0 on success, 1 on any failure (missing
@@ -271,6 +284,7 @@ function _build_hyprland_plugin_fresh(){
   cp -f "$build_dir/$so_filename" "$_staged_so"
   chmod 755 "$_staged_so"
   mv -f "$_staged_so" "$plugin_dir/$so_filename"
+  printf '%s\n' "$(_hyprland_stamp_version)" > "$plugin_dir/$so_filename.builtfor"
   echo -e "${STY_GREEN}[$0]: $name: built freshly against current hyprland → $plugin_dir/$so_filename${STY_RST}"
   return 0
 }
@@ -296,6 +310,16 @@ function _ensure_hyprland_plugin(){
   local _had_prebuilt=false
   [[ -f "$plugin_path" ]] && _had_prebuilt=true
 
+  # Record which Hyprland this system runs, so the guard in custom/general.lua
+  # has something to compare each .so's stamp against. Written before the build
+  # so a failed build still leaves the guard armed.
+  local _stamp_ver
+  _stamp_ver=$(_hyprland_stamp_version)
+  if [[ -n "$_stamp_ver" ]]; then
+    try sudo mkdir -p /var/lib/hyprland-plugins
+    printf '%s\n' "$_stamp_ver" | try sudo tee /var/lib/hyprland-plugins/hyprland-version >/dev/null
+  fi
+
   if [[ "$_had_prebuilt" == true ]]; then
     echo -e "${STY_BLUE}[$0]: $name: prebuilt $so_filename present at $plugin_path${STY_RST}"
     echo -e "${STY_BLUE}[$0]:   Will rebuild against current hyprland to guarantee ABI match.${STY_RST}"
@@ -307,8 +331,9 @@ function _ensure_hyprland_plugin(){
 
   if [[ "$_had_prebuilt" == true ]]; then
     echo -e "${STY_YELLOW}[$0]: $name: keeping prebuilt $so_filename as fallback.${STY_RST}"
-    echo -e "${STY_YELLOW}[$0]:   This .so may not load if the build host's hyprland version differs${STY_RST}"
-    echo -e "${STY_YELLOW}[$0]:   from yours. The pacman rebuild hook installed below will retry${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   It loads only if it is stamped for hyprland $_stamp_ver; a prebuilt${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   for any other version stays disabled rather than crashing the${STY_RST}"
+    echo -e "${STY_YELLOW}[$0]:   compositor. The pacman rebuild hook installed below will retry${STY_RST}"
     echo -e "${STY_YELLOW}[$0]:   from source on the next \`pacman -Syu\` that touches hyprland.${STY_RST}"
     return 0
   fi
