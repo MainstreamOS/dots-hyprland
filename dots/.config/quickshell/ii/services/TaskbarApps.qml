@@ -137,19 +137,52 @@ Singleton {
             map.get(resolvedAppId.toLowerCase()).toplevels.push(toplevel);
         }
 
+        // Entries are reused between runs rather than rebuilt. Everything this
+        // binding reads re-runs the whole body, so opening a window recomputed
+        // the entire list even though the same apps were still in it. Handing
+        // the model a fresh object for every app made it treat each one as a
+        // new item, so the dock dropped and re-added every icon, ran its
+        // appearance transition, and the animated width slid the whole centred
+        // row sideways before it settled. Reordering never showed it because
+        // that path turns the transition off while it drags.
+        //
+        // An app that really did appear or disappear still gets a new or
+        // destroyed entry, so those keep animating.
         var values = [];
+        const live = new Set();
 
         for (const [key, value] of map) {
-            values.push(appEntryComp.createObject(null, {
-                appId: value.originalId,
-                toplevels: value.toplevels,
-                pinned: value.pinned,
-                isFolder: value.isFolder
-            }));
+            live.add(key);
+            let entry = root._entries[key];
+            if (entry) {
+                entry.appId = value.originalId;
+                entry.toplevels = value.toplevels;
+                entry.pinned = value.pinned;
+                entry.isFolder = value.isFolder;
+            } else {
+                entry = appEntryComp.createObject(null, {
+                    appId: value.originalId,
+                    toplevels: value.toplevels,
+                    pinned: value.pinned,
+                    isFolder: value.isFolder
+                });
+                root._entries[key] = entry;
+            }
+            values.push(entry);
+        }
+
+        for (const key in root._entries) {
+            if (live.has(key)) continue;
+            root._entries[key].destroy();
+            delete root._entries[key];
         }
 
         return values;
     }
+
+    // Keyed by the same key the map above uses. Only ever mutated in place —
+    // assigning to it would make the binding above depend on its own output.
+    property var _entries: ({})
 
     component TaskbarAppEntry: QtObject {
         id: wrapper
