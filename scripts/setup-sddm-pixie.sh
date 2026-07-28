@@ -63,26 +63,37 @@ CompositorCommand=start-hyprland
 Current=pixie
 SDDMEOF
 
+# Lua, not .conf: 0.56.1 shows a deprecation notice on any .conf config, and the
+# greeter is the first thing anyone sees. The format goes away in 0.57. An empty
+# output is the catch-all rule, the same as the old `monitor=,...` line.
 mkdir -p /var/lib/sddm/.config/hypr
-cat > /var/lib/sddm/.config/hypr/hyprland.conf <<'HYPREOF'
-monitor=,preferred,auto,1
+rm -f /var/lib/sddm/.config/hypr/hyprland.conf
+cat > /var/lib/sddm/.config/hypr/hyprland.lua <<'HYPREOF'
+hl.monitor({
+    output   = "",
+    mode     = "preferred",
+    position = "auto",
+    scale    = "1",
+})
 
-misc {
-    disable_hyprland_logo = true
-    disable_splash_rendering = true
-    force_default_wallpaper = 0
-}
+hl.config({
+    misc = {
+        disable_hyprland_logo    = true,
+        disable_splash_rendering = true,
+        force_default_wallpaper  = 0,
+        disable_watchdog_warning = true,
+    },
+    animations = {
+        enabled = false,
+    },
+})
 
-animations {
-    enabled = false
-}
-
-windowrule = match:class ^(sddm-greeter-qt6)$, fullscreen on
+hl.window_rule({ match = { class = "^(sddm-greeter-qt6)$" }, fullscreen = true })
 HYPREOF
 chown -R sddm:sddm /var/lib/sddm
 chmod 700 /var/lib/sddm/.config
 chmod 700 /var/lib/sddm/.config/hypr
-chmod 600 /var/lib/sddm/.config/hypr/hyprland.conf
+chmod 600 /var/lib/sddm/.config/hypr/hyprland.lua
 info "SDDM Wayland greeter configured"
 
 # --- Step 3: Configure silent boot/reboot/shutdown ---
