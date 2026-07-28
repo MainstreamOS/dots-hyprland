@@ -116,7 +116,13 @@ done
 
 NPROC=$(nproc 2>/dev/null || echo 1)
 
-HYPR_VER=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
+# pacman first: it reports pkgrel, pkg-config does not. A pkgrel-only rebuild
+# (0.56.1-1 -> 0.56.1-2, against a newer aquamarine) changes the plugin ABI hash
+# while the bare version stays identical, so a stamp without it would compare
+# equal and hand back a stale .so. pkg-config stays as the fallback so a rebuild
+# against a hand-built Hyprland still works.
+HYPR_VER=$(pacman -Q hyprland 2>/dev/null | awk '{print $2}')
+[[ -n "$HYPR_VER" ]] || HYPR_VER=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
 [[ -n "$HYPR_VER" ]] || { err "could not read Hyprland version"; exit 1; }
 log "Installed Hyprland: $HYPR_VER"
 mkdir -p /var/lib/hyprland-plugins
