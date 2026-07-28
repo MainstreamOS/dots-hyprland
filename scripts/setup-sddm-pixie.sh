@@ -64,36 +64,24 @@ Current=pixie
 SDDMEOF
 
 # Lua, not .conf: 0.56.1 shows a deprecation notice on any .conf config, and the
-# greeter is the first thing anyone sees. The format goes away in 0.57. An empty
-# output is the catch-all rule, the same as the old `monitor=,...` line.
+# greeter is the first thing anyone sees. The format goes away in 0.57.
+# updatems-system installs the same file, so it lives in the repo rather than in
+# a heredoc here — two copies of a login-screen config is one too many.
 mkdir -p /var/lib/sddm/.config/hypr
-rm -f /var/lib/sddm/.config/hypr/hyprland.conf
-cat > /var/lib/sddm/.config/hypr/hyprland.lua <<'HYPREOF'
-hl.monitor({
-    output   = "",
-    mode     = "preferred",
-    position = "auto",
-    scale    = "1",
-})
-
-hl.config({
-    misc = {
-        disable_hyprland_logo    = true,
-        disable_splash_rendering = true,
-        force_default_wallpaper  = 0,
-        disable_watchdog_warning = true,
-    },
-    animations = {
-        enabled = false,
-    },
-})
-
-hl.window_rule({ match = { class = "^(sddm-greeter-qt6)$" }, fullscreen = true })
-HYPREOF
+GREETER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sdata/sddm/hyprland.lua"
+if [[ -f "$GREETER_SRC" ]]; then
+    install -m600 "$GREETER_SRC" /var/lib/sddm/.config/hypr/hyprland.lua
+    # Moved aside rather than removed: lua is found before conf, so the new file
+    # already wins, and keeping the old one means a greeter that will not start
+    # can be put back by renaming one file.
+    [[ -f /var/lib/sddm/.config/hypr/hyprland.conf ]] \
+        && mv /var/lib/sddm/.config/hypr/hyprland.conf /var/lib/sddm/.config/hypr/hyprland.conf.old
+else
+    warn "Greeter config missing at $GREETER_SRC — leaving the existing one alone"
+fi
 chown -R sddm:sddm /var/lib/sddm
 chmod 700 /var/lib/sddm/.config
 chmod 700 /var/lib/sddm/.config/hypr
-chmod 600 /var/lib/sddm/.config/hypr/hyprland.lua
 info "SDDM Wayland greeter configured"
 
 # --- Step 3: Configure silent boot/reboot/shutdown ---

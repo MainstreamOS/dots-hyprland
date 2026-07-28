@@ -109,6 +109,35 @@ _install_file 0644 \
     /usr/share/polkit-1/rules.d/50-sddm-bg.rules \
     "SDDM polkit rules"
 
+# ── SDDM greeter config: .conf → .lua ──────────────────────────────────────
+# Hyprland 0.56.1 puts a notice on screen for any .conf config and drops the
+# format in 0.57. The greeter runs its own compositor, and its config is
+# written by the installer — which an update never re-runs — so a machine
+# installed before the switch would keep showing that notice at every login
+# with nothing to clear it.
+#
+# Only touched when the directory already exists, so this never sets up a
+# greeter on a machine that has not asked for one. Hyprland finds lua before
+# conf, so writing the new file is what resolves it; the old one is moved
+# aside afterwards, and only if the write succeeded.
+GREETER_DIR=/var/lib/sddm/.config/hypr
+GREETER_SRC="$REPO_DIR/sdata/sddm/hyprland.lua"
+if [[ -d "$GREETER_DIR" ]]; then
+    if [[ ! -f "$GREETER_SRC" ]]; then
+        warn "SDDM greeter config source missing at $GREETER_SRC — skipping"
+    elif install -m 600 -o sddm -g sddm "$GREETER_SRC" "$GREETER_DIR/hyprland.lua"; then
+        if [[ -f "$GREETER_DIR/hyprland.conf" ]]; then
+            mv "$GREETER_DIR/hyprland.conf" "$GREETER_DIR/hyprland.conf.old"
+            ok "SDDM greeter config moved to Lua (old kept as hyprland.conf.old)"
+        else
+            ok "SDDM greeter config refreshed -> $GREETER_DIR/hyprland.lua"
+        fi
+    else
+        warn "SDDM greeter config install failed — leaving the existing one alone"
+        RC=1
+    fi
+fi
+
 # ── Update tooling (refreshes itself + updatems + helper) ──────────────────
 # Refreshing the helper while it's mid-run is safe on Linux — the
 # kernel keeps the inode open via the existing fd until the process
