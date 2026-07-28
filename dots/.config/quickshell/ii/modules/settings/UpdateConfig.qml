@@ -229,7 +229,7 @@ ContentPage {
                 }
             }
         ]
-
+        /*
         // Which version is installed, and where an update would take it. In a
         // notice of its own rather than beside the section title, where it read
         // as part of the heading instead of as a thing being reported.
@@ -253,7 +253,7 @@ ContentPage {
                 color: Appearance.colors.colOnPrimaryContainer
             }
         }
-
+        */
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 200
