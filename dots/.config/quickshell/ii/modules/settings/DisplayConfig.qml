@@ -740,6 +740,22 @@ print(json.dumps(result))
         return 0;
     }
 
+    // The logical footprint a monitor occupies in Hyprland's coordinate space,
+    // which is what x/y are expressed in.  Mode width/height are pixels, so
+    // rotate (transforms 1/3/5/7 are 90°/270°) and divide by the scale.
+    // Uses the pending/monitors.lua scale, never hyprctl's 2-decimal rounding.
+    function logicalSize(monName, p, mon) {
+        let scale = p.scale ?? confScale[monName] ?? mon.scale;
+        if (!(scale > 0)) scale = 1;
+        let rot   = ((p.transform ?? mon.transform ?? 0) % 2) === 1;
+        let pxW   = p.width  ?? mon.width;
+        let pxH   = p.height ?? mon.height;
+        return {
+            width:  Math.round((rot ? pxH : pxW) / scale),
+            height: Math.round((rot ? pxW : pxH) / scale)
+        };
+    }
+
     // Resolve the visual canvas position of a monitor, honouring positionMode
     // when it is set to an auto-center-* value.  The default monitor is always
     // at 0×0; every other monitor is placed relative to it.
@@ -753,10 +769,12 @@ print(json.dumps(result))
         let defMon  = displayConfigPage.monitors.find(m => m.name === defName);
         if (!defMon) return { x: p.x ?? mon.x, y: p.y ?? mon.y };
         let dp   = displayConfigPage.pendingChanges[defName] ?? {};
-        let defW = dp.width  ?? defMon.width;
-        let defH = dp.height ?? defMon.height;
-        let thisW = p.width  ?? mon.width;
-        let thisH = p.height ?? mon.height;
+        let defSize  = logicalSize(defName, dp, defMon);
+        let thisSize = logicalSize(monName, p, mon);
+        let defW = defSize.width;
+        let defH = defSize.height;
+        let thisW = thisSize.width;
+        let thisH = thisSize.height;
         switch (mode) {
             case "auto-center-right": return { x: defW,           y: Math.round((defH - thisH) / 2) };
             case "auto-center-left":  return { x: -thisW,         y: Math.round((defH - thisH) / 2) };
@@ -774,8 +792,9 @@ print(json.dumps(result))
         monitors.forEach(mon => {
             let p   = pendingChanges[mon.name] ?? {};
             let pos = resolveEffectivePos(mon.name, p, mon);
-            let w   = p.width  ?? mon.width;
-            let h   = p.height ?? mon.height;
+            let sz  = logicalSize(mon.name, p, mon);
+            let w   = sz.width;
+            let h   = sz.height;
             minX = Math.min(minX, pos.x);
             minY = Math.min(minY, pos.y);
             maxX = Math.max(maxX, pos.x + w);
@@ -1257,10 +1276,11 @@ except Exception:
 
                     // Position and size on canvas
                     property var effectivePos: displayConfigPage.resolveEffectivePos(monName, pending, mon)
+                    property var effectiveSize: displayConfigPage.logicalSize(monName, pending, mon)
                     x: effectivePos.x * layout.scale + layout.offsetX
                     y: effectivePos.y * layout.scale + layout.offsetY
-                    width:  (pending.width  ?? mon.width)  * layout.scale
-                    height: (pending.height ?? mon.height) * layout.scale
+                    width:  effectiveSize.width  * layout.scale
+                    height: effectiveSize.height * layout.scale
 
                     Rectangle {
                         anchors.fill: parent
