@@ -208,7 +208,6 @@
   "Night Light": "Luz Noturna",
   "Font roundness": "Arredondamento da fonte",
   "Style & wallpaper": "Estilo & Papel de parede",
-  "Nothing": "Nada",
   "Snipping area": "Área de recorte",
   "Exceeded max allowed": "Máximo permitido excedido",
   "Sidebars": "Barras laterais",
@@ -1751,5 +1750,9 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Hover animation": "Hover animation",
+  "Nothing": "Nada"
 }

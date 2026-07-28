@@ -827,7 +827,6 @@
   "Not connected": "Not connected",
   "Not secured": "Not secured",
   "Notes": "Notes",
-  "Nothing": "Nothing",
   "Number style": "Number style",
   "Numbers": "Numbers",
   "Numbers font": "Numbers font",
@@ -1785,5 +1784,9 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Hover animation": "Hover animation",
+  "Nothing": "Nothing"
 }

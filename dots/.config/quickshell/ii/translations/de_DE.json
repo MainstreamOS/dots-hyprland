@@ -575,7 +575,6 @@
   "Hide clipboard images copied from sussy sources": "Zwischenablage-Bilder von verdächtigen Quellen ausblenden",
   "Scroll to Bottom": "Nach unten scrollen",
   "Enabled": "Aktiviert",
-  "Nothing": "Nichts",
   "Audio input": "Audio-Eingabe",
   "with vertical offset": "mit vertikalem Versatz",
   "Padding": "Abstand",
@@ -1785,5 +1784,9 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Hover animation": "Hover animation",
+  "Nothing": "Nichts"
 }

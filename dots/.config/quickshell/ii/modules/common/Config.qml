@@ -821,6 +821,8 @@ Singleton {
                 // the dock's own setting moves the bar across instead.
                 property string position: "bottom"
                 property bool monochromeIcons: false
+                // "magnify" | "glow" | "off"
+                property string hoverEffect: "magnify"
                 property real hoverRegionHeight: 2
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace

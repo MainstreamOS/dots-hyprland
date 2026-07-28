@@ -581,7 +581,6 @@
   "Hide clipboard images copied from sussy sources": "Hide clipboard images copied from sussy sources",
   "Scroll to Bottom": "Scroll to Bottom",
   "Enabled": "Enabled",
-  "Nothing": "Nothing",
   "Audio input": "Audio input",
   "with vertical offset": "with vertical offset",
   "Padding": "Padding",
@@ -1808,5 +1807,12 @@
   "Dark mode and light mode each keep their own colors.": "Dark mode and light mode each keep their own colors.",
   "Split into three": "Split into three",
   "Spread": "Spread",
-  "Notch": "Notch"
+  "Notch": "Notch",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Magnify amount": "Magnify amount",
+  "Hover animation": "Hover animation",
+  "Glow color": "Glow color",
+  "Glow intensity": "Glow intensity",
+  "Nothing": "Nothing"
 }

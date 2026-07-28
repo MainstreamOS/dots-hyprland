@@ -201,7 +201,18 @@ Item {
     property real maxScale: Appearance.sizes.dockMaxScale
     property real sigma: 60
 
+    // Which button the pointer is actually over. Asked of the same mouse
+    // position magnification uses, because the per-button hover areas never
+    // fire: listHoverArea below fills the whole list and sits above every
+    // delegate, so it takes the hover first. Position and size are along the
+    // dock's own axis, the same line mousePosInList runs on.
+    function pointerIsOver(itemPos, itemSize) {
+        if (!listHovered || previewShow) return false;
+        return mousePosInList >= itemPos && mousePosInList < itemPos + itemSize;
+    }
+
     function scaleForPos(itemCenter) {
+        if (Config.options.dock.hoverEffect !== "magnify") return 1.0;
         if (!listHovered || previewShow) return 1.0;
         const dist = itemCenter - mousePosInList;
         return 1.0 + (maxScale - 1.0) * Math.exp(-(dist * dist) / (2 * sigma * sigma));
@@ -295,6 +306,7 @@ Item {
             leftInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
             rightInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
             hoverScale: root.scaleForPos(dockRoot.dockVertical ? y + height / 2 : x + width / 2)
+            pointerOver: root.pointerIsOver(dockRoot.dockVertical ? y : x, dockRoot.dockVertical ? height : width)
         }
     }
 

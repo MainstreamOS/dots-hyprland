@@ -537,7 +537,6 @@
   "Hide clipboard images copied from sussy sources": "Скрывать изображения из подозрительных источников",
   "Scroll to Bottom": "В конец",
   "Enabled": "Вкл.",
-  "Nothing": "Тут пусто!",
   "Audio input": "Аудиовход",
   "with vertical offset": "Смещением по вертикали",
   "Padding": "Отступ",
@@ -1760,5 +1759,9 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Hover animation": "Hover animation",
+  "Nothing": "Тут пусто!"
 }

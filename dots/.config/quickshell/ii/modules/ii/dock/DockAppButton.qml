@@ -122,6 +122,8 @@ DockButton {
 
     enabled: !isSeparator
     property real hoverScale: 1.0
+    // Set by the list, not by a MouseArea here — see pointerIsOver in DockApps.
+    property bool pointerOver: false
     property int buttonIndex: 0
 
     implicitWidth: dockRoot.dockVertical ? dockButtonSize + leftInset + rightInset
@@ -278,6 +280,30 @@ DockButton {
 
             Behavior on scale {
                 NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
+            }
+
+            // Hover glow. Declared before the icon so it is drawn behind it —
+            // the icon stays sharp and only the halo shows around the edges.
+            // Carries the launch animation's transform for the same reason the
+            // tint overlay does: anchors follow geometry, and scale and rotation
+            // do not touch geometry, so without it the halo would sit still
+            // while the icon moved inside it.
+            FadeLoader {
+                anchors.fill: parent
+                shown: root.pointerOver
+                scale: launchAnims.scale
+                rotation: launchAnims.rot
+                transformOrigin: Item.Center
+                sourceComponent: Glow {
+                    source: root.isFolder ? folderIconLoader : iconImageLoader
+                    radius: 14
+                    samples: 29
+                    color: Appearance.colors.colOutline
+                    // Without this the blur is cut off at the item edges, and
+                    // since the item is exactly the icon's size the halo ends up
+                    // entirely behind the icon with nothing showing.
+                    transparentBorder: true
+                }
             }
 
             // Regular app icon

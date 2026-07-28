@@ -139,6 +139,38 @@ ContentPage {
         }
 
         ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "mouse"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Hover animation")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                id: dockHoverEffectCombo
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("None"), icon: "block", value: "off" },
+                    { displayName: Translation.tr("Magnify"), icon: "zoom_in", value: "magnify" },
+                    { displayName: Translation.tr("Glow"), icon: "blur_on", value: "glow" },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.dock.hoverEffect);
+                    return idx !== -1 ? idx : 1; // fall back to magnify
+                }
+                onActivated: index => { Config.options.dock.hoverEffect = dockHoverEffectCombo.model[index].value; }
+            }
+        }
+
+        ConfigRow {
             uniform: true
             ConfigSwitch {
                 buttonIcon: "highlight_mouse_cursor"

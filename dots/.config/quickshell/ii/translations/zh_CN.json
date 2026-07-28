@@ -557,7 +557,6 @@
   "Not secured": "不安全",
   "Overlay: General": "叠加面板：通用",
   "Keybind font size": "快捷键字体大小",
-  "Nothing": "空空如也",
   "Main font": "主字体",
   "End session": "结束专注",
   "Listening...": "正在听取...",
@@ -1770,5 +1769,9 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Glow": "Glow",
+  "Magnify": "Magnify",
+  "Hover animation": "Hover animation",
+  "Nothing": "空空如也"
 }
