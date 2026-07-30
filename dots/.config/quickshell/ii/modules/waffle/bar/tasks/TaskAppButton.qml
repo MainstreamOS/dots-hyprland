@@ -12,17 +12,32 @@ AppButton {
 
     required property var appEntry
     readonly property bool isSeparator: appEntry.appId === "SEPARATOR"
-    property var desktopEntry: DesktopEntries.heuristicLookup(appEntry.appId)
+    // Bumped by the retry timer to re-run the lookup below. The timer used to
+    // assign straight to desktopEntry, which replaced the binding with whatever
+    // that one attempt returned — see the same fix in the dock's DockAppButton.
+    // Task buttons are no longer rebuilt every time a window opens, so a lookup
+    // that came back null while the database was still filling in stayed null
+    // until a reload.
+    property int lookupAttempt: 0
+
+    readonly property var desktopEntry: {
+        // heuristicLookup() is a plain function call and registers no
+        // dependency, so read the entry list to make the database itself one.
+        DesktopEntries.applications.values.length;
+        root.lookupAttempt;
+        return DesktopEntries.heuristicLookup(root.appEntry.appId);
+    }
 
     Timer {
-        // Retry looking up the desktop entry if it failed (e.g. database not loaded yet)
+        // Safety net only — nudges lookupAttempt rather than assigning to
+        // desktopEntry, which is what broke the binding in the first place.
         property int retryCount: 5
         interval: 1000
         running: !root.isSeparator && root.desktopEntry === null && retryCount > 0
         repeat: true
         onTriggered: {
             retryCount--;
-            root.desktopEntry = DesktopEntries.heuristicLookup(root.appEntry.appId);
+            root.lookupAttempt++;
         }
     }
 
