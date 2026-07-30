@@ -7,7 +7,7 @@ local qsIpcCall = "qs -c $qsConfig ipc call"
 local qsIsAlive = qsIpcCall.." TEST_ALIVE"
 
 --#!
---##! Shell
+--##! Desktop
 -- These absolutely need to be on top, or they won't work consistently
 hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:searchToggleRelease"), {description = "Toggle search"} )
 hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:searchToggleRelease"))
