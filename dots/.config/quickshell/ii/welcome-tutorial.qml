@@ -55,6 +55,7 @@ ApplicationWindow {
         var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
     }
     function toggleInstall(key) {
+        if (installLocked(key)) return;
         var s = Object.assign({}, installSelections); s[key] = !s[key];
         if (s[key] && (key === "resolve" || key === "resolve-studio"))
             s[key === "resolve" ? "resolve-studio" : "resolve"] = false;
@@ -62,10 +63,40 @@ ApplicationWindow {
             s[key === "gaming" ? "gamescope" : "gaming"] = false;
         installSelections = s;
     }
+
+    // Resolve is a local pacman package, so the install button is also the
+    // update button — but re-running it when nothing is newer used to mean a
+    // silent ~50 GB rebuild. Updates.refreshResolve() shells out to
+    // `install-davinci-resolve --check --json`, the same source of truth the
+    // weekly notifier uses. Asynchronous and best-effort: until it answers (or
+    // if it never does) every row reads exactly as it did before.
+    Component.onCompleted: Updates.refreshResolve()
+
+    // Which install row, if any, the installed Resolve package occupies. Prefix
+    // matching so a beta claims its row without implying a version comparison —
+    // the check deliberately refuses to compare betas against stable.
+    function resolveRowFor(key) {
+        const pkg = Updates.resolvePackage;
+        if (pkg.length === 0) return false;
+        return key === "resolve-studio"
+            ? pkg.indexOf("davinci-resolve-studio") === 0
+            : pkg.indexOf("davinci-resolve-studio") !== 0;
+    }
+    function installLocked(key) {
+        if (key !== "resolve" && key !== "resolve-studio") return false;
+        return resolveRowFor(key) && !Updates.resolveUpdateAvailable;
+    }
+    function installStatus(key) {
+        if (!resolveRowFor(key)) return "";
+        if (Updates.resolveUpdateAvailable && Updates.resolveLatest.length > 0)
+            return Translation.tr("Update to %1").arg(Updates.resolveLatest);
+        return Translation.tr("Installed");
+    }
     function runInstalls() {
         if (installCount === 0) return;
         var opts = [];
-        for (var k in installSelections) if (installSelections[k]) opts.push(k);
+        for (var k in installSelections) if (installSelections[k] && !installLocked(k)) opts.push(k);
+        if (opts.length === 0) return;
         Quickshell.execDetached(["sh", "-c", "pkexec /usr/bin/mainstream-welcome-install \"$@\"; :", "sh"].concat(opts));
     }
 
@@ -361,10 +392,15 @@ ApplicationWindow {
         property string optTitle
         property string optDesc
         property string optIcon
-        readonly property bool selected: (root.installSelections[optKey] === true)
+        // Already installed and current: nothing to do, so the row reports state
+        // instead of offering an install that would be a no-op.
+        readonly property bool locked: root.installLocked(optKey)
+        readonly property string status: root.installStatus(optKey)
+        readonly property bool selected: !locked && (root.installSelections[optKey] === true)
         Layout.fillWidth: true
         Layout.preferredHeight: 74
         radius: Appearance.rounding.normal
+        opacity: locked ? 0.6 : 1
         color: selected
             ? ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.85)
             : Appearance.colors.colLayer1
@@ -372,9 +408,11 @@ ApplicationWindow {
         border.color: selected ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
         Behavior on border.color { ColorAnimation { duration: 150 } }
         Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on opacity { NumberAnimation { duration: 150 } }
 
         MouseArea {
             anchors.fill: parent
+            enabled: !optRoot.locked
             cursorShape: Qt.PointingHandCursor
             onClicked: root.toggleInstall(optRoot.optKey)
         }
@@ -397,18 +435,24 @@ ApplicationWindow {
                     color: Appearance.colors.colOnLayer0
                 }
                 StyledText {
-                    text: optRoot.optDesc
+                    // The version check replaces the sales pitch once it has
+                    // something more useful to say about this row.
+                    text: optRoot.status.length > 0 ? optRoot.status : optRoot.optDesc
                     font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colSubtext
+                    color: optRoot.status.length > 0 && !optRoot.locked
+                        ? Appearance.m3colors.m3primary
+                        : Appearance.colors.colSubtext
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
             }
             MaterialSymbol {
-                text: optRoot.selected ? "check_circle" : "radio_button_unchecked"
-                fill: optRoot.selected ? 1 : 0
+                text: optRoot.locked ? "check_circle"
+                    : (optRoot.selected ? "check_circle" : "radio_button_unchecked")
+                fill: (optRoot.selected || optRoot.locked) ? 1 : 0
                 iconSize: 24
-                color: optRoot.selected ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
+                color: optRoot.selected ? Appearance.m3colors.m3primary
+                    : (optRoot.locked ? Appearance.colors.colSubtext : Appearance.colors.colOutlineVariant)
             }
         }
     }
