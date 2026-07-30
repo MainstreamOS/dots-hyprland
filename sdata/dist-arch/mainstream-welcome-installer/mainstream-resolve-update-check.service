@@ -1,0 +1,12 @@
+[Unit]
+Description=Check whether a newer DaVinci Resolve release is available
+
+[Service]
+Type=oneshot
+# 10 is "an update is available" — a result, not a failure. Without this the
+# unit shows up red in systemctl --user status exactly when it worked.
+SuccessExitStatus=0 10
+ExecStart=/usr/bin/mainstream-resolve-update-check
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=120

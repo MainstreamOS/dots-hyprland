@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# mainstream-resolve-update-check — tell the user when a newer DaVinci Resolve is
+# out. Resolve is built into a local pacman package, so 'pacman -Syu' never sees
+# it and nothing else would ever mention a new release.
+#
+# It notifies. It never installs: no pkexec, no sudo, no call into
+# mainstream-welcome-install. The user decides.
+#
+# All version logic lives in 'install-davinci-resolve --check --json' — this is a
+# wrapper around that one call, so the two can never disagree about what "out of
+# date" means.
+
+set -euo pipefail
+
+readonly PROG=${0##*/}
+
+QUIET=0
+FORCE=0
+
+# ---------------------------------------------------------------- output helpers
+if [[ -t 1 ]]; then
+  c_b=$'\e[1m'; c_g=$'\e[32m'; c_y=$'\e[33m'; c_r=$'\e[31m'; c_0=$'\e[0m'
+else
+  c_b=""; c_g=""; c_y=""; c_r=""; c_0=""
+fi
+info() { printf '%s==>%s %s\n' "$c_g$c_b" "$c_0" "$*"; }
+step() { printf '%s  ->%s %s\n' "$c_b" "$c_0" "$*"; }
+die()  { printf '%serror:%s %s\n' "$c_r$c_b" "$c_0" "$*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+${c_b}$PROG${c_0} — notify when a newer DaVinci Resolve release is available.
+
+Usage: $PROG [options]
+
+  --quiet             Exit status only; never notify.
+  --force             Notify again even if this version was already announced.
+  -h, --help          This help.
+
+Exit codes:
+  0   up to date, nothing installed, a beta is installed, or the check could
+      not run (offline / API down — deliberately silent)
+  10  an update is available
+  1   $PROG itself could not run the check
+
+Nothing is ever installed. The notification names the command to run; running
+it is up to you.
+
+A user timer runs this weekly. To turn it off:
+  ${c_b}systemctl --user mask --now mainstream-resolve-update-check.timer${c_0}
+
+and to turn it back on:
+  ${c_b}systemctl --user unmask mainstream-resolve-update-check.timer${c_0}
+  ${c_b}systemctl --user start mainstream-resolve-update-check.timer${c_0}
+
+'mask', not 'disable': the package enables the timer by shipping a symlink in
+/usr/lib/systemd/user/timers.target.wants/, and 'disable' only ever removes
+symlinks from the user's own config, so against a packaged one it exits 0 and
+changes nothing. Masking is also what the Resolve section of Settings ->
+Updates toggles, so the two agree.
+EOF
+}
+
+# ------------------------------------------------------------------- parse args
+while (( $# )); do
+  case $1 in
+    -q|--quiet) QUIET=1; shift ;;
+    --force) FORCE=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown argument: $1 (see --help)" ;;
+  esac
+done
+
+# Same lookup order as mainstream-welcome-install: the packaged path first, then
+# a user's own copy.
+resolve_bin() {
+  if command -v install-davinci-resolve >/dev/null 2>&1; then
+    command -v install-davinci-resolve
+  elif [[ -x "$HOME/.local/bin/install-davinci-resolve" ]]; then
+    printf '%s\n' "$HOME/.local/bin/install-davinci-resolve"
+  fi
+}
+
+INSTALLER=$(resolve_bin)
+[[ -n $INSTALLER ]] || die "install-davinci-resolve not found."
+
+# 10 = update available, 0 = nothing to do, anything else = the check failed.
+# A failed check is silent and exits 0 on purpose: this runs on a timer, and a
+# laptop that wakes up on a train with no network must not produce an error
+# notification about it.
+rc=0
+OUT=$("$INSTALLER" --check --json 2>/dev/null) || rc=$?
+case $rc in
+  10) ;;
+  0)  exit 0 ;;
+  *)  exit 0 ;;
+esac
+
+PKG=$(jq -r '.package // empty' <<<"$OUT" 2>/dev/null) || PKG=""
+LATEST=$(jq -r '.latest // empty' <<<"$OUT" 2>/dev/null) || LATEST=""
+# Exit 10 said there is an update, so a response we cannot read is a real fault
+# in the pair of scripts rather than a network problem — surface it.
+[[ -n $LATEST ]] || die "could not read the version check output."
+
+NAME="DaVinci Resolve"
+CMD="install-davinci-resolve"
+if [[ $PKG == davinci-resolve-studio ]]; then
+  NAME="DaVinci Resolve Studio"
+  CMD="install-davinci-resolve --studio"
+fi
+
+if (( QUIET )); then
+  exit 10
+fi
+
+# Announce a given version once. The timer fires weekly and Blackmagic can go
+# months between releases, so without this the same notification arrives every
+# week until the user acts on it.
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream-resolve"
+STATE_FILE="$STATE_DIR/last-notified"
+if ! (( FORCE )) && [[ -r $STATE_FILE ]] && [[ "$(<"$STATE_FILE")" == "$LATEST" ]]; then
+  exit 10
+fi
+
+if command -v notify-send >/dev/null 2>&1; then
+  notify-send -a "Mainstream" -u normal \
+    "$NAME $LATEST is available" \
+    "Run: $CMD" 2>/dev/null || true
+fi
+
+# Written even if notify-send was missing or the bus rejected it — retrying
+# weekly would not find a notification daemon that is not there, and the exit
+# code already reports the update to whatever is watching.
+mkdir -p "$STATE_DIR" && printf '%s\n' "$LATEST" > "$STATE_FILE"
+
+if [[ -t 1 ]]; then
+  info "${c_y}${c_b}${NAME} ${LATEST} is available.${c_0}"
+  step "Install it with: ${c_b}${CMD}${c_0}"
+fi
+
+exit 10

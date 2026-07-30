@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-welcome-installer
-pkgver=1.0
-pkgrel=3
+pkgver=1.1
+pkgrel=1
 pkgdesc='Mainstream OS Welcome app installers — one-click app installs + DaVinci Resolve'
 arch=(any)
 license=(MIT)
@@ -19,8 +19,14 @@ source=(
   install-davinci-resolve
   mainstream-welcome-install
   mainstream-welcome.rules
+  mainstream-resolve-update-check
+  mainstream-resolve-update-check.service
+  mainstream-resolve-update-check.timer
 )
 sha256sums=(
+  SKIP
+  SKIP
+  SKIP
   SKIP
   SKIP
   SKIP
@@ -30,4 +36,19 @@ package() {
   install -Dm755 "$srcdir/install-davinci-resolve"   "$pkgdir/usr/bin/install-davinci-resolve"
   install -Dm755 "$srcdir/mainstream-welcome-install" "$pkgdir/usr/bin/mainstream-welcome-install"
   install -Dm644 "$srcdir/mainstream-welcome.rules"   "$pkgdir/usr/share/polkit-1/rules.d/49-mainstream-welcome.rules"
+
+  # User units, not system: the notifier needs the calling user's session bus to
+  # reach their notification daemon.
+  install -Dm755 "$srcdir/mainstream-resolve-update-check" \
+                 "$pkgdir/usr/bin/mainstream-resolve-update-check"
+  install -Dm644 "$srcdir/mainstream-resolve-update-check.service" \
+                 "$pkgdir/usr/lib/systemd/user/mainstream-resolve-update-check.service"
+  install -Dm644 "$srcdir/mainstream-resolve-update-check.timer" \
+                 "$pkgdir/usr/lib/systemd/user/mainstream-resolve-update-check.timer"
+  # Enabled by shipping the symlink rather than a user preset: a preset only
+  # applies to accounts created after it lands, which on an OS image is every
+  # account except the one that already exists.
+  install -d "$pkgdir/usr/lib/systemd/user/timers.target.wants"
+  ln -s ../mainstream-resolve-update-check.timer \
+        "$pkgdir/usr/lib/systemd/user/timers.target.wants/mainstream-resolve-update-check.timer"
 }

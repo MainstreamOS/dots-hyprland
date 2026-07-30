@@ -18,6 +18,9 @@ REG_PHONE="202-555-0100"
 ANON=0
 ASSUME_YES=0
 KEEP=0
+FORCE=0
+CHECK=0
+JSON=0
 ROCM_MODE=""
 ROCM_VERSION="7.1.1"
 # Real Blackmagic download-page id, sent as the Referer their gate expects; the
@@ -67,6 +70,10 @@ Usage: $PROG [--studio] [options]
                       (Convenient, but it spoofs Blackmagic's registration gate.)
   -y, --yes           Assume yes to prompts.
   --keep              Keep the downloaded installer + build files.
+  --force, --reinstall
+                      Rebuild even when the installed version is already current.
+  --check             Report the installed/latest version and exit. Needs no sudo.
+  --json              With --check, print one JSON object instead of prose.
   --rocm-pin          Downgrade + hold the ROCm OpenCL stack at a Resolve-compatible
                       version (default 7.1.1) to dodge the ROCm 7.2 regression. Exits.
   --rocm-unpin        Remove the ROCm hold (then run 'sudo pacman -Syu'). Exits.
@@ -76,6 +83,27 @@ Usage: $PROG [--studio] [options]
 The free edition needs no license. Studio downloads the same installer but only
 unlocks with your license key/dongle. Blackmagic requires registration to
 download; by default this asks for your real name and email.
+
+${c_b}Updating${c_0}
+Resolve is built into a local package, so 'pacman -Syu' never updates it (see
+'pacman -Qm'). Re-run this script to update; it exits immediately when there is
+nothing newer to install. A weekly user timer checks for you and notifies; turn
+it off in Settings -> Updates, or with (mask, not disable — the timer is enabled
+by a packaged symlink, which 'disable' does not touch):
+
+  systemctl --user mask --now mainstream-resolve-update-check.timer
+
+${c_b}--check exit codes${c_0}
+  0   up to date, nothing installed, or a beta is installed (nothing to do)
+  10  an update is available
+  1   error (including "could not reach the version API")
+
+${c_b}--check --json${c_0} prints exactly one object on stdout, diagnostics on stderr:
+
+  {"package":"davinci-resolve-studio","installed":"20.2.0-1","latest":"20.3.0","update_available":true}
+
+'package' and 'installed' are null when no Resolve package is installed; 'latest'
+is null for a beta install, where the stable version is not a valid comparison.
 EOF
 }
 
@@ -92,6 +120,9 @@ while (( $# )); do
     --anon) ANON=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --keep) KEEP=1; shift ;;
+    --force|--reinstall) FORCE=1; shift ;;
+    --check) CHECK=1; shift ;;
+    --json) JSON=1; shift ;;
     --rocm-pin) ROCM_MODE=pin; shift ;;
     --rocm-unpin) ROCM_MODE=unpin; shift ;;
     --rocm-version) need_val "$1" "${2:-}"; ROCM_VERSION=$2; shift 2 ;;
@@ -99,6 +130,128 @@ while (( $# )); do
     *) die "unknown argument: $1 (see --help)" ;;
   esac
 done
+
+(( JSON && ! CHECK )) && die "--json describes --check output; pass --check too."
+# One object on stdout means no colour on it, and none on the diagnostics either.
+(( JSON )) && { c_b=""; c_g=""; c_y=""; c_r=""; c_d=""; c_0=""; }
+
+# ------------------------------------------------------------ version reporting
+# Resolve's four packages mutually conflict, so at most one is ever installed.
+# Studio leads: it is the one the user paid for and would want reported.
+RESOLVE_PKGS=(davinci-resolve-studio davinci-resolve davinci-resolve-studio-beta davinci-resolve-beta)
+
+installed_resolve_pkg() {  # -> "pkgname version" on stdout, or 1 if none
+  local p v
+  for p in "${RESOLVE_PKGS[@]}"; do
+    v=$(pacman -Q "$p" 2>/dev/null | awk '{print $2}') || v=""
+    [[ -n $v ]] || continue
+    printf '%s %s\n' "$p" "$v"
+    return 0
+  done
+  return 1
+}
+
+# Sets VER + DOWNLOAD_ID (and API_RESPONSE for error messages). Returns 1 when
+# the API is unreachable and 2 when the response is not the shape we expect —
+# the caller supplies the wording, because --check has to fail in one quiet line
+# while the install path wants the full response echoed back.
+API_RESPONSE=""
+fetch_latest() {  # slug
+  local fields _maj _min _rel
+  API_RESPONSE=$(curl -fsSL "https://www.blackmagicdesign.com/api/support/latest-stable-version/${1}/linux") \
+    || return 1
+  fields=$(jq -r '[.linux.downloadId, .linux.major, .linux.minor, .linux.releaseNum] | @tsv' \
+    <<<"$API_RESPONSE" 2>/dev/null) || return 2
+  IFS=$'\t' read -r DOWNLOAD_ID _maj _min _rel <<<"$fields"
+  [[ -n ${DOWNLOAD_ID:-} && -n $_maj && -n $_min && -n $_rel ]] || return 2
+  VER="${_maj}.${_min}.${_rel}"
+}
+
+# Empty string in, JSON null out — a machine reader has to be able to tell
+# "no package installed" from a package literally named "".
+check_json() {  # pkgname  installed  latest  update_available(true|false)
+  jq -nc --arg pkg "$1" --arg inst "$2" --arg latest "$3" --argjson upd "$4" \
+    '{package:          (if $pkg    == "" then null else $pkg    end),
+      installed:        (if $inst   == "" then null else $inst   end),
+      latest:           (if $latest == "" then null else $latest end),
+      update_available: $upd}'
+}
+
+run_check() {  # 0 = nothing to do, 10 = update available, 1 = error (via die)
+  local found pkg="" installed="" slug latest cmp frc=0 rc=0 studio_flag=""
+
+  if found=$(installed_resolve_pkg); then
+    pkg=${found% *}; installed=${found#* }
+  fi
+
+  # A beta tracks its own release line, so the stable version is not a valid
+  # comparison — it would mark every beta "out of date" the day it is installed.
+  # Report what is there and stop, without spending an API call.
+  if [[ $pkg == *-beta ]]; then
+    if (( JSON )); then
+      check_json "$pkg" "$installed" "" false
+    else
+      info "Installed: ${c_b}${pkg} ${installed}${c_0}"
+      step "Beta releases are not compared against the stable version."
+    fi
+    return 0
+  fi
+
+  case $pkg in
+    davinci-resolve-studio) slug=davinci-resolve-studio ;;
+    davinci-resolve)        slug=davinci-resolve ;;
+    # Nothing installed: report what a first install would get, which is what
+    # --studio selects between.
+    *) if (( STUDIO )); then slug=davinci-resolve-studio; else slug=davinci-resolve; fi ;;
+  esac
+  [[ $slug == davinci-resolve-studio ]] && studio_flag=" --studio"
+
+  fetch_latest "$slug" || frc=$?
+  case $frc in
+    0) ;;
+    1) die "could not reach Blackmagic's version API." ;;
+    *) die "unexpected response from Blackmagic's version API." ;;
+  esac
+  latest=$VER
+
+  # pacman -Q carries the pkgrel, and everything this script builds is pkgrel=1.
+  if [[ -n $installed ]]; then
+    cmp=$(vercmp "$installed" "${VER}-1" 2>/dev/null) || cmp=0
+    [[ $cmp =~ ^-?[0-9]+$ ]] || cmp=0
+    (( cmp < 0 )) && rc=10
+  fi
+
+  if (( JSON )); then
+    check_json "$pkg" "$installed" "$latest" "$( (( rc == 10 )) && echo true || echo false )"
+  else
+    if [[ -n $installed ]]; then
+      info "Installed: ${c_b}${pkg} ${installed}${c_0}"
+    else
+      info "No DaVinci Resolve package is installed."
+    fi
+    step "Latest:    ${c_b}${latest}${c_0}"
+    if (( rc == 10 )); then
+      info "${c_y}${c_b}An update is available.${c_0}"
+      step "Install it with: ${c_b}${PROG}${studio_flag}${c_0}"
+    elif [[ -n $installed ]]; then
+      info "${c_g}${c_b}Up to date.${c_0}"
+    fi
+  fi
+  return "$rc"
+}
+
+# --check reads pacman's database and Blackmagic's version API and nothing else,
+# so it returns before the root refusal, the sudo keepalive, GPU detection, the
+# OpenCL install and the stale-build sweep below. The weekly timer calls it with
+# no terminal attached and no way to answer a password prompt.
+if (( CHECK )); then
+  for c in curl jq pacman vercmp; do
+    command -v "$c" >/dev/null 2>&1 || die "missing required command: $c"
+  done
+  _check_rc=0
+  run_check || _check_rc=$?
+  exit "$_check_rc"
+fi
 
 (( EUID == 0 )) && die "run as your normal user, not root — $PROG uses sudo only where needed."
 for c in curl jq lspci sudo pacman makepkg bsdtar; do
@@ -277,8 +430,12 @@ verify_opencl() {
     [[ -n $platforms ]] && warn "clinfo reports: $(tr '\n' ' ' <<<"$platforms")"
   fi
   # More than one ICD is legal but lets Resolve pick the wrong runtime.
+  # The `|| icds=0` is load-bearing, not defensive: with no ICD installed the
+  # lookup exits non-zero, `set -o pipefail` hands that status to the
+  # assignment, and errexit then killed the whole script right here without
+  # printing anything — on exactly the machine this function exists to warn.
   local icds
-  icds=$(ls /etc/OpenCL/vendors/*.icd 2>/dev/null | wc -l)
+  icds=$(find /etc/OpenCL/vendors -maxdepth 1 -name '*.icd' 2>/dev/null | wc -l) || icds=0
   (( icds > 1 )) && warn "$icds OpenCL runtimes are installed; Resolve may not pick the one you expect."
   return 0
 }
@@ -296,19 +453,32 @@ else
 fi
 
 info "Looking up the latest ${PRODUCT}…"
-RELEASE=$(curl -fsSL "https://www.blackmagicdesign.com/api/support/latest-stable-version/${SLUG}/linux") \
-  || die "could not reach Blackmagic's version API."
-DOWNLOAD_ID=$(jq -r '.linux.downloadId // empty' <<<"$RELEASE")
-_maj=$(jq -r '.linux.major // empty' <<<"$RELEASE")
-_min=$(jq -r '.linux.minor // empty' <<<"$RELEASE")
-_rel=$(jq -r '.linux.releaseNum // empty' <<<"$RELEASE")
-[[ -n $DOWNLOAD_ID && -n $_maj && -n $_min && -n $_rel ]] || die "unexpected API response: $RELEASE"
-VER="${_maj}.${_min}.${_rel}"
+_frc=0
+fetch_latest "$SLUG" || _frc=$?
+case $_frc in
+  0) ;;
+  1) die "could not reach Blackmagic's version API." ;;
+  *) die "unexpected API response: $API_RESPONSE" ;;
+esac
 step "latest is ${c_b}${PRODUCT} ${VER}${c_0}"
 
 if pacman -Qi "$PKGNAME" >/dev/null 2>&1; then
   CURRENT=$(pacman -Q "$PKGNAME" | awk '{print $2}')
   step "installed: $CURRENT"
+  _cmp=$(vercmp "$CURRENT" "${VER}-1" 2>/dev/null) || _cmp=0
+  [[ $_cmp =~ ^-?[0-9]+$ ]] || _cmp=0
+  # Nothing newer to install. Stop here — before the registration request, the
+  # download and makepkg — and stop with 0, not an error: the Welcome app passes
+  # -y, so without this its install button silently redoes a ~50 GB build, and
+  # mainstream-welcome-install turns any non-zero into a red "install failed"
+  # notification. Same reasoning as verify_opencl above: nothing to do is not a
+  # failed install. >= rather than == so a pulled release (installed newer than
+  # the API's latest) does not rebuild either.
+  if (( _cmp >= 0 )) && ! (( FORCE )); then
+    info "${c_g}${c_b}${PRODUCT} ${CURRENT} is already installed and current.${c_0}"
+    step "Nothing to do. Rebuild anyway with: ${c_b}${PROG} --force${c_0}"
+    exit 0
+  fi
   confirm "Reinstall/upgrade $PKGNAME to $VER-1?" || { info "Nothing to do."; exit 0; }
 fi
 
@@ -530,6 +700,51 @@ PKGBUILD
 
 ( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ) || die "makepkg failed."
 FINISHED=1
+
+# Keep the package that was just built, so a bad Resolve release can be undone
+# with pacman -U instead of another 13 GB download and 50 GB rebuild. Runs here,
+# not in cleanup(), because the trap deletes BUILD_DIR. Two generations: the one
+# just installed and the one it replaced, which is as far back as a rollback is
+# ever useful and still costs ~6 GB.
+PKG_KEEP_DIR="$CACHE_DIR/packages"
+save_built_package() {
+  local built=() f kept=0
+  while IFS= read -r -d '' f; do built+=("$f"); done \
+    < <(find "$BUILD_DIR" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print0 2>/dev/null)
+  (( ${#built[@]} )) || { warn "no built package found to keep for rollback."; return 0; }
+
+  mkdir -p "$PKG_KEEP_DIR"
+  for f in "${built[@]}"; do
+    cp -f "$f" "$PKG_KEEP_DIR/" || { warn "could not keep $(basename "$f") for rollback."; return 0; }
+    kept=1
+  done
+  (( kept )) || return 0
+
+  # Newest two survive; mtime, because the version in the filename does not sort
+  # usefully and a rebuild of the same version should still count as newer.
+  local old=()
+  while IFS= read -r -d '' f; do old+=("${f#* }"); done \
+    < <(find "$PKG_KEEP_DIR" -maxdepth 1 -type f -name '*.pkg.tar.zst' -printf '%T@ %p\0' 2>/dev/null \
+        | sort -zrn | tail -zn +3)
+  (( ${#old[@]} )) && rm -f "${old[@]}"
+
+  info "Kept for rollback: ${c_b}${PKG_KEEP_DIR}/$(basename "${built[0]}")${c_0}"
+  step "Roll back with: ${c_b}sudo pacman -U ${PKG_KEEP_DIR}/<file>.pkg.tar.zst${c_0}"
+}
+save_built_package
+
+# Each of these is 10 GB or more and nothing else ever removes them. Only the
+# download just used survives. -maxdepth 1 -type f keeps this away from the
+# build.?????? trees, which have their own sweep and PID-owner guard, and from
+# packages/ next door.
+if ! (( KEEP )); then
+  _pruned=0
+  while IFS= read -r -d '' _old_zip; do
+    [[ $_old_zip == "$ZIP" ]] && continue
+    rm -f "$_old_zip" && _pruned=$(( _pruned + 1 ))
+  done < <(find "$CACHE_DIR" -maxdepth 1 -type f -name 'DaVinci_Resolve*_Linux.zip' -print0 2>/dev/null)
+  (( _pruned )) && step "removed $_pruned superseded download(s) from $CACHE_DIR"
+fi
 
 # Resolve's bundled libcurl has /etc/pki/tls/certs/ca-bundle.crt compiled in as
 # its CA file — the Red Hat path, which Arch doesn't have. curl 7.82 gives up as

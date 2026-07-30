@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly DaVinci Resolve update check
+
+[Timer]
+OnCalendar=weekly
+# Catch machines that were powered off when the timer was due.
+Persistent=true
+# Every Mainstream install would otherwise hit Blackmagic's version API at the
+# same instant every Monday.
+RandomizedDelaySec=6h
+
+[Install]
+WantedBy=timers.target
