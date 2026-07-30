@@ -28,17 +28,37 @@ DockButton {
     // dock and elsewhere.
     readonly property string lookupAppId: appToplevel.appId
 
-    property var desktopEntry: isFolder ? null : AppSearch.guessDesktopEntry(lookupAppId)
+    // Bumped by the retry timer to re-run the lookup below. The timer used to
+    // assign straight to desktopEntry, which replaced the binding with whatever
+    // that one attempt returned. That was invisible while every delegate was
+    // rebuilt each time a window opened — the binding came back with the new
+    // delegate. Delegates now live for the whole session, so a lookup that came
+    // back null while the database was still filling in stayed null until a
+    // reload, and the icon sat on the guessIcon() fallback.
+    property int lookupAttempt: 0
+
+    readonly property var desktopEntry: {
+        // guessDesktopEntry() resolves through DesktopEntries.byId(), a plain
+        // function call that registers no dependency, so read the entry list to
+        // make the database itself one: when it finishes populating, every icon
+        // re-resolves on its own.
+        DesktopEntries.applications.values.length;
+        root.lookupAttempt;
+        if (root.isFolder) return null;
+        return AppSearch.guessDesktopEntry(root.lookupAppId);
+    }
 
     Timer {
-        // Retry looking up the desktop entry if it failed (e.g. database not loaded yet)
+        // Safety net for a lookup that fails for a reason the dependency above
+        // can't see. It only nudges lookupAttempt — assigning to desktopEntry
+        // here is what broke the binding in the first place.
         property int retryCount: 5
         interval: 1000
         running: !root.isSeparator && !root.isFolder && root.desktopEntry === null && retryCount > 0
         repeat: true
         onTriggered: {
             retryCount--;
-            root.desktopEntry = AppSearch.guessDesktopEntry(root.lookupAppId);
+            root.lookupAttempt++;
         }
     }
 
