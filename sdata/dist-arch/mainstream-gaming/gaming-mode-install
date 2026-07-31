@@ -24,7 +24,15 @@ case "$gpu" in
     *\[8086:*) pkgs+=(vulkan-intel lib32-vulkan-intel) ;;
 esac
 case "$gpu" in
-    *\[10de:*) pkgs+=(lib32-nvidia-utils) ;;
+    *\[10de:*)
+        # Match the 32-bit driver to whichever NVIDIA branch is already
+        # installed (mainline nvidia-utils, or a legacy branch like
+        # nvidia-580xx-utils for pre-Turing cards). Hardcoding
+        # lib32-nvidia-utils here always pulls mainline and conflicts with
+        # an installed legacy driver package, since both provide nvidia-libgl.
+        nvidia_pkg=$(pacman -Qq 2>/dev/null | grep -E '^nvidia(-[0-9]+xx)?-utils$' | head -n1 || true)
+        pkgs+=("lib32-${nvidia_pkg:-nvidia-utils}")
+        ;;
 esac
 
 exec pacman -Sy --needed --noconfirm "${pkgs[@]}"
