@@ -3,8 +3,11 @@
 # out. Resolve is built into a local pacman package, so 'pacman -Syu' never sees
 # it and nothing else would ever mention a new release.
 #
-# It notifies. It never installs: no pkexec, no sudo, no call into
-# mainstream-welcome-install. The user decides.
+# Nothing is installed unless the user presses the notification's Install button.
+# Pressing it hands off to 'mainstream-welcome-install resolve-update' through
+# pkexec, which is the same path the Welcome app already uses and is already
+# covered by 49-mainstream-welcome.rules — so this adds no new privileged code
+# and no new polkit rule.
 #
 # All version logic lives in 'install-davinci-resolve --check --json' — this is a
 # wrapper around that one call, so the two can never disagree about what "out of
@@ -16,6 +19,8 @@ readonly PROG=${0##*/}
 
 QUIET=0
 FORCE=0
+NO_ACTION=0
+AWAIT_ACTION=0
 
 # ---------------------------------------------------------------- output helpers
 if [[ -t 1 ]]; then
@@ -35,6 +40,7 @@ Usage: $PROG [options]
 
   --quiet             Exit status only; never notify.
   --force             Notify again even if this version was already announced.
+  --no-action         Plain notification with no Install button.
   -h, --help          This help.
 
 Exit codes:
@@ -43,8 +49,11 @@ Exit codes:
   10  an update is available
   1   $PROG itself could not run the check
 
-Nothing is ever installed. The notification names the command to run; running
-it is up to you.
+The notification carries an ${c_b}Install now${c_0} button when the notification daemon
+supports actions. Pressing it updates whichever edition is installed —
+free or Studio, read from --check, not guessed — downloading and building in
+the background, with a notification when it starts and another when it
+finishes. Nothing happens unless you press it; --no-action removes the button.
 
 A user timer runs this weekly. To turn it off:
   ${c_b}systemctl --user mask --now mainstream-resolve-update-check.timer${c_0}
@@ -66,6 +75,9 @@ while (( $# )); do
   case $1 in
     -q|--quiet) QUIET=1; shift ;;
     --force) FORCE=1; shift ;;
+    --no-action) NO_ACTION=1; shift ;;
+    # Internal: the detached half of the action notification. Not in --help.
+    --await-action) AWAIT_ACTION=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1 (see --help)" ;;
   esac
@@ -83,6 +95,10 @@ resolve_bin() {
 
 INSTALLER=$(resolve_bin)
 [[ -n $INSTALLER ]] || die "install-davinci-resolve not found."
+
+# The privileged half of the Install button. Looked up rather than hardcoded, for
+# the same reason install-davinci-resolve is.
+WELCOME_INSTALL=$(command -v mainstream-welcome-install 2>/dev/null) || WELCOME_INSTALL=""
 
 # 10 = update available, 0 = nothing to do, anything else = the check failed.
 # A failed check is silent and exits 0 on purpose: this runs on a timer, and a
@@ -113,6 +129,33 @@ if (( QUIET )); then
   exit 10
 fi
 
+# ------------------------------------------------- the Install button (detached)
+# Reached only via `setsid --fork "$0" --await-action` below. Blocks on the
+# notification for as long as it is on screen, then acts on the button.
+if (( AWAIT_ACTION )); then
+  chosen=$(notify-send -a "Mainstream" -u normal \
+    -A "install=Install now" \
+    "$NAME $LATEST is available" \
+    "Press Install now to update in the background, or run: $CMD" 2>/dev/null) || chosen=""
+  # Dismissed, timed out, or closed — that is a no, and a no is silent.
+  [[ $chosen == install ]] || exit 0
+
+  # Hand off to the Welcome app's installer. It picks the edition from --check,
+  # runs install-davinci-resolve -y --anon inside a transient systemd scope so
+  # the build survives logout, and fires its own "Updating…" and "updated"
+  # notifications. pkexec is passwordless here via 49-mainstream-welcome.rules.
+  if pkexec "$WELCOME_INSTALL" resolve-update; then
+    exit 0
+  fi
+  # pkexec refuses when the caller has no active local session, which is a real
+  # possibility for a process launched from a systemd *user* unit. Say so and
+  # hand back the command rather than failing silently.
+  notify-send -a "Mainstream" -u critical \
+    "Could not start the DaVinci Resolve update" \
+    "Authorisation was refused. Run this in a terminal instead: $CMD" 2>/dev/null || true
+  exit 1
+fi
+
 # Announce a given version once. The timer fires weekly and Blackmagic can go
 # months between releases, so without this the same notification arrives every
 # week until the user acts on it.
@@ -122,7 +165,30 @@ if ! (( FORCE )) && [[ -r $STATE_FILE ]] && [[ "$(<"$STATE_FILE")" == "$LATEST" 
   exit 10
 fi
 
-if command -v notify-send >/dev/null 2>&1; then
+# Does this notify-send understand actions, and will anything render them? The
+# button is pointless without both, and an unsupported -A makes older builds
+# fail outright rather than degrade.
+action_supported() {
+  (( NO_ACTION )) && return 1
+  command -v notify-send >/dev/null 2>&1 || return 1
+  command -v setsid      >/dev/null 2>&1 || return 1
+  [[ -n $WELCOME_INSTALL ]] || return 1
+  notify-send --help 2>&1 | grep -q -- '--action' || return 1
+  return 0
+}
+
+if action_supported; then
+  # notify-send -A blocks until the notification is actioned or dismissed, and
+  # the action is delivered to the *sender* — a dead sender means a dead button.
+  # This script is a Type=oneshot unit, so waiting inline would hold the systemd
+  # job open for as long as the popup sits on screen. Detach the waiter instead:
+  # the unit completes immediately and the button keeps working. The service sets
+  # KillMode=process so systemd does not reap the waiter along with the unit.
+  # Re-entered through the running interpreter rather than as "$0" alone: the
+  # script is only mode 755 once packaged, and this has to work from a checkout
+  # too.
+  setsid --fork "${BASH:-/usr/bin/env bash}" "$0" --await-action >/dev/null 2>&1 || true
+elif command -v notify-send >/dev/null 2>&1; then
   notify-send -a "Mainstream" -u normal \
     "$NAME $LATEST is available" \
     "Run: $CMD" 2>/dev/null || true

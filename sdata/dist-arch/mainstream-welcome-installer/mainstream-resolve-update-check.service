@@ -10,3 +10,8 @@ ExecStart=/usr/bin/mainstream-resolve-update-check
 Nice=19
 IOSchedulingClass=idle
 TimeoutStartSec=120
+# The notification's Install button is a detached notify-send that has to outlive
+# this unit — it is the sender, and the action is delivered to the sender, so if
+# systemd reaps it with the cgroup the button goes dead the moment the check
+# finishes. Only the main process gets killed.
+KillMode=process

@@ -8,6 +8,11 @@
 # traced after the fact:  tail -f /var/log/mainstream-welcome-install.log
 #
 # Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs resolve resolve-studio
+#
+# 'resolve-update' is the same run as 'resolve'/'resolve-studio' but picks the
+# edition from `install-davinci-resolve --check --json` instead of being told,
+# and words its notifications as an update. It backs the Install button on the
+# weekly update notification (mainstream-resolve-update-check).
 
 set -uo pipefail
 
@@ -102,16 +107,21 @@ install_obs() {
   else notify "OBS install failed" "See $LOGFILE." critical; fi
 }
 
-install_resolve() {  # "" | --studio
-  local flag=$1 name="DaVinci Resolve"
+install_resolve() {  # "" | --studio   [install|update]
+  local flag=$1 mode=${2:-install} name="DaVinci Resolve"
   [[ $flag == --studio ]] && name="DaVinci Resolve Studio"
+  # Same run either way — the installer is the update path — but a user who
+  # pressed "Install now" on an update notification should not be told their
+  # existing install is being installed.
+  local ing="Installing" done_="installed" failed="install failed"
+  if [[ $mode == update ]]; then ing="Updating"; done_="updated"; failed="update failed"; fi
   local bin; bin=$(resolve_bin)
   if [[ -z $bin ]]; then
     log "install-davinci-resolve NOT FOUND (checked PATH and $RHOME/.local/bin)"
     notify "$name unavailable" "install-davinci-resolve not found." critical; return
   fi
-  log "installer: $bin   args: ${flag:-<none>} -y --anon   (running as $RUSER)"
-  notify "Installing $name…" "Large download — it keeps running in the background."
+  log "installer: $bin   args: ${flag:-<none>} -y --anon   (running as $RUSER, mode=$mode)"
+  notify "$ing $name…" "Large download — it keeps running in the background."
   printf '%s ALL=(root) NOPASSWD: ALL\n' "$RUSER" > "$SUDOERS_TMP"
   chmod 0440 "$SUDOERS_TMP"
   log "granted temporary NOPASSWD sudo to $RUSER for the build"
@@ -119,8 +129,32 @@ install_resolve() {  # "" | --studio
   runuser -l "$RUSER" -- "$bin" $flag -y --anon || rc=$?
   rm -f "$SUDOERS_TMP"
   log "$name installer exited: $rc"
-  if (( rc == 0 )); then notify "$name installed" "Launch it from your apps."
-  else notify "$name install failed" "See the log: $LOGFILE" critical; fi
+  if (( rc == 0 )); then notify "$name $done_" "Launch it from your apps."
+  else notify "$name $failed" "See the log: $LOGFILE" critical; fi
+}
+
+# Update whichever edition is actually installed. The edition is read from
+# `--check --json` rather than guessed, so the notification's button cannot
+# start a 50 GB build of the wrong one — and so a beta install, which --check
+# deliberately refuses to compare against stable, is left alone.
+update_resolve() {
+  local bin; bin=$(resolve_bin)
+  if [[ -z $bin ]]; then
+    log "install-davinci-resolve NOT FOUND (checked PATH and $RHOME/.local/bin)"
+    notify "DaVinci Resolve unavailable" "install-davinci-resolve not found." critical; return
+  fi
+  local out pkg=""
+  out=$(runuser -l "$RUSER" -- "$bin" --check --json 2>/dev/null) || true
+  [[ -n $out ]] && pkg=$(jq -r '.package // empty' <<<"$out" 2>/dev/null) || pkg=""
+  log "resolve-update: --check reports package='${pkg:-<none>}'"
+  case $pkg in
+    davinci-resolve-studio) install_resolve --studio update ;;
+    davinci-resolve)        install_resolve ""        update ;;
+    "") log "no Resolve package installed — nothing to update"
+        notify "Nothing to update" "DaVinci Resolve is not installed." ;;
+    *)  log "refusing to update '$pkg' — betas are not compared against stable"
+        notify "Nothing to update" "A beta build of DaVinci Resolve is installed; update it yourself." ;;
+  esac
 }
 
 run_item() {  # label  fn...
@@ -144,8 +178,8 @@ notify "Setting up your apps" "Installing your selections in the background — 
 tasks=(); resolve_tasks=()
 for opt in "$@"; do
   case $opt in
-    resolve|resolve-studio) resolve_tasks+=("$opt") ;;
-    *)                      tasks+=("$opt") ;;
+    resolve|resolve-studio|resolve-update) resolve_tasks+=("$opt") ;;
+    *)                                     tasks+=("$opt") ;;
   esac
 done
 
@@ -156,6 +190,7 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
     obs)             run_item "OBS Studio"              install_obs ;;
     resolve)         run_item "DaVinci Resolve"         install_resolve "" ;;
     resolve-studio)  run_item "DaVinci Resolve Studio"  install_resolve --studio ;;
+    resolve-update)  run_item "DaVinci Resolve update"  update_resolve ;;
     *) log "unknown option: $opt" ;;
   esac
 done
