@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# =============================================================================
+# limine-bios-sync — re-install Limine's BIOS stages after a limine upgrade
+# =============================================================================
+#
+# Limine boots a BIOS machine in three stages, and all three ship from the same
+# package build:
+#
+#   stage 1+2  the MBR / post-MBR gap, written only by `limine bios-install`
+#   stage 3    limine-bios.sys, an ordinary file on the boot filesystem
+#
+# Upgrading the limine package replaces /usr/share/limine/limine-bios.sys but
+# cannot touch the MBR, and Arch ships no hook that re-runs bios-install. Once
+# the stages come from different builds the firmware finds nothing bootable and
+# drops straight into setup — no bootloader, no menu, no error. UEFI machines
+# are immune, because they boot BOOTX64.EFI from the ESP and never use these
+# stages at all.
+#
+# Called by 61-limine-bios.hook after every limine install/upgrade. Safe to run
+# by hand at any time, and safe to run on a UEFI system (it exits early).
+
+set -euo pipefail
+
+log()  { echo "[limine-bios-sync] $*"; }
+die()  { log "ERROR: $*"; exit 1; }
+
+# Mirror install-limine: a machine with no efivars booted in BIOS mode, and a
+# BIOS install has no ESP — /boot is the boot filesystem.
+if [[ -d /sys/firmware/efi ]]; then
+    log "UEFI system — BIOS stages are not used here, nothing to do."
+    exit 0
+fi
+
+readonly SRC=/usr/share/limine/limine-bios.sys
+readonly BOOT_PATH=/boot
+
+[[ -f "$SRC" ]]      || die "$SRC missing — is the limine package installed?"
+[[ -d "$BOOT_PATH" ]] || die "$BOOT_PATH does not exist."
+
+# Which disk holds the MBR the firmware reads. Resolved from whatever carries
+# /boot, and unwrapped through LUKS first: a mapper's PKNAME is the mapper, not
+# a disk, so asking lsblk directly would target the wrong device — the same
+# trap install-limine documents.
+resolve_disk() {
+    local src disk
+    src=$(findmnt -n -o SOURCE "$BOOT_PATH" 2>/dev/null | sed 's/\[.*\]//') || return 1
+    [[ -n "$src" ]] || return 1
+
+    if [[ "$src" == /dev/mapper/* ]]; then
+        src=$(cryptsetup status "${src##*/}" 2>/dev/null \
+              | awk '/^[[:space:]]*device:/ {print $2; exit}')
+        [[ -n "$src" ]] || return 1
+    fi
+
+    # -d (nodeps) for the same reason install-limine uses it: without it a
+    # LUKS-backing partition reports its open mapper too and the multi-line
+    # result corrupts the device path.
+    disk=$(lsblk -dno PKNAME "$src" 2>/dev/null) || return 1
+    [[ -n "$disk" ]] || return 1
+    [[ "$disk" != /* ]] && disk="/dev/$disk"
+    printf '%s\n' "$disk"
+}
+
+TARGET_DISK=$(resolve_disk) || die "could not resolve the disk hosting $BOOT_PATH."
+log "Boot filesystem: $BOOT_PATH   target disk: $TARGET_DISK"
+
+# Stage 3 first: if bios-install then fails, the pair is still consistent with
+# whatever is already in the MBR far more often than the reverse ordering.
+cp -f "$SRC" "$BOOT_PATH/limine-bios.sys" \
+    || die "could not copy limine-bios.sys to $BOOT_PATH."
+log "Updated $BOOT_PATH/limine-bios.sys"
+
+# Deliberately not `|| true`. A machine that cannot write its own MBR is a
+# machine that will not boot, and that has to be loud while the user is still
+# sitting in front of a working system.
+if limine bios-install "$TARGET_DISK"; then
+    log "Re-installed Limine BIOS stages on $TARGET_DISK"
+else
+    die "limine bios-install failed on $TARGET_DISK — this system may not boot. Re-run: limine bios-install $TARGET_DISK"
+fi

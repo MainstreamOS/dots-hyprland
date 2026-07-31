@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(any)
 license=(None)
@@ -26,6 +26,8 @@ source=(
   scrolloverview-rebuild.timer
   95-scrolloverview-rebuild.hook
   limine-restore-auto
+  limine-bios-sync
+  61-limine-bios.hook
   mainstream.preset
   hyprbars.conf
   scrolloverview.conf
@@ -33,6 +35,7 @@ source=(
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP
 )
 
 package() {
@@ -41,6 +44,7 @@ package() {
   install -Dm755 "$srcdir/hyprbars-status-notify.sh"      "$pkgdir/usr/bin/hyprbars-status-notify"
   install -Dm755 "$srcdir/scrolloverview-status-notify.sh" "$pkgdir/usr/bin/scrolloverview-status-notify"
   install -Dm755 "$srcdir/limine-restore-auto"           "$pkgdir/usr/bin/limine-restore-auto"
+  install -Dm755 "$srcdir/limine-bios-sync"              "$pkgdir/usr/bin/limine-bios-sync"
   install -Dm755 "$srcdir/mainstream-repair"            "$pkgdir/usr/bin/mainstream-repair"
   install -Dm644 "$srcdir/hyprbars-rebuild.service"      "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.service"
   install -Dm644 "$srcdir/hyprbars-rebuild.timer"        "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.timer"
@@ -48,6 +52,7 @@ package() {
   install -Dm644 "$srcdir/scrolloverview-rebuild.timer"  "$pkgdir/usr/lib/systemd/system/scrolloverview-rebuild.timer"
   install -Dm644 "$srcdir/95-hyprbars-rebuild.hook"      "$pkgdir/usr/share/libalpm/hooks/95-hyprbars-rebuild.hook"
   install -Dm644 "$srcdir/95-scrolloverview-rebuild.hook" "$pkgdir/usr/share/libalpm/hooks/95-scrolloverview-rebuild.hook"
+  install -Dm644 "$srcdir/61-limine-bios.hook"           "$pkgdir/usr/share/libalpm/hooks/61-limine-bios.hook"
   install -Dm644 "$srcdir/mainstream.preset"             "$pkgdir/usr/lib/systemd/system-preset/80-mainstream.preset"
   install -Dm644 "$srcdir/hyprbars.conf"                 "$pkgdir/usr/share/mainstream/hyprbars.conf"
   install -Dm644 "$srcdir/scrolloverview.conf"           "$pkgdir/usr/share/mainstream/scrolloverview.conf"

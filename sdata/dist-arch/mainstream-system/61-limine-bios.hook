@@ -1,0 +1,21 @@
+# Limine boots a BIOS machine from three stages that all ship from the same
+# package build: stages 1-2 in the MBR, written only by `limine bios-install`,
+# and stage 3 (limine-bios.sys) as a file on the boot filesystem. Upgrading the
+# limine package replaces stage 3 and cannot touch the MBR, and upstream Arch
+# ships no hook to reconcile them — so the boot after a routine `pacman -Syu`
+# drops straight into firmware setup with no bootloader and no error.
+#
+# limine-bios-sync exits immediately on UEFI systems, where these stages are
+# unused, so this hook is a no-op there.
+
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = limine
+
+[Action]
+Description = Re-installing Limine BIOS stages (MBR) after a limine upgrade...
+When = PostTransaction
+Depends = limine
+Exec = /usr/bin/limine-bios-sync
