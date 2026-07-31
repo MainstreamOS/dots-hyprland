@@ -64,14 +64,6 @@ ApplicationWindow {
         installSelections = s;
     }
 
-    // Resolve is a local pacman package, so the install button is also the
-    // update button — but re-running it when nothing is newer used to mean a
-    // silent ~50 GB rebuild. Updates.refreshResolve() shells out to
-    // `install-davinci-resolve --check --json`, the same source of truth the
-    // weekly notifier uses. Asynchronous and best-effort: until it answers (or
-    // if it never does) every row reads exactly as it did before.
-    Component.onCompleted: Updates.refreshResolve()
-
     // Which install row, if any, the installed Resolve package occupies. Prefix
     // matching so a beta claims its row without implying a version comparison —
     // the check deliberately refuses to compare betas against stable.
@@ -190,6 +182,14 @@ ApplicationWindow {
         // No file work here: the marker is already written by the
         // FirstRunExperience service, so the tutorial is disabled by
         // default. Only an explicit toggle (below) changes that.
+
+        // Resolve is a local pacman package, so the install button is also the
+        // update button — but re-running it when nothing is newer used to mean
+        // a silent ~50 GB rebuild. refreshResolve() shells out to
+        // `install-davinci-resolve --check --json`, the same source of truth
+        // the weekly notifier uses. Asynchronous and best-effort: until it
+        // answers (or if it never does) every row reads as it did before.
+        Updates.refreshResolve()
     }
 
     // ── Frame ────────────────────────────────────────────────────────────
