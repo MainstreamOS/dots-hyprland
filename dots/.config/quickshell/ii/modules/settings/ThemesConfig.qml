@@ -168,11 +168,6 @@ ContentPage {
         return tsTo24(p.hour12, p.minute, period)
     }
 
-    // ── Init ─────────────────────────────────────────────────────────────────
-    // The library itself lives in ThemeLibrary so it outlives this page being
-    // rebuilt. Opening the page is what puts its preview pins in place.
-    Component.onCompleted: ThemeLibrary.pinPreviews = true
-
     // ── Save theme (capture) ────────────────────────────────────────────────
     Process { id: saveProc }
     function beginSave(updateSlug) {
@@ -354,8 +349,17 @@ ContentPage {
             // Screenshot of primary focused monitor. Always overwrites
             // preview.png — same path whether this is a brand-new save
             // or an Update on an existing theme.
+            //
+            // Downscaled on the way out rather than stored at monitor
+            // resolution. Nothing ever draws this larger than the save card,
+            // so a native-resolution grim was several megabytes and a few
+            // hundred milliseconds of decode per theme, paid on every visit to
+            // the page and carried into every export. `>` only ever shrinks, so
+            // a small monitor's shot is left alone. If magick isn't there the
+            // full-size shot stays rather than the save losing its preview.
             `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
             `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
+            `magick "$DIR/preview.png" -resize ${ThemeLibrary.previewMaxDimension}x${ThemeLibrary.previewMaxDimension}\\> "$DIR/preview.png" 2>/dev/null || true\n` +
             // Millisecond resolution so back-to-back Update saves (within
             // the same wall-clock second) still produce a distinct
             // `created` value. The grid's preview Image keys its
@@ -999,13 +1003,15 @@ finally:
                         Layout.fillWidth: true
                         Layout.preferredHeight: width * 9 / 16
 
-                        StyledImage {
+                        ThumbnailImage {
                             id: saveWallpaper
                             anchors.fill: parent
                             fillMode: Image.PreserveAspectCrop
-                            cache: false
-                            source: Config.options.background.wallpaperPath || ""
-                            sourceSize: Qt.size(768, 432)
+                            // Same thumbnail, same size and fill mode as Quick
+                            // Setup's preview, so the two share one cache entry
+                            // rather than decoding the wallpaper twice.
+                            sourcePath: Config.options.background.wallpaperPath || ""
+                            sourceSize: Images.wallpaperPreviewSourceSize
                             layer.enabled: true
                             layer.effect: OpacityMask {
                                 maskSource: Rectangle {

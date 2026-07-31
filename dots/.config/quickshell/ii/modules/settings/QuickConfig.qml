@@ -90,13 +90,18 @@ ContentPage {
                            path.endsWith('.ogv');
                 }
                 
-                StyledImage {
+                ThumbnailImage {
                     id: wallpaperPreviewImage
                     visible: !parent.isVideo
                     anchors.fill: parent
                     fillMode: Image.PreserveAspectCrop
-                    source: parent.isVideo ? "" : Config.options.background.wallpaperPath
-                    cache: false
+                    // Reads the cached thumbnail rather than the wallpaper.
+                    // sourceSize caps how large the pixmap ends up, not how much
+                    // work it takes to get there — PNG has no scaled-decode
+                    // path, so a 4K wallpaper was decoded at 4K and thrown away
+                    // down to this size every time the page was rebuilt.
+                    sourcePath: parent.isVideo ? "" : Config.options.background.wallpaperPath
+                    sourceSize: Images.wallpaperPreviewSourceSize
                     layer.enabled: true
                     layer.effect: OpacityMask {
                         maskSource: Rectangle {

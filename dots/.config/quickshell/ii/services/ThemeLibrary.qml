@@ -17,11 +17,12 @@ import Quickshell.Io
  * Owning the index here means a rebuilt page has its grid populated on the
  * first frame instead of after two subprocesses return.
  *
- * The images at the bottom hold a reference on every decoded preview. Qt
- * sweeps pixmaps nothing references on a timer, so caching alone goes cold
- * while the user sits on another page; a referenced pixmap is never swept,
- * and a rebuilt page reads it back during component creation, before the
- * fade-in Behavior is armed.
+ * This used to hold a decoded copy of every preview alive as well, because a
+ * preview.png was a monitor-resolution screenshot and re-decoding five of them
+ * on each rebuild was worth going to some trouble to avoid. They are written
+ * downscaled now (see previewMaxDimension, applied at capture in
+ * ThemesConfig), which is cheap enough to decode that holding them was more
+ * machinery than the problem justified.
  *
  * Only Settings reaches for this. QML singletons are created on first use, so
  * the main shell never instantiates it.
@@ -39,13 +40,23 @@ Singleton {
     property string lastAppliedSlug: ""
     property string _indexRaw: ""
 
+    // What a preview.png is capped at on disk, applied by the capture in
+    // ThemesConfig. Stated here next to the size they are drawn at, because the
+    // pair only makes sense together: this has to stay comfortably above
+    // previewSourceSize or the previews are upscaled.
+    //
+    // Applied only when a theme is saved or updated. Themes captured before
+    // this keep their full-size preview and stay slow to decode until their
+    // next save — there is no migration pass over the library.
+    readonly property int previewMaxDimension: 1024
+
     // Qt keys its pixmap cache on the requested size and the fill mode as well
-    // as the URL, so the pins below and every preview on the page have to ask
-    // for all three identically or they decode separate copies and none of
-    // this works. A mismatch is silent — nothing warns, the previews just go
-    // back to reloading. A fixed size rather than the drawn width is what
-    // makes the key settle during component creation instead of after the
-    // layout pass; 400 covers the ~408px grid card at the default window size.
+    // as the URL, so every preview on the page has to ask for all three
+    // identically or they decode separate copies. A fixed size rather than the
+    // drawn width is what makes the key settle during component creation
+    // instead of after the layout pass, so a still-cached preview is simply
+    // there instead of fading in; 400 covers the ~408px grid card at the
+    // default window size.
     readonly property size previewSourceSize: Qt.size(400, 225)
     readonly property int previewFillMode: Image.PreserveAspectCrop
 
@@ -56,11 +67,6 @@ Singleton {
         if (!theme || !theme.slug) return ""
         return `file://${root.themesDir}/${theme.slug}/preview.png?v=${theme.created || 0}`
     }
-
-    // Set by the Themes page the first time it is built. Until someone has
-    // looked at the screenshots there is nothing worth the decode or the
-    // memory.
-    property bool pinPreviews: false
 
     function refresh() {
         loadIndexProc.running = false
@@ -145,16 +151,4 @@ Singleton {
         onFileChanged: root.refresh()
     }
 
-    Instantiator {
-        active: root.pinPreviews
-        model: root.themes
-        delegate: Image {
-            required property var modelData
-            asynchronous: true
-            cache: true
-            fillMode: root.previewFillMode
-            source: root.previewUrl(modelData)
-            sourceSize: root.previewSourceSize
-        }
-    }
 }
