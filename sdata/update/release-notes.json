@@ -67,7 +67,7 @@
     ]
   },
   "1.1.0": {
-    "date": "2026-07-27",
+    "date": "2026-07-31",
     "kind": "feature",
     "summary": "A bar you arrange, themes you can share, and a look you choose",
     "changes": [
@@ -81,11 +81,13 @@
       "Choose your app style, icon theme and mouse cursor in Settings",
       "Pick fonts from a searchable list that shows each one in its typeface",
       "Most apps now use the font you pick for the shell",
+      "Pick how a dock icon animates when it launches an app: Bounce, Pulse, Pop or Wobble (thanks @sanaruca, end-4/dots-hyprland#3553)",
       "Video wallpapers just play, with no package to install yourself",
       "Pick a cursor size from the sizes your theme can actually draw",
       "Turn on Shake to Locate to magnify or enlarge a lost cursor",
       "Mirror one display onto another from the monitor settings",
-      "A bar icon and a notification tell you when a new release is out"
+      "A bar icon and a notification tell you when a new release is out",
+      "The script install now lands on the newest release, with --edge to follow the branch instead"
     ]
   }
 }
