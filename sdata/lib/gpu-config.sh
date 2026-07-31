@@ -353,9 +353,16 @@ _gpu_esp_mib() {
 # proprietary nvidia config + GBM_BACKEND=nvidia env black-screens the Wayland
 # session. The nvidia paths consult this and stay on nouveau when it returns 1.
 _gpu_nvidia_has_driver() {
-    pacman -Qq nvidia-utils nvidia-open nvidia-open-dkms nvidia-dkms \
-        nvidia-580xx-utils nvidia-470xx-utils nvidia-390xx-utils >/dev/null 2>&1
+    local pkg
+    for pkg in nvidia-utils nvidia-open nvidia-open-dkms nvidia-dkms \
+               nvidia-580xx-utils nvidia-470xx-utils nvidia-390xx-utils; do
+        _gpu_pacman_has "$pkg" && return 0
+    done
+    return 1
 }
+# One package per query: `pacman -Qq a b` exits 1 unless *every* name is
+# installed, and these branches conflict with each other.
+_gpu_pacman_has() { pacman -Qq "$1" >/dev/null 2>&1; }
 
 # ── nvidia_write_qs_hint <user_home> ────────────────────────────────────────
 # Ship the QS_DISABLE_DMABUF escape hatch as a commented, opt-in line. It cures

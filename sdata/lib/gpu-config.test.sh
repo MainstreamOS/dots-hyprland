@@ -257,6 +257,18 @@ chk_str breadcrumb-x "$( [[ "$BC" == *"- driver X failed"* ]] && echo yes || ech
 chk_str breadcrumb-y "$( [[ "$BC" == *"- driver Y failed"* ]] && echo yes || echo no )" "yes"
 rm -rf "$NTMP"
 
+# ── _gpu_nvidia_has_driver: any-of, not all-of ──────────────────────────────
+# Drives every NVIDIA branch in both orchestrators, so an all-of query silently
+# disables them all. Fixtured at the pacman seam so the real loop is exercised.
+INSTALLED=""
+_gpu_pacman_has() { [[ " $INSTALLED " == *" $1 "* ]]; }
+has_drv() { _gpu_nvidia_has_driver && echo yes || echo no; }
+CASES=$((CASES + 1))
+INSTALLED="nvidia-580xx-utils"; chk_str hasdrv-580xx "$(has_drv)" "yes"
+INSTALLED="nvidia-390xx-utils"; chk_str hasdrv-390xx "$(has_drv)" "yes"
+INSTALLED="nvidia-utils nvidia-open"; chk_str hasdrv-open "$(has_drv)" "yes"
+INSTALLED="mesa vulkan-radeon"; chk_str hasdrv-none "$(has_drv)" "no"
+
 # ── orchestration: gpu_apply_autoconfig + gpu_apply_hypr_tweaks per card ─────
 OTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$OTMP/mkinitcpio.conf" KERNEL_CMDLINE="$OTMP/cmdline" MODPROBE_DIR="$OTMP/modprobe.d" INITCPIO_INSTALL_DIR="$OTMP/initcpio"
 OHOME="$OTMP/home"; mkdir -p "$OHOME/.config/hypr/custom"; FIX_SYSVENDOR=""
