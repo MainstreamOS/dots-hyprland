@@ -570,12 +570,10 @@ Singleton {
                 property real testHealthPercentage: 92.0   // drives the Health row
             }
 
-            // Userspace shim for window-state restore. xdg-session-management-v1
-            // exists in wayland-protocols/staging as of 2026 but Hyprland 0.55
-            // has no compositor-side implementation yet, so this drives a
-            // hyprctl-based relauncher (scripts/session/snapshot.sh +
-            // restore.sh). On by default — relaunches the windows that were
-            // open at logout on next login.
+            // Window-state restore. Gates scripts/session/: a resident watcher
+            // keeps the saved session current while you work, and restore.sh
+            // replays it at login. On by default — brings back the windows that
+            // were open, on the workspaces they were on.
             property JsonObject session: JsonObject {
                 property bool restoreEnabled: true
             }
