@@ -146,6 +146,19 @@ fi
 JQ_FILTER='.'
 JQ_ARGS=()
 [ -n "$WP_ABS" ]                  && { JQ_FILTER+=' | .background.wallpaperPath = $p';            JQ_ARGS+=(--arg p "$WP_ABS"); }
+# The wallpaper slideshow belongs to whichever theme is on, so a theme saved
+# with a single wallpaper has to stop one the previous theme started. A key
+# that is merely absent from the snapshot won't do it — the shell's config
+# adapter keeps the value it already has when a key disappears from the file —
+# so say it outright. Themes saved before the slideshow existed land here too,
+# which is what makes them turn it off rather than inherit it.
+jq -e '.background.slideshow' "$THEME_DIR/config.json" >/dev/null 2>&1 \
+    || JQ_FILTER+=' | .background.slideshow.enable = false'
+# An imported theme has had the folder stripped out of it, since it named a
+# directory in someone else's home. Empty rather than missing, so it resolves
+# to the local wallpaper directory instead of whatever this machine last used.
+jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/null 2>&1 \
+    || JQ_FILTER+=' | .background.slideshow.folder = ""'
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }

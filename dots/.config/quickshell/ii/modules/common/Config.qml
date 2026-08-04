@@ -380,6 +380,21 @@ Singleton {
                 property string wallpaperPath: ""
                 property string thumbnailPath: ""
                 property bool hideWhenFullscreen: true
+                // Rotates wallpaperPath through `folder` on a timer. These keys
+                // ride along in a saved theme's config.json snapshot, so the
+                // slideshow belongs to whichever theme is currently on — a
+                // single-wallpaper theme taking over turns it off, and the
+                // Day/Night pair hand their own rotations back and forth.
+                // An empty folder means the stock Wallpapers directory.
+                // `recolor` regenerates the whole palette on every change;
+                // left off, a rotation only swaps the picture.
+                property JsonObject slideshow: JsonObject {
+                    property bool enable: false
+                    property string folder: ""
+                    property int intervalMinutes: 30
+                    property bool shuffle: true
+                    property bool recolor: false
+                }
                 property JsonObject parallax: JsonObject {
                     property bool vertical: false
                     property bool autoVertical: false

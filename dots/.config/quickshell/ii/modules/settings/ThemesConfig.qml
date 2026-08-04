@@ -593,11 +593,12 @@ ContentPage {
     readonly property string pyPortable: `
 import json, os
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
          ("screenRecord", "savePath"), ("screenSnip", "savePath"),
-         ("background", "thumbnailPath"), ("background", "wallpaperPath")]
+         ("background", "thumbnailPath"), ("background", "wallpaperPath"),
+         ("background", "slideshow", "folder")]
 
 def theme_installed(kind, name, cursors=False):
     # kind is the shared-data subdirectory a look lives in ("themes" for widget
@@ -625,6 +626,33 @@ def portable(cfg):
     for p in STRIP:
         drop(cfg, p)
     return cfg
+
+# What the rotation itself considers a wallpaper — kept in step with
+# WallpaperSlideshow.extensions, and top level only, since it does not recurse.
+SS_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".avif")
+
+def slideshow_folder(cfg):
+    ss = ((cfg.get("background") or {}).get("slideshow") or {})
+    if not ss.get("enable"):
+        return ""
+    folder = str(ss.get("folder") or "").strip()
+    if not folder:
+        folder = os.path.join(os.path.expanduser("~"), "Pictures", "Wallpapers")
+    return folder if os.path.isdir(folder) else ""
+
+def slideshow_images(folder):
+    if not folder:
+        return []
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        p = os.path.join(folder, n)
+        if os.path.isfile(p) and os.path.splitext(n)[1].lower() in SS_EXT:
+            out.append(p)
+    return out
 `
 
     Process {
@@ -642,7 +670,53 @@ def portable(cfg):
         }
     }
 
+    // The pictures a rotation draws from can outweigh the rest of a theme many
+    // times over, so what they weigh is put in front of the person exporting
+    // rather than decided for them. Counted before anything is asked, so a
+    // theme with no rotation never sees the question at all.
+    property bool exportDialogOpen: false
+    property string exportSlug: ""
+    property int exportImageCount: 0
+    property real exportImageMib: 0
+
+    Process {
+        id: exportPreflightProc
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => exportPreflightProc.buf += data }
+        onExited: {
+            const parts = (exportPreflightProc.buf || "").trim().split(/\s+/)
+            const count = parseInt(parts[0]) || 0
+            const bytes = parseInt(parts[1]) || 0
+            if (count <= 0) {
+                root.runExport(false)
+                return
+            }
+            root.exportImageCount = count
+            root.exportImageMib = bytes / 1048576
+            root.exportDialogOpen = true
+        }
+    }
+
     function exportTheme(theme) {
+        if (root.ioBusy) return
+        root.exportSlug = theme.slug
+        exportPreflightProc.command = ["bash", "-c",
+            `python3 - "$1" <<'PY'\n` + root.pyPortable + `import sys
+theme_dir = sys.argv[1]
+try:
+    raw = json.load(open(os.path.join(theme_dir, "config.json")))
+except Exception:
+    raw = {}
+images = slideshow_images(slideshow_folder(raw))
+print("%d %d" % (len(images), sum(os.path.getsize(p) for p in images)))
+` + `PY\n`,
+            "export-preflight", `${root.themesDir}/${theme.slug}`]
+        exportPreflightProc.running = false
+        exportPreflightProc.running = true
+    }
+
+    function runExport(includeImages) {
         if (root.ioBusy) return
         root.ioBusy = true
         // Values reach bash as positional arguments, never spliced into the
@@ -650,14 +724,14 @@ def portable(cfg):
         const script =
             `SLUG="$1"\n` +
             `OUT=$(zenity --file-selection --save --confirm-overwrite ` +
-            `--title="Export theme" --filename="$HOME/$SLUG.mtheme" ` +
+            `--title="$3" --filename="$HOME/$SLUG.mtheme" ` +
             `--file-filter="Mainstream theme | *.mtheme" 2>/dev/null) || { echo CANCEL; exit 0; }\n` +
             `[ -n "$OUT" ] || { echo CANCEL; exit 0; }\n` +
             `case "$OUT" in *.mtheme) ;; *) OUT="$OUT.mtheme" ;; esac\n` +
-            `python3 - '${root.themesDir}'/"$SLUG" "$OUT" <<'PY'\n` +
+            `python3 - '${root.themesDir}'/"$SLUG" "$OUT" "$2" <<'PY'\n` +
             root.pyPortable +
             `import io, sys, tarfile
-theme_dir, out_path = sys.argv[1], sys.argv[2]
+theme_dir, out_path, include = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 KEEP = ("interface.json", "decorations.json", "preview.png")
 
 def entry(tar, name, obj):
@@ -667,11 +741,15 @@ def entry(tar, name, obj):
     info.mode = 0o644
     tar.addfile(info, io.BytesIO(blob))
 
-cfg = portable(json.load(open(os.path.join(theme_dir, "config.json"))))
+raw = json.load(open(os.path.join(theme_dir, "config.json")))
+images = slideshow_images(slideshow_folder(raw)) if include else []
+cfg = portable(raw)
 meta = json.load(open(os.path.join(theme_dir, "meta.json")))
 # Stamp the layout this archive was written against, so a future reader can
 # recognise a theme it only partly understands instead of applying it blind.
-meta["formatVersion"] = FORMAT_VERSION
+# Only a bundle carrying pictures claims the newer layout, so a theme without
+# one still lands cleanly on a build that predates them.
+meta["formatVersion"] = FORMAT_VERSION if images else 1
 with tarfile.open(out_path, "w:gz") as tar:
     entry(tar, "config.json", cfg)
     entry(tar, "meta.json", meta)
@@ -679,10 +757,15 @@ with tarfile.open(out_path, "w:gz") as tar:
         p = os.path.join(theme_dir, n)
         if os.path.isfile(p) and (n in KEEP or n.startswith("wallpaper.")):
             tar.add(p, arcname=n)
+    for p in images:
+        tar.add(p, arcname="slideshow/" + os.path.basename(p))
 print("OK|" + out_path)
 ` +
             `PY\n`
-        exportProc.command = ["bash", "-c", script, "export-theme", theme.slug]
+        exportProc.command = ["bash", "-c", script, "export-theme",
+            root.exportSlug,
+            includeImages ? "1" : "0",
+            Translation.tr("Export theme")]
         exportProc.running = false
         exportProc.running = true
     }
@@ -741,6 +824,22 @@ EXACT = {"meta.json", "config.json", "interface.json", "decorations.json", "prev
 def wanted(n):
     return n in EXACT or (n.startswith("wallpaper.") and len(n) > len("wallpaper."))
 
+# A bundle can carry the pictures its rotation draws from. They are the only
+# members allowed to sit in a subdirectory, and even then only the basename is
+# kept — the archive still never picks where anything lands. The ceilings are
+# there so a malicious file can't fill the disk on the way in.
+MAX_SS_FILES = 500
+MAX_SS_BYTES = 1024 * 1024 * 1024
+
+def slideshow_name(name):
+    parts = name.split("/")
+    if len(parts) != 2 or parts[0] != "slideshow":
+        return ""
+    n = os.path.basename(parts[1])
+    if not n or n.startswith("."):
+        return ""
+    return n if os.path.splitext(n)[1].lower() in SS_EXT else ""
+
 def fail():
     print("ERR|notatheme")
     sys.exit(0)
@@ -755,18 +854,36 @@ try:
         fail()
     with tar:
         picked, seen = [], set()
+        ss_picked, ss_seen, ss_bytes = [], set(), 0
         for m in tar.getmembers():
+            if not m.isfile():
+                continue
+            raw = m.name[2:] if m.name.startswith("./") else m.name
+            ss = slideshow_name(raw)
+            if ss:
+                if (ss in ss_seen or len(ss_picked) >= MAX_SS_FILES
+                        or ss_bytes + m.size > MAX_SS_BYTES):
+                    continue
+                ss_seen.add(ss)
+                ss_bytes += m.size
+                m.name = "slideshow/" + ss
+                ss_picked.append(m)
+                continue
+            # Anything else nested is dropped rather than flattened, so a
+            # picture folder can't smuggle in a second meta.json.
+            if "/" in raw:
+                continue
             # Only ever write a basename we recognise, so nothing in the
             # archive can choose its own destination.
-            n = os.path.basename(m.name)
-            if not m.isfile() or n in seen or not wanted(n):
+            n = os.path.basename(raw)
+            if n in seen or not wanted(n):
                 continue
             seen.add(n)
             m.name = n
             picked.append(m)
         if "meta.json" not in seen or "config.json" not in seen:
             fail()
-        tar.extractall(tmp, members=picked, filter="data")
+        tar.extractall(tmp, members=picked + ss_picked, filter="data")
 
     try:
         meta = json.load(open(os.path.join(tmp, "meta.json")))
@@ -803,6 +920,20 @@ try:
         local = (live.get(section) or {}).get(key)
         if local:
             cfg.setdefault(section, {})[key] = local
+
+    # The folder came out on export because it named a directory in someone
+    # else's home. If the pictures travelled with the theme it is re-pointed at
+    # the copy that just landed; if they didn't, the rotation is switched off
+    # rather than left running over whatever this machine happens to keep in its
+    # own wallpapers folder, which would be a different theme wearing this one's
+    # name. Only touched when there is something to say, so a theme with no
+    # rotation at all doesn't gain an empty one.
+    ss = (cfg.get("background") or {}).get("slideshow")
+    if ss_picked:
+        cfg.setdefault("background", {}).setdefault("slideshow", {})["folder"] = \
+            os.path.join(dest, "slideshow")
+    elif isinstance(ss, dict) and ss.get("enable"):
+        ss["enable"] = False
 
     # A look the machine doesn't have would otherwise be written into gsettings
     # as a name nothing can resolve, leaving the desktop on a fallback and, for
@@ -1637,6 +1768,107 @@ finally:
                 }
             }
             Item { Layout.fillWidth: true }
+        }
+    }
+
+    // ── Export: include the slideshow pictures? ─────────────────────────────
+    Rectangle {
+        id: exportDialogScrim
+        visible: root.exportDialogOpen
+        parent: Overlay.overlay
+        anchors.fill: parent
+        color: Qt.rgba(Appearance.m3colors.m3scrim.r, Appearance.m3colors.m3scrim.g, Appearance.m3colors.m3scrim.b, 0.53)
+        z: 1000
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.exportDialogOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            implicitWidth: 420
+            implicitHeight: exportDialogCol.implicitHeight + 40
+            radius: Appearance.rounding.normal
+            color: Appearance.m3colors.m3surfaceContainerHigh
+            MouseArea { anchors.fill: parent } // absorb click-through
+
+            ColumnLayout {
+                id: exportDialogCol
+                anchors {
+                    fill: parent
+                    margins: 20
+                }
+                spacing: 14
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    MaterialSymbol {
+                        text: "photo_library"
+                        iconSize: 28
+                        fill: 1
+                        color: Appearance.m3colors.m3primary
+                    }
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Include the slideshow wallpapers?")
+                        font.pixelSize: Appearance.font.pixelSize.larger
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: `${root.exportImageCount} ${Translation.tr("images")} · ${root.exportImageMib.toFixed(0)} MB`
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.m3colors.m3primary
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Without them the theme still carries its colors, fonts and decorations — the slideshow simply arrives switched off.")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.WordWrap
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Item { Layout.fillWidth: true }
+                    RippleButton {
+                        buttonRadius: Appearance.rounding.full
+                        implicitHeight: 36
+                        padding: 10
+                        onClicked: {
+                            root.exportDialogOpen = false
+                            root.runExport(false)
+                        }
+                        contentItem: StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("Skip")
+                            color: Appearance.colors.colOnLayer1
+                        }
+                    }
+                    RippleButton {
+                        buttonRadius: Appearance.rounding.full
+                        implicitHeight: 36
+                        padding: 10
+                        colBackground: Appearance.m3colors.m3primary
+                        onClicked: {
+                            root.exportDialogOpen = false
+                            root.runExport(true)
+                        }
+                        contentItem: StyledText {
+                            anchors.centerIn: parent
+                            text: Translation.tr("Include")
+                            color: Appearance.m3colors.m3onPrimary
+                        }
+                    }
+                }
+            }
         }
     }
 

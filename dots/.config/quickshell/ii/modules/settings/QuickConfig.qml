@@ -29,6 +29,29 @@ ContentPage {
         onExited: MaterialThemeLoader.reapplyTheme()
     }
 
+    // Picking a folder turns the slideshow on and shows one straight away, so
+    // the button does something visible rather than leaving the desktop
+    // unchanged until the first interval is up. The rotation lives in the main
+    // shell, so it is asked over IPC rather than run here.
+    Process {
+        id: slideshowFolderProc
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => slideshowFolderProc.buf += data }
+        onExited: exitCode => {
+            if (exitCode !== 0) return;
+            const picked = (slideshowFolderProc.buf || "").trim();
+            if (picked.length === 0) return;
+            Config.options.background.slideshow.folder = picked;
+            Config.options.background.slideshow.enable = true;
+            slideshowNextProc.command = ["qs", "-c", "ii", "ipc", "call", "slideshow", "next"];
+            slideshowNextProc.running = false;
+            slideshowNextProc.running = true;
+        }
+    }
+
+    Process { id: slideshowNextProc }
+
     function applyTheme(args) {
         if (themeApplyProc.running)
             return;
@@ -226,39 +249,36 @@ ContentPage {
                         text: Translation.tr("Random osu! seasonal background\nImage is saved to ~/Pictures/Wallpapers")
                     }
                 }
-                RippleButtonWithIcon {
+                RowLayout {
                     Layout.fillWidth: true
-                    materialIcon: "wallpaper"
-                    StyledToolTip {
-                        text: Translation.tr("Pick wallpaper image on your system")
+                    uniformCellSizes: true
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        centerContent: true
+                        materialIcon: "wallpaper"
+                        mainText: Translation.tr("Wallpaper")
+                        StyledToolTip {
+                            text: Translation.tr("Pick wallpaper image on your system")
+                        }
+                        onClicked: {
+                            Quickshell.execDetached(`${Directories.wallpaperSwitchScriptPath}`);
+                        }
                     }
-                    onClicked: {
-                        Quickshell.execDetached(`${Directories.wallpaperSwitchScriptPath}`);
-                    }
-                    mainContentComponent: Component {
-                        RowLayout {
-                            spacing: 10
-                            StyledText {
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                text: Translation.tr("Choose file")
-                                color: Appearance.colors.colOnSecondaryContainer
-                            }
-                            RowLayout {
-                                spacing: 3
-                                KeyboardKey {
-                                    key: "Ctrl"
-                                }
-                                KeyboardKey {
-                                    key: Config.options.cheatsheet.superKey ?? "󰖳"
-                                }
-                                StyledText {
-                                    Layout.alignment: Qt.AlignVCenter
-                                    text: "+"
-                                }
-                                KeyboardKey {
-                                    key: "T"
-                                }
-                            }
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        centerContent: true
+                        materialIcon: "slideshow"
+                        mainText: Translation.tr("Slideshow")
+                        StyledToolTip {
+                            text: Translation.tr("Rotate the wallpaper through a folder's images")
+                        }
+                        onClicked: {
+                            slideshowFolderProc.command = ["bash", "-c",
+                                'zenity --file-selection --directory --filename="$1/" --title="$2"',
+                                "--", WallpaperSlideshow.folder, Translation.tr("Choose slideshow folder")];
+                            slideshowFolderProc.running = false;
+                            slideshowFolderProc.running = true;
                         }
                     }
                 }

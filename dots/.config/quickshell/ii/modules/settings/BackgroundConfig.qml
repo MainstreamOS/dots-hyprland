@@ -3,9 +3,96 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import Quickshell.Io
 
 ContentPage {
+    id: backgroundRoot
     forceWidth: true
+
+    // The rotation itself lives in the main shell, so asking for one now goes
+    // over IPC rather than calling into this process's passive copy.
+    Process { id: slideshowNextProc }
+
+    ContentSection {
+        icon: "gallery_thumbnail"
+        title: Translation.tr("Slideshow")
+
+        ConfigSwitch {
+            buttonIcon: "slideshow"
+            text: Translation.tr("Change the wallpaper automatically")
+            checked: Config.options.background.slideshow.enable
+            onCheckedChanged: {
+                Config.options.background.slideshow.enable = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("Rotate through the wallpapers in the slideshow folder automatically")
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "shuffle"
+                text: Translation.tr("Shuffle")
+                checked: Config.options.background.slideshow.shuffle
+                onCheckedChanged: {
+                    Config.options.background.slideshow.shuffle = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("Off, wallpapers follow the folder in name order.")
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "palette"
+                text: Translation.tr("Recolor the desktop each time")
+                checked: Config.options.background.slideshow.recolor
+                onCheckedChanged: {
+                    Config.options.background.slideshow.recolor = checked;
+                }
+                StyledToolTip {
+                    text: Translation.tr("Change the UI color for each new wallpaper.")
+                }
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+            ConfigSpinBox {
+                icon: "timer"
+                text: Translation.tr("Change every")
+                suffix: Translation.tr(" min")
+                value: Math.max(WallpaperSlideshow.minimumInterval, Config.options.background.slideshow.intervalMinutes)
+                from: WallpaperSlideshow.minimumInterval
+                to: 720
+                stepSize: 5
+                onValueChanged: {
+                    Config.options.background.slideshow.intervalMinutes = value;
+                }
+            }
+            // Holds the right half open at its own size so the spin box keeps
+            // the left half, with the button sitting at its natural width
+            // against the far edge rather than stretched across the gap.
+            Item {
+                Layout.fillWidth: true
+                implicitHeight: showNextButton.implicitHeight
+
+                RippleButtonWithIcon {
+                    id: showNextButton
+                    anchors.right: parent.right
+                    anchors.rightMargin: 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    materialIcon: "skip_next"
+                    mainText: Translation.tr("Show next")
+                    enabled: Config.options.background.slideshow.enable
+                    onClicked: {
+                        slideshowNextProc.command = ["qs", "-c", "ii", "ipc", "call", "slideshow", "next"]
+                        slideshowNextProc.running = false
+                        slideshowNextProc.running = true
+                    }
+                }
+            }
+        }
+    }
 
     ContentSection {
         icon: "sync_alt"

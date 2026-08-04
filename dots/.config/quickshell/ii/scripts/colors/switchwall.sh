@@ -206,6 +206,13 @@ set_scrolloverview_wallpaper() {
     local path="$1"
     local screen_width="$2"
     local screen_height="$3"
+    # How the running compositor is told: a full reload picks up matugen's
+    # colour templates alongside this value, which is what a colour change
+    # needs. `eval` sets this one key and nothing else — the plugin reads the
+    # path through a pointer into the config, so it rebuilds its textures on
+    # the next overview render either way. A reload makes every Wayland client
+    # re-configure, so it isn't something to run on a timer.
+    local push_mode="${4:-reload}"
     local target="$XDG_CONFIG_HOME/hypr/custom/general.lua"
     [[ -z "$path" || ! -f "$target" ]] && return
 
@@ -245,8 +252,32 @@ set_scrolloverview_wallpaper() {
         # Push the new value into the running compositor (and thus the
         # plugin's getDataStaticPtr-cached value). Run async so we don't
         # block the rest of post_process.
-        hyprctl reload >/dev/null 2>&1 &
+        if [[ "$push_mode" == "eval" ]]; then
+            local lua_path="${plugin_path//\\/\\\\}"
+            lua_path="${lua_path//\"/\\\"}"
+            hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
+        else
+            hyprctl reload >/dev/null 2>&1 &
+        fi
     fi
+}
+
+# A slideshow tick: refresh what else draws the same picture, without the
+# palette work. The login background is deliberately not among them — it is
+# re-encoded from the full-size image and would keep a rotation busy for
+# something nobody sees until they log out, so it stays on the wallpaper the
+# theme was applied with.
+picture_only_post_process() {
+    local wallpaper_path="$1"
+    local screen_width screen_height
+    screen_width="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
+    screen_height="$(hyprctl monitors -j | jq '([.[].height] | min)' | xargs)"
+    (
+        if command -v flock >/dev/null 2>&1 && exec 8>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-wallpaper-derivatives.lock"; then
+            flock 8
+        fi
+        set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
+    ) >/dev/null 2>&1 9>&- &
 }
 
 categorize_wallpaper() {
@@ -366,6 +397,13 @@ switch() {
         fi
     fi
 
+    # The picture is on screen and every path that draws it has been told; the
+    # rest of this function is the palette, which a slideshow leaves alone.
+    if [[ -n "${picture_only_flag:-}" ]]; then
+        picture_only_post_process "$imgpath"
+        return 0
+    fi
+
     # Determine mode if not set
     if [[ -z "$mode_flag" ]]; then
         current_mode=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")
@@ -481,6 +519,7 @@ main() {
     color_flag=""
     color=""
     noswitch_flag=""
+    picture_only_flag=""
 
     get_type_from_config() {
         jq -r '.appearance.palette.type' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "auto"
@@ -556,6 +595,10 @@ main() {
                 imgpath=$(jq -r '.background.wallpaperPath' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "")
                 shift
                 ;;
+            --picture-only)
+                picture_only_flag="1"
+                shift
+                ;;
             *)
                 if [[ -z "$imgpath" ]]; then
                     imgpath="$1"
@@ -570,6 +613,16 @@ main() {
     if [[ "$config_color" =~ ^#?[A-Fa-f0-9]{6}$ ]]; then
         color_flag="1"
         color="$config_color"
+    fi
+
+    # A picked accent normally routes switch() down the colour branch, which
+    # never reaches the code that records the wallpaper. Nothing here is going
+    # to generate colours anyway, so drop it and take the image branch — which
+    # also leaves the accent itself untouched, since only the colour path
+    # clears it.
+    if [[ -n "$picture_only_flag" ]]; then
+        color_flag=""
+        color=""
     fi
 
     # If type_flag is not set, get it from config
@@ -592,7 +645,7 @@ main() {
     fi
 
     # Only prompt for wallpaper if not using --color and not using --noswitch and no imgpath set
-    if [[ -z "$imgpath" && -z "$color_flag" && -z "$noswitch_flag" ]]; then
+    if [[ -z "$imgpath" && -z "$color_flag" && -z "$noswitch_flag" && -z "$picture_only_flag" ]]; then
         cd "$(xdg-user-dir PICTURES)/Wallpapers/showcase" 2>/dev/null || cd "$(xdg-user-dir PICTURES)/Wallpapers" 2>/dev/null || cd "$(xdg-user-dir PICTURES)" || return 1
         imgpath="$(zenity --file-selection --filename="$PWD/" --title='Choose wallpaper')"
     fi
@@ -626,7 +679,7 @@ main() {
         fi
     fi
 
-    if [[ -n "$imgpath" && -z "$noswitch_flag" ]]; then
+    if [[ -n "$imgpath" && -z "$noswitch_flag" && -z "$picture_only_flag" ]]; then
         # Recorded rather than written here: the write happens next to the
         # wallpaper path so the two land together and the shell reads the file
         # once instead of twice.
