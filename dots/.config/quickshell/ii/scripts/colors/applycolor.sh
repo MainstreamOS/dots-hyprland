@@ -101,6 +101,17 @@ apply_anyterm() {
   done
 }
 
+apply_kvantum() {
+  # Kvantum paints Qt widgets from a static SVG and its own [GeneralColors];
+  # neither follows the palette, so both are re-derived from it.
+  if [ ! -f "$SCRIPT_DIR/generate_kvantum_theme.py" ]; then
+    echo "Generator not found for Kvantum theme. Skipping that."
+    return
+  fi
+  python3 "$SCRIPT_DIR/generate_kvantum_theme.py" \
+    --scss "$STATE_DIR/user/generated/material_colors.scss"
+}
+
 apply_term() {
   apply_anyterm &
   apply_kitty &
@@ -120,6 +131,15 @@ if [ -f "$CONFIG_FILE" ]; then
 else
   echo "Config file not found at $CONFIG_FILE. Applying terminal theming by default."
   apply_term &
+fi
+
+if [ -f "$CONFIG_FILE" ]; then
+  enable_qt_apps=$(jq -r '.appearance.wallpaperTheming.enableQtApps' "$CONFIG_FILE")
+  if [ "$enable_qt_apps" != "false" ]; then
+    apply_kvantum &
+  fi
+else
+  apply_kvantum &
 fi
 
 # apply_qt & # Qt theming is already handled by kde-material-colors
