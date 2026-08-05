@@ -11,14 +11,31 @@
     <img src="assets/desktop.webp" alt="The Mainstream OS desktop">
 </div>
 
-Arch under the hood, Hyprland on the surface, and the polish of macOS on top — the kind of care that makes it feel at home on your mom's laptop and your rendering rig alike. Deeply featured. Genuinely friendly.
+Mainstream OS is a Linux operating system built on Arch. Its desktop is Hyprland — the software that arranges your windows and decides where they go — and Hyprland is normally set up by hand, by editing text files. Here you set it up by clicking: displays, window layouts, keyboard shortcuts, the bar, the look of the whole interface, updates and repairs each get a proper settings page — a settings app, not a config file, and never a terminal. Pick a wallpaper and the whole desktop takes its colors from it. One keypress hands the machine over to a full-screen Steam session for gaming. **Deeply featured. Genuinely friendly.**
 
-This repository is the desktop itself — the Quickshell shell, the Hyprland configuration, and the `./setup` tooling that turns a fresh Arch install into Mainstream OS. The ISO builder lives at [MainstreamOS/archiso](https://github.com/MainstreamOS/archiso) and the signed package repo at [MainstreamOS/packages](https://github.com/MainstreamOS/packages). Mainstream ships a lean, heavily modified version of end-4's [illogical-impulse](https://github.com/end-4/dots-hyprland) shell the way Ubuntu ships GNOME — as one credited, continuously-upstream-merged component of a full operating system.
+This repository is the desktop itself — the Quickshell shell, the Hyprland configuration, and the `./setup` tooling that turns a fresh Arch install into Mainstream OS. The ISO builder lives at [MainstreamOS/archiso](https://github.com/MainstreamOS/archiso) and the signed package repo at [MainstreamOS/packages](https://github.com/MainstreamOS/packages).
+
+The shell — the bar, the dock, the side panels, the search box — is a lean, heavily modified version of [end-4](https://github.com/end-4)'s [illogical-impulse](https://github.com/end-4/dots-hyprland). Mainstream ships it the way Ubuntu ships GNOME: as one openly credited part of a complete operating system. Improvements from the original are still taken in periodically, and fixes found here are offered back rather than kept private. It has grown since — the dock, the app drawer, file search, and the way colors are saved and scheduled are largely Mainstream's now, and so is everything around it: the installer, the settings app, the package repository, the backup and repair tools, the gaming session.
 
 ## Install
 
-- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 2.7 GB), flash it to a USB drive, boot and click through. Dual-boot and full-disk encryption are supported.
-- **On an existing Arch install** — run `bash <(curl -fsSL https://mainstreamos.org/install.sh)`; about 10 minutes. It also takes options — `--os-only` (desktop only), `--console` (gaming/console), or `--verbose` (confirm each command before it runs) — see [all the options](https://mainstreamos.org/#install-script).
+- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 2.7 GB), flash it to a USB drive, boot and click through. Dual-boot and full-disk encryption are set up during the install itself. An experimental legacy-NVIDIA edition (4.0 GB) covers older NVIDIA cards, back to the GeForce 400 series.
+- **On an existing Arch install** — one command, about 10 minutes:
+
+  ```bash
+  bash <(curl -fsSL https://mainstreamos.org/install.sh)
+  ```
+
+  That installs the newest numbered release — the same one the ISO ships and Settings → Update tracks. Options for the install itself go **after a `--` separator**; `--edge` goes before it and installs the `mainstream` branch as it stands, ahead of any release:
+
+  ```bash
+  bash <(curl -fsSL https://mainstreamos.org/install.sh) -- --os-only   # desktop only, without the default apps
+  bash <(curl -fsSL https://mainstreamos.org/install.sh) -- --console   # gaming / console install
+  bash <(curl -fsSL https://mainstreamos.org/install.sh) -- --verbose   # confirm each command before it runs
+  bash <(curl -fsSL https://mainstreamos.org/install.sh) --edge         # the mainstream branch, ahead of any release
+  ```
+
+  See [all the options](https://mainstreamos.org/#install-script).
 - Once you're in: `Super` + `Tab` opens the keybind list, `Super` + `T` opens a terminal.
 
 See the [install guides](https://mainstreamos.org/#install-iso) for details.
@@ -26,23 +43,30 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 ## Features
 
 - **Every setting lives in one place** — wallpaper and colors, the UI, display and layout switching, keybinds and updates — a settings app, not a config file, and never a terminal. Snapshots keep experimenting safe.
-    - **Displays** — arrange monitors and set resolution, refresh rate, scale, and orientation.
-    - **Layout switching** — dwindle, master, scrolling, monocle, or float, per workspace, on the fly.
-    - **Keybinds** — view and remap every shortcut in a visual editor.
+    - **Displays** — arrange monitors and set resolution, refresh rate, scale, orientation, HDR and color profiles, or mirror one screen onto another.
+    - **Layout switching** — dwindle, master, scrolling, monocle, or float: four ways of arranging windows automatically plus a floating mode, per workspace, on the fly.
+    - **Keybinds** — a real editor rather than a printed list. Change the ones that ship, add your own, and set them by pressing the keys you want.
     - **Touchpad gestures** — remap every swipe and pinch, applied instantly.
     - **Title bars** — toggle window title bars on or off instantly.
     - **App management** — install and remove native packages and Flatpaks, no terminal.
     - **Auto drive mounting** — set a drive up once and it's ready every login; format blank disks and unlock encrypted ones in the app.
-- **Gaming Mode** — one click swaps your desktop for a full-screen dedicated gamescope session running Steam Big Picture, the same Game Mode a Steam Deck boots into, and one click back. A full tiling desktop and a real console mode, in one system.
-- **Themes you can save and schedule** — pick a wallpaper — a still image or a video — and the whole desktop recolors to match (Material You). Save a complete look — wallpaper, colors, and window decorations — as a named theme with a preview, switch between saved themes in one tap, and pair a Day and Night theme that follow Night Light or your own set hours.
-- **A launcher that finds everything** — apps, folders, files, and quick math.
-- **Scrolling overview** — a zoomed-out map of every workspace; drag windows, files, and folders between them.
-- **Session restore** — log out or reboot and your windows come back: same apps, same workspaces.
+- **Whole-desktop Material You** — pick a wallpaper, a still image or a video, and the shell, the settings app, your terminal, your apps, your folder icons, and the lock screen all recolor to match it.
+- **Themes you can save, schedule, and share** — your whole look — wallpaper, colors, app style, icons, interface changes, and window styling — saves under a name with a preview and switches back in one tap. Pair a Day and Night theme that follow Night Light or your own set hours, or export a theme to a single file and import it on another computer.
+- **A bar you arrange** — show, hide, and reorder every piece of the bar by dragging, move them between the left, middle, and right, and drop two together to join them into a single rounded group.
+- **App style, icons, pointer, and fonts** — all pickers in Settings, with a font list that shows each font in its own lettering. Your choice carries into your apps, not just the shell.
+- **Gaming Mode** — `Super` + `G` puts the desktop away and hands the machine to a full-screen gamescope Steam session, the same session model a Steam Deck runs, then gives the desktop back. AMD, Intel, and NVIDIA alike. Proton GE is installed and set as Steam's default, so Windows titles run the first time you open them.
+- **Console Mode** — an install option that starts straight into that session and sets up game controllers, turning a computer under the TV into a console, with the full desktop still there whenever you want it.
+- **A launcher that finds everything** — apps, folders, files, quick math, and your clipboard history.
+- **Overviews** — a hot corner or `Super` + `F10` opens a map of every workspace; drag windows between them and drop files and folders in. The scrolling layout has its own panning view on `Super` + `O`.
+- **Session restore** — log out or reboot and your windows come back on the workspaces they were on.
 - **Made with creators in mind** — one-click install for DaVinci Resolve and OBS, with GPU encoding on Wayland.
-- **LocalSend built in** — drag a file onto the bar's media widget to send it to any device on your network; right-click to receive. No cloud.
-- **Updates with a safety net** — automatic snapshots before every update, and rollbacks right from the boot menu.
-- **Verified installs** — a post-install self-check runs 19 tests on the finished system and writes a health report, so a bad install tells you instead of failing silently.
-- **A lean, native base** — native apps as defaults, and the AUR off by default in favor of the signed [\[mainstream\]](https://github.com/MainstreamOS/packages) repo.
+- **LocalSend built in** — drag files onto the bar's media widget to send them to any phone, tablet, or computer on your network running [LocalSend](https://localsend.org), and right-click to receive, with live progress and no cloud in the middle. Built into the desktop rather than bundled as a separate app.
+- **Graphics sorted out during the install** — your card is recognized and given drivers that match the model you actually have, across AMD, Intel, and NVIDIA, laptops with two included. The experimental legacy-NVIDIA edition covers older NVIDIA cards, back to the GeForce 400 series.
+- **Updates with a safety net** — system packages, Flatpaks, and the desktop update together from a single button, with a restore point taken before and after. A bad update is one boot-menu entry away from being undone, and a marker on the bar tells you when a new release is out.
+- **Repair Install** — one button re-runs the desktop setup and rebuilds its components.
+- **Verified installs** — a post-install self-check runs on the finished system and writes a health report, so a bad install tells you instead of failing silently.
+- **Signed downloads and packages** — every release is signed with checksums published alongside it, and everything Mainstream adds arrives prebuilt and signed in the [\[mainstream\]](https://github.com/MainstreamOS/packages) repo.
+- **A lean, native base** — native apps as defaults, and the AUR off by default in favor of the signed repo.
 
 ## Screenshots
 
@@ -106,6 +130,8 @@ Fixes to the upstream shell go back to [illogical-impulse](https://github.com/en
 - [@midn8hustlr](https://github.com/midn8hustlr) for the color generation system
 - [@outfoxxed](https://github.com/outfoxxed/) for [Quickshell](https://quickshell.outfoxxed.me/)
 - [@yayuuu](https://github.com/yayuuu) for [Scroll Overview](https://github.com/yayuuu/hyprland-scroll-overview), the plugin behind the scrolling overview
+- [@sanaruca](https://github.com/sanaruca) for the dock launch animations ([end-4/dots-hyprland#3553](https://github.com/end-4/dots-hyprland/issues/3553))
+- The [LocalSend](https://localsend.org) project, whose protocol powers device-to-device transfers
 - The [Calamares](https://calamares.io) team for the installer framework
 - [@ful1e5](https://github.com/ful1e5) ([sponsor](https://github.com/sponsors/ful1e5)) for the [Bibata](https://github.com/ful1e5/Bibata_Cursor) cursor theme
 - [@xCaptaiN09](https://github.com/xCaptaiN09) for the [Pixie](https://github.com/xCaptaiN09/pixie-sddm) SDDM theme
