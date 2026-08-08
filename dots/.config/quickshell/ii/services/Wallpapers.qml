@@ -54,7 +54,9 @@ Singleton {
             if (!Config.ready || !root.isVideoFile(Config.options.background.wallpaperPath.toLowerCase())) return;
             if (root.videoApplied) return;
             root.videoApplied = true;
-            root.apply(Config.options.background.wallpaperPath, Appearance.m3colors.darkmode);
+            // Putting a video wallpaper back as the shell comes up is not the
+            // user choosing anything, and a rotation must survive a restart.
+            root.apply(Config.options.background.wallpaperPath, Appearance.m3colors.darkmode, true);
         }
     }
     
@@ -62,9 +64,11 @@ Singleton {
         Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light"]);
     }
 
-    function apply(path, darkMode = Appearance.m3colors.darkmode) {
+    function apply(path, darkMode = Appearance.m3colors.darkmode, keepSlideshow = false) {
         if (!path || path.length === 0) return;
-        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path]);
+        const args = [Directories.wallpaperSwitchScriptPath, "--mode", darkMode ? "dark" : "light", "--image", path];
+        if (keepSlideshow) args.push("--keep-slideshow");
+        Quickshell.execDetached(args);
         root.changed()
     }
 

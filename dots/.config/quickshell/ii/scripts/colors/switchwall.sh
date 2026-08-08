@@ -160,8 +160,16 @@ EOF
 
 set_wallpaper_path() {
     local path="$1"
+    # Ending a rotation rides along in the write that records the picture, so
+    # the shell reads one change rather than two. Said outright rather than by
+    # dropping the key: the config adapter keeps a value whose key has gone.
+    local stop_slideshow="${2:-}"
+    local filter='.background.wallpaperPath = $path'
+    if [[ -n "$stop_slideshow" ]]; then
+        filter+=' | (if ((.background.slideshow.enable)? // false) == true then .background.slideshow.enable = false else . end)'
+    fi
     if [ -f "$SHELL_CONFIG_FILE" ]; then
-        jq --arg path "$path" '.background.wallpaperPath = $path' "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
+        jq --arg path "$path" "$filter" "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
     fi
 }
 
@@ -333,7 +341,7 @@ switch() {
             # Set wallpaper path (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
                 [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
-                set_wallpaper_path "$imgpath"
+                set_wallpaper_path "$imgpath" "${stop_slideshow:-}"
             fi
 
             # Set video wallpaper
@@ -368,7 +376,7 @@ switch() {
             # Update wallpaper path in config (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
                 [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
-                set_wallpaper_path "$imgpath"
+                set_wallpaper_path "$imgpath" "${stop_slideshow:-}"
             fi
             remove_restore
         fi
@@ -497,6 +505,8 @@ main() {
     color=""
     noswitch_flag=""
     picture_only_flag=""
+    keep_slideshow_flag=""
+    stop_slideshow=""
 
     get_type_from_config() {
         jq -r '.appearance.palette.type' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "auto"
@@ -574,6 +584,13 @@ main() {
                 ;;
             --picture-only)
                 picture_only_flag="1"
+                shift
+                ;;
+            # Everything that changes the wallpaper without the user having
+            # chosen it passes this: the rotation's own ticks, the re-apply of a
+            # video wallpaper as the shell comes up, and the first-run seed.
+            --keep-slideshow)
+                keep_slideshow_flag="1"
                 shift
                 ;;
             *)
@@ -663,6 +680,13 @@ main() {
         clear_accent_color=1
         color_flag=""
         color=""
+    fi
+
+    # A picture chosen on purpose is the end of a rotation. Kept apart from the
+    # accent rule above so the rotation's own ticks, which do want the accent
+    # cleared when they regenerate the palette, are not caught by it.
+    if [[ -n "$imgpath" && -z "$noswitch_flag" && -z "$picture_only_flag" && -z "$keep_slideshow_flag" ]]; then
+        stop_slideshow=1
     fi
 
     switch "$imgpath" "$mode_flag" "$type_flag" "$color_flag" "$color"

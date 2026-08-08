@@ -146,9 +146,13 @@ Singleton {
 
     function apply(path) {
         if (!path || path.length === 0) return
+        // --keep-slideshow is what separates a tick from someone choosing a
+        // single wallpaper; without it the script reads this as the user
+        // picking one and turns the rotation off mid-run.
         const args = [Directories.wallpaperSwitchScriptPath,
                       "--mode", Appearance.m3colors.darkmode ? "dark" : "light",
-                      "--image", path]
+                      "--image", path,
+                      "--keep-slideshow"]
         if (!(root.opts?.recolor ?? false)) args.push("--picture-only")
         Quickshell.execDetached(args)
     }

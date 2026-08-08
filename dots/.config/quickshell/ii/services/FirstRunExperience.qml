@@ -37,7 +37,7 @@ Singleton {
         Quickshell.execDetached(["bash", "-c",
             `g='${genDir}'; ` +
             `[ -s "$g/colors.json" ] && [ -s "$g/material_colors.scss" ] && grep -q on_background "$g/colors.json" 2>/dev/null && exit 0; ` +
-            `exec nice -n 19 ionice -c 3 '${Directories.wallpaperSwitchScriptPath}' '${root.defaultWallpaperPath}'`])
+            `exec nice -n 19 ionice -c 3 '${Directories.wallpaperSwitchScriptPath}' --keep-slideshow '${root.defaultWallpaperPath}'`])
         // Gate the welcome on the BAR's first paint. It launches as a second,
         // heavy quickshell process; starting it during the main shell's startup
         // races the paint and pops up over a blank/half-painted bar. Wait (up to
