@@ -381,4 +381,10 @@ PY2
 
 fi
 
+# ── 8. Restage the desktop portal, now the whole look has settled ───────────
+# Runs here rather than inside switchwall so the portal comes back holding the
+# widget theme, icon theme and fonts set in 5b/5c, not just the palette.
+RESTAGE_PORTALS="$SCRIPT_DIR/../colors/restage-portals.sh"
+[ -f "$RESTAGE_PORTALS" ] && bash "$RESTAGE_PORTALS" >/dev/null 2>&1 9>&- &
+
 echo "OK"

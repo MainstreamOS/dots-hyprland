@@ -9,7 +9,17 @@ set -u
 # copy of itself and returns. Descriptors 8 and 9 carry locks belonging to
 # whoever started the chain; the copy closes them so it can't outlive its own
 # run and stall the next one.
+#
+# Descriptor 6 is the opposite: it is taken here, before the copy is handed the
+# work, and deliberately left open in it. Anything that has to come after the
+# finished icon set -- the desktop portal restage, which would otherwise come up
+# holding the plain icons -- waits on that descriptor rather than guessing how
+# long this takes. The kernel drops it if this run dies.
 if [ -z "${PAPIRUS_FOLDER_DETACHED:-}" ] && command -v setsid >/dev/null 2>&1; then
+    if command -v flock >/dev/null 2>&1 \
+        && exec 6>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-icon-recolor.lock" 2>/dev/null; then
+        flock -n 6 || true
+    fi
     PAPIRUS_FOLDER_DETACHED=1 setsid bash "$0" >/dev/null 2>&1 </dev/null 8>&- 9>&- &
     exit 0
 fi

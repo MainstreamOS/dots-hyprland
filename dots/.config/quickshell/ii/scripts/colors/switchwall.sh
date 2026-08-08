@@ -103,6 +103,12 @@ post_process() {
         set_sddm_background "$wallpaper_path"
         set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
     ) >/dev/null 2>&1 9>&- &
+    # Under apply-theme.sh the widget theme, the icon theme and the interface
+    # fonts are all still to come, so the portal is restaged at the end of that
+    # run instead — restarting it here would hand it the palette without them.
+    if [[ -z "${noswitch_flag:-}" ]]; then
+        "$SCRIPT_DIR/restage-portals.sh" >/dev/null 2>&1 9>&- &
+    fi
 }
 
 CUSTOM_DIR="$XDG_CONFIG_HOME/hypr/custom"
