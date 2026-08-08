@@ -116,6 +116,41 @@ is_video() {
     [[ "$extension" == "mp4" || "$extension" == "webm" || "$extension" == "mkv" || "$extension" == "avi" || "$extension" == "mov" || "$extension" == "m4v" || "$extension" == "ogv" ]] && return 0 || return 1
 }
 
+# Small tab-separated stores, newest line first, keyed on a path and the file's
+# own mtime and size so an edited picture is never answered from a stale entry.
+# One line per picture rather than one line total: the wallpaper slideshow asks
+# about a different picture every few minutes, and a single slot meant it wiped
+# whatever the theme had just paid to work out.
+PALETTE_CACHE_KEEP=64
+SRCCOLOR_CACHE="$STATE_DIR/user/generated/source-color-for-image.cache"
+cache_key_for() {
+    stat -c '%n:%Y:%s' "$1" 2>/dev/null
+}
+# Answers through $cache_value rather than stdout: at 64 short lines the shell
+# reads the whole store for less than the fork a command substitution costs.
+cache_get() {
+    local file="$1" key="$2" k v
+    cache_value=""
+    [[ -n "$key" && -f "$file" ]] || return 1
+    while IFS=$'\t' read -r k v; do
+        if [[ "$k" == "$key" ]]; then
+            cache_value="$v"
+            break
+        fi
+    done < "$file"
+    [[ -n "$cache_value" ]] || return 1
+}
+cache_put() {
+    local file="$1" key="$2" value="$3"
+    [[ -n "$key" && -n "$value" ]] || return 0
+    mkdir -p "${file%/*}" 2>/dev/null || return 0
+    {
+        printf '%s\t%s\n' "$key" "$value"
+        [[ -f "$file" ]] && awk -F'\t' -v k="$key" '$1 != k' "$file" 2>/dev/null
+    } | head -n "$PALETTE_CACHE_KEEP" > "$file.tmp" 2>/dev/null \
+        && mv -f "$file.tmp" "$file" 2>/dev/null || rm -f "$file.tmp" 2>/dev/null
+}
+
 # pkill/pgrep read every /proc/*/cmdline, which hangs whenever any task is
 # wedged in the kernel holding its mm lock (an amdgpu HMM oops leaves one
 # behind). Matching /proc/*/comm directly avoids cmdline reads entirely, so
@@ -298,6 +333,10 @@ switch() {
     cursorposy_inverted=$((screensizey - cursorposy))
 
     matugen_args=(--source-color-index 0)
+    # Only set on the picture path; a hand-picked accent colour needs no cache
+    # because there is no picture to read.
+    palette_key=""
+    palette_hex=""
 
     if [[ "$color_flag" == "1" ]]; then
         matugen_args+=(color hex "$color")
@@ -362,7 +401,19 @@ switch() {
             fi
 
             if [ -f "$thumbnail" ]; then
-                matugen_args+=(image "$thumbnail")
+                palette_img="$thumbnail"
+                # Keyed on the video rather than the thumbnail: ffmpeg rewrites
+                # the thumbnail every run, so its mtime never matches twice and
+                # a thumbnail key could only ever miss, filling the store with
+                # entries nothing can read.
+                palette_key="$(cache_key_for "$video_path")"
+                if cache_get "$SRCCOLOR_CACHE" "$palette_key"; then
+                    palette_hex="$cache_value"
+                    matugen_args+=(color hex "$palette_hex")
+                else
+                    palette_hex=""
+                    matugen_args+=(image "$thumbnail")
+                fi
                 generate_colors_material_args=(--path "$thumbnail")
                 create_restore_script "$video_path"
             else
@@ -371,7 +422,20 @@ switch() {
                 exit 1
             fi
         else
-            matugen_args+=(image "$imgpath")
+            # Handing matugen the picture means decoding it, which on anything
+            # camera-sized is most of the wait. All it takes from the picture is
+            # one colour, and the scheme it builds from that colour is the same
+            # either way — so once that colour is known, the picture never has
+            # to be opened again.
+            palette_img="$imgpath"
+            palette_key="$(cache_key_for "$imgpath")"
+            if cache_get "$SRCCOLOR_CACHE" "$palette_key"; then
+                palette_hex="$cache_value"
+                matugen_args+=(color hex "$palette_hex")
+            else
+                palette_hex=""
+                matugen_args+=(image "$imgpath")
+            fi
             generate_colors_material_args=(--path "$imgpath")
             # Update wallpaper path in config (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
@@ -438,7 +502,6 @@ switch() {
 
     [[ -n "$type_flag" ]] && matugen_args+=(--type "$type_flag") && generate_colors_material_args+=(--scheme "$type_flag")
     generate_colors_material_args+=(--termscheme "$terminalscheme" --blend_bg_fg)
-    generate_colors_material_args+=(--cache "$STATE_DIR/user/generated/color.txt")
 
     pre_process "$mode_flag"
 
@@ -469,18 +532,76 @@ switch() {
     # half-written copy behind to accumulate.
     trap 'rm -f "$generated_colors_tmp"' EXIT INT TERM HUP
     # These two read the same wallpaper and neither reads anything the other
-    # writes, so running one after the other only made the wait longer. Start
+    # writes, so running one after the other only made the wait longer.
+    # The colour the editor theme is set from stays matugen's alone: the two
+    # extractors disagree, and while the stylesheet generator was also writing
+    # it, which one you got depended on whether the cache had been hit. Start
     # the stylesheet first and let matugen work at the same time; the result is
     # collected below before anything depends on it.
-    python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" &
-    generated_colors_pid=$!
+    # The stylesheet cannot be rebuilt from a single colour the way matugen's
+    # scheme can — its terminal colours come out of the picture itself — so what
+    # gets kept is the finished stylesheet, under everything that went into it.
+    scss_cache_key=""
+    scss_cache_file=""
+    if [[ -n "${palette_key:-}" ]]; then
+        scss_cache_key="$(printf '%s|%s|%s|%s|%s|%s|%s|%s' \
+            "$palette_key" "${mode_flag:-}" "${type_flag:-}" "${harmony:-}" \
+            "${harmonize_threshold:-}" "${term_fg_boost:-}" \
+            "$(cache_key_for "$terminalscheme")" \
+            "$(cache_key_for "$SCRIPT_DIR/generate_colors_material.py")" | sha256sum 2>/dev/null)"
+        scss_cache_key="${scss_cache_key:0:32}"
+        [[ -n "$scss_cache_key" ]] && scss_cache_file="$CACHE_DIR/user/generated/palette-scss/$scss_cache_key.scss"
+    fi
+    if [[ -n "$scss_cache_file" && -s "$scss_cache_file" ]]; then
+        cp -f "$scss_cache_file" "$generated_colors_tmp" 2>/dev/null
+        generated_colors_pid=""
+    else
+        python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" &
+        generated_colors_pid=$!
+    fi
 
-    matugen "${matugen_args[@]}"
+    matugen_status=0
+    matugen "${matugen_args[@]}" || matugen_status=$?
 
-    wait "$generated_colors_pid"
-    generated_colors_status=$?
+    # matugen records the colour it settled on, so the next apply of this same
+    # picture can be handed the answer instead of the picture.
+    if [[ $matugen_status -eq 0 && -n "${palette_key:-}" && -z "${palette_hex:-}" ]]; then
+        extracted_hex="$(jq -r '.source_color // empty' "$STATE_DIR/user/generated/colors.json" 2>/dev/null)"
+        [[ "$extracted_hex" =~ ^#[0-9a-fA-F]{6}$ ]] && cache_put "$SRCCOLOR_CACHE" "$palette_key" "$extracted_hex"
+    fi
+
+    # The picture behind the current palette, recorded here rather than by a
+    # matugen template: matugen only knows it when it was handed the picture, and
+    # wrote the string Null the rest of the time — over an accent pick, which
+    # changes no wallpaper at all, as much as over a cached one.
+    if [[ $matugen_status -eq 0 && -n "${palette_img:-}" ]]; then
+        mkdir -p "$STATE_DIR/user/generated/wallpaper" 2>/dev/null \
+            && printf '%s\n' "$palette_img" > "$STATE_DIR/user/generated/wallpaper/path.txt" 2>/dev/null
+    fi
+
+    generated_colors_status=0
+    [[ -n "$generated_colors_pid" ]] && { wait "$generated_colors_pid"; generated_colors_status=$?; }
+    # A failed matugen leaves the previous colors.json in place, and every check
+    # downstream would pass on it — so stop here rather than let the theme apply
+    # with the old palette under the new theme's name.
+    if [[ $matugen_status -ne 0 ]]; then
+        rm -f "$generated_colors_tmp"
+        echo "[switchwall] matugen failed (exit $matugen_status); keeping the previous colors." >&2
+        deactivate
+        return 1
+    fi
     if [[ $generated_colors_status -eq 0 ]] \
         && grep -Eq '^\$onBackground: #[[:xdigit:]]{6};$' "$generated_colors_tmp"; then
+        # Kept only once it has passed the same check the live copy has to pass,
+        # so a half-written stylesheet can never be served back later.
+        if [[ -n "$scss_cache_file" && ! -s "$scss_cache_file" ]]; then
+            mkdir -p "${scss_cache_file%/*}" 2>/dev/null \
+                && cp -f "$generated_colors_tmp" "$scss_cache_file.tmp" 2>/dev/null \
+                && mv -f "$scss_cache_file.tmp" "$scss_cache_file" 2>/dev/null \
+                || rm -f "$scss_cache_file.tmp" 2>/dev/null
+            ls -1t "$CACHE_DIR/user/generated/palette-scss"/*.scss 2>/dev/null \
+                | tail -n "+$((PALETTE_CACHE_KEEP + 1))" | xargs -r rm -f 2>/dev/null
+        fi
         mv "$generated_colors_tmp" "$STATE_DIR"/user/generated/material_colors.scss
     else
         rm -f "$generated_colors_tmp"
@@ -528,14 +649,11 @@ main() {
         # on every theme apply and every light/dark toggle, so keep the last
         # answer and the file it belongs to.
         local cache="$STATE_DIR/user/generated/scheme-for-image.cache"
-        local key cached_key cached_value
-        key="$(stat -c '%n:%Y:%s' "$img" 2>/dev/null)"
-        if [[ -n "$key" && -f "$cache" ]]; then
-            IFS=$'\t' read -r cached_key cached_value < "$cache" 2>/dev/null || true
-            if [[ "$cached_key" == "$key" && -n "$cached_value" ]]; then
-                printf '%s' "$cached_value"
-                return 0
-            fi
+        local key
+        key="$(cache_key_for "$img")"
+        if cache_get "$cache" "$key"; then
+            printf '%s' "$cache_value"
+            return 0
         fi
 
         source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
@@ -543,11 +661,7 @@ main() {
         detected="$("$SCRIPT_DIR"/scheme_for_image.py "$img" 2>/dev/null | tr -d '\n')"
         deactivate
 
-        if [[ -n "$detected" && -n "$key" ]]; then
-            mkdir -p "$(dirname "$cache")"
-            printf '%s\t%s\n' "$key" "$detected" > "$cache.tmp" 2>/dev/null \
-                && mv -f "$cache.tmp" "$cache" 2>/dev/null || rm -f "$cache.tmp" 2>/dev/null
-        fi
+        [[ -n "$detected" ]] && cache_put "$cache" "$key" "$detected"
         printf '%s' "$detected"
     }
 
