@@ -17,7 +17,6 @@ ContentPage {
 
     // ── Paths ────────────────────────────────────────────────────────────────
     readonly property string homePath: FileUtils.trimFileProtocol(Directories.home)
-    readonly property string shellConfigDir: Directories.shellConfig
     readonly property string shellConfigPath: Directories.shellConfigPath
     readonly property string themesDir: ThemeLibrary.themesDir
     readonly property string lastAppliedPath: ThemeLibrary.lastAppliedPath
@@ -288,8 +287,8 @@ ContentPage {
         // Build bash payload
         const bash =
             `set -e\n` +
-            `SLUG='${String(slug).replace(/'/g, "'\\''")}'\n` +
-            `NAME='${String(name).replace(/'/g, "'\\''")}'\n` +
+            `SLUG='${StringUtils.shellSingleQuoteEscape(slug)}'\n` +
+            `NAME='${StringUtils.shellSingleQuoteEscape(name)}'\n` +
             `MODE='${modeStr}'\n` +
             `THEMES='${root.themesDir}'\n` +
             `DIR="$THEMES/$SLUG"\n` +
@@ -510,7 +509,7 @@ ContentPage {
         Config.blockWrites = true
         deleteProc.deletingSlug = theme.slug
 
-        const safeSlug = String(theme.slug).replace(/'/g, "\\'\\''")
+        const safeSlug = StringUtils.shellSingleQuoteEscape(theme.slug)
         const bash =
             `set -e\n` +
             `SLUG='${safeSlug}'\n` +
@@ -1190,7 +1189,6 @@ finally:
                 delegate: Rectangle {
                     id: themeCard
                     required property var modelData
-                    required property int index
                     readonly property bool isActive: modelData.slug === root.lastAppliedSlug
                     readonly property bool busy: root.applyInFlight
                     Layout.fillWidth: true

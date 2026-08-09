@@ -316,6 +316,7 @@ except Exception:
 # every theme apply still takes effect live. Section/leaf split on the
 # first `:`; bracket-string keys handle leafs that have their own dots
 # (e.g. blur:enabled → ["blur.enabled"]).
+sections = {}
 def kw(keyword, value):
     first_colon = keyword.find(":")
     section = keyword[:first_colon]
@@ -330,8 +331,7 @@ def kw(keyword, value):
             lua_val = s
         except ValueError:
             lua_val = '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    expr = 'hl.config({ ' + section + ' = { ["' + leaf + '"] = ' + lua_val + ' } })'
-    subprocess.run(["hyprctl", "eval", expr], capture_output=True)
+    sections.setdefault(section, []).append('["' + leaf + '"] = ' + lua_val)
 if "animations"   in flags: kw("animations:enabled",          "true"  if flags["animations"]   else "false")
 if "blur"         in flags: kw("decoration:blur:enabled",     "true"  if flags["blur"]         else "false")
 if "shadow"       in flags: kw("decoration:shadow:enabled",   "true"  if flags["shadow"]       else "false")
@@ -343,6 +343,11 @@ if "borders" in flags:
     else:
         kw("general:border_size", "0");   kw("general:resize_on_border", "false")
         kw("general:gaps_in",     "0");   kw("general:gaps_out",         "0")
+# hl.config() takes the whole set at once, and every eval is a round trip to
+# the compositor on the interactive path -- up to eight of them for one apply.
+if sections:
+    body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())
+    subprocess.run(["hyprctl", "eval", "hl.config({ " + body + " })"], capture_output=True)
 PY2
     fi
 

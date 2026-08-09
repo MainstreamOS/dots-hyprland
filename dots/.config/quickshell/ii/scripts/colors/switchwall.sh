@@ -295,13 +295,13 @@ set_scrolloverview_wallpaper() {
 # theme was applied with.
 picture_only_post_process() {
     local wallpaper_path="$1"
-    local screen_width screen_height
-    screen_width="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
-    screen_height="$(hyprctl monitors -j | jq '([.[].height] | min)' | xargs)"
     (
         if command -v flock >/dev/null 2>&1 && exec 8>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-wallpaper-derivatives.lock"; then
             flock 8
         fi
+        local screen_width screen_height
+        read -r screen_width screen_height < <(hyprctl monitors -j \
+            | jq -r '([.[].width] | min), ([.[].height] | min)' | xargs)
         set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
     ) >/dev/null 2>&1 9>&- &
 }

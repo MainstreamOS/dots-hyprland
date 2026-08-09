@@ -43,11 +43,6 @@ Singleton {
         return videoExtensions.some(ext => name.endsWith("." + ext))
     }
 
-    // Executions
-    Process {
-        id: applyProc
-    }
-
     Connections {
         target: Config
         function onReadyChanged() { // Apply wallpaper on config ready if it's a video

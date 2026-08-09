@@ -183,7 +183,6 @@ if [ ! -e "$pending_file" ] \
    && [ "$folder_color" = "$(cat "$state_file" 2>/dev/null)" ] \
    && [ "$base_theme" = "$(cat "$state_file.base" 2>/dev/null)" ] \
    && [ -f "$theme_dir/index.theme" ]; then
-    printf '#%s\n' "$source_hex" > "$state_file.hex"
     exit 0
 fi
 
@@ -261,7 +260,6 @@ done
 # dies partway through is never mistaken for a finished one.
 printf '%s\n' "$folder_color" > "$state_file"
 printf '%s\n' "$base_theme" > "$state_file.base"
-printf '#%s\n' "$source_hex" > "$state_file.hex"
 rm -f "$pending_file"
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
