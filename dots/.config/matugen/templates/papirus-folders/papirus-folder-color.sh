@@ -20,6 +20,7 @@ theme_name="${PAPIRUS_MATUGEN_THEME:-Papirus-Matugen}"
 theme_dir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/$theme_name"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/matugen"
 state_file="$state_dir/papirus-folder-color"
+pending_file="$state_file.pending"
 
 mkdir -p "$state_dir"
 
@@ -159,18 +160,35 @@ fi
 # otherwise delete and relink four hundred icons to produce byte-identical
 # output, and flip the icon theme away and back, making every open application
 # reload its icons for nothing.
-if [ "$folder_color" = "$(cat "$state_file" 2>/dev/null)" ] \
+#
+# What is on disk decides this, not what an earlier run said it was going to do.
+# The note records an intention, and a run that died partway through leaves one
+# it never carried out, along with the marker written across the rebuild; asking
+# for the same colour again is exactly when nothing else would notice. -ef
+# compares what the links resolve to and forks nothing, which matters because
+# the no-op this guards is on the path of every wallpaper change.
+icons_current=1
+for size in 16x16 22x22 24x24 32x32 48x48 64x64; do
+  source_dir="/usr/share/icons/$base_theme/$size/places"
+  [ -d "$source_dir" ] || source_dir="/usr/share/icons/Papirus/$size/places"
+  [ -e "$source_dir/folder-$folder_color.svg" ] || continue
+  [ "$theme_dir/$size/places/folder.svg" -ef "$source_dir/folder-$folder_color.svg" ] || {
+    icons_current=0
+    break
+  }
+done
+
+if [ ! -e "$pending_file" ] \
+   && [ "$icons_current" = "1" ] \
+   && [ "$folder_color" = "$(cat "$state_file" 2>/dev/null)" ] \
    && [ "$base_theme" = "$(cat "$state_file.base" 2>/dev/null)" ] \
-   && [ -f "$theme_dir/index.theme" ] \
-   && [ -e "$theme_dir/64x64/places/folder.svg" ]; then
+   && [ -f "$theme_dir/index.theme" ]; then
     printf '#%s\n' "$source_hex" > "$state_file.hex"
     exit 0
 fi
 
 mkdir -p "$theme_dir"
-printf '%s\n' "$folder_color" > "$state_file"
-printf '%s\n' "$base_theme" > "$state_file.base"
-printf '#%s\n' "$source_hex" > "$state_file.hex"
+: > "$pending_file"
 
 cat > "$theme_dir/index.theme" <<EOF
 [Icon Theme]
@@ -229,15 +247,22 @@ for size in 16x16 22x22 24x24 32x32 48x48 64x64; do
       folder-"$folder_color"-*) alias="folder-${name#folder-$folder_color-}" ;;
       *) continue ;;
     esac
-    ln -s "$icon" "$target_dir/$alias"
+    ln -sf "$icon" "$target_dir/$alias"
   done
 
   for icon in "$source_dir"/user-"$folder_color"-*.svg; do
     [ -e "$icon" ] || continue
     name="$(basename "$icon")"
-    ln -s "$icon" "$target_dir/user-${name#user-$folder_color-}"
+    ln -sf "$icon" "$target_dir/user-${name#user-$folder_color-}"
   done
 done
+
+# Recorded once the icon set on disk is the colour being recorded, so a run that
+# dies partway through is never mistaken for a finished one.
+printf '%s\n' "$folder_color" > "$state_file"
+printf '%s\n' "$base_theme" > "$state_file.base"
+printf '#%s\n' "$source_hex" > "$state_file.hex"
+rm -f "$pending_file"
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -f -t "$theme_dir" >/dev/null 2>&1 || true
