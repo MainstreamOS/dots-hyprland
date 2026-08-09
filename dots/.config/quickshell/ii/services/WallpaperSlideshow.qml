@@ -113,32 +113,55 @@ Singleton {
         onExited: root._advance((listProc.buf || "").split("\n").filter(l => l.length > 0))
     }
 
+    // A picture and its -dark/-light siblings are one entry in the rotation:
+    // the tick asks by name, but switchwall answers with whichever sibling
+    // matches the mode, so two different names can mean the same picture on
+    // screen. Sorting always puts such a pair next to each other.
+    function _variantGroup(path) {
+        const slash = path.lastIndexOf("/")
+        const dir = slash < 0 ? "" : path.slice(0, slash + 1)
+        const base = slash < 0 ? path : path.slice(slash + 1)
+        const dot = base.lastIndexOf(".")
+        let stem = dot < 0 ? base : base.slice(0, dot)
+        const ext = dot < 0 ? "" : base.slice(dot)
+        if (stem.endsWith("-dark")) stem = stem.slice(0, -5)
+        else if (stem.endsWith("-light")) stem = stem.slice(0, -6)
+        return dir + stem + ext
+    }
+
     function _advance(all) {
         if (all.length === 0) return
         const current = FileUtils.trimFileProtocol(Config.options.background.wallpaperPath ?? "")
+        const currentGroup = root._variantGroup(current)
         let next = ""
 
         if (root.opts?.shuffle ?? true) {
             // Keep a short memory of what has already been shown so a small
             // folder doesn't repeat itself immediately. When everything has
             // had a turn the memory clears rather than the rotation stalling.
+            // Held by group, so what's recorded is what ends up on screen.
             const memory = Math.min(root._recent.length, Math.max(0, Math.floor(all.length / 2)))
             const recent = root._recent.slice(root._recent.length - memory)
-            let pool = all.filter(p => p !== current && recent.indexOf(p) < 0)
+            let pool = all.filter(p => root._variantGroup(p) !== currentGroup
+                                       && recent.indexOf(root._variantGroup(p)) < 0)
             if (pool.length === 0) {
                 root._recent = []
-                pool = all.filter(p => p !== current)
+                pool = all.filter(p => root._variantGroup(p) !== currentGroup)
             }
             if (pool.length === 0) return
             next = pool[Math.floor(Math.random() * pool.length)]
-            root._recent = recent.concat([next]).slice(-64)
+            root._recent = recent.concat([root._variantGroup(next)]).slice(-64)
         } else {
             // An unrecognised current wallpaper (a theme's embedded copy, say,
             // which lives in the theme directory rather than this folder)
             // starts the sequence from the top.
             const index = all.indexOf(current)
-            next = all[(index + 1) % all.length]
-            if (next === current) return
+            // Step over every sibling of the picture already showing.
+            for (let i = 1; i <= all.length; ++i) {
+                const candidate = all[(index + i) % all.length]
+                if (root._variantGroup(candidate) !== currentGroup) { next = candidate; break }
+            }
+            if (next.length === 0) return
         }
 
         root.apply(next)

@@ -71,8 +71,13 @@ Singleton {
             // Without this, the scheduler would silently skip apply on
             // every evaluation and the dropdown would still show the
             // phantom slug as "selected" even though there's no card.
+            //
+            // Only when the index parsed into something: an empty map means
+            // unreadable or caught mid-rewrite, not empty, and clearing on that
+            // reading wipes the picks — by writing config.json from
+            // Component.onCompleted, which startup must never do.
             const sched = Config.options?.appearance?.themeSchedule
-            if (sched) {
+            if (sched && Object.keys(map).length > 0) {
                 if (sched.daySlug && !map[sched.daySlug]) sched.daySlug = ""
                 if (sched.nightSlug && !map[sched.nightSlug]) sched.nightSlug = ""
             }
@@ -129,26 +134,49 @@ Singleton {
         // leaves a failed apply with nothing to report but a number.
         stderr: StdioCollector { id: applyStderr }
         onExited: (exitCode, exitStatus) => {
+            // Cancelled to start a different theme: pendingSlug already names
+            // the replacement, so anything reported here names the wrong one.
+            // blockWrites is left alone too — the run now underway set it.
+            if (exitCode === 143 || exitCode === 137) return
             Config.blockWrites = false
             // Force a re-read of the generated colors.json. Matugen writes via
             // rename which can leave QFileSystemWatcher tracking a stale inode,
             // so onFileChanged doesn't always fire.
             MaterialThemeLoader.reapplyTheme()
             if (exitCode === 0) {
+                root._failedSlug = ""
+                root._failedAttempts = 0
                 root.applied(applyProc.pendingSlug)
             } else {
                 const reason = (applyStderr.text ?? "").trim()
-                root.applyFailed(applyProc.pendingSlug, reason.length > 0 ? reason : "exit " + exitCode)
+                const failedSlug = applyProc.pendingSlug
+                root.applyFailed(failedSlug, reason.length > 0 ? reason : "exit " + exitCode)
+                // The scheduler short-circuits while its baseline still matches
+                // the computed target, so clearing the baseline is what lets the
+                // next tick try again. Bounded, since ticks are once a minute
+                // and each attempt costs a notification.
+                let scheduleRetry = false
+                if (failedSlug === root._lastScheduledSlug) {
+                    root._failedAttempts = (root._failedSlug === failedSlug) ? root._failedAttempts + 1 : 1
+                    root._failedSlug = failedSlug
+                    if (root._failedAttempts < root._maxScheduleRetries) {
+                        root._lastScheduledSlug = ""
+                        scheduleRetry = root._failedAttempts > 1
+                    }
+                }
                 // A theme that rolls back puts the previous one back and says
                 // nothing, so the desktop simply doesn't change and the user is
                 // left to guess. The Settings page can't be relied on to carry
                 // this — applies are started over IPC and land in this process,
                 // not in the one drawing that page, which may not even be open.
-                console.log("[ThemeManager] apply failed for " + applyProc.pendingSlug + ": " + reason)
-                Quickshell.execDetached(["notify-send",
-                    Translation.tr("Couldn't apply that theme"),
-                    Translation.tr("Your previous theme is still in place."),
-                    "-a", "Shell"])
+                console.log("[ThemeManager] apply failed for " + failedSlug + ": " + reason)
+                // Said once per failure, not once per retry of the same one.
+                if (!scheduleRetry) {
+                    Quickshell.execDetached(["notify-send",
+                        Translation.tr("Couldn't apply that theme"),
+                        Translation.tr("Your previous theme is still in place."),
+                        "-a", "Shell"])
+                }
             }
         }
     }
@@ -168,6 +196,12 @@ Singleton {
     // for the same target. Updated by apply(), which is the only place
     // the live theme actually changes.
     property string _lastScheduledSlug: ""
+
+    // Which scheduled slug last failed, and how many times running. Cleared by
+    // any successful apply.
+    property string _failedSlug: ""
+    property int _failedAttempts: 0
+    readonly property int _maxScheduleRetries: 3
 
     // Gate: only the main shell (shell.qml's Component.onCompleted) flips
     // this on. The settings.qml process loads ThemeManager too as part of

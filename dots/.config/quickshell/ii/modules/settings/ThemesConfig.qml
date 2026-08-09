@@ -448,11 +448,21 @@ ContentPage {
 
     Connections {
         target: saveProc
-        function onExited() {
+        function onExited(exitCode, exitStatus) {
             root.countingDown = false
             root.saveDialogOpen = false
             root.pendingUpdateSlug = ""
             root.restoreWindowAfterShot()
+            // The payload runs under `set -e` and can stop partway — an
+            // unwritable directory, a wallpaper that vanished between being
+            // chosen and being copied — so the library is pointed at the new
+            // slug only once there is a directory behind it.
+            if (exitCode !== 0) {
+                root.lastSavedSlug = ""
+                ThemeLibrary.refresh()
+                root.showStatus(Translation.tr("Couldn't save that theme"), 8000)
+                return
+            }
             if (root.lastSavedSlug) ThemeLibrary.lastAppliedSlug = root.lastSavedSlug
             root.lastSavedSlug = ""
             ThemeLibrary.refresh()

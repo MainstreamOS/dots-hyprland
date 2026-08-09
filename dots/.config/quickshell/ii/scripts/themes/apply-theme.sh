@@ -56,23 +56,63 @@ if command -v flock >/dev/null 2>&1 && { exec 9>"$APPLY_LOCK_FILE"; } 2>/dev/nul
     flock -w 120 9 2>/dev/null || dlog "lock wait timed out; applying anyway"
 fi
 
-write_apply_state "applying"
-
-[ -d "$THEME_DIR" ] || { write_apply_state "idle"; echo "theme dir missing: $THEME_DIR" >&2; exit 3; }
-[ -f "$THEME_DIR/config.json" ] || { write_apply_state "idle"; echo "theme config missing" >&2; exit 4; }
-
 # Record the pick before doing the work, not after. Readers watch this file to
 # decide which theme to mark as active, and the rest of an apply takes long
 # enough that leaving the previous slug in place makes them show the old theme
 # for several seconds — a settings page that already moved to the new one gets
-# pulled back and then forward again. rollback() puts the old value back if the
-# apply doesn't survive validation.
+# pulled back and then forward again. cleanup() puts the old value back unless
+# the run reaches the end.
 write_last_applied() {
-    [ -n "$1" ] || return 0
-    mkdir -p "$THEMES_DIR"
+    mkdir -p "$THEMES_DIR" 2>/dev/null || true
+    # Empty means there was no previous pick, so the marker is removed rather
+    # than left alone.
+    if [ -z "$1" ]; then
+        rm -f "$LAST_APPLIED" 2>/dev/null || true
+        return 0
+    fi
     printf '%s' "$1" > "$LAST_APPLIED.tmp" 2>/dev/null && mv -f "$LAST_APPLIED.tmp" "$LAST_APPLIED" 2>/dev/null || return 0
 }
 PREV_APPLIED=$(cat "$LAST_APPLIED" 2>/dev/null || true)
+
+# Set up before anything can fail, since the state file below tells the shell
+# to stop writing config.json and only this trap turns that back off.
+BACKUP=""
+STAGED=0
+SUCCESS=0
+CHILD_PID=""
+
+cleanup() {
+    if [ "$SUCCESS" != "1" ]; then
+        # Any ending short of the last line — set -e, a cancellation, a logout —
+        # leaves the staged config live with the previous theme's colours behind
+        # it, so the backup is put back.
+        if [ "$STAGED" = "1" ] && [ -n "$BACKUP" ] && [ -f "$BACKUP" ]; then
+            mv -f "$BACKUP" "$SHELL_CONFIG" 2>/dev/null || true
+            BACKUP=""
+            dlog "cleanup: restored backup over $SHELL_CONFIG"
+        fi
+        write_last_applied "$PREV_APPLIED"
+    fi
+    [ -n "$BACKUP" ] && [ -f "$BACKUP" ] && rm -f "$BACKUP" 2>/dev/null
+    write_apply_state "idle"
+}
+trap cleanup EXIT
+
+on_signal() {
+    trap - TERM INT
+    # Cancelled to start a different theme. Bash doesn't pass the signal on to
+    # what it is waiting for, so the colour run has to be taken down by hand or
+    # it keeps writing the cancelled theme's palette over the incoming one.
+    [ -n "$CHILD_PID" ] && kill -TERM "$CHILD_PID" 2>/dev/null
+    exit 143
+}
+trap on_signal TERM INT
+
+write_apply_state "applying"
+
+[ -d "$THEME_DIR" ] || { echo "theme dir missing: $THEME_DIR" >&2; exit 3; }
+[ -f "$THEME_DIR/config.json" ] || { echo "theme config missing" >&2; exit 4; }
+
 write_last_applied "$SLUG"
 
 # Resolve wallpaper (stored as meta.wallpaperFile, relative to $THEME_DIR) and
@@ -89,7 +129,6 @@ WP_ABS=""
 
 # ── 1. Backup live config for rollback ──────────────────────────────────────
 mkdir -p "$(dirname "$SHELL_CONFIG")"
-BACKUP=""
 if [ -f "$SHELL_CONFIG" ]; then
     BACKUP=$(mktemp --tmpdir="$(dirname "$SHELL_CONFIG")" config.json.backup.XXXXXX)
     cp -f "$SHELL_CONFIG" "$BACKUP"
@@ -107,12 +146,6 @@ rollback() {
     write_last_applied "$PREV_APPLIED"
     exit 5
 }
-
-cleanup() {
-    [ -n "$BACKUP" ] && [ -f "$BACKUP" ] && rm -f "$BACKUP"
-    write_apply_state "idle"
-}
-trap cleanup EXIT
 
 # ── 2. Stage merged config.json with wallpaperPath rewritten + user meta-state preserved ─
 # Some Config fields are user-level preferences that happen to live in the same
@@ -186,6 +219,13 @@ else
         || { rm -f "$TMP"; rollback "failed to stage config.json"; }
 fi
 mv -f "$TMP" "$SHELL_CONFIG"
+STAGED=1
+
+# switchwall gives up with a success code when there is no image to read, and
+# the colours already on disk would satisfy every check below. Checked here,
+# where the reason is known, rather than inferred later from an unchanged file.
+EFFECTIVE_WP=$(jq -r '.background.wallpaperPath // ""' "$SHELL_CONFIG" 2>/dev/null || echo "")
+[ -n "$EFFECTIVE_WP" ] || rollback "theme has no wallpaper to generate colours from"
 
 # ── 3. Regenerate colors via switchwall --noswitch ──────────────────────────
 # Pass --mode when the theme captured one so matugen regenerates the palette
@@ -194,7 +234,17 @@ mv -f "$TMP" "$SHELL_CONFIG"
 SWITCHWALL_ARGS=(--noswitch)
 [ -n "$MODE" ] && SWITCHWALL_ARGS+=(--mode "$MODE")
 if [ -x "$SWITCHWALL" ] || [ -f "$SWITCHWALL" ]; then
-    bash "$SWITCHWALL" "${SWITCHWALL_ARGS[@]}" || rollback "switchwall.sh exited non-zero"
+    # Backgrounded and waited on, because bash holds trapped signals until a
+    # foreground child finishes and a cancellation has to be acted on now.
+    # Descriptor 9 carries this run's lock and is closed for the whole colour
+    # run: switchwall starts things that outlive it — mpvpaper for a video
+    # wallpaper lasts the session — and an inherited lock is never given back.
+    SW_RC=0
+    bash "$SWITCHWALL" "${SWITCHWALL_ARGS[@]}" 9>&- &
+    CHILD_PID=$!
+    wait "$CHILD_PID" || SW_RC=$?
+    CHILD_PID=""
+    [ "$SW_RC" -eq 0 ] || rollback "switchwall.sh exited non-zero (rc=$SW_RC)"
 else
     rollback "switchwall.sh not found at $SWITCHWALL"
 fi
@@ -406,4 +456,5 @@ fi
 RESTAGE_PORTALS="$SCRIPT_DIR/../colors/restage-portals.sh"
 [ -f "$RESTAGE_PORTALS" ] && bash "$RESTAGE_PORTALS" >/dev/null 2>&1 9>&- &
 
+SUCCESS=1
 echo "OK"
