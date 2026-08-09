@@ -19,8 +19,14 @@ fi
 # don't cp + sed the kitty-theme.conf template over each other's
 # partial work. -w 30 queues callers up to 30 s; lock auto-releases
 # on script exit (see the `wait` calls below that keep fd 9 alive).
-exec 9>"$STATE_DIR/applycolor.lock"
-flock -w 30 9 || { echo "applycolor.sh: lock timeout — skipping"; exit 0; }
+#
+# The recolour runs whether or not the lock was taken: nothing downstream
+# checks this script's status, so it is the only chance the terminals and Qt
+# apps get. The `exec` is guarded because bash carries on past a failed
+# redirection, which would leave flock working on a descriptor never opened.
+if command -v flock >/dev/null 2>&1 && { exec 9>"$STATE_DIR/applycolor.lock"; } 2>/dev/null; then
+    flock -w 30 9 2>/dev/null || echo "applycolor.sh: lock wait timed out — applying anyway" >&2
+fi
 
 cd "$CONFIG_DIR" || exit
 

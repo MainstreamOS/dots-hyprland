@@ -231,7 +231,7 @@ EFFECTIVE_WP=$(jq -r '.background.wallpaperPath // ""' "$SHELL_CONFIG" 2>/dev/nu
 # Pass --mode when the theme captured one so matugen regenerates the palette
 # in the right brightness AND pre_process() in switchwall flips the GNOME
 # color-scheme gsetting too (apps like nautilus/gnome-text-editor watch it).
-SWITCHWALL_ARGS=(--noswitch)
+SWITCHWALL_ARGS=(--noswitch --config-staged)
 [ -n "$MODE" ] && SWITCHWALL_ARGS+=(--mode "$MODE")
 if [ -x "$SWITCHWALL" ] || [ -f "$SWITCHWALL" ]; then
     # Backgrounded and waited on, because bash holds trapped signals until a

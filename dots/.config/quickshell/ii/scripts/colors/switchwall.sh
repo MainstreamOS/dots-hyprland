@@ -318,12 +318,17 @@ switch() {
     type_flag="$3"
     color_flag="$4"
     color="$5"
-    # When called via apply-theme.sh (--noswitch), the caller has already
-    # staged wallpaperPath atomically via its own jq/mv. Rewriting it here
-    # adds an extra fs-event that quickshell processes reload from, which
-    # worsens the write race. Skip the in-script set_wallpaper_path in that
-    # case.
-    local skip_config_writes="${noswitch_flag:-}"
+    # apply-theme.sh has already staged wallpaperPath atomically via its own
+    # jq/mv. Rewriting it here adds an extra fs-event that quickshell processes
+    # reload from, which worsens the write race, so that caller says so and the
+    # write is skipped.
+    #
+    # Keyed on saying so rather than on --noswitch, which ten other callers pass
+    # while staging nothing. The variant resolution below can swap the picture
+    # for its -dark or -light sibling, and wallpaperPath is the only one of the
+    # things downstream that is actually drawn, so it has to end up naming
+    # whatever the palette was built from.
+    local skip_config_writes="${config_staged_flag:-}"
 
     # Start Gemini auto-categorization if enabled
     aiStylingEnabled=$(jq -r '.background.widgets.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
@@ -434,15 +439,34 @@ switch() {
             # either way — so once that colour is known, the picture never has
             # to be opened again.
             palette_img="$imgpath"
+            # matugen exits 101 on AVIF and on SVG, and the material generator
+            # is PIL-based with the same gaps, but both formats display fine —
+            # so the colour is read from a small rasterised copy while the
+            # wallpaper stays the original. The cache is keyed on that original,
+            # since this copy is rewritten whenever the source changes and a key
+            # on it could only ever miss.
+            local palette_src="$imgpath"
+            case "${imgpath,,}" in
+                *.avif|*.svg|*.svgz)
+                    if command -v magick >/dev/null 2>&1; then
+                        local colorsrc="$CACHE_DIR/user/generated/colorsrc-$(basename "$imgpath").png"
+                        if [[ ! -f "$colorsrc" || "$imgpath" -nt "$colorsrc" ]]; then
+                            mkdir -p "${colorsrc%/*}" 2>/dev/null
+                            magick "$imgpath" -resize '512x512>' -flatten "$colorsrc" 2>/dev/null || true
+                        fi
+                        [[ -s "$colorsrc" ]] && palette_src="$colorsrc"
+                    fi
+                    ;;
+            esac
             palette_key="$(cache_key_for "$imgpath")"
             if cache_get "$SRCCOLOR_CACHE" "$palette_key"; then
                 palette_hex="$cache_value"
                 matugen_args+=(color hex "$palette_hex")
             else
                 palette_hex=""
-                matugen_args+=(image "$imgpath")
+                matugen_args+=(image "$palette_src")
             fi
-            generate_colors_material_args=(--path "$imgpath")
+            generate_colors_material_args=(--path "$palette_src")
             # Update wallpaper path in config (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
                 [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
@@ -631,6 +655,7 @@ main() {
     color_flag=""
     color=""
     noswitch_flag=""
+    config_staged_flag=""
     picture_only_flag=""
     keep_slideshow_flag=""
     stop_slideshow=""
@@ -700,6 +725,12 @@ main() {
             --noswitch)
                 noswitch_flag="1"
                 imgpath=$(jq -r '.background.wallpaperPath' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "")
+                shift
+                ;;
+            # "I have already written wallpaperPath myself; don't write it
+            # again." Only apply-theme.sh, which stages the whole config.
+            --config-staged)
+                config_staged_flag="1"
                 shift
                 ;;
             --picture-only)

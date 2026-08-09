@@ -143,10 +143,23 @@ fi
 base_theme="${PAPIRUS_MATUGEN_BASE_THEME:-}"
 if [ -z "$base_theme" ]; then
   case "$current_theme" in
-    Papirus-Matugen|Papirus-Dark|Papirus-Dark-Matugen) base_theme="Papirus-Dark" ;;
+    # A Papirus variant the user chose themselves is the base to layer on.
+    Papirus-Dark|Papirus-Dark-Matugen) base_theme="Papirus-Dark" ;;
     Papirus-Light|Papirus-Light-Matugen) base_theme="Papirus-Light" ;;
-    Papirus|Papirus-Matugen-Light) base_theme="Papirus" ;;
-    *) base_theme="Papirus-Dark" ;;
+    Papirus) base_theme="Papirus" ;;
+    # Anything else, including this script's own generated theme, says nothing
+    # about light or dark: only */places is overridden here, so the base decides
+    # every other icon on the desktop and it has to follow the colour scheme.
+    *)
+      scheme=""
+      if command -v gsettings >/dev/null 2>&1; then
+        scheme="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null | tr -d "'")"
+      fi
+      case "$scheme" in
+        prefer-light) base_theme="Papirus-Light" ;;
+        *) base_theme="Papirus-Dark" ;;
+      esac
+      ;;
   esac
 fi
 
