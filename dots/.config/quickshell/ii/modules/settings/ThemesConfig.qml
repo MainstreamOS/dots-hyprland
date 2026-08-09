@@ -314,10 +314,19 @@ ContentPage {
             //                                exported while it was would carry a
             //                                per-machine record onto a machine it
             //                                does not describe.)
+            //   - apps.*                   (each of these is handed to `bash -c`
+            //                                when its button is pressed. A theme
+            //                                is a look; it has no business
+            //                                naming the command the Updates
+            //                                button runs.)
+            //   - updates.*                (names the manifest the release
+            //                                checker fetches. Where a machine
+            //                                is told about updates is not
+            //                                something a look decides.)
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.apps) | del(.updates)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.
@@ -340,8 +349,12 @@ ContentPage {
             // interface look were written, but before the wallpaper, the
             // screenshot and the metadata — so an update changed some of the
             // theme and left the rest, including the preview, as it was.
-            (wpTrimmed ? `WP='${wpTrimmed}'\n` +
-                         `EXT="\${WP##*.}"\n` +
+            // The extension is read off the basename, since a wallpaper with no
+            // dot in its name would otherwise take a slice of its own directory
+            // path along with it and the copy would land nowhere.
+            (wpTrimmed ? `WP='${StringUtils.shellSingleQuoteEscape(wpTrimmed)}'\n` +
+                         `WP_BASE="\${WP##*/}"\n` +
+                         `case "$WP_BASE" in *.*) EXT="\${WP_BASE##*.}" ;; *) EXT="img" ;; esac\n` +
                          `[ "$WP" -ef "$DIR/wallpaper.$EXT" ] || cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
@@ -367,9 +380,18 @@ ContentPage {
             // could keep showing the previous frame even though
             // preview.png on disk was already overwritten.
             `CREATED=$(date +%s%3N)\n` +
-            `cat > "$DIR/meta.json" <<EOF\n` +
-            `{"slug":"$SLUG","name":"$NAME","wallpaperFile":"$WP_FILE","mode":"$MODE","created":$CREATED}\n` +
-            `EOF\n` +
+            // Written by a serialiser rather than pasted into a heredoc: the
+            // name is whatever the user typed, and a quote or a backslash in it
+            // used to produce a meta.json nothing could parse. The index rebuild
+            // reads every theme's meta with `except Exception: pass`, so the
+            // theme simply vanished from the grid while its directory, its
+            // wallpaper copy and its preview stayed on disk unreachable.
+            `python3 - "$DIR/meta.json" "$SLUG" "$NAME" "$WP_FILE" "$MODE" "$CREATED" <<'PYMETA'\n` +
+            `import json, sys\n` +
+            `out, slug, name, wp, mode, created = sys.argv[1:7]\n` +
+            `json.dump({"slug": slug, "name": name, "wallpaperFile": wp,\n` +
+            `           "mode": mode, "created": int(created)}, open(out, "w"))\n` +
+            `PYMETA\n` +
             // Snapshot current decoration flags (Lua-config syntax — same
             // parsing logic as InterfaceConfig.qml's decoReader). Applying
             // this theme later restores the look the user had at save time.
@@ -403,7 +425,13 @@ ContentPage {
             `import json, os, sys\n` +
             `themes_dir = sys.argv[1]\n` +
             `out = []\n` +
+            // An import stages into a dot-prefixed directory alongside the real
+            // ones and only sanitises the archive's meta.json near the end, so a
+            // run killed partway leaves a hidden directory holding whatever the
+            // file claimed its slug was. Skipping dotted names keeps that out of
+            // the index instead of publishing it as a theme.
             `for name in sorted(os.listdir(themes_dir)):\n` +
+            `    if name.startswith("."): continue\n` +
             `    p = os.path.join(themes_dir, name)\n` +
             `    meta = os.path.join(p, "meta.json")\n` +
             `    if os.path.isdir(p) and os.path.isfile(meta):\n` +
@@ -549,6 +577,7 @@ ContentPage {
             `themes_dir = sys.argv[1]\n` +
             `out = []\n` +
             `for n in sorted(os.listdir(themes_dir)):\n` +
+            `    if n.startswith("."): continue\n` +
             `    p = os.path.join(themes_dir, n); m = os.path.join(p, "meta.json")\n` +
             `    if os.path.isdir(p) and os.path.isfile(m):\n` +
             `        try:\n` +
@@ -597,7 +626,12 @@ FORMAT_VERSION = 2
 STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
          ("screenRecord", "savePath"), ("screenSnip", "savePath"),
          ("background", "thumbnailPath"), ("background", "wallpaperPath"),
-         ("background", "slideshow", "folder")]
+         ("background", "slideshow", "folder"),
+         # A theme file arrives from somewhere else. Every apps.* value is run
+         # as a shell command by the button that owns it, and updates.* names
+         # the manifest this machine trusts for release news -- neither is part
+         # of a look, and neither may be carried in from outside.
+         ("apps",), ("updates",)]
 
 def theme_installed(kind, name, cursors=False):
     # kind is the shared-data subdirectory a look lives in ("themes" for widget
@@ -783,6 +817,12 @@ print("OK|" + out_path)
                 try { result = JSON.parse(line.slice(3)) } catch (e) { result = null }
                 const name = result?.name ?? ""
                 const missing = result?.missing ?? []
+                // Overwriting a theme the user already had is the one outcome
+                // they cannot undo, so it is said whatever else also happened —
+                // it used to be the last branch of the chain and any missing
+                // look, or a newer file, spoke instead of it.
+                const over = result?.replaced
+                    ? Translation.tr(" It replaced your saved copy.") : ""
                 if (missing.length > 0) {
                     // Name what was left out and how to get the rest, rather
                     // than quietly importing a partial look.
@@ -790,9 +830,9 @@ print("OK|" + out_path)
                     root.showStatus((missing.length === 1
                         ? Translation.tr("Imported %1 without %2 — not installed on this system. Install it, then import the file again for the complete theme.")
                         : Translation.tr("Imported %1 without %2 — not installed on this system. Install them, then import the file again for the complete theme."))
-                        .arg(name).arg(parts.join(", ")), 0)
+                        .arg(name).arg(parts.join(", ")) + over, 0)
                 } else if (result?.newer) {
-                    root.showStatus(Translation.tr("Imported %1. It was made by a newer version, so parts of it may not apply.").arg(name), 12000)
+                    root.showStatus(Translation.tr("Imported %1. It was made by a newer version, so parts of it may not apply.").arg(name) + over, 12000)
                 } else if (result?.replaced) {
                     root.showStatus(Translation.tr("Replaced your saved %1 with the imported one").arg(name))
                 } else {
@@ -908,6 +948,22 @@ try:
         live = {}
     wp = next((f for f in sorted(os.listdir(tmp)) if f.startswith("wallpaper.")), "")
 
+    # Replacing a theme swaps the whole directory, so anything the incoming file
+    # doesn't carry would go out with the old copy. An archive exported without
+    # its wallpaper is the ordinary case, and losing the picture -- and the
+    # preview built from it -- is not what "import an update to this theme"
+    # should mean. Carry them across so only what actually arrived is replaced.
+    if replaced:
+        for keep_name in ("preview.png",):
+            src_keep = os.path.join(dest, keep_name)
+            if os.path.isfile(src_keep) and not os.path.exists(os.path.join(tmp, keep_name)):
+                shutil.copy2(src_keep, os.path.join(tmp, keep_name))
+        if not wp:
+            old_wp = next((f for f in sorted(os.listdir(dest)) if f.startswith("wallpaper.")), "")
+            if old_wp:
+                shutil.copy2(os.path.join(dest, old_wp), os.path.join(tmp, old_wp))
+                wp = old_wp
+
     cfg = portable(cfg)
     if wp:
         cfg.setdefault("background", {})["wallpaperPath"] = os.path.join(dest, wp)
@@ -984,6 +1040,7 @@ try:
 
     index = []
     for d in sorted(os.listdir(themes_dir)):
+        if d.startswith("."): continue
         mp = os.path.join(themes_dir, d, "meta.json")
         if os.path.isdir(os.path.join(themes_dir, d)) and os.path.isfile(mp):
             try:

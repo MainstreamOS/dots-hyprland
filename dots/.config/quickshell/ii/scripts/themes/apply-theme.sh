@@ -127,6 +127,8 @@ PRESERVE_THEME_SCHED=""
 PRESERVE_LIGHT_NIGHT=""
 PRESERVE_CURSOR=""
 PRESERVE_SEEDED=""
+PRESERVE_APPS=""
+PRESERVE_UPDATES=""
 if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     # Preserve the entire light.night object — schedule, automatic flag,
@@ -142,6 +144,13 @@ if [ -f "$SHELL_CONFIG" ]; then
     # A snapshot taken before a widget existed doesn't have it, so restoring one
     # would hand the shell back its one chance to add a widget the user removed.
     PRESERVE_SEEDED=$(jq -c '.bar.seededWidgets // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    # apps.* is the command each button runs, by way of `bash -c`, and updates.*
+    # names the manifest this machine believes about releases. A theme that
+    # carried either would be choosing what runs here, so the live values win
+    # over the snapshot every time — including for themes saved or shared
+    # before they were kept out of snapshots at all.
+    PRESERVE_APPS=$(jq -c '.apps // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    PRESERVE_UPDATES=$(jq -c '.updates // empty' "$SHELL_CONFIG" 2>/dev/null || true)
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -163,6 +172,13 @@ jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/nul
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }
 [ -n "$PRESERVE_SEEDED" ]         && { JQ_FILTER+=' | .bar.seededWidgets = $seeded';               JQ_ARGS+=(--argjson seeded "$PRESERVE_SEEDED"); }
+# Nothing live to put back means the snapshot's copy is dropped rather than
+# inherited: absent is the safe answer here, since the shell falls back to its
+# own defaults for these.
+if [ -n "$PRESERVE_APPS" ]; then    JQ_FILTER+=' | .apps = $apps';    JQ_ARGS+=(--argjson apps "$PRESERVE_APPS");
+else                                JQ_FILTER+=' | del(.apps)'; fi
+if [ -n "$PRESERVE_UPDATES" ]; then JQ_FILTER+=' | .updates = $upd';  JQ_ARGS+=(--argjson upd "$PRESERVE_UPDATES");
+else                                JQ_FILTER+=' | del(.updates)'; fi
 if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
 else

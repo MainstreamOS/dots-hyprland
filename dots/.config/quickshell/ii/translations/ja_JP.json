@@ -1657,5 +1657,6 @@
   "Rebuilds the palette from each new wallpaper. Slower, and needs a longer interval.": "Rebuilds the palette from each new wallpaper. Slower, and needs a longer interval.",
   "Rotate through the wallpapers in the slideshow folder automatically": "Rotate through the wallpapers in the slideshow folder automatically",
   "Changes the UI's color for each new wallpaper.": "Changes the UI's color for each new wallpaper.",
-  "Change the UI color for each new wallpaper.": "Change the UI color for each new wallpaper."
+  "Change the UI color for each new wallpaper.": "Change the UI color for each new wallpaper.",
+  " It replaced your saved copy.": " It replaced your saved copy."
 }
