@@ -2,10 +2,20 @@
 import argparse
 import re
 import os
+import subprocess
 import tempfile
+
+# Values given with --set-lua are written through untouched, for the settings
+# that are a table rather than a scalar: a gradient border is
+# {colors={"rgba(..)","rgba(..)"},angle=45}, and Lua rejects the single-string
+# form hyprlang accepts.
+RAW_PREFIX = "\0lua:"
+
 
 def format_value(value):
     """Format value: quote strings, leave numbers and booleans as-is"""
+    if value.startswith(RAW_PREFIX):
+        return value[len(RAW_PREFIX):]
     if value in ('true', 'false'):
         return value
     try:
@@ -14,12 +24,20 @@ def format_value(value):
     except ValueError:
         return f'"{value}"'
 
+
+def format_key(part):
+    """A key with a dot in it has to be a bracket string, not a bare name."""
+    if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', part):
+        return part
+    return f'["{part}"]'
+
+
 def build_nested_structure(key_parts, value):
     """Recursively build nested structure from key parts"""
     if len(key_parts) == 1:
-        return f'{key_parts[0]}={format_value(value)}'
+        return f'{format_key(key_parts[0])}={format_value(value)}'
     else:
-        return f'{key_parts[0]}={{{build_nested_structure(key_parts[1:], value)}}}'
+        return f'{format_key(key_parts[0])}={{{build_nested_structure(key_parts[1:], value)}}}'
 
 def generate_config_line(key, value):
     """Generate hl.config line for given key and value"""
@@ -104,6 +122,15 @@ def edit_hyprland_config(file_path, set_args, reset_args):
             os.remove(temp_path)
         print(f"Error saving file: {e}")
         return
+
+    # The compositor watches its config files by inode, and the atomic
+    # replace above hands it a new one — whether it noticed depended on a
+    # race between its re-watch and the next write. The writer applies its
+    # own edit instead of hoping to be seen.
+    try:
+        subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
         
     for key in reset_set:
         print(f"Removed '{key}' from '{file_path}'")
@@ -115,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--file", default="~/.config/hypr/hyprland.conf", help="Path to the Hyprland config file (default: ~/.config/hypr/hyprland.conf).")
     
     parser.add_argument("--set", nargs=2, action="append", metavar=("KEY", "VALUE"), help="Set a configuration key to a value.")
+    parser.add_argument("--set-lua", nargs=2, action="append", metavar=("KEY", "LUA"), help="Set a key to a literal Lua value, such as a table.")
     parser.add_argument("--reset", action="append", metavar="KEY", help="Remove a configuration key.")
     
     args = parser.parse_args()
@@ -130,6 +158,8 @@ if __name__ == "__main__":
             reset_args.append(key)
         else:
             set_args.append((key, value))
+    for key, value in (args.set_lua or []):
+        set_args.append((key, RAW_PREFIX + value))
     
     if not set_args and not reset_args:
         print("Error: Must specify at least one key to set or reset.")
