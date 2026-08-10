@@ -1659,5 +1659,7 @@
   "Changes the UI's color for each new wallpaper.": "Changes the UI's color for each new wallpaper.",
   "Change the UI color for each new wallpaper.": "Change the UI color for each new wallpaper.",
   " It replaced your saved copy.": " It replaced your saved copy.",
-  "Couldn't save that theme": "Couldn't save that theme"
+  "Couldn't save that theme": "Couldn't save that theme",
+  "A theme file of that name is already there. Replace it?": "A theme file of that name is already there. Replace it?",
+  "You already have a theme called %1. Pick another name, or use Update on that theme.": "You already have a theme called %1. Pick another name, or use Update on that theme."
 }

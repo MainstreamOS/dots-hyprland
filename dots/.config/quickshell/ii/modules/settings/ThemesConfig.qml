@@ -280,6 +280,19 @@ ContentPage {
     function doCapture() {
         const slug = root.pendingUpdateSlug || root.slugify(root.saveThemeName)
         const name = (root.saveThemeName || slug).trim() || slug
+        // Saving a new theme onto a slug that already has one replaces it where
+        // it stands, wallpaper and preview included, and the grid just shows the
+        // card under its new name. Names are slugified down to lowercase and
+        // digits, so "Green!", "green" and "Green" are all the same theme here
+        // and the collision is easy to reach by accident. Updating an existing
+        // theme is the one case where landing on its slug is the intention.
+        if (!root.pendingUpdateSlug && ThemeLibrary.themes.some(t => t.slug === slug)) {
+            root.countingDown = false
+            root.saveDialogOpen = false
+            root.restoreWindowAfterShot()
+            root.showStatus(Translation.tr("You already have a theme called %1. Pick another name, or use Update on that theme.").arg(name), 10000)
+            return
+        }
         const wp = Config.options.background.wallpaperPath || ""
         const wpTrimmed = FileUtils.trimFileProtocol(wp)
         const modeStr = Appearance.m3colors.darkmode ? "dark" : "light"
@@ -771,6 +784,12 @@ print("%d %d" % (len(images), sum(os.path.getsize(p) for p in images)))
             `--file-filter="Mainstream theme | *.mtheme" 2>/dev/null) || { echo CANCEL; exit 0; }\n` +
             `[ -n "$OUT" ] || { echo CANCEL; exit 0; }\n` +
             `case "$OUT" in *.mtheme) ;; *) OUT="$OUT.mtheme" ;; esac\n` +
+            // zenity checked whatever was typed, and the extension is added
+            // after, so the name it asked about is not always the name written.
+            // Asked again here when they differ.
+            `if [ -e "$OUT" ]; then\n` +
+            `  zenity --question --title="$3" --text="$4" 2>/dev/null || { echo CANCEL; exit 0; }\n` +
+            `fi\n` +
             `python3 - '${root.themesDir}'/"$SLUG" "$OUT" "$2" <<'PY'\n` +
             root.pyPortable +
             `import io, sys, tarfile
@@ -808,7 +827,8 @@ print("OK|" + out_path)
         exportProc.command = ["bash", "-c", script, "export-theme",
             root.exportSlug,
             includeImages ? "1" : "0",
-            Translation.tr("Export theme")]
+            Translation.tr("Export theme"),
+            Translation.tr("A theme file of that name is already there. Replace it?")]
         exportProc.running = false
         exportProc.running = true
     }
@@ -879,6 +899,12 @@ def wanted(n):
 # there so a malicious file can't fill the disk on the way in.
 MAX_SS_FILES = 500
 MAX_SS_BYTES = 1024 * 1024 * 1024
+# A theme file arrives from somewhere else, and tar members declare their own
+# size: a small archive can name an enormous one. These are what a theme's own
+# parts plausibly weigh, so a file claiming more is rejected before anything is
+# written rather than after the disk is full.
+MAX_MEMBER_BYTES = 128 * 1024 * 1024
+MAX_TOTAL_BYTES = 512 * 1024 * 1024
 
 def slideshow_name(name):
     parts = name.split("/")
@@ -902,7 +928,7 @@ try:
     except Exception:
         fail()
     with tar:
-        picked, seen = [], set()
+        picked, seen, total_bytes = [], set(), 0
         ss_picked, ss_seen, ss_bytes = [], set(), 0
         for m in tar.getmembers():
             if not m.isfile():
@@ -927,6 +953,11 @@ try:
             n = os.path.basename(raw)
             if n in seen or not wanted(n):
                 continue
+            if m.size > MAX_MEMBER_BYTES:
+                fail()
+            total_bytes += m.size
+            if total_bytes > MAX_TOTAL_BYTES:
+                fail()
             seen.add(n)
             m.name = n
             picked.append(m)

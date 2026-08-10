@@ -164,7 +164,17 @@ if [ -z "$base_theme" ]; then
 fi
 
 if [ ! -d "/usr/share/icons/$base_theme" ]; then
-  base_theme="Papirus-Dark"
+  for candidate in Papirus-Dark Papirus Papirus-Light; do
+    [ -d "/usr/share/icons/$candidate" ] && { base_theme="$candidate"; break; }
+  done
+fi
+
+# Only */places is overridden here and everything else is inherited, so without
+# a base on disk the published theme resolves to bare hicolor — every icon on
+# the desktop, not just the folders. Nothing to layer on means nothing to
+# publish, and the icon theme already in use is left alone.
+if [ ! -d "/usr/share/icons/$base_theme" ]; then
+  exit 0
 fi
 
 # The icon set depends only on which of the seventeen folder colours was
@@ -180,6 +190,11 @@ fi
 # for the same colour again is exactly when nothing else would notice. -ef
 # compares what the links resolve to and forks nothing, which matters because
 # the no-op this guards is on the path of every wallpaper change.
+#
+# An alias is checked alongside folder.svg. The links are laid down one at a
+# time, and nothing serialises two rebuilds, so a directory can hold the newer
+# folder.svg over aliases from the older colour; sampling only folder.svg reads
+# that as finished and it stays mixed for as long as the colour does.
 icons_current=1
 for size in 16x16 22x22 24x24 32x32 48x48 64x64; do
   source_dir="/usr/share/icons/$base_theme/$size/places"
@@ -189,6 +204,11 @@ for size in 16x16 22x22 24x24 32x32 48x48 64x64; do
     icons_current=0
     break
   }
+  if [ -e "$source_dir/folder-$folder_color-documents.svg" ] \
+     && [ ! "$theme_dir/$size/places/folder-documents.svg" -ef "$source_dir/folder-$folder_color-documents.svg" ]; then
+    icons_current=0
+    break
+  fi
 done
 
 if [ ! -e "$pending_file" ] \

@@ -95,6 +95,28 @@ Singleton {
         listProc.running = true
     }
 
+    // "Show the next one now", from the settings page. The two processes reach
+    // this through config.json, so the request can arrive before the value that
+    // enables the rotation has been written, reloaded and seen here — asking
+    // straight away would find the rotation still switched off and answer with
+    // nothing. Held briefly instead, and spent the moment it does come on.
+    property bool _rotateRequested: false
+    function requestRotate() {
+        if (root.active) { root.rotate(); return }
+        root._rotateRequested = true
+        rotateRequestTimeout.restart()
+    }
+    onActiveChanged: if (root.active && root._rotateRequested) {
+        root._rotateRequested = false
+        rotateRequestTimeout.stop()
+        root.rotate()
+    }
+    Timer {
+        id: rotateRequestTimeout
+        interval: 5000
+        onTriggered: root._rotateRequested = false
+    }
+
     // Re-read the folder on every change rather than caching it, so wallpapers
     // added or deleted mid-session are picked up without anything to invalidate.
     Process {
@@ -169,6 +191,14 @@ Singleton {
 
     function apply(path) {
         if (!path || path.length === 0) return
+        // Listing the folder is a round trip through a process, so a couple of
+        // hundred milliseconds separate the decision to rotate from acting on
+        // it. A wallpaper chosen by hand in that gap turns the rotation off and
+        // is the wallpaper the user is now looking at; the tick is stale and
+        // would put a random picture over it, with nothing left running to
+        // move off it again.
+        if (!root.active) return
+        if (Config.themeApplyInProgress) return
         // --keep-slideshow is what separates a tick from someone choosing a
         // single wallpaper; without it the script reads this as the user
         // picking one and turns the rotation off mid-run.
@@ -195,7 +225,7 @@ Singleton {
         target: "slideshow"
 
         function next(): void {
-            root.rotate();
+            root.requestRotate();
         }
     }
 }

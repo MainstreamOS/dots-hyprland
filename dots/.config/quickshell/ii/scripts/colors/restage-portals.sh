@@ -18,9 +18,15 @@ command -v systemctl >/dev/null 2>&1 || exit 0
 
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
+# A restage that is skipped leaves this behind, so the palette it was owed is
+# not simply forgotten: whoever restarts next clears it, and a run that finds it
+# still there afterwards knows a newer palette arrived mid-restart and goes
+# again. Waiting is what is not allowed here; remembering costs nothing.
+OWED="$RUNTIME_DIR/quickshell-restage-portals.owed"
+
 # One restart per burst of colour changes.
 if command -v flock >/dev/null 2>&1 && { exec 7>"$RUNTIME_DIR/quickshell-restage-portals.lock"; } 2>/dev/null; then
-    flock -n 7 || exit 0
+    flock -n 7 || { : > "$OWED" 2>/dev/null; exit 0; }
 fi
 
 # Not while one of its own dialogs is open — the restart would take the dialog
@@ -29,7 +35,18 @@ fi
 if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
     && hyprctl clients -j 2>/dev/null \
        | jq -e 'any(.[]; .class == "xdg-desktop-portal-gtk")' >/dev/null 2>&1; then
+    : > "$OWED" 2>/dev/null
     exit 0
 fi
 
-systemctl --user restart xdg-desktop-portal-gtk.service 2>/dev/null || true
+# Cleared before the restart rather than after, so a change that lands while the
+# service is coming back sets it again and is not swallowed by the run it
+# arrived during. Bounded, since each pass is a real restart.
+attempt=0
+while :; do
+    rm -f "$OWED" 2>/dev/null
+    systemctl --user restart xdg-desktop-portal-gtk.service 2>/dev/null || true
+    attempt=$((attempt + 1))
+    [ -e "$OWED" ] && [ "$attempt" -lt 3 ] || break
+done
+rm -f "$OWED" 2>/dev/null

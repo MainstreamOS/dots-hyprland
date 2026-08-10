@@ -97,11 +97,26 @@ post_process() {
     # runs in quick succession from finishing out of order and leaving a stale
     # image behind.
     (
+        # Bounded: the section below re-encodes with ImageMagick and can reach
+        # pkexec for the login background, either of which may sit there. A run
+        # that gives up on the lock still does its work — the cost is a
+        # derivative that may land out of order, against a subshell per
+        # wallpaper change waiting for something that is never coming.
         if command -v flock >/dev/null 2>&1 && exec 8>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-wallpaper-derivatives.lock"; then
-            flock 8
+            flock -w 30 8 2>/dev/null || true
         fi
-        set_sddm_background "$wallpaper_path"
-        set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
+        # A rotation tick asks for the palette too when recolour is on, but it is
+        # still a timer. The login background is re-encoded from the full-size
+        # image for something nobody sees until they log out, and the overview
+        # backdrop is pushed with a reload that makes every client reconfigure —
+        # neither is worth doing every interval, so the tick keeps the cheap
+        # single-key push and leaves the login screen on the theme's wallpaper.
+        if [[ -n "${keep_slideshow_flag:-}" ]]; then
+            set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
+        else
+            set_sddm_background "$wallpaper_path"
+            set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
+        fi
     ) >/dev/null 2>&1 9>&- &
     # Under apply-theme.sh the widget theme, the icon theme and the interface
     # fonts are all still to come, so the portal is restaged at the end of that
@@ -299,11 +314,20 @@ set_scrolloverview_wallpaper() {
     if [[ -f "$src" && "$screen_width" =~ ^[0-9]+$ && "$screen_height" =~ ^[0-9]+$ ]]; then
         local scaled="$CACHE_DIR/user/generated/scrolloverview_$(basename "$src").jpg"
         mkdir -p "$CACHE_DIR/user/generated"
-        if command -v magick &>/dev/null; then
+        if [[ -s "$scaled" && "$scaled" -nt "$src" ]]; then
+            # Already scaled from this very picture. A rotation revisits the same
+            # folder for as long as it runs, and this is a full decode and encode.
+            plugin_path="$scaled"
+        elif command -v magick &>/dev/null; then
             magick "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         elif command -v convert &>/dev/null; then
             convert "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         fi
+        # One monitor-sized copy per picture, and a rotation is pointed at whole
+        # folders, so the oldest are dropped rather than kept for a wallpaper
+        # nobody has chosen in months.
+        ls -1t "$CACHE_DIR"/user/generated/scrolloverview_*.jpg 2>/dev/null \
+            | tail -n +33 | while IFS= read -r stale; do rm -f "$stale"; done
     fi
 
     if grep -qE '^[[:space:]]*wallpaper_path[[:space:]]*=' "$target"; then
@@ -363,7 +387,7 @@ picture_only_post_process() {
     local wallpaper_path="$1"
     (
         if command -v flock >/dev/null 2>&1 && exec 8>"${XDG_RUNTIME_DIR:-/tmp}/quickshell-wallpaper-derivatives.lock"; then
-            flock 8
+            flock -w 30 8 2>/dev/null || true
         fi
         local screen_width screen_height
         read -r screen_width screen_height < <(hyprctl monitors -j \
@@ -560,9 +584,11 @@ switch() {
     fi
 
     # enforce dark mode for terminal
+    force_dark_mode=""
     if [[ -n "$mode_flag" ]]; then
         matugen_args+=(--mode "$mode_flag")
-        if [[ $(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode' "$SHELL_CONFIG_FILE") == "true" ]]; then
+        force_dark_mode="$(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode' "$SHELL_CONFIG_FILE" 2>/dev/null)"
+        if [[ "$force_dark_mode" == "true" ]]; then
             generate_colors_material_args+=(--mode "dark")
         else
             generate_colors_material_args+=(--mode "$mode_flag")
@@ -640,9 +666,12 @@ switch() {
     scss_cache_key=""
     scss_cache_file=""
     if [[ -n "${palette_key:-}" ]]; then
-        scss_cache_key="$(printf '%s|%s|%s|%s|%s|%s|%s|%s' \
+        # forceDarkMode belongs in here: it decides whether the generator is
+        # run against the dark palette or the current one, so it changes what
+        # the cached stylesheet contains without changing anything else here.
+        scss_cache_key="$(printf '%s|%s|%s|%s|%s|%s|%s|%s|%s' \
             "$palette_key" "${mode_flag:-}" "${type_flag:-}" "${harmony:-}" \
-            "${harmonize_threshold:-}" "${term_fg_boost:-}" \
+            "${harmonize_threshold:-}" "${term_fg_boost:-}" "${force_dark_mode:-}" \
             "$(cache_key_for "$terminalscheme")" \
             "$(cache_key_for "$SCRIPT_DIR/generate_colors_material.py")" | sha256sum 2>/dev/null)"
         scss_cache_key="${scss_cache_key:0:32}"

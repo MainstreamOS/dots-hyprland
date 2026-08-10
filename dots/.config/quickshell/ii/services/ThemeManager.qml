@@ -50,19 +50,24 @@ Singleton {
     Process {
         id: themesIndexProc
         property string buf: ""
-        command: ["cat", `${root.themesDir}/index.json`]
+        // The index is a record of what was saved, not of what is there now: a
+        // theme directory removed any other way than through this page stays
+        // listed. A slug only counts as real if its directory is on disk, or the
+        // scheduler applies one that isn't and gives up on the window.
+        command: ["bash", "-c",
+            `cd "$1" 2>/dev/null || exit 0\n` +
+            `jq -r '.[].slug // empty' index.json 2>/dev/null | while IFS= read -r s; do\n` +
+            `  [ -n "$s" ] && [ -d "$s" ] && printf '%s\\n' "$s"\n` +
+            `done`,
+            "theme-index", root.themesDir]
         onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => themesIndexProc.buf += data }
+        stdout: SplitParser { onRead: data => themesIndexProc.buf += data + "\n" }
         onExited: {
             let map = ({})
-            try {
-                const arr = JSON.parse(themesIndexProc.buf || "[]")
-                for (let i = 0; i < arr.length; ++i) {
-                    if (arr[i] && arr[i].slug) map[arr[i].slug] = true
-                }
-            } catch (e) {
-                // Malformed index — leave the map empty so the scheduler's
-                // validity guard treats every slug as unknown until next reload.
+            const slugs = (themesIndexProc.buf || "").split("\n")
+            for (let i = 0; i < slugs.length; ++i) {
+                const s = slugs[i].trim()
+                if (s.length > 0) map[s] = true
             }
             root._validSlugs = map
             root._validSlugsLoaded = true
