@@ -289,9 +289,15 @@ print(' '.join(row.get('shipped', [])))" 2>/dev/null || echo "")
     done
 fi
 
+# restore rather than write: keys the snapshot doesn't name go to their stock
+# values, because they didn't exist as settings when the theme was saved —
+# leaving them alone kept the previous theme's look bleeding into this one.
+# --push hands the same completed set to the compositor from inside the one
+# interpreter, so the change shows before the reload at the end gets there.
 if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
-    python3 "$DECORATIONS_PY" write "$GENERAL_CONF" "$DECO_JSON" \
-        --flag-dir "$(dirname "$CUSTOM_CONF")" 2>/dev/null || dlog "decoration restore failed"
+    python3 "$DECORATIONS_PY" restore "$GENERAL_CONF" "$DECO_JSON" \
+        --flag-dir "$(dirname "$CUSTOM_CONF")" --push >/dev/null 2>&1 \
+        || dlog "decoration restore failed"
 fi
 
 # ── 5b. Restore interface look (gsettings) if the theme snapshotted it ──────
@@ -336,15 +342,10 @@ fi
 # ── 6. Re-assert last-applied (recorded up front; see write_last_applied) ──
 write_last_applied "$SLUG"
 
-# ── 7. Apply decorations live, reload hyprland, then restore kitty ──────────
+# ── 7. Reload hyprland, then restore kitty ─────────────────────────────────
+# The decorations already went live in step 5; this reload is what the rest of
+# the config needs.
 if command -v hyprctl >/dev/null 2>&1; then
-
-    # Every keyword-settable decoration goes live now, so the change shows
-    # before the reload below finishes. That leaves the reload needed only for
-    # matugen's colour templates and the titlebar plugin.
-    if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
-        python3 "$DECORATIONS_PY" push "$DECO_JSON" 2>/dev/null || true
-    fi
 
     # Full reload is still needed for matugen's hyprland color templates
     # (sourced files) and the titlebar plugin (hyprbars.so can't be toggled

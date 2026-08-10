@@ -9,8 +9,9 @@ means or where it lives.
     decorations.py read     <general.lua> [--flag-dir DIR]
     decorations.py defaults <general.lua>
     decorations.py write    <general.lua> <values.json> [--flag-dir DIR]
+    decorations.py restore  <general.lua> <values.json> [--flag-dir DIR] [--push]
     decorations.py set      <general.lua> key=value ... [--flag-dir DIR]
-    decorations.py push     <values.json>
+    decorations.py push     <values.json> [--no-reload]
 
 Where a setting lives is derived from its hyprctl keyword rather than stated
 twice: decoration:blur:size is the field `size`, inside `blur`, inside
@@ -19,10 +20,17 @@ the next `}` -- general holds col and snap, decoration holds blur and shadow,
 and shadow holds an offset pair, so a field can sit after a nested block has
 closed and a scan would stop short of it.
 
-write() only touches keys the values file actually carries. A theme saved
-before a setting existed says nothing about it, and silence means leave it
-alone: defaults belong to the settings page, not to a restore, or applying an
-older theme would quietly reset whatever the machine had.
+write() only touches keys the values file actually carries — the settings
+page speaks one key at a time. restore() is what a theme apply uses instead:
+it fills every key the snapshot doesn't name from the schema defaults, because
+a setting absent from a snapshot did not exist when the theme was saved, and
+stock is what the machine showed then. Leaving those keys alone instead meant
+applying an older theme kept whatever the previous theme had put in the newer
+keys, and the older theme no longer looked like its save. Snapshots from
+before two keys were renamed still say borders / roundCorners; a false there
+restores as its modern spelling's zero, and a true is the default the
+completion supplies anyway. restore --push also sends that completed set to
+the compositor, so a theme apply spends one interpreter rather than two.
 """
 
 import json
@@ -280,7 +288,7 @@ def write(general_path, values, flag_dir=None, schema=None):
     return written
 
 
-def push(values, schema=None):
+def push(values, schema=None, allow_reload=True):
     """Send the settings to the running compositor.
 
     `hyprctl keyword` is Legacy-only in 0.55 ("can't work with non-legacy
@@ -288,12 +296,18 @@ def push(values, schema=None):
     the keyword is the section and the rest becomes a bracket-string key, which
     is what carries a nested block: decoration:blur:size -> ["blur.size"].
     One eval for the whole set, since each is a round trip.
+
+    A profile name only takes effect on a reload, so one is issued when the
+    set names it. allow_reload is for the caller that reloads anyway — a
+    reload re-parses the whole config and is the most expensive thing here,
+    so the theme apply asks for its own rather than paying for two.
     """
     import subprocess
     schema = schema or load_schema()
-    needs_reload = any(row.get("mechanism") == "namefile"
-                       and resolve(values, row) is not None
-                       for row in schema["keys"])
+    needs_reload = allow_reload and any(
+        row.get("mechanism") == "namefile"
+        and resolve(values, row) is not None
+        for row in schema["keys"])
     sections = {}
     for row in schema["keys"]:
         if not row.get("hypr"):
@@ -312,13 +326,18 @@ def push(values, schema=None):
         else:
             lua = str(value)
         sections.setdefault(path[0], []).append('["' + leaf + '"] = ' + lua)
-    if needs_reload:
-        subprocess.run(["hyprctl", "reload"], capture_output=True)
-    if not sections:
-        return
-    body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())
-    subprocess.run(["hyprctl", "eval", "hl.config({ " + body + " })"],
-                   capture_output=True)
+    try:
+        if needs_reload:
+            subprocess.run(["hyprctl", "reload"], capture_output=True)
+        if not sections:
+            return
+        body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())
+        subprocess.run(["hyprctl", "eval", "hl.config({ " + body + " })"],
+                       capture_output=True)
+    except (FileNotFoundError, OSError):
+        # No compositor to talk to: the file write already happened and is
+        # what a later start reads, so this is a no-op rather than a failure.
+        pass
 
 
 def coerce(schema, pairs):
@@ -370,6 +389,30 @@ def main(argv):
             values = json.load(fh)
         write(general, values, flag_dir)
         return 0
+    if verb == "restore":
+        if not rest:
+            print("restore needs a values file", file=sys.stderr)
+            return 2
+        with open(rest[0]) as fh:
+            values = json.load(fh)
+        schema = load_schema()
+        full = {row["key"]: row["default"] for row in schema["keys"]
+                if "default" in row}
+        known = {row["key"] for row in schema["keys"]}
+        for old, new in (("borders", "borderSize"), ("roundCorners", "rounding")):
+            if values.get(old) is False and new not in values:
+                full[new] = 0
+        for key, value in values.items():
+            if key in known:
+                full[key] = value
+        write(general, full, flag_dir)
+        # --push sends the same completed set to the running compositor here
+        # rather than through a second invocation reading a temp file: this
+        # process already holds the values and the schema. The caller reloads
+        # for its own reasons, so no reload is issued from inside.
+        if "--push" in rest:
+            push(full, schema, allow_reload=False)
+        return 0
     if verb == "set":
         # `set <general.lua> key=value ...` — one call from the settings page
         # covers the file and the running compositor, so neither can be updated
@@ -388,7 +431,7 @@ def main(argv):
                 values = json.load(fh)
         except Exception:
             return 0
-        push(values)
+        push(values, allow_reload="--no-reload" not in rest)
         return 0
     print("unknown verb: " + verb, file=sys.stderr)
     return 2
