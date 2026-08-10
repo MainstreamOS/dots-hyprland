@@ -436,6 +436,13 @@ ContentPage {
             `    os.makedirs(dest, exist_ok=True)\n` +
             `    shutil.copy2(src, os.path.join(dest, name + ".lua"))\n` +
             `PYANIM\n` +
+            // The window rules store is already the JSON a theme wants, so the
+            // snapshot is a copy. Written even when there are no rules: an
+            // empty list at save time is part of the look, and applying the
+            // theme later puts exactly that back.
+            `USERRULES='${root.homePath}/.config/hypr/hyprland/userrules.json'\n` +
+            `if [ -f "$USERRULES" ]; then cp -f "$USERRULES" "$DIR/windowrules.json"; ` +
+            `else printf '{"rules": []}\\n' > "$DIR/windowrules.json"; fi\n` +
             // Newly saved themes are treated as the currently applied theme.
             `printf '%s' "$SLUG" > '${root.lastAppliedPath}.tmp' && mv -f '${root.lastAppliedPath}.tmp' '${root.lastAppliedPath}'\n` +
             // Rebuild index
@@ -799,7 +806,7 @@ print("%d %d" % (len(images), sum(os.path.getsize(p) for p in images)))
             root.pyPortable +
             `import io, sys, tarfile
 theme_dir, out_path, include = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
-KEEP = ("interface.json", "decorations.json", "preview.png")
+KEEP = ("interface.json", "decorations.json", "windowrules.json", "preview.png")
 
 def entry(tar, name, obj):
     blob = json.dumps(obj, indent=2).encode()
@@ -901,7 +908,7 @@ print("OK|" + out_path)
             root.pyPortable +
             `import re, shutil, sys, tarfile, tempfile, time
 archive, themes_dir, live_config = sys.argv[1], sys.argv[2], sys.argv[3]
-EXACT = {"meta.json", "config.json", "interface.json", "decorations.json", "preview.png"}
+EXACT = {"meta.json", "config.json", "interface.json", "decorations.json", "windowrules.json", "preview.png"}
 
 def wanted(n):
     return n in EXACT or (n.startswith("wallpaper.") and len(n) > len("wallpaper."))

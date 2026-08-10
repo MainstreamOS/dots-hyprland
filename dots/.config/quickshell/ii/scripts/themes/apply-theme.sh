@@ -317,6 +317,22 @@ fi
 # Reads the just-restored config.json; no-op if apply-gtk-font.sh is absent.
 [ -x "$SCRIPT_DIR/apply-gtk-font.sh" ] && bash "$SCRIPT_DIR/apply-gtk-font.sh" 2>/dev/null || true
 
+# ── 5d. Restore window rules if the theme snapshotted them ──────────────────
+# Same contract as decorations: a theme saved before rules existed has no
+# windowrules.json and leaves the live rules alone; one that carries the file
+# wins wholesale, empty list included — no rules at save time is part of the
+# look. Routed through the owner script's write verb rather than copied, so a
+# theme that arrived as an import gets the same validation the settings page
+# gets, and the generated Lua plus reload come along for free.
+WR_JSON="$THEME_DIR/windowrules.json"
+WINDOWRULES_PY="$XDG_CONFIG_HOME/quickshell/ii/scripts/hyprland/windowrules.py"
+if [ -f "$WR_JSON" ] && [ -f "$WINDOWRULES_PY" ]; then
+    python3 "$WINDOWRULES_PY" write \
+        "$XDG_CONFIG_HOME/hypr/hyprland/userrules.json" \
+        "$XDG_CONFIG_HOME/hypr/hyprland/userrules.lua" \
+        < "$WR_JSON" >/dev/null 2>&1 || dlog "window rules restore failed"
+fi
+
 # ── 6. Re-assert last-applied (recorded up front; see write_last_applied) ──
 write_last_applied "$SLUG"
 
