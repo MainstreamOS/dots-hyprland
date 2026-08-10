@@ -6,10 +6,11 @@ page, the snapshot a saved theme keeps, and the restore an apply performs all
 go through here, so none of them can drift from the others about what a key
 means or where it lives.
 
-    decorations.py read  <general.lua> [--flag-dir DIR]
-    decorations.py write <general.lua> <values.json> [--flag-dir DIR]
-    decorations.py set   <general.lua> key=value ... [--flag-dir DIR]
-    decorations.py push  <values.json>
+    decorations.py read     <general.lua> [--flag-dir DIR]
+    decorations.py defaults <general.lua>
+    decorations.py write    <general.lua> <values.json> [--flag-dir DIR]
+    decorations.py set      <general.lua> key=value ... [--flag-dir DIR]
+    decorations.py push     <values.json>
 
 Where a setting lives is derived from its hyprctl keyword rather than stated
 twice: decoration:blur:size is the field `size`, inside `blur`, inside
@@ -295,6 +296,15 @@ def main(argv):
         rest = rest[:i] + rest[i + 2:]
     if verb == "read":
         json.dump(read(general, flag_dir), sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        return 0
+    if verb == "defaults":
+        # What each setting is worth on a stock install. Kept apart from read so
+        # a theme snapshot stays a record of what was set, not of what shipped.
+        schema = load_schema()
+        json.dump({row["key"]: row["default"] for row in schema["keys"]
+                   if "default" in row},
+                  sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
         return 0
     if verb == "write":

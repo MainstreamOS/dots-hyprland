@@ -18,6 +18,10 @@ ContentPage {
     property bool shadowsEnabled: true
     property bool bordersEnabled: true
     property bool roundCornersEnabled: true
+    property int  roundingValue: 10
+    property int  borderSizeValue: 4
+    property int  gapsInValue: 4
+    property int  gapsOutValue: 5
     property int  blurSizeValue: 10
     property int  blurPassesValue: 3
     property real activeOpacityValue: 1.0
@@ -109,6 +113,19 @@ ContentPage {
     readonly property string decorationsPy: `${CF.FileUtils.trimFileProtocol(Directories.config)}/quickshell/ii/scripts/themes/decorations.py`
     readonly property string flagDir: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
 
+    // What each setting is worth on a stock install, read from the same table
+    // the settings themselves come from so the mark on a track cannot claim a
+    // default the schema has since moved.
+    property var decoDefaults: ({})
+
+    // The mark a track carries, as the single-value list the slider wants. An
+    // empty list until the defaults land, which draws no mark rather than one
+    // in the wrong place.
+    function defaultMark(key) {
+        const value = root.decoDefaults[key]
+        return value === undefined ? [] : [value]
+    }
+
     // Size and passes are one perceptual control: passes decides how far each
     // unit of size spreads, so raising one without the other gives grain or
     // mush rather than more blur. One slider walks both through pairs that
@@ -131,6 +148,18 @@ ContentPage {
     }
 
     Process {
+        id: decoDefaultsReader
+        running: true
+        command: ["python3", root.decorationsPy, "defaults", root.generalConf]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { root.decoDefaults = JSON.parse(text || "{}") }
+                catch (e) { root.decoDefaults = ({}) }
+            }
+        }
+    }
+
+    Process {
         id: decoReader
         // The same reader a theme snapshot uses, so this page and a saved theme
         // can never disagree about what a setting is or where it lives.
@@ -147,6 +176,10 @@ ContentPage {
             if (values.shadow !== undefined) root.shadowsEnabled = values.shadow
             if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
             if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
+            if (values.rounding !== undefined && values.rounding > 0) root.roundingValue = values.rounding
+            if (values.borderSize !== undefined && values.borderSize > 0) root.borderSizeValue = values.borderSize
+            if (values.gapsIn !== undefined) root.gapsInValue = values.gapsIn
+            if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
             if (values.blurSize !== undefined) root.blurSizeValue = values.blurSize
             if (values.blurPasses !== undefined) root.blurPassesValue = values.blurPasses
             if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
@@ -357,10 +390,8 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.bordersEnabled = checked;
-                    root.setDecoration(["borderSize=" + (checked ? 4 : 0),
-                                        "resizeOnBorder=" + checked,
-                                        "gapsIn=" + (checked ? 4 : 0),
-                                        "gapsOut=" + (checked ? 5 : 0)]);
+                    root.setDecoration([`borderSize=${checked ? root.borderSizeValue : 0}`,
+                                        `resizeOnBorder=${checked}`]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Colored borders around active and inactive windows")
@@ -377,7 +408,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.roundCornersEnabled = checked;
-                    root.setDecoration(["rounding=" + (checked ? 10 : 0)]);
+                    root.setDecoration([`rounding=${checked ? root.roundingValue : 0}`]);
                     // The bar's own corners follow the window rounding.
                     if (!checked) {
                         root.previousCornerStyle = Config.options.bar.cornerStyle;
@@ -415,6 +446,88 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
     }
 
+    // ── Shape ─────────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "rounded_corner"
+        title: Translation.tr("Window shape")
+
+        ConfigSlider {
+            text: Translation.tr("Corner radius")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("rounding")
+            buttonIcon: "rounded_corner"
+            usePercentTooltip: false
+            enabled: root.roundCornersEnabled
+            opacity: root.roundCornersEnabled ? 1 : 0.5
+            from: 1
+            to: 24
+            value: root.roundingValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.roundingValue) return;
+                root.roundingValue = stepped;
+                root.queueDecoration("rounding", stepped);
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Border thickness")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("borderSize")
+            buttonIcon: "border_style"
+            usePercentTooltip: false
+            enabled: root.bordersEnabled
+            opacity: root.bordersEnabled ? 1 : 0.5
+            from: 1
+            to: 10
+            value: root.borderSizeValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.borderSizeValue) return;
+                root.borderSizeValue = stepped;
+                root.queueDecoration("borderSize", stepped);
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Gap between windows")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("gapsIn")
+            buttonIcon: "width"
+            usePercentTooltip: false
+            from: 0
+            to: 40
+            value: root.gapsInValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.gapsInValue) return;
+                root.gapsInValue = stepped;
+                root.queueDecoration("gapsIn", stepped);
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Gap around the edge")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("gapsOut")
+            buttonIcon: "fit_screen"
+            usePercentTooltip: false
+            from: 0
+            to: 60
+            value: root.gapsOutValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.gapsOutValue) return;
+                root.gapsOutValue = stepped;
+                root.queueDecoration("gapsOut", stepped);
+            }
+        }
+    }
+
     // ── Transparency ──────────────────────────────────────────────────────────
     ContentSection {
         icon: "opacity"
@@ -422,6 +535,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Focused window")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("activeOpacity")
             buttonIcon: "filter_center_focus"
             from: 0.7
             to: 1.0
@@ -435,6 +551,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Unfocused windows")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("inactiveOpacity")
             buttonIcon: "filter_none"
             from: 0.7
             to: 1.0
@@ -458,6 +577,8 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             text: Translation.tr("Strength")
             textWidth: 170
             sliderWidth: 340
+            stopIndicatorValues: (root.decoDefaults.blurSize !== undefined && root.decoDefaults.blurPasses !== undefined)
+                ? [root.blurStrengthOf(root.decoDefaults.blurSize, root.decoDefaults.blurPasses)] : []
             buttonIcon: "lens_blur"
             usePercentTooltip: false
             enabled: root.blurEnabled
@@ -497,6 +618,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Amount")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("dimStrength")
             buttonIcon: "gradient"
             enabled: root.dimInactiveEnabled
             opacity: root.dimInactiveEnabled ? 1 : 0.5
