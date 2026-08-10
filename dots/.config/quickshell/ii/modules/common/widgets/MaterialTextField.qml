@@ -1,4 +1,5 @@
 import qs.modules.common
+import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Controls.Material
 import QtQuick.Controls
@@ -36,5 +37,19 @@ TextField {
         acceptedButtons: Qt.NoButton
         hoverEnabled: true
         cursorShape: Qt.IBeamCursor
+    }
+
+    // The toolkit grows its own editing menu on a right click; leaving it in
+    // place would open both.
+    ContextMenu.menu: null
+
+    TextFieldContextMenu {
+        id: editMenu
+        target: root
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: eventPoint => editMenu.openAt(eventPoint.position.x, eventPoint.position.y)
     }
 }

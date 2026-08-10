@@ -50,4 +50,18 @@ TextArea {
         variableAxes: Appearance.font.variableAxes.main
     }
     wrapMode: TextEdit.Wrap
+
+    // The toolkit grows its own editing menu on a right click; leaving it in
+    // place would open both.
+    ContextMenu.menu: null
+
+    TextFieldContextMenu {
+        id: editMenu
+        target: root
+    }
+
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: eventPoint => editMenu.openAt(eventPoint.position.x, eventPoint.position.y)
+    }
 }
