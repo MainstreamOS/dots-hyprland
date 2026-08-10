@@ -320,7 +320,7 @@ ContentPage {
                 from: 1
                 to: 1000
                 stopIndicatorValues: [350]
-                onValueChanged: {
+                onMoved: {
                     Config.options.background.widgets.clock.digital.font.weight = value;
                 }
             }
@@ -333,7 +333,7 @@ ContentPage {
                 from: 50
                 to: 700
                 stopIndicatorValues: [90]
-                onValueChanged: {
+                onMoved: {
                     Config.options.background.widgets.clock.digital.font.size = value;
                 }
             }
@@ -346,7 +346,7 @@ ContentPage {
                 from: 25
                 to: 125
                 stopIndicatorValues: [100]
-                onValueChanged: {
+                onMoved: {
                     Config.options.background.widgets.clock.digital.font.width = value;
                 }
             }
@@ -357,7 +357,7 @@ ContentPage {
                 buttonIcon: "line_curve"
                 from: 0
                 to: 100
-                onValueChanged: {
+                onMoved: {
                     Config.options.background.widgets.clock.digital.font.roundness = value;
                 }
             }
