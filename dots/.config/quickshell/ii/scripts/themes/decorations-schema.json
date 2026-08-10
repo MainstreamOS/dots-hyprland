@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "groups": [
+    { "id": "shape",   "label": "Shape" },
+    { "id": "blur",    "label": "Blur" },
+    { "id": "shadow",  "label": "Shadow" },
+    { "id": "opacity", "label": "Transparency" },
+    { "id": "motion",  "label": "Motion" }
+  ],
+  "keys": [
+    { "key": "animations", "group": "motion", "label": "Animations",
+      "type": "bool", "default": true, "hypr": "animations:enabled" },
+
+    { "key": "rounding", "group": "shape", "label": "Corner radius",
+      "type": "int", "default": 10, "min": 0, "max": 24,
+      "hypr": "decoration:rounding",
+      "legacy": { "bool": "roundCorners", "on": 10, "off": 0 } },
+
+    { "key": "roundingPower", "group": "shape", "label": "Corner shape",
+      "type": "float", "default": 4.0, "min": 2.0, "max": 8.0, "step": 0.1,
+      "hypr": "decoration:rounding_power", "requires": "rounding" },
+
+    { "key": "borderSize", "group": "shape", "label": "Border thickness",
+      "type": "int", "default": 4, "min": 0, "max": 10,
+      "hypr": "general:border_size",
+      "legacy": { "bool": "borders", "on": 4, "off": 0 } },
+
+    { "key": "resizeOnBorder", "group": "shape", "label": "Resize from window edge",
+      "type": "bool", "default": true,
+      "hypr": "general:resize_on_border",
+      "legacy": { "bool": "borders", "on": true, "off": false } },
+
+    { "key": "gapsIn", "group": "shape", "label": "Inner gap",
+      "type": "int", "default": 4, "min": 0, "max": 40,
+      "hypr": "general:gaps_in",
+      "legacy": { "bool": "borders", "on": 4, "off": 0 } },
+
+    { "key": "gapsOut", "group": "shape", "label": "Outer gap",
+      "type": "int", "default": 5, "min": 0, "max": 60,
+      "hypr": "general:gaps_out",
+      "legacy": { "bool": "borders", "on": 5, "off": 0 } },
+
+    { "key": "blur", "group": "blur", "label": "Blur",
+      "type": "bool", "default": true, "hypr": "decoration:blur:enabled" },
+
+    { "key": "blurSize", "group": "blur", "label": "Blur radius",
+      "type": "int", "default": 10, "min": 1, "max": 40,
+      "hypr": "decoration:blur:size", "requires": "blur" },
+
+    { "key": "blurPasses", "group": "blur", "label": "Blur passes",
+      "type": "int", "default": 3, "min": 1, "max": 6,
+      "hypr": "decoration:blur:passes", "requires": "blur" },
+
+    { "key": "blurNoise", "group": "blur", "label": "Noise",
+      "type": "float", "default": 0.05, "min": 0.0, "max": 0.5, "step": 0.01,
+      "hypr": "decoration:blur:noise", "requires": "blur" },
+
+    { "key": "blurVibrancy", "group": "blur", "label": "Vibrancy",
+      "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
+      "hypr": "decoration:blur:vibrancy", "requires": "blur" },
+
+    { "key": "blurXray", "group": "blur", "label": "See through to the wallpaper",
+      "type": "bool", "default": true,
+      "hypr": "decoration:blur:xray", "requires": "blur" },
+
+    { "key": "shadow", "group": "shadow", "label": "Shadows",
+      "type": "bool", "default": true, "hypr": "decoration:shadow:enabled" },
+
+    { "key": "shadowRange", "group": "shadow", "label": "Shadow size",
+      "type": "int", "default": 20, "min": 1, "max": 60,
+      "hypr": "decoration:shadow:range", "requires": "shadow" },
+
+    { "key": "shadowRenderPower", "group": "shadow", "label": "Shadow falloff",
+      "type": "int", "default": 10, "min": 1, "max": 20,
+      "hypr": "decoration:shadow:render_power", "requires": "shadow" },
+
+    { "key": "activeOpacity", "group": "opacity", "label": "Focused window",
+      "type": "float", "default": 1.0, "min": 0.4, "max": 1.0, "step": 0.01,
+      "hypr": "decoration:active_opacity" },
+
+    { "key": "inactiveOpacity", "group": "opacity", "label": "Unfocused windows",
+      "type": "float", "default": 1.0, "min": 0.4, "max": 1.0, "step": 0.01,
+      "hypr": "decoration:inactive_opacity" },
+
+    { "key": "fullscreenOpacity", "group": "opacity", "label": "Fullscreen windows",
+      "type": "float", "default": 1.0, "min": 0.4, "max": 1.0, "step": 0.01,
+      "hypr": "decoration:fullscreen_opacity" },
+
+    { "key": "dimInactive", "group": "opacity", "label": "Dim unfocused windows",
+      "type": "bool", "default": true, "hypr": "decoration:dim_inactive" },
+
+    { "key": "dimStrength", "group": "opacity", "label": "Dim amount",
+      "type": "float", "default": 0.05, "min": 0.0, "max": 0.8, "step": 0.01,
+      "hypr": "decoration:dim_strength", "requires": "dimInactive" },
+
+    { "key": "titleBars", "group": "shape", "label": "Title bars",
+      "type": "bool", "default": true,
+      "mechanism": "flagfile", "path": "titlebars.enabled" }
+  ]
+}

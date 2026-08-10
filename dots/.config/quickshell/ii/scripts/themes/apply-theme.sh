@@ -266,85 +266,10 @@ DECO_JSON="$THEME_DIR/decorations.json"
 # Targets the Lua-config tree introduced in Hyprland 0.55.
 GENERAL_CONF="$XDG_CONFIG_HOME/hypr/hyprland/general.lua"
 CUSTOM_CONF="$XDG_CONFIG_HOME/hypr/custom/general.lua"
-if [ -f "$DECO_JSON" ]; then
-    python3 - "$DECO_JSON" "$GENERAL_CONF" "$CUSTOM_CONF" <<'PY' || dlog "decoration restore failed"
-import json, os, re, sys
-deco_path, general, custom = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    flags = json.load(open(deco_path))
-except Exception:
-    sys.exit(0)
-
-def set_block_enabled(text, block, enabled):
-    # Lua: `<block> = { ... enabled = ... }` — the `=` between block name
-    # and `{` distinguishes Lua from hyprlang. Block-opener anchored at
-    # line start (re.M) so a doc comment that mentions `animations = {`
-    # or similar doesn't shadow the real block.
-    val = "true" if enabled else "false"
-    pat = r'(^[ \t]*' + re.escape(block) + r'\s*=\s*\{[^}]*?)(enabled\s*=\s*)\w+'
-    return re.sub(pat, r'\1\2' + val, text, count=1, flags=re.S|re.M)
-
-def set_borders(text, enabled):
-    # In Lua the col entries are bare keys inside `col = { ... }`, no dot prefix.
-    fields = ["border_size", "active_border", "inactive_border", "resize_on_border"]
-    out = []
-    for line in text.splitlines(keepends=True):
-        stripped = line.lstrip()
-        indent = line[:len(line) - len(stripped)]
-        matched = False
-        for f in fields:
-            if enabled:
-                if stripped.startswith('-- ' + f + ' ') or stripped.startswith('--' + f + ' ') \
-                   or stripped.startswith('-- ' + f + '=') or stripped.startswith('--' + f + '='):
-                    line = indent + stripped.lstrip('- ')
-                    matched = True
-                    break
-            else:
-                if stripped.startswith(f + ' ') or stripped.startswith(f + '='):
-                    line = indent + '-- ' + stripped
-                    matched = True
-                    break
-        if not matched:
-            if stripped.startswith('gaps_in'):
-                line = indent + 'gaps_in = ' + ('4' if enabled else '0') + ',\n'
-            elif stripped.startswith('gaps_out'):
-                line = indent + 'gaps_out = ' + ('5' if enabled else '0') + ',\n'
-        out.append(line)
-    return ''.join(out)
-
-def set_rounding(text, enabled):
-    val = "10" if enabled else "0"
-    # `rounding = N` works for both hyprlang and Lua syntax; trailing
-    # comma untouched. Line-anchored (re.M + ^\s*) so a doc comment like
-    # `-- rounding = 10` doesn't get rewritten instead of the real key.
-    return re.sub(r'(?m)^(\s*rounding\s*=\s*)\d+', r'\g<1>' + val, text, count=1)
-
-try:
-    text = open(general).read()
-    if "animations" in flags: text = set_block_enabled(text, "animations", flags["animations"])
-    if "blur" in flags:       text = set_block_enabled(text, "blur", flags["blur"])
-    if "shadow" in flags:     text = set_block_enabled(text, "shadow", flags["shadow"])
-    if "borders" in flags:    text = set_borders(text, flags["borders"])
-    if "roundCorners" in flags: text = set_rounding(text, flags["roundCorners"])
-    # Written beside the target and renamed over it. general.lua is sourced by
-    # the Hyprland config, and switchwall leaves a `hyprctl reload` running in
-    # the background that can parse it at any point during this step; a plain
-    # open(..., "w") empties the file first and a reload landing in that window
-    # takes the compositor back to its built-in defaults.
-    tmp = general + ".tmp"
-    with open(tmp, "w") as fh:
-        fh.write(text)
-    try: os.chmod(tmp, os.stat(general).st_mode & 0o7777)
-    except OSError: pass
-    os.replace(tmp, general)
-except FileNotFoundError: pass
-
-if "titleBars" in flags:
-    try:
-        flag = os.path.join(os.path.dirname(custom), "titlebars.enabled")
-        open(flag, "w").write("1" if flags["titleBars"] else "0")
-    except OSError: pass
-PY
+DECORATIONS_PY="$SCRIPT_DIR/decorations.py"
+if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
+    python3 "$DECORATIONS_PY" write "$GENERAL_CONF" "$DECO_JSON" \
+        --flag-dir "$(dirname "$CUSTOM_CONF")" 2>/dev/null || dlog "decoration restore failed"
 fi
 
 # ── 5b. Restore interface look (gsettings) if the theme snapshotted it ──────
@@ -376,55 +301,11 @@ write_last_applied "$SLUG"
 # ── 7. Apply decorations live, reload hyprland, then restore kitty ──────────
 if command -v hyprctl >/dev/null 2>&1; then
 
-    # Apply every keyword-settable decoration flag live right now via
-    # hyprctl keyword. This gives immediate visual feedback before the
-    # reload below finishes, and means the reload is only strictly needed
-    # for matugen's hyprland color templates and the titlebar plugin.
-    if [ -f "$DECO_JSON" ]; then
-        python3 - "$DECO_JSON" <<'PY2' || true
-import json, subprocess, sys
-try:
-    flags = json.load(open(sys.argv[1]))
-except Exception:
-    sys.exit(0)
-# `hyprctl keyword` is Legacy-only in 0.55 ("can't work with non-legacy
-# parsers. Use eval."). Route through `hyprctl eval` + hl.config() so
-# every theme apply still takes effect live. Section/leaf split on the
-# first `:`; bracket-string keys handle leafs that have their own dots
-# (e.g. blur:enabled → ["blur.enabled"]).
-sections = {}
-def kw(keyword, value):
-    first_colon = keyword.find(":")
-    section = keyword[:first_colon]
-    leaf = keyword[first_colon+1:].replace(":", ".")
-    # Pick Lua literal: keep true/false/numbers bare, quote strings.
-    s = str(value)
-    if s in ("true", "false"):
-        lua_val = s
-    else:
-        try:
-            float(s)
-            lua_val = s
-        except ValueError:
-            lua_val = '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    sections.setdefault(section, []).append('["' + leaf + '"] = ' + lua_val)
-if "animations"   in flags: kw("animations:enabled",          "true"  if flags["animations"]   else "false")
-if "blur"         in flags: kw("decoration:blur:enabled",     "true"  if flags["blur"]         else "false")
-if "shadow"       in flags: kw("decoration:shadow:enabled",   "true"  if flags["shadow"]       else "false")
-if "roundCorners" in flags: kw("decoration:rounding",         "10"    if flags["roundCorners"] else "0")
-if "borders" in flags:
-    if flags["borders"]:
-        kw("general:border_size", "4");   kw("general:resize_on_border", "true")
-        kw("general:gaps_in",     "4");   kw("general:gaps_out",         "5")
-    else:
-        kw("general:border_size", "0");   kw("general:resize_on_border", "false")
-        kw("general:gaps_in",     "0");   kw("general:gaps_out",         "0")
-# hl.config() takes the whole set at once, and every eval is a round trip to
-# the compositor on the interactive path -- up to eight of them for one apply.
-if sections:
-    body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())
-    subprocess.run(["hyprctl", "eval", "hl.config({ " + body + " })"], capture_output=True)
-PY2
+    # Every keyword-settable decoration goes live now, so the change shows
+    # before the reload below finishes. That leaves the reload needed only for
+    # matugen's colour templates and the titlebar plugin.
+    if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
+        python3 "$DECORATIONS_PY" push "$DECO_JSON" 2>/dev/null || true
     fi
 
     # Full reload is still needed for matugen's hyprland color templates

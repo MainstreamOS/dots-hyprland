@@ -405,32 +405,15 @@ ContentPage {
             `json.dump({"slug": slug, "name": name, "wallpaperFile": wp,\n` +
             `           "mode": mode, "created": int(created)}, open(out, "w"))\n` +
             `PYMETA\n` +
-            // Snapshot current decoration flags (Lua-config syntax — same
-            // parsing logic as InterfaceConfig.qml's decoReader). Applying
-            // this theme later restores the look the user had at save time.
+            // Snapshot the decoration settings so applying this theme later
+            // restores the look the user had at save time.
             `GENERAL='${root.homePath}/.config/hypr/hyprland/general.lua'\n` +
             `CUSTOM='${root.homePath}/.config/hypr/custom/general.lua'\n` +
-            `python3 - "$DIR/decorations.json" "$GENERAL" "$CUSTOM" <<'PY'\n` +
-            `import json, os, re, sys\n` +
-            `out_path, general, custom = sys.argv[1], sys.argv[2], sys.argv[3]\n` +
-            `def truthy(v): return v.lower() in ("true", "1", "yes", "on")\n` +
-            `flags = {}\n` +
-            `try:\n` +
-            `    text = open(general).read()\n` +
-            `    for key, block in (("animations", "animations"), ("blur", "blur"), ("shadow", "shadow")):\n` +
-            `        m = re.search(block + r"\\s*=\\s*\\{[^}]*?enabled\\s*=\\s*(\\w+)", text, re.S)\n` +
-            `        if m: flags[key] = truthy(m.group(1))\n` +
-            `    bm = re.search(r"^(\\s*)(--\\s*)?border_size\\s*=", text, re.M)\n` +
-            `    flags["borders"] = bool(bm and not bm.group(2))\n` +
-            `    rm = re.search(r"^\\s*rounding\\s*=\\s*(\\d+)", text, re.M)\n` +
-            `    if rm: flags["roundCorners"] = int(rm.group(1)) > 0\n` +
-            `except FileNotFoundError: pass\n` +
-            `try:\n` +
-            `    fp = os.path.join(os.path.dirname(custom), "titlebars.enabled")\n` +
-            `    flags["titleBars"] = (open(fp).read().strip() != "0") if os.path.exists(fp) else True\n` +
-            `except FileNotFoundError: pass\n` +
-            `with open(out_path, "w") as f: json.dump(flags, f, indent=2)\n` +
-            `PY\n` +
+            // Snapshot through the shared reader, so what a theme records and
+            // what an apply puts back can never disagree about a key.
+            `python3 '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations.py' \\\n` +
+            `    read "$GENERAL" --flag-dir "$(dirname "$CUSTOM")" > "$DIR/decorations.json" \\\n` +
+            `    || printf '{}' > "$DIR/decorations.json"\n` +
             // Newly saved themes are treated as the currently applied theme.
             `printf '%s' "$SLUG" > '${root.lastAppliedPath}.tmp' && mv -f '${root.lastAppliedPath}.tmp' '${root.lastAppliedPath}'\n` +
             // Rebuild index

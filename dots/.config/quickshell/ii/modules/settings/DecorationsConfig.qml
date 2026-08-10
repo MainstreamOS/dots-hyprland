@@ -100,146 +100,35 @@ ContentPage {
         }
     }
 
-    function runPy(py, args) {
-        Quickshell.execDetached(["python3", "-c", py, ...args])
-    }
-
-    function setHyprKeyword(keyword, value) {
-        const firstColon = keyword.indexOf(":");
-        if (firstColon < 0) {
-            console.warn("setHyprKeyword: keyword has no section:", keyword);
-            return;
-        }
-        const section = keyword.substring(0, firstColon);
-        // Remaining leaf may still contain `:` (e.g. "decoration:blur:enabled"
-        // → leaf "blur:enabled"); luaConfigValueName already converts `:`→`.`
-        // for stored keys, so we normalize the leaf the same way before
-        // bracket-string indexing.
-        const leaf = keyword.substring(firstColon + 1).replace(/:/g, ".");
-        let luaVal;
-        const v = String(value);
-        if (v === "true" || v === "false") {
-            luaVal = v;
-        } else if (/^-?\d+(?:\.\d+)?$/.test(v)) {
-            luaVal = v;
-        } else {
-            luaVal = `"${v.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
-        }
-        const expr = `hl.config({ ${section} = { ["${leaf}"] = ${luaVal} } })`;
-        Quickshell.execDetached(["hyprctl", "eval", expr]);
-    }
+    readonly property string decorationsPy: `${CF.FileUtils.trimFileProtocol(Directories.config)}/quickshell/ii/scripts/themes/decorations.py`
+    readonly property string flagDir: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
 
     Process {
         id: decoReader
-        command: ["cat", root.generalConf]
+        // The same reader a theme snapshot uses, so this page and a saved theme
+        // can never disagree about what a setting is or where it lives.
+        command: ["python3", root.decorationsPy, "read", root.generalConf,
+                  "--flag-dir", root.flagDir]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => decoReader.buf += data + "\n" }
+        stdout: SplitParser { onRead: data => decoReader.buf += data }
         onExited: {
-            let text = decoReader.buf;
-            // Lua format: `animations = { enabled = true, ... }`.
-            // Block-opener regexes use `(?m)^\s*KEY\s*=\s*\{` so a doc
-            // comment that happens to mention "animations = {" doesn't
-            // shadow the real block (Lua comments start with `--` which
-            // doesn't match `\s*`). Same anchor for blur, shadow, rounding.
-            let animMatch = text.match(/^\s*animations\s*=\s*\{[\s\S]*?enabled\s*=\s*(\w+)/m);
-            if (animMatch) root.animationsEnabled = animMatch[1] === "true" || animMatch[1] === "1";
-            let blurMatch = text.match(/^\s*blur\s*=\s*\{[\s\S]*?enabled\s*=\s*(\w+)/m);
-            if (blurMatch) root.blurEnabled = blurMatch[1] === "true" || blurMatch[1] === "1";
-            let shadowMatch = text.match(/^\s*shadow\s*=\s*\{[\s\S]*?enabled\s*=\s*(\w+)/m);
-            if (shadowMatch) root.shadowsEnabled = shadowMatch[1] === "true" || shadowMatch[1] === "1";
-            // Lua comment marker is `--` instead of hyprlang's `#`
-            let borderMatch = text.match(/^(\s*)(--\s*)?border_size\s*=/m);
-            root.bordersEnabled = borderMatch ? !borderMatch[2] : false;
-            let roundMatch = text.match(/^\s*rounding\s*=\s*(\d+)/m);
-            if (roundMatch) root.roundCornersEnabled = parseInt(roundMatch[1]) > 0;
-            root._decoReady = true;
+            let values = ({})
+            try { values = JSON.parse(decoReader.buf || "{}") } catch (e) { values = ({}) }
+            if (values.animations !== undefined) root.animationsEnabled = values.animations
+            if (values.blur !== undefined) root.blurEnabled = values.blur
+            if (values.shadow !== undefined) root.shadowsEnabled = values.shadow
+            if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
+            if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
+            root._decoReady = true
         }
     }
 
-    function decoSetBlockEnabled(blockName, enabled) {
-        let val = enabled ? "true" : "false";
-        // Block shape in Lua: `<blockName> = { ... enabled = ... }`. The `=`
-        // between block name and `{` is captured to allow whitespace variations.
-        // Block opener anchored at line start (re.M) so a doc comment that
-        // mentions `<block> = {` cannot shadow the real config block.
-        let py =
-            "import sys, re\n" +
-            "block, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
-            "text = open(conf).read()\n" +
-            "pattern = r'(?ms)^(\\s*' + re.escape(block) + r'\\s*=\\s*' + chr(123) + r'[^' + chr(125) + r']*?)(enabled\\s*=\\s*)\\w+'\n" +
-            "text = re.sub(pattern, r'\\1\\2' + val, text, count=1)\n" +
-            "open(conf, 'w').write(text)\n";
-        runPy(py, [blockName, val, root.generalConf])
-    }
-
-    function decoSetBordersEnabled(enabled) {
-        // Lua nested-table form: `col = { active_border = "...", inactive_border = "..." }`
-        // so the field names are bare inside `col`, no `col.` prefix.
-        let fields = ["border_size", "active_border", "inactive_border", "resize_on_border"];
-        let py =
-            "import sys, re\n" +
-            "enable = sys.argv[1] == '1'\n" +
-            "conf = sys.argv[2]\n" +
-            "fields = sys.argv[3].split(',')\n" +
-            "lines = open(conf).readlines()\n" +
-            "result = []\n" +
-            "for line in lines:\n" +
-            "    stripped = line.lstrip()\n" +
-            "    for f in fields:\n" +
-            "        if enable:\n" +
-            "            if stripped.startswith('-- ' + f + ' ') or stripped.startswith('--' + f + ' ') or stripped.startswith('-- ' + f + '=') or stripped.startswith('--' + f + '='):\n" +
-            "                indent = line[:len(line) - len(line.lstrip())]\n" +
-            "                line = indent + stripped.lstrip('- ')\n" +
-            "                break\n" +
-            "        else:\n" +
-            "            if stripped.startswith(f + ' ') or stripped.startswith(f + '='):\n" +
-            "                indent = line[:len(line) - len(line.lstrip())]\n" +
-            "                line = indent + '-- ' + stripped\n" +
-            "                break\n" +
-            "    if stripped.startswith('gaps_in'):\n" +
-            "        indent = line[:len(line) - len(line.lstrip())]\n" +
-            "        line = indent + 'gaps_in = ' + ('4' if enable else '0') + ',\\n'\n" +
-            "    elif stripped.startswith('gaps_out'):\n" +
-            "        indent = line[:len(line) - len(line.lstrip())]\n" +
-            "        line = indent + 'gaps_out = ' + ('5' if enable else '0') + ',\\n'\n" +
-            "    result.append(line)\n" +
-            "open(conf, 'w').writelines(result)\n";
-        runPy(py, [enabled ? "1" : "0", root.generalConf, fields.join(",")])
-        if (enabled) {
-            setHyprKeyword("general:border_size", "4");
-            setHyprKeyword("general:col.active_border", "rgba(0DB7D455)");
-            setHyprKeyword("general:col.inactive_border", "rgba(31313600)");
-            setHyprKeyword("general:resize_on_border", "true");
-            setHyprKeyword("general:gaps_in", "4");
-            setHyprKeyword("general:gaps_out", "5");
-        } else {
-            setHyprKeyword("general:border_size", "0");
-            setHyprKeyword("general:resize_on_border", "false");
-            setHyprKeyword("general:gaps_in", "0");
-            setHyprKeyword("general:gaps_out", "0");
-        }
-    }
-
-    function decoSetRoundCornersEnabled(enabled) {
-        let val = enabled ? "10" : "0";
-        // Multiline-anchored pattern (`(?m)^\s*rounding`) so a doc-comment
-        // like `-- rounding = 10` doesn't get rewritten in place of the
-        // real key inside the decoration table.
-        let py =
-            "import sys, re\n" +
-            "val, conf = sys.argv[1], sys.argv[2]\n" +
-            "text = open(conf).read()\n" +
-            "text = re.sub(r'(?m)^(\\s*rounding\\s*=\\s*)\\d+', r'\\g<1>' + val, text, count=1)\n" +
-            "open(conf, 'w').write(text)\n";
-        runPy(py, [val, root.generalConf])
-        setHyprKeyword("decoration:rounding", val);
-        if (!enabled) {
-            root.previousCornerStyle = Config.options.bar.cornerStyle;
-            Config.options.bar.cornerStyle = 2;
-        } else {
-            Config.options.bar.cornerStyle = root.previousCornerStyle;
-        }
+    // Writes the file and pushes the value to the running compositor in one
+    // call, so the two cannot be updated independently of each other.
+    function setDecoration(pairs) {
+        Quickshell.execDetached(["python3", root.decorationsPy, "set", root.generalConf,
+                                 "--flag-dir", root.flagDir, ...pairs])
     }
 
     Process {
@@ -368,8 +257,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.animationsEnabled = checked;
-                    root.decoSetBlockEnabled("animations", checked);
-                    root.setHyprKeyword("animations:enabled", checked ? "true" : "false");
+                    root.setDecoration(["animations=" + checked]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Window open/close and workspace transition effects")
@@ -384,8 +272,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.blurEnabled = checked;
-                    root.decoSetBlockEnabled("blur", checked);
-                    root.setHyprKeyword("decoration:blur:enabled", checked ? "true" : "false");
+                    root.setDecoration(["blur=" + checked]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Background blur behind transparent windows and layers")
@@ -403,8 +290,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.shadowsEnabled = checked;
-                    root.decoSetBlockEnabled("shadow", checked);
-                    root.setHyprKeyword("decoration:shadow:enabled", checked ? "true" : "false");
+                    root.setDecoration(["shadow=" + checked]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Drop shadows underneath windows")
@@ -419,7 +305,10 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.bordersEnabled = checked;
-                    root.decoSetBordersEnabled(checked);
+                    root.setDecoration(["borderSize=" + (checked ? 4 : 0),
+                                        "resizeOnBorder=" + checked,
+                                        "gapsIn=" + (checked ? 4 : 0),
+                                        "gapsOut=" + (checked ? 5 : 0)]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Colored borders around active and inactive windows")
@@ -436,7 +325,14 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 onCheckedChanged: {
                     if (!root._decoReady) return;
                     root.roundCornersEnabled = checked;
-                    root.decoSetRoundCornersEnabled(checked);
+                    root.setDecoration(["rounding=" + (checked ? 10 : 0)]);
+                    // The bar's own corners follow the window rounding.
+                    if (!checked) {
+                        root.previousCornerStyle = Config.options.bar.cornerStyle;
+                        Config.options.bar.cornerStyle = 2;
+                    } else {
+                        Config.options.bar.cornerStyle = root.previousCornerStyle;
+                    }
                 }
                 StyledToolTip {
                     text: Translation.tr("Rounded corners on windows and the bar")
