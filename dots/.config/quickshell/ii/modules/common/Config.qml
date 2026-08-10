@@ -258,6 +258,31 @@ Singleton {
 
             property JsonObject appearance: JsonObject {
                 property bool extraBackgroundTint: true
+                // Lives here rather than in the Hyprland config so a saved
+                // theme carries it. Palette mode holds role names, which are
+                // re-read from whatever palette is current so the border
+                // follows the wallpaper the way the rest of the desktop does;
+                // custom mode holds the two colours literally and ignores it.
+                property JsonObject borderGradient: JsonObject {
+                    property bool enable: false
+                    property string from: "primary"
+                    property string to: "tertiary"
+                    property bool custom: false
+                    property string customFrom: "#8ab4f8"
+                    property string customTo: "#c58af9"
+                    property int angle: 90
+                    property int opacity: 50
+                }
+                property JsonObject borderGradientInactive: JsonObject {
+                    property bool enable: false
+                    property string from: "primary"
+                    property string to: "tertiary"
+                    property bool custom: false
+                    property string customFrom: "#8ab4f8"
+                    property string customTo: "#c58af9"
+                    property int angle: 90
+                    property int opacity: 15
+                }
                 property int fakeScreenRounding: 2 // 0: None | 1: Always | 2: When not fullscreen
                 property JsonObject fonts: JsonObject {
                     property string main: "Google Sans Flex"

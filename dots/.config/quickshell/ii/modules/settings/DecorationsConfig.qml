@@ -662,7 +662,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 root.blurVibrancyValue = value;
                 root.queueDecoration("blurVibrancy", value.toFixed(2));
             }
-            StyledToolTip { text: Translation.tr("How much colour the blur keeps from what is behind it") }
+            StyledToolTip { text: Translation.tr("How much color the blur keeps from what is behind it") }
         }
 
         ConfigSwitch {
@@ -716,6 +716,143 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 root.dimStrengthValue = value;
                 root.queueDecoration("dimStrength", value.toFixed(2));
             }
+        }
+    }
+
+    // The focused and the unfocused border share one section: each lane is
+    // the same switches, colors and sliders against its own config object,
+    // and the lane's own toggle carries its name, so the pair reads as two
+    // halves of one setting rather than two settings.
+    component BorderGradientLane: ColumnLayout {
+        id: bgSection
+        required property var gradientOpts
+        required property string switchLabel
+        required property string switchIcon
+        property int defaultStrength: 50
+        spacing: 0
+        Layout.fillWidth: true
+
+        // Drawn from the palette's primary and tertiary, so it is re-derived
+        // from whatever the wallpaper produced instead of drifting out of step
+        // with everything around it. That pair is not offered as a choice: the
+        // other roles sit too close together to read as a gradient, so picking
+        // between them is the long way round to no visible difference. Anyone
+        // who wants a specific pair wants colours, which is the switch below.
+        ConfigSwitch {
+            buttonIcon: bgSection.switchIcon
+            text: bgSection.switchLabel
+            checked: bgSection.gradientOpts.enable
+            onCheckedChanged: bgSection.gradientOpts.enable = checked
+            StyledToolTip {
+                text: Translation.tr("Off leaves the border the color the palette picked for it")
+            }
+        }
+
+        // Everything below the toggle belongs to it: inset behind a rail,
+        // so which border a slider moves is read from the shape of the
+        // section rather than remembered.
+        RowLayout {
+            visible: bgSection.gradientOpts.enable
+            Layout.fillWidth: true
+            Layout.leftMargin: 18
+            spacing: 6
+
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.topMargin: 4
+                Layout.bottomMargin: 4
+                implicitWidth: 2
+                radius: 1
+                color: CF.ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.5)
+            }
+
+            ColumnLayout {
+                spacing: 0
+                Layout.fillWidth: true
+
+                ConfigSwitch {
+                    buttonIcon: "palette"
+                    text: Translation.tr("Choose the colors myself")
+                    checked: bgSection.gradientOpts.custom
+                    onCheckedChanged: bgSection.gradientOpts.custom = checked
+                    StyledToolTip {
+                        text: Translation.tr("Fixed colors stay put when the wallpaper changes")
+                    }
+                }
+
+                ColorField {
+                    text: Translation.tr("From")
+                    buttonIcon: "trip_origin"
+                    textWidth: 170
+                    sliderWidth: 340
+                    visible: bgSection.gradientOpts.custom
+                    value: bgSection.gradientOpts.customFrom
+                    onEdited: newValue => bgSection.gradientOpts.customFrom = newValue
+                }
+
+                ColorField {
+                    text: Translation.tr("To")
+                    buttonIcon: "adjust"
+                    textWidth: 170
+                    sliderWidth: 340
+                    visible: bgSection.gradientOpts.custom
+                    value: bgSection.gradientOpts.customTo
+                    onEdited: newValue => bgSection.gradientOpts.customTo = newValue
+                }
+
+                ConfigSlider {
+                    text: Translation.tr("Angle")
+                    textWidth: 170
+                    sliderWidth: 340
+                    stopIndicatorValues: [90]
+                    buttonIcon: "rotate_right"
+                    usePercentTooltip: false
+                    from: 0
+                    to: 360
+                    value: bgSection.gradientOpts.angle
+                    onMoved: {
+                        const stepped = Math.round(value / 5) * 5;
+                        if (stepped === bgSection.gradientOpts.angle) return;
+                        bgSection.gradientOpts.angle = stepped;
+                    }
+                }
+
+                ConfigSlider {
+                    text: Translation.tr("Strength")
+                    textWidth: 170
+                    sliderWidth: 340
+                    stopIndicatorValues: [bgSection.defaultStrength]
+                    buttonIcon: "opacity"
+                    from: 10
+                    to: 100
+                    value: bgSection.gradientOpts.opacity
+                    onMoved: {
+                        const stepped = Math.round(value);
+                        if (stepped === bgSection.gradientOpts.opacity) return;
+                        bgSection.gradientOpts.opacity = stepped;
+                    }
+                    StyledToolTip { text: Translation.tr("How solid the border is against what is behind it") }
+                }
+            }
+        }
+    }
+
+    // ── Border color ─────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "gradient"
+        title: Translation.tr("Window border color")
+
+        BorderGradientLane {
+            switchLabel: Translation.tr("Active border")
+            switchIcon: "select_window"
+            gradientOpts: Config.options.appearance.borderGradient
+        }
+
+        BorderGradientLane {
+            switchLabel: Translation.tr("Inactive border")
+            switchIcon: "select_window_2"
+            defaultStrength: 15
+            gradientOpts: Config.options.appearance.borderGradientInactive
         }
     }
 

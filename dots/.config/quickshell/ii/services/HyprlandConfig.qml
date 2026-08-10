@@ -25,6 +25,15 @@ Singleton {
         ])
     }
     
+    // A value written through as Lua rather than quoted, for the settings that
+    // are a table: a gradient is {colors={...},angle=N}, and the single-string
+    // form is rejected.
+    function setLua(key: string, lua: string) {
+        Quickshell.execDetached(["bash", "-c", //
+            `${root.configuratorScriptPath} --file ${root.shellOverridesPath} --set-lua "${key}" '${lua}'` //
+        ])
+    }
+
     function setMany(entries: var) {
         let args = ""
         for (let key in entries) {
