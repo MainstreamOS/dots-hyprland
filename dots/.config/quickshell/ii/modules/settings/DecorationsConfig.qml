@@ -385,7 +385,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
     // ── Decorations ──────────────────────────────────────────────────────────
     ContentSection {
         icon: "auto_awesome"
-        title: Translation.tr("Decorations")
+        title: Translation.tr("Window decorations")
 
         // animateChanges: root._decoReady on each ConfigSwitch below — the
         // initial `checked` binding evaluates BEFORE decoReader has parsed
