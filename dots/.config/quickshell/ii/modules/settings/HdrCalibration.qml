@@ -146,7 +146,7 @@ Window {
             patternType: "saturation",
             title:       Translation.tr("SDR Saturation"),
             setting:     "sdrsaturation",
-            hint:        Translation.tr("Adjusts the colour saturation of SDR content. 1.0 is accurate sRGB; increase slightly if SDR apps look desaturated next to HDR, or decrease if they look over-vivid.\n\nThe colour swatches update in real time."),
+            hint:        Translation.tr("Adjusts the color saturation of SDR content. 1.0 is accurate sRGB; increase slightly if SDR apps look desaturated next to HDR, or decrease if they look over-vivid.\n\nThe color swatches update in real time."),
             propName:    "valSdrSaturation",
             minVal: 0.5, maxVal: 2.0, sliderStep: 0.05, decimals: 2, unit: "×",
             recMin: 0.9, recMax: 1.1,

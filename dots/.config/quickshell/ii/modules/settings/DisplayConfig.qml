@@ -1983,7 +1983,7 @@ except Exception:
                         StyledToolTip {
                             visible: !monitorSection.tenBitSupported
                             y: (parent.height - implicitHeight) / 2
-                            text: Translation.tr("10-bit colour is not supported by this display or driver.")
+                            text: Translation.tr("10-bit color is not supported by this display or driver.")
                         }
 
                         SelectPopup {
