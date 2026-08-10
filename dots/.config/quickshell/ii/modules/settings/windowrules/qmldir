@@ -1,0 +1,2 @@
+module qs.modules.settings.windowrules
+WindowRulesSection 1.0 WindowRulesSection.qml

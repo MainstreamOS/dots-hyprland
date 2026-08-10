@@ -6,6 +6,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions as CF
 import qs.modules.common.widgets
+import qs.modules.settings.windowrules
 
 ContentPage {
     id: root
@@ -1365,4 +1366,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             }
         }
     }
+
+    // ── Window rules (per-app exceptions to the window sections) ──────────────
+    // Last on purpose: the list grows without pushing anything below it, and
+    // the sections above stay where muscle memory expects them.
+    WindowRulesSection {}
 }
