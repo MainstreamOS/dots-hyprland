@@ -130,12 +130,23 @@ is_video() {
 PALETTE_CACHE_KEEP=64
 SRCCOLOR_CACHE="$STATE_DIR/user/generated/source-color-for-image.cache"
 cache_key_for() {
-    stat -c '%n:%Y:%s' "$1" 2>/dev/null
+    local meta
+    meta="$(stat -c '%Y:%s' "$1" 2>/dev/null)" || return 1
+    [[ -n "$meta" ]] || return 1
+    # A record is one line and its fields are tab-separated, and both characters
+    # are legal in a filename, so a path carrying either would split its own key
+    # across the boundary.
+    local safe="${1//$'\t'/ }"
+    printf '%s:%s' "${safe//$'\n'/ }" "$meta"
 }
 # Answers through $cache_value rather than stdout: at 64 short lines the shell
 # reads the whole store for less than the fork a command substitution costs.
 cache_get() {
-    local file="$1" key="$2" k v
+    # Two stores share these helpers and hold different kinds of value — a
+    # colour in one, a scheme name in the other — so the caller says what a
+    # good answer looks like. The default rejects anything with whitespace,
+    # which is what a key split across the field boundary leaves behind.
+    local file="$1" key="$2" pattern="${3:-^[^[:space:]]+$}" k v
     cache_value=""
     [[ -n "$key" && -f "$file" ]] || return 1
     while IFS=$'\t' read -r k v; do
@@ -144,17 +155,31 @@ cache_get() {
             break
         fi
     done < "$file"
-    [[ -n "$cache_value" ]] || return 1
+    # A value that doesn't look right reads as absent, so the miss path
+    # regenerates it and writes the line again: the store repairs itself
+    # instead of handing the same unusable answer back for the file's lifetime.
+    [[ "$cache_value" =~ $pattern ]] || { cache_value=""; return 1; }
+}
+# awk is given the key through the environment because -v expands escape
+# sequences in what it is assigned, and a path may contain a backslash.
+cache_rewrite() {
+    local file="$1" key="$2" value="${3:-}" tmp
+    [[ -n "$key" ]] || return 0
+    mkdir -p "${file%/*}" 2>/dev/null || return 0
+    tmp="$(mktemp "$file.XXXXXX" 2>/dev/null)" || return 0
+    {
+        [[ -n "$value" ]] && printf '%s\t%s\n' "$key" "$value"
+        [[ -f "$file" ]] && CACHE_KEY="$key" awk -F'\t' '$1 != ENVIRON["CACHE_KEY"]' "$file" 2>/dev/null
+    } | head -n "$PALETTE_CACHE_KEEP" > "$tmp" 2>/dev/null \
+        && mv -f "$tmp" "$file" 2>/dev/null || rm -f "$tmp" 2>/dev/null
 }
 cache_put() {
-    local file="$1" key="$2" value="$3"
-    [[ -n "$key" && -n "$value" ]] || return 0
-    mkdir -p "${file%/*}" 2>/dev/null || return 0
-    {
-        printf '%s\t%s\n' "$key" "$value"
-        [[ -f "$file" ]] && awk -F'\t' -v k="$key" '$1 != k' "$file" 2>/dev/null
-    } | head -n "$PALETTE_CACHE_KEEP" > "$file.tmp" 2>/dev/null \
-        && mv -f "$file.tmp" "$file" 2>/dev/null || rm -f "$file.tmp" 2>/dev/null
+    [[ -n "${3:-}" ]] || return 0
+    cache_rewrite "$1" "$2" "$3"
+}
+cache_drop() {
+    [[ -f "$1" ]] || return 0
+    cache_rewrite "$1" "$2" ""
 }
 
 # pkill/pgrep read every /proc/*/cmdline, which hangs whenever any task is
@@ -199,6 +224,30 @@ EOF
     mv "$RESTORE_SCRIPT.tmp" "$RESTORE_SCRIPT"
 }
 
+# Every edit to config.json here is a read-modify-write of a file the shell's
+# own adapter also writes. The temp is unique and sits beside the target, so two
+# writers can't publish each other's half-finished output and the rename a
+# reader sees is atomic. The lock only decides which of two edits survives; it
+# is bounded and skippable, since a rewrite that raced is better than one that
+# never happened.
+CONFIG_WRITE_LOCK="${XDG_RUNTIME_DIR:-/tmp}/quickshell-config-write.${UID:-0}.lock"
+config_jq() {
+    [ -f "$SHELL_CONFIG_FILE" ] || return 0
+    (
+        if command -v flock >/dev/null 2>&1 && { exec 6>"$CONFIG_WRITE_LOCK"; } 2>/dev/null; then
+            flock -w 5 6 2>/dev/null
+        fi
+        local tmp
+        tmp="$(mktemp "$SHELL_CONFIG_FILE.XXXXXX" 2>/dev/null)" || return 0
+        if jq "$@" "$SHELL_CONFIG_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+            chmod --reference="$SHELL_CONFIG_FILE" "$tmp" 2>/dev/null
+            mv -f "$tmp" "$SHELL_CONFIG_FILE"
+        else
+            rm -f "$tmp"
+        fi
+    )
+}
+
 set_wallpaper_path() {
     local path="$1"
     # Ending a rotation rides along in the write that records the picture, so
@@ -209,16 +258,12 @@ set_wallpaper_path() {
     if [[ -n "$stop_slideshow" ]]; then
         filter+=' | (if ((.background.slideshow.enable)? // false) == true then .background.slideshow.enable = false else . end)'
     fi
-    if [ -f "$SHELL_CONFIG_FILE" ]; then
-        jq --arg path "$path" "$filter" "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
-    fi
+    config_jq --arg path "$path" "$filter"
 }
 
 set_thumbnail_path() {
     local path="$1"
-    if [ -f "$SHELL_CONFIG_FILE" ]; then
-        jq --arg path "$path" '.background.thumbnailPath = $path' "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
-    fi
+    config_jq --arg path "$path" '.background.thumbnailPath = $path'
 }
 
 # Rewrite the `wallpaper_path = ...` line that the scrolloverview plugin
@@ -262,25 +307,46 @@ set_scrolloverview_wallpaper() {
     fi
 
     if grep -qE '^[[:space:]]*wallpaper_path[[:space:]]*=' "$target"; then
+        # The value lands inside a Lua double-quoted string, in the file and in
+        # the eval alike, so a backslash or a quote in the name has to survive
+        # as itself. Escaped once here for both. A line break is legal in a
+        # filename but not inside a Lua string literal, and the rewrite below is
+        # line-oriented besides, so those go in as escapes and Lua puts them
+        # back. Backslashes are doubled first, or the escapes added after would
+        # be doubled too.
+        local lua_path="${plugin_path//\\/\\\\}"
+        lua_path="${lua_path//\"/\\\"}"
+        lua_path="${lua_path//$'\n'/\\n}"
+        lua_path="${lua_path//$'\r'/\\r}"
+
         local tmpfile
-        tmpfile="$(mktemp)"
+        # Beside the target, so replacing it is a rename. general.lua is
+        # sourced by the Hyprland config and a reload can be reading it at any
+        # moment; a copy in from elsewhere would truncate it first.
+        tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || return
         # Lua form: `wallpaper_path = "...",` (with quotes and trailing comma).
         # Preserves leading indent so the value stays inside the parent table.
-        awk -v new="$plugin_path" '
+        # Passed through the environment because awk -v expands escape
+        # sequences in what it is given.
+        if SCROLLOVERVIEW_PATH="$lua_path" awk '
             /^[[:space:]]*wallpaper_path[[:space:]]*=/ {
                 match($0, /^[[:space:]]*/)
-                printf "%swallpaper_path = \"%s\",\n", substr($0, 1, RLENGTH), new
+                printf "%swallpaper_path = \"%s\",\n", substr($0, 1, RLENGTH), ENVIRON["SCROLLOVERVIEW_PATH"]
                 next
             }
             { print }
-        ' "$target" > "$tmpfile" && mv "$tmpfile" "$target"
+        ' "$target" > "$tmpfile" && [ -s "$tmpfile" ]; then
+            chmod --reference="$target" "$tmpfile" 2>/dev/null
+            mv -f "$tmpfile" "$target"
+        else
+            rm -f "$tmpfile"
+            return
+        fi
 
         # Push the new value into the running compositor (and thus the
         # plugin's getDataStaticPtr-cached value). Run async so we don't
         # block the rest of post_process.
         if [[ "$push_mode" == "eval" ]]; then
-            local lua_path="${plugin_path//\\/\\\\}"
-            lua_path="${lua_path//\"/\\\"}"
             hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
         else
             hyprctl reload >/dev/null 2>&1 &
@@ -418,7 +484,7 @@ switch() {
                 # a thumbnail key could only ever miss, filling the store with
                 # entries nothing can read.
                 palette_key="$(cache_key_for "$video_path")"
-                if cache_get "$SRCCOLOR_CACHE" "$palette_key"; then
+                if cache_get "$SRCCOLOR_CACHE" "$palette_key" '^#[0-9a-fA-F]{6}$'; then
                     palette_hex="$cache_value"
                     matugen_args+=(color hex "$palette_hex")
                 else
@@ -459,7 +525,7 @@ switch() {
                     ;;
             esac
             palette_key="$(cache_key_for "$imgpath")"
-            if cache_get "$SRCCOLOR_CACHE" "$palette_key"; then
+            if cache_get "$SRCCOLOR_CACHE" "$palette_key" '^#[0-9a-fA-F]{6}$'; then
                 palette_hex="$cache_value"
                 matugen_args+=(color hex "$palette_hex")
             else
@@ -615,6 +681,9 @@ switch() {
     # downstream would pass on it — so stop here rather than let the theme apply
     # with the old palette under the new theme's name.
     if [[ $matugen_status -ne 0 ]]; then
+        # A stored colour matugen won't take is dropped, so the next run reads
+        # the picture again instead of being handed the same refusal.
+        [[ -n "${palette_hex:-}" && -n "${palette_key:-}" ]] && cache_drop "$SRCCOLOR_CACHE" "$palette_key"
         rm -f "$generated_colors_tmp"
         echo "[switchwall] matugen failed (exit $matugen_status); keeping the previous colors." >&2
         deactivate
@@ -668,7 +737,7 @@ main() {
     }
     set_accent_color() {
         local color="$1"
-        jq --arg color "$color" '.appearance.palette.accentColor = $color' "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
+        config_jq --arg color "$color" '.appearance.palette.accentColor = $color'
     }
 
     detect_scheme_type_from_image() {

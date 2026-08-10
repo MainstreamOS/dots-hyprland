@@ -326,7 +326,17 @@ try:
     if "shadow" in flags:     text = set_block_enabled(text, "shadow", flags["shadow"])
     if "borders" in flags:    text = set_borders(text, flags["borders"])
     if "roundCorners" in flags: text = set_rounding(text, flags["roundCorners"])
-    open(general, "w").write(text)
+    # Written beside the target and renamed over it. general.lua is sourced by
+    # the Hyprland config, and switchwall leaves a `hyprctl reload` running in
+    # the background that can parse it at any point during this step; a plain
+    # open(..., "w") empties the file first and a reload landing in that window
+    # takes the compositor back to its built-in defaults.
+    tmp = general + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.write(text)
+    try: os.chmod(tmp, os.stat(general).st_mode & 0o7777)
+    except OSError: pass
+    os.replace(tmp, general)
 except FileNotFoundError: pass
 
 if "titleBars" in flags:
