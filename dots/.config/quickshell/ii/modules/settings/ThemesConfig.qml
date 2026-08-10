@@ -414,6 +414,28 @@ ContentPage {
             `python3 '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations.py' \\\n` +
             `    read "$GENERAL" --flag-dir "$(dirname "$CUSTOM")" > "$DIR/decorations.json" \\\n` +
             `    || printf '{}' > "$DIR/decorations.json"\n` +
+            // A custom animation profile is a file, not a value: the snapshot
+            // records its name, but on another machine the name points at
+            // nothing. The file rides in the theme so the name means the same
+            // thing wherever the theme lands. Shipped profiles stay out — every
+            // install has them, and a theme is not how the stock set updates.
+            `python3 - "$DIR" '${root.homePath}/.config/hypr/hyprland/animations' \\\n` +
+            `    '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations-schema.json' <<'PYANIM'\n` +
+            `import json, os, re, shutil, sys\n` +
+            `theme_dir, anim_dir, schema_path = sys.argv[1:4]\n` +
+            `row = next(r for r in json.load(open(schema_path))["keys"] if r["key"] == "animationProfile")\n` +
+            `shipped = set(row.get("shipped", []))\n` +
+            `try:\n` +
+            `    name = str(json.load(open(os.path.join(theme_dir, "decorations.json"))).get("animationProfile", ""))\n` +
+            `except Exception:\n` +
+            `    name = ""\n` +
+            `dest = os.path.join(theme_dir, "animations")\n` +
+            `shutil.rmtree(dest, ignore_errors=True)\n` +
+            `src = os.path.join(anim_dir, name + ".lua")\n` +
+            `if name and name not in shipped and re.fullmatch(r"[\\w-]+", name) and os.path.isfile(src):\n` +
+            `    os.makedirs(dest, exist_ok=True)\n` +
+            `    shutil.copy2(src, os.path.join(dest, name + ".lua"))\n` +
+            `PYANIM\n` +
             // Newly saved themes are treated as the currently applied theme.
             `printf '%s' "$SLUG" > '${root.lastAppliedPath}.tmp' && mv -f '${root.lastAppliedPath}.tmp' '${root.lastAppliedPath}'\n` +
             // Rebuild index
@@ -804,6 +826,14 @@ with tarfile.open(out_path, "w:gz") as tar:
             tar.add(p, arcname=n)
     for p in images:
         tar.add(p, arcname="slideshow/" + os.path.basename(p))
+    ANIM_OK = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    adir = os.path.join(theme_dir, "animations")
+    if os.path.isdir(adir):
+        for n in sorted(os.listdir(adir)):
+            p = os.path.join(adir, n)
+            stem = n[:-4] if n.endswith(".lua") else ""
+            if stem and all(c in ANIM_OK for c in stem) and os.path.isfile(p) and os.path.getsize(p) <= 262144:
+                tar.add(p, arcname="animations/" + n)
 print("OK|" + out_path)
 ` +
             `PY\n`
@@ -882,12 +912,23 @@ def wanted(n):
 # there so a malicious file can't fill the disk on the way in.
 MAX_SS_FILES = 500
 MAX_SS_BYTES = 1024 * 1024 * 1024
+MAX_ANIM_FILES = 20
+MAX_ANIM_BYTES = 4 * 1024 * 1024
 # A theme file arrives from somewhere else, and tar members declare their own
 # size: a small archive can name an enormous one. These are what a theme's own
 # parts plausibly weigh, so a file claiming more is rejected before anything is
 # written rather than after the disk is full.
 MAX_MEMBER_BYTES = 128 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
+
+ANIM_OK = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+def animation_name(name):
+    parts = name.split("/")
+    if len(parts) != 2 or parts[0] != "animations":
+        return ""
+    n = os.path.basename(parts[1])
+    stem = n[:-4] if n.endswith(".lua") else ""
+    return n if stem and all(c in ANIM_OK for c in stem) else ""
 
 def slideshow_name(name):
     parts = name.split("/")
@@ -913,10 +954,21 @@ try:
     with tar:
         picked, seen, total_bytes = [], set(), 0
         ss_picked, ss_seen, ss_bytes = [], set(), 0
+        anim_picked, anim_seen, anim_bytes = [], set(), 0
         for m in tar.getmembers():
             if not m.isfile():
                 continue
             raw = m.name[2:] if m.name.startswith("./") else m.name
+            an = animation_name(raw)
+            if an:
+                if (an in anim_seen or len(anim_picked) >= MAX_ANIM_FILES
+                        or anim_bytes + m.size > MAX_ANIM_BYTES):
+                    continue
+                anim_seen.add(an)
+                anim_bytes += m.size
+                m.name = "animations/" + an
+                anim_picked.append(m)
+                continue
             ss = slideshow_name(raw)
             if ss:
                 if (ss in ss_seen or len(ss_picked) >= MAX_SS_FILES
@@ -946,7 +998,7 @@ try:
             picked.append(m)
         if "meta.json" not in seen or "config.json" not in seen:
             fail()
-        tar.extractall(tmp, members=picked + ss_picked, filter="data")
+        tar.extractall(tmp, members=picked + ss_picked + anim_picked, filter="data")
 
     try:
         meta = json.load(open(os.path.join(tmp, "meta.json")))

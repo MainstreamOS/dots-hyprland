@@ -32,6 +32,22 @@
       "hypr": "animations:enabled"
     },
     {
+      "key": "animationProfile",
+      "group": "motion",
+      "label": "Animation style",
+      "type": "str",
+      "default": "expressive",
+      "mechanism": "namefile",
+      "path": "animations/active",
+      "shipped": [
+        "expressive",
+        "snappy",
+        "smooth",
+        "bouncy",
+        "minimal"
+      ]
+    },
+    {
       "key": "rounding",
       "group": "shape",
       "label": "Corner radius",

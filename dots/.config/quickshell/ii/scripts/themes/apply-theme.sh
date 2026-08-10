@@ -267,6 +267,28 @@ DECO_JSON="$THEME_DIR/decorations.json"
 GENERAL_CONF="$XDG_CONFIG_HOME/hypr/hyprland/general.lua"
 CUSTOM_CONF="$XDG_CONFIG_HOME/hypr/custom/general.lua"
 DECORATIONS_PY="$SCRIPT_DIR/decorations.py"
+# A theme can carry the animation profile its snapshot names; the file has to
+# be in place before the restore below points the compositor at it. Shipped
+# names are never written — every install has its own copies, and a theme is
+# not how the stock set updates.
+ANIM_SRC="$THEME_DIR/animations"
+ANIM_DST="$XDG_CONFIG_HOME/hypr/hyprland/animations"
+if [ -d "$ANIM_SRC" ] && [ -f "$DECORATIONS_PY" ]; then
+    SHIPPED=$(python3 -c "
+import json
+row = next(r for r in json.load(open('$SCRIPT_DIR/decorations-schema.json'))['keys']
+           if r['key'] == 'animationProfile')
+print(' '.join(row.get('shipped', [])))" 2>/dev/null || echo "")
+    mkdir -p "$ANIM_DST"
+    for ANIM_FILE in "$ANIM_SRC"/*.lua; do
+        [ -f "$ANIM_FILE" ] || continue
+        ANIM_BASE=$(basename "$ANIM_FILE" .lua)
+        printf '%s' "$ANIM_BASE" | grep -qE '^[A-Za-z0-9_-]+$' || continue
+        case " $SHIPPED " in *" $ANIM_BASE "*) continue ;; esac
+        cp -f "$ANIM_FILE" "$ANIM_DST/$ANIM_BASE.lua" 2>/dev/null || dlog "animation profile install failed: $ANIM_BASE"
+    done
+fi
+
 if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
     python3 "$DECORATIONS_PY" write "$GENERAL_CONF" "$DECO_JSON" \
         --flag-dir "$(dirname "$CUSTOM_CONF")" 2>/dev/null || dlog "decoration restore failed"

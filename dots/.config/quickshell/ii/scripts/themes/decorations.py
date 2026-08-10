@@ -188,6 +188,15 @@ def read(general_path, flag_dir=None, schema=None):
                 out[row["key"]] = (open(fp).read().strip() != "0") \
                     if os.path.exists(fp) else True
             continue
+        if row.get("mechanism") == "namefile":
+            fp = os.path.join(os.path.dirname(general_path), row["path"])
+            try:
+                name = open(fp).read().strip()
+            except OSError:
+                continue
+            if name:
+                out[row["key"]] = name
+            continue
         path, field = lua_location(row)
         span = _find_field(text, path, field)
         if span is None:
@@ -236,6 +245,17 @@ def write(general_path, values, flag_dir=None, schema=None):
                 except OSError:
                     pass
             continue
+        if row.get("mechanism") == "namefile":
+            if re.fullmatch(r"[\w-]+", str(value)):
+                fp = os.path.join(os.path.dirname(general_path), row["path"])
+                try:
+                    os.makedirs(os.path.dirname(fp), exist_ok=True)
+                    with open(fp, "w") as fh:
+                        fh.write(str(value) + "\n")
+                    written += 1
+                except OSError:
+                    pass
+            continue
         path, field = lua_location(row)
         rendered = _format(value, row["type"])
         span = _find_field(text, path, field)
@@ -271,6 +291,9 @@ def push(values, schema=None):
     """
     import subprocess
     schema = schema or load_schema()
+    needs_reload = any(row.get("mechanism") == "namefile"
+                       and resolve(values, row) is not None
+                       for row in schema["keys"])
     sections = {}
     for row in schema["keys"]:
         if not row.get("hypr"):
@@ -289,6 +312,8 @@ def push(values, schema=None):
         else:
             lua = str(value)
         sections.setdefault(path[0], []).append('["' + leaf + '"] = ' + lua)
+    if needs_reload:
+        subprocess.run(["hyprctl", "reload"], capture_output=True)
     if not sections:
         return
     body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())

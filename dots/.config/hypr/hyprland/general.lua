@@ -118,143 +118,48 @@ hl.config({
         -- precise_mouse_move = true,
     },
 })
--- Curves
-hl.curve("expressiveFastSpatial", {
-    type = "bezier",
-    points = {{0.42, 1.67}, {0.21, 0.90}}
-})
-hl.curve("expressiveSlowSpatial", {
-    type = "bezier",
-    points = {{0.39, 1.29}, {0.35, 0.98}}
-})
-hl.curve("expressiveDefaultSpatial", {
-    type = "bezier",
-    points = {{0.38, 1.21}, {0.22, 1.00}}
-})
-hl.curve("emphasizedDecel", {
-    type = "bezier",
-    points = {{0.05, 0.7}, {0.1, 1}}
-})
-hl.curve("emphasizedAccel", {
-    type = "bezier",
-    points = {{0.3, 0}, {0.8, 0.15}}
-})
-hl.curve("standardDecel", {
-    type = "bezier",
-    points = {{0, 0}, {0, 1}}
-})
-hl.curve("menu_decel", {
-    type = "bezier",
-    points = {{0.1, 1}, {0, 1}}
-})
-hl.curve("menu_accel", {
-    type = "bezier",
-    points = {{0.52, 0.03}, {0.72, 0.08}}
-})
-hl.curve("stall", {
-    type = "bezier",
-    points = {{1, -0.1}, {0.7, 0.85}}
-})
--- Configs
--- windows
-hl.animation({
-    leaf = "windowsIn",
-    enabled = true,
-    speed = 3,
-    bezier = "emphasizedDecel",
-    style = "popin 80%"
-})
-hl.animation({
-    leaf = "fadeIn",
-    enabled = true,
-    speed = 3,
-    bezier = "emphasizedDecel"
-})
-hl.animation({
-    leaf = "windowsOut",
-    enabled = true,
-    speed = 2,
-    bezier = "emphasizedDecel",
-    style = "popin 90%"
-})
-hl.animation({
-    leaf = "fadeOut",
-    enabled = true,
-    speed = 2,
-    bezier = "emphasizedDecel"
-})
-hl.animation({
-    leaf = "windowsMove",
-    enabled = true,
-    speed = 3,
-    bezier = "emphasizedDecel",
-    style = "slide"
-})
-hl.animation({
-    leaf = "border",
-    enabled = true,
-    speed = 10,
-    bezier = "emphasizedDecel"
-})
+-- Animations live in a profile file so the set can be swapped whole: curves
+-- and targets belong together, and half of one profile over half of another
+-- is a window easing against a curve tuned for something else. The name in
+-- animations/active picks the file; anything missing or unreadable falls
+-- back to the stock profile. Read from disk on every reload rather than
+-- required, so a change shows without restarting.
+local animationsDir = os.getenv("HOME") .. "/.config/hypr/hyprland/animations/"
+local animationProfile = "expressive"
+local activeFile = io.open(animationsDir .. "active", "r")
+if activeFile then
+    local line = activeFile:read("*l")
+    activeFile:close()
+    if line then
+        line = line:match("^%s*([%w_%-]+)%s*$")
+        if line then animationProfile = line end
+    end
+end
 
--- layers
-hl.animation({
-    leaf = "layersIn",
-    enabled = true,
-    speed = 2.7,
-    bezier = "emphasizedDecel",
-    style = "popin 93%"
-})
-hl.animation({
-    leaf = "layersOut",
-    enabled = true,
-    speed = 2.4,
-    bezier = "menu_accel",
-    style = "popin 94%"
-})
--- fade
-hl.animation({
-    leaf = "fadeLayersIn",
-    enabled = true,
-    speed = 0.5,
-    bezier = "menu_decel"
-})
-hl.animation({
-    leaf = "fadeLayersOut",
-    enabled = true,
-    speed = 2.7,
-    bezier = "stall"
-})
--- workspaces
-hl.animation({
-    leaf = "workspaces",
-    enabled = true,
-    speed = 7,
-    bezier = "menu_decel",
-    style = "slide"
-})
--- specialWorkspace
-hl.animation({
-    leaf = "specialWorkspaceIn",
-    enabled = true,
-    speed = 2.8,
-    bezier = "emphasizedDecel",
-    style = "slidevert"
-})
-hl.animation({
-    leaf = "specialWorkspaceOut",
-    enabled = true,
-    speed = 1.2,
-    bezier = "emphasizedAccel",
-    style = "slidevert"
-})
--- zoom
-hl.animation({
-    leaf = "zoomFactor",
-    enabled = true,
-    speed = 3,
-    bezier = "standardDecel"
-})
+-- A profile is meant to be data: a set of curves and the targets they drive.
+-- It can arrive inside a theme file downloaded from anywhere, and dofile would
+-- run it with the whole standard library within reach — os.execute included.
+-- It is loaded into an environment holding only the two calls a profile has
+-- any business making, and only as source, never as bytecode. A profile that
+-- reaches for anything else finds nil and fails, which is the fallback's cue.
+local function loadAnimationProfile(file)
+    local fh = io.open(file, "r")
+    if not fh then return false end
+    local src = fh:read("*a")
+    fh:close()
+    if not src then return false end
+    local chunk = load(src, "@" .. file, "t",
+        { hl = { curve = hl.curve, animation = hl.animation } })
+    if not chunk then return false end
+    return (pcall(chunk))
+end
+
+if not loadAnimationProfile(animationsDir .. animationProfile .. ".lua") then
+    -- The stock profile is loaded the same guarded way: a missing or broken
+    -- one must not abort general.lua, or the input and misc config below
+    -- never applies.
+    loadAnimationProfile(animationsDir .. "expressive.lua")
+end
 
 hl.config({
     input = {

@@ -24,6 +24,7 @@ ContentPage {
     property int  shadowOffsetXValue: 0
     property int  shadowOffsetYValue: 2
     property string shadowColorValue: "rgba(00000020)"
+    property string animationProfileValue: "expressive"
     property int  borderSizeValue: 4
     property int  gapsInValue: 4
     property int  gapsOutValue: 5
@@ -134,6 +135,40 @@ ContentPage {
         return value === undefined ? [] : [value]
     }
 
+    // The shipped profiles keep their translated names and their order; the
+    // scan below appends whatever else is in the profile directory, named by
+    // its filename — so a hand-written profile shows up without the page
+    // having to know it exists.
+    readonly property var shippedAnimationProfiles: [
+        { displayName: Translation.tr("Expressive"), value: "expressive" },
+        { displayName: Translation.tr("Snappy"), value: "snappy" },
+        { displayName: Translation.tr("Smooth"), value: "smooth" },
+        { displayName: Translation.tr("Bouncy"), value: "bouncy" },
+        { displayName: Translation.tr("Minimal"), value: "minimal" },
+    ]
+    property var extraAnimationProfiles: []
+    readonly property var animationProfiles: shippedAnimationProfiles.concat(extraAnimationProfiles)
+    readonly property string animationsDir: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/animations`
+
+    Process {
+        id: animationProfilesScan
+        running: true
+        command: ["bash", "-c", `ls '${root.animationsDir}'/*.lua 2>/dev/null`]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const shipped = new Set(root.shippedAnimationProfiles.map(p => p.value));
+                root.extraAnimationProfiles = text.split("\n")
+                    .map(line => line.trim().split("/").pop().replace(/\.lua$/, ""))
+                    .filter(name => /^[\w-]+$/.test(name) && !shipped.has(name))
+                    .sort()
+                    .map(name => ({
+                        displayName: name.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                        value: name
+                    }));
+            }
+        }
+    }
+
     // The two faces of the shadow color string: how opaque it is, and what
     // hue that opacity is applied to.
     function shadowAlphaOf(rgba) {
@@ -203,6 +238,7 @@ ContentPage {
                 root.shadowOffsetYValue = values.shadowOffset[1]
             }
             if (values.shadowColor !== undefined) root.shadowColorValue = values.shadowColor
+            if (values.animationProfile !== undefined) root.animationProfileValue = values.animationProfile
             if (values.borderSize !== undefined && values.borderSize > 0) root.borderSizeValue = values.borderSize
             if (values.gapsIn !== undefined) root.gapsInValue = values.gapsIn
             if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
@@ -971,6 +1007,46 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 root.queueDecoration("shadowOffset", `${root.shadowOffsetXValue},${stepped}`);
             }
             StyledToolTip { text: Translation.tr("How far the shadow drops below its window") }
+        }
+    }
+
+    // ── Animations ────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "animation"
+        title: Translation.tr("Window animations")
+
+        // A profile is the whole set at once — curves, speeds and styles are
+        // tuned against each other, so they travel together rather than as
+        // fourteen separate knobs.
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            enabled: root.animationsEnabled
+            opacity: root.animationsEnabled ? 1 : 0.5
+            OptionalMaterialSymbol {
+                icon: "auto_awesome_motion"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Style")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.animationProfiles
+                currentIndex: root.animationProfiles.findIndex(p => p.value === root.animationProfileValue)
+                onActivated: index => {
+                    const chosen = root.animationProfiles[index].value;
+                    if (chosen === root.animationProfileValue) return;
+                    root.animationProfileValue = chosen;
+                    root.setDecoration([`animationProfile=${chosen}`]);
+                }
+            }
         }
     }
 
