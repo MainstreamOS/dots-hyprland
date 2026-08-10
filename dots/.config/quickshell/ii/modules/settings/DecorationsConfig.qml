@@ -225,34 +225,72 @@ ContentPage {
         onExited: {
             let values = ({})
             try { values = JSON.parse(decoReader.buf || "{}") } catch (e) { values = ({}) }
-            if (values.animations !== undefined) root.animationsEnabled = values.animations
-            if (values.blur !== undefined) root.blurEnabled = values.blur
-            if (values.shadow !== undefined) root.shadowsEnabled = values.shadow
-            if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
-            if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
-            if (values.rounding !== undefined && values.rounding > 0) root.roundingValue = values.rounding
-            if (values.shadowRange !== undefined) root.shadowRangeValue = values.shadowRange
-            if (values.shadowRenderPower !== undefined) root.shadowRenderPowerValue = values.shadowRenderPower
-            if (values.shadowOffset !== undefined) {
-                root.shadowOffsetXValue = values.shadowOffset[0]
-                root.shadowOffsetYValue = values.shadowOffset[1]
-            }
-            if (values.shadowColor !== undefined) root.shadowColorValue = values.shadowColor
-            if (values.animationProfile !== undefined) root.animationProfileValue = values.animationProfile
-            if (values.borderSize !== undefined && values.borderSize > 0) root.borderSizeValue = values.borderSize
-            if (values.gapsIn !== undefined) root.gapsInValue = values.gapsIn
-            if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
-            if (values.blurSize !== undefined) root.blurSizeValue = values.blurSize
-            if (values.blurPasses !== undefined) root.blurPassesValue = values.blurPasses
-            if (values.blurNoise !== undefined) root.blurNoiseValue = values.blurNoise
-            if (values.blurVibrancy !== undefined) root.blurVibrancyValue = values.blurVibrancy
-            if (values.blurXray !== undefined) root.blurXrayEnabled = values.blurXray
-            if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
-            if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
-            if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
-            if (values.dimStrength !== undefined) root.dimStrengthValue = values.dimStrength
+            root.applyDecoValues(values)
             root._decoReady = true
         }
+    }
+
+    // Every window section back to stock in one motion, from the same table
+    // the track marks are read from. Title bars go through their own service,
+    // which owns the flag and the plugin's reload; the border gradient lives
+    // in config.json, where its service is watching. System look and below
+    // are left alone — the cursor and the fonts belong to the whole desktop,
+    // not to its windows.
+    function resetWindowSections() {
+        const d = root.decoDefaults;
+        const pairs = Object.keys(d)
+            .filter(k => k !== "titleBars")
+            .map(k => `${k}=${d[k]}`);
+        if (pairs.length === 0) return;
+        root.setDecoration(pairs);
+        root.applyDecoValues(d);
+        if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
+        const gradientStock = [
+            [Config.options.appearance.borderGradient, 50],
+            [Config.options.appearance.borderGradientInactive, 15],
+        ];
+        for (const [bg, strength] of gradientStock) {
+            bg.enable = false;
+            bg.custom = false;
+            bg.customFrom = "#8ab4f8";
+            bg.customTo = "#c58af9";
+            bg.angle = 90;
+            bg.opacity = strength;
+            bg.from = "primary";
+            bg.to = "tertiary";
+        }
+    }
+
+    // What the reader learned, or what the defaults table says: either way
+    // the page's rows follow one set of assignments, so the reader and the
+    // reset cannot disagree about what a key drives.
+    function applyDecoValues(values) {
+        if (values.animations !== undefined) root.animationsEnabled = values.animations
+        if (values.blur !== undefined) root.blurEnabled = values.blur
+        if (values.shadow !== undefined) root.shadowsEnabled = values.shadow
+        if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
+        if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
+        if (values.rounding !== undefined && values.rounding > 0) root.roundingValue = values.rounding
+        if (values.shadowRange !== undefined) root.shadowRangeValue = values.shadowRange
+        if (values.shadowRenderPower !== undefined) root.shadowRenderPowerValue = values.shadowRenderPower
+        if (values.shadowOffset !== undefined) {
+            root.shadowOffsetXValue = values.shadowOffset[0]
+            root.shadowOffsetYValue = values.shadowOffset[1]
+        }
+        if (values.shadowColor !== undefined) root.shadowColorValue = values.shadowColor
+        if (values.animationProfile !== undefined) root.animationProfileValue = values.animationProfile
+        if (values.borderSize !== undefined && values.borderSize > 0) root.borderSizeValue = values.borderSize
+        if (values.gapsIn !== undefined) root.gapsInValue = values.gapsIn
+        if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
+        if (values.blurSize !== undefined) root.blurSizeValue = values.blurSize
+        if (values.blurPasses !== undefined) root.blurPassesValue = values.blurPasses
+        if (values.blurNoise !== undefined) root.blurNoiseValue = values.blurNoise
+        if (values.blurVibrancy !== undefined) root.blurVibrancyValue = values.blurVibrancy
+        if (values.blurXray !== undefined) root.blurXrayEnabled = values.blurXray
+        if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
+        if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
+        if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
+        if (values.dimStrength !== undefined) root.dimStrengthValue = values.dimStrength
     }
 
     // A slider emits on every pixel of a drag, and each write is a process and
@@ -1045,6 +1083,25 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                     if (chosen === root.animationProfileValue) return;
                     root.animationProfileValue = chosen;
                     root.setDecoration([`animationProfile=${chosen}`]);
+                }
+            }
+        }
+    }
+
+    // ── Reset ─────────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "settings_backup_restore"
+        title: Translation.tr("Reset")
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            RippleButtonWithIcon {
+                materialIcon: "settings_backup_restore"
+                mainText: Translation.tr("Reset window settings")
+                onClicked: root.resetWindowSections()
+                StyledToolTip {
+                    text: Translation.tr("Every window section above goes back to how a fresh install has it")
                 }
             }
         }
