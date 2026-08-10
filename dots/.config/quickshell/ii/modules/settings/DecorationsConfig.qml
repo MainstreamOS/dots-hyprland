@@ -29,6 +29,9 @@ ContentPage {
     property int  gapsOutValue: 5
     property int  blurSizeValue: 10
     property int  blurPassesValue: 3
+    property real blurNoiseValue: 0.05
+    property real blurVibrancyValue: 0.5
+    property bool blurXrayEnabled: true
     property real activeOpacityValue: 1.0
     property real inactiveOpacityValue: 1.0
     property bool dimInactiveEnabled: true
@@ -205,6 +208,9 @@ ContentPage {
             if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
             if (values.blurSize !== undefined) root.blurSizeValue = values.blurSize
             if (values.blurPasses !== undefined) root.blurPassesValue = values.blurPasses
+            if (values.blurNoise !== undefined) root.blurNoiseValue = values.blurNoise
+            if (values.blurVibrancy !== undefined) root.blurVibrancyValue = values.blurVibrancy
+            if (values.blurXray !== undefined) root.blurXrayEnabled = values.blurXray
             if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
             if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
             if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
@@ -619,6 +625,61 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 root.queueDecoration("blurPasses", pair[1]);
             }
             StyledToolTip { text: Translation.tr("How deep the frost goes. Deeper costs more to draw.") }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Noise")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("blurNoise")
+            buttonIcon: "grain"
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 0.0
+            to: 0.1
+            value: root.blurNoiseValue
+            onMoved: {
+                if (Math.abs(value - root.blurNoiseValue) < 0.005) return;
+                root.blurNoiseValue = value;
+                root.queueDecoration("blurNoise", value.toFixed(2));
+            }
+            StyledToolTip { text: Translation.tr("Grain over the blur, which hides the banding a heavy blur can leave") }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Saturation")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("blurVibrancy")
+            buttonIcon: "palette"
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 0.0
+            to: 1.0
+            value: root.blurVibrancyValue
+            onMoved: {
+                if (Math.abs(value - root.blurVibrancyValue) < 0.005) return;
+                root.blurVibrancyValue = value;
+                root.queueDecoration("blurVibrancy", value.toFixed(2));
+            }
+            StyledToolTip { text: Translation.tr("How much colour the blur keeps from what is behind it") }
+        }
+
+        ConfigSwitch {
+            buttonIcon: "layers_clear"
+            text: Translation.tr("Blur through to the wallpaper")
+            checked: root.blurXrayEnabled
+            animateChanges: root._decoReady
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            onCheckedChanged: {
+                if (!root._decoReady) return;
+                root.blurXrayEnabled = checked;
+                root.setDecoration([`blurXray=${checked}`]);
+            }
+            StyledToolTip {
+                text: Translation.tr("Blur what is on the desktop rather than the windows stacked underneath")
+            }
         }
     }
 
