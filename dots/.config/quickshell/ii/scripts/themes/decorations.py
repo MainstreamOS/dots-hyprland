@@ -72,7 +72,11 @@ def _find_field(text, path, field):
         if span is None:
             return None
         start, end = span
-    pattern = re.compile(r"^[ \t]*" + re.escape(field) + r"[ \t]*=[ \t]*(\"(?:[^\"\\\n]|\\.)*\"|[^,\n}]+)")
+    # A braced value closes on its own line, which is what tells it apart
+    # from a nested block opening; tried first, since the scalar pattern
+    # would stop at the first comma inside it.
+    pattern = re.compile(r"^[ \t]*" + re.escape(field)
+                         + r"[ \t]*=[ \t]*(\{[^}\n]*\}|\"(?:[^\"\\\n]|\\.)*\"|[^,\n}]+)")
     pos, depth = start, 0
     while pos < end:
         nl = text.find("\n", pos)
@@ -135,6 +139,17 @@ def _parse(raw, kind):
     raw = raw.strip().rstrip(",").strip()
     if kind == "bool":
         return raw.lower() in ("true", "1", "yes", "on")
+    if kind == "str":
+        return raw.strip('"') or None
+    if kind == "vec2":
+        parts = raw.strip("{}").split(",")
+        if len(parts) != 2:
+            return None
+        try:
+            return [int(x) if float(x) == int(float(x)) else float(x)
+                    for x in (p.strip() for p in parts)]
+        except ValueError:
+            return None
     try:
         return int(raw) if kind == "int" else float(raw)
     except ValueError:
@@ -144,6 +159,14 @@ def _parse(raw, kind):
 def _format(value, kind):
     if kind == "bool":
         return "true" if value else "false"
+    if kind == "str":
+        # The value can come from a theme made anywhere, and this lands in a
+        # file the compositor evaluates as Lua. Escaping the quote and the
+        # backslash keeps it a string rather than an expression.
+        safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
+        return '"' + safe + '"' 
+    if kind == "vec2":
+        return "{%s, %s}" % (value[0], value[1])
     if kind == "int":
         return str(int(round(float(value))))
     text = ("%.4f" % float(value)).rstrip("0").rstrip(".")
@@ -257,7 +280,14 @@ def push(values, schema=None):
             continue
         path, field = lua_location(row)
         leaf = ".".join(path[1:] + [field])
-        lua = "true" if value is True else "false" if value is False else str(value)
+        if value is True or value is False:
+            lua = "true" if value else "false"
+        elif row["type"] == "str":
+            lua = '"' + str(value) + '"'
+        elif row["type"] == "vec2":
+            lua = "{%s, %s}" % (value[0], value[1])
+        else:
+            lua = str(value)
         sections.setdefault(path[0], []).append('["' + leaf + '"] = ' + lua)
     if not sections:
         return

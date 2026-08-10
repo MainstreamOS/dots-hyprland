@@ -191,11 +191,32 @@
       "group": "shadow",
       "label": "Shadow falloff",
       "type": "int",
-      "default": 10,
+      "default": 4,
       "min": 1,
-      "max": 20,
+      "max": 4,
       "hypr": "decoration:shadow:render_power",
       "requires": "shadow"
+    },
+    {
+      "key": "shadowOffset",
+      "group": "shadow",
+      "label": "Shadow offset",
+      "type": "vec2",
+      "default": [
+        0,
+        2
+      ],
+      "min": -30,
+      "max": 30,
+      "hypr": "decoration:shadow:offset"
+    },
+    {
+      "key": "shadowColor",
+      "group": "shadow",
+      "label": "Shadow color",
+      "type": "str",
+      "default": "rgba(00000020)",
+      "hypr": "decoration:shadow:color"
     },
     {
       "key": "activeOpacity",

@@ -23,6 +23,12 @@ RowLayout {
     // label written over it.
     property real sliderWidth: 0
 
+    // StyledToolTip reads `hovered` off its parent and counts a parent that has
+    // no such property as hovered, so a row without this shows its tooltip for
+    // as long as the page is open.
+    property bool hovered: hoverHandler.hovered
+    HoverHandler { id: hoverHandler }
+
     // Fires only for a drag or a key press, never for a change that arrived
     // through the value binding. A row saves what the user did from here; the
     // track still follows the bound value either way, so a setting changed

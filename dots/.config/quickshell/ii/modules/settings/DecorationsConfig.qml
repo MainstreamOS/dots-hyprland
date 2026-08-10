@@ -19,6 +19,11 @@ ContentPage {
     property bool bordersEnabled: true
     property bool roundCornersEnabled: true
     property int  roundingValue: 10
+    property int  shadowRangeValue: 20
+    property int  shadowRenderPowerValue: 4
+    property int  shadowOffsetXValue: 0
+    property int  shadowOffsetYValue: 2
+    property string shadowColorValue: "rgba(00000020)"
     property int  borderSizeValue: 4
     property int  gapsInValue: 4
     property int  gapsOutValue: 5
@@ -126,6 +131,17 @@ ContentPage {
         return value === undefined ? [] : [value]
     }
 
+    // The two faces of the shadow color string: how opaque it is, and what
+    // hue that opacity is applied to.
+    function shadowAlphaOf(rgba) {
+        const m = String(rgba).match(/^rgba\(([0-9a-fA-F]{8})\)$/)
+        return m ? Math.round(parseInt(m[1].slice(6, 8), 16) / 2.55) : 0
+    }
+    function shadowRgbOf(rgba) {
+        const m = String(rgba).match(/^rgba\(([0-9a-fA-F]{8})\)$/)
+        return m ? m[1].slice(0, 6) : "000000"
+    }
+
     // Size and passes are one perceptual control: passes decides how far each
     // unit of size spreads, so raising one without the other gives grain or
     // mush rather than more blur. One slider walks both through pairs that
@@ -177,6 +193,13 @@ ContentPage {
             if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
             if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
             if (values.rounding !== undefined && values.rounding > 0) root.roundingValue = values.rounding
+            if (values.shadowRange !== undefined) root.shadowRangeValue = values.shadowRange
+            if (values.shadowRenderPower !== undefined) root.shadowRenderPowerValue = values.shadowRenderPower
+            if (values.shadowOffset !== undefined) {
+                root.shadowOffsetXValue = values.shadowOffset[0]
+                root.shadowOffsetYValue = values.shadowOffset[1]
+            }
+            if (values.shadowColor !== undefined) root.shadowColorValue = values.shadowColor
             if (values.borderSize !== undefined && values.borderSize > 0) root.borderSizeValue = values.borderSize
             if (values.gapsIn !== undefined) root.gapsInValue = values.gapsIn
             if (values.gapsOut !== undefined) root.gapsOutValue = values.gapsOut
@@ -632,6 +655,124 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 root.dimStrengthValue = value;
                 root.queueDecoration("dimStrength", value.toFixed(2));
             }
+        }
+    }
+
+    // ── Shadow ────────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "ev_shadow"
+        title: Translation.tr("Window shadow")
+
+        ConfigSlider {
+            text: Translation.tr("Size")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("shadowRange")
+            buttonIcon: "photo_size_select_large"
+            usePercentTooltip: false
+            enabled: root.shadowsEnabled
+            opacity: root.shadowsEnabled ? 1 : 0.5
+            from: 1
+            to: 60
+            value: root.shadowRangeValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.shadowRangeValue) return;
+                root.shadowRangeValue = stepped;
+                root.queueDecoration("shadowRange", stepped);
+            }
+            StyledToolTip { text: Translation.tr("How far the shadow spreads from the window") }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Falloff")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.defaultMark("shadowRenderPower")
+            buttonIcon: "gradient"
+            usePercentTooltip: false
+            enabled: root.shadowsEnabled
+            opacity: root.shadowsEnabled ? 1 : 0.5
+            from: 1
+            to: 4
+            value: root.shadowRenderPowerValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.shadowRenderPowerValue) return;
+                root.shadowRenderPowerValue = stepped;
+                root.queueDecoration("shadowRenderPower", stepped);
+            }
+            StyledToolTip { text: Translation.tr("How sharply the shadow fades out at its edge") }
+        }
+
+        // Size and falloff only shape the shadow; how much of it can be seen
+        // at all is the alpha of its color, which is what this slider carries.
+        // The hue is kept from whatever the color already is, so a theme that
+        // tints its shadow keeps the tint while the darkness moves.
+        ConfigSlider {
+            text: Translation.tr("Darkness")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.decoDefaults.shadowColor !== undefined
+                ? [root.shadowAlphaOf(root.decoDefaults.shadowColor)] : []
+            buttonIcon: "contrast"
+            enabled: root.shadowsEnabled
+            opacity: root.shadowsEnabled ? 1 : 0.5
+            from: 0
+            to: 100
+            value: root.shadowAlphaOf(root.shadowColorValue)
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.shadowAlphaOf(root.shadowColorValue)) return;
+                const alpha = Math.round(stepped * 2.55).toString(16).padStart(2, "0");
+                root.shadowColorValue = `rgba(${root.shadowRgbOf(root.shadowColorValue)}${alpha})`;
+                root.queueDecoration("shadowColor", root.shadowColorValue);
+            }
+            StyledToolTip { text: Translation.tr("How dark the shadow is. Faint shadows barely change with size.") }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Offset X")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.decoDefaults.shadowOffset !== undefined
+                ? [root.decoDefaults.shadowOffset[0]] : []
+            buttonIcon: "swap_horiz"
+            usePercentTooltip: false
+            enabled: root.shadowsEnabled
+            opacity: root.shadowsEnabled ? 1 : 0.5
+            from: -30
+            to: 30
+            value: root.shadowOffsetXValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.shadowOffsetXValue) return;
+                root.shadowOffsetXValue = stepped;
+                root.queueDecoration("shadowOffset", `${stepped},${root.shadowOffsetYValue}`);
+            }
+            StyledToolTip { text: Translation.tr("How far the shadow sits to the side of its window") }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Offset Y")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: root.decoDefaults.shadowOffset !== undefined
+                ? [root.decoDefaults.shadowOffset[1]] : []
+            buttonIcon: "swap_vert"
+            usePercentTooltip: false
+            enabled: root.shadowsEnabled
+            opacity: root.shadowsEnabled ? 1 : 0.5
+            from: -30
+            to: 30
+            value: root.shadowOffsetYValue
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === root.shadowOffsetYValue) return;
+                root.shadowOffsetYValue = stepped;
+                root.queueDecoration("shadowOffset", `${root.shadowOffsetXValue},${stepped}`);
+            }
+            StyledToolTip { text: Translation.tr("How far the shadow drops below its window") }
         }
     }
 
