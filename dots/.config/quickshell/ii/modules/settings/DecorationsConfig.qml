@@ -18,6 +18,12 @@ ContentPage {
     property bool shadowsEnabled: true
     property bool bordersEnabled: true
     property bool roundCornersEnabled: true
+    property int  blurSizeValue: 10
+    property int  blurPassesValue: 3
+    property real activeOpacityValue: 1.0
+    property real inactiveOpacityValue: 1.0
+    property bool dimInactiveEnabled: true
+    property real dimStrengthValue: 0.05
     property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
     property int  cursorSize:      24
@@ -103,6 +109,27 @@ ContentPage {
     readonly property string decorationsPy: `${CF.FileUtils.trimFileProtocol(Directories.config)}/quickshell/ii/scripts/themes/decorations.py`
     readonly property string flagDir: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
 
+    // Size and passes are one perceptual control: passes decides how far each
+    // unit of size spreads, so raising one without the other gives grain or
+    // mush rather than more blur. One slider walks both through pairs that
+    // keep the balance; the stored keys stay the two Hyprland reads, so a
+    // hand-written config or an imported theme still round-trips.
+    readonly property var blurLadder: [[2, 1], [3, 1], [4, 2], [6, 2], [8, 2], [8, 3], [10, 3], [12, 3], [12, 4], [16, 4]]
+
+    // Nearest ladder step to an arbitrary pair, compared on log2(size·2^passes)
+    // — the spread of the blur in pixels — so off-ladder values from elsewhere
+    // land on the step that looks most like them.
+    function blurStrengthOf(size, passes) {
+        const target = Math.log2(Math.max(1, size)) + passes
+        let best = 1
+        let bestDistance = Infinity
+        for (let i = 0; i < blurLadder.length; i++) {
+            const d = Math.abs(Math.log2(blurLadder[i][0]) + blurLadder[i][1] - target)
+            if (d < bestDistance) { bestDistance = d; best = i + 1 }
+        }
+        return best
+    }
+
     Process {
         id: decoReader
         // The same reader a theme snapshot uses, so this page and a saved theme
@@ -120,7 +147,32 @@ ContentPage {
             if (values.shadow !== undefined) root.shadowsEnabled = values.shadow
             if (values.borderSize !== undefined) root.bordersEnabled = values.borderSize > 0
             if (values.rounding !== undefined) root.roundCornersEnabled = values.rounding > 0
+            if (values.blurSize !== undefined) root.blurSizeValue = values.blurSize
+            if (values.blurPasses !== undefined) root.blurPassesValue = values.blurPasses
+            if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
+            if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
+            if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
+            if (values.dimStrength !== undefined) root.dimStrengthValue = values.dimStrength
             root._decoReady = true
+        }
+    }
+
+    // A slider emits on every pixel of a drag, and each write is a process and
+    // a round trip to the compositor. Collected and sent once the drag settles,
+    // which also means several sliders moved together arrive as one change.
+    property var _pending: ({})
+    function queueDecoration(key, value) {
+        if (!root._decoReady) return;
+        root._pending[key] = value;
+        decoFlush.restart();
+    }
+    Timer {
+        id: decoFlush
+        interval: 200
+        onTriggered: {
+            const pairs = Object.keys(root._pending).map(k => `${k}=${root._pending[k]}`);
+            root._pending = ({});
+            if (pairs.length > 0) root.setDecoration(pairs);
         }
     }
 
@@ -359,6 +411,102 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 StyledToolTip {
                     text: Translation.tr("Show title bars on windows")
                 }
+            }
+        }
+    }
+
+    // ── Transparency ──────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "opacity"
+        title: Translation.tr("Window transparency")
+
+        ConfigSlider {
+            text: Translation.tr("Focused window")
+            buttonIcon: "filter_center_focus"
+            from: 0.7
+            to: 1.0
+            value: root.activeOpacityValue
+            onMoved: {
+                if (Math.abs(value - root.activeOpacityValue) < 0.005) return;
+                root.activeOpacityValue = value;
+                root.queueDecoration("activeOpacity", value.toFixed(2));
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Unfocused windows")
+            buttonIcon: "filter_none"
+            from: 0.7
+            to: 1.0
+            value: root.inactiveOpacityValue
+            onMoved: {
+                if (Math.abs(value - root.inactiveOpacityValue) < 0.005) return;
+                root.inactiveOpacityValue = value;
+                root.queueDecoration("inactiveOpacity", value.toFixed(2));
+            }
+        }
+    }
+
+    // ── Blur depth ────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "blur_on"
+        title: Translation.tr("Window blur")
+
+        // Greyed rather than hidden when blur is off, so the settings stay
+        // where they were found rather than moving as things are toggled.
+        ConfigSlider {
+            text: Translation.tr("Strength")
+            textWidth: 170
+            sliderWidth: 340
+            buttonIcon: "lens_blur"
+            usePercentTooltip: false
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 1
+            to: root.blurLadder.length
+            value: root.blurStrengthOf(root.blurSizeValue, root.blurPassesValue)
+            onMoved: {
+                const step = Math.max(1, Math.min(root.blurLadder.length, Math.round(value)));
+                const pair = root.blurLadder[step - 1];
+                if (pair[0] === root.blurSizeValue && pair[1] === root.blurPassesValue) return;
+                root.blurSizeValue = pair[0];
+                root.blurPassesValue = pair[1];
+                root.queueDecoration("blurSize", pair[0]);
+                root.queueDecoration("blurPasses", pair[1]);
+            }
+            StyledToolTip { text: Translation.tr("How deep the frost goes. Deeper costs more to draw.") }
+        }
+    }
+
+    // ── Dim ───────────────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "brightness_medium"
+        title: Translation.tr("Window dim")
+
+        ConfigSwitch {
+            buttonIcon: "brightness_medium"
+            text: Translation.tr("Unfocused windows")
+            checked: root.dimInactiveEnabled
+            animateChanges: root._decoReady
+            onCheckedChanged: {
+                if (!root._decoReady) return;
+                root.dimInactiveEnabled = checked;
+                root.setDecoration([`dimInactive=${checked}`]);
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Amount")
+            buttonIcon: "gradient"
+            enabled: root.dimInactiveEnabled
+            opacity: root.dimInactiveEnabled ? 1 : 0.5
+            from: 0.0
+            to: 0.8
+            value: root.dimStrengthValue
+            onMoved: {
+                if (Math.abs(value - root.dimStrengthValue) < 0.005) return;
+                root.dimStrengthValue = value;
+                root.queueDecoration("dimStrength", value.toFixed(2));
             }
         }
     }
