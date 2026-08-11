@@ -80,9 +80,11 @@ def _find_field(text, path, field):
         if span is None:
             return None
         start, end = span
-    # A braced value closes on its own line, which is what tells it apart
-    # from a nested block opening; tried first, since the scalar pattern
-    # would stop at the first comma inside it.
+    # A braced value closes on its own line, which is what tells it apart from
+    # a nested block opening; it and the quoted string are tried first, since
+    # the scalar pattern stops at the first comma and both may contain one —
+    # rgba(20, 20, 20, 0.5) is a colour Hyprland accepts, and matching only
+    # `"rgba(20` would splice the replacement in front of the rest of it.
     pattern = re.compile(r"^[ \t]*" + re.escape(field)
                          + r"[ \t]*=[ \t]*(\{[^}\n]*\}|\"(?:[^\"\\\n]|\\.)*\"|[^,\n}]+)")
     pos, depth = start, 0
@@ -124,11 +126,15 @@ def _insert_field(text, path, field, rendered):
             nl = end
         line = text[pos:nl]
         stripped = line.strip()
+        depth += line.count("{") - line.count("}")
+        # Anchored on a line that ENDS back at depth 0, so a block whose last
+        # entry is a nested table anchors on that table's closing brace rather
+        # than its opening line — anchoring on the opening line spliced the new
+        # field inside the nested table and left `{,` behind.
         if depth == 0 and stripped and not stripped.startswith("--"):
             if indent is None:
                 indent = line[:len(line) - len(line.lstrip())]
             last_end = pos + len(line.rstrip())
-        depth += line.count("{") - line.count("}")
         pos = nl + 1
 
     if indent is None:
@@ -232,7 +238,44 @@ def resolve(values, row):
     return None
 
 
+def _locked(path):
+    """Exclusive hold on a file's sibling lock, for the length of a `with`.
+
+    The settings page and a theme apply both read general.lua, change part of
+    it and write it back, and they overlap: the page is live while a theme
+    applies. Without this the second writer starts from the text the first one
+    had already replaced, and that writer's whole edit disappears.
+    """
+    import fcntl
+
+    class _Lock:
+        def __enter__(self):
+            try:
+                self.fh = open(path + ".lock", "w")
+                fcntl.flock(self.fh, fcntl.LOCK_EX)
+            except OSError:
+                # A read-only or missing directory is not a reason to refuse
+                # the edit; it only means it is not serialised.
+                self.fh = None
+            return self
+
+        def __exit__(self, *exc):
+            if self.fh is not None:
+                try:
+                    fcntl.flock(self.fh, fcntl.LOCK_UN)
+                finally:
+                    self.fh.close()
+            return False
+
+    return _Lock()
+
+
 def write(general_path, values, flag_dir=None, schema=None):
+    with _locked(general_path):
+        return _write_locked(general_path, values, flag_dir, schema)
+
+
+def _write_locked(general_path, values, flag_dir=None, schema=None):
     schema = schema or load_schema()
     try:
         with open(general_path) as fh:
@@ -266,7 +309,12 @@ def write(general_path, values, flag_dir=None, schema=None):
                     pass
             continue
         path, field = lua_location(row)
-        rendered = _format(value, row["type"])
+        try:
+            rendered = _format(value, row["type"])
+        except (TypeError, ValueError, IndexError, KeyError):
+            # A snapshot from a version where this key held a different shape.
+            # One unrenderable value must not cost the whole set its write.
+            continue
         span = _find_field(text, path, field)
         if span is None:
             grown = _insert_field(text, path, field, rendered)
@@ -277,15 +325,26 @@ def write(general_path, values, flag_dir=None, schema=None):
             text = text[:span[0]] + rendered + text[span[1]:]
         written += 1
     # Beside the target and renamed over it: general.lua is sourced by the
-    # Hyprland config and a reload can be reading it at any moment.
-    tmp = general_path + ".tmp"
-    with open(tmp, "w") as fh:
-        fh.write(text)
+    # Hyprland config and a reload can be reading it at any moment. The name is
+    # unique per writer — a shared one meant two writers held the same inode,
+    # and the loser's rename published a half-written file.
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(general_path) or ".",
+                               prefix=os.path.basename(general_path) + ".")
     try:
-        os.chmod(tmp, os.stat(general_path).st_mode & 0o7777)
-    except OSError:
-        pass
-    os.replace(tmp, general_path)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        try:
+            os.chmod(tmp, os.stat(general_path).st_mode & 0o7777)
+        except OSError:
+            pass
+        os.replace(tmp, general_path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return written
 
 
@@ -320,17 +379,22 @@ def push(values, schema=None, allow_reload=True):
         leaf = ".".join(path[1:] + [field])
         # Same renderer as the file write, so this eval carries the same
         # escaping — the value reaches the compositor either way.
-        lua = _format(value, row["type"])
+        try:
+            lua = _format(value, row["type"])
+        except (TypeError, ValueError, IndexError, KeyError):
+            continue
         sections.setdefault(path[0], []).append('["' + leaf + '"] = ' + lua)
     try:
+        # Bounded: a wedged compositor would otherwise hang the theme apply
+        # for good, holding its lock and leaving the shell stuck on "applying".
         if needs_reload:
-            subprocess.run(["hyprctl", "reload"], capture_output=True)
+            subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
         if not sections:
             return
         body = ", ".join(s + " = { " + ", ".join(v) + " }" for s, v in sections.items())
         subprocess.run(["hyprctl", "eval", "hl.config({ " + body + " })"],
-                       capture_output=True)
-    except (FileNotFoundError, OSError):
+                       capture_output=True, timeout=10)
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         # No compositor to talk to: the file write already happened and is
         # what a later start reads, so this is a no-op rather than a failure.
         pass
@@ -383,7 +447,9 @@ def main(argv):
             return 2
         with open(rest[0]) as fh:
             values = json.load(fh)
-        write(general, values, flag_dir)
+        if write(general, values, flag_dir) == 0:
+            print(f"nothing written to {general}", file=sys.stderr)
+            return 1
         return 0
     if verb == "restore":
         if not rest:
@@ -407,7 +473,12 @@ def main(argv):
         for key, value in values.items():
             if key in known:
                 full[key] = value
-        write(general, full, flag_dir)
+        # Nothing persisted means the file was missing or held none of these
+        # blocks; telling the compositor anyway would put the desktop in a
+        # state no file backs, which the next start would silently undo.
+        if write(general, full, flag_dir) == 0:
+            print(f"nothing written to {general}", file=sys.stderr)
+            return 1
         # --push sends the same completed set to the running compositor here
         # rather than through a second invocation reading a temp file: this
         # process already holds the values and the schema. The caller reloads
@@ -423,7 +494,9 @@ def main(argv):
         values = coerce(schema, rest)
         if not values:
             return 0
-        write(general, values, flag_dir, schema)
+        if write(general, values, flag_dir, schema) == 0:
+            print(f"nothing written to {general}", file=sys.stderr)
+            return 1
         push(values, schema)
         return 0
     if verb == "push":
