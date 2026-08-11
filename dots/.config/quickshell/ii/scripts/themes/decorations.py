@@ -8,6 +8,7 @@ means or where it lives.
 
     decorations.py read     <general.lua> [--flag-dir DIR]
     decorations.py defaults <general.lua>
+    decorations.py shipped  <general.lua>
     decorations.py write    <general.lua> <values.json> [--flag-dir DIR]
     decorations.py restore  <general.lua> <values.json> [--flag-dir DIR] [--push]
     decorations.py set      <general.lua> key=value ... [--flag-dir DIR]
@@ -72,8 +73,12 @@ def _find_block(text, name, start, end):
     return None
 
 
-def _find_field(text, path, field):
-    """(value_start, value_end) for `field = value` at the block path's own level."""
+def _find_field(text, path, field, commented=False):
+    """(value_start, value_end) for `field = value` at the block path's own level.
+
+    commented looks for the same field behind a `--` instead, which is how the
+    previous release recorded a setting being turned off.
+    """
     start, end = 0, len(text)
     for name in path:
         span = _find_block(text, name, start, end)
@@ -85,7 +90,8 @@ def _find_field(text, path, field):
     # the scalar pattern stops at the first comma and both may contain one —
     # rgba(20, 20, 20, 0.5) is a colour Hyprland accepts, and matching only
     # `"rgba(20` would splice the replacement in front of the rest of it.
-    pattern = re.compile(r"^[ \t]*" + re.escape(field)
+    lead = r"^[ \t]*--[ \t]*" if commented else r"^[ \t]*"
+    pattern = re.compile(lead + re.escape(field)
                          + r"[ \t]*=[ \t]*(\{[^}\n]*\}|\"(?:[^\"\\\n]|\\.)*\"|[^,\n}]+)")
     pos, depth = start, 0
     while pos < end:
@@ -215,6 +221,15 @@ def read(general_path, flag_dir=None, schema=None):
         path, field = lua_location(row)
         span = _find_field(text, path, field)
         if span is None:
+            # The release before this one turned a setting off by commenting
+            # its line out, so an upgraded install has `-- border_size = 4,`
+            # sitting where the field should be. Reading that as "not set"
+            # would show the switch on while the compositor has none, and a
+            # theme saved from that state would turn it back on. A commented
+            # field means the off value the old toggle meant by it.
+            legacy = row.get("legacy")
+            if legacy is not None and _find_field(text, path, field, commented=True):
+                out[row["key"]] = legacy["off"]
             continue
         value = _parse(text[span[0]:span[1]], row["type"])
         if value is not None:
@@ -431,6 +446,15 @@ def main(argv):
     if verb == "read":
         json.dump(read(general, flag_dir), sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
+        return 0
+    if verb == "shipped":
+        # The names every install already has. Callers used to each dig this
+        # out of the schema themselves, with validators that disagreed about
+        # what a profile may be called.
+        schema = load_schema()
+        row = next((r for r in schema["keys"] if r["key"] == "animationProfile"), None)
+        for name in (row or {}).get("shipped", []):
+            print(name)
         return 0
     if verb == "defaults":
         # What each setting is worth on a stock install. Kept apart from read so
