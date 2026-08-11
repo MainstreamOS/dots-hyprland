@@ -335,7 +335,7 @@ WINDOWRULES_PY="$XDG_CONFIG_HOME/quickshell/ii/scripts/hyprland/windowrules.py"
 if [ -f "$WR_JSON" ] && [ -f "$WINDOWRULES_PY" ]; then
     python3 "$WINDOWRULES_PY" write \
         "$XDG_CONFIG_HOME/hypr/hyprland/userrules.json" \
-        "$XDG_CONFIG_HOME/hypr/hyprland/userrules.lua" \
+        "$XDG_CONFIG_HOME/hypr/hyprland/userrules.lua" --no-reload \
         < "$WR_JSON" >/dev/null 2>&1 || dlog "window rules restore failed"
 fi
 
