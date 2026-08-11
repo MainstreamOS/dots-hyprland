@@ -164,7 +164,11 @@ Item {
                         delegate: ContextMenuItem {
                             required property var modelData
                             Layout.fillWidth: true
-                            iconName: modelData.icon ?? ""
+                            // Every other item here names a Material Symbol, but a
+                            // desktop action carries an icon theme name. Handing one
+                            // to the symbol font draws it as its own letters, and any
+                            // word that happens to be a ligature turns into a glyph.
+                            iconName: ""
                             label: modelData.name
                             onClicked: {
                                 modelData.execute();
