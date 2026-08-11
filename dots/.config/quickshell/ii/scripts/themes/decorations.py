@@ -168,13 +168,14 @@ def _format(value, kind):
     if kind == "bool":
         return "true" if value else "false"
     if kind == "str":
-        # The value can come from a theme made anywhere, and this lands in a
-        # file the compositor evaluates as Lua. Escaping the quote and the
-        # backslash keeps it a string rather than an expression.
+        # A theme's decorations.json is untrusted on import, and this string
+        # lands in general.lua, which the compositor evaluates as Lua. Escaping
+        # the quote and backslash keeps a value like `x" .. os.execute(...)`
+        # a harmless string instead of an expression that breaks out of it.
         safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
-        return '"' + safe + '"' 
+        return '"' + safe + '"'
     if kind == "vec2":
-        return "{%s, %s}" % (value[0], value[1])
+        return "{%s, %s}" % (int(round(float(value[0]))), int(round(float(value[1]))))
     if kind == "int":
         return str(int(round(float(value))))
     text = ("%.4f" % float(value)).rstrip("0").rstrip(".")
@@ -317,14 +318,9 @@ def push(values, schema=None, allow_reload=True):
             continue
         path, field = lua_location(row)
         leaf = ".".join(path[1:] + [field])
-        if value is True or value is False:
-            lua = "true" if value else "false"
-        elif row["type"] == "str":
-            lua = '"' + str(value) + '"'
-        elif row["type"] == "vec2":
-            lua = "{%s, %s}" % (value[0], value[1])
-        else:
-            lua = str(value)
+        # Same renderer as the file write, so this eval carries the same
+        # escaping — the value reaches the compositor either way.
+        lua = _format(value, row["type"])
         sections.setdefault(path[0], []).append('["' + leaf + '"] = ' + lua)
     try:
         if needs_reload:
@@ -399,9 +395,15 @@ def main(argv):
         full = {row["key"]: row["default"] for row in schema["keys"]
                 if "default" in row}
         known = {row["key"] for row in schema["keys"]}
-        for old, new in (("borders", "borderSize"), ("roundCorners", "rounding")):
-            if values.get(old) is False and new not in values:
-                full[new] = 0
+        # Snapshots from before the border/corner keys were split still carry
+        # the old bools (borders, roundCorners). Map each through the schema's
+        # own legacy table so every key a bool used to drive moves with it —
+        # borders off meant no border AND no gaps AND no resize edge, not just
+        # a zero border size.
+        for row in schema["keys"]:
+            legacy = row.get("legacy")
+            if legacy and legacy["bool"] in values and row["key"] not in values:
+                full[row["key"]] = legacy["on"] if values[legacy["bool"]] else legacy["off"]
         for key, value in values.items():
             if key in known:
                 full[key] = value

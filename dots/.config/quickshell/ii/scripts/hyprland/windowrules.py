@@ -56,8 +56,11 @@ MATCHES = {
 }
 
 FIELD_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-# A literal the generated config can carry without carrying anything else:
-# a boolean, a number, a quoted string, or a one-line braced table of those.
+# A literal the generated config can carry without carrying anything else: a
+# boolean, a number, or a double-quoted string with no escapes. A braced table
+# holds a comma-separated list of exactly those — the braces cannot wrap a bare
+# Lua expression, or a custom effect value like `{os.execute("...")}` would ride
+# an imported theme straight into the compositor's config.
 _SCALAR = r'(?:true|false|-?\d+(?:\.\d+)?|"[^"\\]*")'
 LITERAL_RE = re.compile(
     r"^(%s|\{\s*%s(?:\s*,\s*%s)*\s*\})$" % (_SCALAR, _SCALAR, _SCALAR))
