@@ -192,10 +192,14 @@ ContentSection {
         root.dSizeW = e.size?.[0] ?? 900;
         root.dSizeH = e.size?.[1] ?? 600;
         root.dCenter = e.center === true;
+        // Only a plain workspace number is something the spin box can hold. A
+        // named or relative one (special:scratch, name:media, +1) is carried
+        // through untouched below instead of being flattened to 1.
         const ws = e.workspace !== undefined ? String(e.workspace) : "";
-        root.dWorkspaceOn = ws.length > 0;
-        root.dWorkspaceNum = parseInt(ws) || 1;
-        root.dWorkspaceSilent = ws.includes("silent");
+        const plainWs = /^(\d+)( silent)?$/.exec(ws);
+        root.dWorkspaceOn = plainWs !== null && parseInt(plainWs[1]) <= 10;
+        root.dWorkspaceNum = root.dWorkspaceOn ? parseInt(plainWs[1]) : 1;
+        root.dWorkspaceSilent = root.dWorkspaceOn && ws.includes("silent");
         root.dPin = e.pin === true;
         root.dFullscreen = e.fullscreen === true;
         root.dMaximize = e.maximize === true;
@@ -211,6 +215,13 @@ ContentSection {
         const extraMatch = ({}), extraEffects = ({});
         for (const k in m) if (root.editorMatchKeys.indexOf(k) < 0) extraMatch[k] = m[k];
         for (const k in e) if (root.editorEffectKeys.indexOf(k) < 0) extraEffects[k] = e[k];
+        // A value the widgets can only half-express is treated the same as a
+        // key with no widget at all: kept aside and written back as it was.
+        if (e.workspace !== undefined && !root.dWorkspaceOn) extraEffects.workspace = e.workspace;
+        if (e.rounding !== undefined && e.rounding !== 0) extraEffects.rounding = e.rounding;
+        if (e.borderSize !== undefined && e.borderSize !== 0) extraEffects.borderSize = e.borderSize;
+        if (e.size !== undefined && !root.dFloat) extraEffects.size = e.size;
+        if (e.center === true && !root.dFloat) extraEffects.center = true;
         root.dExtraMatch = extraMatch;
         root.dExtraEffects = extraEffects;
         root.editIndex = index;
@@ -283,11 +294,25 @@ ContentSection {
         root.writeRules();
     }
 
+    // Set when the store could not be read. The list is empty then, but it is
+    // empty because nothing was understood, not because there are no rules —
+    // so writing must not go anywhere near it.
+    property string loadError: ""
+    readonly property bool rulesUsable: root.loadError.length === 0
+
     function writeRules() {
-        writerProc.running = false;
+        if (!root.rulesUsable) return;
+        // Killing a write in flight makes its exit look like a failure to the
+        // handler below, which then reloads the pre-write file over the newer
+        // list — deleted rules came back. Later saves queue instead.
+        if (writerProc.running) {
+            root.writePending = true;
+            return;
+        }
         writerProc.stdinEnabled = true;
         writerProc.running = true;
     }
+    property bool writePending: false
 
     Component.onCompleted: {
         rulesReader.running = true;
@@ -299,6 +324,9 @@ ContentSection {
         target: Config
         function onThemeApplyInProgressChanged() {
             if (Config.themeApplyInProgress) return;
+            // The list is about to be replaced from outside, so an open editor
+            // would save at an index into a list that no longer exists.
+            root.editIndex = -1;
             rulesReader.running = false;
             rulesReader.running = true;
         }
@@ -312,8 +340,13 @@ ContentSection {
         stdout: SplitParser { onRead: data => rulesReader.buf += data }
         onExited: {
             try {
-                root.rules = JSON.parse(rulesReader.buf).rules ?? [];
-            } catch (e) {}
+                const parsed = JSON.parse(rulesReader.buf);
+                root.loadError = parsed.error ?? "";
+                root.rules = parsed.rules ?? [];
+            } catch (e) {
+                root.loadError = Translation.tr("The rules file could not be read");
+                root.rules = [];
+            }
         }
     }
 
@@ -342,6 +375,14 @@ ContentSection {
             stdinEnabled = false;
         }
         onExited: {
+            if (root.writePending) {
+                // A change arrived while this one was still going; send the
+                // current list rather than re-reading over the top of it.
+                root.writePending = false;
+                writerProc.stdinEnabled = true;
+                writerProc.running = true;
+                return;
+            }
             // The script refused the list (or died): its JSON on disk is
             // still the last good one, so fall back to that rather than
             // keep showing a state that never landed.
@@ -378,8 +419,19 @@ ContentSection {
         wrapMode: Text.WordWrap
     }
 
+    // An unreadable store shows as a warning rather than as an empty list, and
+    // everything that writes is held back: a save here would replace rules
+    // that are still on disk with the nothing this page managed to load.
+    NoticeBox {
+        visible: !root.rulesUsable
+        Layout.fillWidth: true
+        Layout.margins: 8
+        materialIcon: "warning"
+        text: Translation.tr("Your window rules file couldn't be read, so it's being left alone: %1").arg(root.loadError)
+    }
+
     StyledText {
-        visible: root.rules.length === 0 && !root.editorOpen
+        visible: root.rulesUsable && root.rules.length === 0 && !root.editorOpen
         Layout.fillWidth: true
         Layout.margins: 8
         text: Translation.tr("No rules yet.")
@@ -779,17 +831,22 @@ ContentSection {
                         required property int index
                         Layout.fillWidth: true
                         spacing: 8
+                        // Replaced rather than edited in place: changing a
+                        // field inside the array notifies nothing, so the Save
+                        // button never learned the rule had become saveable.
                         MaterialTextField {
                             Layout.preferredWidth: 220
                             placeholderText: Translation.tr("Effect (e.g. xray)")
                             text: root.dCustom[customRow.index].field
-                            onTextChanged: root.dCustom[customRow.index].field = text
+                            onTextChanged: root.dCustom = root.dCustom.map((c, i) =>
+                                i === customRow.index ? { field: text, value: c.value } : c)
                         }
                         MaterialTextField {
                             Layout.fillWidth: true
                             placeholderText: Translation.tr("Value (e.g. true)")
                             text: root.dCustom[customRow.index].value
-                            onTextChanged: root.dCustom[customRow.index].value = text
+                            onTextChanged: root.dCustom = root.dCustom.map((c, i) =>
+                                i === customRow.index ? { field: c.field, value: text } : c)
                         }
                         SmallIconButton {
                             glyph: "close"
@@ -841,7 +898,7 @@ ContentSection {
     }
 
     RowLayout {
-        visible: !root.editorOpen
+        visible: !root.editorOpen && root.rulesUsable
         Layout.leftMargin: 8
         Layout.rightMargin: 8
         Layout.fillWidth: true

@@ -257,6 +257,9 @@ ContentPage {
         swBlurXray.checked = Qt.binding(() => root.blurXrayEnabled);
         swDimInactive.checked = Qt.binding(() => root.dimInactiveEnabled);
         if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
+        swTitleBars.checked = Qt.binding(() => TitleBars.enabled);
+        activeBorderLane.rearm();
+        inactiveBorderLane.rearm();
         const gradientStock = [
             [Config.options.appearance.borderGradient, 50],
             [Config.options.appearance.borderGradientInactive, 15],
@@ -551,6 +554,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             // flag matches the decoration-switches pattern above and
             // prevents the slide-in animation on every menu reopen.
             ConfigSwitch {
+                id: swTitleBars
                 buttonIcon: "title"
                 text: Translation.tr("Title Bars")
                 checked: TitleBars.enabled
@@ -825,6 +829,13 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         spacing: 0
         Layout.fillWidth: true
 
+        // A clicked ConfigSwitch has lost its `checked:` binding, so a reset
+        // that only changes the config leaves these two showing the old state.
+        function rearm() {
+            laneSwitch.checked = Qt.binding(() => bgSection.gradientOpts.enable);
+            customSwitch.checked = Qt.binding(() => bgSection.gradientOpts.custom);
+        }
+
         // Drawn from the palette's primary and tertiary, so it is re-derived
         // from whatever the wallpaper produced instead of drifting out of step
         // with everything around it. That pair is not offered as a choice: the
@@ -832,6 +843,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // between them is the long way round to no visible difference. Anyone
         // who wants a specific pair wants colours, which is the switch below.
         ConfigSwitch {
+            id: laneSwitch
             buttonIcon: bgSection.switchIcon
             text: bgSection.switchLabel
             checked: bgSection.gradientOpts.enable
@@ -866,6 +878,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 ConfigSwitch {
                     buttonIcon: "palette"
                     text: Translation.tr("Choose the colors myself")
+                    id: customSwitch
                     checked: bgSection.gradientOpts.custom
                     onCheckedChanged: bgSection.gradientOpts.custom = checked
                     StyledToolTip {
@@ -936,12 +949,14 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         title: Translation.tr("Window border color")
 
         BorderGradientLane {
+            id: activeBorderLane
             switchLabel: Translation.tr("Active border")
             switchIcon: "select_window"
             gradientOpts: Config.options.appearance.borderGradient
         }
 
         BorderGradientLane {
+            id: inactiveBorderLane
             switchLabel: Translation.tr("Inactive border")
             switchIcon: "select_window_2"
             defaultStrength: 15
