@@ -312,7 +312,16 @@ set_scrolloverview_wallpaper() {
         [[ -f "$thumb" ]] && src="$thumb"
     fi
     if [[ -f "$src" && "$screen_width" =~ ^[0-9]+$ && "$screen_height" =~ ^[0-9]+$ ]]; then
-        local scaled="$CACHE_DIR/user/generated/scrolloverview_$(basename "$src").jpg"
+        # Named for where the picture is, not what it is called. Every theme
+        # keeps its wallpaper as `wallpaper.jpg`, so a name-only key put all of
+        # them in one entry and each theme was served whichever one got there
+        # first — the freshness check below compares timestamps, and a newer
+        # entry from a different theme passes it. The size is in the key too,
+        # so a copy scaled for another monitor is not mistaken for this one.
+        local key
+        key="$(printf '%s|%sx%s' "$(realpath -- "$src" 2>/dev/null || printf '%s' "$src")" \
+                                  "$screen_width" "$screen_height" | sha256sum | cut -c1-16)"
+        local scaled="$CACHE_DIR/user/generated/scrolloverview_$(basename "$src")_$key.jpg"
         mkdir -p "$CACHE_DIR/user/generated"
         if [[ -s "$scaled" && "$scaled" -nt "$src" ]]; then
             # Already scaled from this very picture. A rotation revisits the same
