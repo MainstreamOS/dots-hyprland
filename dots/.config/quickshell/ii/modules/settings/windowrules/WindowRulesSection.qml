@@ -55,6 +55,17 @@ ContentSection {
     property bool dKeepAspect: false
     property string dIdleInhibit: ""
     property var dCustom: []
+    // Match keys and effects a hand-edited or theme-supplied rule can hold that
+    // this editor has no widget for (initialClass, xwayland, tile, …). Stashed
+    // on open so saving a rule doesn't quietly drop what it didn't show.
+    property var dExtraMatch: ({})
+    property var dExtraEffects: ({})
+
+    readonly property var editorMatchKeys: ["class", "title"]
+    readonly property var editorEffectKeys: [
+        "opacity", "noBlur", "float", "size", "center", "workspace", "pin",
+        "fullscreen", "maximize", "borderSize", "noShadow", "rounding", "noDim",
+        "noAnim", "tearing", "keepAspect", "idleInhibit"]
 
     readonly property var idleInhibitOptions: [
         { displayName: Translation.tr("Allow sleep"), value: "" },
@@ -66,25 +77,28 @@ ContentSection {
     // What the typed pattern catches among the windows open right now — the
     // feedback that saves the user from finding out at next launch that the
     // pattern never matched anything.
+    // state: "blank" (nothing typed) | "nopreview" (JS can't compile the
+    // pattern) | "matches" (list is what it catches now). Hyprland matches with
+    // RE2, not JS regex, so a pattern JS rejects is not necessarily invalid —
+    // it only means the preview can't run, never that the rule can't be saved.
     readonly property var liveMatch: {
         if (!root.editorOpen)
-            return { valid: true, blank: true, list: [] };
+            return { state: "blank", list: [] };
         let rc = null, rt = null;
         try {
             if (root.dClass.length > 0) rc = new RegExp(root.dClass);
             if (root.dTitle.length > 0) rt = new RegExp(root.dTitle);
         } catch (e) {
-            return { valid: false, blank: false, list: [] };
+            return { state: "nopreview", list: [] };
         }
         if (!rc && !rt)
-            return { valid: true, blank: true, list: [] };
+            return { state: "blank", list: [] };
         const list = root.openWindows.filter(w =>
             (!rc || rc.test(w.class)) && (!rt || rt.test(w.title)));
-        return { valid: true, blank: false, list: list };
+        return { state: "matches", list: list };
     }
 
     readonly property bool draftSaveable: (root.dClass.length > 0 || root.dTitle.length > 0)
-        && root.liveMatch.valid
         && (root.dOpacityOn || root.dNoBlur || root.dFloat || root.dWorkspaceOn
             || root.dPin || root.dFullscreen || root.dMaximize
             || root.dNoBorder || root.dNoShadow || root.dNoRounding || root.dNoDim
@@ -114,12 +128,12 @@ ContentSection {
     function effectsSummary(rule) {
         const e = rule.effects || {};
         const parts = [];
-        if (e.opacity !== undefined) parts.push(Math.round(e.opacity * 100) + Translation.tr("% opacity"));
+        if (e.opacity !== undefined) parts.push(Translation.tr("%1% opacity").arg(Math.round(e.opacity * 100)));
         if (e.noBlur) parts.push(Translation.tr("no frost"));
         if (e.float) parts.push(Translation.tr("floating"));
         if (e.size) parts.push(e.size[0] + "×" + e.size[1]);
         if (e.center) parts.push(Translation.tr("centered"));
-        if (e.workspace !== undefined) parts.push(Translation.tr("workspace") + " " + e.workspace);
+        if (e.workspace !== undefined) parts.push(Translation.tr("workspace %1").arg(e.workspace));
         if (e.pin) parts.push(Translation.tr("pinned"));
         if (e.fullscreen) parts.push(Translation.tr("fullscreen"));
         if (e.maximize) parts.push(Translation.tr("maximized"));
@@ -194,13 +208,20 @@ ContentSection {
         root.dKeepAspect = e.keepAspect === true;
         root.dIdleInhibit = e.idleInhibit ?? "";
         root.dCustom = (rule?.custom ?? []).map(c => ({ field: c.field, value: c.value }));
+        const extraMatch = ({}), extraEffects = ({});
+        for (const k in m) if (root.editorMatchKeys.indexOf(k) < 0) extraMatch[k] = m[k];
+        for (const k in e) if (root.editorEffectKeys.indexOf(k) < 0) extraEffects[k] = e[k];
+        root.dExtraMatch = extraMatch;
+        root.dExtraEffects = extraEffects;
         root.editIndex = index;
         windowsProc.running = false;
         windowsProc.running = true;
     }
 
     function collectDraft() {
-        const effects = {};
+        // Start from the fields this editor doesn't surface so an edit keeps
+        // them; the widgets below overwrite only what they own.
+        const effects = Object.assign({}, root.dExtraEffects);
         if (root.dOpacityOn) effects.opacity = Math.round(root.dOpacity * 100) / 100;
         if (root.dNoBlur) effects.noBlur = true;
         if (root.dFloat) {
@@ -221,7 +242,8 @@ ContentSection {
         if (root.dTearing) effects.tearing = true;
         if (root.dKeepAspect) effects.keepAspect = true;
         if (root.dIdleInhibit.length > 0) effects.idleInhibit = root.dIdleInhibit;
-        const rule = { name: root.dName, enabled: root.dEnabled, match: {}, effects: effects };
+        const rule = { name: root.dName, enabled: root.dEnabled,
+                       match: Object.assign({}, root.dExtraMatch), effects: effects };
         if (root.dClass.length > 0) rule.match.class = root.dClass;
         if (root.dTitle.length > 0) rule.match.title = root.dTitle;
         const custom = root.dCustom.filter(c => c.field.length > 0 && c.value.length > 0);
@@ -525,22 +547,21 @@ ContentSection {
                     Layout.leftMargin: 2
                     spacing: 6
                     MaterialSymbol {
-                        text: !root.liveMatch.valid ? "error"
-                            : root.liveMatch.blank ? "search"
+                        text: root.liveMatch.state === "nopreview" ? "info"
+                            : root.liveMatch.state === "blank" ? "search"
                             : root.liveMatch.list.length > 0 ? "check_circle" : "visibility_off"
                         iconSize: Appearance.font.pixelSize.normal
-                        color: !root.liveMatch.valid ? Appearance.m3colors.m3error
-                            : root.liveMatch.list.length > 0 ? Appearance.m3colors.m3primary
-                            : Appearance.colors.colSubtext
+                        color: root.liveMatch.state === "matches" && root.liveMatch.list.length > 0
+                            ? Appearance.m3colors.m3primary : Appearance.colors.colSubtext
                     }
                     StyledText {
                         Layout.fillWidth: true
-                        text: !root.liveMatch.valid ? Translation.tr("That pattern isn't valid")
-                            : root.liveMatch.blank ? Translation.tr("Pick a window or type a pattern to see what it catches")
+                        text: root.liveMatch.state === "nopreview" ? Translation.tr("Can't preview this pattern here, but it will still be saved")
+                            : root.liveMatch.state === "blank" ? Translation.tr("Pick a window or type a pattern to see what it catches")
                             : root.liveMatch.list.length === 0 ? Translation.tr("Matches none of the windows open right now")
-                            : Translation.tr("Matches now: ") + root.liveMatch.list.map(w => w.class).filter((c, i, a) => a.indexOf(c) === i).join(", ")
+                            : Translation.tr("Matches now: %1").arg(root.liveMatch.list.map(w => w.class).filter((c, i, a) => a.indexOf(c) === i).join(", "))
                         font.pixelSize: Appearance.font.pixelSize.smaller
-                        color: !root.liveMatch.valid ? Appearance.m3colors.m3error : Appearance.colors.colSubtext
+                        color: Appearance.colors.colSubtext
                         elide: Text.ElideRight
                     }
                 }

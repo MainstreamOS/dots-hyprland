@@ -1718,11 +1718,9 @@
   "Awake while focused": "Awake while focused",
   "Awake while fullscreen": "Awake while fullscreen",
   "Always awake": "Always awake",
-  "% opacity": "% opacity",
   "no frost": "no frost",
   "floating": "floating",
   "centered": "centered",
-  "workspace": "workspace",
   "pinned": "pinned",
   "fullscreen": "fullscreen",
   "maximized": "maximized",
@@ -1742,10 +1740,8 @@
   "Re-list the windows open right now": "Re-list the windows open right now",
   "App class (regex)": "App class (regex)",
   "Window title (regex, optional)": "Window title (regex, optional)",
-  "That pattern isn't valid": "That pattern isn't valid",
   "Pick a window or type a pattern to see what it catches": "Pick a window or type a pattern to see what it catches",
   "Matches none of the windows open right now": "Matches none of the windows open right now",
-  "Matches now: ": "Matches now: ",
   "Rule name (optional)": "Rule name (optional)",
   "Placement": "Placement",
   "Open floating": "Open floating",
@@ -1779,5 +1775,9 @@
   "Add rule": "Add rule",
   "Click again to remove them all": "Click again to remove them all",
   "Remove all rules": "Remove all rules",
-  "Only the rules made here — anything in your own config files stays": "Only the rules made here — anything in your own config files stays"
+  "Only the rules made here — anything in your own config files stays": "Only the rules made here — anything in your own config files stays",
+  "%1% opacity": "%1% opacity",
+  "workspace %1": "workspace %1",
+  "Matches now: %1": "Matches now: %1",
+  "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved"
 }

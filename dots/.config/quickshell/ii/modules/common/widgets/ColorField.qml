@@ -93,12 +93,13 @@ RowLayout {
             text: root.value
             onEditingFinished: {
                 const v = root.normalise(text)
-                // Put the old value back rather than leaving something unusable in
-                // the box, since nothing downstream can act on it.
                 if (v.length > 0 && v !== root.value)
                     root.edited(v)
-                // Re-armed rather than assigned: a plain assignment severs
-                // `text: root.value`, and the box stops following the picker.
+                // Re-arm the binding rather than assigning text: a plain
+                // assignment would sever `text: root.value` for good, so after
+                // one edit the box would stop following the picker or an
+                // outside change. Qt.binding keeps it tracking — and snaps an
+                // unusable entry back to the real value in the same stroke.
                 text = Qt.binding(() => root.value)
             }
         }

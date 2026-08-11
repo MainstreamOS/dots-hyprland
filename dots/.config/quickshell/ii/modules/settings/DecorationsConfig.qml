@@ -245,6 +245,17 @@ ContentPage {
         if (pairs.length === 0) return;
         root.setDecoration(pairs);
         root.applyDecoValues(d);
+        // A switch the user has toggled has lost its `checked:` binding (see
+        // ConfigSwitch), so setting the backing property above no longer moves
+        // it. Re-arm each so the reset shows on the switches, not just in the
+        // file and the compositor.
+        swAnimations.checked = Qt.binding(() => root.animationsEnabled);
+        swBlur.checked = Qt.binding(() => root.blurEnabled);
+        swShadows.checked = Qt.binding(() => root.shadowsEnabled);
+        swBorders.checked = Qt.binding(() => root.bordersEnabled);
+        swRoundCorners.checked = Qt.binding(() => root.roundCornersEnabled);
+        swBlurXray.checked = Qt.binding(() => root.blurXrayEnabled);
+        swDimInactive.checked = Qt.binding(() => root.dimInactiveEnabled);
         if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
         const gradientStock = [
             [Config.options.appearance.borderGradient, 50],
@@ -438,6 +449,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         ConfigRow {
             uniform: true
             ConfigSwitch {
+                id: swAnimations
                 Layout.fillWidth: true
                 buttonIcon: "animation"
                 text: Translation.tr("Animations")
@@ -453,6 +465,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 }
             }
             ConfigSwitch {
+                id: swBlur
                 Layout.fillWidth: true
                 buttonIcon: "blur_on"
                 text: Translation.tr("Blur")
@@ -471,6 +484,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         ConfigRow {
             uniform: true
             ConfigSwitch {
+                id: swShadows
                 Layout.fillWidth: true
                 buttonIcon: "ev_shadow"
                 text: Translation.tr("Shadows")
@@ -486,6 +500,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 }
             }
             ConfigSwitch {
+                id: swBorders
                 Layout.fillWidth: true
                 buttonIcon: "border_style"
                 text: Translation.tr("Borders")
@@ -505,6 +520,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         ConfigRow {
             uniform: true
             ConfigSwitch {
+                id: swRoundCorners
                 buttonIcon: "rounded_corner"
                 text: Translation.tr("Rounded Corners")
                 checked: root.roundCornersEnabled
@@ -741,6 +757,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
 
         ConfigSwitch {
+            id: swBlurXray
             buttonIcon: "layers_clear"
             text: Translation.tr("Blur through to the wallpaper")
             checked: root.blurXrayEnabled
@@ -764,6 +781,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         title: Translation.tr("Window dim")
 
         ConfigSwitch {
+            id: swDimInactive
             buttonIcon: "brightness_medium"
             text: Translation.tr("Unfocused windows")
             checked: root.dimInactiveEnabled
