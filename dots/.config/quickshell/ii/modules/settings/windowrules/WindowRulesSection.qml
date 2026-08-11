@@ -314,10 +314,10 @@ ContentSection {
     }
     property bool writePending: false
 
-    Component.onCompleted: {
-        rulesReader.running = true;
-        windowsProc.running = true;
-    }
+    // The window list is only read while the editor is open, and openEditor
+    // fetches a fresh one each time — listing them at page load was work whose
+    // result was always thrown away.
+    Component.onCompleted: rulesReader.running = true
 
     // A theme apply may carry its own rule set; re-read once it lands.
     Connections {

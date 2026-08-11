@@ -274,11 +274,7 @@ DECORATIONS_PY="$SCRIPT_DIR/decorations.py"
 ANIM_SRC="$THEME_DIR/animations"
 ANIM_DST="$XDG_CONFIG_HOME/hypr/hyprland/animations"
 if [ -d "$ANIM_SRC" ] && [ -f "$DECORATIONS_PY" ]; then
-    SHIPPED=$(python3 -c "
-import json
-row = next(r for r in json.load(open('$SCRIPT_DIR/decorations-schema.json'))['keys']
-           if r['key'] == 'animationProfile')
-print(' '.join(row.get('shipped', [])))" 2>/dev/null || echo "")
+    SHIPPED=$(python3 "$DECORATIONS_PY" shipped "$GENERAL_CONF" 2>/dev/null | tr '\n' ' ')
     mkdir -p "$ANIM_DST"
     for ANIM_FILE in "$ANIM_SRC"/*.lua; do
         [ -f "$ANIM_FILE" ] || continue

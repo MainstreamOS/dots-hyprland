@@ -422,12 +422,16 @@ ContentPage {
             // nothing. The file rides in the theme so the name means the same
             // thing wherever the theme lands. Shipped profiles stay out — every
             // install has them, and a theme is not how the stock set updates.
+            // Which names ship is decorations.py's to answer; asking it keeps
+            // this from being a second reading of the schema that could come
+            // to a different conclusion.
+            `SHIPPED=$(python3 '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations.py' \\\n` +
+            `    shipped '${root.homePath}/.config/hypr/hyprland/general.lua' 2>/dev/null | tr '\\n' ' ')\n` +
             `python3 - "$DIR" '${root.homePath}/.config/hypr/hyprland/animations' \\\n` +
-            `    '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations-schema.json' <<'PYANIM'\n` +
+            `    "$SHIPPED" <<'PYANIM'\n` +
             `import json, os, re, shutil, sys\n` +
-            `theme_dir, anim_dir, schema_path = sys.argv[1:4]\n` +
-            `row = next(r for r in json.load(open(schema_path))["keys"] if r["key"] == "animationProfile")\n` +
-            `shipped = set(row.get("shipped", []))\n` +
+            `theme_dir, anim_dir = sys.argv[1:3]\n` +
+            `shipped = set(sys.argv[3].split()) if len(sys.argv) > 3 else set()\n` +
             `try:\n` +
             `    name = str(json.load(open(os.path.join(theme_dir, "decorations.json"))).get("animationProfile", ""))\n` +
             `except Exception:\n` +

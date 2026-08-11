@@ -65,6 +65,12 @@ Singleton {
         return `{colors={"${a}","${b}"},angle=${Math.round(o.angle)}}`
     }
 
+    // What the override file was last told. A palette moves on every wallpaper
+    // change, and with both lanes off the write is two resets of keys that are
+    // already absent — a process and a full config reload for no difference,
+    // repeatedly, while a slideshow is running.
+    property string _lastApplied: ""
+
     function apply() {
         if (!Config.ready) return
         const entries = ({})
@@ -74,6 +80,9 @@ Singleton {
             if (payload !== undefined)
                 entries[key] = payload
         }
+        const signature = JSON.stringify(entries)
+        if (signature === root._lastApplied) return
+        root._lastApplied = signature
         HyprlandConfig.applyLuaMany(entries)
     }
 

@@ -309,10 +309,7 @@ def main(argv):
             if key in seen or not any(key):
                 continue
             seen.add(key)
-            out.append({"class": c.get("class", ""),
-                        "title": c.get("title", ""),
-                        "initialClass": c.get("initialClass", ""),
-                        "initialTitle": c.get("initialTitle", "")})
+            out.append({"class": c.get("class", ""), "title": c.get("title", "")})
         json.dump(out, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 0
