@@ -412,8 +412,11 @@ ContentPage {
             // Snapshot through the shared reader, so what a theme records and
             // what an apply puts back can never disagree about a key.
             `python3 '${root.homePath}/.config/quickshell/ii/scripts/themes/decorations.py' \\\n` +
+            // On failure drop the file rather than leave `{}`: an empty object
+            // now reads as "reset every decoration to stock" on apply, so a
+            // failed snapshot must leave no file at all, which apply skips.
             `    read "$GENERAL" --flag-dir "$(dirname "$CUSTOM")" > "$DIR/decorations.json" \\\n` +
-            `    || printf '{}' > "$DIR/decorations.json"\n` +
+            `    || rm -f "$DIR/decorations.json"\n` +
             // A custom animation profile is a file, not a value: the snapshot
             // records its name, but on another machine the name points at
             // nothing. The file rides in the theme so the name means the same
