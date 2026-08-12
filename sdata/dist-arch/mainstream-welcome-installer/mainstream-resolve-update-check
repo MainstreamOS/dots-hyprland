@@ -143,13 +143,25 @@ if (( AWAIT_ACTION )); then
   # Hand off to the Welcome app's installer. It picks the edition from --check,
   # runs install-davinci-resolve -y --anon inside a transient systemd scope so
   # the build survives logout, and fires its own "Updating…" and "updated"
-  # notifications. pkexec is passwordless here via 49-mainstream-welcome.rules.
+  # notifications. pkexec is passwordless via 49-mainstream-welcome.rules, but
+  # that rule requires an active local session — and this process has none:
+  # it lives in the user manager's cgroup (user@.service), not the login
+  # session's scope, because it was detached from a systemd user unit. polkit
+  # maps the caller's cgroup to a logind session, finds nothing, and refuses.
+  #
+  # So route the launch through the compositor: a process Hyprland spawns is a
+  # child of the session scope, which is exactly the context the Welcome app
+  # calls from and the rule already trusts. Progress from there is reported by
+  # the installer's own notifications.
+  if command -v hyprctl >/dev/null 2>&1 \
+      && hyprctl eval "hl.exec_cmd(\"pkexec $WELCOME_INSTALL resolve-update\")" >/dev/null 2>&1; then
+    exit 0
+  fi
+  # No compositor to route through — try directly, which works when this was
+  # run from a terminal inside the session rather than from the timer.
   if pkexec "$WELCOME_INSTALL" resolve-update; then
     exit 0
   fi
-  # pkexec refuses when the caller has no active local session, which is a real
-  # possibility for a process launched from a systemd *user* unit. Say so and
-  # hand back the command rather than failing silently.
   notify-send -a "Mainstream" -u critical \
     "Could not start the DaVinci Resolve update" \
     "Authorisation was refused. Run this in a terminal instead: $CMD" 2>/dev/null || true
