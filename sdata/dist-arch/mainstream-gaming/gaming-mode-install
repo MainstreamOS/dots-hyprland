@@ -9,6 +9,10 @@
 # system update first.
 set -e
 
+# Refresh up front so the resolvability checks below and the install itself
+# read the same, current databases.
+pacman -Sy --noconfirm
+
 pkgs=(
     steam
     mangohud lib32-mangohud
@@ -31,8 +35,25 @@ case "$gpu" in
         # lib32-nvidia-utils here always pulls mainline and conflicts with
         # an installed legacy driver package, since both provide nvidia-libgl.
         nvidia_pkg=$(pacman -Qq 2>/dev/null | grep -E '^nvidia(-[0-9]+xx)?-utils$' | head -n1 || true)
-        pkgs+=("lib32-${nvidia_pkg:-nvidia-utils}")
+        if [[ -n "$nvidia_pkg" ]]; then
+            lib32_pkg="lib32-$nvidia_pkg"
+            if pacman -Qq "$lib32_pkg" &>/dev/null; then
+                # Already present — the legacy editions install it alongside
+                # the driver. It must also stay OUT of the target list: the
+                # legacy branches exist in no online repo, and pacman -S
+                # resolves every named target against the sync dbs before
+                # --needed can skip it, so naming an installed-but-
+                # unresolvable package aborts the whole transaction.
+                :
+            elif pacman -Si "$lib32_pkg" &>/dev/null; then
+                pkgs+=("$lib32_pkg")
+            else
+                echo "warning: $lib32_pkg is neither installed nor in any repo — 32-bit titles may not run on this driver branch." >&2
+            fi
+        fi
+        # No installed proprietary branch means nouveau, whose 32-bit
+        # userspace is the lib32-mesa already listed above.
         ;;
 esac
 
-exec pacman -Sy --needed --noconfirm "${pkgs[@]}"
+exec pacman -S --needed --noconfirm "${pkgs[@]}"
