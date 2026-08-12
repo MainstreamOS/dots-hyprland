@@ -90,5 +90,24 @@
       "A bar icon and a notification tell you when a new release is out",
       "The script install now lands on the newest release, with --edge to follow the branch instead"
     ]
+  },
+  "1.2.0": {
+    "date": "2026-08-12",
+    "kind": "feature",
+    "name": "Let there be RICE",
+    "summary": "Windows the shape you want them, and rules for the ones that are different",
+    "changes": [
+      "Shape your windows from Settings: corner radius, border thickness, and the gaps between them and around the screen",
+      "Set how see-through a window is and tune the blur behind it",
+      "Dim the windows you are not using, by as much as you like",
+      "Give your borders a gradient of your own colors, or leave them following the wallpaper",
+      "Shape the shadow under a window: its size, how sharply it fades, how dark it is, and which way it falls",
+      "Pick how windows animate — Expressive, Smooth, or Minimal — or drop in an animation file of your own",
+      "A window rule editor: teach one app where to open, how to look, and whether it floats",
+      "Themes now carry shape, transparency, blur, dim, borders, shadow, animations and window rules as well as your colors and interface changes",
+      "Set a folder as your wallpaper and let it rotate on a timer",
+      "Qt apps now take their colors from your wallpaper along with everything else",
+      "Your session is captured while it runs, so a crash no longer loses your window layout"
+    ]
   }
 }

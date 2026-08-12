@@ -36,6 +36,10 @@ derived text stays the default and every deviation from it is visible in one
 file. Kind is deliberately not overridable — the tag stays the source of truth
 for how important a release is.
 
+A release may also carry a "name". Nothing derives one, so it appears only for
+the releases given one, and the pages that show it leave the slot out entirely
+for the rest.
+
 Alongside that human-facing pair, every release also carries the unedited
 commit range behind it:
 
@@ -229,7 +233,7 @@ def build(repo, limit, notes):
                           if SEMVER.match(v) else [0], reverse=True):
         note = notes[version]
         if "date" in note and "kind" in note:
-            upcoming.append({
+            entry = {
                 "version": version,
                 "date": note["date"],
                 "kind": note["kind"],
@@ -237,7 +241,10 @@ def build(repo, limit, notes):
                 "changes": [str(c) for c in note.get("changes", [])],
                 "commits": [],
                 "unreleased": True,
-            })
+            }
+            if note.get("name"):
+                entry["name"] = str(note["name"])
+            upcoming.append(entry)
         else:
             print(f"warning: release-notes has no matching tag for {version!r} and no "
                   f"date/kind to publish it as upcoming; ignoring", file=sys.stderr)
@@ -279,6 +286,8 @@ def build(repo, limit, notes):
             "changes": [c for c in changes if c != summary][:cap],
             "commits": [f"{sha} {subject}" for sha, subject, _ in commits[:TECH_CAP]],
         }
+        if note.get("name"):
+            entry["name"] = str(note["name"])
         # A capped list still looks exhaustive, so say when it isn't. The
         # compare link on the page reaches the rest.
         if len(commits) > TECH_CAP:
