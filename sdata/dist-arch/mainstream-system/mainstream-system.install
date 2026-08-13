@@ -10,6 +10,56 @@ _fix_plugin_configs() {
     done
 }
 
+# Bump when an upstream plugin fix needs to reach machines that already build
+# the plugin successfully.
+#
+# The rebuild scripts try their cached last-good ref FIRST and stop at the first
+# ref that builds, so once a machine has a working commit it never looks at the
+# branch again — a new upstream fix stays invisible until Hyprland changes
+# enough to break the cached commit. Dropping the cache makes the next run fall
+# through to the branch and pick the fix up.
+#
+# The serial is what keeps that to once. A machine records the serial it has
+# acted on; only a bump refreshes, so an ordinary upgrade still uses the cache
+# and finishes in seconds.
+_PLUGIN_REFRESH_SERIAL=1
+
+_refresh_plugin_refs() {
+    marker=/var/lib/mainstream/plugin-refresh-serial
+    cur=""
+    [ -r "$marker" ] && cur=$(cat "$marker" 2>/dev/null)
+    [ "$cur" = "$_PLUGIN_REFRESH_SERIAL" ] && return 0
+
+    mkdir -p /var/lib/mainstream
+
+    # No marker means this machine predates the mechanism, and there is no way
+    # to tell whether its cached ref is behind. Record where it stands and act
+    # only from the next bump — refreshing everyone the first time this ships
+    # would rebuild the fleet for nothing.
+    if [ -z "$cur" ]; then
+        printf '%s\n' "$_PLUGIN_REFRESH_SERIAL" > "$marker"
+        return 0
+    fi
+
+    dropped=0
+    for p in hyprbars scrolloverview; do
+        if [ -f "/var/cache/$p/last-good-ref" ]; then
+            rm -f "/var/cache/$p/last-good-ref"
+            dropped=1
+        fi
+    done
+    printf '%s\n' "$_PLUGIN_REFRESH_SERIAL" > "$marker"
+
+    # Nothing was cached, so nothing was stale — a fresh install still has the
+    # plugin the ISO baked in, and rebuilding it would cost minutes to land in
+    # the same place.
+    [ "$dropped" = 1 ] || return 0
+
+    if [ -d /run/systemd/system ]; then
+        systemctl start --no-block hyprbars-rebuild.service scrolloverview-rebuild.service 2>/dev/null || true
+    fi
+}
+
 _migrate() {
     rm -f /etc/pacman.d/hooks/95-hyprbars-rebuild.hook \
           /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
@@ -23,6 +73,7 @@ _migrate() {
         [ -e "/usr/local/bin/$n-status-notify" ] || ln -sf "/usr/bin/$n-status-notify" "/usr/local/bin/$n-status-notify"
     done
     _fix_plugin_configs
+    _refresh_plugin_refs
     systemctl daemon-reload 2>/dev/null || true
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
