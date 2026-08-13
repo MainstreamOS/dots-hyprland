@@ -436,8 +436,8 @@ function setup_hyprland_plugins(){
 
   if ! _ensure_hyprland_plugin \
         "hyprbars" \
-        "https://github.com/hyprwm/hyprland-plugins" \
-        "main" \
+        "https://github.com/MainstreamOS/hyprland-plugins" \
+        "mainstream" \
         "hyprbars" \
         "hyprbars.so"; then
     return 1
