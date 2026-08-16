@@ -149,6 +149,25 @@ Item { // Bar content region
     function groupHasSpacer(g) {
         return root.groupWidgets(g).some(w => w.id === "spacer");
     }
+    // Whether anything showing in this group needs its section's spare width.
+    // Only two widgets genuinely do: the spacer, whose job is to eat room, and
+    // the window title, which needs room so it can shrink to an ellipsis.
+    function groupTakesSpace(g) {
+        return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id)
+            && (w.id === "spacer" || w.id === "activeWindow"));
+    }
+    // Whether a side section needs its packer: a row wider than its content
+    // does not push items against its edge — columns with no stretch share the
+    // surplus in proportion to their size, so free-standing pills drift apart
+    // across the section. The packer is a guaranteed stretch item that eats
+    // the surplus, and it stands down when a real space-taker is present —
+    // two stretch items split the surplus, and a spacer would only pull half
+    // as far.
+    function sectionNeedsPacker(groups) {
+        if (!groups)
+            return true;
+        return !Array.prototype.some.call(groups, g => root.groupTakesSpace(g));
+    }
 
     component VerticalBarSeparator: Rectangle {
         Layout.topMargin: Appearance.sizes.baseBarHeight / 3
@@ -171,16 +190,19 @@ Item { // Bar content region
         // share rather than the media half of it; left null a module speaks
         // for itself.
         property Item popupAnchor: null
-        // Whether this slot sits in a centre-section pill. Media's fill only
-        // means something there: a centre pill has a set width and the spare
-        // room goes to the track title. Off centre the pill can be as wide as
-        // its section — filled by a group-mate like the window title — and
-        // media filling alongside it grew past its set width instead of
-        // leaving the surplus to the widget that asked for it.
+        // Whether this slot sits in a center-section pill. Fill only means
+        // something there for most widgets: a center pill has a set width,
+        // and filling shares it — media's spare room goes to the track
+        // title, the clock centers in its slot. Off center the pill can be
+        // as wide as its section, where filling would grow those same
+        // widgets past their set width instead of leaving the surplus to
+        // the widget the section fill exists for. The media-and-resources
+        // pairing fills anywhere, because its pill keeps a set width in
+        // every section.
         property bool inCenter: false
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
-            && (inCenter || (moduleName !== "media" && moduleName !== "resources"))
+            && (inCenter || yieldsToGroupMate || moduleName === "spacer" || moduleName === "activeWindow")
         // Media asks for a set amount rather than for as much as its track
         // title happens to need. That keeps the group a predictable size —
         // titles come and go and the bar shouldn't move when they do — while
@@ -204,15 +226,12 @@ Item { // Bar content region
         readonly property var gw: root.groupWidgets(group)
         readonly property bool chromeless: root.groupChromeless(group)
         readonly property bool isWorkspaces: gw.length === 1 && gw[0].id === "workspaces"
-        // Whether anything showing in this group needs the section's spare
-        // width, which is what promotes the pill to filling outside the
-        // centre. Media and shortened resources are deliberately not counted:
-        // their fill is pill-internal — leftover room inside their own group
-        // goes to the track title — and letting it promote the pill turned a
-        // media group placed on the left or right side into a full-section
-        // bar instead of its set width.
-        readonly property bool takesSpace: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleFillWidth(w.id)
-            && w.id !== "media" && w.id !== "resources")
+        // Needing the section's spare width is what promotes the pill to
+        // filling outside the center. Everything else on the fill-width list
+        // fills as center-pill layout — sharing a set width inside the pill —
+        // and promoting the pill for one of those would turn its group into
+        // a full-section bar.
+        readonly property bool takesSpace: root.groupTakesSpace(group)
         readonly property bool widthVolatile: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleWidthVolatile(w.id))
         readonly property bool mediaYields: root.mediaYieldsIn(group)
         visible: root.groupHasVisible(group)
@@ -220,9 +239,12 @@ Item { // Bar content region
         // A group beside the middle whose contents change width never falls
         // below a set width, so one holding only media doesn't shrink to the
         // width of its icon when nothing is playing and leave the two sides
-        // mismatched. It can still grow past it: put workspaces and media in
-        // the same group and both need room, which a set width would deny them.
-        implicitWidth: (centerSection && widthVolatile) ? Math.max(root.centerSideModuleWidth, contentWidth) : contentWidth
+        // mismatched. The media-and-resources pairing keeps the floor in
+        // every section — media hands its room to resources and takes back
+        // what is left, which only means something inside a set width. A
+        // group can still grow past it: put workspaces and media in the
+        // same group and both need room, which a set width would deny them.
+        implicitWidth: ((centerSection && widthVolatile) || mediaYields) ? Math.max(root.centerSideModuleWidth, contentWidth) : contentWidth
         // Outside the centre a group has to be allowed to take the width its
         // widgets asked for, and to be squeezed below what they'd like. The
         // window title is the one that shows it: pinned to its own width it
@@ -597,6 +619,11 @@ Item { // Bar content region
                     group: modelData
                 }
             }
+
+            Item { // Packs the pills against the screen edge (see sectionNeedsPacker)
+                Layout.fillWidth: true
+                visible: root.sectionNeedsPacker(Config.options.bar.layout.left)
+            }
         }
     }
 
@@ -733,6 +760,11 @@ Item { // Bar content region
             anchors.leftMargin: 5
             anchors.rightMargin: Appearance.rounding.screenRounding
             spacing: 5
+
+            Item { // Packs the pills against the screen edge (see sectionNeedsPacker)
+                Layout.fillWidth: true
+                visible: root.sectionNeedsPacker(Config.options.bar.layout.right)
+            }
 
             Repeater {
                 model: Config.options.bar.layout.right
