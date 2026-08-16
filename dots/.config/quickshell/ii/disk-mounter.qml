@@ -6,14 +6,17 @@
 
 // disk-mounter.qml — Mainstream OS utility for mounting drives.
 //
-// Three tabs, each owns one of the app's three responsibilities:
+// Two tabs, each owns one of the app's responsibilities:
 //
 //   Local    — pick an unmounted internal partition, optionally rename
-//              and relabel it, mount + add to /etc/fstab.
+//              and relabel it, mount + add to /etc/fstab. Entries this
+//              app manages stay on the tab afterwards, in a Mounted
+//              category with a one-click unmount + fstab-strip action —
+//              a drive that vanished into another tab after mounting
+//              read as having disappeared.
 //   Network  — discover SMB hosts on the LAN via avahi-browse; mount
 //              SMB/CIFS or NFS shares with optional saved credentials.
-//   Mounted  — list all /mnt/* fstab entries this app's domain manages,
-//              with a one-click unmount + fstab-strip action per row.
+//              Mounted shares get the same category treatment here.
 //
 // Privileged work funnels through /usr/local/bin/disk-mounter — a
 // subcommand dispatcher installed system-wide (by dots-hyprland's
@@ -88,6 +91,12 @@ ApplicationWindow {
     // /mnt/ prefix filter — that's where this app and `mount /mnt/...`
     // by convention put user-data drives.
     property var mountedDrives: []
+    // The Mounted categories live on the tab that made the entry, so the
+    // fstab list splits by transport: network filesystems under Network,
+    // everything else under Local.
+    readonly property var networkFstypes: ["cifs", "smbfs", "nfs", "nfs4"]
+    readonly property var mountedLocal: mountedDrives.filter(d => !networkFstypes.includes((d.fstype || "").toLowerCase()))
+    readonly property var mountedNetwork: mountedDrives.filter(d => networkFstypes.includes((d.fstype || "").toLowerCase()))
 
     // ── Shared status banner ───────────────────────────────────────
     // status / resultKind drive the bottom-of-page banner across all
@@ -867,6 +876,106 @@ ApplicationWindow {
         }
     }
 
+    Component {
+        id: mountedRow
+        Rectangle {
+            required property var modelData
+            width: ListView.view.width
+            implicitHeight: 56
+            radius: Appearance.rounding.small
+            color: Appearance.colors.colLayer1
+
+            MaterialSymbol {
+                id: mIcon
+                anchors.left: parent.left
+                anchors.leftMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                text: {
+                    const ft = (modelData.fstype || "").toLowerCase()
+                    if (ft === "cifs" || ft === "smbfs") return "lan"
+                    if (ft === "nfs"  || ft === "nfs4")  return "lan"
+                    return "hard_drive_2"
+                }
+                iconSize: 22
+                color: modelData.connected === false
+                    ? Appearance.colors.colSubtext
+                    : Appearance.colors.colOnLayer1
+            }
+            ColumnLayout {
+                anchors.left: mIcon.right
+                anchors.leftMargin: 12
+                anchors.right: unmountBtn.left
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 1
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    StyledText {
+                        Layout.fillWidth: modelData.connected !== false
+                        text: modelData.mountpoint
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        color: modelData.connected === false
+                            ? Appearance.colors.colSubtext
+                            : Appearance.colors.colOnLayer1
+                        font.weight: Font.Medium
+                        elide: Text.ElideMiddle
+                    }
+                    StyledText {
+                        visible: modelData.connected === false
+                        text: Translation.tr("(Disconnected)")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colError
+                        font.weight: Font.Medium
+                    }
+                    Item {
+                        visible: modelData.connected === false
+                        Layout.fillWidth: true
+                    }
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    text: root.friendlyFstype(modelData.fstype) + " · " + modelData.source
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                    elide: Text.ElideRight
+                }
+            }
+            RippleButton {
+                id: unmountBtn
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: 110
+                implicitHeight: 32
+                buttonRadius: Appearance.rounding.small
+                enabled: !root.busy
+                onClicked: root.startUnmount(modelData.mountpoint)
+                contentItem: Item {
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        MaterialSymbol {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "link_off"
+                            iconSize: 16
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Translation.tr("Remove")
+                            color: Appearance.colors.colOnLayer1
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                    }
+                }
+                StyledToolTip {
+                    text: Translation.tr("Unmount and remove from /etc/fstab")
+                }
+            }
+        }
+    }
+
     // ── Layout ─────────────────────────────────────────────────────
     // Mirrors the settings app's chrome: m3background window, content on
     // a rounded m3surfaceContainerLow pane, section-style headers, rows
@@ -933,8 +1042,7 @@ ApplicationWindow {
             Repeater {
                 model: [
                     { label: Translation.tr("Local"),   icon: "storage" },
-                    { label: Translation.tr("Network"), icon: "lan" },
-                    { label: Translation.tr("Mounted"), icon: "folder_special" }
+                    { label: Translation.tr("Network"), icon: "lan" }
                 ]
 
                 delegate: RippleButton {
@@ -1045,6 +1153,44 @@ ApplicationWindow {
                     visible: active
                     sourceComponent: renameMountBlock
                     onActiveChanged: if (active) root.revealBlock(this)
+                }
+
+                // Mounted entries stay visible on the tab they were made from,
+                // so a freshly mounted drive moves down a section instead of
+                // disappearing into another tab.
+                ColumnLayout {
+                    id: mountedLocalCol
+                    Layout.fillWidth: true
+                    visible: root.mountedLocal.length > 0
+                    spacing: 8
+
+                        RowLayout {
+                            spacing: 8
+                            MaterialSymbol { text: "folder_special"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: Translation.tr("Mounted")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnSecondaryContainer
+                                font.weight: Font.Medium
+                            }
+                            StyledText {
+                                text: root.mountedLocal.length + " " + Translation.tr("active")
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                            }
+                        }
+
+                        ListView {
+                            id: mountedLocalList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(count, 6) * 60
+                            Layout.maximumHeight: 6 * 60
+                            clip: true
+                            spacing: 4
+                            model: root.mountedLocal
+                            delegate: mountedRow
+                        }
                 }
 
                 // Operating System Drives (partitions on a disk that has an ESP).
@@ -1212,6 +1358,7 @@ ApplicationWindow {
                     Layout.topMargin: 8
                     visible: root.drives.length === 0 && root.osDrives.length === 0
                         && root.encrypted.length === 0 && root.unformatted.length === 0
+                        && root.mountedLocal.length === 0
                     text: Translation.tr("No drives found. Plug in a drive to mount it.")
                     horizontalAlignment: Text.AlignHCenter
                     font.pixelSize: Appearance.font.pixelSize.small
@@ -1557,154 +1704,40 @@ ApplicationWindow {
                             }
                         }
                 }
-            }
 
-            // ===== TAB 2: MOUNTED ========================================
-            ColumnLayout {
-                spacing: 12
-
+                // Shares this app mounted stay on this tab, same treatment as
+                // the Local tab's Mounted category.
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    Layout.fillHeight: false
+                    visible: root.mountedNetwork.length > 0
                     spacing: 8
 
                         RowLayout {
                             spacing: 8
-                            MaterialSymbol {
-                                text: "folder_special"
-                                iconSize: 18
-                                color: Appearance.colors.colOnSecondaryContainer
-                            }
+                            MaterialSymbol { text: "folder_special"; iconSize: 18; color: Appearance.colors.colOnSecondaryContainer }
                             StyledText {
                                 Layout.fillWidth: true
-                                text: Translation.tr("Auto-mounted drives")
+                                text: Translation.tr("Mounted shares")
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colOnSecondaryContainer
                                 font.weight: Font.Medium
                             }
                             StyledText {
-                                text: root.mountedDrives.length === 0
-                                    ? Translation.tr("None")
-                                    : root.mountedDrives.length + " " + Translation.tr("active")
+                                text: root.mountedNetwork.length + " " + Translation.tr("active")
                                 font.pixelSize: Appearance.font.pixelSize.small
                                 color: Appearance.colors.colSubtext
                             }
                         }
 
-                        StyledText {
-                            Layout.fillWidth: true
-                            visible: root.mountedDrives.length === 0
-                            text: Translation.tr("Drives that this app added to /etc/fstab show up here. Mount a drive from the Local or Network tab and it'll appear in this list, ready to remove with one click.")
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                            opacity: 0.8
-                            wrapMode: Text.WordWrap
-                        }
-
                         ListView {
-                            id: mountedList
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
+                            Layout.preferredHeight: Math.min(count, 4) * 60
+                            Layout.maximumHeight: 4 * 60
                             clip: true
                             spacing: 4
-                            model: root.mountedDrives
-
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: mountedList.width
-                                implicitHeight: 56
-                                radius: Appearance.rounding.small
-                                color: Appearance.colors.colLayer1
-
-                                MaterialSymbol {
-                                    id: mIcon
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 12
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: {
-                                        const ft = (modelData.fstype || "").toLowerCase()
-                                        if (ft === "cifs" || ft === "smbfs") return "lan"
-                                        if (ft === "nfs"  || ft === "nfs4")  return "lan"
-                                        return "hard_drive_2"
-                                    }
-                                    iconSize: 22
-                                    color: modelData.connected === false
-                                        ? Appearance.colors.colSubtext
-                                        : Appearance.colors.colOnLayer1
-                                }
-                                ColumnLayout {
-                                    anchors.left: mIcon.right
-                                    anchors.leftMargin: 12
-                                    anchors.right: unmountBtn.left
-                                    anchors.rightMargin: 12
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: 1
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 6
-                                        StyledText {
-                                            Layout.fillWidth: modelData.connected !== false
-                                            text: modelData.mountpoint
-                                            font.pixelSize: Appearance.font.pixelSize.normal
-                                            color: modelData.connected === false
-                                                ? Appearance.colors.colSubtext
-                                                : Appearance.colors.colOnLayer1
-                                            font.weight: Font.Medium
-                                            elide: Text.ElideMiddle
-                                        }
-                                        StyledText {
-                                            visible: modelData.connected === false
-                                            text: Translation.tr("(Disconnected)")
-                                            font.pixelSize: Appearance.font.pixelSize.small
-                                            color: Appearance.colors.colError
-                                            font.weight: Font.Medium
-                                        }
-                                        Item {
-                                            visible: modelData.connected === false
-                                            Layout.fillWidth: true
-                                        }
-                                    }
-                                    StyledText {
-                                        Layout.fillWidth: true
-                                        text: root.friendlyFstype(modelData.fstype) + " · " + modelData.source
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        color: Appearance.colors.colSubtext
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                                RippleButton {
-                                    id: unmountBtn
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    implicitWidth: 110
-                                    implicitHeight: 32
-                                    buttonRadius: Appearance.rounding.small
-                                    enabled: !root.busy
-                                    onClicked: root.startUnmount(modelData.mountpoint)
-                                    contentItem: Item {
-                                        Row {
-                                            anchors.centerIn: parent
-                                            spacing: 6
-                                            MaterialSymbol {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: "link_off"
-                                                iconSize: 16
-                                                color: Appearance.colors.colOnLayer1
-                                            }
-                                            StyledText {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                text: Translation.tr("Remove")
-                                                color: Appearance.colors.colOnLayer1
-                                                font.pixelSize: Appearance.font.pixelSize.small
-                                            }
-                                        }
-                                    }
-                                    StyledToolTip {
-                                        text: Translation.tr("Unmount and remove from /etc/fstab")
-                                    }
-                                }
-                            }
+                            model: root.mountedNetwork
+                            delegate: mountedRow
                         }
                 }
             }
