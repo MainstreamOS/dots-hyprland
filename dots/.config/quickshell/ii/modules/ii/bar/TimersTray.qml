@@ -38,6 +38,9 @@ BarGroup {
         // so it has to be placed as a layout child — anchoring an item a
         // layout manages is undefined behavior.
         Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+        // The grid would compress the row while the pill's width animates
+        // up; pinning the minimum keeps the reveal from squashing it.
+        Layout.minimumWidth: implicitWidth
         spacing: 15
 
         // --- POMODORO SECTION ---

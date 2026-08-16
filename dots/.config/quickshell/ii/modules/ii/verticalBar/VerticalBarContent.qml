@@ -25,7 +25,6 @@ Item { // Bar content region
     // width the center pills come out at.
     readonly property real floatingInset: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
 
-    readonly property var verticalModules: ["sidebarButton", "resources", "media", "workspaces", "clock", "battery", "tray", "volume", "indicators"]
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton", "tray", "volume", "indicators"]
 
@@ -45,7 +44,7 @@ Item { // Bar content region
     }
 
     function moduleActive(name) {
-        return root.verticalModules.indexOf(name) !== -1 && root.moduleComponent(name) !== null;
+        return root.moduleComponent(name) !== null;
     }
 
     // Widgets built to span the bar's width. Everything else is its own size
@@ -80,7 +79,7 @@ Item { // Bar content region
         return ws.length > 0 && ws.every(w => root.chromelessModules.indexOf(w.id) !== -1);
     }
     function entryActive(w) {
-        return w.enabled && root.moduleActive(w.id);
+        return w.enabled !== false && root.moduleActive(w.id);
     }
     function groupHasVisible(g) {
         return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id));

@@ -112,11 +112,11 @@ Item { // Bar content region
         return [];
     }
     function groupChromeless(g) {
-        const ws = root.groupWidgets(g);
+        const ws = root.groupWidgets(g).filter(w => root.moduleActive(w.id));
         return ws.length > 0 && ws.every(w => root.chromelessModules.indexOf(w.id) !== -1);
     }
     function entryActive(w) {
-        return w.enabled && root.moduleActive(w.id);
+        return w.enabled !== false && root.moduleActive(w.id);
     }
     function groupHasVisible(g) {
         return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id));
@@ -145,12 +145,15 @@ Item { // Bar content region
         const n = g.length;
         return (n % 2 === 1) ? g.slice((n - 1) / 2 + 1) : [];
     }
+    // The widgets whose job is genuinely width: the window title needs the
+    // section's spare room so it can shrink to an ellipsis.
+    function moduleTakesSpace(name) {
+        return name === "activeWindow";
+    }
     // Whether anything showing in this group needs its section's spare width.
-    // Only the window title genuinely does: it needs room so it can shrink
-    // to an ellipsis.
     function groupTakesSpace(g) {
         return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id)
-            && w.id === "activeWindow");
+            && root.moduleTakesSpace(w.id));
     }
     // Whether a side section needs its packer: a row wider than its content
     // does not push items against its edge — columns with no stretch share the
@@ -198,7 +201,7 @@ Item { // Bar content region
         property bool inCenter: false
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
-            && (inCenter || yieldsToGroupMate || moduleName === "activeWindow")
+            && (inCenter || yieldsToGroupMate || root.moduleTakesSpace(moduleName))
         // Media asks for a set amount rather than for as much as its track
         // title happens to need. That keeps the group a predictable size —
         // titles come and go and the bar shouldn't move when they do — while
@@ -263,7 +266,10 @@ Item { // Bar content region
             visible: pill.chromeless
             spacing: 4
             Repeater {
-                model: pill.gw
+                // Gated on chromelessness, not just hidden: an always-built
+                // model would keep a live duplicate of every widget behind
+                // each pill.
+                model: pill.chromeless ? pill.gw : []
                 delegate: BarModule {
                     required property var modelData
                     moduleName: modelData.id
@@ -282,7 +288,12 @@ Item { // Bar content region
                         required property var modelData
                         moduleName: modelData.id
                         entryEnabled: modelData.enabled
-                        yieldsToGroupMate: pill.mediaYields
+                        // The yield pairing only holds while nothing else
+                        // stretches the pill; beside the window title media
+                        // keeps its set width and the title takes the room.
+                        yieldsToGroupMate: pill.mediaYields && !pill.takesSpace
+                        // The pair is merged whenever both are in the pill,
+                        // stretched by a group-mate or not.
                         popupAnchor: pill.mediaYields ? pill : null
                         inCenter: pill.centerSection
                     }
