@@ -34,7 +34,10 @@ BarGroup {
 
     RowLayout {
         id: mainRow
-        anchors.centerIn: parent
+        // The default property lands this row inside the group's GridLayout,
+        // so it has to be placed as a layout child — anchoring an item a
+        // layout manages is undefined behavior.
+        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
         spacing: 15
 
         // --- POMODORO SECTION ---
