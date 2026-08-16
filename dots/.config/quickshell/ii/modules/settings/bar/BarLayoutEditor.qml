@@ -27,13 +27,22 @@ Item {
         { id: "timers",        name: Translation.tr("Timers"),            icon: "timer" },
         { id: "weather",       name: Translation.tr("Weather"),           icon: "cloud" },
         { id: "releaseUpdates", name: Translation.tr("Update available"), icon: "system_update_alt" },
-        { id: "spacer",        name: Translation.tr("Flexible space"),    icon: "space_bar" },
     ]
 
     readonly property real tokenHeight: 35
 
-    // Structural widgets pinned in place — shown as a small marker, not draggable/toggleable.
-    readonly property var lockedModules: ["sidebarButton", "spacer"]
+    // Ids retired from the bar entirely, taken from where the load-time scrub
+    // reads them so the editor and that migration cannot come to disagree. The
+    // bar renders an unknown id as nothing, so only what was deliberately
+    // retired is dropped — unknown ids pass through, though every entry
+    // written back is normalized to id + enabled.
+    readonly property var retiredModules: Config.retiredBarModules
+    // Arranged by the bar rather than the user: the editor hides these
+    // while they are placed, preserves their entries in the layout it
+    // writes back, and offers the widget again if a layout arrives
+    // without it.
+    readonly property var barManagedModules: ["sidebarButton"]
+
     // Widgets with no vertical rendering — hidden from the editor while the bar is vertical.
     readonly property var verticalUnsupported: ["activeWindow", "utilButtons", "weather", "timers", "releaseUpdates"]
 
@@ -60,15 +69,13 @@ Item {
         return { id: id, name: id, icon: "widgets" };
     }
     function widgetsOf(g) {
-        if (!g) return [];
-        if (typeof g === "string") return [{ id: g, enabled: true }];
-        if (g.widgets !== undefined)
-            return Array.prototype.slice.call(g.widgets).map(w => (typeof w === "string") ? ({ id: w, enabled: true }) : ({ id: w.id, enabled: w.enabled !== false }));
-        if (g.items !== undefined)
-            return Array.prototype.slice.call(g.items).map(w => (typeof w === "string") ? ({ id: w, enabled: true }) : ({ id: w.id, enabled: w.enabled !== false }));
-        return [];
+        return ObjectUtils.layoutGroupWidgets(g)
+            .map(w => ({ id: w.id, enabled: w.enabled !== false }))
+            .filter(w => root.retiredModules.indexOf(w.id) === -1);
     }
     function widgetHiddenHere(id) {
+        if (root.barManagedModules.indexOf(id) !== -1)
+            return root.findWidget(id) !== null;
         return Config.options.bar.vertical && root.verticalUnsupported.indexOf(id) !== -1;
     }
     function shownWidgetsOf(g) {
@@ -90,6 +97,13 @@ Item {
         return Array.prototype.slice.call(a).map(g => ({ widgets: root.widgetsOf(g) }));
     }
     function commit(s, groups) {
+        // Bar-managed entries float to the front of their group: drops index
+        // around hidden entries, and without a canonical spot the bar could
+        // render one somewhere the editor cannot show.
+        for (const g of groups) {
+            g.widgets = g.widgets.filter(w => root.barManagedModules.indexOf(w.id) !== -1)
+                .concat(g.widgets.filter(w => root.barManagedModules.indexOf(w.id) === -1));
+        }
         const cleaned = groups.filter(g => g.widgets.length > 0);
         Config.options.bar.layout[s] = cleaned;
     }
@@ -115,7 +129,7 @@ Item {
         else root.addWidget(id);
     }
     function simpleWidgets() {
-        return root.moduleCatalog.filter(m => root.lockedModules.indexOf(m.id) === -1 && !root.widgetHiddenHere(m.id));
+        return root.moduleCatalog.filter(m => !root.widgetHiddenHere(m.id));
     }
     function setEnabled(s, gi, wi, on) {
         let g = root.groupsOf(s);
@@ -236,7 +250,6 @@ Item {
         required property int gi
         required property int wi
         readonly property var m: root.meta(entry.id)
-        readonly property bool locked: root.lockedModules.indexOf(entry.id) !== -1
         readonly property bool isDragSource: root.dragInfo && root.dragInfo.section === section && root.dragInfo.gi === gi && root.dragInfo.wi === wi
         required property bool roundLeft
         required property bool roundRight
@@ -249,15 +262,14 @@ Item {
         property real rightRadius: tok.wrapped ? Appearance.rounding.small : (tok.roundRight ? endRadius : Appearance.rounding.unsharpenmore)
         Behavior on leftRadius { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
         Behavior on rightRadius { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-        implicitWidth: tok.locked ? 60 : (tokRow.implicitWidth + 24)
+        implicitWidth: tokRow.implicitWidth + 24
         implicitHeight: root.tokenHeight
         height: implicitHeight
         topLeftRadius: tok.leftRadius
         bottomLeftRadius: tok.leftRadius
         topRightRadius: tok.rightRadius
         bottomRightRadius: tok.rightRadius
-        color: tok.locked ? Appearance.colors.colSecondaryContainer
-            : entry.enabled
+        color: entry.enabled
                 ? (dragArea.containsMouse ? Appearance.colors.colPrimaryHover : Appearance.colors.colPrimary)
                 : (dragArea.containsMouse ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colSecondaryContainer)
         opacity: tok.isDragSource ? 0.3 : 1.0
@@ -266,24 +278,9 @@ Item {
         property point pressStart: Qt.point(0, 0)
         property bool didDrag: false
 
-        // Locked marker — a horizontal line spanning the token's slot.
-        Rectangle {
-            visible: tok.locked
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 6
-            anchors.rightMargin: 6
-            height: 3
-            radius: 2
-            color: Appearance.colors.colOnSecondaryContainer
-            opacity: 0.55
-        }
-
         MouseArea {
             id: dragArea
             anchors.fill: parent
-            enabled: !tok.locked
             hoverEnabled: true
             preventStealing: true
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.PointingHandCursor
@@ -314,7 +311,6 @@ Item {
 
         RowLayout {
             id: tokRow
-            visible: !tok.locked
             anchors.centerIn: parent
             spacing: 4
             MaterialSymbol {

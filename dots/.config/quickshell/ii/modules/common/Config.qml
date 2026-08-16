@@ -13,6 +13,12 @@ Singleton {
     // The bar as it ships. Declared here rather than inside the adapter so the
     // settings page's "Reset to defaults" and a first run can't drift apart —
     // they were separate copies, and adding a widget meant editing both.
+    //
+    // Weather and the release chip sit at the end of the center rather than the
+    // start of the right: that is where they appeared all along, held there by
+    // the spacer that used to divide the right section. Without it the right
+    // section packs to the screen edge and they would ride against the tray, so
+    // the layout now says the position the spacer used to fake.
     readonly property var defaultBarLayout: ({
         "left": [
             { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
@@ -20,11 +26,10 @@ Singleton {
         "center": [
             { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
             { "widgets": [ {"id": "workspaces", "enabled": true} ] },
-            { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] }
+            { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] },
+            { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] }
         ],
         "right": [
-            { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] },
-            { "widgets": [ {"id": "spacer", "enabled": true} ] },
             { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
         ]
     })
@@ -130,6 +135,61 @@ Singleton {
         return changed
     }
 
+    // Ids the bar has stopped drawing. A layout saved while one was still a
+    // widget goes on listing it, and the bar renders nothing in its place — so
+    // the room it used to hold vanishes and everything beside it slides over.
+    // The editor drops them from any section it writes, but only once someone
+    // opens it, which leaves the bar looking rearranged until they do.
+    readonly property var retiredBarModules: ["spacer"]
+
+    function scrubRetiredBarModules() {
+        const sections = {}
+        for (const s of ["left", "center", "right"])
+            sections[s] = JSON.parse(JSON.stringify(root.options.bar.layout[s] ?? []))
+
+        function spacerOnly(g) {
+            const ws = g.widgets ?? []
+            return ws.length > 0 && ws.every(w => root.retiredBarModules.indexOf(w.id) !== -1)
+        }
+        let changed = false
+
+        // A spacer alone in a side section stood between groups and pushed the
+        // ones on its inward side back toward the middle, where they read as
+        // part of the center however the layout listed them. Deleting it on its
+        // own would let those groups fall against the screen edge, so they move
+        // to the center instead and go on rendering where they always appeared.
+        for (const side of ["left", "right"]) {
+            const groups = sections[side]
+            const marks = groups.map(spacerOnly)
+            const at = side === "right" ? marks.indexOf(true) : marks.lastIndexOf(true)
+            if (at === -1) continue
+            const inward = side === "right" ? groups.slice(0, at) : groups.slice(at + 1)
+            if (inward.length === 0) continue
+            sections[side] = side === "right" ? groups.slice(at) : groups.slice(0, at + 1)
+            sections.center = side === "right" ? sections.center.concat(inward)
+                : inward.concat(sections.center)
+            changed = true
+        }
+
+        for (const s of ["left", "center", "right"]) {
+            const kept = []
+            for (const group of sections[s]) {
+                const widgets = group.widgets ?? []
+                const remaining = widgets.filter(w => root.retiredBarModules.indexOf(w.id) === -1)
+                if (remaining.length !== widgets.length) changed = true
+                // A group that held nothing else goes with it, rather than
+                // staying on as a slot with nothing to show.
+                group.widgets = remaining
+                if (remaining.length > 0) kept.push(group)
+            }
+            sections[s] = kept
+        }
+
+        if (changed)
+            for (const s of ["left", "center", "right"]) root.options.bar.layout[s] = sections[s]
+        return changed
+    }
+
     function reloadFromFile() {
         root._reloading = true
         configFileView.reload()
@@ -212,14 +272,17 @@ Singleton {
         }
         onLoaded: {
             root.ready = true
-            // The migration runs here, where _reloading may still be set and would
+            // The migrations run here, where _reloading may still be set and would
             // swallow the write that onAdapterUpdated would otherwise schedule, so
-            // the save is asked for directly. It only fires for a file written
-            // before bar.layout existed, which a fresh install never has — nothing
-            // else may write this file at startup. A first login seeds the
+            // the save is asked for directly. Each only fires for a file an older
+            // release wrote — one lacking bar.layout, one still naming a retired
+            // widget — and a fresh install is neither, which matters because
+            // nothing else may write this file at startup. A first login seeds the
             // wallpaper path from outside a moment later, and that write only
             // survives because it is the last one.
-            if (root.seedBarLayoutFromLegacySwitches()) fileWriteTimer.restart()
+            const seeded = root.seedBarLayoutFromLegacySwitches()
+            const scrubbed = root.scrubRetiredBarModules()
+            if (seeded || scrubbed) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -479,7 +542,7 @@ Singleton {
                 // center, the middle group is kept screen-centered. Recognized
                 // ids: sidebarButton, activeWindow, resources, media,
                 // workspaces, clock, utilButtons, battery, indicators, volume,
-                // tray, timers, weather, releaseUpdates, spacer.
+                // tray, timers, weather, releaseUpdates.
                 property JsonObject layout: JsonObject {
                     property list<var> left: root.defaultBarLayout.left
                     property list<var> center: root.defaultBarLayout.center
@@ -656,6 +719,7 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: true
+                property string position: "bottom" // "bottom" | "top" | "left" | "right"; flips to the opposite edge if the bar holds this one
                 property bool monochromeIcons: false
                 property real height: 60
                 property real hoverRegionHeight: 2

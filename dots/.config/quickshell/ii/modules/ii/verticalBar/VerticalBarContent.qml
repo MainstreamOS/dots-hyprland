@@ -19,9 +19,9 @@ Item { // Bar content region
     // Widgets that have a vertical rendering. Inherently horizontal widgets
     // (activeWindow, utilButtons, weather, timers) have no vertical form and
     // are skipped on the vertical bar.
-    readonly property var verticalModules: ["sidebarButton", "resources", "media", "workspaces", "clock", "battery", "tray", "volume", "indicators", "spacer"]
+    readonly property var verticalModules: ["sidebarButton", "resources", "media", "workspaces", "clock", "battery", "tray", "volume", "indicators"]
     // Modules that render without a surrounding pill.
-    readonly property var chromelessModules: ["sidebarButton", "tray", "volume", "indicators", "spacer"]
+    readonly property var chromelessModules: ["sidebarButton", "tray", "volume", "indicators"]
 
     function moduleComponent(name) {
         switch (name) {
@@ -34,7 +34,6 @@ Item { // Bar content region
         case "tray": return comp_tray;
         case "volume": return comp_volume;
         case "indicators": return comp_indicators;
-        case "spacer": return comp_spacer;
         default: return null;
         }
     }
@@ -47,7 +46,7 @@ Item { // Bar content region
     // and sits centred — stretching them makes a widget that draws its own
     // background, such as the status indicators, look far wider than it is.
     function moduleFillWidth(name) {
-        return name === "spacer" || name === "resources" || name === "media"
+        return name === "resources" || name === "media"
             || name === "clock" || name === "battery" || name === "tray";
     }
 
@@ -80,9 +79,6 @@ Item { // Bar content region
     function groupHasVisible(g) {
         return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id));
     }
-    function groupHasSpacer(g) {
-        return root.groupWidgets(g).some(w => w.id === "spacer");
-    }
 
     // Generic single-widget slot (vertical).
     component BarModule: Loader {
@@ -96,7 +92,6 @@ Item { // Bar content region
         Layout.topMargin: moduleName === "sidebarButton"
             ? (Appearance.sizes.baseVerticalBarWidth - implicitWidth) / 2 : 0
         Layout.fillWidth: root.moduleFillWidth(moduleName)
-        Layout.fillHeight: moduleName === "spacer"
         active: entryEnabled && root.moduleActive(moduleName)
         visible: active && root.moduleVisible(moduleName)
         sourceComponent: root.moduleComponent(moduleName)
@@ -217,14 +212,6 @@ Item { // Bar content region
             Layout.fillWidth: true
             Layout.fillHeight: false
             invertSide: Config?.options.bar.bottom
-        }
-    }
-
-    Component {
-        id: comp_spacer
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
         }
     }
 
@@ -463,9 +450,18 @@ Item { // Bar content region
             }
         }
 
+        // Natural height anchored to the bottom edge, mirroring the top
+        // section: the column grows toward the middle, so the pills pack
+        // against the edge, and with no rect to fit there is no spare space
+        // to spread them apart — and no deficit to shrink them below their
+        // content when a tall widget like workspaces joins the section.
         ColumnLayout {
-            anchors.fill: parent
-            anchors.bottomMargin: Appearance.rounding.screenRounding
+            anchors {
+                bottom: parent.bottom
+                left: parent.left
+                right: parent.right
+                bottomMargin: Appearance.rounding.screenRounding
+            }
             spacing: 8
 
             Repeater {
@@ -473,7 +469,6 @@ Item { // Bar content region
                 delegate: GroupPill {
                     required property var modelData
                     group: modelData
-                    Layout.fillHeight: root.groupHasSpacer(modelData)
                 }
             }
         }

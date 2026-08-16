@@ -18,8 +18,8 @@ Item { // Bar content region
     readonly property int centerSideModuleWidth: (useShortenedForm == 2) ? Appearance.sizes.barCenterSideModuleWidthHellaShortened : (useShortenedForm == 1) ? Appearance.sizes.barCenterSideModuleWidthShortened : Appearance.sizes.barCenterSideModuleWidth
 
     // Modules that render without a surrounding pill (they carry their own
-    // background, are flexible spacers, or fill the available width).
-    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "indicators", "volume", "tray", "spacer", "timers", "releaseUpdates"]
+    // background or fill the available width).
+    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "indicators", "volume", "tray", "timers", "releaseUpdates"]
 
     function moduleComponent(name) {
         switch (name) {
@@ -37,7 +37,6 @@ Item { // Bar content region
         case "timers": return comp_timers;
         case "weather": return comp_weather;
         case "releaseUpdates": return comp_releaseUpdates;
-        case "spacer": return comp_spacer;
         default: return null;
         }
     }
@@ -73,11 +72,11 @@ Item { // Bar content region
     // a capsule into a slab the full height of the bar.
     function moduleFillHeight(name) {
         return name === "activeWindow" || name === "workspaces" || name === "tray"
-            || name === "volume" || name === "spacer";
+            || name === "volume";
     }
 
     function moduleFillWidth(name) {
-        return name === "spacer" || name === "activeWindow" || name === "media" || name === "clock" || (name === "resources" && root.useShortenedForm === 2);
+        return name === "activeWindow" || name === "media" || name === "clock" || (name === "resources" && root.useShortenedForm === 2);
     }
 
     // Widgets whose own width comes and goes: a track title is there or it
@@ -146,23 +145,20 @@ Item { // Bar content region
         const n = g.length;
         return (n % 2 === 1) ? g.slice((n - 1) / 2 + 1) : [];
     }
-    function groupHasSpacer(g) {
-        return root.groupWidgets(g).some(w => w.id === "spacer");
-    }
     // Whether anything showing in this group needs its section's spare width.
-    // Only two widgets genuinely do: the spacer, whose job is to eat room, and
-    // the window title, which needs room so it can shrink to an ellipsis.
+    // Only the window title genuinely does: it needs room so it can shrink
+    // to an ellipsis.
     function groupTakesSpace(g) {
         return root.groupWidgets(g).some(w => root.entryActive(w) && root.moduleVisible(w.id)
-            && (w.id === "spacer" || w.id === "activeWindow"));
+            && w.id === "activeWindow");
     }
     // Whether a side section needs its packer: a row wider than its content
     // does not push items against its edge — columns with no stretch share the
     // surplus in proportion to their size, so free-standing pills drift apart
     // across the section. The packer is a guaranteed stretch item that eats
-    // the surplus, and it stands down when a real space-taker is present —
-    // two stretch items split the surplus, and a spacer would only pull half
-    // as far.
+    // the surplus, and it stands down when the window title is there to take
+    // it — two stretch items would split the surplus, leaving whatever
+    // follows the title adrift by the other half.
     function sectionNeedsPacker(groups) {
         if (!groups)
             return true;
@@ -202,7 +198,7 @@ Item { // Bar content region
         property bool inCenter: false
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
-            && (inCenter || yieldsToGroupMate || moduleName === "spacer" || moduleName === "activeWindow")
+            && (inCenter || yieldsToGroupMate || moduleName === "activeWindow")
         // Media asks for a set amount rather than for as much as its track
         // title happens to need. That keeps the group a predictable size —
         // titles come and go and the bar shouldn't move when they do — while
@@ -406,11 +402,6 @@ Item { // Bar content region
     Component {
         id: comp_releaseUpdates
         ReleaseUpdatesIndicator {}
-    }
-
-    Component {
-        id: comp_spacer
-        Item {}
     }
 
     Component {
