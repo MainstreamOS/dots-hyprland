@@ -154,6 +154,7 @@ Item { // Bar content region
         Layout.bottomMargin: Appearance.sizes.baseBarHeight / 3
         Layout.fillHeight: true
         implicitWidth: 1
+        implicitHeight: Appearance.sizes.baseBarHeight / 3
         color: Appearance.colors.colOutlineVariant
     }
 
@@ -633,8 +634,7 @@ Item { // Bar content region
         anchors {
             right: centerMidZone.left
             rightMargin: 2
-            top: parent.top
-            bottom: parent.bottom
+            verticalCenter: parent.verticalCenter
         }
         visible: Config.options?.bar.borderless && centerLeftFlank.width > 0 && root.groupsAt().length > 0
     }
@@ -669,8 +669,7 @@ Item { // Bar content region
         anchors {
             left: centerMidZone.right
             leftMargin: 2
-            top: parent.top
-            bottom: parent.bottom
+            verticalCenter: parent.verticalCenter
         }
         visible: Config.options?.bar.borderless && centerRightFlank.width > 0 && root.groupsAt().length > 0
     }
