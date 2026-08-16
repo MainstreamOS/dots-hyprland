@@ -38,7 +38,16 @@ StyledImage {
         // wrote, so files in directories with whitespace render as transparent
         // tiles in the wallpaper picker. Encode straight from the raw path.
         const rawPath = FileUtils.trimFileProtocol(sourcePath);
-        const encodedPath = rawPath.split("/").map(part => encodeURIComponent(part)).join("/");
+        // The md5 must be of the URI byte-for-byte as the generator wrote it,
+        // and the bulk generator gets its URI from GIO. GLib leaves @ & = , :
+        // $ + raw in a path (they are legal there) while encodeURIComponent
+        // escapes all seven, so a wallpaper named with any of them hashed to a
+        // name thumbgen never wrote and drew as an empty tile. Encode, then
+        // put GLib's raw set back. `;` stays escaped — GLib escapes it too.
+        const encodedPath = rawPath.split("/").map(part => encodeURIComponent(part)
+            .replace(/%40/g, "@").replace(/%26/g, "&").replace(/%3D/g, "=")
+            .replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%24/g, "$")
+            .replace(/%2B/g, "+")).join("/");
         const md5Hash = Qt.md5(`file://${encodedPath}`);
         return `${Directories.genericCache}/thumbnails/${thumbnailSizeName}/${md5Hash}.png`;
     }

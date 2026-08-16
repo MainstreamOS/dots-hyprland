@@ -36,7 +36,10 @@ urlencode() {
     for ((i=0; i<${#str}; i++)); do
         c="${str:$i:1}"
         case "$c" in
-            [a-zA-Z0-9.~_-]|/|'('|')'|'*') encoded+="$c" ;;
+            # Mirror GLib's g_file_get_uri(): these all stay raw in a path
+            # segment there, and the md5 key has to match thumbgen's byte for
+            # byte. `;` is deliberately absent — GLib escapes it.
+            [a-zA-Z0-9.~_-]|/|'('|')'|'*'|'!'|"'"|'@'|':'|'$'|'&'|'+'|','|'=') encoded+="$c" ;;
             *) printf -v hex '%%%02X' "'${c}'"; encoded+="$hex" ;;
         esac
     done
