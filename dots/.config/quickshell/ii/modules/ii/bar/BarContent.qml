@@ -91,8 +91,9 @@ Item { // Bar content region
 
     readonly property int mediaMinimumWidth: 140
 
-    // The stock centre-left pill: resources sat beside media and media took
-    // whatever room was left, so switching resources on never moved the bar.
+    // When resources and media share a group, media takes the room resources
+    // leaves rather than growing the pill, so switching resources on never
+    // moves the bar.
     function mediaYieldsIn(g) {
         const ws = root.groupWidgets(g);
         return ws.some(w => w.id === "media" && root.entryActive(w) && root.moduleVisible(w.id))
@@ -170,15 +171,22 @@ Item { // Bar content region
         // share rather than the media half of it; left null a module speaks
         // for itself.
         property Item popupAnchor: null
+        // Whether this slot sits in a centre-section pill. Media's fill only
+        // means something there: a centre pill has a set width and the spare
+        // room goes to the track title. Off centre the pill can be as wide as
+        // its section — filled by a group-mate like the window title — and
+        // media filling alongside it grew past its set width instead of
+        // leaving the surplus to the widget that asked for it.
+        property bool inCenter: false
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
+            && (inCenter || (moduleName !== "media" && moduleName !== "resources"))
         // Media asks for a set amount rather than for as much as its track
         // title happens to need. That keeps the group a predictable size —
         // titles come and go and the bar shouldn't move when they do — while
         // still letting media take any room the group has left over. Sharing
         // with resources is the exception: ask for the least it can live with
-        // and let the group's set width hand back whatever resources didn't
-        // use, which is how the two sat together before pills were arrangeable.
+        // and let the group's set width hand back whatever resources didn't use.
         Layout.preferredWidth: moduleName !== "media" ? -1
             : yieldsToGroupMate ? root.mediaMinimumWidth
             : Math.max(root.mediaMinimumWidth, root.centerSideModuleWidth - 40)
@@ -242,6 +250,7 @@ Item { // Bar content region
                     required property var modelData
                     moduleName: modelData.id
                     entryEnabled: modelData.enabled
+                    inCenter: pill.centerSection
                 }
             }
         }
@@ -257,6 +266,7 @@ Item { // Bar content region
                         entryEnabled: modelData.enabled
                         yieldsToGroupMate: pill.mediaYields
                         popupAnchor: pill.mediaYields ? pill : null
+                        inCenter: pill.centerSection
                     }
                 }
             }
