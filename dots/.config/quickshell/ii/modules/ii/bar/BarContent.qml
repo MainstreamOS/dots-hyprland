@@ -328,7 +328,12 @@ Item { // Bar content region
     Component {
         id: comp_resources
         Resources {
+            // The collapse to a single meter exists to hand the shared
+            // pill's room to media, so it only applies beside media: the
+            // parent is the BarModule slot, whose yieldsToGroupMate marks
+            // that pairing. Standing alone, the full readout stays.
             alwaysShowAllResources: root.useShortenedForm === 2
+                || !(parent?.yieldsToGroupMate ?? false)
         }
     }
 
