@@ -191,9 +191,15 @@ Item { // Bar content region
         readonly property var gw: root.groupWidgets(group)
         readonly property bool chromeless: root.groupChromeless(group)
         readonly property bool isWorkspaces: gw.length === 1 && gw[0].id === "workspaces"
-        // Whether anything showing in this group is the kind of widget that
-        // takes whatever room it is given rather than only what it needs.
-        readonly property bool takesSpace: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleFillWidth(w.id))
+        // Whether anything showing in this group needs the section's spare
+        // width, which is what promotes the pill to filling outside the
+        // centre. Media and shortened resources are deliberately not counted:
+        // their fill is pill-internal — leftover room inside their own group
+        // goes to the track title — and letting it promote the pill turned a
+        // media group placed on the left or right side into a full-section
+        // bar instead of its set width.
+        readonly property bool takesSpace: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleFillWidth(w.id)
+            && w.id !== "media" && w.id !== "resources")
         readonly property bool widthVolatile: gw.some(w => root.entryActive(w) && root.moduleVisible(w.id) && root.moduleWidthVolatile(w.id))
         readonly property bool mediaYields: root.mediaYieldsIn(group)
         visible: root.groupHasVisible(group)
