@@ -3,9 +3,6 @@
 -- Workspace: https://wiki.hypr.land/Configuring/Workspace-Rules/
 
 -- ######## Layer rules ########
--- Order overview-dim below the bar so the bar stays visible during overview.
-hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, order = 5 })
-hl.layer_rule({ match = { namespace = "quickshell:bar" }, order = 10 })
 
 -- ######## Window rules ########
 

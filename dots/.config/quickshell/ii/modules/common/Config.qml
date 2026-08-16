@@ -719,7 +719,10 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: true
-                property string position: "bottom" // "bottom" | "top" | "left" | "right"; flips to the opposite edge if the bar holds this one
+                // "bottom" | "top" | "left" | "right". The dock yields if the
+                // bar is moved onto this edge; asking for the bar's edge from
+                // the dock's own setting moves the bar across instead.
+                property string position: "bottom"
                 property bool monochromeIcons: false
                 property real height: 60
                 property real hoverRegionHeight: 2

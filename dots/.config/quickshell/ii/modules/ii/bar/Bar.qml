@@ -60,7 +60,15 @@ Scope {
                 exclusiveZone: (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
-                WlrLayershell.layer: WlrLayer.Overlay
+                // The compositor subtracts Top-layer exclusive zones before it
+                // arranges the Overlay layer, so a pinned side dock pushes a
+                // horizontal bar out of its corner. Joining the dock's layer in
+                // exactly that case lets the bar's higher arrangement order
+                // (custom/rules.lua) claim the edge first: the bar keeps its
+                // full width and the dock is shortened to sit above it.
+                WlrLayershell.layer: (Config.options.dock.enable && GlobalStates.dockPinned
+                        && (Appearance.sizes.dockEdge === "left" || Appearance.sizes.dockEdge === "right"))
+                    ? WlrLayer.Top : WlrLayer.Overlay
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
                 mask: Region {
                     item: hoverMaskRegion

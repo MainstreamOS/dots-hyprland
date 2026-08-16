@@ -67,13 +67,14 @@ Item {
     property bool _reordering: false
     property bool _suppressTranslateAnim: false
     property int dragSourceIndex: -1
-    property real dragCursorX: 0
-    property real dragStartCursorX: 0
-    property real slotWidth: 0
+    // Main-axis scalars: X on a horizontal dock, Y on a vertical one.
+    property real dragCursorPos: 0
+    property real dragStartCursorPos: 0
+    property real slotSize: 0
     property int dragTargetIndex: {
-        if (!dragging || slotWidth <= 0) return dragSourceIndex;
-        var delta = dragCursorX - dragStartCursorX;
-        var slots = Math.round(delta / slotWidth);
+        if (!dragging || slotSize <= 0) return dragSourceIndex;
+        var delta = dragCursorPos - dragStartCursorPos;
+        var slots = Math.round(delta / slotSize);
         var pinnedCount = Config.options.dock.pinnedApps.length;
         return Math.max(0, Math.min(dragSourceIndex + slots, pinnedCount - 1));
     }
@@ -100,8 +101,8 @@ Item {
         }
         dragging = false;
         dragSourceIndex = -1;
-        dragCursorX = 0;
-        dragStartCursorX = 0;
+        dragCursorPos = 0;
+        dragStartCursorPos = 0;
         // Allow the ListView to fully process delegate changes before
         // re-enabling transitions, preventing the opacity-flicker on add.
         reorderSettleTimer.restart();
@@ -111,8 +112,8 @@ Item {
         _suppressTranslateAnim = true;
         dragging = false;
         dragSourceIndex = -1;
-        dragCursorX = 0;
-        dragStartCursorX = 0;
+        dragCursorPos = 0;
+        dragStartCursorPos = 0;
         Qt.callLater(function() { _suppressTranslateAnim = false; });
     }
 
@@ -129,14 +130,14 @@ Item {
     }
 
     property alias listViewRef: listView
-    property real mouseXInList: -9999
+    property real mousePosInList: -9999
     property bool listHovered: false
     property real maxScale: 2.35
     property real sigma: 60
 
-    function scaleForX(itemCenterX) {
+    function scaleForPos(itemCenter) {
         if (!listHovered || previewShow) return 1.0;
-        const dist = itemCenterX - mouseXInList;
+        const dist = itemCenter - mousePosInList;
         return 1.0 + (maxScale - 1.0) * Math.exp(-(dist * dist) / (2 * sigma * sigma));
     }
 
@@ -149,15 +150,20 @@ Item {
         acceptedButtons: Qt.NoButton
         z: 1
         onPositionChanged: mouse => {
-            root.mouseXInList = mouse.x + listView.contentX;
+            root.mousePosInList = dockRoot.dockVertical ? mouse.y + listView.contentY : mouse.x + listView.contentX;
         }
         onEntered:  root.listHovered = true
         onExited:   root.listHovered = false
     }
 
-    Layout.fillHeight: true
-    Layout.topMargin: Appearance.sizes.hyprlandGapsOut
-    implicitWidth: listView.implicitWidth
+    Layout.fillHeight: !dockRoot.dockVertical
+    Layout.fillWidth: dockRoot.dockVertical
+    Layout.topMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : 0
+    Layout.bottomMargin: dockRoot.dockEdge === "top" ? Appearance.sizes.hyprlandGapsOut : 0
+    Layout.leftMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : 0
+    Layout.rightMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : 0
+    implicitWidth: dockRoot.dockVertical ? 0 : listView.implicitWidth
+    implicitHeight: dockRoot.dockVertical ? listView.implicitHeight : 0
 
     Timer {
         id: dismissTimer
@@ -184,14 +190,20 @@ Item {
         clip: false
         interactive: false
         animateAppearance: !root._reordering
-        orientation: ListView.Horizontal
+        orientation: dockRoot.dockVertical ? ListView.Vertical : ListView.Horizontal
         anchors {
-            top: parent.top
-            bottom: parent.bottom
+            top: dockRoot.dockVertical ? undefined : parent.top
+            bottom: dockRoot.dockVertical ? undefined : parent.bottom
+            left: dockRoot.dockVertical ? parent.left : undefined
+            right: dockRoot.dockVertical ? parent.right : undefined
         }
-        implicitWidth: contentWidth
+        implicitWidth: dockRoot.dockVertical ? 0 : contentWidth
+        implicitHeight: dockRoot.dockVertical ? contentHeight : 0
 
         Behavior on implicitWidth {
+            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+        }
+        Behavior on implicitHeight {
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
 
@@ -212,9 +224,11 @@ Item {
             }
             buttonIndex: index
 
-            topInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
-            bottomInset: Appearance.sizes.hyprlandGapsOut + root.buttonPadding
-            hoverScale: root.scaleForX(x + width / 2)
+            topInset: dockRoot.dockVertical ? 0 : Appearance.sizes.hyprlandGapsOut + root.buttonPadding
+            bottomInset: dockRoot.dockVertical ? 0 : Appearance.sizes.hyprlandGapsOut + root.buttonPadding
+            leftInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
+            rightInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
+            hoverScale: root.scaleForPos(dockRoot.dockVertical ? y + height / 2 : x + width / 2)
         }
     }
 
@@ -227,9 +241,12 @@ Item {
 
             anchor {
                 item: root.clickedButton
-                gravity: Edges.Top
-                edges: Edges.Top
-                adjustment: PopupAdjustment.SlideX
+                gravity: dockRoot.awayEdges
+                edges: dockRoot.awayEdges
+                // The popup content grows along X whatever the edge, so a
+                // vertical dock needs SlideX on top of its cross-axis SlideY
+                // or a wide popup runs off the far side of the screen.
+                adjustment: dockRoot.dockVertical ? (PopupAdjustment.SlideX | PopupAdjustment.SlideY) : PopupAdjustment.SlideX
             }
             color: "transparent"
             implicitWidth: popupBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
@@ -259,9 +276,10 @@ Item {
                     clip: true
                     color: Appearance.m3colors.m3surfaceContainer
                     radius: Appearance.rounding.normal
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: Appearance.sizes.elevationMargin
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    // The window is the background plus a shadow margin on
+                    // every side, so centering insets it evenly and the
+                    // breathing room sits between popup and dock.
+                    anchors.centerIn: parent
                     implicitHeight: previewRowLayout.implicitHeight + padding * 2
                     implicitWidth: previewRowLayout.implicitWidth + padding * 2
 
@@ -395,9 +413,12 @@ Item {
 
             anchor {
                 item: root.clickedButton
-                gravity: Edges.Top
-                edges: Edges.Top
-                adjustment: PopupAdjustment.SlideX
+                gravity: dockRoot.awayEdges
+                edges: dockRoot.awayEdges
+                // The popup content grows along X whatever the edge, so a
+                // vertical dock needs SlideX on top of its cross-axis SlideY
+                // or a wide popup runs off the far side of the screen.
+                adjustment: dockRoot.dockVertical ? (PopupAdjustment.SlideX | PopupAdjustment.SlideY) : PopupAdjustment.SlideX
             }
 
             HyprlandFocusGrab {
@@ -429,11 +450,10 @@ Item {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                 }
 
-                anchors {
-                    bottom: parent.bottom
-                    horizontalCenter: parent.horizontalCenter
-                    bottomMargin: Appearance.sizes.elevationMargin
-                }
+                // The window is the background plus a shadow margin on every
+                // side, so centering insets it evenly and the breathing room
+                // sits between popup and dock.
+                anchors.centerIn: parent
                 color: Appearance.m3colors.m3surfaceContainer
                 radius: Appearance.rounding.normal
                 implicitWidth: folderColumn.implicitWidth + padding * 2

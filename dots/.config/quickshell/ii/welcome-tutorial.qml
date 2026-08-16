@@ -1339,7 +1339,7 @@ ApplicationWindow {
             return dockX + dockPadding + cellIdx * (dockIconSize + dockGap) + dockIconSize / 2
         }
 
-        // Gaussian magnify, mirroring DockApps.qml#scaleForX. Numbers
+        // Gaussian magnify, mirroring DockApps.qml#scaleForPos. Numbers
         // dialled down slightly because the mockup runs at a smaller
         // scale than the real dock.
         readonly property real maxScale: 2.0

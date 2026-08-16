@@ -388,6 +388,25 @@ Singleton {
 
     sizes: QtObject {
         property real baseBarHeight: 40
+        // Which edge the bar occupies, and where the dock lands after its
+        // configured edge is flipped off the bar's — shared by the dock, the
+        // overview's clearance and the settings picker so they can never
+        // disagree.
+        property string barEdge: Config.options.bar.vertical
+            ? (Config.options.bar.bottom ? "right" : "left")
+            : (Config.options.bar.bottom ? "bottom" : "top")
+        property string dockEdge: {
+            const flip = { top: "bottom", bottom: "top", left: "right", right: "left" };
+            // config.json is hand-editable and every consumer picks its edge by
+            // negation, so an unrecognised value would anchor the dock to all
+            // four edges at once instead of falling back to one.
+            const want = flip[Config.options.dock.position] ? Config.options.dock.position : "bottom";
+            return want === root.sizes.barEdge ? flip[want] : want;
+        }
+        // The dock's visible thickness plus its screen gap. The dock sizes its
+        // window from this and the overview clears the top edge by it, so the
+        // two cannot drift apart.
+        property real dockExtent: (Config.options?.dock.height ?? 70) + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut
         property real barHeight: Config.options.bar.cornerStyle === 1 ? 
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
         property real barCenterSideModuleWidth: Config.options?.bar.verbose ? 360 : 140

@@ -83,15 +83,15 @@ DockButton {
 
     // Drag-to-reorder
     readonly property bool isDragged: appListRoot.dragging && delegateIndex === appListRoot.dragSourceIndex
-    readonly property real dragTranslateX: {
+    readonly property real dragTranslate: {
         if (!appListRoot.dragging) return 0;
-        if (isDragged) return appListRoot.dragCursorX - appListRoot.dragStartCursorX;
+        if (isDragged) return appListRoot.dragCursorPos - appListRoot.dragStartCursorPos;
         if (!appToplevel.pinned || isSeparator) return 0;
         var src = appListRoot.dragSourceIndex;
         var tgt = appListRoot.dragTargetIndex;
         var idx = delegateIndex;
-        if (src < tgt && idx > src && idx <= tgt) return -appListRoot.slotWidth;
-        if (src > tgt && idx >= tgt && idx < src) return appListRoot.slotWidth;
+        if (src < tgt && idx > src && idx <= tgt) return -appListRoot.slotSize;
+        if (src > tgt && idx >= tgt && idx < src) return appListRoot.slotSize;
         return 0;
     }
     z: isDragged ? 100 : 0
@@ -101,11 +101,19 @@ DockButton {
     property real hoverScale: 1.0
     property int buttonIndex: 0
 
-    implicitWidth: isSeparator ? 1 : (implicitHeight - topInset - bottomInset)
+    implicitWidth: dockRoot.dockVertical ? dockButtonSize + leftInset + rightInset
+        : (isSeparator ? 1 : dockButtonSize)
+    implicitHeight: dockRoot.dockVertical ? (isSeparator ? 1 : dockButtonSize)
+        : dockButtonSize + topInset + bottomInset
 
     transform: Translate {
-        x: root.dragTranslateX
+        x: dockRoot.dockVertical ? 0 : root.dragTranslate
+        y: dockRoot.dockVertical ? root.dragTranslate : 0
         Behavior on x {
+            enabled: !root.isDragged && !appListRoot._suppressTranslateAnim
+            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+        }
+        Behavior on y {
             enabled: !root.isDragged && !appListRoot._suppressTranslateAnim
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
@@ -115,8 +123,10 @@ DockButton {
         active: isSeparator
         anchors {
             fill: parent
-            topMargin: dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
-            bottomMargin: dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
+            topMargin: dockRoot.dockVertical ? 0 : dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
+            bottomMargin: dockRoot.dockVertical ? 0 : dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
+            leftMargin: dockRoot.dockVertical ? dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal : 0
+            rightMargin: dockRoot.dockVertical ? dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal : 0
         }
         sourceComponent: DockSeparator {}
     }
@@ -129,31 +139,31 @@ DockButton {
         enabled: appToplevel.pinned && !isSeparator
         acceptedButtons: Qt.LeftButton
         preventStealing: true
-        property real pressX: 0
+        property real pressPos: 0
         property bool dragActive: false
 
         onPressed: (event) => {
-            pressX = event.x;
+            pressPos = dockRoot.dockVertical ? event.y : event.x;
             root.down = true;
             root.startRipple(event.x, event.y);
         }
         onPositionChanged: (event) => {
             if (!pressed) return;
-            var dist = Math.abs(event.x - pressX);
+            var dist = Math.abs((dockRoot.dockVertical ? event.y : event.x) - pressPos);
             if (!dragActive && dist > 5) {
                 dragActive = true;
                 root.cancelRipple();
                 root.down = false;
                 appListRoot.dragSourceIndex = root.delegateIndex;
                 var mapped = mapToItem(appListRoot, event.x, event.y);
-                appListRoot.dragStartCursorX = mapped.x;
-                appListRoot.dragCursorX = mapped.x;
-                appListRoot.slotWidth = root.width + 2;
+                appListRoot.dragStartCursorPos = dockRoot.dockVertical ? mapped.y : mapped.x;
+                appListRoot.dragCursorPos = appListRoot.dragStartCursorPos;
+                appListRoot.slotSize = (dockRoot.dockVertical ? root.height : root.width) + 2;
                 appListRoot.dragging = true;
             }
             if (dragActive) {
                 var mapped = mapToItem(appListRoot, event.x, event.y);
-                appListRoot.dragCursorX = mapped.x;
+                appListRoot.dragCursorPos = dockRoot.dockVertical ? mapped.y : mapped.x;
             }
         }
         onReleased: (event) => {
@@ -211,7 +221,9 @@ DockButton {
         onPositionChanged: mouse => {
             appListRoot.listHovered = true;
             const mapped = mapToItem(appListRoot.listViewRef, mouse.x, mouse.y);
-            appListRoot.mouseXInList = mapped.x + appListRoot.listViewRef.contentX;
+            appListRoot.mousePosInList = dockRoot.dockVertical
+                ? mapped.y + appListRoot.listViewRef.contentY
+                : mapped.x + appListRoot.listViewRef.contentX;
         }
         onEntered: appListRoot.listHovered = true
         onExited: Qt.callLater(() => { appListRoot.listHovered = false; })
@@ -232,7 +244,9 @@ DockButton {
             width: root.iconSize
             height: root.iconSize
             scale: root.hoverScale
-            transformOrigin: Item.Bottom
+            transformOrigin: dockRoot.dockEdge === "bottom" ? Item.Bottom
+                : dockRoot.dockEdge === "top" ? Item.Top
+                : dockRoot.dockEdge === "left" ? Item.Left : Item.Right
 
             Behavior on scale {
                 NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
@@ -342,12 +356,28 @@ DockButton {
                 }
             }
 
-            RowLayout {
-                spacing: 3
+            GridLayout {
+                columnSpacing: 3
+                rowSpacing: 3
+                columns: dockRoot.dockVertical ? 1 : -1
+                rows: dockRoot.dockVertical ? -1 : 1
                 anchors {
-                    top: root.isFolder ? folderIconLoader.bottom : iconImageLoader.bottom
-                    topMargin: 2
-                    horizontalCenter: parent.horizontalCenter
+                    top: dockRoot.dockEdge === "bottom" ? (root.isFolder ? folderIconLoader.bottom : iconImageLoader.bottom) : undefined
+                    bottom: dockRoot.dockEdge === "top" ? (root.isFolder ? folderIconLoader.top : iconImageLoader.top) : undefined
+                    // On the cross axis the icon loaders are stretched wider
+                    // than the art they draw, so the art's side edge has to be
+                    // derived from the center — anchoring to the loader's box
+                    // edge puts the dots at the window border, where the
+                    // magnify scale shoves them past the surface and clips
+                    // them into stretched slivers.
+                    left: dockRoot.dockEdge === "right" ? parent.horizontalCenter : undefined
+                    right: dockRoot.dockEdge === "left" ? parent.horizontalCenter : undefined
+                    topMargin: dockRoot.dockEdge === "bottom" ? 2 : 0
+                    bottomMargin: dockRoot.dockEdge === "top" ? 2 : 0
+                    leftMargin: dockRoot.dockEdge === "right" ? root.iconSize / 2 + 3 : 0
+                    rightMargin: dockRoot.dockEdge === "left" ? root.iconSize / 2 + 3 : 0
+                    horizontalCenter: dockRoot.dockVertical ? undefined : parent.horizontalCenter
+                    verticalCenter: dockRoot.dockVertical ? parent.verticalCenter : undefined
                 }
                 visible: !root.isFolder
                 Repeater {
@@ -355,9 +385,10 @@ DockButton {
                     delegate: Rectangle {
                         required property int index
                         radius: Appearance.rounding.full
-                        implicitWidth: (appToplevel.toplevels.length <= 3) ?
-                            root.countDotWidth : root.countDotHeight
-                        implicitHeight: root.countDotHeight
+                        implicitWidth: dockRoot.dockVertical ? root.countDotHeight
+                            : (appToplevel.toplevels.length <= 3) ? root.countDotWidth : root.countDotHeight
+                        implicitHeight: !dockRoot.dockVertical ? root.countDotHeight
+                            : (appToplevel.toplevels.length <= 3) ? root.countDotWidth : root.countDotHeight
                         color: appIsActive ? Appearance.colors.colPrimary : ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.4)
                     }
                 }

@@ -21,6 +21,9 @@ Singleton {
     // rather than a coordinate: the popup measures at the moment it opens,
     // against the bar window the widget actually lives in.
     property Item mediaWidgetItem: null
+    // Written by the dock; a pinned dock reserves an exclusive zone, an
+    // unpinned one reveals over other surfaces.
+    property bool dockPinned: false
     property var mediaTransferUrls: []
     property bool mediaReceiveActive: false
     property bool osdBrightnessOpen: false

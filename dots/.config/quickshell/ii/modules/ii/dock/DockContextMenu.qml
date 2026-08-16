@@ -51,9 +51,12 @@ Item {
 
             anchor {
                 item: root.targetButton
-                gravity: Edges.Top
-                edges: Edges.Top
-                adjustment: PopupAdjustment.SlideX
+                gravity: dockRoot.awayEdges
+                edges: dockRoot.awayEdges
+                // The menu grows along X whatever the edge, so a vertical dock
+                // needs SlideX on top of its cross-axis SlideY or a wide menu
+                // runs off the far side of the screen.
+                adjustment: dockRoot.dockVertical ? (PopupAdjustment.SlideX | PopupAdjustment.SlideY) : PopupAdjustment.SlideX
             }
 
             HyprlandFocusGrab {
@@ -74,11 +77,10 @@ Item {
                 id: menuBackground
                 property real padding: 4
 
-                anchors {
-                    bottom: parent.bottom
-                    horizontalCenter: parent.horizontalCenter
-                    bottomMargin: Appearance.sizes.elevationMargin
-                }
+                // The window is the background plus a shadow margin on every
+                // side, so centring insets it evenly and the breathing room
+                // sits between popup and dock.
+                anchors.centerIn: parent
                 color: Appearance.m3colors.m3surfaceContainer
                 radius: Appearance.rounding.normal
                 implicitWidth: menuColumn.implicitWidth + padding * 2

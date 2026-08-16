@@ -295,9 +295,39 @@ Scope {
             }
         }
 
+        // An open overview captures clicks across the whole screen, but the
+        // only thing that closes it is the dismiss area inside the flickable.
+        // The top clearance sits outside that area, so a click landing there
+        // does nothing at all — and the dock's launcher button, which the
+        // clearance is reserved for, reads as dead after opening the overview
+        // because the press that should toggle it back is swallowed.
+        MouseArea {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: flickable.anchors.topMargin
+            enabled: GlobalStates.overviewOpen && flickable.anchors.topMargin > 0
+            onClicked: GlobalStates.overviewOpen = false
+        }
+
         StyledFlickable {
             id: flickable
             anchors.fill: parent
+            // A dock owner needs clearance under the top edge wherever it sits,
+            // so the search bar keeps one height as the dock moves: an unpinned
+            // top dock reveals over the overview and a dock on another edge
+            // leaves the top bare, so both start the content a dock's thickness
+            // down. A pinned top dock displaces this window by its exclusive
+            // zone, which stops at the pill and leaves the shadow band
+            // uncovered, so only that remainder is added; a top bar displaces
+            // the window on its own. With no dock at all there is nothing to
+            // clear, and reserving a strip would only push the launcher down.
+            anchors.topMargin: {
+                if (!Config.options.dock.enable || Appearance.sizes.barEdge === "top") return 0;
+                if (Appearance.sizes.dockEdge === "top" && GlobalStates.dockPinned)
+                    return Appearance.sizes.elevationMargin;
+                return Appearance.sizes.dockExtent;
+            }
             contentWidth: columnLayout.implicitWidth
             contentHeight: columnLayout.implicitHeight
             clip: true
