@@ -64,9 +64,6 @@ Singleton {
 	function isFirefoxMprisBridge(name) {
 		return /\.firefox\.instance\d+_t\d+/.test(name ?? '');
 	}
-	readonly property bool hasFirefoxMprisBridge: Mpris.players.values.some(
-		p => isFirefoxMprisBridge(p.dbusName)
-	)
 	// mpris-hyprland also bridges Chromium: a Chromium session publishes
 	// org.mpris.MediaPlayer2.chromium.instance<pid>_t<window>. The _t<digits>
 	// segment distinguishes the per-window bridge from Chromium's own native
@@ -74,9 +71,6 @@ Singleton {
 	function isChromiumMprisBridge(name) {
 		return /\.chromium\.instance\d+_t\d+/.test(name ?? '');
 	}
-	readonly property bool hasChromiumMprisBridge: Mpris.players.values.some(
-		p => isChromiumMprisBridge(p.dbusName)
-	)
 	// A browser's own sparse single MPRIS player (Firefox built-in, Chromium
 	// native), as opposed to the rich per-window bridge players. Split per
 	// browser so a rich source for one browser never hides the other's player.
@@ -93,23 +87,42 @@ Singleton {
 	function isBuiltinBrowserPlayer(name) {
 		return isBuiltinFirefoxPlayer(name) || isBuiltinChromiumPlayer(name);
 	}
+	// Which built-ins a running bridge covers, resolved by process ancestry:
+	// the bridge host is a child of the browser that owns the built-in's
+	// connection. No name-level linkage exists — the bridge embeds its own
+	// host pid while the browser names its player after its connection or
+	// its pid depending on version — so the resolve goes through D-Bus and
+	// /proc in a helper.
+	property var coveredBuiltins: []
+	Process {
+		id: coveredBuiltinsProc
+		stdout: StdioCollector {
+			onStreamFinished: root.coveredBuiltins = text.trim().length > 0 ? text.trim().split("\n") : []
+		}
+	}
+	// Debounced: players arrive and leave in bursts, and one resolve per
+	// burst is enough.
+	Timer {
+		id: coveredBuiltinsRefresh
+		interval: 150
+		onTriggered: {
+			const names = Mpris.players.values.map(p => p.dbusName ?? "").filter(n => n.length > 0);
+			coveredBuiltinsProc.running = false;
+			coveredBuiltinsProc.command = [Quickshell.shellPath("scripts/mpris/covered-builtins.sh"), ...names];
+			coveredBuiltinsProc.running = true;
+		}
+	}
 	function isRealPlayer(player) {
         if (!Config.options.media.filterDuplicatePlayers) {
             return true;
         }
         const name = player.dbusName ?? '';
-        // Hide a browser's built-in single player only when a richer source for
-        // THAT browser is present, so it isn't duplicated. Scoped per browser:
-        // the Firefox bridge (or plasma-browser-integration) hides the Firefox
-        // built-in; plasma also hides the Chromium built-in. Critically a
-        // Firefox bridge must NOT hide Chromium's native player — different
-        // browsers — which previously left Chromium showing a bar title with no
-        // player in the popup.
-        const richFirefoxSource = hasActivePlasmaIntegration || hasFirefoxMprisBridge;
-        const richChromiumSource = hasActivePlasmaIntegration || hasChromiumMprisBridge;
+        // Hide a browser's built-in single player only when a bridge runs in
+        // that same browser (see coveredBuiltins), so it isn't duplicated;
+        // plasma integration replaces built-ins outright. A built-in from a
+        // browser without a bridge is somebody's only player and stays.
         return (
-            !(richFirefoxSource && isBuiltinFirefoxPlayer(name)) &&
-            !(richChromiumSource && isBuiltinChromiumPlayer(name)) &&
+            !(isBuiltinBrowserPlayer(name) && (hasActivePlasmaIntegration || root.coveredBuiltins.indexOf(name) !== -1)) &&
             // playerctld just copies other buses and we don't need duplicates
             !name.startsWith('org.mpris.MediaPlayer2.playerctld') &&
             // Non-instance mpd bus
@@ -125,6 +138,7 @@ Singleton {
 			target: modelData;
 
 			Component.onCompleted: {
+				coveredBuiltinsRefresh.restart();
 				root.notePlaybackChange(modelData);
 				if (root.trackedPlayer == null || modelData.isPlaying) {
 					root.trackedPlayer = modelData;
@@ -132,6 +146,7 @@ Singleton {
 			}
 
 			Component.onDestruction: {
+				coveredBuiltinsRefresh.restart();
 				if (root.trackedPlayer == null || !root.trackedPlayer.isPlaying) {
 					for (const player of Mpris.players.values) {
 						if (player.playbackState.isPlaying) {
