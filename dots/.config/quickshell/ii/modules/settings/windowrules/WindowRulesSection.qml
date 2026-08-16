@@ -203,7 +203,35 @@ ContentSection {
         easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
     }
 
+    // Bring a freshly built editor onto screen. Called from the Loader once
+    // the editor exists, because before that the page's content height is
+    // still the old one and a scroll target clamped against it lands above
+    // the editor — opening from the bottom of the page used to shove the
+    // view up while the editor grew in below it, off screen. Top-aligns the
+    // editor when it is taller than the view, bottom-aligns it otherwise, so
+    // the fields you fill in first are what lands in frame.
+    function scrollToEditor(item) {
+        let flick = root.parent;
+        while (flick && flick.contentY === undefined)
+            flick = flick.parent;
+        if (!flick || !item) return;
+        const top = flick.contentItem.mapFromItem(item, 0, 0).y;
+        const target = item.height > flick.height
+            ? top - 12
+            : Math.min(top - 12, top + item.height - flick.height + 12);
+        scrollBackAnim.target = flick;
+        scrollBackAnim.to = Math.max(0, Math.min(target, flick.contentHeight - flick.height));
+        scrollBackAnim.restart();
+    }
+
     function openEditor(index) {
+        // A used ConfigSwitch has had its checked: binding broken by the
+        // click, so an open editor cannot be repointed at another rule — it
+        // has to come down and go up again. Dropping editIndex first
+        // deactivates the Loader; the fresh instance then binds against the
+        // draft loaded below.
+        if (root.editorOpen && root.editIndex !== index)
+            root.editIndex = -1;
         const rule = index < root.rules.length ? root.rules[index] : null;
         const m = rule?.match ?? {};
         const e = rule?.effects ?? {};
@@ -534,7 +562,7 @@ ContentSection {
                     }
                     SmallIconButton {
                         glyph: "edit"
-                        enabled: !root.editorOpen
+                        enabled: root.editIndex !== ruleCard.index
                         onClicked: root.openEditor(ruleCard.index)
                     }
                     SmallIconButton {
@@ -556,6 +584,9 @@ ContentSection {
         visible: active
         Layout.fillWidth: true
         Layout.topMargin: 4
+        // After onLoaded the item exists but the layout has not sized it yet;
+        // one deferral lets implicitHeight land before the scroll measures it.
+        onLoaded: Qt.callLater(() => root.scrollToEditor(item))
 
         sourceComponent: Rectangle {
             color: Appearance.colors.colLayer1
@@ -570,8 +601,18 @@ ContentSection {
                 }
                 spacing: 8
 
-                ContentSubsectionLabel {
-                    text: Translation.tr("Which windows")
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    ContentSubsectionLabel {
+                        text: Translation.tr("Which windows")
+                    }
+                    Item { Layout.fillWidth: true }
+                    SmallIconButton {
+                        glyph: "close"
+                        onClicked: root.editIndex = -1
+                        StyledToolTip { text: Translation.tr("Close without saving") }
+                    }
                 }
 
                 RowLayout {
