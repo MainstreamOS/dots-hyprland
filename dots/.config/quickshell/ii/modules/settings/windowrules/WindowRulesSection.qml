@@ -110,6 +110,33 @@ ContentSection {
         return "^(" + text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")$";
     }
 
+    // One entry per app, under the name a person knows it by. The desktop
+    // entry is the authority when one matches the class; otherwise the class
+    // itself is tidied — reverse-DNS prefix dropped, dashes and underscores
+    // opened into spaces, first letters raised — so org.gnome.Nautilus and
+    // desktop-plus read as Nautilus and Desktop Plus rather than as ids.
+    function friendlyAppName(cls) {
+        const entry = DesktopEntries.heuristicLookup(cls);
+        if (entry && entry.name.length > 0) return entry.name;
+        const seg = cls.split(".").pop();
+        return seg.split(/[-_]/)
+            .filter(w => w.length > 0)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+    }
+
+    readonly property var openApps: {
+        const seen = ({});
+        const apps = [];
+        for (const w of openWindows) {
+            if (!w.class || seen[w.class]) continue;
+            seen[w.class] = true;
+            apps.push({ displayName: friendlyAppName(w.class), cls: w.class });
+        }
+        apps.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        return apps;
+    }
+
     // ^(kitty)$ reads as noise on a card; show the plain name when the
     // pattern is just an anchored literal, the raw pattern otherwise.
     function prettyPattern(pattern) {
@@ -554,11 +581,8 @@ ContentSection {
                         id: windowPicker
                         Layout.fillWidth: true
                         textRole: "displayName"
-                        model: [{ displayName: Translation.tr("Pick an open window…"), cls: "" }]
-                            .concat(root.openWindows.map(w => ({
-                                displayName: w.class + "  —  " + w.title,
-                                cls: w.class
-                            })))
+                        model: [{ displayName: Translation.tr("Pick an open app…"), cls: "" }]
+                            .concat(root.openApps)
                         currentIndex: 0
                         onActivated: index => {
                             const cls = model[index]?.cls ?? "";
@@ -573,7 +597,7 @@ ContentSection {
                             windowsProc.running = false;
                             windowsProc.running = true;
                         }
-                        StyledToolTip { text: Translation.tr("Re-list the windows open right now") }
+                        StyledToolTip { text: Translation.tr("Re-list the apps open right now") }
                     }
                 }
 
@@ -609,7 +633,7 @@ ContentSection {
                     StyledText {
                         Layout.fillWidth: true
                         text: root.liveMatch.state === "nopreview" ? Translation.tr("Can't preview this pattern here, but it will still be saved")
-                            : root.liveMatch.state === "blank" ? Translation.tr("Pick a window or type a pattern to see what it catches")
+                            : root.liveMatch.state === "blank" ? Translation.tr("Pick an app or type a pattern to see what it catches")
                             : root.liveMatch.list.length === 0 ? Translation.tr("Matches none of the windows open right now")
                             : Translation.tr("Matches now: %1").arg(root.liveMatch.list.map(w => w.class).filter((c, i, a) => a.indexOf(c) === i).join(", "))
                         font.pixelSize: Appearance.font.pixelSize.smaller
