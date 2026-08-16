@@ -55,6 +55,9 @@ BarGroup {
                 }
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
+                // Tabular figures: every digit shares one width, so a ticking
+                // time doesn't resize the pill.
+                font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
             }
         }
@@ -80,6 +83,7 @@ BarGroup {
                 }
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
+                font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
             }
         }
@@ -102,6 +106,7 @@ BarGroup {
                 }
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
+                font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
             }
         }
