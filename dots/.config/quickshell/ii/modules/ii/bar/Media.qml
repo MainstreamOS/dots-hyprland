@@ -19,6 +19,11 @@ Item {
     implicitWidth: rowLayout.implicitWidth + rowLayout.spacing * 2
     implicitHeight: Appearance.sizes.baseBarHeight
 
+    // What the controls popup centers on. The slot hands over the whole pill
+    // where media shares one with resources — the two read as a single
+    // control there, so the popup follows their combined width.
+    readonly property Item popupAnchorItem: parent?.popupAnchor ?? root
+
     Timer {
         running: activePlayer?.playbackState == MprisPlaybackState.Playing
         interval: Config.options.resources.updateInterval
@@ -37,8 +42,10 @@ Item {
             } else if (event.button === Qt.ForwardButton) {
                 activePlayer.next();
             } else if (event.button === Qt.RightButton) {
+                GlobalStates.mediaWidgetItem = root.popupAnchorItem;
                 GlobalStates.toggleReceiveView();
             } else if (event.button === Qt.LeftButton) {
+                GlobalStates.mediaWidgetItem = root.popupAnchorItem;
                 GlobalStates.mediaControlsOpen = !GlobalStates.mediaControlsOpen
             }
         }
@@ -58,6 +65,7 @@ Item {
             // upload isn't disturbed; the user can finish the current send
             // (or wait for it) before starting another.
             if (LocalSend.state === LocalSend.stateSending) return;
+            GlobalStates.mediaWidgetItem = root.popupAnchorItem;
             GlobalStates.mediaTransferActive = true;
             GlobalStates.mediaControlsOpen = true;
         }

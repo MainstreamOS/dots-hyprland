@@ -150,10 +150,31 @@ Scope {
                 left: !(Config.options.bar.vertical && Config.options.bar.bottom)
                 right: Config.options.bar.vertical && Config.options.bar.bottom
             }
+            // The stock center-left spot, used until the widget that opened
+            // the popup has been measured — and kept whenever it cannot be.
+            property real anchorLeft: (panelWindow.screen.width / 2) - (osdWidth / 2) - widgetWidth
+
+            // Measured on open rather than bound: the loader rebuilds this
+            // window every time the popup opens, and the widget publishes
+            // itself immediately before, so one measurement per open is both
+            // current and free of binding loops against the layout.
+            function placeUnderWidget() {
+                if (Config.options.bar.vertical) return;
+                try {
+                    const it = GlobalStates.mediaWidgetItem;
+                    const win = it ? it.QsWindow.window : null;
+                    const pos = win?.contentItem ? win.contentItem.mapFromItem(it, 0, 0) : null;
+                    if (!pos) return;
+                    const want = pos.x + it.width / 2 - root.widgetWidth / 2;
+                    const maxX = panelWindow.screen.width - root.widgetWidth - Appearance.sizes.hyprlandGapsOut;
+                    panelWindow.anchorLeft = Math.max(Appearance.sizes.hyprlandGapsOut, Math.min(want, maxX));
+                } catch (e) {}
+            }
+
             margins {
                 top: Config.options.bar.vertical ? ((panelWindow.screen.height / 2) - widgetHeight * 1.5) : Appearance.sizes.barHeight
                 bottom: Appearance.sizes.barHeight
-                left: Config.options.bar.vertical ? Appearance.sizes.barHeight : ((panelWindow.screen.width / 2) - (osdWidth / 2) - widgetWidth)
+                left: Config.options.bar.vertical ? Appearance.sizes.barHeight : panelWindow.anchorLeft
                 right: Appearance.sizes.barHeight
             }
 
@@ -163,6 +184,7 @@ Scope {
 
             Component.onCompleted: {
                 GlobalFocusGrab.addDismissable(panelWindow);
+                panelWindow.placeUnderWidget();
             }
             Component.onDestruction: {
                 GlobalFocusGrab.removeDismissable(panelWindow);

@@ -165,6 +165,11 @@ Item { // Bar content region
         // Set when this pill is the stock media-and-resources pairing, where
         // media gives up room rather than the pill growing.
         property bool yieldsToGroupMate: false
+        // What a module's popup should sit under. Media and resources in one
+        // pill read as a single control, so the popup follows the pill they
+        // share rather than the media half of it; left null a module speaks
+        // for itself.
+        property Item popupAnchor: null
         Layout.alignment: Qt.AlignVCenter
         Layout.fillWidth: root.moduleFillWidth(moduleName)
         // Media asks for a set amount rather than for as much as its track
@@ -251,6 +256,7 @@ Item { // Bar content region
                         moduleName: modelData.id
                         entryEnabled: modelData.enabled
                         yieldsToGroupMate: pill.mediaYields
+                        popupAnchor: pill.mediaYields ? pill : null
                     }
                 }
             }

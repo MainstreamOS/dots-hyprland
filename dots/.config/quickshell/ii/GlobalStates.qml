@@ -16,6 +16,11 @@ Singleton {
     property bool sidebarRightOpen: false
     property bool mediaControlsOpen: false
     property bool mediaTransferActive: false
+    // The bar's media widget, set by whichever one opens the popup, so the
+    // popup can place itself under it wherever the layout put it. An Item
+    // rather than a coordinate: the popup measures at the moment it opens,
+    // against the bar window the widget actually lives in.
+    property Item mediaWidgetItem: null
     property var mediaTransferUrls: []
     property bool mediaReceiveActive: false
     property bool osdBrightnessOpen: false
