@@ -763,7 +763,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         ConfigSwitch {
             id: swBlurXray
             buttonIcon: "layers_clear"
-            text: Translation.tr("Blur through to the wallpaper")
+            text: Translation.tr("Blur through to the wallpaper") + " (xray)"
             checked: root.blurXrayEnabled
             animateChanges: root._decoReady
             enabled: root.blurEnabled
