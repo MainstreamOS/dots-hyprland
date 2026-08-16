@@ -19,6 +19,12 @@ Item { // Bar content region
     // Widgets that have a vertical rendering. Inherently horizontal widgets
     // (activeWindow, utilButtons, weather, timers) have no vertical form and
     // are skipped on the vertical bar.
+    // The bar's visible body is inset from the window by the floating gap,
+    // matching barBackground's margins. The section columns consume it so
+    // their pills stay the width of the bar they sit on, which is also the
+    // width the center pills come out at.
+    readonly property real floatingInset: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
+
     readonly property var verticalModules: ["sidebarButton", "resources", "media", "workspaces", "clock", "battery", "tray", "volume", "indicators"]
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton", "tray", "volume", "indicators"]
@@ -419,6 +425,8 @@ Item { // Bar content region
                 left: parent.left
                 right: parent.right
                 topMargin: Appearance.sizes.hyprlandGapsOut
+                leftMargin: root.floatingInset
+                rightMargin: root.floatingInset
             }
             spacing: 8
 
@@ -461,6 +469,8 @@ Item { // Bar content region
                 left: parent.left
                 right: parent.right
                 bottomMargin: Appearance.rounding.screenRounding
+                leftMargin: root.floatingInset
+                rightMargin: root.floatingInset
             }
             spacing: 8
 
