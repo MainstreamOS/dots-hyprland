@@ -41,9 +41,12 @@ LazyLoader {
         margins {
             left: {
                 if (!Config.options.bar.vertical) {
+                    // Window position, but pill centering: the pill sits an
+                    // elevationMargin inside the window's edge, so that inset
+                    // comes off the offset or the pill lands right of center.
                     let mapped = root.QsWindow?.mapFromItem(
                         root.anchorTarget,
-                        (root.anchorTarget.width - popupBackground.implicitWidth) / 2, 0
+                        (root.anchorTarget.width - popupBackground.implicitWidth) / 2 - popupBackground.anchors.leftMargin, 0
                     );
                     // Clamp to screen edges
                     let screenW = popupWindow.screen?.width ?? 1920;
@@ -57,7 +60,7 @@ LazyLoader {
                 if (!Config.options.bar.vertical) return Appearance.sizes.barHeight;
                 let mapped = root.QsWindow?.mapFromItem(
                     root.anchorTarget,
-                    0, (root.anchorTarget.height - popupBackground.implicitHeight) / 2
+                    0, (root.anchorTarget.height - popupBackground.implicitHeight) / 2 - popupBackground.anchors.topMargin
                 );
                 // Clamp to screen edges
                 let screenH = popupWindow.screen?.height ?? 1080;

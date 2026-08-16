@@ -66,18 +66,25 @@ LazyLoader {
         exclusionMode: ExclusionMode.Ignore
         exclusiveZone: 0
         margins {
+            // These margins place the WINDOW, but what should center on the
+            // widget is the visible pill, which sits inset from the window's
+            // anchored edge by the shadow padding below. Subtracting that
+            // inset — written as the same expression the background uses —
+            // keeps the pill centred rather than shifted by a shadow's width.
             left: {
                 if (!Config.options.bar.vertical) return root.QsWindow?.mapFromItem(
                     root.hoverTarget, 
-                    (root.hoverTarget.width - popupBackground.implicitWidth) / 2, 0
+                    (root.hoverTarget.width - popupBackground.implicitWidth) / 2
+                        - (Appearance.sizes.elevationMargin + root.popupBackgroundMargin * (!popupWindow.anchors.left)), 0
                 ).x;
                 return Appearance.sizes.verticalBarWidth
             }
             top: {
                 if (!Config.options.bar.vertical) return Appearance.sizes.barHeight;
                 return root.QsWindow?.mapFromItem(
-                    root.hoverTarget, 
-                    (root.hoverTarget.height - popupBackground.implicitHeight) / 2, 0
+                    root.hoverTarget, 0,
+                    (root.hoverTarget.height - popupBackground.implicitHeight) / 2
+                        - (Appearance.sizes.elevationMargin + root.popupBackgroundMargin * (!popupWindow.anchors.top))
                 ).y;
             }
             right: Appearance.sizes.verticalBarWidth
