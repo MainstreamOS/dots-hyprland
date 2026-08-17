@@ -201,6 +201,15 @@ jq -e '.background.slideshow' "$THEME_DIR/config.json" >/dev/null 2>&1 \
 # to the local wallpaper directory instead of whatever this machine last used.
 jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/null 2>&1 \
     || JQ_FILTER+=' | .background.slideshow.folder = ""'
+# Which edge the dock sits on belongs to the theme, but only when the theme has
+# an opinion. A snapshot taken before the setting existed names no edge, and an
+# absent key is the worst of both: the adapter keeps showing the dock where it
+# is while the file says nothing, so the next start moves it somewhere the user
+# never chose. Write the live edge in instead, so the screen and the file agree.
+if ! jq -e '.dock | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; then
+    PRESERVE_DOCK_POS=$(jq -c '.dock.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    [ -n "$PRESERVE_DOCK_POS" ] && { JQ_FILTER+=' | .dock.position = $dockpos'; JQ_ARGS+=(--argjson dockpos "$PRESERVE_DOCK_POS"); }
+fi
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }
