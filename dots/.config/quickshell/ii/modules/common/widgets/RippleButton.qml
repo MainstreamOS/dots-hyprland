@@ -41,13 +41,19 @@ Button {
     function cancelRipple() { rippleFadeAnim.restart(); }
 
     function startRipple(x, y) {
+        // The ripple is a child of the background, which the control insets on
+        // both axes — so a horizontal inset offsets the origin just as a
+        // vertical one does, and the reach is the background's, not the whole
+        // control's. Only buttons with a left or right inset can tell.
+        const stateX = buttonBackground.x;
         const stateY = buttonBackground.y;
-        rippleAnim.x = x;
+        rippleAnim.x = x - stateX;
         rippleAnim.y = y - stateY;
 
         const dist = (ox,oy) => ox*ox + oy*oy
+        const stateEndX = stateX + buttonBackground.width
         const stateEndY = stateY + buttonBackground.height
-        rippleAnim.radius = Math.sqrt(Math.max(dist(0, stateY), dist(0, stateEndY), dist(width, stateY), dist(width, stateEndY)))
+        rippleAnim.radius = Math.sqrt(Math.max(dist(stateX, stateY), dist(stateX, stateEndY), dist(stateEndX, stateY), dist(stateEndX, stateEndY)))
 
         rippleFadeAnim.complete();
         rippleAnim.restart();
