@@ -147,9 +147,13 @@ Singleton {
         for (const s of ["left", "center", "right"])
             sections[s] = JSON.parse(JSON.stringify(root.options.bar.layout[s] ?? []))
 
-        function spacerOnly(g) {
-            const ws = g.widgets ?? []
-            return ws.length > 0 && ws.every(w => root.retiredBarModules.indexOf(w.id) !== -1)
+        // A group may still be a bare string, or carry `items` where this one
+        // carries `widgets` — the bar and its editor both read all three forms.
+        // Reading `widgets` alone sees an empty group where there is a full one,
+        // and everything downstream then treats it as empty.
+        function holdsSpacer(g) {
+            return ObjectUtils.layoutGroupWidgets(g)
+                .some(w => root.retiredBarModules.indexOf(w.id) !== -1)
         }
         let changed = false
 
@@ -160,7 +164,7 @@ Singleton {
         // to the center instead and go on rendering where they always appeared.
         for (const side of ["left", "right"]) {
             const groups = sections[side]
-            const marks = groups.map(spacerOnly)
+            const marks = groups.map(holdsSpacer)
             const at = side === "right" ? marks.indexOf(true) : marks.lastIndexOf(true)
             if (at === -1) continue
             const inward = side === "right" ? groups.slice(0, at) : groups.slice(at + 1)
@@ -174,13 +178,22 @@ Singleton {
         for (const s of ["left", "center", "right"]) {
             const kept = []
             for (const group of sections[s]) {
-                const widgets = group.widgets ?? []
+                const widgets = ObjectUtils.layoutGroupWidgets(group)
                 const remaining = widgets.filter(w => root.retiredBarModules.indexOf(w.id) === -1)
-                if (remaining.length !== widgets.length) changed = true
+                // Nothing retired in it: hand back the group exactly as it was
+                // read, in whichever form it was written. Rewriting one this
+                // pass has no business touching is how a layout gets lost.
+                if (remaining.length === widgets.length) { kept.push(group); continue }
+                changed = true
                 // A group that held nothing else goes with it, rather than
                 // staying on as a slot with nothing to show.
-                group.widgets = remaining
-                if (remaining.length > 0) kept.push(group)
+                if (remaining.length === 0) continue
+                // Only now is the group rewritten, and it settles on the one
+                // form so `items` cannot survive alongside a stale `widgets`.
+                const next = (typeof group === "object" && group !== null) ? group : {}
+                delete next.items
+                next.widgets = remaining
+                kept.push(next)
             }
             sections[s] = kept
         }
