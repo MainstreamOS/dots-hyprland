@@ -109,5 +109,27 @@
       "Qt apps now take their colors from your wallpaper along with everything else",
       "Your session is captured while it runs, so a crash no longer loses your window layout"
     ]
+  },
+  "1.3.0": {
+    "date": "2026-08-17",
+    "kind": "feature",
+    "name": "Everything in its place",
+    "summary": "The dock goes on any edge you like, and the bar arranges itself",
+    "changes": [
+      "Put the dock on any edge of the screen: top, bottom, left or right",
+      "The bar steps aside when you give the dock the edge it was using",
+      "Themes now carry which edge the dock sits on, along with everything else they remember",
+      "The flexible-space widget is retired — the bar packs its own sections now, and a layout you already saved moves across on its own",
+      "Bar popups open centered under the widget they belong to, wherever you have put it",
+      "A popup near the edge of the screen stays on screen instead of running off it",
+      "The media widget keeps its size and its popup in the right place outside the center",
+      "The timer keeps a steady width while it counts down, instead of nudging its neighbors",
+      "Dividers stay inside the bar's rounded background",
+      "Close the window rule editor from its own corner, and switch between rules without closing it",
+      "Pick a window rule's app by name instead of by window class",
+      "Drives you have mounted stay on the tab you mounted them from",
+      "Wallpaper thumbnails show up for filenames with punctuation in them",
+      "Media controls come back from the shortcut, and a second browser's player no longer disappears"
+    ]
   }
 }
