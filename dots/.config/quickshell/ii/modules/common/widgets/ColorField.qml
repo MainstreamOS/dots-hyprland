@@ -22,6 +22,10 @@ RowLayout {
     property string text: ""
     property string buttonIcon: ""
     property string value: "#000000"
+    // Whether clearing the box is a way of saying "no color of my own" rather
+    // than a typo. Off by default: somewhere like a gradient lane, an empty
+    // string is not a color it can draw, and refusing it is the kinder answer.
+    property bool allowEmpty: false
     property real textWidth: 170
     // The width the swatch, the field and the button share, so the row lines
     // up with the sliders around it: the swatch starts where their tracks
@@ -93,7 +97,13 @@ RowLayout {
             text: root.value
             onEditingFinished: {
                 const v = root.normalise(text)
-                if (v.length > 0 && v !== root.value)
+                // An emptied box is the only way of taking a color back off
+                // where one is allowed to be absent; without it the field can
+                // be given a value but never returned to not having one.
+                if (v.length === 0 && root.allowEmpty && String(text).trim().length === 0) {
+                    if (root.value !== "")
+                        root.edited("")
+                } else if (v.length > 0 && v !== root.value)
                     root.edited(v)
                 // Re-arm the binding rather than assigning text: a plain
                 // assignment would sever `text: root.value` for good, so after
