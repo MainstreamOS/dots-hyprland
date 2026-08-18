@@ -21,7 +21,8 @@ Singleton {
     // the layout now says the position the spacer used to fake.
     readonly property var defaultBarLayout: ({
         "left": [
-            { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] }
+            { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] },
+            { "widgets": [ {"id": "activeWindowPill", "enabled": false} ] }
         ],
         "center": [
             { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
@@ -553,9 +554,9 @@ Singleton {
                 // of widgets ({ id, enabled }). Widgets in the same group share
                 // a pill (combined); separate groups are separate pills. In the
                 // center, the middle group is kept screen-centered. Recognized
-                // ids: sidebarButton, activeWindow, resources, media,
-                // workspaces, clock, utilButtons, battery, indicators, volume,
-                // tray, timers, weather, releaseUpdates.
+                // ids: sidebarButton, activeWindow, activeWindowPill,
+                // resources, media, workspaces, clock, utilButtons, battery,
+                // indicators, volume, tray, timers, weather, releaseUpdates.
                 property JsonObject layout: JsonObject {
                     property list<var> left: root.defaultBarLayout.left
                     property list<var> center: root.defaultBarLayout.center

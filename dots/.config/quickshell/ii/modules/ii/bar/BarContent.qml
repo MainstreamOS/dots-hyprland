@@ -25,6 +25,7 @@ Item { // Bar content region
         switch (name) {
         case "sidebarButton": return comp_sidebarButton;
         case "activeWindow": return comp_activeWindow;
+        case "activeWindowPill": return comp_activeWindowPill;
         case "resources": return comp_resources;
         case "media": return comp_media;
         case "workspaces": return comp_workspaces;
@@ -54,6 +55,7 @@ Item { // Bar content region
             || Config.options.sidebar.translator.enable
             || Config.options.policies.weeb !== 0;
         case "activeWindow": return root.useShortenedForm === 0;
+        case "activeWindowPill": return root.useShortenedForm === 0;
         case "media": return root.useShortenedForm < 2;
         case "utilButtons": return Config.options.bar.verbose && root.useShortenedForm === 0;
         case "battery": return root.useShortenedForm < 2 && Battery.available;
@@ -71,12 +73,12 @@ Item { // Bar content region
     // centred — stretching one that draws its own background turns a circle or
     // a capsule into a slab the full height of the bar.
     function moduleFillHeight(name) {
-        return name === "activeWindow" || name === "workspaces" || name === "tray"
+        return name === "activeWindow" || name === "activeWindowPill" || name === "workspaces" || name === "tray"
             || name === "volume";
     }
 
     function moduleFillWidth(name) {
-        return name === "activeWindow" || name === "media" || name === "clock" || (name === "resources" && root.useShortenedForm === 2);
+        return name === "activeWindow" || name === "activeWindowPill" || name === "media" || name === "clock" || (name === "resources" && root.useShortenedForm === 2);
     }
 
     // Widgets whose own width comes and goes: a track title is there or it
@@ -148,7 +150,7 @@ Item { // Bar content region
     // The widgets whose job is genuinely width: the window title needs the
     // section's spare room so it can shrink to an ellipsis.
     function moduleTakesSpace(name) {
-        return name === "activeWindow";
+        return name === "activeWindow" || name === "activeWindowPill";
     }
     // Whether anything showing in this group needs its section's spare width.
     function groupTakesSpace(g) {
@@ -334,6 +336,11 @@ Item { // Bar content region
     Component {
         id: comp_activeWindow
         ActiveWindow {}
+    }
+
+    Component {
+        id: comp_activeWindowPill
+        ActiveWindow { pilled: true }
     }
 
     Component {
