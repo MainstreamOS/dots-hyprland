@@ -16,6 +16,11 @@ MouseArea {
     readonly property MprisPlayer activePlayer: MprisController.activePlayer
     readonly property string cleanedTitle: StringUtils.cleanMusicTitle(activePlayer?.trackTitle) || Translation.tr("No media")
 
+    // What the controls popup lines itself up with. Matches the horizontal
+    // widget so the popup opens beside whichever one was clicked rather than
+    // at a fixed spot on the screen edge.
+    readonly property Item popupAnchorItem: parent?.popupAnchor ?? root
+
     Layout.fillHeight: true
     implicitHeight: mediaCircProg.implicitHeight
     implicitWidth: Appearance.sizes.verticalBarWidth
@@ -37,6 +42,7 @@ MouseArea {
         } else if (event.button === Qt.ForwardButton || event.button === Qt.RightButton) {
             activePlayer.next();
         } else if (event.button === Qt.LeftButton) {
+            GlobalStates.mediaWidgetItem = root.popupAnchorItem;
             GlobalStates.mediaControlsOpen = !GlobalStates.mediaControlsOpen
         }
     }

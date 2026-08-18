@@ -150,29 +150,39 @@ Scope {
                 left: !(Config.options.bar.vertical && Config.options.bar.bottom)
                 right: Config.options.bar.vertical && Config.options.bar.bottom
             }
-            // The stock center-left spot, used until the widget that opened
-            // the popup has been measured — and kept whenever it cannot be.
+            // The stock spots, used until the widget that opened the popup has
+            // been measured — and kept whenever it cannot be. Which one is read
+            // depends on the edge the bar is on: a vertical bar puts the popup
+            // beside itself and slides it up and down, a horizontal one puts it
+            // below and slides it across.
             property real anchorLeft: (panelWindow.screen.width / 2) - (osdWidth / 2) - widgetWidth
+            property real anchorTop: (panelWindow.screen.height / 2) - widgetHeight * 1.5
 
             // Measured on open rather than bound: the loader rebuilds this
             // window every time the popup opens, and the widget publishes
             // itself immediately before, so one measurement per open is both
             // current and free of binding loops against the layout.
             function placeUnderWidget() {
-                if (Config.options.bar.vertical) return;
                 try {
                     const it = GlobalStates.mediaWidgetItem;
                     const win = it ? it.QsWindow.window : null;
                     const pos = win?.contentItem ? win.contentItem.mapFromItem(it, 0, 0) : null;
                     if (!pos) return;
-                    const want = pos.x + it.width / 2 - root.widgetWidth / 2;
-                    const maxX = panelWindow.screen.width - root.widgetWidth - Appearance.sizes.hyprlandGapsOut;
-                    panelWindow.anchorLeft = Math.max(Appearance.sizes.hyprlandGapsOut, Math.min(want, maxX));
+                    const gap = Appearance.sizes.hyprlandGapsOut;
+                    if (Config.options.bar.vertical) {
+                        const wantY = pos.y + it.height / 2 - root.widgetHeight / 2;
+                        const maxY = panelWindow.screen.height - root.widgetHeight - gap;
+                        panelWindow.anchorTop = Math.max(gap, Math.min(wantY, maxY));
+                    } else {
+                        const want = pos.x + it.width / 2 - root.widgetWidth / 2;
+                        const maxX = panelWindow.screen.width - root.widgetWidth - gap;
+                        panelWindow.anchorLeft = Math.max(gap, Math.min(want, maxX));
+                    }
                 } catch (e) {}
             }
 
             margins {
-                top: Config.options.bar.vertical ? ((panelWindow.screen.height / 2) - widgetHeight * 1.5) : Appearance.sizes.barHeight
+                top: Config.options.bar.vertical ? panelWindow.anchorTop : Appearance.sizes.barHeight
                 bottom: Appearance.sizes.barHeight
                 left: Config.options.bar.vertical ? Appearance.sizes.barHeight : panelWindow.anchorLeft
                 right: Appearance.sizes.barHeight
