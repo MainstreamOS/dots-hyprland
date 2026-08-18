@@ -403,6 +403,14 @@ Singleton {
             const want = flip[Config.options.dock.position] ? Config.options.dock.position : "bottom";
             return want === root.sizes.barEdge ? flip[want] : want;
         }
+        // Which edge each sidebar opens from. A vertical bar gathers every
+        // control onto one side of the screen, so the panels it opens belong
+        // on that side too rather than a reach across the display. A vertical
+        // bar only ever sits left or right, so these stay left/right.
+        property string sidebarLeftEdge: Config.options.bar.vertical ? root.sizes.barEdge : "left"
+        property string sidebarRightEdge: Config.options.bar.vertical ? root.sizes.barEdge : "right"
+        // Whether the two share an edge, and so cannot both be shown.
+        property bool sidebarsShareEdge: root.sizes.sidebarLeftEdge === root.sizes.sidebarRightEdge
         // The dock's visible thickness plus its screen gap. The dock sizes its
         // window from this and the overview clears the top edge by it, so the
         // two cannot drift apart.

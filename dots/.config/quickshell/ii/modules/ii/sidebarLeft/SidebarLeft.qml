@@ -104,9 +104,12 @@ Scope { // Scope
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
             color: "transparent"
 
+            readonly property bool onRight: Appearance.sizes.sidebarLeftEdge === "right"
+
             anchors {
                 top: true
-                left: true
+                left: !panelWindow.onRight
+                right: panelWindow.onRight
                 bottom: true
             }
 
@@ -136,9 +139,14 @@ Scope { // Scope
             Rectangle {
                 id: sidebarLeftBackground
                 anchors.top: parent.top
-                anchors.left: parent.left
+                // Held against whichever edge the panel opens from, so the
+                // card keeps its screen gap there and the width animation
+                // below grows inward rather than off the display.
+                anchors.left: panelWindow.onRight ? undefined : parent.left
+                anchors.right: panelWindow.onRight ? parent.right : undefined
                 anchors.topMargin: Appearance.sizes.hyprlandGapsOut
                 anchors.leftMargin: Appearance.sizes.hyprlandGapsOut
+                anchors.rightMargin: Appearance.sizes.hyprlandGapsOut
                 width: panelWindow.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
                 height: parent.height - Appearance.sizes.hyprlandGapsOut * 2
                 color: Appearance.colors.colLayer0

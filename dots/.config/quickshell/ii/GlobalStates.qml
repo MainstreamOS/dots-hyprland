@@ -93,10 +93,22 @@ Singleton {
     // independent of the bar's per-monitor LazyLoader.
     signal hotCornerTriggered()
 
+    // A vertical bar brings both panels to its own edge, where one would cover
+    // the other with no way to reach underneath. Showing either puts the other
+    // away; side by side on a horizontal bar they stay independent.
+    onSidebarLeftOpenChanged: {
+        if (GlobalStates.sidebarLeftOpen && Appearance.sizes.sidebarsShareEdge) {
+            GlobalStates.sidebarRightOpen = false;
+        }
+    }
+
     onSidebarRightOpenChanged: {
         if (GlobalStates.sidebarRightOpen) {
             Notifications.timeoutAll();
             Notifications.markAllRead();
+            if (Appearance.sizes.sidebarsShareEdge) {
+                GlobalStates.sidebarLeftOpen = false;
+            }
         }
     }
 

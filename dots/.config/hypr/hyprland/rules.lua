@@ -163,8 +163,10 @@ hl.layer_rule({ match = { namespace = "quickshell:screenshot" }, no_anim = true}
 hl.layer_rule({ match = { namespace = "quickshell:session" }, blur = true})
 hl.layer_rule({ match = { namespace = "quickshell:session" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:session" }, ignore_alpha = 0})
-hl.layer_rule({ match = { namespace = "quickshell:sidebarRight" }, animation = "slide right"})
-hl.layer_rule({ match = { namespace = "quickshell:sidebarLeft" }, animation = "slide left"})
+-- Unnamed direction so the slide follows whichever edge the panel anchored to,
+-- the way the vertical bar below is served on either side by one rule.
+hl.layer_rule({ match = { namespace = "quickshell:sidebarRight" }, animation = "slide"})
+hl.layer_rule({ match = { namespace = "quickshell:sidebarLeft" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:verticalBar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:osk" }, order = -1})
 -- Quickshell: waffles

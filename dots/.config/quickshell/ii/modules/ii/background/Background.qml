@@ -203,7 +203,14 @@ Variants {
                     }
                     if (!GlobalStates.screenLocked && Config.options.background.parallax.enableSidebar) {
                         let sidebarFraction = bgRoot.parallaxRation / bgRoot.workspaceChunkSize / 2;
-                        usedFraction += (sidebarFraction * GlobalStates.sidebarRightOpen - sidebarFraction * GlobalStates.sidebarLeftOpen);
+                        // Which way the wallpaper leans follows the edge a panel
+                        // occupies rather than its name: a vertical bar can put
+                        // both on one side, where they must not cancel out.
+                        let openOnRight = (Appearance.sizes.sidebarRightEdge === "right" && GlobalStates.sidebarRightOpen)
+                            || (Appearance.sizes.sidebarLeftEdge === "right" && GlobalStates.sidebarLeftOpen);
+                        let openOnLeft = (Appearance.sizes.sidebarRightEdge === "left" && GlobalStates.sidebarRightOpen)
+                            || (Appearance.sizes.sidebarLeftEdge === "left" && GlobalStates.sidebarLeftOpen);
+                        usedFraction += sidebarFraction * (openOnRight - openOnLeft);
                     }
                     return Math.max(0, Math.min(1, usedFraction));
                 }

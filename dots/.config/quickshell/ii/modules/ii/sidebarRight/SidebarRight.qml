@@ -25,9 +25,12 @@ Scope {
         WlrLayershell.keyboardFocus: GlobalStates.sidebarRightOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         color: "transparent"
 
+        readonly property bool onLeft: Appearance.sizes.sidebarRightEdge === "left"
+
         anchors {
             top: true
-            right: true
+            left: panelWindow.onLeft
+            right: !panelWindow.onLeft
             bottom: true
         }
 
@@ -51,7 +54,11 @@ Scope {
             anchors {
                 fill: parent
                 margins: Appearance.sizes.hyprlandGapsOut
-                leftMargin: Appearance.sizes.elevationMargin
+                // The window is wider than the card by the room the shadow
+                // needs; that slack belongs on the side facing the desktop,
+                // which swaps when the panel moves to the other edge.
+                leftMargin: panelWindow.onLeft ? Appearance.sizes.hyprlandGapsOut : Appearance.sizes.elevationMargin
+                rightMargin: panelWindow.onLeft ? Appearance.sizes.elevationMargin : Appearance.sizes.hyprlandGapsOut
             }
             width: sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
             height: parent.height - Appearance.sizes.hyprlandGapsOut * 2
