@@ -1786,5 +1786,10 @@
   "Matches now: %1": "Matches now: %1",
   "Can't preview this pattern here, but it will still be saved": "Can't preview this pattern here, but it will still be saved",
   "Your window rules file couldn't be read, so it's being left alone: %1": "Your window rules file couldn't be read, so it's being left alone: %1",
-  "The rules file could not be read": "The rules file could not be read"
+  "The rules file could not be read": "The rules file could not be read",
+  "Reset to default transparency": "Reset to default transparency",
+  "Widget pills": "Widget pills",
+  "Reset to default colors": "Reset to default colors",
+  "Colors": "Colors",
+  "Dark mode and light mode each keep their own colors.": "Dark mode and light mode each keep their own colors."
 }

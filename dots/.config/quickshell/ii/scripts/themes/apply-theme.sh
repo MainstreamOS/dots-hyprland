@@ -207,6 +207,17 @@ jq -e '.background.slideshow' "$THEME_DIR/config.json" >/dev/null 2>&1 \
 # to the local wallpaper directory instead of whatever this machine last used.
 jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/null 2>&1 \
     || JQ_FILTER+=' | .background.slideshow.folder = ""'
+# How see-through the bar is and what color its pills take belong to the theme,
+# so a snapshot naming none of it means stock rather than whatever the last theme
+# was wearing — the rule the decorations restore further down states, for the
+# same reason: every theme saved before these existed was saved wearing stock, so
+# stock is the honest reading of one. Asked one at a time because a snapshot can
+# hold some and not others; the keys it carries deserve their values and the
+# rest deserve stock.
+# A right-biased object merge, because presence is the whole test: false and 0
+# are both settings someone chose, and only a key the snapshot never wrote may
+# take the stock value.
+JQ_FILTER+=' | .bar = ({backgroundOpacity: -1, widgetOpacity: -1, widgetColorDark: "", widgetColorLight: "", backgroundColorDark: "", backgroundColorLight: "", floatStyleShadow: true} + (.bar // {}))'
 # Which edge the dock sits on belongs to the theme, but only when the theme has
 # an opinion. A snapshot taken before the setting existed names no edge, and an
 # absent key is the worst of both: the adapter keeps showing the dock where it

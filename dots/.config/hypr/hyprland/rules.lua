@@ -133,6 +133,19 @@ hl.layer_rule({ match = { namespace = "osk[0-9]*" }, ignore_alpha = 0.6})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur_popups = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
+-- Blur stops at a fixed alpha, so with the shared 0.79 the bar loses its blur
+-- between two neighboring steps of its own transparency slider, and where that
+-- lands moves with the interface's transparency setting — around 7% of the
+-- slider on a wallpaper the automatic setting reads as fairly vibrant. Held low
+-- enough that the slider is smooth through the range anyone uses, and above the
+-- shadow these surfaces cast. Their layer is larger than the shape drawn on it:
+-- the rest is the room the shadow falls in, and a floor under the shadow's own
+-- alpha sends the blur through that too, ringing every surface in a frosted
+-- halo. The dock and sidebars ride the same floor, because the shared threshold
+-- above sits inside the reach of their stock alpha — the automatic transparency
+-- can land them a hair under it on a dark wallpaper, and a surface should not
+-- lose its blur to settings nobody touched.
+hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})

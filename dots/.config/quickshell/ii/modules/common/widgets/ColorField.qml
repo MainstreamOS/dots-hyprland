@@ -26,6 +26,13 @@ RowLayout {
     // than a typo. Off by default: somewhere like a gradient lane, an empty
     // string is not a color it can draw, and refusing it is the kinder answer.
     property bool allowEmpty: false
+    // What the swatch shows when the value is absent: a caller whose color
+    // can legitimately not exist hands over the stand-in it would use instead
+    // (a palette pick). A stand-in keeps moving with the palette while an
+    // owned color freezes, and the box dims its hex so the two never read
+    // alike — derived from the value itself, so they cannot disagree.
+    property string fallback: ""
+    readonly property bool ownValue: root.value !== "" || root.fallback === ""
     property real textWidth: 170
     // The width the swatch, the field and the button share, so the row lines
     // up with the sliders around it: the swatch starts where their tracks
@@ -50,7 +57,7 @@ RowLayout {
     // rather than a typed string has no reason to strip the alpha itself, and
     // an unreadable value here is worse than a wrong one — it cannot be edited
     // back into shape.
-    readonly property string displayValue: root.normalise(root.value) || root.value
+    readonly property string displayValue: root.normalise(root.value) || root.value || root.normalise(root.fallback) || root.fallback
 
     OptionalMaterialSymbol {
         icon: root.buttonIcon
@@ -104,6 +111,7 @@ RowLayout {
             Layout.preferredHeight: pickButton.height
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredWidth: Math.ceil(hexMetrics.advanceWidth) + leftPadding + rightPadding + 2
+            color: root.ownValue ? Appearance.m3colors.m3onSurface : Appearance.colors.colSubtext
             text: root.displayValue
             onEditingFinished: {
                 const v = root.normalise(text)
@@ -113,7 +121,11 @@ RowLayout {
                 if (v.length === 0 && root.allowEmpty && String(text).trim().length === 0) {
                     if (root.value !== "")
                         root.edited("")
-                } else if (v.length > 0 && v !== root.value)
+                // Against what the box shows, not the raw value: the value can
+                // arrive wearing the eight-digit dress while the box shows six,
+                // and comparing across that gap made a mere focus loss commit
+                // an untouched stand-in as an owned pick.
+                } else if (v.length > 0 && v !== root.displayValue)
                     root.edited(v)
                 // Re-arm the binding rather than assigning text: a plain
                 // assignment would sever `text: root.displayValue` for good,

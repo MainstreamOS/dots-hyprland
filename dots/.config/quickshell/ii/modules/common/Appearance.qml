@@ -119,9 +119,48 @@ Singleton {
         property color colLayer0Hover: ColorUtils.transparentize(ColorUtils.mix(colLayer0, colOnLayer0, 0.9, root.contentTransparency))
         property color colLayer0Active: ColorUtils.transparentize(ColorUtils.mix(colLayer0, colOnLayer0, 0.8, root.contentTransparency))
         property color colLayer0Border: ColorUtils.mix(root.m3colors.m3outlineVariant, colLayer0, 0.4)
+        // The bar's own two surfaces. Each keeps the color the rest of the
+        // interface gives it and takes only its opacity from the setting, which
+        // starts at whatever that surface was already drawn with.
+        readonly property real barBackgroundStockAlpha: colLayer0.a
+        // Only a color Qt can actually paint may leave the pick: a slot that
+        // arrives malformed — a hand-edit, a bad import — reads as unpicked
+        // rather than wedging every binding downstream of it.
+        readonly property string barBackgroundPick: {
+            const v = m3colors.darkmode
+                ? (Config.options?.bar.backgroundColorDark ?? "")
+                : (Config.options?.bar.backgroundColorLight ?? "")
+            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        }
+        property color colBarBackground: ColorUtils.applyAlpha(
+            barBackgroundPick !== "" ? barBackgroundPick : colLayer0,
+            (Config.options?.bar.backgroundOpacity ?? -1) < 0
+                ? barBackgroundStockAlpha : Config.options.bar.backgroundOpacity)
+        // The float style's outline wears the strip's own alpha: a hairline
+        // that kept full strength while the strip went see-through read as a
+        // wire rectangle floating around nothing.
+        property color colBarBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colBarBackground.a)
+        // The shadow the same way: a slab of shade around a strip that has
+        // faded from sight reads as a decoration around nothing.
+        property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
         // Layer 1
         property color colLayer1Base: m3colors.m3surfaceContainerLow
         property color colLayer1: ColorUtils.solveOverlayColor(colLayer0Base, colLayer1Base, 1 - root.contentTransparency);
+        // colLayer1 carries only the opacity an overlay needs to look right on
+        // top of a solid layer 0 — about a tenth — which is why widget groups
+        // vanish once the strip beneath them stops being solid.
+        readonly property real barWidgetStockAlpha: colLayer1.a
+        // The slot for the mode on screen; the other waits for its mode.
+        readonly property string barWidgetPick: {
+            const v = m3colors.darkmode
+                ? (Config.options?.bar.widgetColorDark ?? "")
+                : (Config.options?.bar.widgetColorLight ?? "")
+            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        }
+        property color colBarWidget: ColorUtils.applyAlpha(
+            barWidgetPick !== "" ? barWidgetPick : colLayer1,
+            (Config.options?.bar.widgetOpacity ?? -1) < 0
+                ? barWidgetStockAlpha : Config.options.bar.widgetOpacity)
         property color colOnLayer1: m3colors.m3onSurfaceVariant;
         property color colOnLayer1Inactive: ColorUtils.mix(colOnLayer1, colLayer1, 0.45);
         property color colLayer1Hover: ColorUtils.transparentize(ColorUtils.mix(colLayer1, colOnLayer1, 0.92), root.contentTransparency)

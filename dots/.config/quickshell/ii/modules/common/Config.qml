@@ -547,6 +547,22 @@ Singleton {
                 property bool borderless: false // true for no grouping of items
                 property string topLeftIcon: "spark" // Options: "distro" or any icon name in ~/.config/quickshell/ii/assets/icons
                 property bool showBackground: true
+                // How solid each of the bar's two surfaces is, as plain opacity:
+                // 0 is gone, 1 is fully solid. Below zero means the interface
+                // decides, which is where both start — the strip lands near
+                // solid and the widget groups near a tenth, so the sliders open
+                // at different points while still meaning the same thing.
+                property real backgroundOpacity: -1
+                property real widgetOpacity: -1
+                // A filled slot is the whole decision: empty means the palette
+                // decides, anything else is the user's own. One slot per mode,
+                // because everything a color sits against flips with the mode:
+                // a pill picked against a dark palette is a dark-mode
+                // decision that goes unreadable against light surfaces.
+                property string widgetColorDark: ""
+                property string widgetColorLight: ""
+                property string backgroundColorDark: ""
+                property string backgroundColorLight: ""
                 property bool verbose: true
                 property bool vertical: false
                 // Per-section widget layout. Each section is an ordered list

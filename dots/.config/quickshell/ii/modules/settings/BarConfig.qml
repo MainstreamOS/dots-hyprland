@@ -212,6 +212,132 @@ ContentPage {
     }
 
     ContentSection {
+        icon: "opacity"
+        title: Translation.tr("Transparency")
+
+        ConfigSlider {
+            text: Translation.tr("Background")
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: [Appearance.colors.barBackgroundStockAlpha]
+            buttonIcon: "wallpaper"
+            from: 0
+            to: 1
+            value: Config.options.bar.backgroundOpacity < 0
+                ? Appearance.colors.barBackgroundStockAlpha : Config.options.bar.backgroundOpacity
+            onMoved: {
+                if (Math.abs(value - Config.options.bar.backgroundOpacity) < 0.005)
+                    return;
+                Config.options.bar.backgroundOpacity = value;
+            }
+        }
+
+        // Line-separated groups draw nothing behind their widgets, so the pill
+        // controls have no surface to act on there and are put away entirely
+        // rather than offered in a state that could do nothing.
+        ConfigSlider {
+            text: Translation.tr("Widget pills")
+            visible: !Config.options.bar.borderless
+            textWidth: 170
+            sliderWidth: 340
+            // Where the pills sit before anyone touches this, read from the
+            // same value the slider falls back to, so the mark cannot promise
+            // a default the track would not actually return to.
+            stopIndicatorValues: [Appearance.colors.barWidgetStockAlpha]
+            buttonIcon: "location_chip"
+            from: 0
+            to: 1
+            value: Config.options.bar.widgetOpacity < 0
+                ? Appearance.colors.barWidgetStockAlpha : Config.options.bar.widgetOpacity
+            onMoved: {
+                if (Math.abs(value - Config.options.bar.widgetOpacity) < 0.005)
+                    return;
+                Config.options.bar.widgetOpacity = value;
+            }
+        }
+
+        // The tracks run zero to one while stock sits below zero, so this is
+        // the only road back to "the interface decides" — including for pill
+        // state a borderless bar keeps but does not show.
+        ConfigResetButton {
+            visible: Config.options.bar.backgroundOpacity >= 0
+                || Config.options.bar.widgetOpacity >= 0
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default transparency")
+            onClicked: {
+                Config.options.bar.backgroundOpacity = -1
+                Config.options.bar.widgetOpacity = -1
+            }
+        }
+    }
+
+    ContentSection {
+        icon: "palette"
+        title: Translation.tr("Colors")
+
+        ColorField {
+            text: Translation.tr("Background")
+            allowEmpty: true
+            textWidth: 170
+            sliderWidth: 340
+            buttonIcon: "wallpaper"
+            // Edits the slot for the mode on screen; the other mode keeps its
+            // own pick, or the palette where none was made.
+            value: Appearance.colors.barBackgroundPick
+            fallback: String(Appearance.colors.colLayer0)
+            onEdited: newValue => {
+                if (Appearance.m3colors.darkmode) Config.options.bar.backgroundColorDark = newValue
+                else Config.options.bar.backgroundColorLight = newValue
+            }
+        }
+
+        ColorField {
+            text: Translation.tr("Widget pills")
+            visible: !Config.options.bar.borderless
+            allowEmpty: true
+            textWidth: 170
+            sliderWidth: 340
+            buttonIcon: "location_chip"
+            value: Appearance.colors.barWidgetPick
+            fallback: String(Appearance.colors.colLayer1)
+            onEdited: newValue => {
+                if (Appearance.m3colors.darkmode) Config.options.bar.widgetColorDark = newValue
+                else Config.options.bar.widgetColorLight = newValue
+            }
+        }
+
+        // Hands every slot back to the palette in one press, without making
+        // someone guess that an emptied box is how you say "no color of my
+        // own". Shown whenever any slot is filled — either mode's, either
+        // surface's, borderless or not.
+        ConfigResetButton {
+            visible: Config.options.bar.backgroundColorDark !== ""
+                || Config.options.bar.backgroundColorLight !== ""
+                || Config.options.bar.widgetColorDark !== ""
+                || Config.options.bar.widgetColorLight !== ""
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default colors")
+            onClicked: {
+                Config.options.bar.widgetColorDark = ""
+                Config.options.bar.widgetColorLight = ""
+                Config.options.bar.backgroundColorDark = ""
+                Config.options.bar.backgroundColorLight = ""
+            }
+        }
+
+        SubtleNoticeBox {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            text: Translation.tr("Dark mode and light mode each keep their own colors.")
+        }
+    }
+
+    ContentSection {
         icon: "workspaces"
         title: Translation.tr("Workspaces")
 
