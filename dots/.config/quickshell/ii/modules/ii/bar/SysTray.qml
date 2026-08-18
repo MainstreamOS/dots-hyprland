@@ -9,8 +9,12 @@ import qs.modules.common.widgets
 
 Item {
     id: root
-    implicitWidth: gridLayout.implicitWidth
-    implicitHeight: gridLayout.implicitHeight
+    // Room between the icons and the pill drawn around them, the same the
+    // utility buttons keep, so the two read as the same kind of thing when they
+    // sit beside each other.
+    readonly property real contentPadding: 4
+    implicitWidth: gridLayout.implicitWidth + root.contentPadding * 2
+    implicitHeight: gridLayout.implicitHeight + root.contentPadding * 2
     property bool vertical: false
     property bool invertSide: false
     property bool trayOverflowOpen: false
@@ -70,6 +74,7 @@ Item {
         id: gridLayout
         columns: root.vertical ? 1 : -1
         anchors.fill: parent
+        anchors.margins: root.contentPadding
         rowSpacing: 8
         columnSpacing: 15
 

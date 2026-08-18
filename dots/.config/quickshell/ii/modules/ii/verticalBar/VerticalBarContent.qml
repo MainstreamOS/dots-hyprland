@@ -26,7 +26,7 @@ Item { // Bar content region
     readonly property real floatingInset: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
 
     // Modules that render without a surrounding pill.
-    readonly property var chromelessModules: ["sidebarButton", "tray", "volume", "indicators"]
+    readonly property var chromelessModules: ["sidebarButton"]
 
     function moduleComponent(name) {
         switch (name) {

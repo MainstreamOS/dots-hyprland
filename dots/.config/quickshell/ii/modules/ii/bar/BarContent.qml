@@ -19,7 +19,7 @@ Item { // Bar content region
 
     // Modules that render without a surrounding pill (they carry their own
     // background or fill the available width).
-    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "indicators", "volume", "tray", "timers", "releaseUpdates"]
+    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "timers", "releaseUpdates"]
 
     function moduleComponent(name) {
         switch (name) {
