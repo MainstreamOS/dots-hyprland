@@ -23,11 +23,12 @@ import mimetypes
 import os
 import socket
 import ssl
+import subprocess
 import sys
 import urllib.parse
 import uuid
 
-from common import device_info, emit
+from common import ALIAS, device_info, emit
 
 PROGRESS_INTERVAL = 65536
 CHUNK_SIZE = 65536
@@ -39,11 +40,50 @@ def decode_path(arg):
     return arg
 
 
+def client_cert():
+    """Path to this machine's LocalSend certificate, created on first use.
+
+    A receiver asks the sender for a certificate during the handshake and
+    refuses the connection outright when none arrives — the transfer never
+    reaches the point of sending a file, and the failure surfaces as a TLS
+    alert rather than anything about files. Which certificate it is does not
+    matter to the handshake; that one is offered at all does. It is kept
+    rather than made per-run so a peer keeps seeing the same device.
+    """
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    pem = os.path.join(base, "mainstream", "localsend", "client.pem")
+    if os.path.exists(pem) and os.path.getsize(pem) > 0:
+        return pem
+    os.makedirs(os.path.dirname(pem), mode=0o700, exist_ok=True)
+    tmp = pem + ".tmp"
+    rc = subprocess.run(
+        ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+         "-keyout", tmp, "-out", tmp, "-days", "3650",
+         "-subj", "/CN=" + ALIAS],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode
+    if rc != 0 or not os.path.exists(tmp):
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return None
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, pem)
+    return pem
+
+
 def make_connection(protocol, host, port, timeout=600):
     if protocol == "https":
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+        # A peer that does not ask for one ignores it, so this is offered
+        # every time rather than only after a refusal.
+        pem = client_cert()
+        if pem:
+            try:
+                ctx.load_cert_chain(pem)
+            except ssl.SSLError:
+                pass
         return http.client.HTTPSConnection(host, port, timeout=timeout, context=ctx)
     return http.client.HTTPConnection(host, port, timeout=timeout)
 
