@@ -34,13 +34,23 @@ RowLayout {
     signal edited(string newValue)
 
     // Accepts what someone would actually type: with or without the hash, and
-    // the three-digit form.
+    // the three-digit form. Also the eight-digit one, which nobody types but
+    // which is what Qt hands back for a color carrying alpha — the leading pair
+    // is that alpha, and a swatch that kept it would draw a color nobody chose.
     function normalise(raw) {
         let v = String(raw).trim().replace(/^#/, "").toLowerCase()
         if (/^[0-9a-f]{3}$/.test(v))
             v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2]
+        else if (/^[0-9a-f]{8}$/.test(v))
+            v = v.slice(2)
         return /^[0-9a-f]{6}$/.test(v) ? "#" + v : ""
     }
+
+    // What the swatch paints and the box shows. A caller handing over a color
+    // rather than a typed string has no reason to strip the alpha itself, and
+    // an unreadable value here is worse than a wrong one — it cannot be edited
+    // back into shape.
+    readonly property string displayValue: root.normalise(root.value) || root.value
 
     OptionalMaterialSymbol {
         icon: root.buttonIcon
@@ -67,7 +77,7 @@ RowLayout {
             Layout.preferredHeight: pickButton.height
             Layout.alignment: Qt.AlignVCenter
             radius: Appearance.rounding.small
-            color: root.value
+            color: root.displayValue
             border.width: 1
             border.color: Appearance.m3colors.m3outline
         }
@@ -94,7 +104,7 @@ RowLayout {
             Layout.preferredHeight: pickButton.height
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredWidth: Math.ceil(hexMetrics.advanceWidth) + leftPadding + rightPadding + 2
-            text: root.value
+            text: root.displayValue
             onEditingFinished: {
                 const v = root.normalise(text)
                 // An emptied box is the only way of taking a color back off
@@ -106,11 +116,11 @@ RowLayout {
                 } else if (v.length > 0 && v !== root.value)
                     root.edited(v)
                 // Re-arm the binding rather than assigning text: a plain
-                // assignment would sever `text: root.value` for good, so after
-                // one edit the box would stop following the picker or an
-                // outside change. Qt.binding keeps it tracking — and snaps an
-                // unusable entry back to the real value in the same stroke.
-                text = Qt.binding(() => root.value)
+                // assignment would sever `text: root.displayValue` for good,
+                // so after one edit the box would stop following the picker or
+                // an outside change. Qt.binding keeps it tracking — and snaps
+                // an unusable entry back to the real value in the same stroke.
+                text = Qt.binding(() => root.displayValue)
             }
         }
 
