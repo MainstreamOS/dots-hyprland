@@ -231,6 +231,14 @@ _gpu_lspci_d() { printf '%s\n' "0000:01:00.0 VGA compatible controller: NVIDIA C
 nvidia_write_aq_drm "$NVHOME"; CASES=$((CASES + 1))
 chk_str aq-drm "$(cat "$NVHOME/.config/hypr/custom/env.lua")" 'hl.env("AQ_DRM_DEVICES", "/dev/dri/by-path/pci-0000:01:00.0-card")'
 
+# The initramfs names whichever module the kernel bound, not one worked out from
+# the card's generation.
+_gpu_lspci_d() { printf '%s\n' "0000:00:02.0 VGA compatible controller: Intel Corporation Arrow Lake-S [Intel Graphics]"; }
+_gpu_bound_driver() { echo xe; };   chk_str intel-mod-xe "$(intel_kms_module)" "xe"
+_gpu_bound_driver() { echo i915; }; chk_str intel-mod-i915 "$(intel_kms_module)" "i915"
+_gpu_bound_driver() { return 0; };  chk_str intel-mod-fallback "$(intel_kms_module)" "i915"
+CASES=$((CASES + 3))
+
 ENABLED=""; _gpu_systemctl() { [[ "$1" == enable ]] && ENABLED="$ENABLED ${2%.service}"; return 0; }
 nvidia_enable_services true; CASES=$((CASES + 1))
 chk_str svc-powerd-on "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"

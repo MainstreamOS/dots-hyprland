@@ -255,6 +255,28 @@ mkinitcpio_add_modules() {
     done
 }
 
+# ── intel_kms_module ────────────────────────────────────────────────────────
+# Which module the initramfs needs for Intel early KMS, read off the card rather
+# than worked out from its generation. Whether i915 or xe claims a part is the
+# kernel's call and it moves from one release to the next, so a table here would
+# be a second opinion with nothing keeping it honest — and the generation tiers
+# are no help either, since the one covering Xe spans parts on both sides of the
+# split. Asking what is driving the card cannot disagree with the kernel, and
+# follows it for free the release a default changes.
+#
+# i915 when nothing answers: it is what every Intel part predating the split
+# uses, and it is what the initramfs named before any of this was asked.
+intel_kms_module() {
+    local addr drv=""
+    addr="$(_gpu_lspci_d | grep -iE 'VGA compatible controller|3D controller|Display controller' \
+            | grep -i 'Intel' | head -1 | awk '{print $1}' || true)"
+    [[ -n "$addr" ]] && drv="$(_gpu_bound_driver "$addr")" || true
+    case "$drv" in
+        i915|xe) printf '%s\n' "$drv" ;;
+        *)       printf 'i915\n' ;;
+    esac
+}
+
 # ── mkinitcpio_remove_hook <hook> ───────────────────────────────────────────
 # Idempotent removal of a HOOKS entry (scoped to the HOOKS line so MODULES and
 # comments are untouched). Used to drop the kms hook before injecting nvidia
@@ -341,6 +363,13 @@ hypr_env_retire() {
 # Extra probes/wrappers (overridable for testing).
 _gpu_lspci_d()   { lspci -D 2>/dev/null || true; }
 _gpu_systemctl() { ${GPU_SUDO:-} systemctl "$@"; }
+# The module currently driving a card, straight from the kernel. Empty when
+# nothing has claimed it.
+_gpu_bound_driver() {
+    local link="/sys/bus/pci/devices/$1/driver"
+    [[ -e "$link" ]] || return 0
+    basename "$(readlink -f "$link")" 2>/dev/null || true
+}
 _gpu_esp_mib() {
     if mountpoint -q /boot/efi 2>/dev/null; then
         echo $(( $(findmnt -bno SIZE /boot/efi 2>/dev/null || echo 0) / 1048576 ))
@@ -494,13 +523,11 @@ gpu_apply_autoconfig() {
     if [[ "$esp_threshold" -gt 0 && "$esp_mib" -gt 0 && "$esp_mib" -lt "$esp_threshold" ]]; then
         early_kms=false
     fi
-    # Intel first so i915 precedes nvidia in MODULES.
+    # Intel first so its module precedes nvidia in MODULES.
     if [[ $HAS_INTEL == true ]]; then
-        # i915 is the kernel default for Alchemist/Iris-Xe and older; on the rare
-        # Xe2 card (Battlemage/Lunar Lake) it is a harmless no-op and xe auto-loads.
         # No i915.modeset cmdline token: the param was deprecated in 6.12 (warns)
         # and KMS is already the -1 auto default; early KMS comes from MODULES.
-        [[ $early_kms == true ]] && mkinitcpio_add_modules i915 || true
+        [[ $early_kms == true ]] && mkinitcpio_add_modules "$(intel_kms_module)" || true
     fi
     if [[ $HAS_AMD == true ]]; then
         if [[ $IS_OLD_AMD == true ]]; then
@@ -525,7 +552,7 @@ gpu_apply_autoconfig() {
     # PRIME for hybrid.
     if [[ $IS_HYBRID == true && $early_kms == true ]]; then
         if [[ $HAS_NVIDIA == true && $HAS_INTEL == true ]]; then
-            mkinitcpio_add_modules i915
+            mkinitcpio_add_modules "$(intel_kms_module)"
         elif [[ $HAS_NVIDIA == true && $HAS_AMD == true ]]; then
             mkinitcpio_add_modules amdgpu
         fi
