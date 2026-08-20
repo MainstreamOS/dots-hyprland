@@ -428,16 +428,6 @@ nvidia_write_env() {
     esac
 }
 
-# ── nvidia_write_aq_drm <user_home> ─────────────────────────────────────────
-# Hybrid NVIDIA: pin Aquamarine's DRM device to the NVIDIA card via the stable
-# by-path symlink (card0/card1 enumeration is non-deterministic).
-nvidia_write_aq_drm() {
-    local uh="$1" addr
-    addr="$(_gpu_lspci_d | grep -iE 'NVIDIA|GeForce|Quadro|Tesla' | head -1 | awk '{print $1}' || true)"
-    [[ -n "$addr" ]] || return 0
-    hypr_env_upsert "$uh" AQ_DRM_DEVICES "/dev/dri/by-path/pci-${addr}-card"
-}
-
 # ── nvidia_enable_services <enable_powerd:bool> ─────────────────────────────
 # Enable suspend/hibernate/resume (tolerant of missing units); powerd only when
 # enable_powerd. Dynamic Boost is Ampere+ notebook-only, so only the turing
@@ -573,8 +563,19 @@ gpu_apply_autoconfig() {
 
 # ── gpu_apply_hypr_tweaks <user_home> ───────────────────────────────────────
 # User-level Hyprland GPU config (run AFTER dotfiles deploy so env.lua/
-# hypridle.conf exist): NVIDIA env + hypridle resume fix for Fermi+, and the
-# hybrid AQ_DRM device pin. Mirrors dots setup_gpu_hypr_tweaks.
+# hypridle.conf exist): NVIDIA env + hypridle resume fix for Fermi+. Mirrors
+# dots setup_gpu_hypr_tweaks.
+#
+# AQ_DRM_DEVICES is deliberately NOT written here. This library used to pin it
+# to the NVIDIA card (and later to a joined NVIDIA+other-cards list) on hybrid
+# setups, but on at least one confirmed hybrid Blackwell laptop (HP Omen Max
+# 16, RTX 5080) both forms black-screened on boot, and the only fix that
+# worked was removing the line entirely and letting Aquamarine autodetect.
+# We intentionally do not retire a pre-existing AQ_DRM_DEVICES line either:
+# a machine in this state can't boot to rerun the installer normally, so the
+# realistic recovery path is a fresh install, which never writes the line in
+# the first place. Anyone who wants Hyprland pinned to a specific GPU can
+# still set AQ_DRM_DEVICES by hand per the Hyprland wiki.
 gpu_apply_hypr_tweaks() {
     local uh="$1"
     # Resolve driver presence once (a pacman query) and reuse for both branches.
@@ -583,8 +584,5 @@ gpu_apply_hypr_tweaks() {
     if [[ $has_nv_drv == true && $NVIDIA_PCI_DEC -ge 1728 ]]; then
         nvidia_write_env "$uh"
         hypridle_fix_nvidia "$uh"
-    fi
-    if [[ $has_nv_drv == true && $IS_HYBRID == true ]]; then
-        nvidia_write_aq_drm "$uh"
     fi
 }
