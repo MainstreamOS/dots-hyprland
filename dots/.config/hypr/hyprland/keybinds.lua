@@ -57,6 +57,9 @@ hl.bind("CTRL + SUPER + T", hl.dsp.exec_cmd(qsScripts.."/colors/switchwall.sh"),
 hl.bind("CTRL + SUPER + SHIFT + D", hl.dsp.global("quickshell:toggleLightDark"), {description = "Toggle light/dark mode"} )
 hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("killall ydotool qs quickshell; qs -c $qsConfig &"), {description = "Restart widgets"} )
 hl.bind("CTRL + SUPER + P", hl.dsp.global("quickshell:panelFamilyCycle"), {description = "Cycle panel family"} )
+-- Cycle the layouts selected in Settings → Keyboard. `current` targets the
+-- keyboard that owns the focused input, so it also works with external boards.
+hl.bind("CTRL + SUPER + K", hl.dsp.exec_cmd("hyprctl switchxkblayout current next"), {description = "Next keyboard layout"} )
 
 --##! Media
 local mediaNextCommand = "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`"

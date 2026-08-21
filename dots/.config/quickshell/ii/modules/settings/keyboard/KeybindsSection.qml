@@ -11,9 +11,10 @@ import qs.modules.common.functions
 import qs.modules.common.widgets
 import qs.modules.settings.keybinds
 
-ContentPage {
+ContentSection {
     id: root
-    forceWidth: true
+    icon: "keyboard"
+    title: Translation.tr("Keybinds")
 
     readonly property string userPath: HyprlandKeybindsRaw.userPath
     readonly property string captureSubmapName: "qs_keybind_capture"
@@ -484,10 +485,6 @@ open(path, "w").write(text)
     }
 
     // ── UI ────────────────────────────────────────────────────────────────
-    ContentSection {
-        icon: "keyboard"
-        title: Translation.tr("Keybinds")
-
         // Header controls
         ContentSubsection {
             ColumnLayout {
@@ -623,8 +620,6 @@ open(path, "w").write(text)
                 }
             }
         }
-    }
-
     // ── Inline row component ─────────────────────────────────────────────
     component BindRow: Rectangle {
         id: bindRow
@@ -791,7 +786,7 @@ open(path, "w").write(text)
 
     // ── Edit dialog overlay ──────────────────────────────────────────────
     // Note: the dialog reparents itself to the Window's content item in
-    // its own Component.onCompleted to escape the ContentPage flickable's
+    // its own Component.onCompleted to escape the settings page's scroll
     // layout. We don't set anchors here.
     KeybindEditDialog {
         id: editDialog

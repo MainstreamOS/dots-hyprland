@@ -96,9 +96,9 @@ ApplicationWindow {
         },
         {
             group: 3,
-            name: Translation.tr("Keybinds"),
+            name: Translation.tr("Keyboard"),
             icon: "keyboard",
-            component: "modules/settings/KeybindsConfig.qml"
+            component: "modules/settings/KeyboardConfig.qml"
         },
         {
             group: 3,

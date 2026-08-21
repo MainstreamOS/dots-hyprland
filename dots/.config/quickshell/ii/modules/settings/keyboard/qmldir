@@ -1,0 +1,4 @@
+module qs.modules.settings.keyboard
+KeybindsSection 1.0 KeybindsSection.qml
+LayoutsSection 1.0 LayoutsSection.qml
+LayoutPicker 1.0 LayoutPicker.qml
