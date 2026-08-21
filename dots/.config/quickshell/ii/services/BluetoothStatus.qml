@@ -15,6 +15,32 @@ Singleton {
     readonly property int activeDeviceCount: Bluetooth.defaultAdapter?.devices.values.filter(device => device.connected).length ?? 0
     readonly property bool connected: Bluetooth.devices.values.some(d => d.connected)
 
+    // BlueZ restores the adapter state at login but does not request a new
+    // connection to remembered devices. Ask trusted audio devices once during
+    // shell startup, after bluetoothd has had a chance to populate the device
+    // list. Input devices must manage their own reconnects.
+
+    function reconnectTrustedAudioDevicesAtStartup() {
+        startupReconnectTimer.restart();
+    }
+
+    function isAudioDevice(device) {
+        return (device.icon ?? "").toLowerCase().includes("audio");
+    }
+
+    Timer {
+        id: startupReconnectTimer
+        interval: 4000
+        repeat: false
+
+        onTriggered: {
+            for (const device of Bluetooth.devices.values) {
+                if (device.trusted && isAudioDevice(device) && !device.connected)
+                    device.connect();
+            }
+        }
+    }
+
     // Track the order in which devices are first discovered
     property var discoveryOrder: ({})
     property int discoveryCounter: 0
