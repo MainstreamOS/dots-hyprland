@@ -31,6 +31,15 @@ Rectangle {
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }
 
+    Connections {
+        target: root.device
+
+        function onPairedChanged() {
+            if (root.device?.paired)
+                root.device.trusted = true
+        }
+    }
+
     MouseArea {
         id: mouseArea
         anchors.fill: parent
@@ -247,8 +256,7 @@ Rectangle {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            root.device.trusted = true;
-                            root.device?.connect();  // connect() on unpaired device pairs it
+                            root.device?.pair();
                         }
                     }
                 }

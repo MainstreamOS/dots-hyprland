@@ -13,6 +13,15 @@ DialogListItem {
 
     onClicked: expanded = !expanded
     altAction: () => expanded = !expanded
+
+    Connections {
+        target: root.device
+
+        function onPairedChanged() {
+            if (root.device?.paired)
+                root.device.trusted = true
+        }
+    }
     
     component ActionButton: DialogButton {
         colBackground: Appearance.colors.colPrimary
@@ -95,8 +104,7 @@ DialogListItem {
                     if (root.device?.paired) {
                         root.device?.forget();
                     } else {
-                        root.device?.connect();
-                        root.device.trusted = true;
+                        root.device?.pair();
                     }
                 }
             }
