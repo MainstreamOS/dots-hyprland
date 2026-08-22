@@ -17,6 +17,8 @@ ContentPage {
     property bool accelEnabled:    true
     property bool naturalScroll:   false
     property bool naturalScrollTP: true
+    property bool touchpadEnabled: true
+    property string touchpadDeviceName: ""
     property real sensitivity:     0.0
 
     // 2 cards * 150px + 16px gap
@@ -28,8 +30,10 @@ ContentPage {
         Quickshell.env("HOME") + "/.config/hypr/hyprland/general.lua"
 
     Component.onCompleted: {
-        mouseProc.running = false; mouseProc.running = true
-        tpProc.running    = false; tpProc.running    = true
+        mouseProc.running     = false; mouseProc.running     = true
+        tpProc.running        = false; tpProc.running        = true
+        tpNameProc.running    = false; tpNameProc.running    = true
+        tpEnabledProc.running = false; tpEnabledProc.running = true
         root.applyGestures()
     }
 
@@ -177,6 +181,36 @@ ContentPage {
         }
     }
 
+    // Touchpads are listed with pointer devices by hyprctl. Keep the actual
+    // libinput name so the per-device enabled setting can be updated.
+    Process {
+        id: tpNameProc
+        command: ["bash", "-c",
+            "hyprctl devices -j | python3 -c \"import sys, json; d = json.load(sys.stdin); n = [m['name'] for m in d.get('mice', []) if 'touchpad' in m['name'].lower()]; print(n[0] if n else '')\""
+        ]
+        stdout: SplitParser {
+            onRead: data => {
+                const name = data.trim()
+                if (name) root.touchpadDeviceName = name
+            }
+        }
+    }
+
+    // If no saved device setting exists, touchpadEnabled remains true.
+    Process {
+        id: tpEnabledProc
+        command: ["bash", "-c",
+            "awk '/-- BEGIN touchpad-enable/,/-- END touchpad-enable/' \"$1\" 2>/dev/null",
+            "--", root.envConf
+        ]
+        stdout: SplitParser {
+            onRead: data => {
+                const m = data.match(/enabled\s*=\s*(true|false)/)
+                if (m) root.touchpadEnabled = m[1] === "true"
+            }
+        }
+    }
+
     // Format a QML-passed value as a Lua literal for a given key.
     // - boolean-keyed values (0/1) become `false`/`true`
     // - accel_profile is a string → wrap in quotes
@@ -296,6 +330,26 @@ ContentPage {
             "    result.append(line)\n" +
             "open(conf, 'w').write('\\n'.join(result))\n"
         Quickshell.execDetached(["python3", "-c", py, luaVal, root.envConf])
+    }
+
+    // `enabled` is a per-device option, unlike the settings under
+    // input.touchpad, so apply it with hl.device() and persist that statement
+    // in env.lua for future Hyprland sessions.
+    function applyTouchpadEnabled(value) {
+        if (!root.ready || !root.touchpadDeviceName) return
+        // The name came from hyprctl, but this is the last stop before it sits
+        // inside a quoted Lua string — a quote or backslash in it would break
+        // out of that string, so such a name is not written at all.
+        if (/["\\]/.test(root.touchpadDeviceName)) return
+        const stmt = 'hl.device({ name = "' + root.touchpadDeviceName + '", enabled = '
+            + (value ? "true" : "false") + ' })'
+        // One statement serves both: what eval applies now is byte-for-byte
+        // what the block replays next session, so the two cannot drift.
+        Quickshell.execDetached(["hyprctl", "eval", stmt])
+        Quickshell.execDetached([
+            "python3", Quickshell.shellPath("scripts/hypr/managed_block.py"),
+            root.envConf, "touchpad-enable", stmt
+        ])
     }
 
     // ── General ───────────────────────────────────────────────────────────────
@@ -589,6 +643,36 @@ ContentPage {
     ContentSection {
         icon: "touch_app"
         title: Translation.tr("Touchpad")
+
+        ConfigRow {
+            // A control that flips a device nothing here has is a switch wired
+            // to nothing — machines without a touchpad simply do not show it.
+            visible: root.touchpadDeviceName !== ""
+            StyledText {
+                Layout.fillWidth: true
+                text: Translation.tr("Touchpad")
+                font.pixelSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colOnLayer1
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Enabled"),  value: true },
+                    { displayName: Translation.tr("Disabled"), value: false },
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === root.touchpadEnabled)
+                    return idx !== -1 ? idx : 0
+                }
+                onActivated: index => {
+                    const enabled = model[index].value
+                    root.touchpadEnabled = enabled
+                    root.applyTouchpadEnabled(enabled)
+                }
+            }
+        }
 
         ContentSubsection {
             title: Translation.tr("Scroll Direction")
