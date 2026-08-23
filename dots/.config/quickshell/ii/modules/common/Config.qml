@@ -763,12 +763,15 @@ Singleton {
                 property real backgroundOpacity: -1
                 property string backgroundColorDark: ""
                 property string backgroundColorLight: ""
+                // Shape the same way: the icon size and the corner radius sit
+                // below zero until touched, and the interface decides there.
+                property real iconSize: -1
+                property real radius: -1
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from
                 // the dock's own setting moves the bar across instead.
                 property string position: "bottom"
                 property bool monochromeIcons: false
-                property real height: 60
                 property real hoverRegionHeight: 2
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace

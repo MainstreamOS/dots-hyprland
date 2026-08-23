@@ -17,7 +17,7 @@ RippleButton {
     // would land on the screen-edge side of top and left docks). Derived
     // from plain values rather than implicit sizes to keep the two axes
     // from feeding each other into a binding loop.
-    readonly property real dockButtonSize: Config.options.dock.height - dockRow.padding * 2
+    readonly property real dockButtonSize: Appearance.sizes.dockHeight - dockRow.padding * 2
     implicitWidth: dockRoot.dockVertical ? dockButtonSize + leftInset + rightInset : dockButtonSize
     implicitHeight: dockRoot.dockVertical ? dockButtonSize : dockButtonSize + topInset + bottomInset
     buttonRadius: Appearance.rounding.normal

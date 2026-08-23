@@ -162,6 +162,51 @@ ContentPage {
     }
 
     ContentSection {
+        icon: "rounded_corner"
+        title: Translation.tr("Shape")
+
+        ConfigSlider {
+            text: Translation.tr("Icon size")
+            stopIndicatorValues: [Appearance.sizes.dockIconStock]
+            buttonIcon: "apps"
+            from: 16
+            to: 64
+            value: Config.options.dock.iconSize < 0 ? 35 : Config.options.dock.iconSize
+            onMoved: {
+                if (value === Config.options.dock.iconSize)
+                    return;
+                Config.options.dock.iconSize = value;
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Corner roundness")
+            stopIndicatorValues: [Appearance.rounding.dockStock]
+            buttonIcon: "rounded_corner"
+            from: 0
+            to: 40
+            value: Appearance.rounding.dock
+            onMoved: {
+                if (value === Config.options.dock.radius)
+                    return;
+                Config.options.dock.radius = value;
+            }
+        }
+
+        ConfigResetButton {
+            visible: Config.options.dock.iconSize >= 0
+                || Config.options.dock.radius >= 0
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default shape")
+            onClicked: {
+                Config.options.dock.iconSize = -1
+                Config.options.dock.radius = -1
+            }
+        }
+    }
+
+    ContentSection {
         icon: "opacity"
         title: Translation.tr("Transparency")
 

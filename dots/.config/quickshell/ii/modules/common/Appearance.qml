@@ -289,6 +289,9 @@ Singleton {
         readonly property real barFloatStock: windowRounding
         readonly property real barFloat: (Config.options?.bar.floatRadius ?? -1) >= 0
             ? Config.options.bar.floatRadius : barFloatStock
+        readonly property real dockStock: large
+        readonly property real dock: (Config.options?.dock.radius ?? -1) >= 0
+            ? Config.options.dock.radius : dockStock
     }
 
     font: QtObject {
@@ -492,7 +495,25 @@ Singleton {
         // The dock's visible thickness plus its screen gap. The dock sizes its
         // window from this and the overview clears the top edge by it, so the
         // two cannot drift apart.
-        property real dockExtent: (Config.options?.dock.height ?? 70) + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut
+        // The dock is as thick as its icons ask: one slider drives the icon,
+        // and the surface grows around it, keeping the stock look identical
+        // at the stock icon size.
+        // The icon size the dock ships with. Whatever is sized in proportion to
+        // the icons is measured from it, so a dock left alone looks the same as
+        // it always did and everything grows together once it is changed.
+        property real dockIconStock: 35
+        property real dockIconSize: (Config.options?.dock.iconSize ?? -1) >= 0
+            ? Config.options.dock.iconSize : root.sizes.dockIconStock
+        property real dockHeight: root.sizes.dockIconSize + 25
+        property real dockExtent: root.sizes.dockHeight + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut
+        // How far the pointer magnifies an icon at the peak.
+        property real dockMaxScale: 2.35
+        // The room a magnified icon needs beyond the dock to be drawn whole.
+        // It grows away from the screen from the edge it sits on, so it climbs
+        // by its own size again over the scale, and a fixed figure that suited
+        // the stock icons cut the tops off larger ones. The window is sized by
+        // this and the hover strip is offset past it, so the two cannot drift.
+        property real dockMagnifyHeadroom: root.sizes.dockIconSize * (root.sizes.dockMaxScale - 1)
         property real barHeight: Config.options.bar.cornerStyle === 1 ? 
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
         property real barCenterSideModuleWidth: Config.options?.bar.verbose ? 360 : 140

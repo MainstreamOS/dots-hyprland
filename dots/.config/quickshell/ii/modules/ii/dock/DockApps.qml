@@ -132,7 +132,7 @@ Item {
     property alias listViewRef: listView
     property real mousePosInList: -9999
     property bool listHovered: false
-    property real maxScale: 2.35
+    property real maxScale: Appearance.sizes.dockMaxScale
     property real sigma: 60
 
     function scaleForPos(itemCenter) {

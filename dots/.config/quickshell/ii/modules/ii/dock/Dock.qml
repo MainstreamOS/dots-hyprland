@@ -71,7 +71,7 @@ Scope { // Scope
             // icons can overflow without window clipping.
             readonly property real dockExtent: Appearance.sizes.dockExtent
 
-            exclusiveZone: root.pinned ? (Config.options?.dock.height ?? 70) + Appearance.sizes.hyprlandGapsOut : 0
+            exclusiveZone: root.pinned ? Appearance.sizes.dockHeight + Appearance.sizes.hyprlandGapsOut : 0
 
             Component.onCompleted: {
                 GlobalFocusGrab.addPersistent(dockRoot);
@@ -91,8 +91,8 @@ Scope { // Scope
                 }
             }
 
-            implicitWidth: dockRoot.dockVertical ? dockRoot.dockExtent + 60 : dockBackground.implicitWidth
-            implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + 60
+            implicitWidth: dockRoot.dockVertical ? dockRoot.dockExtent + Appearance.sizes.dockMagnifyHeadroom : dockBackground.implicitWidth
+            implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + Appearance.sizes.dockMagnifyHeadroom
             WlrLayershell.namespace: "quickshell:dock" + (dockRoot.dockEdge === "bottom" ? ""
                 : dockRoot.dockEdge.charAt(0).toUpperCase() + dockRoot.dockEdge.slice(1))
             WlrLayershell.layer: GlobalStates.overviewOpen ? WlrLayer.Overlay : WlrLayer.Top
@@ -104,11 +104,12 @@ Scope { // Scope
 
             MouseArea {
                 id: dockMouseArea
-                // Offset from the window's center-facing side: past the 60px
+                // Offset from the window's center-facing side: past the
                 // magnify headroom when revealed, and far enough to push the
                 // strip off the screen edge when hidden — keeping only the
-                // hover strip while hover-to-reveal is on.
-                readonly property real slide: 60 + (dockRoot.reveal ? 1
+                // hover strip while hover-to-reveal is on. Shares the headroom
+                // with the window above, since the two describe one edge.
+                readonly property real slide: Appearance.sizes.dockMagnifyHeadroom + (dockRoot.reveal ? 1
                     : Config.options?.dock.hoverToReveal ? (dockRoot.dockExtent - Config.options.dock.hoverRegionHeight)
                     : (dockRoot.dockExtent + 1))
 
@@ -226,7 +227,7 @@ Scope { // Scope
                             color: Config.options.dock.showBackground ? Appearance.colors.colDockBackground : "transparent"
                             border.width: Config.options.dock.showBackground ? 1 : 0
                             border.color: Appearance.colors.colDockBackgroundBorder
-                            radius: Appearance.rounding.large
+                            radius: Appearance.rounding.dock
                         }
 
                         GridLayout {
@@ -262,9 +263,12 @@ Scope { // Scope
                                 Layout.leftMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : 0
                                 Layout.rightMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : 0
                                 GroupButton {
-                                    // Pin button
-                                    baseWidth: 35
-                                    baseHeight: 35
+                                    // Pin button. Sized off the icons like the
+                                    // overview button at the far end, so the two
+                                    // ends of the dock keep pace with each other
+                                    // and with what sits between them.
+                                    baseWidth: Appearance.sizes.dockIconSize
+                                    baseHeight: Appearance.sizes.dockIconSize
                                     clickedWidth: baseWidth
                                     clickedHeight: baseHeight + 20
                                     buttonRadius: Appearance.rounding.normal
@@ -274,6 +278,7 @@ Scope { // Scope
                                         text: "keep"
                                         horizontalAlignment: Text.AlignHCenter
                                         iconSize: Appearance.font.pixelSize.larger
+                                            * Appearance.sizes.dockIconSize / Appearance.sizes.dockIconStock
                                         color: root.pinned ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer0
                                     }
                                 }
