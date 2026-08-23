@@ -379,16 +379,21 @@ DockButton {
                     horizontalCenter: dockRoot.dockVertical ? undefined : parent.horizontalCenter
                     verticalCenter: dockRoot.dockVertical ? parent.verticalCenter : undefined
                 }
-                visible: !root.isFolder
+                visible: !root.isFolder && Config.options.dock.indicatorStyle !== "none"
                 Repeater {
                     model: Math.min(appToplevel.toplevels.length, 3)
                     delegate: Rectangle {
                         required property int index
+                        // Dashes stretch along the dock while few and tighten
+                        // to dots past three; the dots style stays a dot at
+                        // any count.
+                        readonly property bool asDash: Config.options.dock.indicatorStyle !== "dots"
+                            && appToplevel.toplevels.length <= 3
                         radius: Appearance.rounding.full
                         implicitWidth: dockRoot.dockVertical ? root.countDotHeight
-                            : (appToplevel.toplevels.length <= 3) ? root.countDotWidth : root.countDotHeight
+                            : asDash ? root.countDotWidth : root.countDotHeight
                         implicitHeight: !dockRoot.dockVertical ? root.countDotHeight
-                            : (appToplevel.toplevels.length <= 3) ? root.countDotWidth : root.countDotHeight
+                            : asDash ? root.countDotWidth : root.countDotHeight
                         color: appIsActive ? Appearance.colors.colPrimary : ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.4)
                     }
                 }

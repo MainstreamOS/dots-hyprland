@@ -76,6 +76,70 @@ ContentPage {
         }
 
         ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "counter_1"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Window indicators")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Disable"), icon: "close", value: "none" },
+                    { displayName: Translation.tr("Dashes"), icon: "remove", value: "dashes" },
+                    { displayName: Translation.tr("Dots"), icon: "more_horiz", value: "dots" }
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.dock.indicatorStyle);
+                    return idx !== -1 ? idx : 1;
+                }
+                onActivated: index => { Config.options.dock.indicatorStyle = model[index].value; }
+            }
+        }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "animation"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Launch animation")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("None"), icon: "block", value: DockLaunchAnims.AnimType.None },
+                    { displayName: Translation.tr("Bounce"), icon: "swap_vert", value: DockLaunchAnims.AnimType.Bounce },
+                    { displayName: Translation.tr("Pulse"), icon: "open_in_new", value: DockLaunchAnims.AnimType.Pulse },
+                    { displayName: Translation.tr("Pop"), icon: "adjust", value: DockLaunchAnims.AnimType.Pop },
+                    { displayName: Translation.tr("Wobble"), icon: "360", value: DockLaunchAnims.AnimType.Wobble }
+                ]
+                currentIndex: {
+                    const idx = model.findIndex(item => item.value === Config.options.dock.launchAnimation);
+                    return idx !== -1 ? idx : 1;
+                }
+                onActivated: index => { Config.options.dock.launchAnimation = model[index].value; }
+            }
+        }
+
+        ConfigRow {
             uniform: true
             ConfigSwitch {
                 buttonIcon: "highlight_mouse_cursor"
@@ -160,23 +224,6 @@ ContentPage {
             checked: Config.options.dock.monochromeIcons
             onCheckedChanged: {
                 Config.options.dock.monochromeIcons = checked;
-            }
-        }
-
-        ContentSubsection {
-            title: Translation.tr("Launch animation")
-            ConfigSelectionArray {
-                currentValue: Config.options.dock.launchAnimation
-                onSelected: newValue => {
-                    Config.options.dock.launchAnimation = newValue;
-                }
-                options: [
-                    { displayName: Translation.tr("None"), icon: "block", value: DockLaunchAnims.AnimType.None },
-                    { displayName: Translation.tr("Bounce"), icon: "swap_vert", value: DockLaunchAnims.AnimType.Bounce },
-                    { displayName: Translation.tr("Pulse"), icon: "open_in_new", value: DockLaunchAnims.AnimType.Pulse },
-                    { displayName: Translation.tr("Pop"), icon: "adjust", value: DockLaunchAnims.AnimType.Pop },
-                    { displayName: Translation.tr("Wobble"), icon: "360", value: DockLaunchAnims.AnimType.Wobble }
-                ]
             }
         }
     }
