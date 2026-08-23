@@ -51,6 +51,12 @@ ApplicationWindow {
         },
         {
             group: 2,
+            name: Translation.tr("Dock"),
+            icon: "dock_to_bottom",
+            component: "modules/settings/DockConfig.qml"
+        },
+        {
+            group: 2,
             name: Translation.tr("Interface"),
             icon: "bottom_app_bar",
             component: "modules/settings/InterfaceConfig.qml"
