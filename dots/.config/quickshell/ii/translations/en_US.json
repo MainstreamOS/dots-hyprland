@@ -1791,6 +1791,9 @@
   "Reset to default transparency": "Reset to default transparency",
   "Widget pills": "Widget pills",
   "Reset to default colors": "Reset to default colors",
+  "Choose a color": "Choose a color",
+  "Accept": "Accept",
+  "Hand this color back to the palette": "Hand this color back to the palette",
   "Colors": "Colors",
   "Dark mode and light mode each keep their own colors.": "Dark mode and light mode each keep their own colors."
 }
