@@ -577,8 +577,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Corner radius")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("rounding")
             buttonIcon: "rounded_corner"
             usePercentTooltip: false
@@ -597,8 +595,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Border thickness")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("borderSize")
             buttonIcon: "border_style"
             usePercentTooltip: false
@@ -617,8 +613,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Gap between windows")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("gapsIn")
             buttonIcon: "width"
             usePercentTooltip: false
@@ -635,8 +629,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Gap around the edge")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("gapsOut")
             buttonIcon: "fit_screen"
             usePercentTooltip: false
@@ -659,8 +651,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Focused window")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("activeOpacity")
             buttonIcon: "filter_center_focus"
             from: 0.7
@@ -675,8 +665,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Unfocused windows")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("inactiveOpacity")
             buttonIcon: "filter_none"
             from: 0.7
@@ -699,8 +687,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // where they were found rather than moving as things are toggled.
         ConfigSlider {
             text: Translation.tr("Strength")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: (root.decoDefaults.blurSize !== undefined && root.decoDefaults.blurPasses !== undefined)
                 ? [root.blurStrengthOf(root.decoDefaults.blurSize, root.decoDefaults.blurPasses)] : []
             buttonIcon: "lens_blur"
@@ -724,8 +710,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Noise")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("blurNoise")
             buttonIcon: "grain"
             enabled: root.blurEnabled
@@ -743,8 +727,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Saturation")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("blurVibrancy")
             buttonIcon: "palette"
             enabled: root.blurEnabled
@@ -799,8 +781,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Amount")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("dimStrength")
             buttonIcon: "gradient"
             enabled: root.dimInactiveEnabled
@@ -889,8 +869,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 ColorField {
                     text: Translation.tr("From")
                     buttonIcon: "trip_origin"
-                    textWidth: 170
-                    sliderWidth: 340
                     visible: bgSection.gradientOpts.custom
                     value: bgSection.gradientOpts.customFrom
                     onEdited: newValue => bgSection.gradientOpts.customFrom = newValue
@@ -899,8 +877,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 ColorField {
                     text: Translation.tr("To")
                     buttonIcon: "adjust"
-                    textWidth: 170
-                    sliderWidth: 340
                     visible: bgSection.gradientOpts.custom
                     value: bgSection.gradientOpts.customTo
                     onEdited: newValue => bgSection.gradientOpts.customTo = newValue
@@ -908,8 +884,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
                 ConfigSlider {
                     text: Translation.tr("Angle")
-                    textWidth: 170
-                    sliderWidth: 340
                     stopIndicatorValues: [90]
                     buttonIcon: "rotate_right"
                     usePercentTooltip: false
@@ -925,8 +899,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
                 ConfigSlider {
                     text: Translation.tr("Strength")
-                    textWidth: 170
-                    sliderWidth: 340
                     stopIndicatorValues: [bgSection.defaultStrength]
                     buttonIcon: "opacity"
                     from: 10
@@ -971,8 +943,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Size")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("shadowRange")
             buttonIcon: "photo_size_select_large"
             usePercentTooltip: false
@@ -992,8 +962,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Falloff")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.defaultMark("shadowRenderPower")
             buttonIcon: "gradient"
             usePercentTooltip: false
@@ -1017,8 +985,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // tints its shadow keeps the tint while the darkness moves.
         ConfigSlider {
             text: Translation.tr("Darkness")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.decoDefaults.shadowColor !== undefined
                 ? [root.shadowAlphaOf(root.decoDefaults.shadowColor)] : []
             buttonIcon: "contrast"
@@ -1039,8 +1005,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Offset X")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.decoDefaults.shadowOffset !== undefined
                 ? [root.decoDefaults.shadowOffset[0]] : []
             buttonIcon: "swap_horiz"
@@ -1061,8 +1025,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         ConfigSlider {
             text: Translation.tr("Offset Y")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: root.decoDefaults.shadowOffset !== undefined
                 ? [root.decoDefaults.shadowOffset[1]] : []
             buttonIcon: "swap_vert"

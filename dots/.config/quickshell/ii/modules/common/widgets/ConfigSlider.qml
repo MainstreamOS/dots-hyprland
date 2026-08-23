@@ -17,7 +17,9 @@ RowLayout {
     property bool usePercentTooltip: true
     property real from: slider.from
     property real to: slider.to
-    property real textWidth: 120
+    // Wide enough for the longest honest label a page carries — "Gap between
+    // windows" is not sayable in fewer words — so no row ends in an ellipsis.
+    property real textWidth: 160
     // The track fills whatever is left over unless a width is asked for. A row
     // whose label needs the room is better served by a shorter track than by a
     // label written over it.

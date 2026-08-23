@@ -38,7 +38,7 @@ RowLayout {
     // alike — derived from the value itself, so they cannot disagree.
     property string fallback: ""
     readonly property bool ownValue: root.value !== "" || root.fallback === ""
-    property real textWidth: 170
+    property real textWidth: 160
     // The width the swatch, the field and the button share, so the row lines
     // up with the sliders around it: the swatch starts where their tracks
     // start and the button ends where their tracks end.

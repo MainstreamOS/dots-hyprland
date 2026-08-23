@@ -230,8 +230,6 @@ ContentPage {
         ConfigSlider {
             text: Translation.tr("Background")
             visible: Config.options.bar.cornerStyle === 1
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: [Appearance.rounding.barFloatStock]
             buttonIcon: "rounded_corner"
             from: 0
@@ -247,8 +245,6 @@ ContentPage {
         ConfigSlider {
             text: Translation.tr("Widget pills")
             visible: !Config.options.bar.borderless
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: [Appearance.rounding.barWidgetStock]
             buttonIcon: "rounded_corner"
             from: 0
@@ -285,8 +281,6 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Background")
-            textWidth: 170
-            sliderWidth: 340
             stopIndicatorValues: [Appearance.colors.barBackgroundStockAlpha]
             buttonIcon: "wallpaper"
             from: 0
@@ -306,8 +300,6 @@ ContentPage {
         ConfigSlider {
             text: Translation.tr("Widget pills")
             visible: !Config.options.bar.borderless
-            textWidth: 170
-            sliderWidth: 340
             // Where the pills sit before anyone touches this, read from the
             // same value the slider falls back to, so the mark cannot promise
             // a default the track would not actually return to.
@@ -347,8 +339,6 @@ ContentPage {
         ColorField {
             text: Translation.tr("Background")
             allowEmpty: true
-            textWidth: 170
-            sliderWidth: 340
             buttonIcon: "wallpaper"
             // Edits the slot for the mode on screen; the other mode keeps its
             // own pick, or the palette where none was made.
@@ -364,8 +354,6 @@ ContentPage {
             text: Translation.tr("Widget pills")
             visible: !Config.options.bar.borderless
             allowEmpty: true
-            textWidth: 170
-            sliderWidth: 340
             buttonIcon: "location_chip"
             value: Appearance.colors.barWidgetPick
             fallback: String(Appearance.colors.colLayer1)
