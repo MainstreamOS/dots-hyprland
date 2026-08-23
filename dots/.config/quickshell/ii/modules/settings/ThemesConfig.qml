@@ -339,7 +339,7 @@ ContentPage {
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.apps) | del(.updates)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.dock.pinnedApps) | del(.apps) | del(.updates)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.
@@ -669,6 +669,7 @@ STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
          ("screenRecord", "savePath"), ("screenSnip", "savePath"),
          ("background", "thumbnailPath"), ("background", "wallpaperPath"),
          ("background", "slideshow", "folder"),
+         ("dock", "pinnedApps"),
          # A theme file arrives from somewhere else. Every apps.* value is run
          # as a shell command by the button that owns it, and updates.* names
          # the manifest this machine trusts for release news -- neither is part

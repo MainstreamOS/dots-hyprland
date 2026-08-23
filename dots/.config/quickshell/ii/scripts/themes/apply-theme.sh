@@ -161,6 +161,7 @@ PRESERVE_LIGHT_NIGHT=""
 PRESERVE_CURSOR=""
 PRESERVE_SEEDED=""
 PRESERVE_APPS=""
+PRESERVE_DOCK_PINS=""
 PRESERVE_UPDATES=""
 if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
@@ -182,6 +183,11 @@ if [ -f "$SHELL_CONFIG" ]; then
     # carried either would be choosing what runs here, so the live values win
     # over the snapshot every time — including for themes saved or shared
     # before they were kept out of snapshots at all.
+    # The dock's pins are this machine's apps, not a look. A theme that
+    # carried them would strand a user with launchers for software they do
+    # not have, so the live pins win over the snapshot every time,
+    # including for themes saved before pins were kept out of snapshots.
+    PRESERVE_DOCK_PINS=$(jq -c '.dock.pinnedApps // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_APPS=$(jq -c '.apps // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_UPDATES=$(jq -c '.updates // empty' "$SHELL_CONFIG" 2>/dev/null || true)
 fi
@@ -217,6 +223,7 @@ fi
 # Nothing live to put back means the snapshot's copy is dropped rather than
 # inherited: absent is the safe answer here, since the shell falls back to its
 # own defaults for these.
+[ -n "$PRESERVE_DOCK_PINS" ]      && { JQ_FILTER+=' | .dock.pinnedApps = $pins';               JQ_ARGS+=(--argjson pins "$PRESERVE_DOCK_PINS"); }
 if [ -n "$PRESERVE_APPS" ]; then    JQ_FILTER+=' | .apps = $apps';    JQ_ARGS+=(--argjson apps "$PRESERVE_APPS");
 else                                JQ_FILTER+=' | del(.apps)'; fi
 if [ -n "$PRESERVE_UPDATES" ]; then JQ_FILTER+=' | .updates = $upd';  JQ_ARGS+=(--argjson upd "$PRESERVE_UPDATES");
