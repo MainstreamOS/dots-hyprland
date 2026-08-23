@@ -1,5 +1,5 @@
 # Maintainer: mainstreamos <https://github.com/MainstreamOS>
-_commit='7d1c9a9c6721606b129829134d6f614f015621e2'
+_commit='0fed22a2c47d9568ddf13cf61586b3f2ac4378a2'
 # Useful links:
 # https://git.outfoxxed.me/quickshell/quickshell/commits/branch/master
 # https://aur.archlinux.org/packages/quickshell-git
@@ -10,12 +10,12 @@ replaces=('illogical-impulse-quickshell-git')
 
 _pkgname=quickshell
 pkgname="$_prefix-$_pkgname-git"
-pkgver=0.3.0.r3
+pkgver=0.3.1.r1
 pkgrel=1
 pkgdesc="$_pkgname-git pinned commit and extra deps for $_prefix"
 arch=(x86_64 aarch64)
 url='https://git.outfoxxed.me/quickshell/quickshell'
-options=(strip !debug)
+options=(!strip)
 license=('LGPL-3.0-only')
 depends=(
   'cpptrace'
@@ -70,7 +70,7 @@ sha256sums=('SKIP'
 build() {
   cd "$_pkgname"
   cmake -GNinja -B build \
-    -DCMAKE_BUILD_TYPE="Release" \
+    -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DDISTRIBUTOR="AUR (package: quickshell-git)" \
     -DINSTALL_QML_PREFIX=lib/qt6/qml
