@@ -552,22 +552,10 @@ Item {
         }
         }
 
-        RippleButton {
+        ConfigResetButton {
             Layout.topMargin: 2
-            implicitHeight: 30
-            implicitWidth: resetRow.implicitWidth + 18
-            buttonRadius: Appearance.rounding.small
-            colBackground: ColorUtils.transparentize(Appearance.colors.colLayer2, 1)
-            colBackgroundHover: Appearance.colors.colLayer2Hover
-            colRipple: Appearance.colors.colLayer2Active
+            buttonText: Translation.tr("Reset to default layout")
             onClicked: root.resetDefaults()
-            contentItem: RowLayout {
-                id: resetRow
-                anchors.centerIn: parent
-                spacing: 4
-                MaterialSymbol { text: "restart_alt"; iconSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                StyledText { text: Translation.tr("Reset to default layout"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-            }
         }
     }
 

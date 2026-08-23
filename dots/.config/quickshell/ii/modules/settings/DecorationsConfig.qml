@@ -1239,33 +1239,13 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // is asked of them, by anything asking — the compositor included — so
         // there is nothing to be done here except say so. Carried the same way
         // the Themes page carries its notices, so the settings speak alike.
-        Rectangle {
+        SubtleNoticeBox {
             Layout.fillWidth: true
             Layout.leftMargin: 8
             Layout.rightMargin: 8
             Layout.topMargin: 4
             Layout.bottomMargin: 4
-            radius: Appearance.rounding.small
-            color: Qt.rgba(Appearance.m3colors.m3primary.r, Appearance.m3colors.m3primary.g, Appearance.m3colors.m3primary.b, 0.12)
-            implicitHeight: cursorNoteRow.implicitHeight + 16
-            RowLayout {
-                id: cursorNoteRow
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: 8
-                MaterialSymbol {
-                    text: "info"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.m3colors.m3primary
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    text: Translation.tr("Not every cursor theme can be resized. One built at a single size stays that size whichever you pick here.")
-                }
-            }
+            text: Translation.tr("Not every cursor theme can be resized. One built at a single size stays that size whichever you pick here.")
         }
     }
 

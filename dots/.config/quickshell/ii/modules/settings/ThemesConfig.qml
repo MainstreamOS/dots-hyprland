@@ -1185,32 +1185,12 @@ finally:
         // imported. Carried the same way as the Day/Night notice below so the
         // page has one voice for telling the user something, with its own icon
         // to separate a thing that has happened from a thing that is disabled.
-        Rectangle {
+        SubtleNoticeBox {
             visible: root.statusMessage.length > 0
             Layout.fillWidth: true
             Layout.topMargin: 4
             Layout.bottomMargin: 4
-            radius: Appearance.rounding.small
-            color: Qt.rgba(Appearance.m3colors.m3primary.r, Appearance.m3colors.m3primary.g, Appearance.m3colors.m3primary.b, 0.12)
-            implicitHeight: statusRow.implicitHeight + 16
-            RowLayout {
-                id: statusRow
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: 8
-                MaterialSymbol {
-                    text: "info"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.m3colors.m3primary
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    text: root.statusMessage
-                }
-            }
+            text: root.statusMessage
         }
 
         // Schedule-active lock banner. Tells the user why the Apply buttons
@@ -1218,32 +1198,13 @@ finally:
         // just silently refuse clicks and look broken. The "Off" word is
         // styled to match the Day/Night dropdown so it's obvious where
         // to go to unlock manual applies.
-        Rectangle {
+        SubtleNoticeBox {
             visible: root.scheduleActive
             Layout.fillWidth: true
             Layout.topMargin: 4
             Layout.bottomMargin: 4
-            radius: Appearance.rounding.small
-            color: Qt.rgba(Appearance.m3colors.m3primary.r, Appearance.m3colors.m3primary.g, Appearance.m3colors.m3primary.b, 0.12)
-            implicitHeight: lockRow.implicitHeight + 16
-            RowLayout {
-                id: lockRow
-                anchors.fill: parent
-                anchors.margins: 8
-                spacing: 8
-                MaterialSymbol {
-                    text: "lock"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.m3colors.m3primary
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    text: Translation.tr("Manual apply is disabled to honor your Day/Night Themes settings, but you can still save new themes and update the current theme with Day/Night Themes active. Set Day/Night Themes to \"Off\" below to apply themes manually.")
-                }
-            }
+            materialIcon: "lock"
+            text: Translation.tr("Manual apply is disabled to honor your Day/Night Themes settings, but you can still save new themes and update the current theme with Day/Night Themes active. Set Day/Night Themes to \"Off\" below to apply themes manually.")
         }
 
         // 2-column grid: first cell is the "Save new theme" card, then existing themes
