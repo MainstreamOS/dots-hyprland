@@ -250,6 +250,14 @@ Singleton {
         property int full: 9999
         property int screenRounding: large
         property int windowRounding: 18
+        // What "the interface decides" means for the bar's two shape sliders,
+        // named so the mark on their tracks and the fallback stay one value.
+        readonly property real barWidgetStock: small
+        readonly property real barWidget: (Config.options?.bar.widgetRadius ?? -1) >= 0
+            ? Config.options.bar.widgetRadius : barWidgetStock
+        readonly property real barFloatStock: windowRounding
+        readonly property real barFloat: (Config.options?.bar.floatRadius ?? -1) >= 0
+            ? Config.options.bar.floatRadius : barFloatStock
     }
 
     font: QtObject {

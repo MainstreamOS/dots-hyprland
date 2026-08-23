@@ -209,6 +209,74 @@ ContentPage {
                 }
             }
         }
+
+    }
+
+    // Each radius appears only while the style that gives it a corner to
+    // round is the one on screen — a slider for an edge the bar isn't drawing
+    // would move nothing.
+    ContentSection {
+        icon: "rounded_corner"
+        title: Translation.tr("Shape")
+        // A header over an empty room: with neither Float nor Pills active
+        // both sliders are put away, so the section goes with them — unless a
+        // radius still holds a non-stock value, which keeps the reset within
+        // reach of the state it exists to clear.
+        visible: Config.options.bar.cornerStyle === 1
+            || !Config.options.bar.borderless
+            || Config.options.bar.widgetRadius >= 0
+            || Config.options.bar.floatRadius >= 0
+
+        ConfigSlider {
+            text: Translation.tr("Background")
+            visible: Config.options.bar.cornerStyle === 1
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: [Appearance.rounding.barFloatStock]
+            buttonIcon: "rounded_corner"
+            from: 0
+            to: 30
+            value: Appearance.rounding.barFloat
+            onMoved: {
+                if (value === Config.options.bar.floatRadius)
+                    return;
+                Config.options.bar.floatRadius = value;
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Widget pills")
+            visible: !Config.options.bar.borderless
+            textWidth: 170
+            sliderWidth: 340
+            stopIndicatorValues: [Appearance.rounding.barWidgetStock]
+            buttonIcon: "rounded_corner"
+            from: 0
+            to: 20
+            value: Appearance.rounding.barWidget
+            onMoved: {
+                if (value === Config.options.bar.widgetRadius)
+                    return;
+                Config.options.bar.widgetRadius = value;
+            }
+        }
+
+        // Landing a slider on its mark freezes today's stock number; this
+        // hands the radius back to the interface outright, so if what it
+        // decides ever moves, a reset bar moves with it. Checked flat rather
+        // than by the active style, because a radius set under one style
+        // waits out the others.
+        ConfigResetButton {
+            visible: Config.options.bar.widgetRadius >= 0
+                || Config.options.bar.floatRadius >= 0
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default shape")
+            onClicked: {
+                Config.options.bar.widgetRadius = -1
+                Config.options.bar.floatRadius = -1
+            }
+        }
     }
 
     ContentSection {

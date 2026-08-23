@@ -563,6 +563,12 @@ Singleton {
                 property string widgetColorLight: ""
                 property string backgroundColorDark: ""
                 property string backgroundColorLight: ""
+                // Shape follows the same rule as the sliders above: below zero
+                // the interface decides. The pill radius reaches every widget
+                // group on either bar; the float radius only means anything
+                // while the bar floats, so it keeps quiet the rest of the time.
+                property real widgetRadius: -1
+                property real floatRadius: -1
                 property bool verbose: true
                 property bool vertical: false
                 // Per-section widget layout. Each section is an ordered list
