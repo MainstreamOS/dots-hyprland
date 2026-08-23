@@ -143,6 +143,37 @@ Singleton {
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
         property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
+        readonly property real dockStockAlpha: colLayer0.a
+        // The blur floor these surfaces are given in hypr/hyprland/rules.lua.
+        // Kept here so a transparency slider can tell where its surface stops
+        // being frosted. The two have to be changed together.
+        readonly property real blurFloor: 0.35
+        // The faintest the dock can be set and still be frosted. Under this the
+        // compositor drops the blur outright rather than by degrees, so a
+        // slider running past it reads as a cliff partway along an otherwise
+        // even track. The dock's shadow sits under its body and fades with it,
+        // so the floor is met by the two together: solving
+        // a + shadow*a*(1 - a) = blurFloor for a, with a hair over the top so
+        // the end of the track is above the drop rather than on it.
+        readonly property real dockOpacityFloor: {
+            const s = colShadow.a
+            const f = root.colors.blurFloor
+            const a = s <= 0 ? f
+                : (1 + s - Math.sqrt((1 + s) * (1 + s) - 4 * s * f)) / (2 * s)
+            return Math.min(1, a + 0.005)
+        }
+        readonly property string dockPick: {
+            const v = m3colors.darkmode
+                ? (Config.options?.dock.backgroundColorDark ?? "")
+                : (Config.options?.dock.backgroundColorLight ?? "")
+            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        }
+        property color colDockBackground: ColorUtils.applyAlpha(
+            dockPick !== "" ? dockPick : colLayer0,
+            (Config.options?.dock.backgroundOpacity ?? -1) < 0
+                ? dockStockAlpha : Config.options.dock.backgroundOpacity)
+        property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
+        property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
         // Layer 1
         property color colLayer1Base: m3colors.m3surfaceContainerLow
         property color colLayer1: ColorUtils.solveOverlayColor(colLayer0Base, colLayer1Base, 1 - root.contentTransparency);

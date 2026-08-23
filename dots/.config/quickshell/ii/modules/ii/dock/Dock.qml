@@ -210,6 +210,8 @@ Scope { // Scope
 
                         StyledRectangularShadow {
                             target: dockVisualBackground
+                            visible: Config.options.dock.showBackground
+                            color: Appearance.colors.colDockShadow
                         }
                         Rectangle { // The real rectangle that is visible
                             id: dockVisualBackground
@@ -221,9 +223,9 @@ Scope { // Scope
                             anchors.bottomMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
                             anchors.leftMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
                             anchors.rightMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
-                            color: Appearance.colors.colLayer0
-                            border.width: 1
-                            border.color: Appearance.colors.colLayer0Border
+                            color: Config.options.dock.showBackground ? Appearance.colors.colDockBackground : "transparent"
+                            border.width: Config.options.dock.showBackground ? 1 : 0
+                            border.color: Appearance.colors.colDockBackgroundBorder
                             radius: Appearance.rounding.large
                         }
 

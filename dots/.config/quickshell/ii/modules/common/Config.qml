@@ -755,6 +755,14 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: true
+                // The bar's rules, worn by the dock: below zero the interface
+                // decides the opacity, and a filled color slot is the whole
+                // decision, kept once per mode because everything a color sits
+                // against flips with the mode.
+                property bool showBackground: true
+                property real backgroundOpacity: -1
+                property string backgroundColorDark: ""
+                property string backgroundColorLight: ""
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from
                 // the dock's own setting moves the bar across instead.

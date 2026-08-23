@@ -10,7 +10,7 @@ ContentPage {
 
     ContentSection {
         icon: "call_to_action"
-        title: Translation.tr("Dock")
+        title: Translation.tr("Behavior")
 
         // Same row form as the hot corner's Trigger overview: icon, label,
         // dropdown on the right. The bar's own edge is not offered; a saved
@@ -158,6 +158,86 @@ ContentPage {
                     { displayName: Translation.tr("Wobble"), icon: "360", value: DockLaunchAnims.AnimType.Wobble }
                 ]
             }
+        }
+    }
+
+    ContentSection {
+        icon: "opacity"
+        title: Translation.tr("Transparency")
+
+        ConfigSwitch {
+            buttonIcon: "background_replace"
+            text: Translation.tr("Show background")
+            checked: Config.options.dock.showBackground
+            onCheckedChanged: Config.options.dock.showBackground = checked
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Background")
+            visible: Config.options.dock.showBackground
+            stopIndicatorValues: [Appearance.colors.dockStockAlpha]
+            buttonIcon: "wallpaper"
+            // The track stops where the dock stops being frosted rather than at
+            // nothing, so every point along it answers the same way. Running it
+            // to zero put a step partway down that no setting explains.
+            from: Appearance.colors.dockOpacityFloor
+            to: 1
+            value: Math.max(Appearance.colors.dockOpacityFloor,
+                Config.options.dock.backgroundOpacity < 0
+                    ? Appearance.colors.dockStockAlpha : Config.options.dock.backgroundOpacity)
+            onMoved: {
+                if (Math.abs(value - Config.options.dock.backgroundOpacity) < 0.005)
+                    return;
+                Config.options.dock.backgroundOpacity = value;
+            }
+        }
+
+        ConfigResetButton {
+            visible: Config.options.dock.backgroundOpacity >= 0
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default transparency")
+            onClicked: Config.options.dock.backgroundOpacity = -1
+        }
+    }
+
+    ContentSection {
+        icon: "palette"
+        title: Translation.tr("Colors")
+
+        ColorField {
+            text: Translation.tr("Background")
+            allowEmpty: true
+            buttonIcon: "wallpaper"
+            // Edits the slot for the mode on screen; the other mode keeps its
+            // own pick, or the palette where none was made.
+            value: Appearance.colors.dockPick
+            fallback: String(Appearance.colors.colLayer0)
+            onEdited: newValue => {
+                if (Appearance.m3colors.darkmode) Config.options.dock.backgroundColorDark = newValue
+                else Config.options.dock.backgroundColorLight = newValue
+            }
+        }
+
+        ConfigResetButton {
+            visible: Config.options.dock.backgroundColorDark !== ""
+                || Config.options.dock.backgroundColorLight !== ""
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default colors")
+            onClicked: {
+                Config.options.dock.backgroundColorDark = ""
+                Config.options.dock.backgroundColorLight = ""
+            }
+        }
+
+        SubtleNoticeBox {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            text: Translation.tr("Dark mode and light mode each keep their own colors.")
         }
     }
 }
