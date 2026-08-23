@@ -47,6 +47,11 @@ MouseArea {
         }
     }
 
+    Bar.MediaTransferDropArea {
+        anchors.fill: parent
+        popupAnchorItem: root.popupAnchorItem
+    }
+
     ClippedFilledCircularProgress {
         id: mediaCircProg
         anchors.centerIn: parent
