@@ -131,5 +131,15 @@
       "Wallpaper thumbnails show up for filenames with punctuation in them",
       "Media controls come back from the shortcut, and a second browser's player no longer disappears"
     ]
+  },
+  "1.4.0": {
+    "date": "2026-08-23",
+    "kind": "feature",
+    "summary": "Update UI Quickshell to 0.3.1",
+    "changes": [
+      "Now running on Quickshell 0.3.1",
+      "LocalSend file drops now work on the vertical bar too",
+      "Bluetooth input devices now reconnect more reliably"
+    ]
   }
 }
