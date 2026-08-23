@@ -20,4 +20,8 @@ hl.on("hyprland.start", function()
     -- safety net while restoring a session days out of date.
     hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/session/restore.sh")
     hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/session/watch.sh")
+
+    -- The Bluetooth applet carries blueman's pairing agent. Started here with
+    -- the xdg entry masked, so the tray icon is switched off before it draws.
+    hl.exec_cmd("$HOME/.config/hypr/custom/scripts/blueman-applet-quiet.sh")
 end)
