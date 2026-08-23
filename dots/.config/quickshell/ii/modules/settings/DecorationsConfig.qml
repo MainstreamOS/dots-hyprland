@@ -576,7 +576,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         title: Translation.tr("Window shape")
 
         ConfigSlider {
-            text: Translation.tr("Corner radius")
+            text: Translation.tr("Corner roundness")
             stopIndicatorValues: root.defaultMark("rounding")
             buttonIcon: "rounded_corner"
             usePercentTooltip: false
