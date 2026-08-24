@@ -86,11 +86,31 @@ ContentPage {
                 }
             }
             ConfigSwitch {
+                buttonIcon: "apps"
+                text: Translation.tr("Show overview button")
+                checked: Config.options.dock.showOverviewButton
+                onCheckedChanged: {
+                    Config.options.dock.showOverviewButton = checked;
+                }
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
                 buttonIcon: "keep"
                 text: Translation.tr("Pinned on startup")
                 checked: Config.options.dock.pinnedOnStartup
                 onCheckedChanged: {
                     Config.options.dock.pinnedOnStartup = checked;
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "keep"
+                text: Translation.tr("Show pin button")
+                checked: Config.options.dock.showPinButton
+                onCheckedChanged: {
+                    Config.options.dock.showPinButton = checked;
                 }
             }
         }

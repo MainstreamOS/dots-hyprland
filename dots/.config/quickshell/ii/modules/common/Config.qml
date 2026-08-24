@@ -767,6 +767,12 @@ Singleton {
                 // below zero until touched, and the interface decides there.
                 property real iconSize: -1
                 property real radius: -1
+                // The buttons at the dock's ends, each away on its own so a
+                // dock can keep the one it uses and drop the other. A button
+                // takes its neighboring separator with it: a divider with
+                // nothing on one side of it divides nothing.
+                property bool showOverviewButton: true
+                property bool showPinButton: true
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from
                 // the dock's own setting moves the bar across instead.

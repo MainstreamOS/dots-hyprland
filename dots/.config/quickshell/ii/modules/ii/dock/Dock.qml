@@ -257,6 +257,7 @@ Scope { // Scope
                             property real padding: 5
 
                             VerticalButtonGroup {
+                                visible: Config.options.dock.showPinButton
                                 Layout.alignment: dockRoot.dockVertical ? Qt.AlignHCenter : Qt.AlignVCenter
                                 Layout.topMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : 0 // why does this work
                                 Layout.bottomMargin: dockRoot.dockEdge === "top" ? Appearance.sizes.hyprlandGapsOut : 0
@@ -283,13 +284,14 @@ Scope { // Scope
                                     }
                                 }
                             }
-                            DockSeparator {}
+                            DockSeparator { visible: Config.options.dock.showPinButton }
                             DockApps {
                                 id: dockApps
                                 buttonPadding: dockRow.padding
                             }
-                            DockSeparator {}
+                            DockSeparator { visible: Config.options.dock.showOverviewButton }
                             DockButton {
+                                visible: Config.options.dock.showOverviewButton
                                 Layout.fillHeight: !dockRoot.dockVertical
                                 Layout.fillWidth: dockRoot.dockVertical
                                 onClicked: GlobalStates.overviewOpen = !GlobalStates.overviewOpen
