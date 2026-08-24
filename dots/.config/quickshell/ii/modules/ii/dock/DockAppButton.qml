@@ -16,10 +16,15 @@ DockButton {
     property real iconSize: Appearance.sizes.dockIconSize
     property real countDotWidth: 10
     property real countDotHeight: 4
-    property bool appIsActive: appToplevel.toplevels.find(t => (t.activated == true)) !== undefined
+    property bool appIsActive: appToplevel?.toplevels?.find(t => (t.activated == true)) !== undefined
 
-    readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
-    readonly property bool isFolder: appToplevel.isFolder === true
+    // How many windows this button stands for. A delegate goes on answering
+    // for a moment after the model has dropped it, so everything that counts
+    // windows reads this rather than reaching through what is no longer there.
+    readonly property int windowCount: appToplevel?.toplevels?.length ?? 0
+
+    readonly property bool isSeparator: appToplevel?.appId === "SEPARATOR"
+    readonly property bool isFolder: appToplevel?.isFolder === true
 
     // appToplevel.appId is already the canonical resolved id (e.g.
     // "settings", "welcome-tutorial") because TaskbarApps.resolveAppId
@@ -27,7 +32,7 @@ DockButton {
     // We keep this property so callers can still go through one lookup
     // point if the resolution rules ever need to differ between the
     // dock and elsewhere.
-    readonly property string lookupAppId: appToplevel.appId
+    readonly property string lookupAppId: appToplevel?.appId ?? ""
 
     // Bumped by the retry timer to re-run the lookup below. The timer used to
     // assign straight to desktopEntry, which replaced the binding with whatever
@@ -87,7 +92,7 @@ DockButton {
     readonly property real dragTranslate: {
         if (!appListRoot.dragging) return 0;
         if (isDragged) return appListRoot.dragCursorPos - appListRoot.dragStartCursorPos;
-        if (!appToplevel.pinned || isSeparator) return 0;
+        if (!appToplevel?.pinned || isSeparator) return 0;
         var src = appListRoot.dragSourceIndex;
         var tgt = appListRoot.dragTargetIndex;
         var idx = delegateIndex;
@@ -137,7 +142,7 @@ DockButton {
         id: dragOverlay
         anchors.fill: parent
         z: 10
-        enabled: appToplevel.pinned && !isSeparator
+        enabled: (appToplevel?.pinned ?? false) && !isSeparator
         acceptedButtons: Qt.LeftButton
         preventStealing: true
         property real pressPos: 0
@@ -197,7 +202,7 @@ DockButton {
                 const folder = AppFolderManager.getFolder(folderId);
                 if (folder) appListRoot.showFolderPopup(root, folder);
             }
-        } else if (appToplevel.toplevels.length > 0) {
+        } else if (root.windowCount > 0) {
             // Toggle preview
             if (appListRoot.clickedButton === root) {
                 appListRoot.hidePreview();
@@ -364,7 +369,7 @@ DockButton {
                 readonly property real diameter: Math.max(14, root.iconSize * 0.3)
                 visible: !root.isFolder
                     && Config.options.dock.indicatorStyle === "badge"
-                    && appToplevel.toplevels.length >= 2
+                    && root.windowCount >= 2
                 implicitWidth: diameter
                 implicitHeight: diameter
                 radius: diameter / 2
@@ -385,8 +390,7 @@ DockButton {
                 }
                 StyledText {
                     anchors.centerIn: parent
-                    text: appToplevel.toplevels.length > 9
-                        ? "9+" : appToplevel.toplevels.length
+                    text: root.windowCount > 9 ? "9+" : root.windowCount
                     font.pixelSize: parent.diameter * 0.62
                     color: Appearance.colors.colDockBadgeText
                 }
@@ -419,14 +423,14 @@ DockButton {
                     && Config.options.dock.indicatorStyle !== "none"
                     && Config.options.dock.indicatorStyle !== "badge"
                 Repeater {
-                    model: Math.min(appToplevel.toplevels.length, 3)
+                    model: Math.min(root.windowCount, 3)
                     delegate: Rectangle {
                         required property int index
                         // Dashes stretch along the dock while few and tighten
                         // to dots past three; the dots style stays a dot at
                         // any count.
                         readonly property bool asDash: Config.options.dock.indicatorStyle !== "dots"
-                            && appToplevel.toplevels.length <= 3
+                            && root.windowCount <= 3
                         radius: Appearance.rounding.full
                         implicitWidth: dockRoot.dockVertical ? root.countDotHeight
                             : asDash ? root.countDotWidth : root.countDotHeight
