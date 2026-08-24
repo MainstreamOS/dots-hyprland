@@ -162,7 +162,7 @@ rm -rf "$CMDTMP"
 # ── modprobe / mkinitcpio MODULES + HOOKS / hypr env writers ────────────────
 WTMP="$(mktemp -d)"; export MODPROBE_DIR="$WTMP/modprobe.d" MKINITCPIO_CONF="$WTMP/mkinitcpio.conf"
 NVIDIA_GEN=turing; write_modprobe_conf nvidia; CASES=$((CASES + 1))
-chk_str modprobe-nvidia "$(cat "$MODPROBE_DIR/nvidia.conf")" "$(printf 'options nvidia-drm modeset=1 fbdev=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp')"
+chk_str modprobe-nvidia "$(cat "$MODPROBE_DIR/nvidia.conf")" "$(printf 'options nvidia-drm modeset=1 fbdev=1')"
 NVIDIA_GEN=kepler; write_modprobe_conf nvidia; CASES=$((CASES + 1))
 chk_str modprobe-nvidia-legacy "$(cat "$MODPROBE_DIR/nvidia.conf")" "$(printf 'options nvidia-drm modeset=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp')"
 write_modprobe_conf amd; CASES=$((CASES + 1))
@@ -230,6 +230,7 @@ chk_str retire-wlr "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo presen
 # black-screened a hybrid laptop, and autodetect is what makes the outputs on
 # both cards enumerable. Anyone who wants the pin sets it by hand.
 chk_str aq-drm-retired "$(type -t nvidia_write_aq_drm || echo absent)" "absent"
+chk_str defer-kms-retired "$(type -t nvidia_defer_kms || echo absent)" "absent"
 CASES=$((CASES + 1))
 
 # The initramfs names whichever module the kernel bound, not one worked out from
@@ -247,11 +248,9 @@ chk_str svc-resume "$( [[ "$ENABLED" == *"nvidia-resume"* ]] && echo yes || echo
 ENABLED=""; nvidia_enable_services false; CASES=$((CASES + 1))
 chk_str svc-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
 chk_str svc-suspend-still "$( [[ "$ENABLED" == *"nvidia-suspend"* ]] && echo yes || echo no )" "yes"
-
-printf 'MODULES=()\nHOOKS=(base systemd plymouth kms block filesystems)\n' > "$MKINITCPIO_CONF"
-nvidia_defer_kms; CASES=$((CASES + 1))
-chk_str defer-kms-no-nvidia "$(grep -c nvidia "$MKINITCPIO_CONF")" "0"
-chk_str defer-kms-removes-kms "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo present || echo gone )" "gone"
+ENABLED=""; nvidia_enable_services true false; CASES=$((CASES + 1))
+chk_str svc-sleep-optout "$( [[ "$ENABLED" == *nvidia-suspend* || "$ENABLED" == *nvidia-hibernate* || "$ENABLED" == *nvidia-resume* ]] && echo present || echo absent )" "absent"
+chk_str svc-powerd-kept "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
 
 HF="$NVHOME/.config/hypr/hypridle.conf"
 printf "listener {\n    after_sleep_cmd = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })' && hyprctl dispatch 'x'\n    on-resume = hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'\n}\n" > "$HF"
@@ -317,7 +316,10 @@ gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES
 CL="$(cat "$KERNEL_CMDLINE")"; ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"; GV="$(cat "$OHOME/.config/hypr/custom/general.lua")"
 chk_str turing-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo yes || echo no )" "yes"
 chk_str turing-no-early-nvidia "$( [[ "$ML" == *"nvidia"* ]] && echo present || echo absent )" "absent"
-chk_str turing-kms-removed "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo present || echo gone )" "gone"
+chk_str turing-kms-kept "$( [[ "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *" kms "* ]] && echo present || echo gone )" "present"
+chk_str turing-modprobe-body "$(cat "$MODPROBE_DIR/nvidia.conf")" "options nvidia-drm modeset=1 fbdev=1"
+chk_str turing-modprobe-bytes "$(wc -c < "$MODPROBE_DIR/nvidia.conf" | tr -d ' ')" "37"
+chk_str turing-no-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* || "$ENABLED" == *nvidia-hibernate* || "$ENABLED" == *nvidia-resume* ]] && echo present || echo absent )" "absent"
 chk_str turing-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes || echo no )" "yes"
 chk_str turing-powerd "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo yes || echo no )" "yes"
 chk_str turing-env "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo yes || echo no )" "yes"
@@ -330,6 +332,8 @@ chk_str kepler-cmdline "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo yes |
 chk_str kepler-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
 chk_str kepler-no-nvd "$( [[ "$EV" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
 chk_str kepler-no-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "0"
+chk_str kepler-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* && "$ENABLED" == *nvidia-hibernate* && "$ENABLED" == *nvidia-resume* ]] && echo yes || echo no )" "yes"
+chk_str kepler-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GP106 [GeForce GTX 1060 6GB] [10de:1c03] (rev a1)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1))
@@ -337,6 +341,8 @@ chk_str maxwell-gen "$NVIDIA_GEN" "maxwell"
 chk_str maxwell-powerd-off "$( [[ "$ENABLED" == *"nvidia-powerd"* ]] && echo present || echo absent )" "absent"
 chk_str maxwell-gsp-hook "$( [[ -f "$INITCPIO_INSTALL_DIR/strip-nvidia-gsp" && "$(grep '^HOOKS=' "$MKINITCPIO_CONF")" == *"strip-nvidia-gsp"* ]] && echo yes || echo no )" "yes"
 chk_str maxwell-fbdev "$(grep -c 'fbdev=1' "$MODPROBE_DIR/nvidia.conf")" "1"
+chk_str maxwell-sleep-opts "$(grep -c NVreg_PreserveVideoMemoryAllocations "$MODPROBE_DIR/nvidia.conf")" "1"
+chk_str maxwell-sleep-svc "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo yes || echo no )" "yes"
 
 oreset; FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); ML="$(grep '^MODULES=' "$MKINITCPIO_CONF")"

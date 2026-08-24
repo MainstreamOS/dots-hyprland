@@ -234,7 +234,21 @@ write_modprobe_conf() {
             # load nvidia-drm, so emit it only for the modern branches.
             local fbdev=""
             case "${NVIDIA_GEN:-}" in turing|maxwell) fbdev=" fbdev=1" ;; esac
-            printf 'options nvidia-drm modeset=1%s\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp\n' "$fbdev" \
+            # How a driver survives suspend is the driver's own business, and
+            # since 595 mainline answers it differently from the legacy branches:
+            # nvidia-utils ships nvidia-sleep.conf asking for kernel suspend
+            # notifiers, where 580xx and older ask to preserve video memory.
+            # Those are alternatives, not layers. This file is called nvidia.conf,
+            # so it stacks on top of theirs instead of replacing it, and handing
+            # the legacy answer to a driver that already gave the modern one
+            # leaves both set at once. Say nothing to the branch that speaks for
+            # itself.
+            local sleep_opts=""
+            case "${NVIDIA_GEN:-}" in
+                turing) ;;
+                *) sleep_opts=$'options nvidia NVreg_PreserveVideoMemoryAllocations=1\noptions nvidia NVreg_TemporaryFilePath=/var/tmp\n' ;;
+            esac
+            printf 'options nvidia-drm modeset=1%s\n%s' "$fbdev" "$sleep_opts" \
                 | _gpu_write_file "$dir/nvidia.conf" ;;
         amd)
             printf 'options amdgpu si_support=1\noptions amdgpu cik_support=1\noptions radeon si_support=0\noptions radeon cik_support=0\n' \
@@ -279,8 +293,9 @@ intel_kms_module() {
 
 # ── mkinitcpio_remove_hook <hook> ───────────────────────────────────────────
 # Idempotent removal of a HOOKS entry (scoped to the HOOKS line so MODULES and
-# comments are untouched). Used to drop the kms hook before injecting nvidia
-# modules; callers that keep kms simply never call it.
+# comments are untouched). No GPU path removes a hook today: NVIDIA used to drop
+# kms, until it turned out that hook only ever collects in-kernel-tree drivers
+# and so never held an NVIDIA module to begin with.
 mkinitcpio_remove_hook() {
     local conf="${MKINITCPIO_CONF:-/etc/mkinitcpio.conf}" hook="$1"
     if grep -qE "^HOOKS=\([^)]*\b${hook}\b" "$conf"; then
@@ -481,32 +496,26 @@ nvidia_write_env() {
     esac
 }
 
-# ── nvidia_enable_services <enable_powerd:bool> ─────────────────────────────
+# ── nvidia_enable_services <enable_powerd:bool> [enable_sleep:bool] ─────────
 # Enable suspend/hibernate/resume (tolerant of missing units); powerd only when
 # enable_powerd. Dynamic Boost is Ampere+ notebook-only, so only the turing
 # bucket (Turing and newer) can ever legitimately use it.
+#
+# The sleep units are opt-out because mainline stopped wanting them: from 595 the
+# driver handles suspend through kernel notifiers, and nvidia-utils actively
+# disables these three on upgrade for exactly that reason. Switching them back on
+# is not a harmless belt-and-braces, it reinstates the handshake the driver no
+# longer performs. The legacy branches still need them.
 nvidia_enable_services() {
-    local enable_powerd="${1:-false}" svc
-    for svc in nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service; do
-        _gpu_systemctl enable "$svc" >/dev/null 2>&1 || true
-    done
+    local enable_powerd="${1:-false}" enable_sleep="${2:-true}" svc
+    if [[ "$enable_sleep" == true ]]; then
+        for svc in nvidia-suspend.service nvidia-hibernate.service nvidia-resume.service; do
+            _gpu_systemctl enable "$svc" >/dev/null 2>&1 || true
+        done
+    fi
     if [[ "$enable_powerd" == true ]]; then
         _gpu_systemctl enable nvidia-powerd.service >/dev/null 2>&1 || true
     fi
-}
-
-# ── nvidia_defer_kms ────────────────────────────────────────────────────────
-# Do NOT early-load the nvidia modules into the initramfs: baking them in breaks
-# hibernation, because NVreg_PreserveVideoMemoryAllocations restores VRAM before
-# the init hooks make the temp filesystem usable (ArchWiki). KMS/full-res is kept
-# by nvidia_drm.modeset=1 on the cmdline; the modules load via udev on the real
-# root, after which suspend/hibernate VRAM preservation works. Remove the kms
-# hook so udev autodetect doesn't early-load nvidia_drm in its place. Dropping
-# the in-initramfs nvidia modules also shrinks the UKI. AMD/Intel still get
-# early KMS via their explicit MODULES entries, guarded by the small-ESP check
-# in gpu_apply_autoconfig.
-nvidia_defer_kms() {
-    mkinitcpio_remove_hook kms
 }
 
 # ── hypridle_fix_nvidia <user_home> ─────────────────────────────────────────
@@ -596,12 +605,18 @@ gpu_apply_autoconfig() {
         # config that reads as correct; say it instead.
         local _k; _k="$(gpu_target_kernel)"
         if nvidia_module_present "$_k"; then
-            nvidia_defer_kms
+            # No nvidia entries go into MODULES. Baking them into the initramfs
+            # costs hibernation: the boot kernel freezes devices before anything
+            # has written /proc/driver/nvidia/suspend, so the driver refuses the
+            # freeze and the resume falls through into an ordinary boot. KMS is
+            # kept by nvidia_drm.modeset=1 below, and udev loads the modules on
+            # the real root where the handshake can happen. The cost is a visible
+            # handoff from simpledrm once nvidia_drm probes.
             write_modprobe_conf nvidia
             cmdline_args+=("nvidia_drm.modeset=1")
-            local _pw=false
-            [[ "$NVIDIA_GEN" == turing ]] && _pw=true || true
-            nvidia_enable_services "$_pw"
+            local _pw=false _sleep=true
+            if [[ "$NVIDIA_GEN" == turing ]]; then _pw=true; _sleep=false; fi
+            nvidia_enable_services "$_pw" "$_sleep"
         else
             note_failure "nvidia: driver installed but no module for kernel ${_k:-unknown}, so the GPU configuration was skipped"
         fi
