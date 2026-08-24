@@ -174,6 +174,23 @@ Singleton {
                 ? dockStockAlpha : Config.options.dock.backgroundOpacity)
         property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
+        readonly property string dockBadgePick: {
+            const v = m3colors.darkmode
+                ? (Config.options?.dock.badgeColorDark ?? "")
+                : (Config.options?.dock.badgeColorLight ?? "")
+            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        }
+        readonly property string dockBadgeTextPick: {
+            const v = m3colors.darkmode
+                ? (Config.options?.dock.badgeTextColorDark ?? "")
+                : (Config.options?.dock.badgeTextColorLight ?? "")
+            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        }
+        // The count badge sits on the icon to be read, not on the surface to
+        // be seen through, so it keeps full strength however faint the dock
+        // behind it is set.
+        property color colDockBadge: dockBadgePick !== "" ? dockBadgePick : colPrimary
+        property color colDockBadgeText: dockBadgeTextPick !== "" ? dockBadgeTextPick : m3colors.m3onPrimary
         // Layer 1
         property color colLayer1Base: m3colors.m3surfaceContainerLow
         property color colLayer1: ColorUtils.solveOverlayColor(colLayer0Base, colLayer1Base, 1 - root.contentTransparency);

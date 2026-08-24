@@ -352,7 +352,7 @@ ContentPage {
         title: Translation.tr("Colors")
 
         ColorField {
-            text: Translation.tr("Background")
+            text: Translation.tr("Dock background")
             allowEmpty: true
             buttonIcon: "wallpaper"
             // Edits the slot for the mode on screen; the other mode keeps its
@@ -365,15 +365,49 @@ ContentPage {
             }
         }
 
+        ColorField {
+            visible: Config.options.dock.indicatorStyle === "badge"
+            text: Translation.tr("Badge text")
+            allowEmpty: true
+            buttonIcon: "format_color_text"
+            value: Appearance.colors.dockBadgeTextPick
+            fallback: String(Appearance.m3colors.m3onPrimary)
+            onEdited: newValue => {
+                if (Appearance.m3colors.darkmode) Config.options.dock.badgeTextColorDark = newValue
+                else Config.options.dock.badgeTextColorLight = newValue
+            }
+        }
+
+        ColorField {
+            visible: Config.options.dock.indicatorStyle === "badge"
+            text: Translation.tr("Badge background")
+            allowEmpty: true
+            buttonIcon: "counter_2"
+            value: Appearance.colors.dockBadgePick
+            fallback: String(Appearance.colors.colPrimary)
+            onEdited: newValue => {
+                if (Appearance.m3colors.darkmode) Config.options.dock.badgeColorDark = newValue
+                else Config.options.dock.badgeColorLight = newValue
+            }
+        }
+
         ConfigResetButton {
             visible: Config.options.dock.backgroundColorDark !== ""
                 || Config.options.dock.backgroundColorLight !== ""
+                || Config.options.dock.badgeColorDark !== ""
+                || Config.options.dock.badgeColorLight !== ""
+                || Config.options.dock.badgeTextColorDark !== ""
+                || Config.options.dock.badgeTextColorLight !== ""
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default colors")
             onClicked: {
                 Config.options.dock.backgroundColorDark = ""
                 Config.options.dock.backgroundColorLight = ""
+                Config.options.dock.badgeColorDark = ""
+                Config.options.dock.badgeColorLight = ""
+                Config.options.dock.badgeTextColorDark = ""
+                Config.options.dock.badgeTextColorLight = ""
             }
         }
 

@@ -789,6 +789,13 @@ Singleton {
                 // while few and tighten to dots past three; dots stay dots at
                 // any count; the badge says the number outright.
                 property string indicatorStyle: "dashes"
+                // What the badge is painted in, kept per mode like every other
+                // color slot here. Empty leaves it to the accent, which is
+                // what it wears until someone decides otherwise.
+                property string badgeColorDark: ""
+                property string badgeColorLight: ""
+                property string badgeTextColorDark: ""
+                property string badgeTextColorLight: ""
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from
                 // the dock's own setting moves the bar across instead.

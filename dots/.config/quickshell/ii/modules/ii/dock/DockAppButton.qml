@@ -368,7 +368,7 @@ DockButton {
                 implicitWidth: diameter
                 implicitHeight: diameter
                 radius: diameter / 2
-                color: Appearance.colors.colPrimary
+                color: Appearance.colors.colDockBadge
                 // The icon corner furthest from the screen, tucked back over
                 // the art. Both corners are measured out from the center by
                 // half an icon: the loaders around the art are stretched to
@@ -388,7 +388,7 @@ DockButton {
                     text: appToplevel.toplevels.length > 9
                         ? "9+" : appToplevel.toplevels.length
                     font.pixelSize: parent.diameter * 0.62
-                    color: Appearance.m3colors.m3onPrimary
+                    color: Appearance.colors.colDockBadgeText
                 }
             }
 
