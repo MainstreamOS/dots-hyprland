@@ -1,6 +1,7 @@
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
+import qs.modules.common.widgets
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
@@ -356,6 +357,41 @@ DockButton {
                 }
             }
 
+            // How many windows an app holds, said outright rather than
+            // counted off in marks. It only speaks from the second window on:
+            // one window is what an open app already looks like.
+            Rectangle {
+                readonly property real diameter: Math.max(14, root.iconSize * 0.3)
+                visible: !root.isFolder
+                    && Config.options.dock.indicatorStyle === "badge"
+                    && appToplevel.toplevels.length >= 2
+                implicitWidth: diameter
+                implicitHeight: diameter
+                radius: diameter / 2
+                color: Appearance.colors.colPrimary
+                // The icon corner furthest from the screen, tucked back over
+                // the art. Both corners are measured out from the center by
+                // half an icon: the loaders around the art are stretched to
+                // the button's cross axis, so their own edges sit outside the
+                // art by however much wider the button is, which on a dock
+                // narrow enough carries the badge clear off the surface.
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    horizontalCenterOffset: (dockRoot.dockEdge === "right" ? -1 : 1)
+                        * (root.iconSize / 2 - diameter * 0.2)
+                    verticalCenter: parent.verticalCenter
+                    verticalCenterOffset: (dockRoot.dockEdge === "top" ? 1 : -1)
+                        * (root.iconSize / 2 - diameter * 0.15)
+                }
+                StyledText {
+                    anchors.centerIn: parent
+                    text: appToplevel.toplevels.length > 9
+                        ? "9+" : appToplevel.toplevels.length
+                    font.pixelSize: parent.diameter * 0.62
+                    color: Appearance.m3colors.m3onPrimary
+                }
+            }
+
             GridLayout {
                 columnSpacing: 3
                 rowSpacing: 3
@@ -379,7 +415,9 @@ DockButton {
                     horizontalCenter: dockRoot.dockVertical ? undefined : parent.horizontalCenter
                     verticalCenter: dockRoot.dockVertical ? parent.verticalCenter : undefined
                 }
-                visible: !root.isFolder && Config.options.dock.indicatorStyle !== "none"
+                visible: !root.isFolder
+                    && Config.options.dock.indicatorStyle !== "none"
+                    && Config.options.dock.indicatorStyle !== "badge"
                 Repeater {
                     model: Math.min(appToplevel.toplevels.length, 3)
                     delegate: Rectangle {

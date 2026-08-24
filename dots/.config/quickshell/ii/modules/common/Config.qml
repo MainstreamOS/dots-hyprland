@@ -784,10 +784,10 @@ Singleton {
                 // nothing on one side of it divides nothing.
                 property bool showOverviewButton: true
                 property bool showPinButton: true
-                // The marks under running apps, in one answer because the
-                // three are one choice: "none" | "dashes" | "dots". Dashes
-                // widen while few and tighten to dots past three; dots stay
-                // dots at any count.
+                // What marks a running app, in one answer because they are one
+                // choice: "none" | "dashes" | "dots" | "badge". Dashes widen
+                // while few and tighten to dots past three; dots stay dots at
+                // any count; the badge says the number outright.
                 property string indicatorStyle: "dashes"
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from

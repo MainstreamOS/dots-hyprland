@@ -94,9 +94,10 @@ ContentPage {
                 Layout.fillWidth: false
                 Layout.preferredWidth: 220
                 model: [
-                    { displayName: Translation.tr("Disable"), icon: "close", value: "none" },
+                    { displayName: Translation.tr("None"), icon: "block", value: "none" },
                     { displayName: Translation.tr("Dashes"), icon: "remove", value: "dashes" },
-                    { displayName: Translation.tr("Dots"), icon: "more_horiz", value: "dots" }
+                    { displayName: Translation.tr("Dots"), icon: "more_horiz", value: "dots" },
+                    { displayName: Translation.tr("Count badge"), icon: "counter_2", value: "badge" }
                 ]
                 currentIndex: {
                     const idx = model.findIndex(item => item.value === Config.options.dock.indicatorStyle);
