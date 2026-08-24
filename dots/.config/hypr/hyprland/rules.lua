@@ -146,6 +146,13 @@ hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
 -- can land them a hair under it on a dark wallpaper, and a surface should not
 -- lose its blur to settings nobody touched.
 hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
+-- The dock is lifted above the overview's dim while the overview is open, so
+-- it is the one blurred surface here whose blur edge is ever seen against
+-- anything but the wallpaper. Blurring the wallpaper alone punches a bright,
+-- stepped outline through the dim, because that edge is decided per pixel with
+-- nothing in between. Reading what is actually behind it puts the dim on both
+-- sides of the line, and the line has nothing left to show.
+hl.layer_rule({ match = { namespace = "quickshell:dock[A-Za-z]*" }, xray = false})
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})
