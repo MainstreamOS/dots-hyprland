@@ -289,9 +289,26 @@ Singleton {
         readonly property real barFloatStock: windowRounding
         readonly property real barFloat: (Config.options?.bar.floatRadius ?? -1) >= 0
             ? Config.options.bar.floatRadius : barFloatStock
+        // The dock's roundness tracks run to this, and the marks on them are
+        // stated as a share of it so a mark can never promise a place the
+        // track does not have.
+        readonly property real dockRoundMax: 40
         readonly property real dockStock: large
+        // Hugging wants a rounder body than a floating one: the curve that
+        // leaves the edge reads as part of it only if the corner above is
+        // generous enough to answer it.
+        readonly property real dockHugStock: dockRoundMax * 0.48
+        readonly property real dockCornerStock: Config.options?.dock.cornerStyle === "hug"
+            ? dockHugStock : dockStock
         readonly property real dock: (Config.options?.dock.radius ?? -1) >= 0
-            ? Config.options.dock.radius : dockStock
+            ? Config.options.dock.radius : dockCornerStock
+        // The pair facing the desktop keeps a slight roundness of its own,
+        // settled rather than derived: following the roundness above would
+        // drag this one's mark along every time that slider moved, and would
+        // leave the pair answering to a control rect has put away.
+        readonly property real dockTopStock: dockRoundMax * 0.10
+        readonly property real dockTop: (Config.options?.dock.topRadius ?? -1) >= 0
+            ? Config.options.dock.topRadius : dockTopStock
     }
 
     font: QtObject {

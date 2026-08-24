@@ -767,6 +767,17 @@ Singleton {
                 // below zero until touched, and the interface decides there.
                 property real iconSize: -1
                 property real radius: -1
+                // How the dock meets the screen edge. Float keeps its gap and
+                // rounds all four corners alike; hug sits flush on the edge,
+                // where the two corners touching it can curve outward into it
+                // instead of away, so the dock reads as part of the edge
+                // rather than a slab resting near it.
+                property string cornerStyle: "float" // "float" | "hug" | "rect"
+                // The corners facing the desktop can answer to themselves;
+                // below zero they follow the radius above. The pair on the
+                // edge takes its shape from the style instead: hug curves it
+                // outward, rect squares it off.
+                property real topRadius: -1
                 // The buttons at the dock's ends, each away on its own so a
                 // dock can keep the one it uses and drop the other. A button
                 // takes its neighboring separator with it: a divider with

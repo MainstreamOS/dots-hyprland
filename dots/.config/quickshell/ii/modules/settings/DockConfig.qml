@@ -232,6 +232,19 @@ ContentPage {
         icon: "rounded_corner"
         title: Translation.tr("Shape")
 
+        ContentSubsection {
+            title: Translation.tr("Corner style")
+            ConfigSelectionArray {
+                currentValue: Config.options.dock.cornerStyle
+                onSelected: newValue => { Config.options.dock.cornerStyle = newValue; }
+                options: [
+                    { displayName: Translation.tr("Hug"), icon: "line_curve", value: "hug" },
+                    { displayName: Translation.tr("Float"), icon: "page_header", value: "float" },
+                    { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" }
+                ]
+            }
+        }
+
         ConfigSlider {
             text: Translation.tr("Icon size")
             stopIndicatorValues: [Appearance.sizes.dockIconStock]
@@ -247,11 +260,27 @@ ContentPage {
         }
 
         ConfigSlider {
+            text: Translation.tr("Top roundness")
+            visible: Config.options.dock.cornerStyle !== "float"
+            stopIndicatorValues: [Appearance.rounding.dockTopStock]
+            buttonIcon: "border_top"
+            from: 0
+            to: Appearance.rounding.dockRoundMax
+            value: Appearance.rounding.dockTop
+            onMoved: {
+                if (value === Config.options.dock.topRadius)
+                    return;
+                Config.options.dock.topRadius = value;
+            }
+        }
+
+        ConfigSlider {
             text: Translation.tr("Corner roundness")
-            stopIndicatorValues: [Appearance.rounding.dockStock]
+            visible: Config.options.dock.cornerStyle !== "rect"
+            stopIndicatorValues: [Appearance.rounding.dockCornerStock]
             buttonIcon: "rounded_corner"
             from: 0
-            to: 40
+            to: Appearance.rounding.dockRoundMax
             value: Appearance.rounding.dock
             onMoved: {
                 if (value === Config.options.dock.radius)
@@ -260,15 +289,19 @@ ContentPage {
             }
         }
 
+
+
         ConfigResetButton {
             visible: Config.options.dock.iconSize >= 0
                 || Config.options.dock.radius >= 0
+                || Config.options.dock.topRadius >= 0
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default shape")
             onClicked: {
                 Config.options.dock.iconSize = -1
                 Config.options.dock.radius = -1
+                Config.options.dock.topRadius = -1
             }
         }
     }

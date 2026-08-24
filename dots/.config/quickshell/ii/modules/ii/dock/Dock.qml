@@ -51,6 +51,18 @@ Scope { // Scope
             // strip lands on the bar instead of the screen edge. The shared
             // resolver flips a configured edge the bar holds.
             readonly property string dockEdge: Appearance.sizes.dockEdge
+            // Which corners face the screen and which face the desktop, and
+            // whether the pair on the edge curves outward into it.
+            // Both hug and rect set the dock down on the edge; what differs is
+            // the pair of corners that touches it, curving outward or squared
+            // off. The pair facing the desktop keeps its own roundness either
+            // way.
+            readonly property bool dockHugging: Config.options.dock.cornerStyle !== "float"
+            readonly property bool dockFlares: Config.options.dock.cornerStyle === "hug"
+            readonly property real edgeRadius: Config.options.dock.cornerStyle === "rect"
+                ? 0 : Appearance.rounding.dock
+            readonly property real deskRadius: dockHugging
+                ? Appearance.rounding.dockTop : Appearance.rounding.dock
             readonly property bool dockVertical: dockEdge === "left" || dockEdge === "right"
             // The center-facing side as an Edges value — where popups open.
             readonly property int awayEdges: dockEdge === "bottom" ? Edges.Top
@@ -214,20 +226,108 @@ Scope { // Scope
                             visible: Config.options.dock.showBackground
                             color: Appearance.colors.colDockShadow
                         }
+                        // The outward curves, drawn beside the surface the way
+                        // the bar draws the ones under its own hug corners.
+                        Loader {
+                            active: dockRoot.dockFlares && Config.options.dock.showBackground
+                            anchors.fill: dockVisualBackground
+                            // Between the shadow and the body: above the shadow,
+                            // which is cast for a surface that stops at the body
+                            // and would otherwise lay a gradient down the join,
+                            // and below the body, so the pixel each curve laps
+                            // over it is hidden rather than doubled. That lap is
+                            // what a fractional display scale needs: the body's
+                            // edge can land between pixels, and a curve merely
+                            // touching it rounds to the far side and leaves a
+                            // hairline of desktop showing through.
+                            sourceComponent: Item {
+                                RoundCorner {
+                                    anchors.right: parent.left
+                                    anchors.rightMargin: -1
+                                    anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
+                                    anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
+                                    anchors.left: dockRoot.dockVertical ? parent.left : undefined
+                                    implicitSize: dockRoot.edgeRadius
+                                    color: Appearance.colors.colDockBackground
+                                    corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopRight
+                                        : RoundCorner.CornerEnum.BottomRight
+                                    visible: !dockRoot.dockVertical
+                                }
+                                RoundCorner {
+                                    anchors.left: parent.right
+                                    anchors.leftMargin: -1
+                                    anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
+                                    anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
+                                    implicitSize: dockRoot.edgeRadius
+                                    color: Appearance.colors.colDockBackground
+                                    corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopLeft
+                                        : RoundCorner.CornerEnum.BottomLeft
+                                    visible: !dockRoot.dockVertical
+                                }
+                                RoundCorner {
+                                    anchors.bottom: parent.top
+                                    anchors.bottomMargin: -1
+                                    anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
+                                    anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
+                                    implicitSize: dockRoot.edgeRadius
+                                    color: Appearance.colors.colDockBackground
+                                    corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.BottomLeft
+                                        : RoundCorner.CornerEnum.BottomRight
+                                    visible: dockRoot.dockVertical
+                                }
+                                RoundCorner {
+                                    anchors.top: parent.bottom
+                                    anchors.topMargin: -1
+                                    anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
+                                    anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
+                                    implicitSize: dockRoot.edgeRadius
+                                    color: Appearance.colors.colDockBackground
+                                    corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.TopLeft
+                                        : RoundCorner.CornerEnum.TopRight
+                                    visible: dockRoot.dockVertical
+                                }
+                            }
+                        }
+
                         Rectangle { // The real rectangle that is visible
                             id: dockVisualBackground
                             property real margin: Appearance.sizes.elevationMargin
                             anchors.fill: parent
                             // The screen gap sits on the edge side, the
                             // shadow's breathing room on the center side.
-                            anchors.topMargin: dockRoot.dockEdge === "top" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
-                            anchors.bottomMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
-                            anchors.leftMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
-                            anchors.rightMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
+                            // Hugging leaves no gap on the edge side: the
+                            // concave corners have nothing to curve into if
+                            // the dock is floating away from it.
+                            readonly property real edgeGap: dockRoot.dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
+                            anchors.topMargin: dockRoot.dockEdge === "top" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
+                            anchors.bottomMargin: dockRoot.dockEdge === "bottom" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
+                            anchors.leftMargin: dockRoot.dockEdge === "left" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
+                            anchors.rightMargin: dockRoot.dockEdge === "right" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
                             color: Config.options.dock.showBackground ? Appearance.colors.colDockBackground : "transparent"
-                            border.width: Config.options.dock.showBackground ? 1 : 0
+                            // The outward curves are drawn as their own pieces
+                            // and carry no outline, so a border on the body
+                            // would run a seam down the join. Hugging means one
+                            // continuous surface or none.
+                            border.width: Config.options.dock.showBackground && !dockRoot.dockFlares ? 1 : 0
                             border.color: Appearance.colors.colDockBackgroundBorder
-                            radius: Appearance.rounding.dock
+                            // The pair facing the screen edge answers to the
+                            // edge roundness; the pair facing the desktop to
+                            // the other. A corner that curves outward is drawn
+                            // beside the surface rather than on it, so the one
+                            // here is squared off and the piece takes over.
+                            // Every corner is set below, so this one is left
+                            // only for the shadow to read: it takes the visible
+                            // pair's roundness, or the shadow would keep a shape
+                            // the surface no longer has.
+                            radius: dockRoot.deskRadius
+                            topLeftRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "left")
+                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                            topRightRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "right")
+                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                            bottomLeftRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "left")
+                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                            bottomRightRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "right")
+                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
                         }
 
                         GridLayout {
