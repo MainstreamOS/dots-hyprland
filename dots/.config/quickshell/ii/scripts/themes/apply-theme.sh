@@ -217,8 +217,12 @@ jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/nul
 # A right-biased object merge, because presence is the whole test: false and 0
 # are both settings someone chose, and only a key the snapshot never wrote may
 # take the stock value.
+# How big the dock's icons are, what it marks its running apps with and whether
+# it keeps the buttons at its ends belong to the look as much as its colors do,
+# so they ride along with the rest of its dress. A theme that names none of them
+# was saved wearing stock and reads as stock, the same as one naming no color.
 JQ_FILTER+=' | .bar = ({backgroundOpacity: -1, widgetOpacity: -1, widgetRadius: -1, floatRadius: -1, widgetColorDark: "", widgetColorLight: "", backgroundColorDark: "", backgroundColorLight: "", floatStyleShadow: true} + (.bar // {}))'
-JQ_FILTER+=' | .dock = ({showBackground: true, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1} + (.dock // {}))'
+JQ_FILTER+=' | .dock = ({showBackground: true, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1, iconSize: -1, indicatorStyle: "dashes", showOverviewButton: true, showPinButton: true} + (.dock // {}))'
 # Which edge the dock sits on belongs to the theme, but only when the theme has
 # an opinion. A snapshot taken before the setting existed names no edge, and an
 # absent key is the worst of both: the adapter keeps showing the dock where it
