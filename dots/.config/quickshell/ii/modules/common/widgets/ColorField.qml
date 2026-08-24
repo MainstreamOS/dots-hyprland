@@ -46,7 +46,7 @@ RowLayout {
     signal edited(string newValue)
 
     onValueChanged: {
-        if (picker.visible && !picker.decided && root.value !== picker.lastEmitted) {
+        if (picker.visible && !picker.decided && picker.emitted[root.value] !== true) {
             picker.decided = true
             picker.close()
         }
@@ -134,13 +134,17 @@ RowLayout {
                 // only Accept or Reset makes the change a decision.
                 property string valueAtOpen: ""
                 property bool decided: false
-                // What the picker itself last sent out the door. If the value
-                // under the popup becomes anything else, the change came from
-                // outside — a mode flip rebinding the slot, a theme apply, the
-                // section reset — and the picker's remembered world is stale:
-                // it closes keeping nothing, because both the audition and the
+                // Every value the picker has sent out while open. A drag commits
+                // many in a row and each comes back through the config a beat
+                // later, so the one arriving now is not always the one sent
+                // last, and weighing it against the latest alone read the
+                // picker's own lagging echo as somebody else's write. Anything
+                // in here is ours however late it lands. Anything else means the
+                // value moved on its own (a mode flip rebinding the slot, a theme
+                // apply, the section reset) and the remembered world is stale: it
+                // closes keeping nothing, because both the audition and the
                 // revert would land somewhere they were never made.
-                property string lastEmitted: "\u0001"
+                property var emitted: ({})
 
                 function openAtCurrent() {
                     const c = Qt.color(/^#[0-9a-fA-F]{6}$/.test(root.displayValue)
@@ -150,7 +154,7 @@ RowLayout {
                     sat = c.hsvSaturation
                     bright = c.hsvValue
                     valueAtOpen = root.value
-                    lastEmitted = "\u0001"
+                    emitted = ({})
                     decided = false
                     open()
                 }
@@ -164,7 +168,7 @@ RowLayout {
                 // handle live.
                 function commit() {
                     const v = root.normalise(Qt.hsva(hue, sat, bright, 1).toString())
-                    lastEmitted = v
+                    emitted[v] = true
                     root.edited(v)
                 }
 
@@ -300,7 +304,7 @@ RowLayout {
                             mainText: Translation.tr("Reset")
                             onClicked: {
                                 picker.decided = true
-                                picker.lastEmitted = ""
+                                picker.emitted[""] = true
                                 if (root.value !== "")
                                     root.edited("")
                                 picker.close()
