@@ -393,6 +393,59 @@ _gpu_nvidia_has_driver() {
 # installed, and these branches conflict with each other.
 _gpu_pacman_has() { pacman -Qq "$1" >/dev/null 2>&1; }
 
+# ── gpu_target_kernel ───────────────────────────────────────────────────────
+# The kernel release the target will boot. Inside a chroot $(uname -r) names
+# the build host's kernel, which is never the one being installed, so read the
+# module trees instead and take the newest that carries a kernel image from the
+# `linux` package: a headers-only upgrade leaves a bare build tree behind under
+# a version nothing can boot.
+_gpu_module_dirs() { printf '%s\n' /usr/lib/modules/*/; }
+_gpu_uname_r()     { uname -r; }
+gpu_target_kernel() {
+    local d n running stock="" any=""
+    running="$(_gpu_uname_r)"
+    while IFS= read -r d; do
+        [[ -f "$d/vmlinuz" ]] || continue
+        n="$(basename "$d")"
+        # Already running it, so there is nothing to work out. This can only
+        # match on a live system: inside an installer the running kernel is the
+        # installer's own and has no tree here.
+        [[ "$n" == "$running" ]] && { printf '%s\n' "$n"; return 0; }
+        any="$n"
+        [[ -r "$d/pkgbase" && "$(<"$d/pkgbase")" == "linux" ]] && stock="$n"
+    done < <(_gpu_module_dirs | sort -V)
+    # The stock kernel by preference, since that is what an install lays down,
+    # but never at the cost of returning nothing: a machine booting linux-lts or
+    # linux-zen has a real kernel and a real driver, and answering "none" there
+    # would strip the configuration off a card that works.
+    printf '%s\n' "${stock:-$any}"
+}
+
+# ── nvidia_module_present [<kernel>] ────────────────────────────────────────
+# Whether a loadable nvidia module exists for that kernel. Asking pacman is not
+# enough and this is the difference that stranded a user: nvidia-open ships
+# PREBUILT modules under one exact kernel's directory while depending on
+# `linux` unversioned, so a kernel that moves on its own leaves the package
+# installed and its module sitting where nothing will look for it. The card
+# then reports no driver at all, has no DRM node, and drives no outputs.
+_gpu_modinfo() { modinfo -k "$1" "$2" >/dev/null 2>&1; }
+# modinfo answers out of depmod's index, and that index is rebuilt when a
+# package touches a kernel's own directory rather than whenever one drops a
+# module deeper inside it. A module file sitting in the tree is the same answer
+# and cannot be missed by an index that has not caught up, so it is worth asking
+# second: reading a stale index as "no driver" would strip the configuration off
+# a card that works.
+_gpu_module_file() {
+    local k="$1"
+    [[ -n "$(find "/usr/lib/modules/$k" -name 'nvidia.ko*' -print -quit 2>/dev/null)" ]]
+}
+nvidia_module_present() {
+    local k="${1:-}"
+    [[ -n "$k" ]] || k="$(gpu_target_kernel)"
+    [[ -n "$k" ]] || return 1
+    _gpu_modinfo "$k" nvidia || _gpu_module_file "$k"
+}
+
 # ── nvidia_write_qs_hint <user_home> ────────────────────────────────────────
 # Ship the QS_DISABLE_DMABUF escape hatch as a commented, opt-in line. It cures
 # the NVIDIA EGL dmabuf-import gray/blank Quickshell surface but forces the
@@ -482,7 +535,13 @@ flush_failures() {
     local path="${1:-/var/lib/mainstream/gpu-install-failed.log}"
     [[ ${#GPU_FAILURES[@]} -gt 0 ]] || return 0
     ${GPU_SUDO:-} mkdir -p "$(dirname "$path")" 2>/dev/null || true
-    { printf 'gpu-config failures (%s):\n' "$(date -Is 2>/dev/null || echo unknown)"
+    # Added to rather than replacing what is there. The driver install writes
+    # its own troubles to this same file earlier in an install, and the later
+    # run of this has no business throwing those away: two GPU problems on one
+    # machine are worth reading together, and the second is usually caused by
+    # the first.
+    { [[ -s "$path" ]] && cat "$path"
+      printf 'gpu-config failures (%s):\n' "$(date -Is 2>/dev/null || echo unknown)"
       printf '  - %s\n' "${GPU_FAILURES[@]}"
     } | _gpu_write_file "$path"
 }
@@ -531,12 +590,21 @@ gpu_apply_autoconfig() {
         fi
     fi
     if [[ $HAS_NVIDIA == true && $NVIDIA_PCI_DEC -ge 1728 ]] && _gpu_nvidia_has_driver; then
-        nvidia_defer_kms
-        write_modprobe_conf nvidia
-        cmdline_args+=("nvidia_drm.modeset=1")
-        local _pw=false
-        [[ "$NVIDIA_GEN" == turing ]] && _pw=true || true
-        nvidia_enable_services "$_pw"
+        # The userspace packages being present says nothing about whether a
+        # module exists for the kernel about to boot. Dressing a driverless
+        # kernel in modeset flags and suspend services hides the failure behind
+        # config that reads as correct; say it instead.
+        local _k; _k="$(gpu_target_kernel)"
+        if nvidia_module_present "$_k"; then
+            nvidia_defer_kms
+            write_modprobe_conf nvidia
+            cmdline_args+=("nvidia_drm.modeset=1")
+            local _pw=false
+            [[ "$NVIDIA_GEN" == turing ]] && _pw=true || true
+            nvidia_enable_services "$_pw"
+        else
+            note_failure "nvidia: driver installed but no module for kernel ${_k:-unknown}, so the GPU configuration was skipped"
+        fi
     fi
     nvidia_strip_gsp_firmware
     # PRIME for hybrid.
@@ -580,7 +648,7 @@ gpu_apply_hypr_tweaks() {
     local uh="$1"
     # Resolve driver presence once (a pacman query) and reuse for both branches.
     local has_nv_drv=false
-    if [[ $HAS_NVIDIA == true ]] && _gpu_nvidia_has_driver; then has_nv_drv=true; fi
+    if [[ $HAS_NVIDIA == true ]] && _gpu_nvidia_has_driver && nvidia_module_present; then has_nv_drv=true; fi
     if [[ $has_nv_drv == true && $NVIDIA_PCI_DEC -ge 1728 ]]; then
         nvidia_write_env "$uh"
         hypridle_fix_nvidia "$uh"

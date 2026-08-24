@@ -226,10 +226,11 @@ EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 chk_str retire-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
 chk_str retire-wlr "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
 
-: > "$NVHOME/.config/hypr/custom/env.lua"
-_gpu_lspci_d() { printf '%s\n' "0000:01:00.0 VGA compatible controller: NVIDIA Corporation TU104 [GeForce RTX 2080]"; }
-nvidia_write_aq_drm "$NVHOME"; CASES=$((CASES + 1))
-chk_str aq-drm "$(cat "$NVHOME/.config/hypr/custom/env.lua")" 'hl.env("AQ_DRM_DEVICES", "/dev/dri/by-path/pci-0000:01:00.0-card")'
+# AQ_DRM_DEVICES is no longer written: pinning Aquamarine to one card
+# black-screened a hybrid laptop, and autodetect is what makes the outputs on
+# both cards enumerable. Anyone who wants the pin sets it by hand.
+chk_str aq-drm-retired "$(type -t nvidia_write_aq_drm || echo absent)" "absent"
+CASES=$((CASES + 1))
 
 # The initramfs names whichever module the kernel bound, not one worked out from
 # the card's generation.
@@ -282,8 +283,11 @@ OTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$OTMP/mkinitcpio.conf" KERNEL_CMDLI
 OHOME="$OTMP/home"; mkdir -p "$OHOME/.config/hypr/custom"; FIX_SYSVENDOR=""
 _gpu_swap_partuuid() { echo ""; }
 _gpu_systemctl() { [[ "$1" == enable ]] && ENABLED="$ENABLED ${2%.service}"; return 0; }
-# Orchestration nvidia cases assume a proprietary driver is installed.
+# Orchestration nvidia cases assume a proprietary driver is installed AND that
+# its module exists for the kernel about to boot. The stranded-module case gets
+# its own fixture further down.
 _gpu_nvidia_has_driver() { return 0; }
+nvidia_module_present() { return 0; }
 oreset() { printf 'MODULES=()\nHOOKS=(base systemd plymouth autodetect kms keyboard block filesystems fsck)\n' > "$MKINITCPIO_CONF"; : > "$KERNEL_CMDLINE"; rm -rf "$MODPROBE_DIR" "$INITCPIO_INSTALL_DIR"; : > "$OHOME/.config/hypr/custom/env.lua"; : > "$OHOME/.config/hypr/custom/general.lua"; ENABLED=""; }
 
 oreset; FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 48 [Radeon RX 9070 XT] [1002:7550] (rev c0)"
@@ -369,6 +373,22 @@ chk_str nouveau-no-env "$( [[ "$EV" == *'GBM_BACKEND'* ]] && echo present || ech
 chk_str nouveau-no-cursor "$( [[ "$GV" == *'no_hardware_cursors'* ]] && echo present || echo absent )" "absent"
 _gpu_nvidia_has_driver() { return 0; }
 
+# THE FIELD BUG (Alienware M17 R3, 2026-08-24): the packages are installed but
+# the kernel moved on its own, so nvidia-open's prebuilt module sits under a
+# kernel directory nothing will look in. Dressing that kernel in modeset flags
+# and suspend services hid the failure behind config that read as correct.
+oreset; nvidia_module_present() { return 1; }
+FIX_LSPCI="01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU106M [GeForce RTX 2060 Mobile] [10de:1f15] (rev a1)"
+GPU_FAILURES=()
+gpu_detect; gpu_apply_autoconfig; gpu_apply_hypr_tweaks "$OHOME"; CASES=$((CASES + 1))
+CL="$(cat "$KERNEL_CMDLINE")"; EV="$(cat "$OHOME/.config/hypr/custom/env.lua")"
+chk_str stranded-no-modeset "$( [[ "$CL" == *"nvidia_drm.modeset=1"* ]] && echo present || echo absent )" "absent"
+chk_str stranded-no-modprobe "$( [[ -f "$MODPROBE_DIR/nvidia.conf" ]] && echo present || echo absent )" "absent"
+chk_str stranded-no-env "$( [[ "$EV" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+chk_str stranded-no-services "$( [[ "$ENABLED" == *nvidia-suspend* ]] && echo present || echo absent )" "absent"
+chk_str stranded-recorded "$( [[ "${GPU_FAILURES[*]:-}" == *"no module for kernel"* ]] && echo yes || echo no )" "yes"
+nvidia_module_present() { return 0; }
+
 oreset; _gpu_swap_partuuid() { echo "1234-abcd"; }
 FIX_LSPCI="03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700 XT] [1002:73df] (rev c1)"
 gpu_detect; gpu_apply_autoconfig; CASES=$((CASES + 1)); CL="$(cat "$KERNEL_CMDLINE")"
@@ -402,5 +422,64 @@ unset GPU_EARLY_KMS_ESP_THRESHOLD; FIX_ESP_MIB=0
 rm -rf "$OTMP"
 
 echo "----"
+# ── target kernel + the stranded-module probe ───────────────────────────────
+# A package query cannot see a module built for a kernel that has since moved.
+# The orchestration section above stubs these probes so its own fixtures stay
+# honest; re-source to get the real ones back before testing them directly.
+source "$DIR/gpu-config.sh"
+KDIR="$(mktemp -d)"
+mkdir -p "$KDIR/6.17.1-arch1-1" "$KDIR/6.17.4-arch1-1" "$KDIR/6.17.9-headers-only"
+for k in 6.17.1-arch1-1 6.17.4-arch1-1; do : > "$KDIR/$k/vmlinuz"; echo linux > "$KDIR/$k/pkgbase"; done
+echo linux > "$KDIR/6.17.9-headers-only/pkgbase"   # headers left a bare tree, no vmlinuz
+_gpu_module_dirs() { printf '%s\n' "$KDIR"/*/; }
+_gpu_uname_r() { echo "not-a-tree-here"; }   # the installer case: nothing matches
+
+chk_str tk-newest-bootable "$(gpu_target_kernel)" "6.17.4-arch1-1"; CASES=$((CASES + 1))
+
+# On a live system the running kernel is the answer, even when an older or a
+# stock-named tree also qualifies.
+_gpu_uname_r() { echo "6.17.1-arch1-1"; }
+chk_str tk-running-wins "$(gpu_target_kernel)" "6.17.1-arch1-1"; CASES=$((CASES + 1))
+_gpu_uname_r() { echo "not-a-tree-here"; }
+
+# A machine booting linux-lts or linux-zen has a real kernel and a real driver.
+# Answering "none" here would strip the config off a card that works.
+LTS="$(mktemp -d)"; mkdir -p "$LTS/6.12.40-1-lts"
+: > "$LTS/6.12.40-1-lts/vmlinuz"; echo linux-lts > "$LTS/6.12.40-1-lts/pkgbase"
+_gpu_module_dirs() { printf '%s\n' "$LTS"/*/; }
+chk_str tk-nonstock-fallback "$(gpu_target_kernel)" "6.12.40-1-lts"; CASES=$((CASES + 1))
+_gpu_modinfo() { [[ "$1" == "6.12.40-1-lts" ]]; }
+chk_str tk-nonstock-configured "$(nvidia_module_present && echo yes || echo no)" "yes"; CASES=$((CASES + 1))
+rm -rf "$LTS"
+_gpu_module_dirs() { printf '%s\n' "$KDIR"/*/; }
+
+# a tree with no kernel image must never be chosen, however new it sorts
+: > "$KDIR/6.17.9-headers-only/pkgbase"; echo linux > "$KDIR/6.17.9-headers-only/pkgbase"
+chk_str tk-skips-headers-only "$(gpu_target_kernel)" "6.17.4-arch1-1"; CASES=$((CASES + 1))
+
+# module present for the booting kernel -> true
+_gpu_modinfo() { [[ "$1" == "6.17.4-arch1-1" && "$2" == nvidia ]]; }
+chk_str mod-present "$(nvidia_module_present && echo yes || echo no)" "yes"; CASES=$((CASES + 1))
+
+# An index that has not caught up must not read as "no driver": the file in the
+# tree is the same answer. Proven necessary, modinfo finds nothing until depmod
+# has run even with the module sitting on disk.
+_gpu_modinfo() { return 1; }
+_gpu_module_file() { [[ "$1" == "6.17.4-arch1-1" ]]; }
+chk_str mod-file-fallback "$(nvidia_module_present && echo yes || echo no)" "yes"; CASES=$((CASES + 1))
+_gpu_module_file() { return 1; }
+chk_str mod-neither "$(nvidia_module_present && echo yes || echo no)" "no"; CASES=$((CASES + 1))
+
+# THE FIELD BUG: module exists only for the kernel that was replaced
+_gpu_modinfo() { [[ "$1" == "6.17.1-arch1-1" && "$2" == nvidia ]]; }
+chk_str mod-stranded "$(nvidia_module_present && echo yes || echo no)" "no"; CASES=$((CASES + 1))
+chk_str mod-stranded-explicit "$(nvidia_module_present 6.17.1-arch1-1 && echo yes || echo no)" "yes"; CASES=$((CASES + 1))
+
+# no bootable tree at all -> false, never a crash
+_gpu_module_dirs() { printf '%s\n' /nonexistent-xyz/*/; }
+chk_str tk-none "$(gpu_target_kernel)" ""; CASES=$((CASES + 1))
+chk_str mod-none "$(nvidia_module_present && echo yes || echo no)" "no"; CASES=$((CASES + 1))
+rm -rf "$KDIR"
+
 if [[ $FAILS -eq 0 ]]; then echo "gpu_detect: all $CASES cases PASS"; exit 0
 else echo "gpu_detect: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

@@ -846,6 +846,8 @@ function setup_gpu_autoconfig(){
   fi
   echo -e "${STY_CYAN}[$0]: GPU autoconfig — Intel=$HAS_INTEL AMD=$HAS_AMD NVIDIA=$HAS_NVIDIA Hybrid=$IS_HYBRID${STY_RST}"
   gpu_apply_autoconfig
+  # A reason nobody can read is the same as no reason.
+  flush_failures
   _initramfs_rebuild
 }
 
