@@ -569,6 +569,13 @@ Singleton {
                 // while the bar floats, so it keeps quiet the rest of the time.
                 property real widgetRadius: -1
                 property real floatRadius: -1
+                // How much of the screen a floating strip spans, as a
+                // percentage. Below zero it reaches the whole width, which is
+                // what it has always done. Narrowing it carries the two end
+                // clusters inward with the edges they are pinned to rather
+                // than leaving them stranded out at the screen's own corners,
+                // and means nothing while the strip is not floating.
+                property real floatWidth: -1
                 property bool verbose: true
                 property bool vertical: false
                 // Per-section widget layout. Each section is an ordered list

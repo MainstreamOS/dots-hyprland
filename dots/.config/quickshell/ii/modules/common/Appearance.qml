@@ -483,6 +483,13 @@ Singleton {
 
     sizes: QtObject {
         property real baseBarHeight: 40
+        // A floating strip spans the whole screen unless it is told otherwise,
+        // as a percentage so one setting reads the same on every monitor
+        // rather than leaving a wide screen barely trimmed and a narrow one
+        // squeezed to a stub.
+        readonly property real barFloatWidthStock: 100
+        readonly property real barFloatWidth: (Config.options?.bar.floatWidth ?? -1) >= 0
+            ? Config.options.bar.floatWidth : barFloatWidthStock
         // Which edge the bar occupies, and where the dock lands after its
         // configured edge is flipped off the bar's — shared by the dock, the
         // overview's clearance and the settings picker so they can never

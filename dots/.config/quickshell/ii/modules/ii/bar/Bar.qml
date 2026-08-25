@@ -111,6 +111,13 @@ Scope {
                             fill: barContent
                             topMargin: -Config.options.bar.autoHide.hoverRegionWidth
                             bottomMargin: -Config.options.bar.autoHide.hoverRegionWidth
+                            // The window still reaches across the screen so the
+                            // strip can sit centered in it, but only the strip
+                            // itself should take the pointer. Without this a
+                            // narrowed bar leaves a wide invisible margin either
+                            // side that swallows clicks meant for what is behind.
+                            leftMargin: barContent.floatSideInset
+                            rightMargin: barContent.floatSideInset
                         }
                     }
 
