@@ -332,9 +332,9 @@ ContentPage {
             // The track stops where the dock stops being frosted rather than at
             // nothing, so every point along it answers the same way. Running it
             // to zero put a step partway down that no setting explains.
-            from: Appearance.colors.dockOpacityFloor
+            from: Appearance.colors.surfaceOpacityFloor
             to: 1
-            value: Math.max(Appearance.colors.dockOpacityFloor,
+            value: Math.max(Appearance.colors.surfaceOpacityFloor,
                 Config.options.dock.backgroundOpacity < 0
                     ? Appearance.colors.layer0StockAlpha : Config.options.dock.backgroundOpacity)
             onMoved: {

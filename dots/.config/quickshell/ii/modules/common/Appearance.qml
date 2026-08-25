@@ -155,14 +155,15 @@ Singleton {
         // Kept here so a transparency slider can tell where its surface stops
         // being frosted. The two have to be changed together.
         readonly property real blurFloor: 0.35
-        // The faintest the dock can be set and still be frosted. Under this the
-        // compositor drops the blur outright rather than by degrees, so a
-        // slider running past it reads as a cliff partway along an otherwise
-        // even track. The dock's shadow sits under its body and fades with it,
-        // so the floor is met by the two together: solving
-        // a + shadow*a*(1 - a) = blurFloor for a, with a hair over the top so
-        // the end of the track is above the drop rather than on it.
-        readonly property real dockOpacityFloor: {
+        // The faintest a blurred surface can be set and still be frosted. Under
+        // this the compositor drops the blur outright rather than by degrees,
+        // so a slider running past it reads as a cliff partway along an
+        // otherwise even track. Every surface named in that rule is on layer 0
+        // and casts the same shadow beneath it, which fades with the body, so
+        // the floor is met by the two together and the answer is one number:
+        // solving a + shadow*a*(1 - a) = blurFloor for a, with a hair over the
+        // top so the end of the track is above the drop rather than on it.
+        readonly property real surfaceOpacityFloor: {
             const s = colShadow.a
             const f = root.colors.blurFloor
             const a = s <= 0 ? f

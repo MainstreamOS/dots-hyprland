@@ -279,14 +279,33 @@ ContentPage {
         icon: "opacity"
         title: Translation.tr("Transparency")
 
+        // The strip has always been able to go without a background, and the
+        // bar reads the setting, but nothing ever offered it. It belongs here
+        // beside the slider for the same reason it does on the dock page:
+        // wanting no strip at all is a different question from wanting a faint
+        // one, and the track below cannot answer it.
+        ConfigSwitch {
+            buttonIcon: "background_replace"
+            text: Translation.tr("Show background")
+            checked: Config.options.bar.showBackground
+            onCheckedChanged: Config.options.bar.showBackground = checked
+        }
+
         ConfigSlider {
             text: Translation.tr("Background")
+            visible: Config.options.bar.showBackground
             stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
             buttonIcon: "wallpaper"
-            from: 0
+            // The strip is given the same blur cutoff as the dock in
+            // hypr/hyprland/rules.lua, so its track stops in the same place.
+            // Running it to zero put a step partway down that no setting
+            // explains: past the cutoff the compositor drops the frosting
+            // outright rather than by degrees.
+            from: Appearance.colors.surfaceOpacityFloor
             to: 1
-            value: Config.options.bar.backgroundOpacity < 0
-                ? Appearance.colors.layer0StockAlpha : Config.options.bar.backgroundOpacity
+            value: Math.max(Appearance.colors.surfaceOpacityFloor,
+                Config.options.bar.backgroundOpacity < 0
+                    ? Appearance.colors.layer0StockAlpha : Config.options.bar.backgroundOpacity)
             onMoved: {
                 if (Math.abs(value - Config.options.bar.backgroundOpacity) < 0.005)
                     return;
