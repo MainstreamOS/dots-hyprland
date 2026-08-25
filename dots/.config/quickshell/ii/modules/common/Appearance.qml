@@ -143,7 +143,10 @@ Singleton {
         // one number rather than two that merely happen to agree.
         readonly property real layer0StockAlpha: colLayer0.a
         readonly property string barBackgroundPick: modePick(Config.options?.bar.backgroundColorDark, Config.options?.bar.backgroundColorLight)
-        property color colBarBackground: surfaceColor(barBackgroundPick, colLayer0, Config.options?.bar.backgroundOpacity, layer0StockAlpha)
+        // A notch reads as part of the screen edge rather than something laid
+        // over it, so it starts opaque instead of at the strip's usual alpha.
+        readonly property real barStockAlpha: Config.options?.bar.cornerStyle === 3 ? 1 : layer0StockAlpha
+        property color colBarBackground: surfaceColor(barBackgroundPick, colLayer0, Config.options?.bar.backgroundOpacity, barStockAlpha)
         // The float style's outline wears the strip's own alpha: a hairline
         // that kept full strength while the strip went see-through read as a
         // wire rectangle floating around nothing.
@@ -285,7 +288,15 @@ Singleton {
         readonly property real barWidgetStock: small
         readonly property real barWidget: (Config.options?.bar.widgetRadius ?? -1) >= 0
             ? Config.options.bar.widgetRadius : barWidgetStock
-        readonly property real barFloatStock: windowRounding
+        // As round as the strip's corners are allowed to get. Named so the
+        // slider and the mark on it read the same number rather than one
+        // carrying a copy.
+        readonly property real barFloatMax: 30
+        // The notch curves as far as it can by default, the way its dock
+        // does, so the two read as one shape. A floating strip keeps the
+        // roundness the rest of the interface uses.
+        readonly property real barFloatStock: Config.options?.bar.cornerStyle === 3
+            ? barFloatMax : windowRounding
         readonly property real barFloat: (Config.options?.bar.floatRadius ?? -1) >= 0
             ? Config.options.bar.floatRadius : barFloatStock
         // The dock's roundness tracks run to this, and the marks on them are
@@ -487,9 +498,21 @@ Singleton {
         // as a percentage so one setting reads the same on every monitor
         // rather than leaving a wide screen barely trimmed and a narrow one
         // squeezed to a stub.
-        readonly property real barFloatWidthStock: 100
-        readonly property real barFloatWidth: (Config.options?.bar.floatWidth ?? -1) >= 0
-            ? Config.options.bar.floatWidth : barFloatWidthStock
+        // The notch is set down on the edge, so at the full width its ends
+        // land in the screen's corners and the curves beside them have
+        // nowhere to go. It stops a little short of that by default, which is
+        // also as far as its slider goes.
+        readonly property bool barIsNotch: Config.options?.bar.cornerStyle === 3
+        // How far the style may be asked to reach, which is not the same as
+        // where it starts. The notch is set down on the edge, so at the whole
+        // width its ends land in the screen's corners with nowhere to put the
+        // curves beside them.
+        readonly property real barFloatWidthMax: barIsNotch ? 95 : 100
+        readonly property real barFloatWidthStock: barFloatWidthMax
+        readonly property real barWidthKey: barIsNotch ? (Config.options?.bar.notchWidth ?? -1)
+            : (Config.options?.bar.floatWidth ?? -1)
+        readonly property real barFloatWidth: barWidthKey >= 0
+            ? Math.min(barWidthKey, barFloatWidthMax) : barFloatWidthStock
         // Which edge the bar occupies, and where the dock lands after its
         // configured edge is flipped off the bar's — shared by the dock, the
         // overview's clearance and the settings picker so they can never

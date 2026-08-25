@@ -181,6 +181,11 @@ ContentPage {
                             displayName: Translation.tr("Rect"),
                             icon: "toolbar",
                             value: 2
+                        },
+                        {
+                            displayName: Translation.tr("Notch"),
+                            icon: "call_to_action",
+                            value: 3
                         }
                     ]
                 }
@@ -219,11 +224,12 @@ ContentPage {
     ContentSection {
         icon: "rounded_corner"
         title: Translation.tr("Shape")
-        // A header over an empty room: with neither Float nor Pills active
-        // both sliders are put away, so the section goes with them — unless a
-        // radius still holds a non-stock value, which keeps the reset within
-        // reach of the state it exists to clear.
+        // A header over an empty room: with no style that shapes a surface
+        // active and Pills off, every control here is put away, so the section
+        // goes with them. Unless a radius still holds a non-stock value, which
+        // keeps the reset within reach of the state it exists to clear.
         visible: Config.options.bar.cornerStyle === 1
+            || Config.options.bar.cornerStyle === 3
             || !Config.options.bar.borderless
             || Config.options.bar.widgetRadius >= 0
             || Config.options.bar.floatRadius >= 0
@@ -262,44 +268,46 @@ ContentPage {
         }
 
         ConfigSwitch {
-            visible: Config.options.bar.cornerStyle === 1
+            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
             buttonIcon: "view_column_2"
             text: Translation.tr("Split into three")
             checked: Config.options.bar.floatSplit
             onCheckedChanged: Config.options.bar.floatSplit = checked
         }
 
-        ConfigSlider {
-            text: Translation.tr("Background")
-            visible: Config.options.bar.cornerStyle === 1
-            stopIndicatorValues: [Appearance.rounding.barFloatStock]
-            buttonIcon: "rounded_corner"
-            from: 0
-            to: 30
-            value: Appearance.rounding.barFloat
-            onMoved: {
-                if (value === Config.options.bar.floatRadius)
-                    return;
-                Config.options.bar.floatRadius = value;
-            }
-        }
 
         // How much of the screen the strip reaches across. The track stops well
         // short of nothing: past a point the end clusters meet the middle one
         // and the strip has nowhere left to put them.
         ConfigSlider {
             text: Config.options.bar.floatSplit ? Translation.tr("Spread") : Translation.tr("Width")
-            visible: Config.options.bar.cornerStyle === 1
+            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
             stopIndicatorValues: [Appearance.sizes.barFloatWidthStock]
             buttonIcon: "width"
             from: GlobalStates.barFloatMinPercent
-            to: 100
+            to: Appearance.sizes.barFloatWidthMax
             value: Appearance.sizes.barFloatWidth
             onMoved: {
                 const stepped = Math.round(value);
-                if (stepped === Config.options.bar.floatWidth)
+                const key = Appearance.sizes.barIsNotch ? "notchWidth" : "floatWidth";
+                if (stepped === Config.options.bar[key])
                     return;
-                Config.options.bar.floatWidth = stepped;
+                Config.options.bar[key] = stepped;
+            }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Corner roundness")
+            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
+            stopIndicatorValues: [Appearance.rounding.barFloatStock]
+            buttonIcon: "rounded_corner"
+            from: 0
+            to: Appearance.rounding.barFloatMax
+            value: Appearance.rounding.barFloat
+            onMoved: {
+                if (value === Config.options.bar.floatRadius)
+                    return;
+                Config.options.bar.floatRadius = value;
             }
         }
 
@@ -327,6 +335,7 @@ ContentPage {
             visible: Config.options.bar.widgetRadius >= 0
                 || Config.options.bar.floatRadius >= 0
                 || Config.options.bar.floatWidth >= 0
+                || Config.options.bar.notchWidth >= 0
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default shape")
@@ -334,6 +343,7 @@ ContentPage {
                 Config.options.bar.widgetRadius = -1
                 Config.options.bar.floatRadius = -1
                 Config.options.bar.floatWidth = -1
+                Config.options.bar.notchWidth = -1
             }
         }
     }
@@ -357,7 +367,7 @@ ContentPage {
         ConfigSlider {
             text: Translation.tr("Background")
             visible: Config.options.bar.showBackground
-            stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
+            stopIndicatorValues: [Appearance.colors.barStockAlpha]
             buttonIcon: "wallpaper"
             // The strip is given the same blur cutoff as the dock in
             // hypr/hyprland/rules.lua, so its track stops in the same place.
@@ -368,7 +378,7 @@ ContentPage {
             to: 1
             value: Math.max(Appearance.colors.surfaceOpacityFloor,
                 Config.options.bar.backgroundOpacity < 0
-                    ? Appearance.colors.layer0StockAlpha : Config.options.bar.backgroundOpacity)
+                    ? Appearance.colors.barStockAlpha : Config.options.bar.backgroundOpacity)
             onMoved: {
                 if (Math.abs(value - Config.options.bar.backgroundOpacity) < 0.005)
                     return;

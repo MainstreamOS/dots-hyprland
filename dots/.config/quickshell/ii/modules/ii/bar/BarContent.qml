@@ -569,7 +569,7 @@ Item { // Bar content region
 
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1 && Config.options.bar.floatStyleShadow && !root.floatSplit
+        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow && !root.floatSplit
         anchors.fill: barBackground
         sourceComponent: StyledRectangularShadow {
             anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
@@ -595,7 +595,7 @@ Item { // Bar content region
     // flanks to sit centered as a whole, so the room either side of it is not
     // the same, and a side carrying one widget more than the other runs out
     // first. The edges move together, so the tighter side governs both.
-    readonly property bool floatSplit: Config.options.bar.cornerStyle === 1
+    readonly property bool floatSplit: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
         && Config.options.bar.floatSplit
     readonly property real floatPad: Appearance.rounding.screenRounding
     // Where the middle cluster begins and ends, in this item's own coordinates.
@@ -605,8 +605,12 @@ Item { // Bar content region
     readonly property real centerRight: centerRightFlank.x + centerRightFlank.width
 
     // The desktop the split keeps between surfaces: what has to survive
-    // when the strip is drawn in or its content grows.
-    readonly property real splitGap: Appearance.sizes.hyprlandGapsOut
+    // when the strip is drawn in or its content grows. Hugging, each surface
+    // end carries a curve drawn beyond it, so two facing each other need
+    // room to stand apart or they meet and weld the surfaces back into one.
+    readonly property real splitGap: Config.options.bar.cornerStyle === 3
+        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
+        : Appearance.sizes.hyprlandGapsOut
 
     readonly property real maxFloatInset: {
         const pad = root.floatPad;
@@ -625,8 +629,8 @@ Item { // Bar content region
         return Math.max(0, Math.min(leftRoom, rightRoom));
     }
 
-    readonly property real floatSideInset: Config.options.bar.cornerStyle === 1
-        ? Math.max(Appearance.sizes.hyprlandGapsOut,
+    readonly property real floatSideInset: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+        ? Math.max(Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut,
             Math.min(root.width * (100 - Appearance.sizes.barFloatWidth) / 200,
                 root.maxFloatInset))
         : 0
@@ -816,23 +820,91 @@ Item { // Bar content region
         opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
         layer.enabled: root.notchSeamFix
 
+    // One concave curve, drawn beside a surface rather than on it. Every piece
+    // carries the same size and color as the body it grows out of, which
+    // leaves each site only the two things that differ: where it hangs and
+    // which way it turns.
+    component BarFlare: RoundCorner {
+        implicitSize: Appearance.rounding.barFloat
+        color: Appearance.colors.colBarBackground
+    }
+
+    // The pair at a surface's own ends, on the side that sits against the
+    // screen, so the strip reads as growing out of the edge instead of
+    // stopping dead on it. Only the style that hugs its widgets flares:
+    // floating, there is a gap on that side and the curves would have nothing
+    // to curve into. Each piece laps a pixel over the body, because a
+    // fractional display scale can land the body's edge between pixels and a
+    // curve that merely touches it rounds to the far side, leaving a hairline
+    // of desktop showing through the join. An end that has been carried out to
+    // the screen's own edge puts its curve off screen, which is the same thing
+    // the squared-off corner there is saying.
+    component BarEndFlares: Item {
+        visible: Config.options.bar.cornerStyle === 3 && Config.options.bar.showBackground
+        BarFlare {
+            anchors.right: parent.left
+            anchors.rightMargin: -1
+            anchors.top: !Config.options.bar.bottom ? parent.top : undefined
+            anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
+            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
+                : RoundCorner.CornerEnum.TopRight
+        }
+        BarFlare {
+            anchors.left: parent.right
+            anchors.leftMargin: -1
+            anchors.top: !Config.options.bar.bottom ? parent.top : undefined
+            anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
+            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomLeft
+                : RoundCorner.CornerEnum.TopLeft
+        }
+    }
+
     // Each of the three surfaces a split strip draws, and the shadow under it.
     // They carry the same dress as the single strip so switching between the
     // two changes where the edges are and nothing else.
     component FloatSurface: Rectangle {
+        id: floatSurface
         visible: root.floatSplit
+        // Whether this surface's own end lands on the screen's edge, which
+        // happens once the strip is asked for the whole width. A corner that
+        // curves away from an edge it is sitting on opens a wedge of desktop
+        // in the screen's own corner, so an end that reaches that far is
+        // squared off instead.
+        property bool flushLeft: false
+        property bool flushRight: false
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        anchors.topMargin: Appearance.sizes.hyprlandGapsOut
-        anchors.bottomMargin: Appearance.sizes.hyprlandGapsOut
+        // Hugging leaves no gap on the docked edge, and the strip these sit in
+        // was never grown by one, so the surface fills it outright. Insetting
+        // here would shrink the visible bar rather than lift it.
+        anchors.topMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
+        anchors.bottomMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
         color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
+        // Left for the shadow to read: it takes the roundness of the corners
+        // that show, or it would keep a shape the surface no longer has.
         radius: Appearance.rounding.barFloat
-        border.width: Config.options.bar.showBackground ? 1 : 0
+        // The pair against the docked edge is squared off when the surface is
+        // set down on it, and so is an end that reaches the screen's own edge.
+        // The pair facing the desktop keeps its roundness either way.
+        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : floatSurface.radius
+        readonly property real leftEndRadius: floatSurface.flushLeft ? 0 : floatSurface.radius
+        readonly property real rightEndRadius: floatSurface.flushRight ? 0 : floatSurface.radius
+        topLeftRadius: Config.options.bar.bottom ? floatSurface.leftEndRadius : floatSurface.edgeCornerRadius
+        topRightRadius: Config.options.bar.bottom ? floatSurface.rightEndRadius : floatSurface.edgeCornerRadius
+        bottomLeftRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.leftEndRadius
+        bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
+        // The curves at the ends are drawn as their own pieces and carry no
+        // outline, so an outline on the body would stop in mid air where each
+        // one begins. Hugging means one continuous surface or none.
+        border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
         border.color: Appearance.colors.colBarBackgroundBorder
+
+        BarEndFlares { anchors.fill: parent }
     }
 
     FloatSurface {
         id: leftFloat
+        flushLeft: root.floatSideInset <= 0
         x: root.floatSideInset
         // Capped at the room before the middle surface. A surface is sized
         // around its widgets, and the title's width is the title's to choose,
@@ -850,6 +922,7 @@ Item { // Bar content region
     }
     FloatSurface {
         id: rightFloat
+        flushRight: root.floatSideInset <= 0
         x: root.width - root.floatSideInset - width
         // Capped for the same reason as its twin, from the other side.
         width: Math.max(0, Math.min(rightRow.implicitWidth + root.floatPad * 2,
@@ -857,11 +930,15 @@ Item { // Bar content region
     }
 
     Repeater {
-        model: (Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1
+        model: (Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
             && Config.options.bar.floatStyleShadow && root.floatSplit)
             ? [leftFloat, centerFloat, rightFloat] : []
         delegate: StyledRectangularShadow {
             required property var modelData
+            // These are built after the surfaces they belong to, and a shadow
+            // is a filled shape rather than a ring, so left in line they are
+            // laid over the very surfaces they are meant to sit under.
+            z: -1
             anchors.fill: undefined
             target: modelData
             color: Appearance.colors.colBarShadow
@@ -879,9 +956,24 @@ Item { // Bar content region
             rightMargin: root.floatSideInset
         }
         color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
-        radius: Config.options.bar.cornerStyle === 1 ? Appearance.rounding.barFloat : 0
+        // Left for the shadow to read, the way the split surfaces leave theirs.
+        radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
+        // Set down on the docked edge, the pair touching it is squared off, and
+        // so are the ends when the strip is asked for the whole width and
+        // reaches the screen's own corners.
+        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : barBackground.radius
+        readonly property real endRadius: (Config.options.bar.cornerStyle === 3 && root.floatSideInset <= 0) ? 0 : barBackground.radius
+        topLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
+        topRightRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
+        bottomLeftRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
+        bottomRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
+        // No outline while the curves at the ends are drawn beside the body:
+        // they carry none of their own, so the body's would stop in mid air
+        // where each one begins.
         border.width: Config.options.bar.cornerStyle === 1 && Config.options.bar.showBackground ? 1 : 0
         border.color: Appearance.colors.colBarBackgroundBorder
+
+        BarEndFlares { anchors.fill: parent }
     }
 
     FocusedScrollMouseArea { // Left side | scroll to change brightness

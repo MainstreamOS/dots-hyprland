@@ -518,8 +518,8 @@ Singleton {
                     }
                 }
                 property bool bottom: false // Instead of top
-                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle
-                property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle == 1 (Float)
+                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch
+                property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle is 1 (Float) or 3 (Notch)
                 // Hot-corner-related settings. Currently only the
                 // top-left trigger uses this.
                 property JsonObject hotCorners: JsonObject {
@@ -565,8 +565,9 @@ Singleton {
                 property string backgroundColorLight: ""
                 // Shape follows the same rule as the sliders above: below zero
                 // the interface decides. The pill radius reaches every widget
-                // group on either bar; the float radius only means anything
-                // while the bar floats, so it keeps quiet the rest of the time.
+                // group on either bar; the float radius rounds the corners of
+                // whichever style draws a surface of its own, which is the
+                // floating strip and the one that hugs its widgets.
                 property real widgetRadius: -1
                 property real floatRadius: -1
                 // How much of the screen a floating strip spans, as a
@@ -574,7 +575,8 @@ Singleton {
                 // what it has always done. Narrowing it carries the two end
                 // clusters inward with the edges they are pinned to rather
                 // than leaving them stranded out at the screen's own corners,
-                // and means nothing while the strip is not floating.
+                // and is honored by the floating strip and by the one that hugs
+                // its widgets alike.
                 property real floatWidth: -1
                 // Float, but as three strips rather than one: the left, middle
                 // and right clusters each get a surface of their own with the
@@ -582,6 +584,11 @@ Singleton {
                 // far the outer two sit from the middle one instead of how far
                 // the single strip's edges come in.
                 property bool floatSplit: false
+                // The notch keeps its own width. It shares the split switch and
+                // the roundness with the floating strip, but not this: the two
+                // reach different distances and a value chosen for one read as
+                // an unasked-for change to the other.
+                property real notchWidth: -1
                 property bool verbose: true
                 property bool vertical: false
                 // Per-section widget layout. Each section is an ordered list

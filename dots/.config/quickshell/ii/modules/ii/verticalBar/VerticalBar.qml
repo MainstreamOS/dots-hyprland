@@ -93,6 +93,14 @@ Scope {
                             fill: barContent
                             leftMargin: -Config.options.bar.autoHide.hoverRegionWidth
                             rightMargin: -Config.options.bar.autoHide.hoverRegionWidth
+                            // The window still runs the height of the screen so
+                            // the strip can sit centered in it, but only the
+                            // strip itself should take the pointer. Without
+                            // this a shortened bar leaves a tall invisible
+                            // margin at each end that swallows clicks meant for
+                            // what is behind.
+                            topMargin: barContent.floatSideInset
+                            bottomMargin: barContent.floatSideInset
                         }
                     }
 

@@ -369,16 +369,28 @@ ContentPage {
         icon: "screenshot_monitor"
         title: Translation.tr("Bar & screen")
 
+        // Dropdowns rather than the rows of buttons the Bar page uses. This
+        // page is meant to be read at a glance, and a fourth bar style pushed
+        // the buttons onto a second line here where the column is narrower.
+        // A menu costs one click to see the choices and never grows again.
         ConfigRow {
+            uniform: true
             ContentSubsection {
                 title: Translation.tr("Bar position")
-                ConfigSelectionArray {
-                    currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
-                    onSelected: newValue => {
-                        Config.options.bar.bottom = (newValue & 1) !== 0;
-                        Config.options.bar.vertical = (newValue & 2) !== 0;
+                StyledComboBox {
+                    textRole: "displayName"
+                    Layout.fillWidth: true
+                    currentIndex: {
+                        const v = (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0);
+                        const i = model.findIndex(o => o.value === v);
+                        return i !== -1 ? i : 0;
                     }
-                    options: [
+                    onActivated: index => {
+                        const v = model[index].value;
+                        Config.options.bar.bottom = (v & 1) !== 0;
+                        Config.options.bar.vertical = (v & 2) !== 0;
+                    }
+                    model: [
                         {
                             displayName: Translation.tr("Top"),
                             icon: "arrow_upward",
@@ -405,12 +417,15 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Bar style")
 
-                ConfigSelectionArray {
-                    currentValue: Config.options.bar.cornerStyle
-                    onSelected: newValue => {
-                        Config.options.bar.cornerStyle = newValue; // Update local copy
+                StyledComboBox {
+                    textRole: "displayName"
+                    Layout.fillWidth: true
+                    currentIndex: {
+                        const i = model.findIndex(o => o.value === Config.options.bar.cornerStyle);
+                        return i !== -1 ? i : 1;
                     }
-                    options: [
+                    onActivated: index => { Config.options.bar.cornerStyle = model[index].value; }
+                    model: [
                         {
                             displayName: Translation.tr("Hug"),
                             icon: "line_curve",
@@ -425,6 +440,11 @@ ContentPage {
                             displayName: Translation.tr("Rect"),
                             icon: "toolbar",
                             value: 2
+                        },
+                        {
+                            displayName: Translation.tr("Notch"),
+                            icon: "call_to_action",
+                            value: 3
                         }
                     ]
                 }

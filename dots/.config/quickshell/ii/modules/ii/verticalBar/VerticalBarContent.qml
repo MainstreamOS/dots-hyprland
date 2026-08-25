@@ -25,6 +25,24 @@ Item { // Bar content region
     // width the center pills come out at.
     readonly property real floatingInset: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
 
+    // The furthest the strip's ends can come in before the pills packed
+    // against them meet the middle block. The middle block is centered on the
+    // window, so the two halves are the same size, but the sections filling
+    // them are not: the one carrying more widgets runs out first, and since
+    // the ends move together it governs both.
+    readonly property real maxFloatInset: {
+        const half = (root.height - middleSection.height) / 2;
+        const pad = Appearance.rounding.screenRounding;
+        return Math.max(0, Math.min(half - topSectionColumn.implicitHeight - pad,
+            half - bottomSectionColumn.implicitHeight - pad));
+    }
+
+    // How far each END of the strip comes in along the screen's height. Only
+    // the style that flares at its own ends has anywhere to put the room this
+    // frees, so every other style is handed the body it always drew: the
+    // floating one its gap on all four sides, the rest none at all.
+    readonly property real floatSideInset: Config.options.bar.cornerStyle === 3
+
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton"]
 
@@ -366,9 +384,34 @@ Item { // Bar content region
         }
     }
 
+    component BarFlare: RoundCorner {
+        implicitSize: Appearance.rounding.barFloat
+        color: Appearance.colors.colBarBackground
+    }
+
+    component BarEndFlares: Item {
+        visible: Config.options.bar.cornerStyle === 3 && Config.options.bar.showBackground
+        BarFlare { // Above the strip
+            anchors.bottom: parent.top
+            anchors.bottomMargin: -1
+            anchors.left: !Config.options.bar.bottom ? parent.left : undefined
+            anchors.right: Config.options.bar.bottom ? parent.right : undefined
+            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
+                : RoundCorner.CornerEnum.BottomLeft
+        }
+        BarFlare { // Below it
+            anchors.top: parent.bottom
+            anchors.topMargin: -1
+            anchors.left: !Config.options.bar.bottom ? parent.left : undefined
+            anchors.right: Config.options.bar.bottom ? parent.right : undefined
+            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.TopRight
+                : RoundCorner.CornerEnum.TopLeft
+        }
+    }
+
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1 && Config.options.bar.floatStyleShadow
+        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow
         anchors.fill: barBackground
         sourceComponent: StyledRectangularShadow {
             anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
@@ -382,11 +425,34 @@ Item { // Bar content region
         anchors {
             fill: parent
             margins: Config.options.bar.cornerStyle === 1 ? (Appearance.sizes.hyprlandGapsOut) : 0 // idk why but +1 is needed
+            // The width setting runs along the bar's length, which on this bar
+            // is the screen's height, so it is the ends that come in and not
+            // the sides. The inset carries the floating style's all round gap
+            // as its own value there, so that style draws what it always did.
+            topMargin: root.floatSideInset
+            bottomMargin: root.floatSideInset
         }
         color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
-        radius: Config.options.bar.cornerStyle === 1 ? Appearance.rounding.barFloat : 0
+        // Left for the shadow to read: it takes the roundness of the corners
+        // that show, or it would keep a shape the surface no longer has.
+        radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
+        // Set down on the docked edge, the pair touching it is squared off. The
+        // pair facing the desktop sits at the strip's ends, so it is squared
+        // too once the strip runs the whole height and those ends land on the
+        // screen's own corners.
+        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : barBackground.radius
+        readonly property real endRadius: (Config.options.bar.cornerStyle === 3 && root.floatSideInset <= 0) ? 0 : barBackground.radius
+        topLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
+        bottomLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
+        topRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
+        bottomRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
+        // No outline while the curves at the ends are drawn beside the body:
+        // they carry none of their own, so the body's would stop in mid air
+        // where each one begins.
         border.width: Config.options.bar.cornerStyle === 1 && Config.options.bar.showBackground ? 1 : 0
         border.color: Appearance.colors.colBarBackgroundBorder
+
+        BarEndFlares { anchors.fill: parent }
     }
 
     Column { // Middle section (layout.center)
@@ -420,11 +486,15 @@ Item { // Bar content region
         }
 
         ColumnLayout {
+            id: topSectionColumn
             anchors {
                 top: parent.top
                 left: parent.left
                 right: parent.right
-                topMargin: Appearance.sizes.hyprlandGapsOut
+                // Packed against the body's own end once the strip is
+                // shortened, rather than against the window's, which the body
+                // no longer reaches.
+                topMargin: Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset)
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
@@ -464,11 +534,13 @@ Item { // Bar content region
         // to spread them apart — and no deficit to shrink them below their
         // content when a tall widget like workspaces joins the section.
         ColumnLayout {
+            id: bottomSectionColumn
             anchors {
                 bottom: parent.bottom
                 left: parent.left
                 right: parent.right
-                bottomMargin: Appearance.rounding.screenRounding
+                // Packed against the body's own end, as the top section is.
+                bottomMargin: Math.max(Appearance.rounding.screenRounding, root.floatSideInset)
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
