@@ -1,6 +1,7 @@
 pragma Singleton
 
 import qs.modules.common
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -134,7 +135,24 @@ Singleton {
 
     // ---- notification ----------------------------------------------------
 
+    // Announcing a release the machine cannot install yet is worse than saying
+    // nothing: the [mainstream] repo is still being put in place through the
+    // first boot, and an update started against it fails on packages that are
+    // not there. Updates watches for the repo to answer, so hold the news until
+    // it does and take it up again on the next check. Nothing is lost by
+    // waiting, since lastNotified is only written once the notice goes out.
+    Timer {
+        id: repoWait
+        interval: 5000
+        repeat: false
+        onTriggered: if (root._announceEnabled && root.updateAvailable && root.wantNotification) root.maybeNotify()
+    }
+
     function maybeNotify() {
+        if (!Updates.repoReady) {
+            repoWait.restart();
+            return;
+        }
         const version = String(root.latest.version);
         if (notifyState.lastNotified === version) return;
         notifyState.lastNotified = version;

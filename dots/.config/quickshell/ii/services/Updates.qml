@@ -45,9 +45,51 @@ Singleton {
         resolveCheckProc.running = true;
     }
 
+    // The [mainstream] repo is put in place during the first boot, and for the
+    // moment the switch takes there is no database to answer from. A check run
+    // then counts nothing and an update started from it would fail on packages
+    // the machine cannot see yet, so nothing is counted or announced until the
+    // repo answers. It comes up in seconds; this waits rather than reporting
+    // anything, because there is nothing wrong to report.
+    property bool repoReady: false
+
+    Process {
+        id: repoReadyProc
+        running: Config.ready && Config.options.updates.enableCheck
+        // Judged by what comes back rather than the exit status: pacman -Sl on a
+        // repo that is configured but has no database yet exits 0 and only warns
+        // on stderr, which is the very moment being waited out. A machine with no
+        // [mainstream] at all has nothing to wait for and counts as ready, or it
+        // would never be told about an update again.
+        command: ["bash", "-c",
+            "pacman-conf --repo=mainstream >/dev/null 2>&1 || exit 0; " +
+            "[ -n \"$(pacman -Slq mainstream </dev/null 2>/dev/null)\" ]"]
+        onExited: (exitCode, exitStatus) => {
+            const ready = (exitCode === 0);
+            if (ready === root.repoReady) {
+                if (!ready) repoReadyRetry.restart();
+                return;
+            }
+            root.repoReady = ready;
+            if (ready) root.refresh();
+            else repoReadyRetry.restart();
+        }
+    }
+
+    Timer {
+        id: repoReadyRetry
+        interval: 5000
+        repeat: false
+        onTriggered: if (!repoReadyProc.running) repoReadyProc.running = true
+    }
+
     function load() {}
     function refresh() {
         if (!available) return;
+        if (!root.repoReady) {
+            if (!repoReadyProc.running && !repoReadyRetry.running) repoReadyProc.running = true;
+            return;
+        }
         print("[Updates] Checking for system updates")
         checkUpdatesProc.running = true;
     }

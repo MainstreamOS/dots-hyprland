@@ -60,7 +60,45 @@ resolve_bin() {
   fi
 }
 
-pac() { log "run: pacman -S --needed --noconfirm $*"; pacman -S --needed --noconfirm "$@"; }
+# The [mainstream] repo is put in place during the first boot, and for the
+# moment that takes there is no database to answer from. A package asked for
+# then is simply not found, which reads as a failed install for something that
+# would have worked seconds later, so wait for the repo rather than lose the
+# race. Waiting is the whole behavior and there is no deadline: a machine that
+# is offline now still wants these packages when it is not, and the periodic
+# refresh is what lets it notice.
+#
+# Ask by what comes back, not by the exit status: pacman -Sl on a repo that is
+# configured but has no database yet exits 0 and only warns on stderr, which is
+# exactly the moment this is here to catch. An empty listing is the answer.
+repo_answers() {
+  [[ -n "$(pacman -Slq mainstream </dev/null 2>/dev/null)" ]]
+}
+
+wait_for_repo() {
+  repo_answers && return 0
+  # Nothing is coming: on a machine that never had [mainstream] configured there
+  # is no first boot to wait through, so let pacman say so in its own words
+  # rather than holding here forever.
+  if ! pacman-conf --repo=mainstream >/dev/null 2>&1; then
+    log "[mainstream] is not configured on this system; not waiting for it"
+    return 0
+  fi
+  local waited=0
+  log "[mainstream] is configured but not answering yet; holding the install until it does"
+  notify "Waiting for the Mainstream repository" "The install starts as soon as it is ready."
+  until repo_answers; do
+    sleep 3
+    waited=$((waited + 3))
+    if (( waited % 30 == 0 )); then
+      log "still waiting for [mainstream] after ${waited}s; refreshing databases"
+      pacman -Sy --noconfirm >/dev/null 2>&1 || true
+    fi
+  done
+  log "[mainstream] answered after ${waited}s"
+}
+
+pac() { wait_for_repo; log "run: pacman -S --needed --noconfirm $*"; pacman -S --needed --noconfirm "$@"; }
 
 install_gaming() {
   notify "Installing Desktop Gaming…" "Steam and the 32-bit gaming stack"
