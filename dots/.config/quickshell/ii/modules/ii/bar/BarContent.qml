@@ -569,7 +569,7 @@ Item { // Bar content region
 
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1 && Config.options.bar.floatStyleShadow
+        active: Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1 && Config.options.bar.floatStyleShadow && !root.floatSplit
         anchors.fill: barBackground
         sourceComponent: StyledRectangularShadow {
             anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
@@ -595,11 +595,33 @@ Item { // Bar content region
     // flanks to sit centered as a whole, so the room either side of it is not
     // the same, and a side carrying one widget more than the other runs out
     // first. The edges move together, so the tighter side governs both.
+    readonly property bool floatSplit: Config.options.bar.cornerStyle === 1
+        && Config.options.bar.floatSplit
+    readonly property real floatPad: Appearance.rounding.screenRounding
+    // Where the middle cluster begins and ends, in this item's own coordinates.
+    // The middle block is centered on the window rather than on any surface, so
+    // neither of these moves when the outer surfaces do.
+    readonly property real centerLeft: centerLeftFlank.x
+    readonly property real centerRight: centerRightFlank.x + centerRightFlank.width
+
+    // The desktop the split keeps between surfaces: what has to survive
+    // when the strip is drawn in or its content grows.
+    readonly property real splitGap: Appearance.sizes.hyprlandGapsOut
+
     readonly property real maxFloatInset: {
-        const pad = Appearance.rounding.screenRounding;
-        const leftRoom = centerLeftFlank.x - leftRow.implicitWidth - pad * 2;
-        const rightRoom = root.width - (centerRightFlank.x + centerRightFlank.width)
-            - rightRow.implicitWidth - pad - 5;
+        const pad = root.floatPad;
+        if (root.floatSplit) {
+            // Split, the limit is one surface meeting the next rather than a
+            // cluster meeting the middle block, so the gap the desktop shows
+            // through is what has to survive.
+            const gap = root.splitGap;
+            const leftRoom = root.centerLeft - pad - gap - (leftRow.implicitWidth + pad * 2);
+            const rightRoom = root.width - root.centerRight - pad - gap
+                - (rightRow.implicitWidth + pad * 2);
+            return Math.max(0, Math.min(leftRoom, rightRoom));
+        }
+        const leftRoom = root.centerLeft - leftRow.implicitWidth - pad * 2;
+        const rightRoom = root.width - root.centerRight - rightRow.implicitWidth - pad - 5;
         return Math.max(0, Math.min(leftRoom, rightRoom));
     }
 
@@ -614,8 +636,11 @@ Item { // Bar content region
     // it moves as they come and go.
     // The surfaces a split strip actually draws, so the window can hold the
     // pointer to them and let the desktop between them be clicked through.
-    readonly property var floatSurfaces: root.floatSplit
-        ? [leftFloat, centerFloat, rightFloat] : []
+    // An empty middle draws no surface: several center layouts can hide every
+    // widget, and a bare stub pill would sit at dead screen center.
+    readonly property bool centerFloatShown: centerMidZone.implicitWidth > 1
+    readonly property var floatSurfaces: !root.floatSplit ? []
+        : root.centerFloatShown ? [leftFloat, centerFloat, rightFloat] : [leftFloat, rightFloat]
 
     readonly property real minFloatPercent: root.width > 0
         ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.width - root.maxFloatInset * 2) * 100 / root.width)) : 40
@@ -753,6 +778,7 @@ Item { // Bar content region
     }
     FloatSurface {
         id: centerFloat
+        visible: root.floatSplit && root.centerFloatShown
         x: root.floatSplit ? root.centerLeft - root.floatPad : 0
         width: root.floatSplit ? root.centerRight - root.centerLeft + root.floatPad * 2 : 0
     }
@@ -790,9 +816,62 @@ Item { // Bar content region
         opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
         layer.enabled: root.notchSeamFix
 
+    // Each of the three surfaces a split strip draws, and the shadow under it.
+    // They carry the same dress as the single strip so switching between the
+    // two changes where the edges are and nothing else.
+    component FloatSurface: Rectangle {
+        visible: root.floatSplit
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Appearance.sizes.hyprlandGapsOut
+        anchors.bottomMargin: Appearance.sizes.hyprlandGapsOut
+        color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
+        radius: Appearance.rounding.barFloat
+        border.width: Config.options.bar.showBackground ? 1 : 0
+        border.color: Appearance.colors.colBarBackgroundBorder
+    }
+
+    FloatSurface {
+        id: leftFloat
+        x: root.floatSideInset
+        // Capped at the room before the middle surface. A surface is sized
+        // around its widgets, and the title's width is the title's to choose,
+        // so a long one would otherwise carry its surface across the gap and
+        // over the middle block. The cap is what turns growth into elision:
+        // the row inside is anchored to the surface, so a clamped surface
+        // compresses the row and the title gives the room back.
+        width: Math.max(0, Math.min(leftRow.implicitWidth + root.floatPad * 2,
+            root.centerLeft - root.floatPad - root.splitGap - root.floatSideInset))
+    }
+    FloatSurface {
+        id: centerFloat
+        x: root.centerLeft - root.floatPad
+        width: root.centerRight - root.centerLeft + root.floatPad * 2
+    }
+    FloatSurface {
+        id: rightFloat
+        x: root.width - root.floatSideInset - width
+        // Capped for the same reason as its twin, from the other side.
+        width: Math.max(0, Math.min(rightRow.implicitWidth + root.floatPad * 2,
+            root.width - root.floatSideInset - root.centerRight - root.floatPad - root.splitGap))
+    }
+
+    Repeater {
+        model: (Config.options.bar.showBackground && Config.options.bar.cornerStyle === 1
+            && Config.options.bar.floatStyleShadow && root.floatSplit)
+            ? [leftFloat, centerFloat, rightFloat] : []
+        delegate: StyledRectangularShadow {
+            required property var modelData
+            anchors.fill: undefined
+            target: modelData
+            color: Appearance.colors.colBarShadow
+        }
+    }
+
     // Background
     Rectangle {
         id: barBackground
+        visible: !root.floatSplit
         anchors {
             fill: parent
             margins: Config.options.bar.cornerStyle === 1 ? (Appearance.sizes.hyprlandGapsOut) : 0 // idk why but +1 is needed
@@ -811,8 +890,8 @@ Item { // Bar content region
         anchors {
             top: parent.top
             bottom: parent.bottom
-            left: barBackground.left
-            right: centerLeftFlank.left
+            left: root.floatSplit ? leftFloat.left : barBackground.left
+            right: root.floatSplit ? leftFloat.right : centerLeftFlank.left
         }
         implicitWidth: leftRow.implicitWidth
         implicitHeight: Appearance.sizes.baseBarHeight
@@ -959,8 +1038,8 @@ Item { // Bar content region
         anchors {
             top: parent.top
             bottom: parent.bottom
-            left: centerRightFlank.right
-            right: barBackground.right
+            left: root.floatSplit ? rightFloat.left : centerRightFlank.right
+            right: root.floatSplit ? rightFloat.right : barBackground.right
         }
         implicitWidth: rightRow.implicitWidth
         implicitHeight: Appearance.sizes.baseBarHeight
@@ -987,7 +1066,8 @@ Item { // Bar content region
         RowLayout {
             id: rightRow
             anchors.fill: parent
-            anchors.leftMargin: 5
+            // Split, the surface budgets the same pad at both of its ends.
+            anchors.leftMargin: root.floatSplit ? root.floatPad : 5
             anchors.rightMargin: Appearance.rounding.screenRounding
             spacing: 5
 

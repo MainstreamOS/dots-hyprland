@@ -261,6 +261,14 @@ ContentPage {
             }
         }
 
+        ConfigSwitch {
+            visible: Config.options.bar.cornerStyle === 1
+            buttonIcon: "view_column_2"
+            text: Translation.tr("Split into three")
+            checked: Config.options.bar.floatSplit
+            onCheckedChanged: Config.options.bar.floatSplit = checked
+        }
+
         ConfigSlider {
             text: Translation.tr("Background")
             visible: Config.options.bar.cornerStyle === 1
@@ -280,7 +288,7 @@ ContentPage {
         // short of nothing: past a point the end clusters meet the middle one
         // and the strip has nowhere left to put them.
         ConfigSlider {
-            text: Translation.tr("Width")
+            text: Config.options.bar.floatSplit ? Translation.tr("Spread") : Translation.tr("Width")
             visible: Config.options.bar.cornerStyle === 1
             stopIndicatorValues: [Appearance.sizes.barFloatWidthStock]
             buttonIcon: "width"

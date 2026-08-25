@@ -576,6 +576,12 @@ Singleton {
                 // than leaving them stranded out at the screen's own corners,
                 // and means nothing while the strip is not floating.
                 property real floatWidth: -1
+                // Float, but as three strips rather than one: the left, middle
+                // and right clusters each get a surface of their own with the
+                // desktop showing between them. The width setting then says how
+                // far the outer two sit from the middle one instead of how far
+                // the single strip's edges come in.
+                property bool floatSplit: false
                 property bool verbose: true
                 property bool vertical: false
                 // Per-section widget layout. Each section is an ordered list

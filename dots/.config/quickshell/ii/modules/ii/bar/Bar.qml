@@ -52,6 +52,10 @@ Scope {
                 }
                 property bool superShow: false
                 property bool mustShow: hoverRegion.containsMouse || superShow
+                // Hidden, the surfaces ride off the window with the strip, so a
+                // surfaces-only mask would go empty and the pointer could never
+                // reach the sliver that brings the bar back.
+                readonly property bool concealed: Config.options.bar.autoHide.enable && !barRoot.mustShow
                 readonly property HyprlandMonitor monitor: Hyprland.monitorFor(barRoot.screen)
                 property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor && w.monitor.name === monitor.name)
                 property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
@@ -70,8 +74,21 @@ Scope {
                         && (Appearance.sizes.dockEdge === "left" || Appearance.sizes.dockEdge === "right"))
                     ? WlrLayer.Top : WlrLayer.Overlay
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
+                // Split into three, the strip is three surfaces with desktop
+                // showing between them, so one rectangle over the lot would take
+                // clicks meant for what lies in the gaps. Each surface masks
+                // itself instead, and unsplit there is still only the one.
                 mask: Region {
-                    item: hoverMaskRegion
+                    item: barContent.floatSplit && !barRoot.concealed ? null : hoverMaskRegion
+                    // Declared children, so the mask owns them for its own
+                    // lifetime. A region built by script with no parent belongs
+                    // to the collector, and the list under the mask keeps only
+                    // bare pointers, so the window would go on holding whatever
+                    // mask it last built while the surfaces move out from under
+                    // it. An empty slot contributes nothing.
+                    Region { item: barContent.floatSurfaces[0] ?? null }
+                    Region { item: barContent.floatSurfaces[1] ?? null }
+                    Region { item: barContent.floatSurfaces[2] ?? null }
                 }
                 color: "transparent"
 
