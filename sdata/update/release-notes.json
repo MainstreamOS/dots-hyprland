@@ -141,5 +141,15 @@
       "LocalSend file drops now work on the vertical bar too",
       "Bluetooth input devices now reconnect more reliably"
     ]
+  },
+  "1.4.1": {
+    "date": "2026-08-25",
+    "kind": "patch",
+    "summary": "Better GPU/laptop support, plus new touchpad controls and keyboard layouts",
+    "changes": [
+      "Added a keyboard layout menu for quickly adding and switching between language layouts, including popular options like Dvorak, Colemak, AZERTY, QWERTZ, and QWERTY",
+      "Added a toggle to enable/disable touchpad",
+      "Improved Nvidia GPU and laptop compatibility"
+    ]
   }
 }
