@@ -242,7 +242,10 @@ Singleton {
             "none": []
         }
     }
-    property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format])
+    // A saved local model does not exist until the Ollama query answers, so at
+    // startup this looks up a format that is not there yet and Object.keys
+    // refuses undefined. The tools reappear when the model registers.
+    property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format] ?? {})
     property var toolDescriptions: {
         "functions": Translation.tr("Commands, edit configs, search.\nTakes an extra turn to switch to search mode if that's needed"),
         "search": Translation.tr("Gives the model search capabilities (immediately)"),
@@ -658,7 +661,7 @@ Singleton {
             const failure = ollamaPullProc.failure;
             root.ollamaBusy = false;
             if (exitCode === 0 && failure.length === 0) {
-                root.setOllamaPullMessage(Translation.tr("**%1** is ready.").arg(name));
+                root.setOllamaPullMessage(Translation.tr("**%1** is ready and selected. It answers on this computer, needs no API key, and keeps working with the network off.").arg(name));
                 root.ollamaPullMessageId = "";
                 // Selecting it is the point of having downloaded it, so the
                 // refresh is told to finish the job it was started for.
@@ -794,7 +797,11 @@ Singleton {
             if (setPersistentState) Persistent.states.ai.model = modelId;
             root.currentModel = model;
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
-            if (model.requires_key) {
+            // Advice belongs to somebody who just chose this model. Callers
+            // passing feedback=false are re-applying a model the user already
+            // had, and a silent re-apply that answers with a page about API
+            // keys reads as though it is talking about whatever just happened.
+            if (feedback && model.requires_key) {
                 // If key not there show advice
                 if (root.apiKeysLoaded && (!root.apiKeys[model.key_id] || root.apiKeys[model.key_id].length === 0)) {
                     root.addApiKeyAdvice(model)
