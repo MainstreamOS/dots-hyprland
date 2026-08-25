@@ -1,6 +1,8 @@
 import QtQuick
 
 ApiStrategy {
+    supportsFunctions: true
+
     property bool isReasoning: false
     
     function buildEndpoint(model: AiModel): string {

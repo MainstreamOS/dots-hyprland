@@ -245,7 +245,15 @@ Singleton {
     // A saved local model does not exist until the Ollama query answers, so at
     // startup this looks up a format that is not there yet and Object.keys
     // refuses undefined. The tools reappear when the model registers.
+    // Function calling is also hidden from strategies that cannot read a call
+    // back out of the reply, so it cannot be picked for a model it would mute.
     property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format] ?? {})
+        .filter(tool => tool !== "functions" || (root.currentApiStrategy?.supportsFunctions ?? false))
+
+    // The tool preference is global, but a model that cannot report a function
+    // call must not be handed the definitions: it answers with a call instead
+    // of prose and the reply arrives empty. Fall back rather than go silent.
+    readonly property string effectiveTool: (root.currentTool === "functions" && !(root.currentApiStrategy?.supportsFunctions ?? false)) ? "none" : root.currentTool
     property var toolDescriptions: {
         "functions": Translation.tr("Commands, edit configs, search.\nTakes an extra turn to switch to search mode if that's needed"),
         "search": Translation.tr("Gives the model search capabilities (immediately)"),
@@ -813,7 +821,7 @@ Singleton {
     }
 
     function setTool(tool) {
-        if (!root.tools[models[currentModelId]?.api_format] || !(tool in root.tools[models[currentModelId]?.api_format])) {
+        if (root.availableTools.indexOf(tool) === -1) {
             root.addMessage(Translation.tr("Invalid tool. Supported tools:\n- %1").arg(root.availableTools.join("\n- ")), root.interfaceRole);
             return false;
         }
@@ -911,7 +919,7 @@ Singleton {
             const endpoint = root.currentApiStrategy.buildEndpoint(model);
             const messageArray = root.messageIDs.map(id => root.messageByID[id]);
             const filteredMessageArray = messageArray.filter(message => message.role !== Ai.interfaceRole);
-            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, root.tools[model.api_format][root.currentTool], root.pendingFilePath);
+            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, root.tools[model.api_format]?.[root.effectiveTool] ?? [], root.pendingFilePath);
             // console.log("[Ai] Request data: ", JSON.stringify(data, null, 2));
 
             let requestHeaders = {

@@ -1,6 +1,11 @@
 import QtQuick
 
 QtObject {
+    // Whether this strategy can read a function call back out of a reply.
+    // Handing function definitions to one that cannot is a dead end: a capable
+    // model answers with a call instead of prose, and nothing renders it.
+    property bool supportsFunctions: false
+
     function buildEndpoint(model: AiModel): string { throw new Error("Not implemented") }
     function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) { throw new Error("Not implemented") }
     function buildAuthorizationHeader(apiKeyEnvVarName: string): string { throw new Error("Not implemented") }

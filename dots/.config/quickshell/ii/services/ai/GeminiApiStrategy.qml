@@ -2,6 +2,8 @@ import QtQuick
 import qs.modules.common.functions as CF
 
 ApiStrategy {
+    supportsFunctions: true
+
     readonly property string apiKeyEnvVarName: "API_KEY"
     readonly property string fileUriVarName: "file_uri"
     readonly property string fileMimeTypeVarName: "MIME_TYPE"
