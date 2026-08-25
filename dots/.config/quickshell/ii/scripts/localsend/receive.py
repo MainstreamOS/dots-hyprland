@@ -108,6 +108,42 @@ class Handler(LocalSendHandler):
         emit(f"SESSION:{session.sender_alias}")
         self._json(200, {"sessionId": session.id, "files": session.tokens})
 
+    def _copy_chunked(self, f, took):
+        """Decode a chunked request body into f, returning the byte count.
+
+        BaseHTTPRequestHandler hands over the raw stream and leaves the framing
+        to whoever reads it, so an HTTP/1.1 server that never learned chunked
+        silently reads nothing at all.
+        """
+        written = 0
+        while True:
+            line = self.rfile.readline(CHUNK_SIZE)
+            if not line:
+                raise IOError("connection closed before the chunk header")
+            # The size can carry extensions after a semicolon; they are not ours.
+            size_text = line.split(b";", 1)[0].strip()
+            if not size_text:
+                raise IOError("malformed chunk header")
+            size = int(size_text, 16)
+            if size == 0:
+                # Trailers, if any, run until the blank line that ends the body.
+                while True:
+                    trailer = self.rfile.readline(CHUNK_SIZE)
+                    if trailer in (b"\r\n", b"\n", b""):
+                        break
+                return written
+            remaining = size
+            while remaining > 0:
+                chunk = self.rfile.read(min(CHUNK_SIZE, remaining))
+                if not chunk:
+                    raise IOError("connection closed mid-chunk")
+                f.write(chunk)
+                remaining -= len(chunk)
+                written += len(chunk)
+                took(len(chunk))
+            # Each chunk's data is followed by its own CRLF.
+            self.rfile.read(2)
+
     def _upload(self):
         global SESSION
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -123,29 +159,56 @@ class Handler(LocalSendHandler):
             return
         meta = session.files.get(file_id) or {}
         length = int(self.headers.get("Content-Length") or 0)
+        # A sender is free to stream the body without saying how long it is, and
+        # phones do. Reading Content-Length alone leaves nothing to copy, so the
+        # file was created, no bytes were written, and the transfer was answered
+        # with 200. An empty file arrived looking like a delivered one.
+        chunked = "chunked" in (self.headers.get("Transfer-Encoding") or "").lower()
+        expected = int(meta.get("size") or 0)
         name = safe_name(meta.get("fileName"))
         os.makedirs(TARGET_DIR, exist_ok=True)
         with LOCK:
             dest = dedupe_path(TARGET_DIR, name)
             partial = dest + ".part"
         try:
-            remaining = length
+            if not chunked and length <= 0:
+                raise IOError("sender gave neither a length nor a chunked body")
             last_report = 0.0
+            written = 0
+
+            def took(n):
+                nonlocal last_report
+                with LOCK:
+                    session.received_bytes += n
+                    received = session.received_bytes
+                    total = session.total_bytes
+                now = time.monotonic()
+                if now - last_report >= PROGRESS_MIN_SECONDS:
+                    emit(f"PROGRESS:{received}:{max(total, 1)}")
+                    last_report = now
+
             with open(partial, "wb") as f:
-                while remaining > 0:
-                    chunk = self.rfile.read(min(CHUNK_SIZE, remaining))
-                    if not chunk:
-                        raise IOError("connection closed mid-upload")
-                    f.write(chunk)
-                    remaining -= len(chunk)
-                    with LOCK:
-                        session.received_bytes += len(chunk)
-                        received = session.received_bytes
-                        total = session.total_bytes
-                    now = time.monotonic()
-                    if now - last_report >= PROGRESS_MIN_SECONDS or remaining == 0:
-                        emit(f"PROGRESS:{received}:{max(total, 1)}")
-                        last_report = now
+                if chunked:
+                    written = self._copy_chunked(f, took)
+                else:
+                    remaining = length
+                    while remaining > 0:
+                        chunk = self.rfile.read(min(CHUNK_SIZE, remaining))
+                        if not chunk:
+                            raise IOError("connection closed mid-upload")
+                        f.write(chunk)
+                        remaining -= len(chunk)
+                        written += len(chunk)
+                        took(len(chunk))
+            # The manifest said how big this file is. Anything else means the
+            # body was cut short, and a short file is worth an error rather than
+            # a rename over the top of a name the user will trust.
+            if expected and written != expected:
+                raise IOError(f"expected {expected} bytes, received {written}")
+            with LOCK:
+                total = session.total_bytes
+                received = session.received_bytes
+            emit(f"PROGRESS:{received}:{max(total, 1)}")
             os.replace(partial, dest)
         except Exception as e:
             try:
