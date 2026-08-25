@@ -402,6 +402,19 @@ Singleton {
     property string ollamaState: "checking"
     readonly property bool ollamaReady: root.ollamaState === "ok"
 
+    // The model picker is the only place local AI is ever mentioned, so while
+    // it is not ready the setup step is listed there as if it were a model.
+    // Without it a fresh install shows no trace of Ollama and offers nothing
+    // to click, which is exactly the state most machines boot into: the
+    // package is installed but its unit ships disabled.
+    readonly property string ollamaSetupModelId: "local-ai-setup"
+    readonly property string ollamaSuggestedModel: "llama3.2:3b"
+    property bool ollamaBusy: false
+    property string ollamaPullMessageId: ""
+    property string ollamaPendingSelect: ""
+
+    onOllamaStateChanged: root.syncOllamaSetupEntry()
+
     // Asking once at startup meant a user who installed Ollama, started the
     // service, or pulled a model had to restart the shell before any of it
     // counted. Ask again, but only while somebody is looking: a machine that is
@@ -467,10 +480,195 @@ Singleton {
                         root.setModel(root.currentModelId, false, false);
                     }
 
+                    // A model the user just downloaded on purpose outranks the
+                    // saved one, so it is switched to once it actually exists.
+                    if (root.ollamaPendingSelect.length > 0) {
+                        const justPulled = root.safeModelName(root.ollamaPendingSelect);
+                        root.ollamaPendingSelect = "";
+                        if (root.modelList.includes(justPulled)) root.setModel(justPulled);
+                    }
+
                 } catch (e) {
                     console.log("Could not fetch Ollama models:", e);
                 }
             }
+        }
+    }
+
+    function ollamaStateSummary() {
+        switch (root.ollamaState) {
+        case "missing":
+            return Translation.tr("Not installed. Select to set up.");
+        case "stopped":
+            return Translation.tr("Installed but not running. Select to start it.");
+        case "empty":
+            return Translation.tr("No model downloaded yet. Select to get one.");
+        default:
+            return Translation.tr("Checking for local AI...");
+        }
+    }
+
+    function syncOllamaSetupEntry() {
+        const listed = root.modelList.includes(root.ollamaSetupModelId);
+        // "checking" is deliberately not offered: the first answer usually
+        // arrives within a second, and advertising setup for a machine that
+        // turns out to be ready would flash an entry and take it away again.
+        const wanted = (root.ollamaState !== "ok" && root.ollamaState !== "checking");
+        if (wanted) {
+            root.addModel(root.ollamaSetupModelId, {
+                "name": Translation.tr("Local AI (Ollama)"),
+                "icon": "ollama-symbolic",
+                "description": root.ollamaStateSummary(),
+                "homepage": "https://ollama.com",
+                "endpoint": "http://localhost:11434/v1/chat/completions",
+                "model": "",
+                "requires_key": false,
+            });
+            if (!listed) root.modelList = [...root.modelList, root.ollamaSetupModelId];
+        } else if (listed) {
+            const remaining = Object.assign({}, root.models);
+            delete remaining[root.ollamaSetupModelId];
+            root.models = remaining;
+            root.modelList = root.modelList.filter(id => id !== root.ollamaSetupModelId);
+        }
+    }
+
+    // Picking the setup entry is a request for help rather than a model
+    // switch, so each state answers with the single action that moves it on.
+    function startOllamaWalkthrough() {
+        if (root.ollamaBusy) {
+            root.addMessage(Translation.tr("Local AI setup is already working on it."), root.interfaceRole);
+            return;
+        }
+        switch (root.ollamaState) {
+        case "missing":
+            root.addMessage(Translation.tr("### Local AI is not installed\n\nLocal AI answers on this computer. Nothing leaves the machine, and no API key is needed.\n\nInstall it from a terminal:\n\n```\nsudo pacman -S ollama\n```\n\nThen pick **Local AI (Ollama)** here again."), root.interfaceRole);
+            break;
+        case "stopped":
+            root.addMessage(Translation.tr("### Starting local AI\n\nOllama is installed, but its service ships switched off. Turning it on asks for your password once, and from then on it starts by itself at every boot."), root.interfaceRole);
+            root.startOllamaService();
+            break;
+        case "empty":
+            root.addMessage(Translation.tr("### One download to go\n\nLocal AI is running but has no model to think with yet. **%1** is a good first one at roughly 2 GB. It downloads once, then works offline.\n\nStart it with:\n\n```\n%2\n```\n\nAny model from [ollama.com/library](https://ollama.com/library) works too, for example `%2 qwen2.5:0.5b`.").arg(root.ollamaSuggestedModel).arg("/ollama pull"), root.interfaceRole);
+            break;
+        default:
+            root.addMessage(Translation.tr("Still checking for local AI. Try again in a moment."), root.interfaceRole);
+        }
+    }
+
+    function startOllamaService() {
+        if (root.ollamaBusy) return;
+        root.ollamaBusy = true;
+        ollamaServiceProc.running = true;
+    }
+
+    Process {
+        id: ollamaServiceProc
+        command: ["pkexec", "/usr/local/bin/ollama-setup", "enable"]
+        stderr: StdioCollector {
+            id: ollamaServiceError
+        }
+        onExited: exitCode => {
+            root.ollamaBusy = false;
+            if (exitCode === 0) {
+                root.addMessage(Translation.tr("Local AI is running."), root.interfaceRole);
+                root.refreshOllama();
+                return;
+            }
+            // pkexec reports 126 for a prompt that was refused or dismissed
+            // and 127 for a helper it could not run at all. Neither means the
+            // service failed, so neither should be reported as if it had.
+            if (exitCode === 126) {
+                root.addMessage(Translation.tr("Local AI was not started: the password prompt was dismissed."), root.interfaceRole);
+                return;
+            }
+            if (exitCode === 127) {
+                root.addMessage(Translation.tr("The local AI helper is missing. Reinstalling the Mainstream OS components restores it."), root.interfaceRole);
+                return;
+            }
+            const detail = ollamaServiceError.text.trim();
+            root.addMessage(detail.length > 0 ? Translation.tr("Could not start local AI.\n\n```\n%1\n```").arg(detail) : Translation.tr("Could not start local AI."), root.interfaceRole);
+        }
+    }
+
+    function pullOllamaModel(modelName) {
+        if (root.ollamaBusy) {
+            root.addMessage(Translation.tr("A download is already running."), root.interfaceRole);
+            return;
+        }
+        if (root.ollamaState === "missing" || root.ollamaState === "stopped") {
+            root.startOllamaWalkthrough();
+            return;
+        }
+        const target = (modelName ?? "").trim().length > 0 ? modelName.trim() : root.ollamaSuggestedModel;
+        root.ollamaBusy = true;
+        ollamaPullProc.modelName = target;
+        ollamaPullProc.failure = "";
+        ollamaPullProc.sawProgress = false;
+        root.ollamaPullMessageId = root.addMessage(Translation.tr("Starting the download of **%1**...").arg(target), root.interfaceRole);
+        // The name is passed as its own argument rather than inside a command
+        // string, so a hostile model name cannot become shell syntax.
+        ollamaPullProc.command = ["bash", `${Directories.scriptPath}/ai/ollama-pull.sh`.replace(/file:\/\//, ""), target];
+        ollamaPullProc.running = true;
+    }
+
+    function setOllamaPullMessage(body) {
+        const message = root.messageByID[root.ollamaPullMessageId];
+        if (!message) return false;
+        message.content = body;
+        message.rawContent = body;
+        return true;
+    }
+
+    Process {
+        id: ollamaPullProc
+        property string modelName: ""
+        property string failure: ""
+        property bool sawProgress: false
+        stdout: SplitParser {
+            onRead: data => {
+                if (data.length === 0) return;
+                let update;
+                try {
+                    update = JSON.parse(data);
+                } catch (e) {
+                    return;
+                }
+                if (update.state === "error") {
+                    // Held rather than shown, so the exit handler decides on
+                    // one final message instead of racing this one.
+                    ollamaPullProc.failure = update.message ?? "";
+                    return;
+                }
+                if (update.state !== "pulling") return;
+                const pct = update.pct ?? -1;
+                if (pct >= 0) {
+                    ollamaPullProc.sawProgress = true;
+                    root.setOllamaPullMessage(Translation.tr("Downloading **%1**: %2%").arg(ollamaPullProc.modelName).arg(pct));
+                } else if (ollamaPullProc.sawProgress) {
+                    // The server reports no byte counts while it checksums and
+                    // writes the manifest, which on a large model is a long
+                    // wait immediately after the bar reaches 100%.
+                    root.setOllamaPullMessage(Translation.tr("Finishing **%1**...").arg(ollamaPullProc.modelName));
+                }
+            }
+        }
+        onExited: exitCode => {
+            const name = ollamaPullProc.modelName;
+            const failure = ollamaPullProc.failure;
+            root.ollamaBusy = false;
+            if (exitCode === 0 && failure.length === 0) {
+                root.setOllamaPullMessage(Translation.tr("**%1** is ready.").arg(name));
+                root.ollamaPullMessageId = "";
+                // Selecting it is the point of having downloaded it, so the
+                // refresh is told to finish the job it was started for.
+                root.ollamaPendingSelect = name;
+                root.refreshOllama();
+                return;
+            }
+            const body = failure.length > 0 ? Translation.tr("Could not download **%1**.\n\n```\n%2\n```").arg(name).arg(failure) : Translation.tr("Could not download **%1**.").arg(name);
+            if (!root.setOllamaPullMessage(body)) root.addMessage(body, root.interfaceRole);
+            root.ollamaPullMessageId = "";
         }
     }
 
@@ -548,6 +746,9 @@ Singleton {
         const id = idForMessage(aiMessage);
         root.messageIDs = [...root.messageIDs, id];
         root.messageByID[id] = aiMessage;
+        // Handed back so a caller reporting on something long-running can
+        // rewrite the one message instead of appending a line per update.
+        return id;
     }
 
     function removeMessage(index) {
@@ -573,6 +774,13 @@ Singleton {
     function setModel(modelId, feedback = true, setPersistentState = true) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
+        // The setup entry is a prompt wearing a model's clothes. Picking it
+        // starts the walkthrough and leaves the working model in place, so a
+        // user who was mid-conversation does not lose the model answering it.
+        if (modelId === root.ollamaSetupModelId) {
+            root.startOllamaWalkthrough();
+            return;
+        }
         if (modelList.indexOf(modelId) !== -1) {
             const model = models[modelId]
             // See if policy prevents online models

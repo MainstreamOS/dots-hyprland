@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for the AI sidebar's local-model helper.
+
+    Unlike app-remover, this action ships no companion .rules file granting
+    a passwordless path. Enabling a system service that then listens on a
+    port is not something that should happen silently on behalf of a click,
+    and the cost of the prompt is paid exactly once per machine: after the
+    unit is enabled it starts itself on every later boot and the sidebar
+    never calls this again. auth_admin everywhere, no _keep, because there
+    is no second invocation for a cache to help.
+
+    The exec.path annotation binds this policy to the system-installed
+    helper. pkexec invocations with /usr/local/bin/ollama-setup as the
+    target program automatically match this action.
+-->
+<policyconfig>
+    <vendor>Mainstream OS</vendor>
+    <vendor_url>https://mainstreamos.org</vendor_url>
+    <icon_name>applications-science</icon_name>
+
+    <action id="org.mainstreamos.ollama-setup">
+        <description>Start the local AI service</description>
+        <description xml:lang="en_US">Start the local AI service</description>
+        <message>Authentication is required to start the local AI service</message>
+        <message xml:lang="en_US">Authentication is required to start the local AI service</message>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/ollama-setup</annotate>
+        <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+    </action>
+</policyconfig>

@@ -102,6 +102,21 @@ function setup_app_remover(){
       /usr/share/polkit-1/rules.d/50-app-remover.rules
 }
 
+function setup_ollama_setup(){
+  # Install the privileged helper + polkit policy used by the AI sidebar to
+  # start the local model server.
+  #
+  # The ollama package ships its unit disabled, so the sidebar's offer to
+  # turn it on is the only thing standing between an installed-but-silent
+  # server and a user who thinks local AI is broken. No .rules file here on
+  # purpose: enabling a listening service is worth one password prompt, and
+  # it is only ever asked once per machine.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/ollama-setup" \
+      /usr/local/bin/ollama-setup
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.ollama-setup.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.ollama-setup.policy
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -397,6 +412,9 @@ v setup_disk_mounter
 
 showfun setup_app_remover
 v setup_app_remover
+
+showfun setup_ollama_setup
+v setup_ollama_setup
 
 if command -v systemctl >/dev/null 2>&1; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.

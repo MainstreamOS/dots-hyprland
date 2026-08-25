@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# ollama-setup — start the local Ollama server for the AI sidebar
+# (~/.config/quickshell/ii/modules/ii/sidebarLeft/AiChat.qml).
+# Installed at /usr/local/bin/ollama-setup.
+#
+# Subcommand dispatch:
+#
+#   enable
+#       systemctl enable --now ollama. The ollama package ships its unit
+#       disabled, so a machine that has the package still answers nothing
+#       on the port until somebody turns it on, and the sidebar sees an
+#       install that looks broken. Invoked via pkexec.
+#
+# Downloading a model is deliberately NOT here. `ollama pull` talks to the
+# server over loopback as the invoking user and needs no privilege at all,
+# so routing it through pkexec would demand a password the operation does
+# not need. That lives in the unprivileged scripts/ai/ollama-pull.sh.
+
+set -uo pipefail
+
+case "${1:-}" in
+    enable)
+        systemctl enable --now ollama || exit 1
+
+        # systemctl returning means the process was started, not that it is
+        # answering yet. The caller checks for models the moment this exits,
+        # and on a cold start would otherwise be told the server is still
+        # down. Wait for it to actually respond.
+        for _ in $(seq 1 30); do
+            if ollama list >/dev/null 2>&1; then
+                exit 0
+            fi
+            sleep 0.5
+        done
+
+        echo "ollama.service started but is not responding." >&2
+        exit 1
+        ;;
+    *)
+        echo "usage: ollama-setup enable" >&2
+        exit 2
+        ;;
+esac

@@ -85,6 +85,20 @@ Item {
             }
         },
         {
+            name: "ollama",
+            description: Translation.tr("Set up local AI"),
+            execute: args => {
+                const action = (args[0] ?? "").toLowerCase();
+                if (action === "pull") {
+                    Ai.pullOllamaModel(args.slice(1).join(" "));
+                } else if (action.length === 0 || action === "status") {
+                    Ai.startOllamaWalkthrough();
+                } else {
+                    Ai.addMessage(Translation.tr("Usage: %1ollama pull MODEL_NAME").arg(root.commandPrefix), Ai.interfaceRole);
+                }
+            }
+        },
+        {
             name: "key",
             description: Translation.tr("Set API key"),
             execute: args => {
