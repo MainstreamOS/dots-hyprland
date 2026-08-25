@@ -307,14 +307,19 @@ Singleton {
         // leaves the edge reads as part of it only if the corner above is
         // generous enough to answer it.
         readonly property real dockCornerStock: Config.options?.dock.cornerStyle === "hug"
-            ? dockRoundMax * 0.48 : large
+            ? dockRoundMax : large
         readonly property real dock: (Config.options?.dock.radius ?? -1) >= 0
             ? Config.options.dock.radius : dockCornerStock
         // The pair facing the desktop keeps a slight roundness of its own,
         // settled rather than derived: following the roundness above would
         // drag this one's mark along every time that slider moved, and would
         // leave the pair answering to a control rect has put away.
-        readonly property real dockTopStock: dockRoundMax * 0.10
+        // The notched dock carries its roundness right up to the cap and keeps
+        // the desktop-facing pair nearly as round, so the body reads as one
+        // continuous curve between the two ends rather than a slab with corners
+        // taken off. Every other style keeps the slight roundness it had.
+        readonly property real dockTopStock: Config.options?.dock.cornerStyle === "hug"
+            ? dockRoundMax * 0.875 : dockRoundMax * 0.10
         readonly property real dockTop: (Config.options?.dock.topRadius ?? -1) >= 0
             ? Config.options.dock.topRadius : dockTopStock
     }

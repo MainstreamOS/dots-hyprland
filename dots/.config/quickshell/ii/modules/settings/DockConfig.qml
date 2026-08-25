@@ -236,10 +236,14 @@ ContentPage {
             ConfigSelectionArray {
                 currentValue: Config.options.dock.cornerStyle
                 onSelected: newValue => { Config.options.dock.cornerStyle = newValue; }
+                // Last, and named the same as the bar's, because it is the same
+                // shape: set down on the edge with a curve leaving each end.
+                // The stored value stays "hug" so a config or a theme written
+                // before the rename still selects it.
                 options: [
-                    { displayName: Translation.tr("Hug"), icon: "line_curve", value: "hug" },
                     { displayName: Translation.tr("Float"), icon: "page_header", value: "float" },
-                    { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" }
+                    { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" },
+                    { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "hug" }
                 ]
             }
         }
