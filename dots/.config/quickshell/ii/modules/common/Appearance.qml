@@ -119,23 +119,31 @@ Singleton {
         property color colLayer0Hover: ColorUtils.transparentize(ColorUtils.mix(colLayer0, colOnLayer0, 0.9, root.contentTransparency))
         property color colLayer0Active: ColorUtils.transparentize(ColorUtils.mix(colLayer0, colOnLayer0, 0.8, root.contentTransparency))
         property color colLayer0Border: ColorUtils.mix(root.m3colors.m3outlineVariant, colLayer0, 0.4)
-        // The bar's own two surfaces. Each keeps the color the rest of the
-        // interface gives it and takes only its opacity from the setting, which
-        // starts at whatever that surface was already drawn with.
-        readonly property real barBackgroundStockAlpha: colLayer0.a
+
+        // A themable surface is the same three ideas everywhere it appears: a
+        // color slot per mode, an opacity that may defer to the stock one, and
+        // the interface's own color when neither is set. Stated once so the
+        // next surface to become themable is two calls rather than a copy.
+        readonly property var hexColor: /^#[0-9a-fA-F]{6}$/
         // Only a color Qt can actually paint may leave the pick: a slot that
         // arrives malformed — a hand-edit, a bad import — reads as unpicked
         // rather than wedging every binding downstream of it.
-        readonly property string barBackgroundPick: {
-            const v = m3colors.darkmode
-                ? (Config.options?.bar.backgroundColorDark ?? "")
-                : (Config.options?.bar.backgroundColorLight ?? "")
-            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
+        function modePick(dark, light) {
+            const v = (m3colors.darkmode ? dark : light) ?? ""
+            return colors.hexColor.test(v) ? v : ""
         }
-        property color colBarBackground: ColorUtils.applyAlpha(
-            barBackgroundPick !== "" ? barBackgroundPick : colLayer0,
-            (Config.options?.bar.backgroundOpacity ?? -1) < 0
-                ? barBackgroundStockAlpha : Config.options.bar.backgroundOpacity)
+        // A negative opacity means the surface never had one chosen, so it is
+        // drawn at whatever strength the interface already gave it.
+        function surfaceColor(pick, base, opacity, stockAlpha) {
+            return ColorUtils.applyAlpha(pick !== "" ? pick : base,
+                (opacity ?? -1) < 0 ? stockAlpha : opacity)
+        }
+
+        // The strip and the dock are both drawn on layer 0, so they start from
+        // one number rather than two that merely happen to agree.
+        readonly property real layer0StockAlpha: colLayer0.a
+        readonly property string barBackgroundPick: modePick(Config.options?.bar.backgroundColorDark, Config.options?.bar.backgroundColorLight)
+        property color colBarBackground: surfaceColor(barBackgroundPick, colLayer0, Config.options?.bar.backgroundOpacity, layer0StockAlpha)
         // The float style's outline wears the strip's own alpha: a hairline
         // that kept full strength while the strip went see-through read as a
         // wire rectangle floating around nothing.
@@ -143,7 +151,6 @@ Singleton {
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
         property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
-        readonly property real dockStockAlpha: colLayer0.a
         // The blur floor these surfaces are given in hypr/hyprland/rules.lua.
         // Kept here so a transparency slider can tell where its surface stops
         // being frosted. The two have to be changed together.
@@ -162,30 +169,12 @@ Singleton {
                 : (1 + s - Math.sqrt((1 + s) * (1 + s) - 4 * s * f)) / (2 * s)
             return Math.min(1, a + 0.005)
         }
-        readonly property string dockPick: {
-            const v = m3colors.darkmode
-                ? (Config.options?.dock.backgroundColorDark ?? "")
-                : (Config.options?.dock.backgroundColorLight ?? "")
-            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
-        }
-        property color colDockBackground: ColorUtils.applyAlpha(
-            dockPick !== "" ? dockPick : colLayer0,
-            (Config.options?.dock.backgroundOpacity ?? -1) < 0
-                ? dockStockAlpha : Config.options.dock.backgroundOpacity)
+        readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
+        property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, layer0StockAlpha)
         property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
-        readonly property string dockBadgePick: {
-            const v = m3colors.darkmode
-                ? (Config.options?.dock.badgeColorDark ?? "")
-                : (Config.options?.dock.badgeColorLight ?? "")
-            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
-        }
-        readonly property string dockBadgeTextPick: {
-            const v = m3colors.darkmode
-                ? (Config.options?.dock.badgeTextColorDark ?? "")
-                : (Config.options?.dock.badgeTextColorLight ?? "")
-            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
-        }
+        readonly property string dockBadgePick: modePick(Config.options?.dock.badgeColorDark, Config.options?.dock.badgeColorLight)
+        readonly property string dockBadgeTextPick: modePick(Config.options?.dock.badgeTextColorDark, Config.options?.dock.badgeTextColorLight)
         // The count badge sits on the icon to be read, not on the surface to
         // be seen through, so it keeps full strength however faint the dock
         // behind it is set.
@@ -199,16 +188,8 @@ Singleton {
         // vanish once the strip beneath them stops being solid.
         readonly property real barWidgetStockAlpha: colLayer1.a
         // The slot for the mode on screen; the other waits for its mode.
-        readonly property string barWidgetPick: {
-            const v = m3colors.darkmode
-                ? (Config.options?.bar.widgetColorDark ?? "")
-                : (Config.options?.bar.widgetColorLight ?? "")
-            return /^#[0-9a-fA-F]{6}$/.test(v) ? v : ""
-        }
-        property color colBarWidget: ColorUtils.applyAlpha(
-            barWidgetPick !== "" ? barWidgetPick : colLayer1,
-            (Config.options?.bar.widgetOpacity ?? -1) < 0
-                ? barWidgetStockAlpha : Config.options.bar.widgetOpacity)
+        readonly property string barWidgetPick: modePick(Config.options?.bar.widgetColorDark, Config.options?.bar.widgetColorLight)
+        property color colBarWidget: surfaceColor(barWidgetPick, colLayer1, Config.options?.bar.widgetOpacity, barWidgetStockAlpha)
         property color colOnLayer1: m3colors.m3onSurfaceVariant;
         property color colOnLayer1Inactive: ColorUtils.mix(colOnLayer1, colLayer1, 0.45);
         property color colLayer1Hover: ColorUtils.transparentize(ColorUtils.mix(colLayer1, colOnLayer1, 0.92), root.contentTransparency)
@@ -310,13 +291,11 @@ Singleton {
         // stated as a share of it so a mark can never promise a place the
         // track does not have.
         readonly property real dockRoundMax: 40
-        readonly property real dockStock: large
         // Hugging wants a rounder body than a floating one: the curve that
         // leaves the edge reads as part of it only if the corner above is
         // generous enough to answer it.
-        readonly property real dockHugStock: dockRoundMax * 0.48
         readonly property real dockCornerStock: Config.options?.dock.cornerStyle === "hug"
-            ? dockHugStock : dockStock
+            ? dockRoundMax * 0.48 : large
         readonly property real dock: (Config.options?.dock.radius ?? -1) >= 0
             ? Config.options.dock.radius : dockCornerStock
         // The pair facing the desktop keeps a slight roundness of its own,

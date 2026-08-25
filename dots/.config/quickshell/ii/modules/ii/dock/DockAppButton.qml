@@ -25,6 +25,16 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel?.appId === "SEPARATOR"
     readonly property bool isFolder: appToplevel?.isFolder === true
+    // Which of the two ways of showing window count this button is drawing.
+    // Both name the styles they want rather than the ones they do not, so a
+    // style added later stays off until it is asked for, instead of switching
+    // the marks on by not having been excluded.
+    readonly property bool showsMarks: !isFolder
+        && (Config.options.dock.indicatorStyle === "dashes"
+            || Config.options.dock.indicatorStyle === "dots")
+    readonly property bool showsBadge: !isFolder
+        && Config.options.dock.indicatorStyle === "badge"
+        && windowCount >= 2
 
     // appToplevel.appId is already the canonical resolved id (e.g.
     // "settings", "welcome-tutorial") because TaskbarApps.resolveAppId
@@ -365,15 +375,13 @@ DockButton {
             // How many windows an app holds, said outright rather than
             // counted off in marks. It only speaks from the second window on:
             // one window is what an open app already looks like.
-            Rectangle {
+            // Built only for the style that draws it: the marks are the stock
+            // choice, so every icon on a default dock would otherwise carry a
+            // circle and a text run that can never be shown.
+            Loader {
+                id: badgeLoader
                 readonly property real diameter: Math.max(14, root.iconSize * 0.3)
-                visible: !root.isFolder
-                    && Config.options.dock.indicatorStyle === "badge"
-                    && root.windowCount >= 2
-                implicitWidth: diameter
-                implicitHeight: diameter
-                radius: diameter / 2
-                color: Appearance.colors.colDockBadge
+                active: root.showsBadge
                 // The icon corner furthest from the screen, tucked back over
                 // the art. Both corners are measured out from the center by
                 // half an icon: the loaders around the art are stretched to
@@ -383,16 +391,22 @@ DockButton {
                 anchors {
                     horizontalCenter: parent.horizontalCenter
                     horizontalCenterOffset: (dockRoot.dockEdge === "right" ? -1 : 1)
-                        * (root.iconSize / 2 - diameter * 0.2)
+                        * (root.iconSize / 2 - badgeLoader.diameter * 0.2)
                     verticalCenter: parent.verticalCenter
                     verticalCenterOffset: (dockRoot.dockEdge === "top" ? 1 : -1)
-                        * (root.iconSize / 2 - diameter * 0.15)
+                        * (root.iconSize / 2 - badgeLoader.diameter * 0.15)
                 }
-                StyledText {
-                    anchors.centerIn: parent
-                    text: root.windowCount > 9 ? "9+" : root.windowCount
-                    font.pixelSize: parent.diameter * 0.62
-                    color: Appearance.colors.colDockBadgeText
+                sourceComponent: Rectangle {
+                    implicitWidth: badgeLoader.diameter
+                    implicitHeight: badgeLoader.diameter
+                    radius: badgeLoader.diameter / 2
+                    color: Appearance.colors.colDockBadge
+                    StyledText {
+                        anchors.centerIn: parent
+                        text: root.windowCount > 9 ? "9+" : root.windowCount
+                        font.pixelSize: badgeLoader.diameter * 0.62
+                        color: Appearance.colors.colDockBadgeText
+                    }
                 }
             }
 
@@ -419,11 +433,12 @@ DockButton {
                     horizontalCenter: dockRoot.dockVertical ? undefined : parent.horizontalCenter
                     verticalCenter: dockRoot.dockVertical ? parent.verticalCenter : undefined
                 }
-                visible: !root.isFolder
-                    && Config.options.dock.indicatorStyle !== "none"
-                    && Config.options.dock.indicatorStyle !== "badge"
+                visible: root.showsMarks
                 Repeater {
-                    model: Math.min(root.windowCount, 3)
+                    // Gated on the style as well as the count: `visible` alone
+                    // still builds a mark per window and rebuilds them on every
+                    // window opened or closed, for a style that draws nothing.
+                    model: root.showsMarks ? Math.min(root.windowCount, 3) : 0
                     delegate: Rectangle {
                         required property int index
                         // Dashes stretch along the dock while few and tighten

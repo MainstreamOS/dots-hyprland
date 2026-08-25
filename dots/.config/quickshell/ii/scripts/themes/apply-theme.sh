@@ -164,32 +164,46 @@ PRESERVE_APPS=""
 PRESERVE_DOCK_PINS=""
 PRESERVE_UPDATES=""
 if [ -f "$SHELL_CONFIG" ]; then
-    PRESERVE_THEME_SCHED=$(jq -c '.appearance.themeSchedule // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    # Preserve the entire light.night object — schedule, automatic flag,
-    # mode, colour temperature, etc. are user preferences that should NOT
-    # be reset by theme switching. The matching strip on the save side
-    # also drops .light.night from new theme snapshots; this preserve
-    # path is what protects older snapshots that still carry those keys.
-    PRESERVE_LIGHT_NIGHT=$(jq -c '.light.night // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    # Shake-to-locate (cursor.*) is user behavior, kept out of theme snapshots
-    # and preserved live here so applying a theme never changes it.
-    PRESERVE_CURSOR=$(jq -c '.cursor // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    # Record of which bar widgets have already been offered to this machine.
-    # A snapshot taken before a widget existed doesn't have it, so restoring one
-    # would hand the shell back its one chance to add a widget the user removed.
-    PRESERVE_SEEDED=$(jq -c '.bar.seededWidgets // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    # apps.* is the command each button runs, by way of `bash -c`, and updates.*
-    # names the manifest this machine believes about releases. A theme that
-    # carried either would be choosing what runs here, so the live values win
-    # over the snapshot every time — including for themes saved or shared
-    # before they were kept out of snapshots at all.
-    # The dock's pins are this machine's apps, not a look. A theme that
-    # carried them would strand a user with launchers for software they do
-    # not have, so the live pins win over the snapshot every time,
-    # including for themes saved before pins were kept out of snapshots.
-    PRESERVE_DOCK_PINS=$(jq -c '.dock.pinnedApps // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    PRESERVE_APPS=$(jq -c '.apps // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    PRESERVE_UPDATES=$(jq -c '.updates // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    # What the live config keeps regardless of what a theme carries, read in
+    # one pass. Each of these was its own jq, so the file was forked over and
+    # parsed in full seven times on a path the user is waiting through.
+    #
+    #   appearance.themeSchedule  when the machine changes mode, not a look.
+    #   light.night               schedule, automatic flag, mode and color
+    #                             temperature are preferences a theme must not
+    #                             reset. The save side drops this from new
+    #                             snapshots; this protects older ones that
+    #                             still carry it.
+    #   cursor                    shake-to-locate is behavior, not appearance.
+    #   bar.seededWidgets         which widgets have already been offered to
+    #                             this machine. A snapshot taken before a
+    #                             widget existed would hand the shell back its
+    #                             one chance to re-add one the user removed.
+    #   dock.pinnedApps           this machine's apps rather than a look;
+    #                             a theme carrying them strands a user with
+    #                             launchers for software they do not have.
+    #   apps, updates             apps.* is the command each button runs by way
+    #                             of `bash -c`, and updates.* names the
+    #                             manifest this machine believes about
+    #                             releases. A theme carrying either would be
+    #                             choosing what runs here.
+    #
+    # One value per line, which is safe because tojson escapes any newline
+    # inside a value rather than emitting it. Reading them tab separated would
+    # not be: that escapes backslashes too, and apps.* holds shell commands.
+    # `// empty` also treats false as absent, so that is matched here.
+    mapfile -t _PRESERVED < <(jq -r '
+        [.appearance.themeSchedule, .light.night, .cursor, .bar.seededWidgets,
+         .dock.pinnedApps, .apps, .updates]
+        | map(if . == null or . == false then "" else tojson end) | .[]' \
+        "$SHELL_CONFIG" 2>/dev/null || true)
+    PRESERVE_THEME_SCHED="${_PRESERVED[0]:-}"
+    PRESERVE_LIGHT_NIGHT="${_PRESERVED[1]:-}"
+    PRESERVE_CURSOR="${_PRESERVED[2]:-}"
+    PRESERVE_SEEDED="${_PRESERVED[3]:-}"
+    PRESERVE_DOCK_PINS="${_PRESERVED[4]:-}"
+    PRESERVE_APPS="${_PRESERVED[5]:-}"
+    PRESERVE_UPDATES="${_PRESERVED[6]:-}"
 fi
 JQ_FILTER='.'
 JQ_ARGS=()

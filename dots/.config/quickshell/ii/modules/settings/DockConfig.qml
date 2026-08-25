@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -30,7 +29,6 @@ ContentPage {
                 color: Appearance.colors.colOnSecondaryContainer
             }
             StyledComboBox {
-                id: dockPositionCombo
                 textRole: "displayName"
                 Layout.fillWidth: false
                 Layout.preferredWidth: 220
@@ -252,11 +250,15 @@ ContentPage {
             buttonIcon: "apps"
             from: 16
             to: 64
-            value: Config.options.dock.iconSize < 0 ? 35 : Config.options.dock.iconSize
+            value: Appearance.sizes.dockIconSize
+            // Whole pixels only. The raw slider value is continuous, so every
+            // frame of a drag would otherwise re-decode every icon on the dock
+            // at a new fractional size and recommit the layer-shell surface.
             onMoved: {
-                if (value === Config.options.dock.iconSize)
+                const stepped = Math.round(value);
+                if (stepped === Config.options.dock.iconSize)
                     return;
-                Config.options.dock.iconSize = value;
+                Config.options.dock.iconSize = stepped;
             }
         }
 
@@ -268,10 +270,13 @@ ContentPage {
             from: 0
             to: Appearance.rounding.dockRoundMax
             value: Appearance.rounding.dockTop
+            // A radius is whole pixels; a fractional one discards the cached
+            // shadow texture and re-triangulates the corner shapes per frame.
             onMoved: {
-                if (value === Config.options.dock.topRadius)
+                const stepped = Math.round(value);
+                if (stepped === Config.options.dock.topRadius)
                     return;
-                Config.options.dock.topRadius = value;
+                Config.options.dock.topRadius = stepped;
             }
         }
 
@@ -284,9 +289,10 @@ ContentPage {
             to: Appearance.rounding.dockRoundMax
             value: Appearance.rounding.dock
             onMoved: {
-                if (value === Config.options.dock.radius)
+                const stepped = Math.round(value);
+                if (stepped === Config.options.dock.radius)
                     return;
-                Config.options.dock.radius = value;
+                Config.options.dock.radius = stepped;
             }
         }
 
@@ -321,7 +327,7 @@ ContentPage {
         ConfigSlider {
             text: Translation.tr("Background")
             visible: Config.options.dock.showBackground
-            stopIndicatorValues: [Appearance.colors.dockStockAlpha]
+            stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
             buttonIcon: "wallpaper"
             // The track stops where the dock stops being frosted rather than at
             // nothing, so every point along it answers the same way. Running it
@@ -330,7 +336,7 @@ ContentPage {
             to: 1
             value: Math.max(Appearance.colors.dockOpacityFloor,
                 Config.options.dock.backgroundOpacity < 0
-                    ? Appearance.colors.dockStockAlpha : Config.options.dock.backgroundOpacity)
+                    ? Appearance.colors.layer0StockAlpha : Config.options.dock.backgroundOpacity)
             onMoved: {
                 if (Math.abs(value - Config.options.dock.backgroundOpacity) < 0.005)
                     return;

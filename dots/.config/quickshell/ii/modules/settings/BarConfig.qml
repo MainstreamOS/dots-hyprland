@@ -281,12 +281,12 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Background")
-            stopIndicatorValues: [Appearance.colors.barBackgroundStockAlpha]
+            stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
             buttonIcon: "wallpaper"
             from: 0
             to: 1
             value: Config.options.bar.backgroundOpacity < 0
-                ? Appearance.colors.barBackgroundStockAlpha : Config.options.bar.backgroundOpacity
+                ? Appearance.colors.layer0StockAlpha : Config.options.bar.backgroundOpacity
             onMoved: {
                 if (Math.abs(value - Config.options.bar.backgroundOpacity) < 0.005)
                     return;

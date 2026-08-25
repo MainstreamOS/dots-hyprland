@@ -59,10 +59,12 @@ Scope { // Scope
             // way.
             readonly property bool dockHugging: Config.options.dock.cornerStyle !== "float"
             readonly property bool dockFlares: Config.options.dock.cornerStyle === "hug"
-            readonly property real edgeRadius: Config.options.dock.cornerStyle === "rect"
-                ? 0 : Appearance.rounding.dock
             readonly property real deskRadius: dockHugging
                 ? Appearance.rounding.dockTop : Appearance.rounding.dock
+            // Set down on the edge, the corners meeting it are square, whether
+            // a curve is drawn beside them or not. Floating, they are the same
+            // roundness as the rest of the body.
+            readonly property real edgeCornerRadius: dockHugging ? 0 : deskRadius
             readonly property bool dockVertical: dockEdge === "left" || dockEdge === "right"
             // The center-facing side as an Edges value — where popups open.
             readonly property int awayEdges: dockEdge === "bottom" ? Edges.Top
@@ -240,51 +242,60 @@ Scope { // Scope
                             // edge can land between pixels, and a curve merely
                             // touching it rounds to the far side and leaves a
                             // hairline of desktop showing through.
-                            sourceComponent: Item {
-                                RoundCorner {
+                            // Only the pair the edge can actually show is built.
+                            // Every curve carries the same size and color, so
+                            // each site is left with the two things that differ:
+                            // where it hangs and which way it turns.
+                            sourceComponent: dockRoot.dockVertical ? sideFlares : endFlares
+                        }
+
+                        component DockFlare: RoundCorner {
+                            implicitSize: Appearance.rounding.dock
+                            color: Appearance.colors.colDockBackground
+                        }
+
+                        // The curves at the two ends of a horizontal dock.
+                        Component {
+                            id: endFlares
+                            Item {
+                                DockFlare {
                                     anchors.right: parent.left
                                     anchors.rightMargin: -1
                                     anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
                                     anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
-                                    anchors.left: dockRoot.dockVertical ? parent.left : undefined
-                                    implicitSize: dockRoot.edgeRadius
-                                    color: Appearance.colors.colDockBackground
                                     corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopRight
                                         : RoundCorner.CornerEnum.BottomRight
-                                    visible: !dockRoot.dockVertical
                                 }
-                                RoundCorner {
+                                DockFlare {
                                     anchors.left: parent.right
                                     anchors.leftMargin: -1
                                     anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
                                     anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
-                                    implicitSize: dockRoot.edgeRadius
-                                    color: Appearance.colors.colDockBackground
                                     corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopLeft
                                         : RoundCorner.CornerEnum.BottomLeft
-                                    visible: !dockRoot.dockVertical
                                 }
-                                RoundCorner {
+                            }
+                        }
+
+                        // The same two for a dock stood on its side.
+                        Component {
+                            id: sideFlares
+                            Item {
+                                DockFlare {
                                     anchors.bottom: parent.top
                                     anchors.bottomMargin: -1
                                     anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
                                     anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
-                                    implicitSize: dockRoot.edgeRadius
-                                    color: Appearance.colors.colDockBackground
                                     corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.BottomLeft
                                         : RoundCorner.CornerEnum.BottomRight
-                                    visible: dockRoot.dockVertical
                                 }
-                                RoundCorner {
+                                DockFlare {
                                     anchors.top: parent.bottom
                                     anchors.topMargin: -1
                                     anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
                                     anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
-                                    implicitSize: dockRoot.edgeRadius
-                                    color: Appearance.colors.colDockBackground
                                     corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.TopLeft
                                         : RoundCorner.CornerEnum.TopRight
-                                    visible: dockRoot.dockVertical
                                 }
                             }
                         }
@@ -321,13 +332,13 @@ Scope { // Scope
                             // the surface no longer has.
                             radius: dockRoot.deskRadius
                             topLeftRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "left")
-                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
                             topRightRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "right")
-                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
                             bottomLeftRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "left")
-                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
                             bottomRightRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "right")
-                                ? (dockRoot.dockFlares ? 0 : dockRoot.edgeRadius) : dockRoot.deskRadius
+                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
                         }
 
                         GridLayout {
@@ -378,8 +389,14 @@ Scope { // Scope
                                     contentItem: MaterialSymbol {
                                         text: "keep"
                                         horizontalAlignment: Text.AlignHCenter
-                                        iconSize: Appearance.font.pixelSize.larger
-                                            * Appearance.sizes.dockIconSize / Appearance.sizes.dockIconStock
+                                        // Whole pixels: MaterialSymbol rounds the
+                                        // optical size axis to keep the font from
+                                        // being remapped per value, but the pixel
+                                        // size it is given is a font cache key of
+                                        // its own, so a fraction here mints a face
+                                        // the rounding was meant to prevent.
+                                        iconSize: Math.round(Appearance.font.pixelSize.larger
+                                            * Appearance.sizes.dockIconSize / Appearance.sizes.dockIconStock)
                                         color: root.pinned ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer0
                                     }
                                 }
