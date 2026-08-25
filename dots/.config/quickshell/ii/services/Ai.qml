@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import qs
 import qs.modules.common.functions as CF
 import qs.modules.common
 import Quickshell
@@ -330,6 +331,11 @@ Singleton {
     }
     property var modelList: Object.keys(root.models)
     property var currentModelId: Persistent.states?.ai?.model || modelList[0]
+    // Read by the input-box indicator. A plain getModel() call there never
+    // re-evaluated, so the name sat on whatever was current when the chat was
+    // built. Ollama's list arrives after that, so a saved local model showed as
+    // something else entirely until the next interaction.
+    property var currentModel: models[currentModelId] || models[modelList[0]]
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
@@ -389,6 +395,38 @@ Singleton {
         });
     }
 
+    // What the local Ollama install is currently able to do. The sidebar reads
+    // this to say something useful instead of showing an empty list: not
+    // installed, installed but not running, running with nothing pulled yet, or
+    // ready. Starts as "checking" so nothing is claimed before the first answer.
+    property string ollamaState: "checking"
+    readonly property bool ollamaReady: root.ollamaState === "ok"
+
+    // Asking once at startup meant a user who installed Ollama, started the
+    // service, or pulled a model had to restart the shell before any of it
+    // counted. Ask again, but only while somebody is looking: a machine that is
+    // never going to have Ollama would otherwise spend the rest of its life
+    // waking up to ask. Opening the sidebar is also the moment the answer starts
+    // mattering, so that is when it re-checks.
+    Timer {
+        id: ollamaRecheck
+        interval: 20000
+        repeat: true
+        running: root.ollamaState !== "ok" && GlobalStates.sidebarLeftOpen
+        onTriggered: root.refreshOllama()
+    }
+
+    Connections {
+        target: GlobalStates
+        function onSidebarLeftOpenChanged() {
+            if (GlobalStates.sidebarLeftOpen && root.ollamaState !== "ok") root.refreshOllama();
+        }
+    }
+
+    function refreshOllama() {
+        if (!getOllamaModels.running) getOllamaModels.running = true;
+    }
+
     Process {
         id: getOllamaModels
         running: true
@@ -397,7 +435,16 @@ Singleton {
             onRead: data => {
                 try {
                     if (data.length === 0) return;
-                    const dataJson = JSON.parse(data);
+                    const parsed = JSON.parse(data);
+                    // The script used to hand back a bare array. It now reports
+                    // which of the failure states it is in alongside the list,
+                    // so accept either shape rather than breaking on an older
+                    // copy left behind by a partial update.
+                    const dataJson = Array.isArray(parsed) ? parsed : (parsed.models ?? []);
+                    root.ollamaState = Array.isArray(parsed)
+                        ? (dataJson.length > 0 ? "ok" : "empty")
+                        : (parsed.state ?? "empty");
+                    if (dataJson.length === 0) return;
                     root.modelList = [...root.modelList, ...dataJson];
                     dataJson.forEach(model => {
                         const safeModelName = root.safeModelName(model);
@@ -413,6 +460,12 @@ Singleton {
                     });
 
                     root.modelList = Object.keys(root.models);
+
+                    // The saved model may only now have become selectable, so
+                    // take it up rather than leaving the default in place.
+                    if (root.modelList.includes(root.currentModelId)) {
+                        root.setModel(root.currentModelId, false, false);
+                    }
 
                 } catch (e) {
                     console.log("Could not fetch Ollama models:", e);
@@ -531,6 +584,7 @@ Singleton {
                 return;
             }
             if (setPersistentState) Persistent.states.ai.model = modelId;
+            root.currentModel = model;
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
             if (model.requires_key) {
                 // If key not there show advice
