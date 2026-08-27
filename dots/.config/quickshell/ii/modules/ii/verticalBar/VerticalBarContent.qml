@@ -30,9 +30,26 @@ Item { // Bar content region
     // window, so the two halves are the same size, but the sections filling
     // them are not: the one carrying more widgets runs out first, and since
     // the ends move together it governs both.
+    // The desktop the split keeps between surfaces; see the horizontal bar.
+    readonly property real splitGap: Config.options.bar.cornerStyle === 3
+        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
+        : Appearance.sizes.hyprlandGapsOut
+
     readonly property real maxFloatInset: {
-        const half = (root.height - middleSection.height) / 2;
         const pad = Appearance.rounding.screenRounding;
+        if (root.floatSplit) {
+            // Split, the limit is one surface meeting the next rather than a
+            // section meeting the middle block, so the gap the desktop shows
+            // through is what has to survive. Hugging, each surface end carries
+            // a curve drawn beyond it, so two facing each other across a gap
+            // need room to stand apart or they fuse back into one strip.
+            const gap = root.splitGap;
+            const topRoom = root.centerTop - pad - gap - (topSectionColumn.implicitHeight + pad * 2);
+            const bottomRoom = root.height - root.centerBottom - pad - gap
+                - (bottomSectionColumn.implicitHeight + pad * 2);
+            return Math.max(0, Math.min(topRoom, bottomRoom));
+        }
+        const half = (root.height - middleSection.height) / 2;
         return Math.max(0, Math.min(half - topSectionColumn.implicitHeight - pad,
             half - bottomSectionColumn.implicitHeight - pad));
     }
@@ -51,6 +68,31 @@ Item { // Bar content region
     // flattened into one group before the surface is faded.
     readonly property bool notchSeamFix: Config.options.bar.cornerStyle === 3
         && Config.options.bar.showBackground
+    readonly property bool floatSplit: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+        && Config.options.bar.floatSplit
+    readonly property real floatPad: Appearance.rounding.screenRounding
+    // Where the middle block begins and ends down the strip. It is centered on
+    // the window rather than on any surface, so neither moves when the outer
+    // surfaces do.
+    readonly property real centerTop: middleSection.y
+    readonly property real centerBottom: middleSection.y + middleSection.height
+    // The surfaces a split strip actually draws, so the window can hold the
+    // pointer to them and let the desktop between them be clicked through. An
+    // empty middle draws no surface, which on this bar is reachable: several
+    // widgets have no vertical form, so a center made only of those is blank.
+    readonly property bool centerFloatShown: middleSection.height > 0
+    readonly property var floatSurfaces: !root.floatSplit ? []
+        : root.centerFloatShown ? [topFloat, centerFloat, bottomFloat] : [topFloat, bottomFloat]
+
+    // What the floor is worth as a percentage, so the slider can refuse to ask
+    // for a length the strip would not honor.
+    readonly property real minFloatPercent: root.floatStyles && root.height > 0
+        ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.height - root.maxFloatInset * 2) * 100 / root.height)) : 40
+    Binding {
+        target: GlobalStates
+        property: "barFloatMinPercent"
+        value: root.minFloatPercent
+    }
 
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton"]
@@ -419,9 +461,112 @@ Item { // Bar content region
         }
     }
 
+    // Each of the three surfaces a split strip draws. They carry the same dress
+    // as the single strip, so switching between the two moves where the edges
+    // are and nothing else.
+    component FloatSurface: Item {
+        id: floatSurface
+        visible: root.floatSplit
+        // Whether this surface's own end lands on the screen's corner, which
+        // happens once the strip is asked for the whole height. A corner that
+        // curves away from an edge it sits on opens a wedge of desktop in the
+        // screen's own corner, so an end reaching that far is squared instead.
+        property bool flushTop: false
+        property bool flushBottom: false
+        // The strip's length runs down the screen, so it is the ends that move
+        // and the sides that stay put. The floating style keeps its gap on the
+        // sides; hugging has none.
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.floatingInset
+        anchors.rightMargin: root.floatingInset
+        // Left for the shadow to read: it takes the roundness of the corners
+        // that show, or it would keep a shape the surface no longer has.
+        readonly property real radius: Appearance.rounding.barFloat
+        // The pair against the docked edge is squared off when the surface is
+        // set down on it. The pair facing the desktop keeps its roundness,
+        // except at an end carried out to the screen's own corner.
+        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : floatSurface.radius
+        readonly property real topEndRadius: floatSurface.flushTop ? 0 : floatSurface.radius
+        readonly property real bottomEndRadius: floatSurface.flushBottom ? 0 : floatSurface.radius
+
+        // The curves hang past the surface's ends, which on this bar is above
+        // and below rather than to either side, so the group that blends them
+        // with the body has to reach further that way: flattening one clips to
+        // its bounds. The body is pushed back in by the same amount, so the
+        // surface's own edges stay where everything else expects them.
+        Item {
+            anchors.fill: parent
+            anchors.topMargin: -floatSurface.radius
+            anchors.bottomMargin: -floatSurface.radius
+            opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
+            layer.enabled: root.notchSeamFix
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.topMargin: floatSurface.radius
+                anchors.bottomMargin: floatSurface.radius
+                color: !Config.options.bar.showBackground ? "transparent"
+                    : root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
+                    : Appearance.colors.colBarBackground
+                radius: floatSurface.radius
+                topLeftRadius: Config.options.bar.bottom ? floatSurface.topEndRadius : floatSurface.edgeCornerRadius
+                bottomLeftRadius: Config.options.bar.bottom ? floatSurface.bottomEndRadius : floatSurface.edgeCornerRadius
+                topRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.topEndRadius
+                bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.bottomEndRadius
+                // The curves are drawn as their own pieces and carry no outline,
+                // so an outline on the body would stop in mid air where each one
+                // begins. Hugging means one continuous surface or none.
+                border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
+                border.color: Appearance.colors.colBarBackgroundBorder
+
+                BarEndFlares { anchors.fill: parent }
+            }
+        }
+    }
+
+    FloatSurface {
+        id: topFloat
+        flushTop: root.floatSideInset <= 0
+        y: root.floatSideInset
+        // Capped at the room before the middle surface, so content that
+        // chooses its own length cannot carry the surface over it.
+        height: Math.max(0, Math.min(topSectionColumn.implicitHeight + root.floatPad * 2,
+            root.centerTop - root.floatPad - root.splitGap - root.floatSideInset))
+    }
+    FloatSurface {
+        id: centerFloat
+        visible: root.floatSplit && root.centerFloatShown
+        y: root.centerTop - root.floatPad
+        height: middleSection.height + root.floatPad * 2
+    }
+    FloatSurface {
+        id: bottomFloat
+        flushBottom: root.floatSideInset <= 0
+        y: root.height - root.floatSideInset - height
+        // Capped for the same reason as its twin, from the other end.
+        height: Math.max(0, Math.min(bottomSectionColumn.implicitHeight + root.floatPad * 2,
+            root.height - root.floatSideInset - root.centerBottom - root.floatPad - root.splitGap))
+    }
+
+    Repeater {
+        model: (Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+            && Config.options.bar.floatStyleShadow && root.floatSplit)
+            ? root.floatSurfaces : []
+        delegate: StyledRectangularShadow {
+            required property var modelData
+            // These are built after the surfaces they belong to, and a shadow is
+            // a filled shape rather than a ring, so left in line they would be
+            // laid over the very surfaces they are meant to sit under.
+            z: -1
+            target: modelData
+            color: Appearance.colors.colBarShadow
+        }
+    }
+
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow
+        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow && !root.floatSplit
         // The body is inset from the window, so the shade under it comes in by
         // the same amount. It anchors to the group rather than the body because
         // the body is no longer a sibling of this loader.
@@ -443,6 +588,7 @@ Item { // Bar content region
     Item {
         id: barSurface
         anchors.fill: parent
+        visible: !root.floatSplit
         opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
         layer.enabled: root.notchSeamFix
 
@@ -500,11 +646,15 @@ Item { // Bar content region
     FocusedScrollMouseArea { // Top section (layout.left) | scroll to change brightness
         id: barTopSectionMouseArea
         anchors {
-            top: parent.top
+            // Split, the section rides its own surface, so a clamped surface
+            // carries its pills with it instead of leaving them on the desktop.
+            top: root.floatSplit ? topFloat.top : parent.top
             left: parent.left
             right: parent.right
+            // The half this section fills is the room above the middle block,
+            // said as an anchor so a surface can be laid in it.
+            bottom: root.floatSplit ? topFloat.bottom : middleSection.top
         }
-        height: (root.height - middleSection.height) / 2
 
         onScrollDown: Brightness.decreaseBrightness()
         onScrollUp: Brightness.increaseBrightness()
@@ -523,10 +673,8 @@ Item { // Bar content region
                 // Packed against the body's own end once the strip is
                 // shortened, rather than against the window's, which the body
                 // no longer reaches.
-                // A shortened strip's end is rounded, so the first pill steps
-                // in past the curve rather than sitting on top of it.
-                topMargin: root.floatSplit ? root.floatPad
-                    : Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
+                topMargin: root.floatSplit ? root.floatSideInset + root.floatPad
+                    : Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset)
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
@@ -547,9 +695,10 @@ Item { // Bar content region
         anchors {
             left: parent.left
             right: parent.right
-            bottom: parent.bottom
+            bottom: root.floatSplit ? bottomFloat.bottom : parent.bottom
+            // The room below the middle block, as the top section has above it.
+            top: root.floatSplit ? bottomFloat.top : middleSection.bottom
         }
-        height: (root.height - middleSection.height) / 2
 
         onScrollDown: Audio.decrementVolume();
         onScrollUp: Audio.incrementVolume();
@@ -572,9 +721,8 @@ Item { // Bar content region
                 left: parent.left
                 right: parent.right
                 // Packed against the body's own end, as the top section is.
-                // Packed against the body's own end, as the top section is.
-                bottomMargin: root.floatSplit ? root.floatPad
-                    : Math.max(Appearance.rounding.screenRounding, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
+                bottomMargin: root.floatSplit ? root.floatSideInset + root.floatPad
+                    : Math.max(Appearance.rounding.screenRounding, root.floatSideInset)
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
