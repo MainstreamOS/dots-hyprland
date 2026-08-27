@@ -570,7 +570,14 @@ Item { // Bar content region
     // Background shadow
     Loader {
         active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow && !root.floatSplit
-        anchors.fill: barBackground
+        anchors.fill: barSurface
+        anchors.leftMargin: root.floatSideInset
+        anchors.rightMargin: root.floatSideInset
+        // The body is lifted off all four edges when it floats, so the shade
+        // under it has to come in by the same amount or it reaches past the
+        // shape it belongs to.
+        anchors.topMargin: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
+        anchors.bottomMargin: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
         sourceComponent: StyledRectangularShadow {
             anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
             target: barBackground
@@ -595,6 +602,10 @@ Item { // Bar content region
     // flanks to sit centered as a whole, so the room either side of it is not
     // the same, and a side carrying one widget more than the other runs out
     // first. The edges move together, so the tighter side governs both.
+    // Only the notch draws a body with separate pieces lapping it, so only it
+    // needs the group flattened before the surface is faded.
+    readonly property bool notchSeamFix: Config.options.bar.cornerStyle === 3
+        && Config.options.bar.showBackground
     readonly property bool floatSplit: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
         && Config.options.bar.floatSplit
     readonly property real floatPad: Appearance.rounding.screenRounding
@@ -826,7 +837,8 @@ Item { // Bar content region
     // which way it turns.
     component BarFlare: RoundCorner {
         implicitSize: Appearance.rounding.barFloat
-        color: Appearance.colors.colBarBackground
+        color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
+            : Appearance.colors.colBarBackground
     }
 
     // The pair at a surface's own ends, on the side that sits against the
@@ -862,7 +874,7 @@ Item { // Bar content region
     // Each of the three surfaces a split strip draws, and the shadow under it.
     // They carry the same dress as the single strip so switching between the
     // two changes where the edges are and nothing else.
-    component FloatSurface: Rectangle {
+    component FloatSurface: Item {
         id: floatSurface
         visible: root.floatSplit
         // Whether this surface's own end lands on the screen's edge, which
@@ -879,27 +891,52 @@ Item { // Bar content region
         // here would shrink the visible bar rather than lift it.
         anchors.topMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
         anchors.bottomMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
-        color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
-        radius: Appearance.rounding.barFloat
+        readonly property real radius: Appearance.rounding.barFloat
         // The pair against the docked edge is squared off when the surface is
         // set down on it, and so is an end that reaches the screen's own edge.
         // The pair facing the desktop keeps its roundness either way.
         readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : floatSurface.radius
         readonly property real leftEndRadius: floatSurface.flushLeft ? 0 : floatSurface.radius
         readonly property real rightEndRadius: floatSurface.flushRight ? 0 : floatSurface.radius
-        topLeftRadius: Config.options.bar.bottom ? floatSurface.leftEndRadius : floatSurface.edgeCornerRadius
-        topRightRadius: Config.options.bar.bottom ? floatSurface.rightEndRadius : floatSurface.edgeCornerRadius
-        bottomLeftRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.leftEndRadius
-        bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
-        // The curves at the ends are drawn as their own pieces and carry no
-        // outline, so an outline on the body would stop in mid air where each
-        // one begins. Hugging means one continuous surface or none.
-        border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
-        border.color: Appearance.colors.colBarBackgroundBorder
 
-        BarEndFlares { anchors.fill: parent }
+        // Each surface carries curves that lap its ends by a pixel, and blending
+        // that lap twice is what draws the line across the join. Body and curves
+        // are painted opaque and faded together here instead. The group has to
+        // reach wider than the body because the curves hang past it and
+        // flattening one clips to its bounds; the body is inset back by the same
+        // amount, so the surface's own edges stay exactly where they were and
+        // everything anchoring to this surface still lands right.
+        Item {
+            anchors.fill: parent
+            anchors.leftMargin: -floatSurface.radius
+            anchors.rightMargin: -floatSurface.radius
+            opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
+            layer.enabled: root.notchSeamFix
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.leftMargin: floatSurface.radius
+                anchors.rightMargin: floatSurface.radius
+                color: !Config.options.bar.showBackground ? "transparent"
+                    : root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
+                    : Appearance.colors.colBarBackground
+                radius: floatSurface.radius
+                topLeftRadius: Config.options.bar.bottom ? floatSurface.leftEndRadius : floatSurface.edgeCornerRadius
+                topRightRadius: Config.options.bar.bottom ? floatSurface.rightEndRadius : floatSurface.edgeCornerRadius
+                bottomLeftRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.leftEndRadius
+                bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
+                // The curves at the ends are drawn as their own pieces and carry
+                // no outline, so an outline on the body would stop in mid air
+                // where each one begins. Hugging means one continuous surface or
+                // none.
+                border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
+                border.color: Appearance.colors.colBarBackgroundBorder
+
+                BarEndFlares { anchors.fill: parent }
+            }
+        }
     }
 
     FloatSurface {
@@ -939,23 +976,33 @@ Item { // Bar content region
             // is a filled shape rather than a ring, so left in line they are
             // laid over the very surfaces they are meant to sit under.
             z: -1
-            anchors.fill: undefined
             target: modelData
             color: Appearance.colors.colBarShadow
         }
     }
 
-    // Background
+    // Background. The container reaches the whole width so the curves beside
+    // the body fall inside it: flattening a group clips to its bounds, and the
+    // curves hang past the body's own. The fade lives here rather than in the
+    // colors, so the lap between body and curve is blended once, not twice.
+    Item {
+        id: barSurface
+        anchors.fill: parent
+        visible: !root.floatSplit
+        opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
+        layer.enabled: root.notchSeamFix
+
     Rectangle {
         id: barBackground
-        visible: !root.floatSplit
         anchors {
             fill: parent
             margins: Config.options.bar.cornerStyle === 1 ? (Appearance.sizes.hyprlandGapsOut) : 0 // idk why but +1 is needed
             leftMargin: root.floatSideInset
             rightMargin: root.floatSideInset
         }
-        color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
+        color: Config.options.bar.showBackground
+            ? (root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque : Appearance.colors.colBarBackground)
+            : "transparent"
         // Left for the shadow to read, the way the split surfaces leave theirs.
         radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
         // Set down on the docked edge, the pair touching it is squared off, and
@@ -975,6 +1022,7 @@ Item { // Bar content region
 
         BarEndFlares { anchors.fill: parent }
     }
+    }
 
     FocusedScrollMouseArea { // Left side | scroll to change brightness
         id: barLeftSideMouseArea
@@ -982,7 +1030,8 @@ Item { // Bar content region
         anchors {
             top: parent.top
             bottom: parent.bottom
-            left: root.floatSplit ? leftFloat.left : barBackground.left
+            left: root.floatSplit ? leftFloat.left : barSurface.left
+            leftMargin: root.floatSplit ? 0 : root.floatSideInset
             right: root.floatSplit ? leftFloat.right : centerLeftFlank.left
         }
         implicitWidth: leftRow.implicitWidth
@@ -1131,7 +1180,8 @@ Item { // Bar content region
             top: parent.top
             bottom: parent.bottom
             left: root.floatSplit ? rightFloat.left : centerRightFlank.right
-            right: root.floatSplit ? rightFloat.right : barBackground.right
+            right: root.floatSplit ? rightFloat.right : barSurface.right
+            rightMargin: root.floatSplit ? 0 : root.floatSideInset
         }
         implicitWidth: rightRow.implicitWidth
         implicitHeight: Appearance.sizes.baseBarHeight

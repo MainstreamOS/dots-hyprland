@@ -47,6 +47,11 @@ Item { // Bar content region
                 root.maxFloatInset))
         : 0
 
+    // Only the notch draws curves beside the body, so only it needs the pair
+    // flattened into one group before the surface is faded.
+    readonly property bool notchSeamFix: Config.options.bar.cornerStyle === 3
+        && Config.options.bar.showBackground
+
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton"]
 
@@ -390,7 +395,8 @@ Item { // Bar content region
 
     component BarFlare: RoundCorner {
         implicitSize: Appearance.rounding.barFloat
-        color: Appearance.colors.colBarBackground
+        color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
+            : Appearance.colors.colBarBackground
     }
 
     component BarEndFlares: Item {
@@ -416,14 +422,30 @@ Item { // Bar content region
     // Background shadow
     Loader {
         active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow
-        anchors.fill: barBackground
+        // The body is inset from the window, so the shade under it comes in by
+        // the same amount. It anchors to the group rather than the body because
+        // the body is no longer a sibling of this loader.
+        anchors.fill: barSurface
+        anchors.leftMargin: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
+        anchors.rightMargin: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
+        anchors.topMargin: root.floatSideInset
+        anchors.bottomMargin: root.floatSideInset
         sourceComponent: StyledRectangularShadow {
             anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
             target: barBackground
             color: Appearance.colors.colBarShadow
         }
     }
-    // Background
+    // Background. The group reaches the whole window so the curves past the
+    // body's ends fall inside it, since flattening one clips to its bounds. The
+    // fade lives here rather than in the colours, so the lap between body and
+    // curve is blended once instead of twice.
+    Item {
+        id: barSurface
+        anchors.fill: parent
+        opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
+        layer.enabled: root.notchSeamFix
+
     Rectangle {
         id: barBackground
         anchors {
@@ -436,7 +458,9 @@ Item { // Bar content region
             topMargin: root.floatSideInset
             bottomMargin: root.floatSideInset
         }
-        color: Config.options.bar.showBackground ? Appearance.colors.colBarBackground : "transparent"
+        color: !Config.options.bar.showBackground ? "transparent"
+            : root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
+            : Appearance.colors.colBarBackground
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
         radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
@@ -457,6 +481,7 @@ Item { // Bar content region
         border.color: Appearance.colors.colBarBackgroundBorder
 
         BarEndFlares { anchors.fill: parent }
+    }
     }
 
     Column { // Middle section (layout.center)

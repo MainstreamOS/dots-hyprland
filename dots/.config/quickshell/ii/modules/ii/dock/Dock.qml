@@ -59,6 +59,11 @@ Scope { // Scope
             // way.
             readonly property bool dockHugging: Config.options.dock.cornerStyle !== "float"
             readonly property bool dockFlares: Config.options.dock.cornerStyle === "hug"
+            // Only the notch draws pieces beside the body, so only it needs the
+            // group flattened before the surface is faded, and only it needs the
+            // room outside the body that those pieces occupy.
+            readonly property bool notchSeamFix: dockFlares && Config.options.dock.showBackground
+            readonly property real flareBleed: notchSeamFix ? Appearance.rounding.dock : 0
             readonly property real deskRadius: dockHugging
                 ? Appearance.rounding.dockTop : Appearance.rounding.dock
             // Set down on the edge, the corners meeting it are square, whether
@@ -223,122 +228,153 @@ Scope { // Scope
                         width: dockRoot.dockVertical ? parent.width - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut : implicitWidth
                         height: dockRoot.dockVertical ? implicitHeight : parent.height - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut
 
-                        StyledRectangularShadow {
-                            target: dockVisualBackground
-                            visible: Config.options.dock.showBackground
-                            color: Appearance.colors.colDockShadow
-                        }
-                        // The outward curves, drawn beside the surface the way
-                        // the bar draws the ones under its own hug corners.
+                        // The shade stays out of the group. It is meant to be seen
+                        // through, and its colour already carries the surface's alpha,
+                        // so fading it again with the group would square that. It
+                        // anchors to the group with the body's own insets, the body no
+                        // longer being a sibling of this loader.
                         Loader {
-                            active: dockRoot.dockFlares && Config.options.dock.showBackground
-                            anchors.fill: dockVisualBackground
-                            // Between the shadow and the body: above the shadow,
-                            // which is cast for a surface that stops at the body
-                            // and would otherwise lay a gradient down the join,
-                            // and below the body, so the pixel each curve laps
-                            // over it is hidden rather than doubled. That lap is
-                            // what a fractional display scale needs: the body's
-                            // edge can land between pixels, and a curve merely
-                            // touching it rounds to the far side and leaves a
-                            // hairline of desktop showing through.
-                            // Only the pair the edge can actually show is built.
-                            // Every curve carries the same size and color, so
-                            // each site is left with the two things that differ:
-                            // where it hangs and which way it turns.
-                            sourceComponent: dockRoot.dockVertical ? sideFlares : endFlares
-                        }
-
-                        component DockFlare: RoundCorner {
-                            implicitSize: Appearance.rounding.dock
-                            color: Appearance.colors.colDockBackground
-                        }
-
-                        // The curves at the two ends of a horizontal dock.
-                        Component {
-                            id: endFlares
-                            Item {
-                                DockFlare {
-                                    anchors.right: parent.left
-                                    anchors.rightMargin: -1
-                                    anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
-                                    anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
-                                    corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopRight
-                                        : RoundCorner.CornerEnum.BottomRight
-                                }
-                                DockFlare {
-                                    anchors.left: parent.right
-                                    anchors.leftMargin: -1
-                                    anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
-                                    anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
-                                    corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopLeft
-                                        : RoundCorner.CornerEnum.BottomLeft
-                                }
+                            active: Config.options.dock.showBackground
+                            anchors.fill: dockSurface
+                            anchors.topMargin: (dockRoot.dockEdge === "top" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
+                            anchors.bottomMargin: (dockRoot.dockEdge === "bottom" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
+                            anchors.leftMargin: (dockRoot.dockEdge === "left" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                            anchors.rightMargin: (dockRoot.dockEdge === "right" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                            sourceComponent: StyledRectangularShadow {
+                                anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
+                                target: dockVisualBackground
+                                color: Appearance.colors.colDockShadow
                             }
                         }
-
-                        // The same two for a dock stood on its side.
-                        Component {
-                            id: sideFlares
-                            Item {
-                                DockFlare {
-                                    anchors.bottom: parent.top
-                                    anchors.bottomMargin: -1
-                                    anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
-                                    anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
-                                    corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.BottomLeft
-                                        : RoundCorner.CornerEnum.BottomRight
-                                }
-                                DockFlare {
-                                    anchors.top: parent.bottom
-                                    anchors.topMargin: -1
-                                    anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
-                                    anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
-                                    corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.TopLeft
-                                        : RoundCorner.CornerEnum.TopRight
-                                }
-                            }
-                        }
-
-                        Rectangle { // The real rectangle that is visible
-                            id: dockVisualBackground
-                            property real margin: Appearance.sizes.elevationMargin
+                        // The curves beside the body lap it by a pixel so a fractional display
+                        // scale cannot leave a hairline of desktop in the join. That lap only
+                        // goes unseen while nothing is see through, so notched the pair is
+                        // painted opaque and faded together here. The group is grown past the
+                        // body because the curves hang outside it and flattening clips to the
+                        // bounds; the body is pushed back in by the same amount, so it lands
+                        // where it always did.
+                        Item {
+                            id: dockSurface
                             anchors.fill: parent
-                            // The screen gap sits on the edge side, the
-                            // shadow's breathing room on the center side.
-                            // Hugging leaves no gap on the edge side: the
-                            // concave corners have nothing to curve into if
-                            // the dock is floating away from it.
-                            readonly property real edgeGap: dockRoot.dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
-                            anchors.topMargin: dockRoot.dockEdge === "top" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
-                            anchors.bottomMargin: dockRoot.dockEdge === "bottom" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin
-                            anchors.leftMargin: dockRoot.dockEdge === "left" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
-                            anchors.rightMargin: dockRoot.dockEdge === "right" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0
-                            color: Config.options.dock.showBackground ? Appearance.colors.colDockBackground : "transparent"
-                            // The outward curves are drawn as their own pieces
-                            // and carry no outline, so a border on the body
-                            // would run a seam down the join. Hugging means one
-                            // continuous surface or none.
-                            border.width: Config.options.dock.showBackground && !dockRoot.dockFlares ? 1 : 0
-                            border.color: Appearance.colors.colDockBackgroundBorder
-                            // The pair facing the screen edge answers to the
-                            // edge roundness; the pair facing the desktop to
-                            // the other. A corner that curves outward is drawn
-                            // beside the surface rather than on it, so the one
-                            // here is squared off and the piece takes over.
-                            // Every corner is set below, so this one is left
-                            // only for the shadow to read: it takes the visible
-                            // pair's roundness, or the shadow would keep a shape
-                            // the surface no longer has.
-                            radius: dockRoot.deskRadius
-                            topLeftRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "left")
-                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
-                            topRightRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "right")
-                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
-                            bottomLeftRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "left")
-                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
-                            bottomRightRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "right")
-                                ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
+                            anchors.margins: -dockRoot.flareBleed
+                            opacity: dockRoot.notchSeamFix ? Appearance.colors.colDockBackground.a : 1
+                            layer.enabled: dockRoot.notchSeamFix
+
+                            // The outward curves, drawn beside the surface the way
+                            // the bar draws the ones under its own hug corners.
+                            Loader {
+                                active: dockRoot.dockFlares && Config.options.dock.showBackground
+                                anchors.fill: dockVisualBackground
+                                // Between the shadow and the body: above the shadow,
+                                // which is cast for a surface that stops at the body
+                                // and would otherwise lay a gradient down the join,
+                                // and below the body, so the pixel each curve laps
+                                // over it is hidden rather than doubled. That lap is
+                                // what a fractional display scale needs: the body's
+                                // edge can land between pixels, and a curve merely
+                                // touching it rounds to the far side and leaves a
+                                // hairline of desktop showing through.
+                                // Only the pair the edge can actually show is built.
+                                // Every curve carries the same size and color, so
+                                // each site is left with the two things that differ:
+                                // where it hangs and which way it turns.
+                                sourceComponent: dockRoot.dockVertical ? sideFlares : endFlares
+                            }
+
+                            component DockFlare: RoundCorner {
+                                implicitSize: Appearance.rounding.dock
+                                color: dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
+                                    : Appearance.colors.colDockBackground
+                            }
+
+                            // The curves at the two ends of a horizontal dock.
+                            Component {
+                                id: endFlares
+                                Item {
+                                    DockFlare {
+                                        anchors.right: parent.left
+                                        anchors.rightMargin: -1
+                                        anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
+                                        anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
+                                        corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopRight
+                                            : RoundCorner.CornerEnum.BottomRight
+                                    }
+                                    DockFlare {
+                                        anchors.left: parent.right
+                                        anchors.leftMargin: -1
+                                        anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
+                                        anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
+                                        corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopLeft
+                                            : RoundCorner.CornerEnum.BottomLeft
+                                    }
+                                }
+                            }
+
+                            // The same two for a dock stood on its side.
+                            Component {
+                                id: sideFlares
+                                Item {
+                                    DockFlare {
+                                        anchors.bottom: parent.top
+                                        anchors.bottomMargin: -1
+                                        anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
+                                        anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
+                                        corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.BottomLeft
+                                            : RoundCorner.CornerEnum.BottomRight
+                                    }
+                                    DockFlare {
+                                        anchors.top: parent.bottom
+                                        anchors.topMargin: -1
+                                        anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
+                                        anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
+                                        corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.TopLeft
+                                            : RoundCorner.CornerEnum.TopRight
+                                    }
+                                }
+                            }
+
+                            Rectangle { // The real rectangle that is visible
+                                id: dockVisualBackground
+                                property real margin: Appearance.sizes.elevationMargin
+                                anchors.fill: parent
+                                // The screen gap sits on the edge side, the
+                                // shadow's breathing room on the center side.
+                                // Hugging leaves no gap on the edge side: the
+                                // concave corners have nothing to curve into if
+                                // the dock is floating away from it.
+                                readonly property real edgeGap: dockRoot.dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
+                                anchors.topMargin: (dockRoot.dockEdge === "top" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
+                                anchors.bottomMargin: (dockRoot.dockEdge === "bottom" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
+                                anchors.leftMargin: (dockRoot.dockEdge === "left" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                                anchors.rightMargin: (dockRoot.dockEdge === "right" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                                color: !Config.options.dock.showBackground ? "transparent"
+                                    : dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
+                                    : Appearance.colors.colDockBackground
+                                // The outward curves are drawn as their own pieces
+                                // and carry no outline, so a border on the body
+                                // would run a seam down the join. Hugging means one
+                                // continuous surface or none.
+                                border.width: Config.options.dock.showBackground && !dockRoot.dockFlares ? 1 : 0
+                                border.color: Appearance.colors.colDockBackgroundBorder
+                                // The pair facing the screen edge answers to the
+                                // edge roundness; the pair facing the desktop to
+                                // the other. A corner that curves outward is drawn
+                                // beside the surface rather than on it, so the one
+                                // here is squared off and the piece takes over.
+                                // Every corner is set below, so this one is left
+                                // only for the shadow to read: it takes the visible
+                                // pair's roundness, or the shadow would keep a shape
+                                // the surface no longer has.
+                                radius: dockRoot.deskRadius
+                                topLeftRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "left")
+                                    ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
+                                topRightRadius: (dockRoot.dockEdge === "top" || dockRoot.dockEdge === "right")
+                                    ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
+                                bottomLeftRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "left")
+                                    ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
+                                bottomRightRadius: (dockRoot.dockEdge === "bottom" || dockRoot.dockEdge === "right")
+                                    ? dockRoot.edgeCornerRadius : dockRoot.deskRadius
+                            }
                         }
 
                         GridLayout {

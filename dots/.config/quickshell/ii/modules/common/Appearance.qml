@@ -150,6 +150,12 @@ Singleton {
         // The float style's outline wears the strip's own alpha: a hairline
         // that kept full strength while the strip went see-through read as a
         // wire rectangle floating around nothing.
+        // The same surface with its alpha taken off. A shape drawn beside
+        // another and lapping it by a pixel composites that lap twice, which
+        // reads as a seam once either is see through. Painting both opaque
+        // inside a group and fading the group instead blends the lap away.
+        readonly property color colBarBackgroundOpaque: Qt.rgba(colBarBackground.r, colBarBackground.g, colBarBackground.b, 1)
+        readonly property color colDockBackgroundOpaque: Qt.rgba(colDockBackground.r, colDockBackground.g, colDockBackground.b, 1)
         property color colBarBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colBarBackground.a)
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
