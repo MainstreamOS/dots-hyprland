@@ -151,5 +151,14 @@
       "Added a toggle to enable/disable touchpad",
       "Improved Nvidia GPU and laptop compatibility"
     ]
+  },
+  "1.4.2": {
+    "date": "2026-08-26",
+    "kind": "patch",
+    "unreleased": true,
+    "summary": "ISO-only update: more room on the boot partition, plus a bootable check before finishing",
+    "changes": [
+      "New installs reserve more boot partition space and get a final boot-setup check"
+    ]
   }
 }
