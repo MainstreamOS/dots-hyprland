@@ -41,7 +41,11 @@ Item { // Bar content region
     // the style that flares at its own ends has anywhere to put the room this
     // frees, so every other style is handed the body it always drew: the
     // floating one its gap on all four sides, the rest none at all.
-    readonly property real floatSideInset: Config.options.bar.cornerStyle === 3
+    readonly property real floatSideInset: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+        ? Math.max(Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut,
+            Math.min(root.height * (100 - Appearance.sizes.barFloatWidth) / 200,
+                root.maxFloatInset))
+        : 0
 
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton"]
@@ -494,7 +498,10 @@ Item { // Bar content region
                 // Packed against the body's own end once the strip is
                 // shortened, rather than against the window's, which the body
                 // no longer reaches.
-                topMargin: Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset)
+                // A shortened strip's end is rounded, so the first pill steps
+                // in past the curve rather than sitting on top of it.
+                topMargin: root.floatSplit ? root.floatPad
+                    : Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
@@ -540,7 +547,9 @@ Item { // Bar content region
                 left: parent.left
                 right: parent.right
                 // Packed against the body's own end, as the top section is.
-                bottomMargin: Math.max(Appearance.rounding.screenRounding, root.floatSideInset)
+                // Packed against the body's own end, as the top section is.
+                bottomMargin: root.floatSplit ? root.floatPad
+                    : Math.max(Appearance.rounding.screenRounding, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
