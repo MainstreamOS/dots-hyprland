@@ -1,3 +1,44 @@
+-- Preserve Num Lock across both compositor handoffs and full reboots. The
+-- persistent value wins because the outgoing SDDM compositor may reset the
+-- hardware LED before this user compositor evaluates its configuration.
+local function inheritedNumlockState()
+    local statePath = os.getenv("HOME") .. "/.local/state/mainstream/numlock"
+    local saved = io.open(statePath, "r")
+    if saved then
+        local value = saved:read("*l")
+        saved:close()
+        if value == "1" then
+            return true
+        elseif value == "0" then
+            return false
+        end
+    end
+
+    local reader = io.popen([[
+for path in /sys/class/leds/*::numlock/brightness; do
+    [ -r "$path" ] && cat "$path"
+done
+]])
+    if not reader then
+        return true
+    end
+
+    local found = false
+    local enabled = false
+    for value in reader:lines() do
+        found = true
+        if value:match("^%s*1%s*$") then
+            enabled = true
+        end
+    end
+    reader:close()
+
+    if not found then
+        return true
+    end
+    return enabled
+end
+
 -- MONITOR CONFIG
 hl.monitor({
     output = "",
@@ -164,7 +205,7 @@ end
 hl.config({
     input = {
         kb_layout = "us",
-        numlock_by_default = true,
+        numlock_by_default = inheritedNumlockState(),
         repeat_delay = 250,
         repeat_rate = 35,
 
