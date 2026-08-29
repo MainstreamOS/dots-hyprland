@@ -76,6 +76,7 @@ Item {
             Hyprland.dispatch(
                 `hl.dsp.focus({window = "address:${fullAddr}"})`
             );
+            if (win?.floating) raiseToplevel(fullAddr);
             return;
         }
         // Pull off special, mirroring the hyprbars title-bar special-toggle.
@@ -87,6 +88,21 @@ Item {
                     `return hl.dsp.window.move({workspace = tostring(t.id), follow = true, window = "address:${fullAddr}"}) ` +
                 `end ` +
             `end)()`
+        );
+        // Scratchpad windows are floating by convention, but check rather
+        // than assume — win was read before the move, and floating state
+        // isn't something a workspace move changes.
+        if (win?.floating) raiseToplevel(fullAddr);
+    }
+
+    // focus only moves keyboard/input focus — it doesn't restack a floating
+    // window above its floating siblings the way a direct mouse click does,
+    // so a covered floating window stays covered until it's explicitly
+    // raised to the top of the floating z-order. Callers gate this on
+    // win.floating themselves since tiled windows have no z-order to alter.
+    function raiseToplevel(fullAddr) {
+        Hyprland.dispatch(
+            `hl.dsp.window.alter_zorder({mode = "top", window = "address:${fullAddr}"})`
         );
     }
 
