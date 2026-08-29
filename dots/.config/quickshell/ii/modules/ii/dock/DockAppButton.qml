@@ -110,7 +110,14 @@ DockButton {
         if (src > tgt && idx >= tgt && idx < src) return appListRoot.slotSize;
         return 0;
     }
-    z: isDragged ? 100 : 0
+    // Idle siblings paint in list order once z ties, so a separator
+    // delegate can draw over a neighbor magnifying into its space. Racing
+    // it on its own hoverScale isn't enough — falloff-based magnification
+    // gives it a nontrivial value of its own even though it never grows —
+    // so it's pinned below the baseline instead (icons never go below 1).
+    // Regular icons still race each other on hoverScale, so the biggest
+    // one paints frontmost.
+    z: isDragged ? 100 : (isSeparator ? -1 : hoverScale)
     scale: isDragged ? 1.05 : 1
 
     enabled: !isSeparator
