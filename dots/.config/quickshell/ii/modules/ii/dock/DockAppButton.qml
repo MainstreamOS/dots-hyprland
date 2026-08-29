@@ -212,13 +212,18 @@ DockButton {
                 const folder = AppFolderManager.getFolder(folderId);
                 if (folder) appListRoot.showFolderPopup(root, folder);
             }
-        } else if (root.windowCount > 0) {
-            // Toggle preview
+        } else if (root.windowCount > 1) {
+            // Multiple windows: toggle the preview so there's something to pick between
             if (appListRoot.clickedButton === root) {
                 appListRoot.hidePreview();
             } else {
                 appListRoot.showPreview(root);
             }
+        } else if (root.windowCount === 1) {
+            // Exactly one window: nothing to choose between, so skip the
+            // preview and go straight to it — the same thing that happens
+            // when you click that window's thumbnail inside a preview.
+            appListRoot.focusToplevel(root.appToplevel?.toplevels?.[0]);
         } else {
             // Only here: opening a folder or toggling a window preview is not a
             // launch, and animating those would say something happened that did not.

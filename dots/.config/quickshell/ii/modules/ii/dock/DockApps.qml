@@ -31,13 +31,63 @@ Item {
         hideFolderPopup(); // tear down folder popup first
         clickedButton = button;
         previewFading = false;
+        // A fade still in flight belongs to a preview that is gone; left
+        // running, its timer would reap the one this click just asked for.
+        fadeTimer.stop();
         previewLoader.active = true;
         previewShow = true;
         dismissTimer.restart();
     }
     function hidePreview() {
+        // Nothing shown means nothing to fade, and a timer armed for a
+        // preview that never existed would reap the next one instead.
+        if (!previewLoader.active) return;
         previewFading = true;
         fadeTimer.restart();
+    }
+
+    // Focuses a single window — mirrors what clicking its tile in the
+    // preview popup does, including tearing down any preview or folder
+    // popup that's currently open, so switching straight to a window never
+    // leaves a stale popup anchored to a different button. Shared by the
+    // preview's per-window buttons and by DockAppButton's single-window
+    // fast path (see its onClicked for why 1 window skips the preview).
+    function focusToplevel(tl) {
+        // Handing focus to a window is a deliberate exit from whatever the
+        // shared grab was holding open. Left armed, the grab's whitelist
+        // collapses with the sidebar's focus and it spends the user's next
+        // click on the bar clearing itself.
+        GlobalFocusGrab.dismiss();
+        hideFolderPopup();
+        hidePreview();
+        const addr = tl?.HyprlandToplevel?.address;
+        if (!addr) {
+            tl?.activate();
+            return;
+        }
+        // Address-targeted dispatch avoids Wayland activate() aliasing
+        // across multiple instances of the same app.
+        const fullAddr = `0x${addr}`;
+        const win = HyprlandData.windowByAddress[fullAddr];
+        const wsName = win?.workspace?.name ?? "";
+        const wsId = win?.workspace?.id ?? 0;
+        const isSpecial = wsName.startsWith("special") || wsId < 0;
+        if (!isSpecial) {
+            Hyprland.dispatch(
+                `hl.dsp.focus({window = "address:${fullAddr}"})`
+            );
+            return;
+        }
+        // Pull off special, mirroring the hyprbars title-bar special-toggle.
+        Hyprland.dispatch(
+            `(function() ` +
+                `local m = hl.get_active_monitor(); ` +
+                `local t = m and m.active_workspace; ` +
+                `if t then ` +
+                    `return hl.dsp.window.move({workspace = tostring(t.id), follow = true, window = "address:${fullAddr}"}) ` +
+                `end ` +
+            `end)()`
+        );
     }
 
     property bool folderPopupStartRenaming: false
@@ -299,40 +349,7 @@ Item {
                                     windowButton.captureSuppressed = true;
                                     windowButton.modelData?.close();
                                 }
-                                onClicked: {
-                                    root.hidePreview();
-                                    const tl = windowButton.modelData;
-                                    const addr = tl?.HyprlandToplevel?.address;
-                                    if (!addr) {
-                                        tl?.activate();
-                                        return;
-                                    }
-                                    // Address-targeted dispatch avoids
-                                    // Wayland activate() aliasing across
-                                    // multiple instances of the same app.
-                                    const fullAddr = `0x${addr}`;
-                                    const win = HyprlandData.windowByAddress[fullAddr];
-                                    const wsName = win?.workspace?.name ?? "";
-                                    const wsId = win?.workspace?.id ?? 0;
-                                    const isSpecial = wsName.startsWith("special") || wsId < 0;
-                                    if (!isSpecial) {
-                                        Hyprland.dispatch(
-                                            `hl.dsp.focus({window = "address:${fullAddr}"})`
-                                        );
-                                        return;
-                                    }
-                                    // Pull off special, mirroring the
-                                    // hyprbars title-bar special-toggle.
-                                    Hyprland.dispatch(
-                                        `(function() ` +
-                                            `local m = hl.get_active_monitor(); ` +
-                                            `local t = m and m.active_workspace; ` +
-                                            `if t then ` +
-                                                `return hl.dsp.window.move({workspace = tostring(t.id), follow = true, window = "address:${fullAddr}"}) ` +
-                                            `end ` +
-                                        `end)()`
-                                    );
-                                }
+                                onClicked: root.focusToplevel(windowButton.modelData)
                                 contentItem: ColumnLayout {
                                     implicitWidth: screencopyView.implicitWidth
                                     implicitHeight: screencopyView.implicitHeight
