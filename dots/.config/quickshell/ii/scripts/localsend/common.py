@@ -15,7 +15,9 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler
 
-ALIAS = "Quickshell Bar"
+from alias_store import get_alias
+
+ALIAS = get_alias()
 MULTICAST_ADDR = "224.0.0.167"
 PORT = 53317
 
