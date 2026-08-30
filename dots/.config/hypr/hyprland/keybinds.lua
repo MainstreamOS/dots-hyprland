@@ -62,8 +62,9 @@ hl.bind("CTRL + SUPER + P", hl.dsp.global("quickshell:panelFamilyCycle"), {descr
 hl.bind("CTRL + SUPER + K", hl.dsp.exec_cmd("hyprctl switchxkblayout current next"), {description = "Next keyboard layout"} )
 
 -- Save the new LED state after the real Num Lock event has reached Hyprland.
--- non_consuming keeps the key's normal behaviour intact.
-hl.bind("Num_Lock", hl.dsp.exec_cmd(hyprScripts.."/save-numlock-state.sh"), {non_consuming = true} )
+-- locked keeps state tracking active on the lock screen, while non_consuming
+-- preserves the key's normal behaviour.
+hl.bind("Num_Lock", hl.dsp.exec_cmd(hyprScripts.."/save-numlock-state.sh"), {locked = true, non_consuming = true} )
 
 --##! Media
 local mediaNextCommand = "playerctl next || playerctl position `bc <<< \"100 * $(playerctl metadata mpris:length) / 1000000 / 100\"`"
