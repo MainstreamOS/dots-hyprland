@@ -6,6 +6,19 @@ local hyprScripts = "$HOME/.config/hypr/hyprland/scripts"
 local qsIpcCall = "qs -c $qsConfig ipc call"
 local qsIsAlive = qsIpcCall.." TEST_ALIVE"
 
+-- Guards a layoutmsg dispatch so it only fires when its target layout is
+-- actually active. hl.dsp.layout() with a message the current layout doesn't
+-- support throws a runtime error (shown as a notification popup), so this
+-- checks hl.get_active_workspace().tiled_layout before dispatching.
+local function on_layout(layout_name, msg)
+ return function()
+ local ws = hl.get_active_workspace()
+ if ws ~= nil and ws.tiled_layout == layout_name then
+ hl.dispatch(hl.dsp.layout(msg))
+ end
+ end
+end
+
 --#!
 --##! Desktop
 -- These absolutely need to be on top, or they won't work consistently
@@ -216,11 +229,11 @@ for i = 1, 4 do
 end
 
 --##! Master Layout
-hl.bind("SUPER + Return", hl.dsp.layout("swapwithmaster"), {description = "Swap master window"} )
-hl.bind("SUPER + M", hl.dsp.layout("focusmaster"), {description = "Focus master window"} )
-hl.bind("SUPER + comma", hl.dsp.layout("addmaster"), {description = "Add master window"} )
-hl.bind("SUPER + Slash", hl.dsp.layout("removemaster"), {description = "Remove master window"} )
-hl.bind("SUPER + Space", hl.dsp.layout("orientationnext"), {description = "Swap master layout orientation"} )
+hl.bind("SUPER + Return", on_layout("master", "swapwithmaster"), {description = "Swap master window"} )
+hl.bind("SUPER + M", on_layout("master", "focusmaster"), {description = "Focus master window"} )
+hl.bind("SUPER + comma", on_layout("master", "addmaster"), {description = "Add master window"} )
+hl.bind("SUPER + Slash", on_layout("master", "removemaster"), {description = "Remove master window"} )
+hl.bind("SUPER + Space", on_layout("master", "orientationnext"), {description = "Swap master layout orientation"} )
 
 --##! Scrolling Layout
 -- The scrolloverview:overview dispatcher's colon makes it unreachable from
@@ -236,8 +249,8 @@ hl.bind("SUPER + O", function()
 end, {description = "Toggle Scrolling overview"})
 
 --##! Monocle Layout
-hl.bind("SUPER + J", hl.dsp.layout("cyclenext"), {description = "Next window"} )
-hl.bind("SUPER + K", hl.dsp.layout("cycleprev"), {description = "Previous window"} )
+hl.bind("SUPER + J", on_layout("monocle", "cyclenext"), {description = "Next window"} )
+hl.bind("SUPER + K", on_layout("monocle", "cycleprev"), {description = "Previous window"} )
 
 --##! Screen
 --# Zoom
