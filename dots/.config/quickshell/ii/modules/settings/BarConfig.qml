@@ -228,16 +228,16 @@ ContentPage {
         // active and Pills off, every control here is put away, so the section
         // goes with them. Unless a radius still holds a non-stock value, which
         // keeps the reset within reach of the state it exists to clear.
-        visible: Config.options.bar.cornerStyle === 1
-            || Config.options.bar.cornerStyle === 3
+        visible: Appearance.sizes.barFloats
             || !Config.options.bar.borderless
             || Config.options.bar.widgetRadius >= 0
             || Config.options.bar.floatRadius >= 0
             || Config.options.bar.floatWidth >= 0
             || Config.options.bar.notchWidth >= 0
 
+
         ConfigSwitch {
-            visible: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+            visible: Appearance.sizes.barFloats
             buttonIcon: "view_column_2"
             text: Translation.tr("Split into three")
             checked: Config.options.bar.floatSplit
@@ -250,39 +250,8 @@ ContentPage {
         // and the strip has nowhere left to put them.
         ConfigSlider {
             text: Config.options.bar.floatSplit ? Translation.tr("Spread") : Translation.tr("Width")
-            visible: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+            visible: Appearance.sizes.barFloats
             stopIndicatorValues: [Appearance.sizes.barFloatWidthMax]
-            buttonIcon: "width"
-            // The floor chases the widgets, so a crowded strip can push it to
-            // the ceiling; the track keeps a step of room so it cannot invert.
-            from: Math.min(GlobalStates.barFloatMinPercent, Appearance.sizes.barFloatWidthMax - 5)
-            to: Appearance.sizes.barFloatWidthMax
-            value: Appearance.sizes.barFloatWidth
-            onMoved: {
-                const stepped = Math.round(value);
-                const key = Appearance.sizes.barIsNotch ? "notchWidth" : "floatWidth";
-                if (stepped === Config.options.bar[key])
-                    return;
-                Config.options.bar[key] = stepped;
-            }
-        }
-
-        ConfigSwitch {
-            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
-            buttonIcon: "view_column_2"
-            text: Translation.tr("Split into three")
-            checked: Config.options.bar.floatSplit
-            onCheckedChanged: Config.options.bar.floatSplit = checked
-        }
-
-
-        // How much of the screen the strip reaches across. The track stops well
-        // short of nothing: past a point the end clusters meet the middle one
-        // and the strip has nowhere left to put them.
-        ConfigSlider {
-            text: Config.options.bar.floatSplit ? Translation.tr("Spread") : Translation.tr("Width")
-            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
-            stopIndicatorValues: [Appearance.sizes.barFloatWidthStock]
             buttonIcon: "width"
             from: GlobalStates.barFloatMinPercent
             to: Appearance.sizes.barFloatWidthMax
@@ -298,7 +267,7 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Corner roundness")
-            visible: Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3
+            visible: Appearance.sizes.barFloats
             stopIndicatorValues: [Appearance.rounding.barFloatStock]
             buttonIcon: "rounded_corner"
             from: 0

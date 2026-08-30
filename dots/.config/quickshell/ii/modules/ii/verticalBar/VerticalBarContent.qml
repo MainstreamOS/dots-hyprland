@@ -31,12 +31,15 @@ Item { // Bar content region
     // them are not: the one carrying more widgets runs out first, and since
     // the ends move together it governs both.
     // The desktop the split keeps between surfaces; see the horizontal bar.
-    readonly property real splitGap: Config.options.bar.cornerStyle === 3
+    readonly property real splitGap: root.isNotch
         ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
         : Appearance.sizes.hyprlandGapsOut
 
     readonly property real maxFloatInset: {
-        const pad = Appearance.rounding.screenRounding;
+        const pad = root.floatPad;
+        // The styles without a strip of their own have no inset to limit, and
+        // this would otherwise chase every widget's height for them.
+        if (!root.floatStyles) return 0;
         if (root.floatSplit) {
             // Split, the limit is one surface meeting the next rather than a
             // section meeting the middle block, so the gap the desktop shows
@@ -58,17 +61,23 @@ Item { // Bar content region
     // the style that flares at its own ends has anywhere to put the room this
     // frees, so every other style is handed the body it always drew: the
     // floating one its gap on all four sides, the rest none at all.
-    readonly property real floatSideInset: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
-        ? Math.max(Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut,
+    readonly property real floatSideInset: root.floatStyles
+        ? Math.max(root.isNotch ? 0 : Appearance.sizes.hyprlandGapsOut,
             Math.min(root.height * (100 - Appearance.sizes.barFloatWidth) / 200,
                 root.maxFloatInset))
         : 0
 
-    // Only the notch draws curves beside the body, so only it needs the pair
-    // flattened into one group before the surface is faded.
-    readonly property bool notchSeamFix: Config.options.bar.cornerStyle === 3
-        && Config.options.bar.showBackground
-    readonly property bool floatSplit: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+    // This file's shorthand for the shared style facts.
+    readonly property bool isNotch: Appearance.sizes.barIsNotch
+    readonly property bool floatStyles: Appearance.sizes.barFloats
+    // Whether the notch's curves are drawn at all.
+    readonly property bool notchFlares: isNotch && Config.options.bar.showBackground
+    // Only the notch draws curves beside the body, and the lap only shows
+    // through a see-through surface, so a fully opaque one skips the
+    // flattening pass and the texture it costs.
+    readonly property bool notchSeamFix: notchFlares
+        && Appearance.colors.colBarBackground.a < 1
+    readonly property bool floatSplit: root.floatStyles
         && Config.options.bar.floatSplit
     readonly property real floatPad: Appearance.rounding.screenRounding
     // Where the middle block begins and ends down the strip. It is centered on
@@ -87,11 +96,14 @@ Item { // Bar content region
     // What the floor is worth as a percentage, so the slider can refuse to ask
     // for a length the strip would not honor.
     readonly property real minFloatPercent: root.floatStyles && root.height > 0
-        ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.height - root.maxFloatInset * 2) * 100 / root.height)) : 40
+        ? Math.min(100, Math.ceil((root.height - root.maxFloatInset * 2) * 100 / root.height)) : 40
     Binding {
         target: GlobalStates
         property: "barFloatMinPercent"
         value: root.minFloatPercent
+        // A dying bar (monitor unplug, orientation flip) must not hand back the
+        // stale floor it captured at birth over a surviving bar's live one.
+        restoreMode: Binding.RestoreNone
     }
 
     // Modules that render without a surrounding pill.
@@ -442,7 +454,6 @@ Item { // Bar content region
     }
 
     component BarEndFlares: Item {
-        visible: Config.options.bar.cornerStyle === 3 && Config.options.bar.showBackground
         BarFlare { // Above the strip
             anchors.bottom: parent.top
             anchors.bottomMargin: -1
@@ -486,7 +497,7 @@ Item { // Bar content region
         // The pair against the docked edge is squared off when the surface is
         // set down on it. The pair facing the desktop keeps its roundness,
         // except at an end carried out to the screen's own corner.
-        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : floatSurface.radius
+        readonly property real edgeCornerRadius: root.isNotch ? 0 : floatSurface.radius
         readonly property real topEndRadius: floatSurface.flushTop ? 0 : floatSurface.radius
         readonly property real bottomEndRadius: floatSurface.flushBottom ? 0 : floatSurface.radius
 
@@ -517,10 +528,14 @@ Item { // Bar content region
                 // The curves are drawn as their own pieces and carry no outline,
                 // so an outline on the body would stop in mid air where each one
                 // begins. Hugging means one continuous surface or none.
-                border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
+                border.width: Config.options.bar.showBackground && !root.isNotch ? 1 : 0
                 border.color: Appearance.colors.colBarBackgroundBorder
 
-                BarEndFlares { anchors.fill: parent }
+                Loader {
+                    anchors.fill: parent
+                    active: root.notchFlares && floatSurface.visible
+                    sourceComponent: BarEndFlares {}
+                }
             }
         }
     }
@@ -528,30 +543,31 @@ Item { // Bar content region
     FloatSurface {
         id: topFloat
         flushTop: root.floatSideInset <= 0
-        y: root.floatSideInset
+        // Parked at zero while unsplit, so a widget changing height does not
+        // lay out three strips nobody sees.
+        y: root.floatSplit ? root.floatSideInset : 0
         // Capped at the room before the middle surface, so content that
         // chooses its own length cannot carry the surface over it.
-        height: Math.max(0, Math.min(topSectionColumn.implicitHeight + root.floatPad * 2,
+        height: !root.floatSplit ? 0 : Math.max(0, Math.min(topSectionColumn.implicitHeight + root.floatPad * 2,
             root.centerTop - root.floatPad - root.splitGap - root.floatSideInset))
     }
     FloatSurface {
         id: centerFloat
         visible: root.floatSplit && root.centerFloatShown
-        y: root.centerTop - root.floatPad
-        height: middleSection.height + root.floatPad * 2
+        y: root.floatSplit ? root.centerTop - root.floatPad : 0
+        height: root.floatSplit ? middleSection.height + root.floatPad * 2 : 0
     }
     FloatSurface {
         id: bottomFloat
         flushBottom: root.floatSideInset <= 0
-        y: root.height - root.floatSideInset - height
+        y: root.floatSplit ? root.height - root.floatSideInset - height : 0
         // Capped for the same reason as its twin, from the other end.
-        height: Math.max(0, Math.min(bottomSectionColumn.implicitHeight + root.floatPad * 2,
+        height: !root.floatSplit ? 0 : Math.max(0, Math.min(bottomSectionColumn.implicitHeight + root.floatPad * 2,
             root.height - root.floatSideInset - root.centerBottom - root.floatPad - root.splitGap))
     }
 
     Repeater {
-        model: (Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
-            && Config.options.bar.floatStyleShadow && root.floatSplit)
+        model: Config.options.bar.showBackground && Config.options.bar.floatStyleShadow
             ? root.floatSurfaces : []
         delegate: StyledRectangularShadow {
             required property var modelData
@@ -566,7 +582,7 @@ Item { // Bar content region
 
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow && !root.floatSplit
+        active: Config.options.bar.showBackground && root.floatStyles && Config.options.bar.floatStyleShadow && !root.floatSplit
         // The body is inset from the window, so the shade under it comes in by
         // the same amount. It anchors to the group rather than the body because
         // the body is no longer a sibling of this loader.
@@ -609,13 +625,13 @@ Item { // Bar content region
             : Appearance.colors.colBarBackground
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
-        radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
+        radius: root.floatStyles ? Appearance.rounding.barFloat : 0
         // Set down on the docked edge, the pair touching it is squared off. The
         // pair facing the desktop sits at the strip's ends, so it is squared
         // too once the strip runs the whole height and those ends land on the
         // screen's own corners.
-        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : barBackground.radius
-        readonly property real endRadius: (Config.options.bar.cornerStyle === 3 && root.floatSideInset <= 0) ? 0 : barBackground.radius
+        readonly property real edgeCornerRadius: root.isNotch ? 0 : barBackground.radius
+        readonly property real endRadius: (root.isNotch && root.floatSideInset <= 0) ? 0 : barBackground.radius
         topLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
         bottomLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
         topRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
@@ -626,7 +642,11 @@ Item { // Bar content region
         border.width: Config.options.bar.cornerStyle === 1 && Config.options.bar.showBackground ? 1 : 0
         border.color: Appearance.colors.colBarBackgroundBorder
 
-        BarEndFlares { anchors.fill: parent }
+        Loader {
+            anchors.fill: parent
+            active: root.notchFlares
+            sourceComponent: BarEndFlares {}
+        }
     }
     }
 

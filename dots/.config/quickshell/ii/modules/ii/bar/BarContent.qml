@@ -569,7 +569,7 @@ Item { // Bar content region
 
     // Background shadow
     Loader {
-        active: Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) && Config.options.bar.floatStyleShadow && !root.floatSplit
+        active: Config.options.bar.showBackground && root.floatStyles && Config.options.bar.floatStyleShadow && !root.floatSplit
         anchors.fill: barSurface
         anchors.leftMargin: root.floatSideInset
         anchors.rightMargin: root.floatSideInset
@@ -602,11 +602,17 @@ Item { // Bar content region
     // flanks to sit centered as a whole, so the room either side of it is not
     // the same, and a side carrying one widget more than the other runs out
     // first. The edges move together, so the tighter side governs both.
-    // Only the notch draws a body with separate pieces lapping it, so only it
-    // needs the group flattened before the surface is faded.
-    readonly property bool notchSeamFix: Config.options.bar.cornerStyle === 3
-        && Config.options.bar.showBackground
-    readonly property bool floatSplit: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
+    // This file's shorthand for the shared style facts.
+    readonly property bool isNotch: Appearance.sizes.barIsNotch
+    readonly property bool floatStyles: Appearance.sizes.barFloats
+    // Whether the notch's curves are drawn at all.
+    readonly property bool notchFlares: isNotch && Config.options.bar.showBackground
+    // Only the notch draws a body with separate pieces lapping it, and the lap
+    // only shows through a see-through surface, so a fully opaque one skips
+    // the flattening pass and the texture it costs.
+    readonly property bool notchSeamFix: notchFlares
+        && Appearance.colors.colBarBackground.a < 1
+    readonly property bool floatSplit: root.floatStyles
         && Config.options.bar.floatSplit
     readonly property real floatPad: Appearance.rounding.screenRounding
     // Where the middle cluster begins and ends, in this item's own coordinates.
@@ -619,12 +625,15 @@ Item { // Bar content region
     // when the strip is drawn in or its content grows. Hugging, each surface
     // end carries a curve drawn beyond it, so two facing each other need
     // room to stand apart or they meet and weld the surfaces back into one.
-    readonly property real splitGap: Config.options.bar.cornerStyle === 3
+    readonly property real splitGap: root.isNotch
         ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
         : Appearance.sizes.hyprlandGapsOut
 
     readonly property real maxFloatInset: {
         const pad = root.floatPad;
+        // The styles without a strip of their own have no inset to limit, and
+        // this would otherwise chase every widget's width for them.
+        if (!root.floatStyles) return 0;
         if (root.floatSplit) {
             // Split, the limit is one surface meeting the next rather than a
             // cluster meeting the middle block, so the gap the desktop shows
@@ -636,12 +645,12 @@ Item { // Bar content region
             return Math.max(0, Math.min(leftRoom, rightRoom));
         }
         const leftRoom = root.centerLeft - leftRow.implicitWidth - pad * 2;
-        const rightRoom = root.width - root.centerRight - rightRow.implicitWidth - pad - 5;
+        const rightRoom = root.width - root.centerRight - rightRow.implicitWidth - pad - rightRow.anchors.leftMargin;
         return Math.max(0, Math.min(leftRoom, rightRoom));
     }
 
-    readonly property real floatSideInset: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
-        ? Math.max(Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut,
+    readonly property real floatSideInset: root.floatStyles
+        ? Math.max(root.isNotch ? 0 : Appearance.sizes.hyprlandGapsOut,
             Math.min(root.width * (100 - Appearance.sizes.barFloatWidth) / 200,
                 root.maxFloatInset))
         : 0
@@ -657,13 +666,17 @@ Item { // Bar content region
     readonly property var floatSurfaces: !root.floatSplit ? []
         : root.centerFloatShown ? [leftFloat, centerFloat, rightFloat] : [leftFloat, rightFloat]
 
-    readonly property real minFloatPercent: root.width > 0
-        ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.width - root.maxFloatInset * 2) * 100 / root.width)) : 40
+    readonly property real minFloatPercent: root.floatStyles && root.width > 0
+        ? Math.min(100, Math.ceil((root.width - root.maxFloatInset * 2) * 100 / root.width)) : 40
     Binding {
         target: GlobalStates
         property: "barFloatMinPercent"
         value: root.minFloatPercent
+        // A dying bar (monitor unplug, orientation flip) must not hand back the
+        // stale floor it captured at birth over a surviving bar's live one.
+        restoreMode: Binding.RestoreNone
     }
+
 
     // One concave curve, drawn beside a surface rather than on it. Every piece
     // carries the same size and color as the body it grows out of, which
@@ -793,7 +806,6 @@ Item { // Bar content region
     }
     FloatSurface {
         id: centerFloat
-        visible: root.floatSplit && root.centerFloatShown
         x: root.floatSplit ? root.centerLeft - root.floatPad : 0
         width: root.floatSplit ? root.centerRight - root.centerLeft + root.floatPad * 2 : 0
     }
@@ -831,167 +843,6 @@ Item { // Bar content region
         opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
         layer.enabled: root.notchSeamFix
 
-    // One concave curve, drawn beside a surface rather than on it. Every piece
-    // carries the same size and color as the body it grows out of, which
-    // leaves each site only the two things that differ: where it hangs and
-    // which way it turns.
-    component BarFlare: RoundCorner {
-        implicitSize: Appearance.rounding.barFloat
-        color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
-            : Appearance.colors.colBarBackground
-    }
-
-    // The pair at a surface's own ends, on the side that sits against the
-    // screen, so the strip reads as growing out of the edge instead of
-    // stopping dead on it. Only the style that hugs its widgets flares:
-    // floating, there is a gap on that side and the curves would have nothing
-    // to curve into. Each piece laps a pixel over the body, because a
-    // fractional display scale can land the body's edge between pixels and a
-    // curve that merely touches it rounds to the far side, leaving a hairline
-    // of desktop showing through the join. An end that has been carried out to
-    // the screen's own edge puts its curve off screen, which is the same thing
-    // the squared-off corner there is saying.
-    component BarEndFlares: Item {
-        visible: Config.options.bar.cornerStyle === 3 && Config.options.bar.showBackground
-        BarFlare {
-            anchors.right: parent.left
-            anchors.rightMargin: -1
-            anchors.top: !Config.options.bar.bottom ? parent.top : undefined
-            anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
-            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
-                : RoundCorner.CornerEnum.TopRight
-        }
-        BarFlare {
-            anchors.left: parent.right
-            anchors.leftMargin: -1
-            anchors.top: !Config.options.bar.bottom ? parent.top : undefined
-            anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
-            corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomLeft
-                : RoundCorner.CornerEnum.TopLeft
-        }
-    }
-
-    // Each of the three surfaces a split strip draws, and the shadow under it.
-    // They carry the same dress as the single strip so switching between the
-    // two changes where the edges are and nothing else.
-    component FloatSurface: Item {
-        id: floatSurface
-        visible: root.floatSplit
-        // Whether this surface's own end lands on the screen's edge, which
-        // happens once the strip is asked for the whole width. A corner that
-        // curves away from an edge it is sitting on opens a wedge of desktop
-        // in the screen's own corner, so an end that reaches that far is
-        // squared off instead.
-        property bool flushLeft: false
-        property bool flushRight: false
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        // Hugging leaves no gap on the docked edge, and the strip these sit in
-        // was never grown by one, so the surface fills it outright. Insetting
-        // here would shrink the visible bar rather than lift it.
-        anchors.topMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
-        anchors.bottomMargin: Config.options.bar.cornerStyle === 3 ? 0 : Appearance.sizes.hyprlandGapsOut
-        // Left for the shadow to read: it takes the roundness of the corners
-        // that show, or it would keep a shape the surface no longer has.
-        readonly property real radius: Appearance.rounding.barFloat
-        // The pair against the docked edge is squared off when the surface is
-        // set down on it, and so is an end that reaches the screen's own edge.
-        // The pair facing the desktop keeps its roundness either way.
-        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : floatSurface.radius
-        readonly property real leftEndRadius: floatSurface.flushLeft ? 0 : floatSurface.radius
-        readonly property real rightEndRadius: floatSurface.flushRight ? 0 : floatSurface.radius
-
-        // Each surface carries curves that lap its ends by a pixel, and blending
-        // that lap twice is what draws the line across the join. Body and curves
-        // are painted opaque and faded together here instead. The group has to
-        // reach wider than the body because the curves hang past it and
-        // flattening one clips to its bounds; the body is inset back by the same
-        // amount, so the surface's own edges stay exactly where they were and
-        // everything anchoring to this surface still lands right.
-        Item {
-            anchors.fill: parent
-            anchors.leftMargin: -floatSurface.radius
-            anchors.rightMargin: -floatSurface.radius
-            opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
-            layer.enabled: root.notchSeamFix
-
-            Rectangle {
-                anchors.fill: parent
-                anchors.leftMargin: floatSurface.radius
-                anchors.rightMargin: floatSurface.radius
-                color: !Config.options.bar.showBackground ? "transparent"
-                    : root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
-                    : Appearance.colors.colBarBackground
-                radius: floatSurface.radius
-                topLeftRadius: Config.options.bar.bottom ? floatSurface.leftEndRadius : floatSurface.edgeCornerRadius
-                topRightRadius: Config.options.bar.bottom ? floatSurface.rightEndRadius : floatSurface.edgeCornerRadius
-                bottomLeftRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.leftEndRadius
-                bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
-                // The curves at the ends are drawn as their own pieces and carry
-                // no outline, so an outline on the body would stop in mid air
-                // where each one begins. Hugging means one continuous surface or
-                // none.
-                border.width: Config.options.bar.showBackground && Config.options.bar.cornerStyle !== 3 ? 1 : 0
-                border.color: Appearance.colors.colBarBackgroundBorder
-
-                BarEndFlares { anchors.fill: parent }
-            }
-        }
-    }
-
-    FloatSurface {
-        id: leftFloat
-        flushLeft: root.floatSideInset <= 0
-        x: root.floatSideInset
-        // Capped at the room before the middle surface. A surface is sized
-        // around its widgets, and the title's width is the title's to choose,
-        // so a long one would otherwise carry its surface across the gap and
-        // over the middle block. The cap is what turns growth into elision:
-        // the row inside is anchored to the surface, so a clamped surface
-        // compresses the row and the title gives the room back.
-        width: Math.max(0, Math.min(leftRow.implicitWidth + root.floatPad * 2,
-            root.centerLeft - root.floatPad - root.splitGap - root.floatSideInset))
-    }
-    FloatSurface {
-        id: centerFloat
-        x: root.centerLeft - root.floatPad
-        width: root.centerRight - root.centerLeft + root.floatPad * 2
-    }
-    FloatSurface {
-        id: rightFloat
-        flushRight: root.floatSideInset <= 0
-        x: root.width - root.floatSideInset - width
-        // Capped for the same reason as its twin, from the other side.
-        width: Math.max(0, Math.min(rightRow.implicitWidth + root.floatPad * 2,
-            root.width - root.floatSideInset - root.centerRight - root.floatPad - root.splitGap))
-    }
-
-    Repeater {
-        model: (Config.options.bar.showBackground && (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3)
-            && Config.options.bar.floatStyleShadow && root.floatSplit)
-            ? [leftFloat, centerFloat, rightFloat] : []
-        delegate: StyledRectangularShadow {
-            required property var modelData
-            // These are built after the surfaces they belong to, and a shadow
-            // is a filled shape rather than a ring, so left in line they are
-            // laid over the very surfaces they are meant to sit under.
-            z: -1
-            target: modelData
-            color: Appearance.colors.colBarShadow
-        }
-    }
-
-    // Background. The container reaches the whole width so the curves beside
-    // the body fall inside it: flattening a group clips to its bounds, and the
-    // curves hang past the body's own. The fade lives here rather than in the
-    // colors, so the lap between body and curve is blended once, not twice.
-    Item {
-        id: barSurface
-        anchors.fill: parent
-        visible: !root.floatSplit
-        opacity: root.notchSeamFix ? Appearance.colors.colBarBackground.a : 1
-        layer.enabled: root.notchSeamFix
-
     Rectangle {
         id: barBackground
         anchors {
@@ -1004,12 +855,12 @@ Item { // Bar content region
             ? (root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque : Appearance.colors.colBarBackground)
             : "transparent"
         // Left for the shadow to read, the way the split surfaces leave theirs.
-        radius: (Config.options.bar.cornerStyle === 1 || Config.options.bar.cornerStyle === 3) ? Appearance.rounding.barFloat : 0
+        radius: root.floatStyles ? Appearance.rounding.barFloat : 0
         // Set down on the docked edge, the pair touching it is squared off, and
         // so are the ends when the strip is asked for the whole width and
         // reaches the screen's own corners.
-        readonly property real edgeCornerRadius: Config.options.bar.cornerStyle === 3 ? 0 : barBackground.radius
-        readonly property real endRadius: (Config.options.bar.cornerStyle === 3 && root.floatSideInset <= 0) ? 0 : barBackground.radius
+        readonly property real edgeCornerRadius: root.isNotch ? 0 : barBackground.radius
+        readonly property real endRadius: (root.isNotch && root.floatSideInset <= 0) ? 0 : barBackground.radius
         topLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
         topRightRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
         bottomLeftRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
@@ -1020,7 +871,11 @@ Item { // Bar content region
         border.width: Config.options.bar.cornerStyle === 1 && Config.options.bar.showBackground ? 1 : 0
         border.color: Appearance.colors.colBarBackgroundBorder
 
-        BarEndFlares { anchors.fill: parent }
+        Loader {
+            anchors.fill: parent
+            active: root.notchFlares
+            sourceComponent: BarEndFlares {}
+        }
     }
     }
 

@@ -62,8 +62,24 @@ Scope { // Scope
             // Only the notch draws pieces beside the body, so only it needs the
             // group flattened before the surface is faded, and only it needs the
             // room outside the body that those pieces occupy.
+            // The lap the fix hides only shows through a see-through surface,
+            // so a fully opaque one skips the flattening pass and its texture.
             readonly property bool notchSeamFix: dockFlares && Config.options.dock.showBackground
+                && Appearance.colors.colDockBackground.a < 1
             readonly property real flareBleed: notchSeamFix ? Appearance.rounding.dock : 0
+            // The screen gap sits on the edge side, the shadow's breathing room
+            // on the center side. Hugging leaves no gap on the edge side: the
+            // concave corners have nothing to curve into if the dock floats
+            // away from it.
+            readonly property real edgeGap: dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
+            // Where the body sits inside its group, said once for the body and
+            // for the shade that follows it, the two no longer sharing an
+            // anchor. The group's bleed only exists on the sides the curves
+            // hang from, so it is only given back there.
+            readonly property real bodyInsetTop: (dockEdge === "top" ? edgeGap : dockVertical ? 0 : Appearance.sizes.elevationMargin) + (dockVertical ? flareBleed : 0)
+            readonly property real bodyInsetBottom: (dockEdge === "bottom" ? edgeGap : dockVertical ? 0 : Appearance.sizes.elevationMargin) + (dockVertical ? flareBleed : 0)
+            readonly property real bodyInsetLeft: (dockEdge === "left" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
+            readonly property real bodyInsetRight: (dockEdge === "right" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
             readonly property real deskRadius: dockHugging
                 ? Appearance.rounding.dockTop : Appearance.rounding.dock
             // Set down on the edge, the corners meeting it are square, whether
@@ -236,10 +252,10 @@ Scope { // Scope
                         Loader {
                             active: Config.options.dock.showBackground
                             anchors.fill: dockSurface
-                            anchors.topMargin: (dockRoot.dockEdge === "top" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
-                            anchors.bottomMargin: (dockRoot.dockEdge === "bottom" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
-                            anchors.leftMargin: (dockRoot.dockEdge === "left" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
-                            anchors.rightMargin: (dockRoot.dockEdge === "right" ? dockVisualBackground.edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                            anchors.topMargin: dockRoot.bodyInsetTop
+                            anchors.bottomMargin: dockRoot.bodyInsetBottom
+                            anchors.leftMargin: dockRoot.bodyInsetLeft
+                            anchors.rightMargin: dockRoot.bodyInsetRight
                             sourceComponent: StyledRectangularShadow {
                                 anchors.fill: undefined // The loader's anchors act on this, and this should not have any anchor
                                 target: dockVisualBackground
@@ -256,7 +272,10 @@ Scope { // Scope
                         Item {
                             id: dockSurface
                             anchors.fill: parent
-                            anchors.margins: -dockRoot.flareBleed
+                            anchors.topMargin: dockRoot.dockVertical ? -dockRoot.flareBleed : 0
+                            anchors.bottomMargin: dockRoot.dockVertical ? -dockRoot.flareBleed : 0
+                            anchors.leftMargin: dockRoot.dockVertical ? 0 : -dockRoot.flareBleed
+                            anchors.rightMargin: dockRoot.dockVertical ? 0 : -dockRoot.flareBleed
                             opacity: dockRoot.notchSeamFix ? Appearance.colors.colDockBackground.a : 1
                             layer.enabled: dockRoot.notchSeamFix
 
@@ -337,16 +356,10 @@ Scope { // Scope
                                 id: dockVisualBackground
                                 property real margin: Appearance.sizes.elevationMargin
                                 anchors.fill: parent
-                                // The screen gap sits on the edge side, the
-                                // shadow's breathing room on the center side.
-                                // Hugging leaves no gap on the edge side: the
-                                // concave corners have nothing to curve into if
-                                // the dock is floating away from it.
-                                readonly property real edgeGap: dockRoot.dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
-                                anchors.topMargin: (dockRoot.dockEdge === "top" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
-                                anchors.bottomMargin: (dockRoot.dockEdge === "bottom" ? edgeGap : dockRoot.dockVertical ? 0 : Appearance.sizes.elevationMargin) + dockRoot.flareBleed
-                                anchors.leftMargin: (dockRoot.dockEdge === "left" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
-                                anchors.rightMargin: (dockRoot.dockEdge === "right" ? edgeGap : dockRoot.dockVertical ? Appearance.sizes.elevationMargin : 0) + dockRoot.flareBleed
+                                anchors.topMargin: dockRoot.bodyInsetTop
+                                anchors.bottomMargin: dockRoot.bodyInsetBottom
+                                anchors.leftMargin: dockRoot.bodyInsetLeft
+                                anchors.rightMargin: dockRoot.bodyInsetRight
                                 color: !Config.options.dock.showBackground ? "transparent"
                                     : dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
                                     : Appearance.colors.colDockBackground
