@@ -67,10 +67,36 @@ SDDMEOF
 # greeter is the first thing anyone sees. The format goes away in 0.57.
 # updatems-system installs the same file, so it lives in the repo rather than in
 # a heredoc here — two copies of a login-screen config is one too many.
+
+# The repo copy of the greeter config carries no keyboard layout: the machine
+# does. The installer appends the recorded layout to this file at first boot,
+# and a pristine refresh would silently send a non-US greeter back to QWERTY,
+# locking the password box to letters the keyboard does not have.
+reseed_greeter_layout() {
+    local target="$1" x11="/etc/X11/xorg.conf.d/00-keyboard.conf" layout="" variant=""
+    if [[ -f "$x11" ]]; then
+        layout=$(grep -oP 'Option\s+"XkbLayout"\s+"\K[^"]+' "$x11" 2>/dev/null | head -1)
+        variant=$(grep -oP 'Option\s+"XkbVariant"\s+"\K[^"]*' "$x11" 2>/dev/null | head -1)
+    fi
+    if [[ -z "$layout" && -f /etc/vconsole.conf ]]; then
+        layout=$(grep -oP '^KEYMAP=\K.*' /etc/vconsole.conf 2>/dev/null | tr -d '"' | head -1)
+        layout="${layout%%-*}"
+    fi
+    [[ -n "$layout" ]] || return 0
+    [[ "$layout" =~ ^[a-z]{2,8}(,[a-z]{2,8})*$ ]] || return 0
+    [[ "$variant" =~ ^[a-z0-9_]*(,[a-z0-9_]*)*$ ]] || variant=""
+    {
+        printf '\nhl.config({\n    input = {\n        kb_layout = "%s",\n' "$layout"
+        [[ -n "$variant" ]] && printf '        kb_variant = "%s",\n' "$variant"
+        printf '    },\n})\n'
+    } >> "$target"
+}
+
 mkdir -p /var/lib/sddm/.config/hypr
 GREETER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sdata/sddm/hyprland.lua"
 if [[ -f "$GREETER_SRC" ]]; then
     install -m600 "$GREETER_SRC" /var/lib/sddm/.config/hypr/hyprland.lua
+    reseed_greeter_layout /var/lib/sddm/.config/hypr/hyprland.lua
     # Moved aside rather than removed: lua is found before conf, so the new file
     # already wins, and keeping the old one means a greeter that will not start
     # can be put back by renaming one file.

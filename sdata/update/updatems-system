@@ -120,12 +120,38 @@ _install_file 0644 \
 # greeter on a machine that has not asked for one. Hyprland finds lua before
 # conf, so writing the new file is what resolves it; the old one is moved
 # aside afterwards, and only if the write succeeded.
+
+# The repo copy of the greeter config carries no keyboard layout: the machine
+# does. The installer appends the recorded layout to this file at first boot,
+# and a pristine refresh would silently send a non-US greeter back to QWERTY,
+# locking the password box to letters the keyboard does not have.
+reseed_greeter_layout() {
+    local target="$1" x11="/etc/X11/xorg.conf.d/00-keyboard.conf" layout="" variant=""
+    if [[ -f "$x11" ]]; then
+        layout=$(grep -oP 'Option\s+"XkbLayout"\s+"\K[^"]+' "$x11" 2>/dev/null | head -1)
+        variant=$(grep -oP 'Option\s+"XkbVariant"\s+"\K[^"]*' "$x11" 2>/dev/null | head -1)
+    fi
+    if [[ -z "$layout" && -f /etc/vconsole.conf ]]; then
+        layout=$(grep -oP '^KEYMAP=\K.*' /etc/vconsole.conf 2>/dev/null | tr -d '"' | head -1)
+        layout="${layout%%-*}"
+    fi
+    [[ -n "$layout" ]] || return 0
+    [[ "$layout" =~ ^[a-z]{2,8}(,[a-z]{2,8})*$ ]] || return 0
+    [[ "$variant" =~ ^[a-z0-9_]*(,[a-z0-9_]*)*$ ]] || variant=""
+    {
+        printf '\nhl.config({\n    input = {\n        kb_layout = "%s",\n' "$layout"
+        [[ -n "$variant" ]] && printf '        kb_variant = "%s",\n' "$variant"
+        printf '    },\n})\n'
+    } >> "$target"
+}
+
 GREETER_DIR=/var/lib/sddm/.config/hypr
 GREETER_SRC="$REPO_DIR/sdata/sddm/hyprland.lua"
 if [[ -d "$GREETER_DIR" ]]; then
     if [[ ! -f "$GREETER_SRC" ]]; then
         warn "SDDM greeter config source missing at $GREETER_SRC — skipping"
     elif install -m 600 -o sddm -g sddm "$GREETER_SRC" "$GREETER_DIR/hyprland.lua"; then
+        reseed_greeter_layout "$GREETER_DIR/hyprland.lua"
         if [[ -f "$GREETER_DIR/hyprland.conf" ]]; then
             mv "$GREETER_DIR/hyprland.conf" "$GREETER_DIR/hyprland.conf.old"
             ok "SDDM greeter config moved to Lua (old kept as hyprland.conf.old)"
