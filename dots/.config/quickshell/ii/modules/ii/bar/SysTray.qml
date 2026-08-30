@@ -39,7 +39,8 @@ Item {
     }
 
     function releaseFocus() {
-        focusGrab.active = false;
+        root.activeMenu = null;
+        focusGrab.active = root.trayOverflowOpen;
     }
 
     function closeOverflowMenu() {
