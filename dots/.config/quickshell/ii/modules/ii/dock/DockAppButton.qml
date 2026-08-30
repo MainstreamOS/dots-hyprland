@@ -117,13 +117,29 @@ DockButton {
     // so it's pinned below the baseline instead (icons never go below 1).
     // Regular icons still race each other on hoverScale, so the biggest
     // one paints frontmost.
-    z: isDragged ? 100 : (isSeparator ? -1 : hoverScale)
+    // A haloed button has to paint above its neighbours for as long as any of
+    // the halo is on screen: it spills past the button's own bounds, and the
+    // lift that comes with it is far too slight to say so through scale, which
+    // is what orders the rest. Below a dragged one, above every resting one.
+    z: isDragged ? 100 : (isSeparator ? -1 : (glowFade > 0 ? 99 : hoverScale))
     scale: isDragged ? 1.05 : 1
 
     enabled: !isSeparator
     property real hoverScale: 1.0
+    // The size to decode an icon at so it stays sharp once hovering has grown
+    // it, quantised so a dial being dragged does not mint a raster per step.
+    function rasterFor(size) {
+        return Math.ceil(size * root.appListRoot.maxScale / 16) * 16;
+    }
     // Set by the list, not by a MouseArea here — see pointerIsOver in DockApps.
     property bool pointerOver: false
+    // How much of the halo is showing. The button owns this rather than the
+    // loader that draws it, because its own stacking has to follow the fade
+    // out as well as the fade in.
+    property real glowFade: root.pointerOver ? 1 : 0
+    Behavior on glowFade {
+        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+    }
     property int buttonIndex: 0
 
     implicitWidth: dockRoot.dockVertical ? dockButtonSize + leftInset + rightInset
@@ -288,17 +304,29 @@ DockButton {
             // tint overlay does: anchors follow geometry, and scale and rotation
             // do not touch geometry, so without it the halo would sit still
             // while the icon moved inside it.
-            FadeLoader {
-                anchors.fill: parent
-                shown: root.pointerOver
+            Loader {
+                // Fills the very item it takes as its source: the halo renders
+                // that source into its own bounds, so a box of any other size
+                // draws a second icon stretched across it rather than a glow
+                // around the one that is there. Both icon loaders take their
+                // height from what they hold, which is not the whole button.
+                anchors.fill: root.isFolder ? folderIconLoader : iconImageLoader
+                // Built only while some of it shows, and not at all when it has
+                // no reach to speak of: a blur of no radius is the icon's own
+                // silhouette in another colour, fringing whatever it shows
+                // through rather than glowing.
+                active: root.glowFade > 0 && Appearance.sizes.dockGlowReach > 0
+                opacity: root.glowFade
                 scale: launchAnims.scale
                 rotation: launchAnims.rot
                 transformOrigin: Item.Center
                 sourceComponent: Glow {
                     source: root.isFolder ? folderIconLoader : iconImageLoader
-                    radius: 14
-                    samples: 29
-                    color: Appearance.colors.colOutline
+                    radius: Appearance.sizes.dockGlowReach
+                    // Sized for the radius the slider can ask for, so turning
+                    // it up never underruns the blur.
+                    samples: 57
+                    color: Appearance.colors.colDockGlow
                     // Without this the blur is cut off at the item edges, and
                     // since the item is exactly the icon's size the halo ends up
                     // entirely behind the icon with nothing showing.
@@ -337,8 +365,11 @@ DockButton {
                     // keeps the idle state cleanly anti-aliased without
                     // visibly softening the magnified peak (mip 0 == 1:1
                     // sample at full hover).
-                    backer.sourceSize.width: root.iconSize * root.appListRoot.maxScale
-                    backer.sourceSize.height: root.iconSize * root.appListRoot.maxScale
+                    // Rounded up to a step, so dragging the amount dial asks
+                    // for a handful of raster sizes rather than one at every
+                    // whole number it passes through.
+                    backer.sourceSize.width: root.rasterFor(root.iconSize)
+                    backer.sourceSize.height: root.rasterFor(root.iconSize)
                 }
             }
 
@@ -377,8 +408,8 @@ DockButton {
                                 // as the main app icon, so they need the
                                 // same maxScale-bumped sourceSize to stay
                                 // crisp through the hover animation.
-                                backer.sourceSize.width: root.iconSize * 0.4 * root.appListRoot.maxScale
-                                backer.sourceSize.height: root.iconSize * 0.4 * root.appListRoot.maxScale
+                                backer.sourceSize.width: root.rasterFor(root.iconSize * 0.4)
+                                backer.sourceSize.height: root.rasterFor(root.iconSize * 0.4)
                             }
                         }
                     }

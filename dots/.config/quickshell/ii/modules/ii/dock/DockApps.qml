@@ -211,9 +211,15 @@ Item {
         return mousePosInList >= itemPos && mousePosInList < itemPos + itemSize;
     }
 
-    function scaleForPos(itemCenter) {
-        if (Config.options.dock.hoverEffect !== "magnify") return 1.0;
-        if (!listHovered || previewShow) return 1.0;
+    // One dispatch for what hovering does to a button's size, so the three
+    // effects read as one decision. The effect is asked first: a mode that
+    // grows nothing never reads the mouse, and its bindings stay cold.
+    function hoverScaleFor(itemPos, itemSize, isSeparator) {
+        const effect = Config.options.dock.hoverEffect;
+        if (effect === "off" || !listHovered || previewShow) return 1.0;
+        if (effect === "glow")
+            return !isSeparator && pointerIsOver(itemPos, itemSize) ? maxScale : 1.0;
+        const itemCenter = itemPos + itemSize / 2;
         const dist = itemCenter - mousePosInList;
         return 1.0 + (maxScale - 1.0) * Math.exp(-(dist * dist) / (2 * sigma * sigma));
     }
@@ -305,8 +311,12 @@ Item {
             bottomInset: dockRoot.dockVertical ? 0 : Appearance.sizes.hyprlandGapsOut + root.buttonPadding
             leftInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
             rightInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
-            hoverScale: root.scaleForPos(dockRoot.dockVertical ? y + height / 2 : x + width / 2)
-            pointerOver: root.pointerIsOver(dockRoot.dockVertical ? y : x, dockRoot.dockVertical ? height : width)
+            hoverScale: root.hoverScaleFor(dockRoot.dockVertical ? y : x,
+                dockRoot.dockVertical ? height : width, isSeparator)
+            // Gated on the mode first, so the halo's only consumer is also the
+            // only one paying the per-motion arithmetic behind it.
+            pointerOver: Config.options.dock.hoverEffect === "glow"
+                && root.pointerIsOver(dockRoot.dockVertical ? y : x, dockRoot.dockVertical ? height : width)
         }
     }
 

@@ -156,6 +156,10 @@ Singleton {
         // inside a group and fading the group instead blends the lap away.
         readonly property color colBarBackgroundOpaque: Qt.rgba(colBarBackground.r, colBarBackground.g, colBarBackground.b, 1)
         readonly property color colDockBackgroundOpaque: Qt.rgba(colDockBackground.r, colDockBackground.g, colDockBackground.b, 1)
+        readonly property string dockGlowPick: modePick(Config.options?.dock.glowColorDark, Config.options?.dock.glowColorLight)
+        // The halo's stock is the palette's lightest tone, so it reads as
+        // light cast by the icon rather than a sticker laid behind it.
+        property color colDockGlow: dockGlowPick !== "" ? dockGlowPick : m3colors.m3primaryFixed
         property color colBarBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colBarBackground.a)
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
@@ -563,14 +567,56 @@ Singleton {
             ? Config.options.dock.iconSize : root.sizes.dockIconStock
         property real dockHeight: root.sizes.dockIconSize + 25
         property real dockExtent: root.sizes.dockHeight + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut
-        // How far the pointer magnifies an icon at the peak.
-        property real dockMaxScale: 2.35
+        // How far a hovered icon grows, as a percentage of itself. Each
+        // effect keeps its own key, stock and ceiling, named so the track,
+        // the mark on it and the clamp all read the same numbers: the wave
+        // has room to be dramatic, the glow lifts only its one icon a shade,
+        // so the halo reads as attention rather than motion, and swapping
+        // effects swaps back to what each had. The clamp still stands
+        // between a hand-edited value and the track.
+        readonly property real dockHoverMagnifyMax: Config.options?.dock.hoverEffect === "glow" ? 100 : 200
+        readonly property real dockHoverMagnifyStock: Config.options?.dock.hoverEffect === "glow" ? 25 : 135
+        readonly property real dockHoverMagnifyKey: Config.options?.dock.hoverEffect === "glow"
+            ? (Config.options?.dock.glowMagnify ?? -1) : (Config.options?.dock.hoverMagnify ?? -1)
+        readonly property real dockHoverMagnify: dockHoverMagnifyKey >= 0
+            ? Math.min(dockHoverMagnifyKey, dockHoverMagnifyMax) : dockHoverMagnifyStock
+        // How strongly the halo blooms, as a percentage of its full reach.
+        readonly property real dockGlowIntensityStock: 35
+        readonly property real dockGlowIntensity: (Config.options?.dock.glowIntensity ?? -1) >= 0
+            ? Math.min(Config.options.dock.glowIntensity, 100) : dockGlowIntensityStock
+        // How far the halo reaches past the icon it grows from, which is the
+        // blur's own radius and nothing at all for the effects that draw none.
+        readonly property real dockGlowReachMax: 28
+        readonly property real dockGlowReach: Config.options?.dock.hoverEffect === "glow"
+            ? dockGlowReachMax * dockGlowIntensity / 100 : 0
+        // Growing nothing needs no room: off collapses the scale, and with it
+        // the headroom the dock reserves and the size its icons rasterize at.
+        property real dockMaxScale: Config.options?.dock.hoverEffect === "off" ? 1
+            : 1 + dockHoverMagnify / 100
         // The room a magnified icon needs beyond the dock to be drawn whole.
         // It grows away from the screen from the edge it sits on, so it climbs
         // by its own size again over the scale, and a fixed figure that suited
         // the stock icons cut the tops off larger ones. The window is sized by
         // this and the hover strip is offset past it, so the two cannot drift.
-        property real dockMagnifyHeadroom: root.sizes.dockIconSize * (root.sizes.dockMaxScale - 1)
+        // The room kept above the icons for what hovering can do to them: the
+        // growth, and the halo that reaches past whatever it grew to. Sized
+        // for the most the effect can be asked for rather than for what it is
+        // asked right now, because the window's size and the margin that sets
+        // the dock inside it both read this: the margin moves with the frame,
+        // the size waits on the compositor to answer, so a headroom that
+        // follows a dial walks the dock up and down under the hand turning it.
+        // Reserving the ceiling costs nothing to look at: the room is
+        // transparent, masked out of the pointer, and the space the dock
+        // claims from other windows is measured from its own height elsewhere.
+        property real dockMagnifyHeadroom: {
+            if (Config.options?.dock.hoverEffect === "off") return 0;
+            const peak = 1 + root.sizes.dockHoverMagnifyMax / 100;
+            return root.sizes.dockIconSize * (peak - 1)
+                + (Config.options?.dock.hoverEffect === "glow" ? root.sizes.dockGlowReachMax * peak : 0);
+        }
+        Behavior on dockMagnifyHeadroom {
+            animation: root.animation.elementMoveFast.numberAnimation.createObject(this)
+        }
         property real barHeight: Config.options.bar.cornerStyle === 1 ? 
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
         property real barCenterSideModuleWidth: Config.options?.bar.verbose ? 360 : 140

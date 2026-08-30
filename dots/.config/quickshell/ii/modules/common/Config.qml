@@ -823,6 +823,14 @@ Singleton {
                 property bool monochromeIcons: false
                 // "magnify" | "glow" | "off"
                 property string hoverEffect: "magnify"
+                // Percent grown on hover, one key per effect so each keeps its
+                // own setting; -1 takes the effect's own stock.
+                property real hoverMagnify: -1
+                property real glowMagnify: -1
+                // The halo's paint and reach; "" and -1 take the palette's own.
+                property string glowColorDark: ""
+                property string glowColorLight: ""
+                property real glowIntensity: -1
                 property real hoverRegionHeight: 2
                 property bool pinnedOnStartup: false
                 property bool hoverToReveal: true // When false, only reveals on empty workspace
