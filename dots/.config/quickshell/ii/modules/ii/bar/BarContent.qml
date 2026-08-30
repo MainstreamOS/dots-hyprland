@@ -667,7 +667,7 @@ Item { // Bar content region
         : root.centerFloatShown ? [leftFloat, centerFloat, rightFloat] : [leftFloat, rightFloat]
 
     readonly property real minFloatPercent: root.floatStyles && root.width > 0
-        ? Math.min(100, Math.ceil((root.width - root.maxFloatInset * 2) * 100 / root.width)) : 40
+        ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.width - root.maxFloatInset * 2) * 100 / root.width)) : 40
     Binding {
         target: GlobalStates
         property: "barFloatMinPercent"
@@ -676,7 +676,6 @@ Item { // Bar content region
         // stale floor it captured at birth over a surviving bar's live one.
         restoreMode: Binding.RestoreNone
     }
-
 
     // One concave curve, drawn beside a surface rather than on it. Every piece
     // carries the same size and color as the body it grows out of, which
@@ -806,6 +805,7 @@ Item { // Bar content region
     }
     FloatSurface {
         id: centerFloat
+        visible: root.floatSplit && root.centerFloatShown
         x: root.floatSplit ? root.centerLeft - root.floatPad : 0
         width: root.floatSplit ? root.centerRight - root.centerLeft + root.floatPad * 2 : 0
     }

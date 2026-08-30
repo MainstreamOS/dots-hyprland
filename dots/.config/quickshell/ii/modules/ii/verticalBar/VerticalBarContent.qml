@@ -96,7 +96,7 @@ Item { // Bar content region
     // What the floor is worth as a percentage, so the slider can refuse to ask
     // for a length the strip would not honor.
     readonly property real minFloatPercent: root.floatStyles && root.height > 0
-        ? Math.min(100, Math.ceil((root.height - root.maxFloatInset * 2) * 100 / root.height)) : 40
+        ? Math.min(Appearance.sizes.barFloatWidthMax, Math.ceil((root.height - root.maxFloatInset * 2) * 100 / root.height)) : 40
     Binding {
         target: GlobalStates
         property: "barFloatMinPercent"
@@ -693,8 +693,10 @@ Item { // Bar content region
                 // Packed against the body's own end once the strip is
                 // shortened, rather than against the window's, which the body
                 // no longer reaches.
-                topMargin: root.floatSplit ? root.floatSideInset + root.floatPad
-                    : Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset)
+                // A shortened strip's end is rounded, so the first pill steps
+                // in past the curve rather than sitting on top of it.
+                topMargin: root.floatSplit ? root.floatPad
+                    : Math.max(Appearance.sizes.hyprlandGapsOut, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
@@ -741,8 +743,9 @@ Item { // Bar content region
                 left: parent.left
                 right: parent.right
                 // Packed against the body's own end, as the top section is.
-                bottomMargin: root.floatSplit ? root.floatSideInset + root.floatPad
-                    : Math.max(Appearance.rounding.screenRounding, root.floatSideInset)
+                // Packed against the body's own end, as the top section is.
+                bottomMargin: root.floatSplit ? root.floatPad
+                    : Math.max(Appearance.rounding.screenRounding, root.floatSideInset + (root.floatSideInset > 0 ? root.floatPad : 0))
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }

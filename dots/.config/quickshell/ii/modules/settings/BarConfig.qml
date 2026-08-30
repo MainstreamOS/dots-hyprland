@@ -235,7 +235,6 @@ ContentPage {
             || Config.options.bar.floatWidth >= 0
             || Config.options.bar.notchWidth >= 0
 
-
         ConfigSwitch {
             visible: Appearance.sizes.barFloats
             buttonIcon: "view_column_2"
@@ -253,7 +252,9 @@ ContentPage {
             visible: Appearance.sizes.barFloats
             stopIndicatorValues: [Appearance.sizes.barFloatWidthMax]
             buttonIcon: "width"
-            from: GlobalStates.barFloatMinPercent
+            // The floor chases the widgets, so a crowded strip can push it to
+            // the ceiling; the track keeps a step of room so it cannot invert.
+            from: Math.min(GlobalStates.barFloatMinPercent, Appearance.sizes.barFloatWidthMax - 5)
             to: Appearance.sizes.barFloatWidthMax
             value: Appearance.sizes.barFloatWidth
             onMoved: {
