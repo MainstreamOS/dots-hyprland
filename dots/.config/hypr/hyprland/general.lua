@@ -1,3 +1,22 @@
+-- Preserve Num Lock across both compositor handoffs and full reboots. Keep
+-- the existing enabled default until the user has made a saved choice: on a
+-- cold boot the hardware LEDs initially read off before anything sets them.
+local function inheritedNumlockState()
+    local statePath = os.getenv("HOME") .. "/.local/state/mainstream/numlock"
+    local saved = io.open(statePath, "r")
+    if saved then
+        local value = saved:read("*l")
+        saved:close()
+        if value == "1" then
+            return true
+        elseif value == "0" then
+            return false
+        end
+    end
+
+    return true
+end
+
 -- MONITOR CONFIG
 hl.monitor({
     output = "",
@@ -164,7 +183,7 @@ end
 hl.config({
     input = {
         kb_layout = "us",
-        numlock_by_default = true,
+        numlock_by_default = inheritedNumlockState(),
         repeat_delay = 250,
         repeat_rate = 35,
 
