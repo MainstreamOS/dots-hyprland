@@ -113,8 +113,13 @@ Item { // Bar content region
             return g.items.map(x => (typeof x === "string") ? ({ id: x, enabled: true }) : x);
         return [];
     }
+    // Only what is actually showing gets a say in whether the group wears a
+    // pill. Reading moduleActive alone counts a widget the layout lists but the
+    // user has switched off, so a pilled entry parked beside the window title
+    // with its own switch off still put a pill around the title, which is drawn
+    // bare by design.
     function groupChromeless(g) {
-        const ws = root.groupWidgets(g).filter(w => root.moduleActive(w.id));
+        const ws = root.groupWidgets(g).filter(w => root.entryActive(w));
         return ws.length > 0 && ws.every(w => root.chromelessModules.indexOf(w.id) !== -1);
     }
     function entryActive(w) {
@@ -147,10 +152,14 @@ Item { // Bar content region
         const n = g.length;
         return (n % 2 === 1) ? g.slice((n - 1) / 2 + 1) : [];
     }
-    // The widgets whose job is genuinely width: the window title needs the
-    // section's spare room so it can shrink to an ellipsis.
+    // Whether a widget claims its section's spare room, which promotes the
+    // group's pill to filling the section. Nothing does. The window title used
+    // to, on the grounds that it needs room to elide into, but a pill promoted
+    // to fill takes the whole side of the bar however short the title is, and
+    // everything beside it moves on every focus change. The title is given a
+    // set width instead, the same the clock keeps, and elides inside it.
     function moduleTakesSpace(name) {
-        return name === "activeWindow" || name === "activeWindowPill";
+        return false;
     }
     // Whether anything showing in this group needs its section's spare width.
     function groupTakesSpace(g) {

@@ -27,7 +27,18 @@ Item {
     // keeps the exact footprint it has always had.
     readonly property real contentPadding: pilled ? 4 : 0
 
-    implicitWidth: colLayout.implicitWidth + root.contentPadding * 2
+    // The width the title keeps whatever it says, matching the clock so the two
+    // read as the same kind of thing. The lines inside elide into it: they can
+    // only do that once something has settled how wide the widget is, and
+    // asking for the text's own width answers "as wide as the title is long".
+    readonly property real titleWidth: 270
+
+    // Held rather than fitted. Sizing to the title makes the widget as wide as
+    // whatever happens to be focused, so the bar rearranged itself around a
+    // window being picked up or put down. A set width is the same on every
+    // window: short names leave room to spare, long ones elide into it, and
+    // nothing beside it ever moves.
+    implicitWidth: root.titleWidth
 
     ColumnLayout {
         id: colLayout
