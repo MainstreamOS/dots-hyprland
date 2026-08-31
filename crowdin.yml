@@ -1,0 +1,3 @@
+files:
+  - source: /dots/.config/quickshell/ii/translations/en_US.json
+    translation: /dots/.config/quickshell/ii/translations/%locale_with_underscore%.json
