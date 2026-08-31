@@ -164,6 +164,43 @@ if [[ -d "$GREETER_DIR" ]]; then
     fi
 fi
 
+# ── Printing ──────────────────────────────────────────────────────────────
+# The spooler is reached through its socket rather than its service, and
+# systemd starts it on the first print job. Arch ships no preset for cups and
+# its default policy is `disable *`, so a machine nobody told to enable it
+# simply cannot print. The installer tells a fresh install; one made before it
+# learned to arrives here instead, which is the only route an existing machine
+# has to the same fix.
+#
+# Skipped where cups is not installed at all: enabling a unit that is not there
+# is not a failure worth reporting, and pulling in a package on an update is a
+# bigger decision than this script gets to make.
+if systemctl cat cups.socket &>/dev/null; then
+    if systemctl is-enabled cups.socket &>/dev/null; then
+        : # already on, nothing to say
+    elif systemctl enable cups.socket &>/dev/null; then
+        ok "Printing enabled (cups.socket)"
+    else
+        warn "Could not enable cups.socket"
+        RC=1
+    fi
+fi
+
+# Most home printers are found over mDNS and answer to a .local name, which
+# nothing resolves until nss-mdns is named in nsswitch. The package installs the
+# resolver and stops there, so a printer the machine can see advertised is still
+# one it cannot reach. Inserted before `dns` so ordinary lookups are unchanged,
+# and only when the entry is absent.
+if [[ -f /etc/nsswitch.conf ]] && ! grep -q 'mdns_minimal' /etc/nsswitch.conf; then
+    if sed -i -E 's/^(hosts:.*[[:space:]])(dns)([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] \2\3/' /etc/nsswitch.conf \
+       && grep -q 'mdns_minimal' /etc/nsswitch.conf; then
+        ok "Network printers resolvable (nss-mdns)"
+    else
+        warn "Could not add mdns_minimal to /etc/nsswitch.conf"
+        RC=1
+    fi
+fi
+
 # ── Update tooling (refreshes itself + updatems + helper) ──────────────────
 # Refreshing the helper while it's mid-run is safe on Linux — the
 # kernel keeps the inode open via the existing fd until the process
