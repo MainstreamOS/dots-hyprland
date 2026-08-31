@@ -21,13 +21,29 @@ WMouseAreaButton {
     readonly property bool isActiveWorkspace: HyprlandData.activeWorkspace?.id === root.workspace
     readonly property real screenWidth: QsWindow.window?.width ?? 0
     readonly property real screenHeight: QsWindow.window?.height ?? 0
-    readonly property real screenAspectRatio: screenWidth / screenHeight
-    readonly property real windowScale: wallpaperHeight / screenHeight
+    // Hyprland places a window in whole layout coordinates, so a monitor that does
+    // not sit at the layout origin hosts windows whose corner is measured from
+    // somewhere off this card. Verified: on this layout the second monitor begins
+    // at -1080, 120, and its surfaces are reported there.
+    readonly property real screenOriginX: QsWindow.window?.screen?.x ?? 0
+    readonly property real screenOriginY: QsWindow.window?.screen?.y ?? 0
+    readonly property real screenAspectRatio: (screenWidth > 0 && screenHeight > 0) ? (screenWidth / screenHeight) : (16 / 9)
+    // The previews are laid out in screen coordinates, so the whole screen has to
+    // fit the picture area on both axes. Fitting to height alone squeezes a
+    // portrait screen's full width into a strip of a landscape card and lets a
+    // preview run off the edge.
+    readonly property real windowScale: (screenWidth > 0 && screenHeight > 0 && wsBg.width > 0 && wsBg.height > 0) ? Math.min(wsBg.width / screenWidth, wsBg.height / screenHeight) : 0
+    readonly property real windowOffsetX: (wsBg.width - screenWidth * windowScale) / 2
+    readonly property real windowOffsetY: (wsBg.height - screenHeight * windowScale) / 2
 
     property real wallpaperHeight: 124
 
     height: ListView.view?.height ?? 100
-    implicitWidth: 244 // for now
+    // The card is the screen drawn small, so its width follows the screen's shape.
+    // Measured against the constant picture height rather than the laid out one, so
+    // the card never takes its size from a child that is sized by the card. Clamped
+    // so a very tall or very wide screen still leaves the label somewhere to sit.
+    implicitWidth: Math.round(Math.max(120, Math.min(320, root.wallpaperHeight * root.screenAspectRatio))) + 24
 
     colBackground: ColorUtils.transparentize(Looks.colors.bg2, (isActiveWorkspace || droppable) ? 0 : 1)
     Behavior on color {
@@ -99,8 +115,8 @@ WMouseAreaButton {
                             live: true
                             width: hyprlandWindowData?.size[0] * root.windowScale
                             height: hyprlandWindowData?.size[1] * root.windowScale
-                            x: hyprlandWindowData?.at[0] * root.windowScale
-                            y: hyprlandWindowData?.at[1] * root.windowScale
+                            x: (hyprlandWindowData?.at[0] - root.screenOriginX) * root.windowScale + root.windowOffsetX
+                            y: (hyprlandWindowData?.at[1] - root.screenOriginY) * root.windowScale + root.windowOffsetY
                         }
                     }
                 }
