@@ -1032,6 +1032,16 @@ function setup_printing(){
   pacman -Qq cups >/dev/null 2>&1 || { echo -e "${STY_YELLOW}[$0]: cups not installed — skipping printing setup.${STY_RST}"; return 0; }
   echo -e "${STY_CYAN}[$0]: Enabling cups.socket (print spooler on demand)...${STY_RST}"
   x sudo systemctl enable cups.socket
+  # Most home printers are found over mDNS and answer to a .local name, which
+  # nothing resolves until nss-mdns is named in nsswitch. The package installs
+  # the resolver and stops there, so a printer the system can see advertised is
+  # still one it cannot reach. Inserted before `dns` so ordinary lookups are
+  # unchanged, and only when the entry is absent.
+  if pacman -Qq nss-mdns >/dev/null 2>&1 && [[ -f /etc/nsswitch.conf ]] \
+     && ! grep -q 'mdns_minimal' /etc/nsswitch.conf; then
+    echo -e "${STY_CYAN}[$0]: Teaching nsswitch to resolve .local printer names...${STY_RST}"
+    x sudo sed -i -E 's/^(hosts:.*[[:space:]])(dns)([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] \2\3/' /etc/nsswitch.conf
+  fi
 }
 showfun setup_printing
 v setup_printing
