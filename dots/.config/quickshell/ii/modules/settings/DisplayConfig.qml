@@ -2389,7 +2389,11 @@ except Exception:
                             Item { Layout.fillWidth: true }
                             ConfigSpinBox {
                                 id: offsetXSpinBox
-                                Layout.preferredWidth: 100
+                                // Wide enough for the steppers plus five
+                                // digits of offset. Below that the middle is
+                                // squeezed to nothing and the number has
+                                // nowhere to sit.
+                                Layout.preferredWidth: 140
                                 from: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).xMin
                                 to: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).xMax
                                 value: monitorSection.pending.offsetX ?? 0
@@ -2477,7 +2481,11 @@ except Exception:
                             Item { Layout.fillWidth: true }
                             ConfigSpinBox {
                                 id: offsetYSpinBox
-                                Layout.preferredWidth: 100
+                                // Wide enough for the steppers plus five
+                                // digits of offset. Below that the middle is
+                                // squeezed to nothing and the number has
+                                // nowhere to sit.
+                                Layout.preferredWidth: 140
                                 from: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).yMin
                                 to: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).yMax
                                 value: monitorSection.pending.offsetY ?? 0

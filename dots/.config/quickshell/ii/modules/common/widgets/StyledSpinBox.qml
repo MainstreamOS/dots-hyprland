@@ -32,7 +32,15 @@ SpinBox {
 
         StyledTextInput {
             id: labelText
-            anchors.centerIn: parent
+            // Fills the room between the two steppers rather than hugging its
+            // digits. Hugging left the target as narrow as the number inside
+            // it, so a single digit gave a few pixels to hit in a control the
+            // better part of a hundred wide, and clicking anywhere else in the
+            // middle did nothing at all.
+            anchors.fill: parent
+            horizontalAlignment: TextInput.AlignHCenter
+            verticalAlignment: TextInput.AlignVCenter
+            selectByMouse: true
             text: root.value + root.suffix // displayText would make the numbers weird like 1,000 instead of 1000
             color: Appearance.colors.colOnLayer2
             font.family: Appearance.font.family.numbers
@@ -40,7 +48,26 @@ SpinBox {
             font.pixelSize: Appearance.font.pixelSize.small
             validator: root.validator
             onTextChanged: {
-                root.value = parseFloat(text);
+                const parsed = parseFloat(text);
+                if (!isNaN(parsed)) {
+                    root.value = parsed;
+                    return;
+                }
+                // Cleared outright, which is how someone starts again rather
+                // than a number they meant: it counts as none, and the field
+                // says so instead of sitting blank with no value behind it.
+                if (text.length === 0) {
+                    root.value = Math.max(root.from, Math.min(root.to, 0));
+                    text = root.value + root.suffix;
+                }
+                // Anything else is a number half typed, a lone minus sign
+                // above all, so the last good value stands until it is whole.
+            }
+            // A half typed value that never became a number would otherwise
+            // stay on screen as itself once the field is left.
+            onEditingFinished: {
+                if (isNaN(parseFloat(text)))
+                    text = root.value + root.suffix;
             }
         }
     }
