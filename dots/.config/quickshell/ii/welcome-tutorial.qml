@@ -46,7 +46,7 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 9   // bump as you add more cards
+    readonly property int cardCount: 10   // bump as you add more cards
 
     // Install page (card 1): which apps the user ticked to install in the background.
     readonly property int installCardIndex: 1
@@ -294,6 +294,7 @@ ApplicationWindow {
                 LazyCard { sourceComponent: card5Comp }
                 LazyCard { sourceComponent: card6Comp }
                 LazyCard { sourceComponent: card7Comp }
+                LazyCard { sourceComponent: card8Comp }
                 // add more LazyCard { sourceComponent: cardNComp } here
             }
 
@@ -306,6 +307,7 @@ ApplicationWindow {
             Component { id: card5Comp; Card5FileDragViaBar {} }
             Component { id: card6Comp; Card6DockPreview {} }
             Component { id: card7Comp; Card7AppShowcaseTabs {} }
+            Component { id: card8Comp; Card8Contribute {} }
         }
 
         // Footer
@@ -823,6 +825,91 @@ ApplicationWindow {
         }
 
         Item { Layout.fillHeight: true }
+    }
+
+
+    // ── Card 8: Contribute ───────────────────────────────────────────────
+    // The last page. The links that ask for money sit beside the ones that
+    // ask only for time, because both are real ways to help and a reader who
+    // cannot give one should not feel they have nothing to offer.
+    component Card8Contribute : Item {
+        id: card8
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 40
+            spacing: 32
+
+            CardLeftColumn {
+                title: Translation.tr("Help keep Mainstream going")
+                body: Translation.tr("Mainstream is free, open source, and independent. If it earned a place on your machine, there are a few ways to help it keep getting better.<br><br>Sponsoring pays for hardware to test on and the hours behind new features. Translating, reporting a bug, or telling a friend costs nothing at all and counts just as much.")
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 14
+
+                Item { Layout.fillHeight: true }
+
+                StyledText {
+                    text: Translation.tr("Support the project")
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colOnLayer0
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    RippleButtonWithIcon {
+                        materialIcon: "favorite"
+                        mainText: Translation.tr("GitHub Sponsors")
+                        onClicked: Qt.openUrlExternally("https://github.com/sponsors/MainstreamOS")
+                    }
+                    RippleButtonWithIcon {
+                        materialIcon: "coffee"
+                        mainText: Translation.tr("Ko-fi")
+                        onClicked: Qt.openUrlExternally("https://ko-fi.com/mainstreamos")
+                    }
+                    RippleButtonWithIcon {
+                        materialIcon: "card_membership"
+                        mainText: Translation.tr("Patreon")
+                        onClicked: Qt.openUrlExternally("https://www.patreon.com/cw/MainstreamOS")
+                    }
+                }
+
+                StyledText {
+                    text: Translation.tr("Give a little time instead")
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colOnLayer0
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    RippleButtonWithIcon {
+                        materialIcon: "translate"
+                        mainText: Translation.tr("Translate Mainstream")
+                        onClicked: Qt.openUrlExternally("https://crowdin.com/project/mainstream-os")
+                    }
+                    RippleButtonWithIcon {
+                        nerdIcon: "󰊤"
+                        mainText: Translation.tr("Contribute on GitHub")
+                        onClicked: Qt.openUrlExternally("https://github.com/MainstreamOS/dots-hyprland")
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: Translation.tr("Thank you for helping make Linux mainstream.")
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colOnLayer0
+                    opacity: 0.75
+                    wrapMode: Text.WordWrap
+                }
+
+                Item { Layout.fillHeight: true }
+            }
+        }
     }
 
     // ── Card 2: Workspaces ───────────────────────────────────────────────

@@ -1895,5 +1895,15 @@
   "Usage: %1ollama pull MODEL_NAME": "Usage: %1ollama pull MODEL_NAME",
   "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.": "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.",
   "Your sidebar is empty": "Your sidebar is empty",
-  "min": "min"
+  "min": "min",
+  "Help keep Mainstream going": "Help keep Mainstream going",
+  "Mainstream is free, open source, and independent. If it earned a place on your machine, there are a few ways to help it keep getting better.<br><br>Sponsoring pays for hardware to test on and the hours behind new features. Translating, reporting a bug, or telling a friend costs nothing at all and counts just as much.": "Mainstream is free, open source, and independent. If it earned a place on your machine, there are a few ways to help it keep getting better.<br><br>Sponsoring pays for hardware to test on and the hours behind new features. Translating, reporting a bug, or telling a friend costs nothing at all and counts just as much.",
+  "Support the project": "Support the project",
+  "GitHub Sponsors": "GitHub Sponsors",
+  "Ko-fi": "Ko-fi",
+  "Patreon": "Patreon",
+  "Give a little time instead": "Give a little time instead",
+  "Translate Mainstream": "Translate Mainstream",
+  "Contribute on GitHub": "Contribute on GitHub",
+  "Thank you for helping make Linux mainstream.": "Thank you for helping make Linux mainstream."
 }
