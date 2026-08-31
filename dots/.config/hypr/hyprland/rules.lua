@@ -81,6 +81,75 @@ hl.window_rule({match = {class = "^(steam_app).*" }, immediate = true})
 -- No shadow for tiled windows
 hl.window_rule({match = {float = 0 }, no_shadow = true})
 
+-- Open a floating window somewhere its title bar can be reached. A float's
+-- title bar is the only handle it has, and a client may ask to open at an
+-- absolute position, so one can arrive with that bar beneath the bar or the
+-- dock. The panels' own reservations are already in monitor.reserved; this
+-- moves a new float to the near edge of the room they leave, and moves
+-- nothing else. What size a window opens at is left to it, and where a
+-- window is deliberately placed is left alone unless its title bar would
+-- land somewhere it cannot be grabbed.
+--
+-- `window.open` fires once the floating layout has given the window its
+-- initial geometry. hyprbars draws its bar above that geometry rather than
+-- inside it, so the bar's own height is part of the room the window needs.
+local function openFloatingWindowWithinReach(window)
+    if not window or not window.floating or window.fullscreen ~= 0 then
+        return
+    end
+
+    local monitor = window.monitor
+    if not monitor then
+        return
+    end
+
+    local reserved = monitor.reserved
+    local at = window.at
+    local size = window.size
+    if not reserved or not at or not size then
+        return
+    end
+
+    local border = tonumber(hl.get_config("general:border_size")) or 0
+    local titleBar = tonumber(hl.get_config("plugin:hyprbars:bar_height")) or 0
+    local gapsOut = hl.get_config("general:gaps_out") or {}
+    -- The room a tiled window would be handed: the monitor, less what the
+    -- panels reserve on each edge, less the gap and border every tile keeps.
+    -- A float is given the same room, so where it may open does not depend on
+    -- which edge the bar and the dock happen to sit on.
+    local left = monitor.x + (reserved.left or 0) + (gapsOut.left or 0) + border
+    local top = monitor.y + (reserved.top or 0) + (gapsOut.top or 0) + border
+    local right = monitor.x + monitor.width - (reserved.right or 0) - (gapsOut.right or 0) - border
+    local bottom = monitor.y + monitor.height - (reserved.bottom or 0) - (gapsOut.bottom or 0) - border
+
+    -- A title bar is drawn above the position a window reports, so the room it
+    -- needs comes off the top wherever the panels are. Counting it only under
+    -- a top reservation is what walked the bar off screen once the panel moved
+    -- to the other edge: with nothing reserved above, a window opened flush to
+    -- the screen's own top and wore its title bar past it.
+    local contentTop = top + titleBar
+    if right <= left or bottom <= contentTop then
+        return
+    end
+
+    -- Held inside the room, a window wears its title bar inside it too, however
+    -- big the window is, and that bar is the one handle a float has. So moving
+    -- is all it takes: what a window asked to be is its own business once it
+    -- can be reached, and one larger than the room keeps that size and
+    -- overhangs the far edge rather than being cut down to fit. The floors are
+    -- what make this hold — without them a window too big for the room is
+    -- pushed past the near edge instead of resting against it, which is the
+    -- one way the title bar still gets away.
+    local x = math.min(math.max(at.x, left), math.max(left, right - size.x))
+    local y = math.min(math.max(at.y, contentTop), math.max(contentTop, bottom - size.y))
+
+    if x ~= at.x or y ~= at.y then
+        hl.dispatch(hl.dsp.window.move({ x = x, y = y, window = window }))
+    end
+end
+
+hl.on("window.open", openFloatingWindowWithinReach)
+
 -- ######## Workspace rules ########
 hl.workspace_rule({ workspace = "special:special", gaps_out = 30 })
 
