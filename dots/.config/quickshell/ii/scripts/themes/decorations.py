@@ -206,8 +206,19 @@ def read(general_path, flag_dir=None, schema=None):
         if row.get("mechanism") == "flagfile":
             if flag_dir:
                 fp = os.path.join(flag_dir, row["path"])
-                out[row["key"]] = (open(fp).read().strip() != "0") \
-                    if os.path.exists(fp) else True
+                if not os.path.exists(fp):
+                    out[row["key"]] = row.get("default", True)
+                else:
+                    raw = open(fp).read().strip()
+                    if row.get("type") == "bool":
+                        out[row["key"]] = raw != "0"
+                    elif row.get("type") == "float":
+                        try:
+                            out[row["key"]] = float(raw)
+                        except ValueError:
+                            out[row["key"]] = row.get("default")
+                    else:
+                        out[row["key"]] = raw
             continue
         if row.get("mechanism") == "namefile":
             fp = os.path.join(os.path.dirname(general_path), row["path"])
@@ -306,8 +317,15 @@ def _write_locked(general_path, values, flag_dir=None, schema=None):
             if flag_dir:
                 try:
                     os.makedirs(flag_dir, exist_ok=True)
+                    # A flag file used to mean a switch and nothing else, so
+                    # every value was flattened to 1 or 0. A colour or an
+                    # opacity written that way arrives as the word "1".
+                    if row.get("type") == "bool":
+                        text_value = "1" if value else "0"
+                    else:
+                        text_value = "" if value is None else str(value)
                     with open(os.path.join(flag_dir, row["path"]), "w") as fh:
-                        fh.write("1" if value else "0")
+                        fh.write(text_value)
                     written += 1
                 except OSError:
                     pass
