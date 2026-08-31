@@ -133,40 +133,6 @@ ContentPage {
         return !root._isCurrentlyDay()
     }
 
-    // ── Time helpers (Day/Night Themes section) ─────────────────────────────
-    // Round-trip "HH:mm" 24-hour storage <-> 12-hour display so the SpinBox
-    // pickers can show "1–12 AM/PM" without changing what we persist (Config
-    // uses 24-hour throughout). Same pattern DisplayConfig's Night Light
-    // section uses; kept inline here so this file doesn't depend on it.
-    function tsParse12(timeStr) {
-        const parts = (timeStr || "").split(":")
-        const h24 = parseInt(parts[0], 10)
-        const m   = parseInt(parts[1], 10)
-        if (isNaN(h24) || isNaN(m))
-            return { hour12: 12, minute: 0, period: "AM" }
-        if (h24 === 0)        return { hour12: 12,      minute: m, period: "AM" }
-        if (h24 < 12)         return { hour12: h24,     minute: m, period: "AM" }
-        if (h24 === 12)       return { hour12: 12,      minute: m, period: "PM" }
-        return { hour12: h24 - 12, minute: m, period: "PM" }
-    }
-    function tsTo24(hour12, minute, period) {
-        let h24 = hour12 % 12
-        if (period === "PM") h24 += 12
-        return String(h24).padStart(2, "0") + ":" + String(minute).padStart(2, "0")
-    }
-    function tsWithHour(timeStr, hour12) {
-        const p = tsParse12(timeStr)
-        return tsTo24(hour12, p.minute, p.period)
-    }
-    function tsWithMinute(timeStr, minute) {
-        const p = tsParse12(timeStr)
-        return tsTo24(p.hour12, minute, p.period)
-    }
-    function tsWithPeriod(timeStr, period) {
-        const p = tsParse12(timeStr)
-        return tsTo24(p.hour12, p.minute, period)
-    }
-
     // ── Save theme (capture) ────────────────────────────────────────────────
     Process { id: saveProc }
     function beginSave(updateSlug) {
@@ -1631,53 +1597,17 @@ finally:
                 }
 
                 // Day-start time picker, only visible in "manual" schedule mode.
-                // Mirrors the Night Light "Turn on" / "Turn off" pickers in
-                // DisplayConfig.qml — same ConfigSpinBox widget, same 70px
-                // preferred width, same equality-guarded onValueChanged
-                // round-trip — so the two pickers feel identical to the user.
-                // AM is locked because the card is the Day side — letting the
-                // user pick PM here would contradict the card's identity.
-                // Any saved-PM time gets normalised to AM the moment the user
-                // touches either spinner.
-                RowLayout {
+                // The same TimeField the Night Light schedule uses, so both
+                // pickers read on the same clock as the bar and feel identical.
+                // The morning half is pinned because the card is the Day side:
+                // letting the user pick an afternoon hour here would contradict
+                // the card's identity.
+                TimeField {
                     Layout.alignment: Qt.AlignHCenter
-                    spacing: 8
                     visible: Config.options.appearance.themeSchedule.mode === "manual"
-                    ConfigSpinBox {
-                        Layout.preferredWidth: 70
-                        from: 1
-                        to: 12
-                        value: root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).hour12
-                        onValueChanged: {
-                            const m = root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).minute
-                            const next = root.tsTo24(value, m, "AM")
-                            if (next !== Config.options.appearance.themeSchedule.dayFrom)
-                                Config.options.appearance.themeSchedule.dayFrom = next
-                        }
-                    }
-                    StyledText {
-                        Layout.alignment: Qt.AlignVCenter
-                        text: ":"
-                        color: Appearance.colors.colOnLayer1
-                    }
-                    ConfigSpinBox {
-                        Layout.preferredWidth: 70
-                        from: 0
-                        to: 59
-                        value: root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).minute
-                        onValueChanged: {
-                            const h = root.tsParse12(Config.options.appearance.themeSchedule.dayFrom).hour12
-                            const next = root.tsTo24(h, value, "AM")
-                            if (next !== Config.options.appearance.themeSchedule.dayFrom)
-                                Config.options.appearance.themeSchedule.dayFrom = next
-                        }
-                    }
-                    StyledText {
-                        Layout.alignment: Qt.AlignVCenter
-                        text: "AM"
-                        color: Appearance.colors.colSubtext
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                    }
+                    meridiem: "AM"
+                    value: Config.options.appearance.themeSchedule.dayFrom
+                    onEdited: next => Config.options.appearance.themeSchedule.dayFrom = next
                 }
             }
 
@@ -1801,48 +1731,15 @@ finally:
                     }
                 }
 
-                // Night-start time picker. PM is locked because the card is
-                // the Night side — same rationale as the Day picker's locked
-                // AM. See that picker for the full reasoning.
-                RowLayout {
+                // Night-start time picker. The afternoon half is pinned because
+                // the card is the Night side, same rationale as the Day
+                // picker's pinned morning. See that picker for the reasoning.
+                TimeField {
                     Layout.alignment: Qt.AlignHCenter
-                    spacing: 8
                     visible: Config.options.appearance.themeSchedule.mode === "manual"
-                    ConfigSpinBox {
-                        Layout.preferredWidth: 70
-                        from: 1
-                        to: 12
-                        value: root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).hour12
-                        onValueChanged: {
-                            const m = root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).minute
-                            const next = root.tsTo24(value, m, "PM")
-                            if (next !== Config.options.appearance.themeSchedule.nightFrom)
-                                Config.options.appearance.themeSchedule.nightFrom = next
-                        }
-                    }
-                    StyledText {
-                        Layout.alignment: Qt.AlignVCenter
-                        text: ":"
-                        color: Appearance.colors.colOnLayer1
-                    }
-                    ConfigSpinBox {
-                        Layout.preferredWidth: 70
-                        from: 0
-                        to: 59
-                        value: root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).minute
-                        onValueChanged: {
-                            const h = root.tsParse12(Config.options.appearance.themeSchedule.nightFrom).hour12
-                            const next = root.tsTo24(h, value, "PM")
-                            if (next !== Config.options.appearance.themeSchedule.nightFrom)
-                                Config.options.appearance.themeSchedule.nightFrom = next
-                        }
-                    }
-                    StyledText {
-                        Layout.alignment: Qt.AlignVCenter
-                        text: "PM"
-                        color: Appearance.colors.colSubtext
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                    }
+                    meridiem: "PM"
+                    value: Config.options.appearance.themeSchedule.nightFrom
+                    onEdited: next => Config.options.appearance.themeSchedule.nightFrom = next
                 }
             }
         }

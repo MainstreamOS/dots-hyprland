@@ -96,29 +96,14 @@ WindowDialog {
         // Read-only summary of the configured times — editing happens
         // in the full Settings → Display page (Details button below).
         // The from/to values stay stored as "HH:mm" 24-hour because
-        // Hyprsunset's parsing depends on it; formatTime() converts
-        // the stored value into a user-friendly "h:MM AM/PM" display
-        // (handles 12-AM = 00:00 and 12-PM = 12:00 edge cases).
+        // Hyprsunset's parsing depends on it; DateTime.formatTimeOfDay()
+        // reads them back on whichever clock the bar is set to.
         ColumnLayout {
-            id: nightSchedule
             Layout.fillWidth: true
             Layout.leftMargin: 12
             Layout.topMargin: visible ? 8 : 0
             spacing: 4
             visible: Config.options.light.night.mode === "manual"
-
-            function formatTime(timeStr) {
-                const parts = (timeStr ?? "").split(":");
-                const h24 = parseInt(parts[0], 10);
-                const m   = parseInt(parts[1], 10);
-                if (isNaN(h24) || isNaN(m)) return "—";
-                let hour12, period;
-                if (h24 === 0)        { hour12 = 12;      period = "AM"; }
-                else if (h24 < 12)    { hour12 = h24;     period = "AM"; }
-                else if (h24 === 12)  { hour12 = 12;      period = "PM"; }
-                else                  { hour12 = h24 - 12; period = "PM"; }
-                return hour12 + ":" + String(m).padStart(2, "0") + " " + period;
-            }
 
             // "Turn on" — read-only display.
             RowLayout {
@@ -133,7 +118,7 @@ WindowDialog {
                 Item { Layout.fillWidth: true }
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
-                    text: nightSchedule.formatTime(Config.options.light.night.from)
+                    text: DateTime.formatTimeOfDay(Config.options.light.night.from)
                     color: Appearance.colors.colOnSecondaryContainer
                 }
             }
@@ -151,7 +136,7 @@ WindowDialog {
                 Item { Layout.fillWidth: true }
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
-                    text: nightSchedule.formatTime(Config.options.light.night.to)
+                    text: DateTime.formatTimeOfDay(Config.options.light.night.to)
                     color: Appearance.colors.colOnSecondaryContainer
                 }
             }

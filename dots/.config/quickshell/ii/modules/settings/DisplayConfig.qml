@@ -3798,14 +3798,12 @@ except Exception:
         // the time-pickers slide in beneath the Schedule dropdown and
         // back out when it switches to "Automatic".
         //
-        // The pickers display 12-hour time with an AM/PM combo for
-        // familiarity, but Config.options.light.night.{from,to} stay
-        // stored as "HH:mm" 24-hour because the Hyprsunset service
-        // parses them with Number(...split(":")). The helpers below
-        // round-trip cleanly (incl. the awkward 12-AM = 00:00 and
-        // 12-PM = 12:00 cases).
+        // The pickers read on whichever clock the bar is set to, so a
+        // 24-hour system is not asked about AM or PM here either, while
+        // Config.options.light.night.{from,to} stay stored as "HH:mm"
+        // 24-hour throughout because the Hyprsunset service parses them
+        // with Number(...split(":")).
         ColumnLayout {
-            id: nightSchedule
             Layout.fillWidth: true
             Layout.leftMargin: 32
             // Slight extra breathing room above so "Turn on" doesn't
@@ -3816,46 +3814,6 @@ except Exception:
             spacing: 8
             visible: Config.options.light.night.mode === "manual"
 
-            // "HH:mm" (24h) → { hour12 (1-12), minute (0-59), period ("AM"|"PM") }
-            function parse12(timeStr) {
-                const parts = (timeStr ?? "").split(":");
-                const h24 = parseInt(parts[0], 10);
-                const m   = parseInt(parts[1], 10);
-                if (isNaN(h24) || isNaN(m))
-                    return { hour12: 12, minute: 0, period: "AM" };
-                if (h24 === 0)        return { hour12: 12,      minute: m, period: "AM" };
-                if (h24 < 12)         return { hour12: h24,     minute: m, period: "AM" };
-                if (h24 === 12)       return { hour12: 12,      minute: m, period: "PM" };
-                return                       { hour12: h24 - 12, minute: m, period: "PM" };
-            }
-
-            // (hour12, minute, period) → "HH:mm" (24h, zero-padded)
-            function compose24(hour12, minute, period) {
-                let h24;
-                if (period === "AM") h24 = (hour12 === 12) ? 0  : hour12;
-                else                 h24 = (hour12 === 12) ? 12 : hour12 + 12;
-                return String(h24).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
-            }
-
-            // Single-component setters — read current, swap one piece, recompose.
-            function withHour(timeStr, h12) {
-                const cur = parse12(timeStr);
-                return compose24(h12, cur.minute, cur.period);
-            }
-            function withMinute(timeStr, m) {
-                const cur = parse12(timeStr);
-                return compose24(cur.hour12, m, cur.period);
-            }
-            function withPeriod(timeStr, period) {
-                const cur = parse12(timeStr);
-                return compose24(cur.hour12, cur.minute, period);
-            }
-
-            // "Turn on" row — wired to Config.options.light.night.from.
-            // Each ConfigSpinBox / StyledComboBox writes back through one
-            // of the with*() helpers so the other components survive the
-            // round-trip. Equality guard avoids a same-value re-write
-            // bouncing the binding.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
@@ -3867,53 +3825,14 @@ except Exception:
                     color: Appearance.colors.colOnLayer1
                 }
 
-                ConfigSpinBox {
-                    Layout.preferredWidth: 70
-                    from: 1
-                    to: 12
-                    value: nightSchedule.parse12(Config.options.light.night.from).hour12
-                    onValueChanged: {
-                        const next = nightSchedule.withHour(Config.options.light.night.from, value);
-                        if (next !== Config.options.light.night.from)
-                            Config.options.light.night.from = next;
-                    }
-                }
-
-                StyledText {
-                    Layout.alignment: Qt.AlignVCenter
-                    text: ":"
-                    color: Appearance.colors.colOnLayer1
-                }
-
-                ConfigSpinBox {
-                    Layout.preferredWidth: 70
-                    from: 0
-                    to: 59
-                    value: nightSchedule.parse12(Config.options.light.night.from).minute
-                    onValueChanged: {
-                        const next = nightSchedule.withMinute(Config.options.light.night.from, value);
-                        if (next !== Config.options.light.night.from)
-                            Config.options.light.night.from = next;
-                    }
-                }
-
-                StyledComboBox {
-                    Layout.preferredWidth: 80
-                    Layout.fillWidth: false
-                    model: ["AM", "PM"]
-                    currentIndex: nightSchedule.parse12(Config.options.light.night.from).period === "AM" ? 0 : 1
-                    onActivated: index => {
-                        const period = (index === 0) ? "AM" : "PM";
-                        const next = nightSchedule.withPeriod(Config.options.light.night.from, period);
-                        if (next !== Config.options.light.night.from)
-                            Config.options.light.night.from = next;
-                    }
+                TimeField {
+                    value: Config.options.light.night.from
+                    onEdited: next => Config.options.light.night.from = next
                 }
 
                 Item { Layout.fillWidth: true }
             }
 
-            // "Turn off" row — same pattern bound to .to.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
@@ -3925,47 +3844,9 @@ except Exception:
                     color: Appearance.colors.colOnLayer1
                 }
 
-                ConfigSpinBox {
-                    Layout.preferredWidth: 70
-                    from: 1
-                    to: 12
-                    value: nightSchedule.parse12(Config.options.light.night.to).hour12
-                    onValueChanged: {
-                        const next = nightSchedule.withHour(Config.options.light.night.to, value);
-                        if (next !== Config.options.light.night.to)
-                            Config.options.light.night.to = next;
-                    }
-                }
-
-                StyledText {
-                    Layout.alignment: Qt.AlignVCenter
-                    text: ":"
-                    color: Appearance.colors.colOnLayer1
-                }
-
-                ConfigSpinBox {
-                    Layout.preferredWidth: 70
-                    from: 0
-                    to: 59
-                    value: nightSchedule.parse12(Config.options.light.night.to).minute
-                    onValueChanged: {
-                        const next = nightSchedule.withMinute(Config.options.light.night.to, value);
-                        if (next !== Config.options.light.night.to)
-                            Config.options.light.night.to = next;
-                    }
-                }
-
-                StyledComboBox {
-                    Layout.preferredWidth: 80
-                    Layout.fillWidth: false
-                    model: ["AM", "PM"]
-                    currentIndex: nightSchedule.parse12(Config.options.light.night.to).period === "AM" ? 0 : 1
-                    onActivated: index => {
-                        const period = (index === 0) ? "AM" : "PM";
-                        const next = nightSchedule.withPeriod(Config.options.light.night.to, period);
-                        if (next !== Config.options.light.night.to)
-                            Config.options.light.night.to = next;
-                    }
+                TimeField {
+                    value: Config.options.light.night.to
+                    onEdited: next => Config.options.light.night.to = next
                 }
 
                 Item { Layout.fillWidth: true }

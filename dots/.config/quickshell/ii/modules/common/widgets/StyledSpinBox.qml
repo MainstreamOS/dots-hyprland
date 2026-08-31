@@ -17,6 +17,14 @@ SpinBox {
     // typing "75%" parses to 75 and "75" parses to 75 — both round-trip
     // to "75%" via the binding.
     property string suffix: ""
+    // SpinBox owns this pair; both are FINAL, so they are set here rather
+    // than redeclared. The stock implementations go through the locale and
+    // render a thousands separator, which is the same reason the text input
+    // below reads the value rather than displayText. A field whose reading is
+    // not simply its number, an hour on a 12-hour clock showing 13 as "1",
+    // replaces the pair so that what gets typed is read back the way it shows.
+    textFromValue: value => value + root.suffix
+    valueFromText: text => parseFloat(text)
     editable: true
 
     opacity: root.enabled ? 1 : 0.4
@@ -41,14 +49,14 @@ SpinBox {
             horizontalAlignment: TextInput.AlignHCenter
             verticalAlignment: TextInput.AlignVCenter
             selectByMouse: true
-            text: root.value + root.suffix // displayText would make the numbers weird like 1,000 instead of 1000
+            text: root.textFromValue(root.value) // displayText would make the numbers weird like 1,000 instead of 1000
             color: Appearance.colors.colOnLayer2
             font.family: Appearance.font.family.numbers
             font.variableAxes: Appearance.font.variableAxes.numbers
             font.pixelSize: Appearance.font.pixelSize.small
             validator: root.validator
             onTextChanged: {
-                const parsed = parseFloat(text);
+                const parsed = root.valueFromText(text);
                 if (!isNaN(parsed)) {
                     root.value = parsed;
                     return;
@@ -58,7 +66,7 @@ SpinBox {
                 // says so instead of sitting blank with no value behind it.
                 if (text.length === 0) {
                     root.value = Math.max(root.from, Math.min(root.to, 0));
-                    text = root.value + root.suffix;
+                    text = root.textFromValue(root.value);
                 }
                 // Anything else is a number half typed, a lone minus sign
                 // above all, so the last good value stands until it is whole.
@@ -66,8 +74,8 @@ SpinBox {
             // A half typed value that never became a number would otherwise
             // stay on screen as itself once the field is left.
             onEditingFinished: {
-                if (isNaN(parseFloat(text)))
-                    text = root.value + root.suffix;
+                if (isNaN(root.valueFromText(text)))
+                    text = root.textFromValue(root.value);
             }
         }
     }

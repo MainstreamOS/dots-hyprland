@@ -12,6 +12,8 @@ RowLayout {
     property alias from: spinBoxWidget.from
     property alias to: spinBoxWidget.to
     property alias suffix: spinBoxWidget.suffix
+    property alias textFromValue: spinBoxWidget.textFromValue
+    property alias valueFromText: spinBoxWidget.valueFromText
     spacing: 10
     Layout.leftMargin: 8
     Layout.rightMargin: 8
