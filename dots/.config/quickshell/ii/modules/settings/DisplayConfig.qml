@@ -21,6 +21,14 @@ ContentPage {
 
     property var monitors: []
     property var pendingChanges: ({})
+    // True for the duration of a canvas drag (see the arrangement-canvas
+    // MouseArea). Freezes the canvas's fit-to-content scale/pan while set,
+    // so the coordinate transform used to convert mouse movement into
+    // logical pixels stays constant for the whole gesture. Otherwise the
+    // canvas re-fitting itself around the monitor being dragged would
+    // change the very transform the drag is using to interpret pointer
+    // movement, making the rectangle and the cursor fight each other.
+    property bool draggingMonitor: false
 
     // Revert-after-apply state. Wayland gives no recovery if the user
     // applies a mode the panel can't drive (black screen, no TTY hint
@@ -60,6 +68,12 @@ ContentPage {
     property var confVrr: ({})
     property var confMirror: ({})
     property var confPositionMode: ({})
+    // Manual pixel nudge applied on top of a monitor's auto-center-*
+    // position (see the Position card's Horizontal/Vertical Offset
+    // fields). Populated by readConfProc from the ii_position_offset
+    // sidecar comment, same mechanism as confHdrMode below.
+    property var confOffsetX: ({})
+    property var confOffsetY: ({})
     property var confColorMode: ({})
     property var confMaxLuminance:    ({})
     property var confMaxAvgLuminance: ({})
@@ -124,11 +138,26 @@ ContentPage {
     }
 
     function setDefaultMonitor(monitorName) {
+        // The outgoing default becomes an ordinary monitor, and an ordinary
+        // monitor without a mode has no flush position to offset from: its
+        // bounds fall through to the unrestricted branch and it can be nudged
+        // straight over whatever took its place. Hand it the same mode a
+        // freshly seen monitor gets so it is bounded like any other.
+        let previous = displayConfigPage.defaultMonitor;
+        if (previous && previous !== monitorName) {
+            let q = Object.assign({}, pendingChanges[previous] ?? {});
+            if (!q.positionMode) {
+                q.positionMode = "auto-center-right";
+                pendingChanges[previous] = q;
+            }
+        }
         displayConfigPage.defaultMonitor = monitorName;
         // Force the new default to position 0x0
         let p = Object.assign({}, pendingChanges[monitorName] ?? {});
         p.x = 0;
         p.y = 0;
+        p.offsetX = 0;
+        p.offsetY = 0;
         delete p.positionMode;
         pendingChanges[monitorName] = p;
         pendingChanges = Object.assign({}, pendingChanges);
@@ -374,6 +403,8 @@ print(json.dumps(result))
             let vrrResult = {};
             let mirrorResult = {};
             let positionModeResult = {};
+            let offsetXResult = {};
+            let offsetYResult = {};
             let colorModeResult = {};
             let maxLuminanceResult    = {};
             let maxAvgLuminanceResult = {};
@@ -435,6 +466,19 @@ print(json.dumps(result))
                 let mh = trimmed.match(/^--\s*ii_hdr_mode:(\S+)\s*=\s*(\d+)/);
                 if (mh) hdrModeResult[mh[1]] = parseInt(mh[2]);
 
+                // ── Position offset metadata (persisted as a Lua comment) ──
+                // Format: -- ii_position_offset:NAME = mode,offsetX,offsetY
+                // Written instead of a bare auto-center-* position whenever
+                // an offset is set (see buildMonitorBlock), since the literal
+                // "XxY" position that gets written can't carry the mode or
+                // offset on its own.
+                let mo = trimmed.match(/^--\s*ii_position_offset:(\S+)\s*=\s*([\w-]+),(-?\d+),(-?\d+)/);
+                if (mo) {
+                    positionModeResult[mo[1]] = mo[2];
+                    offsetXResult[mo[1]] = parseInt(mo[3], 10);
+                    offsetYResult[mo[1]] = parseInt(mo[4], 10);
+                }
+
                 // ── Workspace bindings — hl.workspace_rule({ workspace = "N", monitor = "DP-1" })
                 let mw = line.match(/hl\.workspace_rule\(\{\s*workspace\s*=\s*"(\d+)"\s*,\s*monitor\s*=\s*"([^"]+)"/);
                 if (mw) {
@@ -448,6 +492,8 @@ print(json.dumps(result))
             displayConfigPage.confVrr            = vrrResult;
             displayConfigPage.confMirror         = mirrorResult;
             displayConfigPage.confPositionMode   = positionModeResult;
+            displayConfigPage.confOffsetX        = offsetXResult;
+            displayConfigPage.confOffsetY        = offsetYResult;
             displayConfigPage.confColorMode      = colorModeResult;
             displayConfigPage.confMaxLuminance    = maxLuminanceResult;
             displayConfigPage.confMaxAvgLuminance = maxAvgLuminanceResult;
@@ -494,7 +540,28 @@ print(json.dumps(result))
         let snapped = snapScale(m.scale);
         let scale = (Math.round(snapped * 1e6) / 1e6).toString();
         let isDefault = name === displayConfigPage.defaultMonitor;
-        let pos = isDefault ? "0x0" : (m.positionMode ?? `${m.x}x${m.y}`);
+        // The auto-center-* keyword carries no offset syntax of its own, so
+        // once the user dials in a nonzero offset we resolve the concrete
+        // pixel position ourselves, by the same math the canvas preview uses
+        // through resolveEffectivePos, and write that instead. The original
+        // mode + offset are preserved in an ii_position_offset comment
+        // below so reopening this page restores both the Position dropdown
+        // and the offset fields, not just a bare literal position.
+        // Clamped through the same bounds as the UI/canvas so this can
+        // never persist (or apply) an offset that would overlap the default.
+        let off = clampOffset(m.positionMode, m.offsetX ?? 0, m.offsetY ?? 0);
+        let offsetX = off.x;
+        let offsetY = off.y;
+        let hasOffset = !isDefault && (offsetX !== 0 || offsetY !== 0);
+        let pos;
+        if (isDefault) {
+            pos = "0x0";
+        } else if (hasOffset) {
+            let resolved = resolveEffectivePos(name, m, mon);
+            pos = `${resolved.x}x${resolved.y}`;
+        } else {
+            pos = m.positionMode ?? `${m.x}x${m.y}`;
+        }
         let mode = `${m.width}x${m.height}@${m.refreshRate.toFixed(6)}`;
         let colorMode = m.colorMode ?? "srgb";
         let isHdr = colorMode === "hdr" || colorMode === "hdredid";
@@ -506,6 +573,13 @@ print(json.dumps(result))
         // Persist HDR mode as a Lua comment so it survives reloads.
         if (isHdr && hdrMode > 0)
             lines.push(`-- ii_hdr_mode:${name} = ${hdrMode}`);
+        // Persist the pre-offset position mode + the offset itself, since
+        // `position` above is now a literal "XxY" and can't carry either.
+        // Only ever names the mode the offset was actually measured from.
+        // Inventing one here would restore a different base than the literal
+        // position above was resolved against, and the display would jump.
+        if (hasOffset && m.positionMode)
+            lines.push(`-- ii_position_offset:${name} = ${m.positionMode},${offsetX},${offsetY}`);
         // Lua hl.monitor({...}) call. Strings get quoted, numbers and booleans bare.
         lines.push(`hl.monitor({`);
         lines.push(`    output = "${name}",`);
@@ -688,6 +762,8 @@ print(json.dumps(result))
                 vrr: confVrr[name] ?? 0,
                 mirror: confMirror[name] ?? "",
                 positionMode: isDefault ? undefined : (confPositionMode[name] ?? "auto-center-right"),
+                offsetX: isDefault ? 0 : (confOffsetX[name] ?? 0),
+                offsetY: isDefault ? 0 : (confOffsetY[name] ?? 0),
                 // If hdrMode is "Fullscreen Only" (1), cm=hdr isn't in the config file,
                 // but the UI still needs to show HDR as the active color mode.
                 colorMode: (confHdrMode[name] === 1 && !confColorMode[name])
@@ -756,32 +832,83 @@ print(json.dumps(result))
         };
     }
 
+    // Safe offsetX/offsetY range for a position mode. The axis the mode
+    // already snaps flush against the default monitor on (X for left/right,
+    // Y for up/down) can only move further away from it: moving back the
+    // other way re-enters the default's footprint and Hyprland rejects the
+    // whole layout as overlapping. The perpendicular axis never touches the
+    // default regardless of value, so it's left unrestricted.
+    // An offset held inside what its mode allows. Every place that reads or
+    // writes one goes through here, so a value can only enter the config,
+    // the canvas or the file already inside its bounds.
+    function clampOffset(mode, x, y) {
+        let b = offsetBoundsFor(mode);
+        return { x: Math.max(b.xMin, Math.min(b.xMax, Math.round(x || 0))),
+                 y: Math.max(b.yMin, Math.min(b.yMax, Math.round(y || 0))) };
+    }
+
+    function offsetBoundsFor(mode) {
+        const FAR = 10000;
+        switch (mode) {
+            case "auto-center-right": return { xMin: 0,    xMax: FAR,  yMin: -FAR, yMax: FAR  };
+            case "auto-center-left":  return { xMin: -FAR, xMax: 0,    yMin: -FAR, yMax: FAR  };
+            case "auto-center-up":    return { xMin: -FAR, xMax: FAR,  yMin: -FAR, yMax: 0    };
+            case "auto-center-down":  return { xMin: -FAR, xMax: FAR,  yMin: 0,    yMax: FAR  };
+            // No mode means no flush position to measure an offset from, so
+            // there is nothing an offset could safely mean: it stays put.
+            default:                  return { xMin: 0,    xMax: 0,    yMin: 0,    yMax: 0    };
+        }
+    }
+
+    // The flush (zero-offset) position for an auto-center-* mode, given the
+    // default monitor's and this monitor's logical sizes. Returns null for
+    // no mode (callers fall back to raw x/y). Split out of
+    // resolveEffectivePos so dragMonitorTo can share the exact same
+    // geometry when backing out an offset from a freely dragged position,
+    // if the two ever drifted apart, a drag could land the rectangle
+    // somewhere resolveEffectivePos wouldn't reproduce on the next repaint.
+    function basePosFor(mode, defSize, thisSize) {
+        switch (mode) {
+            case "auto-center-right": return { x: defSize.width,   y: Math.round((defSize.height - thisSize.height) / 2) };
+            case "auto-center-left":  return { x: -thisSize.width, y: Math.round((defSize.height - thisSize.height) / 2) };
+            case "auto-center-up":    return { x: Math.round((defSize.width - thisSize.width) / 2), y: -thisSize.height };
+            case "auto-center-down":  return { x: Math.round((defSize.width - thisSize.width) / 2), y: defSize.height };
+            default:                  return null;
+        }
+    }
+
     // Resolve the visual canvas position of a monitor, honouring positionMode
-    // when it is set to an auto-center-* value.  The default monitor is always
-    // at 0×0; every other monitor is placed relative to it.
+    // when it is set to an auto-center-* value, plus any manual offsetX/offsetY
+    // nudge on top of that (the Position card's Horizontal/Vertical Offset
+    // fields). The default monitor is always at 0×0 with no mode or offset;
+    // every other monitor is placed relative to it. Also reused by
+    // buildMonitorBlock to bake a concrete pixel position into monitors.lua
+    // whenever an offset is set, so the applied layout always matches
+    // exactly what this function shows on the canvas.
     function resolveEffectivePos(monName, p, mon) {
-        let mode = p.positionMode;
-        if (!mode || monName === displayConfigPage.defaultMonitor) {
+        if (monName === displayConfigPage.defaultMonitor) {
             return { x: p.x ?? mon.x, y: p.y ?? mon.y };
+        }
+        let mode = p.positionMode;
+        // Clamped here (not just at input time) so a stale or hand-edited
+        // offset can never resolve to an overlapping position, regardless
+        // of how it got into pendingChanges.
+        let off = clampOffset(mode, p.offsetX ?? 0, p.offsetY ?? 0);
+        let offsetX = off.x;
+        let offsetY = off.y;
+        if (!mode) {
+            return { x: (p.x ?? mon.x) + offsetX, y: (p.y ?? mon.y) + offsetY };
         }
         // Find the default monitor's pending dimensions
         let defName = displayConfigPage.defaultMonitor;
         let defMon  = displayConfigPage.monitors.find(m => m.name === defName);
-        if (!defMon) return { x: p.x ?? mon.x, y: p.y ?? mon.y };
+        if (!defMon) return { x: (p.x ?? mon.x) + offsetX, y: (p.y ?? mon.y) + offsetY };
         let dp   = displayConfigPage.pendingChanges[defName] ?? {};
         let defSize  = logicalSize(defName, dp, defMon);
         let thisSize = logicalSize(monName, p, mon);
-        let defW = defSize.width;
-        let defH = defSize.height;
-        let thisW = thisSize.width;
-        let thisH = thisSize.height;
-        switch (mode) {
-            case "auto-center-right": return { x: defW,           y: Math.round((defH - thisH) / 2) };
-            case "auto-center-left":  return { x: -thisW,         y: Math.round((defH - thisH) / 2) };
-            case "auto-center-up":    return { x: Math.round((defW - thisW) / 2), y: -thisH  };
-            case "auto-center-down":  return { x: Math.round((defW - thisW) / 2), y: defH    };
-            default:                  return { x: p.x ?? mon.x,   y: p.y ?? mon.y };
-        }
+        let base = basePosFor(mode, defSize, thisSize);
+        if (!base) return { x: (p.x ?? mon.x) + offsetX, y: (p.y ?? mon.y) + offsetY };
+        return { x: base.x + offsetX, y: base.y + offsetY };
     }
 
     // Compute canvas scale factor and offset so all monitors fit
@@ -817,6 +944,61 @@ print(json.dumps(result))
             offsetX: padding + (canvasWidth  - padding * 2 - scaledW) / 2 - minX * s,
             offsetY: padding + (canvasHeight - padding * 2 - scaledH) / 2 - minY * s
         };
+    }
+
+    // Called on every pointer move while a canvas rectangle is being
+    // dragged (see the MouseArea in the arrangement-canvas Repeater
+    // delegate). desiredX/desiredY are the *unclamped* logical top-left
+    // position implied by the raw mouse movement so far this gesture,
+    // tracked locally by the MouseArea rather than read back from
+    // pendingChanges, so that dragging past the overlap boundary and back doesn't leave the
+    // rectangle lagging behind the cursor; desiredX/Y just runs ahead of
+    // what offsetBoundsFor allows until the drag crosses back, which is how
+    // a clamped drag is expected to feel.
+    //
+    // Picks whichever side of the default monitor the dragged position is
+    // furthest past, right and left compared on X, up and down on Y, with
+    // a small bonus for staying on the side it is already on so the mode
+    // flicker back and forth when dragging near the diagonal between two
+    // sides. Then backs out the offsetX/offsetY that makes
+    // resolveEffectivePos reproduce desiredX/desiredY exactly, clamped
+    // through the same offsetBoundsFor as manual entry, so the rectangle
+    // never fights the binding that positions it.
+    function dragMonitorTo(monName, desiredX, desiredY) {
+        if (monName === displayConfigPage.defaultMonitor) return;
+        let mon     = displayConfigPage.monitors.find(m => m.name === monName);
+        let defName = displayConfigPage.defaultMonitor;
+        let defMon  = displayConfigPage.monitors.find(m => m.name === defName);
+        if (!mon || !defMon) return;
+
+        let p  = displayConfigPage.pendingChanges[monName] ?? {};
+        let dp = displayConfigPage.pendingChanges[defName] ?? {};
+        let defSize  = logicalSize(defName, dp, defMon);
+        let thisSize = logicalSize(monName, p, mon);
+
+        let centerX = desiredX + thisSize.width  / 2;
+        let centerY = desiredY + thisSize.height / 2;
+        const STICKY_BONUS = 40; // logical px of margin against flicker, see above
+        let excess = {
+            "auto-center-right": centerX - defSize.width,
+            "auto-center-left":  -centerX,
+            "auto-center-down":  centerY - defSize.height,
+            "auto-center-up":    -centerY,
+        };
+        if (p.positionMode in excess) excess[p.positionMode] += STICKY_BONUS;
+        let mode = Object.keys(excess).reduce((best, k) => excess[k] > excess[best] ? k : best);
+
+        let base = basePosFor(mode, defSize, thisSize);
+        if (!base) return;
+        let off = clampOffset(mode, desiredX - base.x, desiredY - base.y);
+
+        // A move that lands on the same clamped answer as the last one has
+        // nothing to say. Writing it anyway replaces the whole pending map and
+        // wakes every monitor's bindings over a value that did not change.
+        if (mode === p.positionMode && off.x === (p.offsetX ?? 0) && off.y === (p.offsetY ?? 0))
+            return;
+        displayConfigPage.updatePendingBatch(monName,
+            { positionMode: mode, offsetX: off.x, offsetY: off.y });
     }
 
     Process {
@@ -1231,6 +1413,9 @@ except Exception:
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 220
+            // A dragged monitor is placed by the frozen fit, so it can reach
+            // past the card it belongs to before the fit is recomputed.
+            clip: true
             color: Appearance.m3colors.m3surfaceContainer
             radius: Appearance.rounding.normal
 
@@ -1242,12 +1427,27 @@ except Exception:
             Connections {
                 target: displayConfigPage
                 function onPendingChangesChanged() {
+                    // Skip while a drag is in progress, see draggingMonitor.
+                    // dragMonitorTo already writes straight into
+                    // pendingChanges on every move event, and re-fitting the
+                    // canvas around that live would change the very scale
+                    // the drag is using to convert pointer movement into
+                    // logical pixels.
+                    if (displayConfigPage.draggingMonitor) return;
                     canvasContainer.layout = displayConfigPage.canvasLayout(
                         canvasContainer.width, canvasContainer.height, 16);
                 }
                 function onMonitorsChanged() {
                     canvasContainer.layout = displayConfigPage.canvasLayout(
                         canvasContainer.width, canvasContainer.height, 16);
+                }
+                function onDraggingMonitorChanged() {
+                    // Drag just ended, or was cancelled, so run the
+                    // fit-to-content recompute that was skipped mid-gesture.
+                    if (!displayConfigPage.draggingMonitor) {
+                        canvasContainer.layout = displayConfigPage.canvasLayout(
+                            canvasContainer.width, canvasContainer.height, 16);
+                    }
                 }
             }
 
@@ -1335,13 +1535,78 @@ except Exception:
                             }
                         }
                     }
+
+                    // Drag to reposition. Only non-default monitors are
+                    // draggable: the default is always pinned to 0x0, see
+                    // setDefaultMonitor) and has nothing to drag relative to.
+                    MouseArea {
+                        id: dragArea
+                        anchors.fill: parent
+                        enabled: monRect.monName !== displayConfigPage.defaultMonitor
+                        hoverEnabled: true
+                        // Take the grab away from an ancestor Flickable (this
+                        // settings page scrolls) once a drag has started, so
+                        // it doesn't turn into scrolling the page instead.
+                        preventStealing: true
+                        cursorShape: !enabled ? Qt.ArrowCursor
+                            : (pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
+
+                        // Unclamped running position for the current
+                        // gesture, in logical (Hyprland) pixels. See
+                        // dragMonitorTo for why this is kept separate from
+                        // pendingChanges' clamped offsetX/offsetY.
+                        property real desiredX: 0
+                        property real desiredY: 0
+                        // Last processed pointer position, in
+                        // canvasContainer's coordinate space rather than
+                        // this MouseArea's own. canvasContainer never moves
+                        // during a drag (only monRect inside it does), so
+                        // this is a stable frame to measure movement in.
+                        // Measuring in dragArea's own frame instead (i.e.
+                        // mouse.x/y directly) works only until
+                        // offsetBoundsFor clamps something: once monRect's
+                        // rendered position stops keeping up with desiredX,
+                        // dragArea's frame stops moving to match too, so the
+                        // next mouse.x/y jumps by the pointer's real movement
+                        // plus the gap the clamp introduced, and desiredX then
+                        // runs ahead of the pointer, and it never recovers
+                        // for the rest of the gesture. monRect.x/y are always
+                        // exactly where the rectangle actually is on screen,
+                        // so monRect.x + mouse.x is an absolute position
+                        // that's correct however monRect got there.
+                        property real lastCanvasX: 0
+                        property real lastCanvasY: 0
+
+                        onPressed: (mouse) => {
+                            displayConfigPage.draggingMonitor = true;
+                            desiredX = monRect.effectivePos.x;
+                            desiredY = monRect.effectivePos.y;
+                            lastCanvasX = monRect.x + mouse.x;
+                            lastCanvasY = monRect.y + mouse.y;
+                        }
+
+                        onPositionChanged: (mouse) => {
+                            if (!pressed) return;
+                            let canvasX = monRect.x + mouse.x;
+                            let canvasY = monRect.y + mouse.y;
+                            let scale = monRect.layout.scale > 0 ? monRect.layout.scale : 1;
+                            desiredX += (canvasX - lastCanvasX) / scale;
+                            desiredY += (canvasY - lastCanvasY) / scale;
+                            lastCanvasX = canvasX;
+                            lastCanvasY = canvasY;
+                            displayConfigPage.dragMonitorTo(monRect.monName, desiredX, desiredY);
+                        }
+
+                        onReleased: displayConfigPage.draggingMonitor = false
+                        onCanceled: displayConfigPage.draggingMonitor = false
+                    }
                 }
             }
         }
 
         StyledText {
             Layout.alignment: Qt.AlignHCenter
-            text: Translation.tr("Use the Position setting under each monitor below to arrange displays")
+            text: Translation.tr("Drag a display to reposition it, or use the Position setting below for precise control")
             font.pixelSize: Appearance.font.pixelSize.small
             color: Appearance.colors.colSubtext
             wrapMode: Text.WordWrap
@@ -2082,10 +2347,210 @@ except Exception:
                             id: positionPopup
                             options: positionRow.positionOptions
                             currentIndex: positionRow.positionOptions.findIndex(o => o.value === (monitorSection.pending.positionMode ?? "auto-center-right"))
-                            onSelected: (modelData, index) => displayConfigPage.updatePending(monitorSection.monName, "positionMode", modelData.value)
+                            onSelected: (modelData, index) => {
+                                let newMode = modelData.value;
+                                let off = displayConfigPage.clampOffset(newMode,
+                                    monitorSection.pending.offsetX ?? 0,
+                                    monitorSection.pending.offsetY ?? 0);
+                                displayConfigPage.updatePendingBatch(monitorSection.monName, {
+                                    positionMode: newMode,
+                                    offsetX: off.x,
+                                    offsetY: off.y,
+                                });
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Appearance.m3colors.m3outlineVariant; opacity: 0.5 }
+
+                    // Manual nudge applied on top of the auto-centered position
+                    // above, say two monitors of different physical height
+                    // won't sit flush when centered, so this lets the user shift
+                    // one until the bezels line up. Baked into a literal pixel
+                    // `position` at Apply time (see buildMonitorBlock) since the
+                    // auto-center-* keyword itself carries no offset syntax; the
+                    // original mode + offset are preserved in an
+                    // `-- ii_position_offset:` comment (same trick as
+                    // ii_hdr_mode) so they round-trip correctly next time this
+                    // page reads monitors.lua.
+                    Item {
+                        id: offsetXRow
+                        Layout.fillWidth: true
+                        implicitHeight: 44
+
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
+                            spacing: 8
+                            StyledText {
+                                text: Translation.tr("Horizontal Offset")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer2
+                            }
+                            Item { Layout.fillWidth: true }
+                            ConfigSpinBox {
+                                id: offsetXSpinBox
+                                Layout.preferredWidth: 100
+                                from: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).xMin
+                                to: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).xMax
+                                value: monitorSection.pending.offsetX ?? 0
+                                onValueChanged: {
+                                    // A drag writes the mode and both offsets at once, which
+                                    // moves this box's bounds and makes it re-clamp the value
+                                    // it was still showing. That is the box catching up, not
+                                    // the user typing, so it must not land back on the drop.
+                                    if (displayConfigPage.draggingMonitor) return;
+                                    if (value !== (monitorSection.pending.offsetX ?? 0))
+                                        displayConfigPage.updatePending(monitorSection.monName, "offsetX", value);
+                                }
+
+                                // SpinBox severs its declarative `value` binding the
+                                // moment the user types in it or clicks a stepper, so
+                                // any imperative internal write drops the binding.
+                                // After that, external changes (reset button, or a
+                                // position-mode switch clamping the offset) still
+                                // update pendingChanges/the canvas fine, but this
+                                // control's own displayed number goes stale. Re-sync
+                                // it explicitly whenever pending changes.
+                                Connections {
+                                    target: monitorSection
+                                    function onPendingChanged() {
+                                        let stored = monitorSection.pending.offsetX ?? 0;
+                                        if (offsetXSpinBox.value !== stored)
+                                            offsetXSpinBox.value = stored;
+                                    }
+                                }
+                            }
+                            StyledText {
+                                text: "px"
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                            }
+
+                            MouseArea {
+                                id: resetOffsetXArea
+                                implicitWidth: 30
+                                implicitHeight: 30
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+                                enabled: (monitorSection.pending.offsetX ?? 0) !== 0
+                                onClicked: displayConfigPage.updatePending(monitorSection.monName, "offsetX", 0)
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: Appearance.rounding.small
+                                    color: resetOffsetXArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "restart_alt"
+                                        iconSize: Appearance.font.pixelSize.normal
+                                        color: Appearance.colors.colSubtext
+                                        opacity: resetOffsetXArea.enabled ? 1.0 : 0.35
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                    }
+
+                                    StyledToolTip {
+                                        visible: resetOffsetXArea.containsMouse
+                                        text: Translation.tr("Reset to 0")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Appearance.m3colors.m3outlineVariant; opacity: 0.5 }
+
+                    Item {
+                        id: offsetYRow
+                        Layout.fillWidth: true
+                        implicitHeight: 44
+
+                        RowLayout {
+                            anchors { fill: parent; leftMargin: 16; rightMargin: 12 }
+                            spacing: 8
+                            StyledText {
+                                text: Translation.tr("Vertical Offset")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colOnLayer2
+                            }
+                            Item { Layout.fillWidth: true }
+                            ConfigSpinBox {
+                                id: offsetYSpinBox
+                                Layout.preferredWidth: 100
+                                from: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).yMin
+                                to: displayConfigPage.offsetBoundsFor(monitorSection.pending.positionMode).yMax
+                                value: monitorSection.pending.offsetY ?? 0
+                                onValueChanged: {
+                                    // A drag writes the mode and both offsets at once, which
+                                    // moves this box's bounds and makes it re-clamp the value
+                                    // it was still showing. That is the box catching up, not
+                                    // the user typing, so it must not land back on the drop.
+                                    if (displayConfigPage.draggingMonitor) return;
+                                    if (value !== (monitorSection.pending.offsetY ?? 0))
+                                        displayConfigPage.updatePending(monitorSection.monName, "offsetY", value);
+                                }
+
+                                Connections {
+                                    target: monitorSection
+                                    function onPendingChanged() {
+                                        let stored = monitorSection.pending.offsetY ?? 0;
+                                        if (offsetYSpinBox.value !== stored)
+                                            offsetYSpinBox.value = stored;
+                                    }
+                                }
+                            }
+                            StyledText {
+                                text: "px"
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                            }
+
+                            MouseArea {
+                                id: resetOffsetYArea
+                                implicitWidth: 30
+                                implicitHeight: 30
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+                                enabled: (monitorSection.pending.offsetY ?? 0) !== 0
+                                onClicked: displayConfigPage.updatePending(monitorSection.monName, "offsetY", 0)
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: Appearance.rounding.small
+                                    color: resetOffsetYArea.containsMouse ? Appearance.colors.colLayer3 : "transparent"
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "restart_alt"
+                                        iconSize: Appearance.font.pixelSize.normal
+                                        color: Appearance.colors.colSubtext
+                                        opacity: resetOffsetYArea.enabled ? 1.0 : 0.35
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                    }
+
+                                    StyledToolTip {
+                                        visible: resetOffsetYArea.containsMouse
+                                        text: Translation.tr("Reset to 0")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+            }
+
+            // Same visibility as positionCard above, since this note only makes
+            // sense once there's a Position/offset section to explain.
+            SubtleNoticeBox {
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                Layout.topMargin: 8
+                visible: displayConfigPage.defaultMonitor !== "" &&
+                         monitorSection.monName !== displayConfigPage.defaultMonitor
+                text: Translation.tr("Offset is capped so a display won't overlap the default display.")
             }
 
             // ── Color Management card ─────────────────────────────────────

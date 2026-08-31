@@ -1813,5 +1813,10 @@
   "Magnify amount": "Magnify amount",
   "Hover animation": "Hover animation",
   "Glow color": "Glow color",
-  "Glow intensity": "Glow intensity"
+  "Glow intensity": "Glow intensity",
+  "Drag a display to reposition it, or use the Position setting below for precise control": "Drag a display to reposition it, or use the Position setting below for precise control",
+  "Horizontal Offset": "Horizontal Offset",
+  "Reset to 0": "Reset to 0",
+  "Vertical Offset": "Vertical Offset",
+  "Offset is capped so a display won't overlap the default display.": "Offset is capped so a display won't overlap the default display."
 }
