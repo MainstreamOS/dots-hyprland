@@ -37,6 +37,11 @@ if not dontLoadDefaultRules    then require("hyprland.rules") end
 if not dontLoadDefaultColors   then require("hyprland.colors") end
 if not dontLoadDefaultKeybinds then require("hyprland.keybinds") end
 
+-- Plugin loading and plugin settings. Required before the custom tree so a
+-- machine still carrying the old copy of this in custom/general.lua is the one
+-- that loses, not the shipped one.
+require("hyprland.plugins")
+
 -- Custom overrides (sourced AFTER defaults so they win)
 tryRequire("custom.execs")
 tryRequire("custom.general")

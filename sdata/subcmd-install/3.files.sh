@@ -453,6 +453,28 @@ function setup_hyprland_plugins(){
   # settings block is parsed, otherwise the config is silently ignored.
   # hyprbars stays loaded always; the Title Bars toggle flips
   # plugin:hyprbars:enabled via the titlebars.enabled flag, not this line.
+  # ---------------------------------------------------------------------------
+  # Plugin machinery moved out of custom/general.lua and into the shipped
+  # hyprland/plugins.lua. custom/ is written once at install and never again, so
+  # anything left in the old copy would go on loading the plugins and
+  # registering its own config.reloaded handler beside the shipped one: the
+  # plugins would be configured twice per reload, by two versions of the same
+  # code.
+  #
+  # Only a file that still carries that machinery is touched, and it is moved
+  # aside rather than deleted, because it is the user's file and anything they
+  # added to it is theirs.
+  # ---------------------------------------------------------------------------
+  local _custom_general="$HOME/.config/hypr/custom/general.lua"
+  if [[ -f "$_custom_general" ]] && grep -q 'applyPluginConfig' "$_custom_general"; then
+    if mv "$_custom_general" "$_custom_general.pre-plugins-move"; then
+      install -Dm644 "dots/.config/hypr/custom/general.lua" "$_custom_general"
+      echo -e "${STY_CYAN}[$0]: Plugin settings now ship in hyprland/plugins.lua; your old custom/general.lua was kept as general.lua.pre-plugins-move${STY_RST}"
+    else
+      echo -e "${STY_YELLOW}[$0]: Could not move $_custom_general aside; plugins may be configured twice until it is${STY_RST}"
+    fi
+  fi
+
   local _general_lua="$HOME/.config/hypr/custom/general.lua"
   if [[ -f "$_general_lua" ]]; then
     if ! grep -qE 'hl\.plugin\.load.*hyprbars\.so' "$_general_lua"; then

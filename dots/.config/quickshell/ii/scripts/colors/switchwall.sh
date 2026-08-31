@@ -319,8 +319,13 @@ set_scrolloverview_wallpaper() {
     # the next overview render either way. A reload makes every Wayland client
     # re-configure, so it isn't something to run on a timer.
     local push_mode="${4:-reload}"
-    local target="$XDG_CONFIG_HOME/hypr/custom/general.lua"
-    [[ -z "$path" || ! -f "$target" ]] && return
+    # Saved beside the other runtime flags rather than spliced into the Lua.
+    # The plugin config that reads it is shipped and refreshed on update, so a
+    # path written into that file would be replaced by the stock one the next
+    # time it was.
+    local target="$XDG_CONFIG_HOME/hypr/custom/overview.wallpaper"
+    [[ -z "$path" ]] && return
+    mkdir -p "$(dirname "$target")"
 
     # The plugin uploads its wallpaper twice (sharp + pre-blurred), so hand it a
     # monitor-sized copy rather than the raw source (often 4K, and a video the
@@ -362,51 +367,27 @@ set_scrolloverview_wallpaper() {
             | tail -n +33 | while IFS= read -r stale; do rm -f "$stale"; done
     fi
 
-    if grep -qE '^[[:space:]]*wallpaper_path[[:space:]]*=' "$target"; then
-        # The value lands inside a Lua double-quoted string, in the file and in
-        # the eval alike, so a backslash or a quote in the name has to survive
-        # as itself. Escaped once here for both. A line break is legal in a
-        # filename but not inside a Lua string literal, and the rewrite below is
-        # line-oriented besides, so those go in as escapes and Lua puts them
-        # back. Backslashes are doubled first, or the escapes added after would
-        # be doubled too.
-        local lua_path="${plugin_path//\\/\\\\}"
-        lua_path="${lua_path//\"/\\\"}"
-        lua_path="${lua_path//$'\n'/\\n}"
-        lua_path="${lua_path//$'\r'/\\r}"
+    # One line, written whole. Placed beside the target and renamed, because a
+    # reload can be reading it at any moment and half a path reads as none.
+    local tmpfile
+    tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || return
+    if printf '%s\n' "$plugin_path" > "$tmpfile" && [ -s "$tmpfile" ]; then
+        mv -f "$tmpfile" "$target"
+    else
+        rm -f "$tmpfile"
+        return
+    fi
 
-        local tmpfile
-        # Beside the target, so replacing it is a rename. general.lua is
-        # sourced by the Hyprland config and a reload can be reading it at any
-        # moment; a copy in from elsewhere would truncate it first.
-        tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || return
-        # Lua form: `wallpaper_path = "...",` (with quotes and trailing comma).
-        # Preserves leading indent so the value stays inside the parent table.
-        # Passed through the environment because awk -v expands escape
-        # sequences in what it is given.
-        if SCROLLOVERVIEW_PATH="$lua_path" awk '
-            /^[[:space:]]*wallpaper_path[[:space:]]*=/ {
-                match($0, /^[[:space:]]*/)
-                printf "%swallpaper_path = \"%s\",\n", substr($0, 1, RLENGTH), ENVIRON["SCROLLOVERVIEW_PATH"]
-                next
-            }
-            { print }
-        ' "$target" > "$tmpfile" && [ -s "$tmpfile" ]; then
-            chmod --reference="$target" "$tmpfile" 2>/dev/null
-            mv -f "$tmpfile" "$target"
-        else
-            rm -f "$tmpfile"
-            return
-        fi
-
-        # Push the new value into the running compositor (and thus the
-        # plugin's getDataStaticPtr-cached value). Run async so we don't
-        # block the rest of post_process.
-        if [[ "$push_mode" == "eval" ]]; then
-            hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
-        else
-            hyprctl reload >/dev/null 2>&1 &
-        fi
+    # Push the new value into the running compositor (and thus the plugin's
+    # cached copy). Run async so the rest of post_process is not held up. The
+    # escaping stays here: this one is read as Lua.
+    local lua_path="$plugin_path"
+    lua_path="${lua_path//\\/\\\\}"
+    lua_path="${lua_path//\"/\\\"}"
+    if [[ "$push_mode" == "eval" ]]; then
+        hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
+    else
+        hyprctl reload >/dev/null 2>&1 &
     fi
 }
 
