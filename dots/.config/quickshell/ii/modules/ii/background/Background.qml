@@ -62,17 +62,27 @@ Variants {
         readonly property real parallaxRation: Math.max(1.1, Config.options.background.parallax.workspaceZoom)
         property int wallpaperWidth: modelData.width // Some reasonable init value, to be updated
         property int wallpaperHeight: modelData.height // Some reasonable init value, to be updated
-        // Derive logical screen size from the HyprlandMonitor directly. monitor.width/height are
-        // the monitor's physical pixel resolution; monitor.scale is the Hyprland scale factor.
-        // This binding recomputes on live scale changes because monitor.scale is the property
-        // that actually fires when the user changes Hyprland scale. bgRoot.width / screen.width
-        // don't reliably emit change notifications for the PanelWindow on live reconfigure.
-        readonly property real logicalScreenWidth: bgRoot.monitor && bgRoot.monitor.scale > 0
-            ? bgRoot.monitor.width / bgRoot.monitor.scale
-            : bgRoot.width
-        readonly property real logicalScreenHeight: bgRoot.monitor && bgRoot.monitor.scale > 0
-            ? bgRoot.monitor.height / bgRoot.monitor.scale
-            : bgRoot.height
+        // monitor.width/height are the monitor's physical mode and monitor.scale is the Hyprland
+        // scale factor, so dividing gives the two logical edge lengths. Hyprland states a mode in
+        // the panel's own orientation, which makes that pair right as a set of magnitudes and
+        // wrong as an assignment to horizontal and vertical the moment an output is turned;
+        // HyprlandMonitor carries no transform, so it cannot tell them apart on its own.
+        // ShellScreen has the rotation applied and decides which magnitude is which. Only the
+        // orientation is taken from it, because a scale change cannot turn a monitor, so the axis
+        // choice stays good between ShellScreen notifications, which a PanelWindow does not emit
+        // reliably on live reconfigure. The magnitudes stay with monitor.scale, the property that
+        // does fire on a live scale change, so the new size is right on the first pass.
+        readonly property bool screenIsPortrait: {
+            // Read for its change signal alone. HyprlandData.monitors is reassigned on every
+            // Hyprland event, so a rotation that alters neither the mode nor the scale still
+            // re-runs this and re-reads the geometry below.
+            const _ = HyprlandData.monitors;
+            return bgRoot.modelData.height > bgRoot.modelData.width;
+        }
+        readonly property real logicalMonitorEdgeA: bgRoot.monitor && bgRoot.monitor.scale > 0 ? bgRoot.monitor.width / bgRoot.monitor.scale : 0
+        readonly property real logicalMonitorEdgeB: bgRoot.monitor && bgRoot.monitor.scale > 0 ? bgRoot.monitor.height / bgRoot.monitor.scale : 0
+        readonly property real logicalScreenWidth: (logicalMonitorEdgeA > 0 && logicalMonitorEdgeB > 0) ? (bgRoot.screenIsPortrait ? Math.min(logicalMonitorEdgeA, logicalMonitorEdgeB) : Math.max(logicalMonitorEdgeA, logicalMonitorEdgeB)) : bgRoot.width
+        readonly property real logicalScreenHeight: (logicalMonitorEdgeA > 0 && logicalMonitorEdgeB > 0) ? (bgRoot.screenIsPortrait ? Math.max(logicalMonitorEdgeA, logicalMonitorEdgeB) : Math.min(logicalMonitorEdgeA, logicalMonitorEdgeB)) : bgRoot.height
         readonly property real minSuitableScale: (wallpaperWidth > 0 && wallpaperHeight > 0 && logicalScreenWidth > 0 && logicalScreenHeight > 0)
             ? Math.max(logicalScreenWidth / wallpaperWidth, logicalScreenHeight / wallpaperHeight)
             : 1
@@ -81,7 +91,12 @@ Variants {
         property real scaledWallpaperHeight: wallpaperHeight * effectiveWallpaperScale
         property real parallaxTotalPixelsX: Math.max(0, scaledWallpaperWidth - logicalScreenWidth)
         property real parallaxTotalPixelsY: Math.max(0, scaledWallpaperHeight - logicalScreenHeight)
-        readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && wallpaperHeight > wallpaperWidth) || Config.options.background.parallax.vertical
+        // Which axis the cover fit actually left room on. Comparing the picture against itself
+        // answers that on a landscape screen and inverts it on a portrait one, where a wide
+        // picture is the one with spare width, so the pan would crawl along the axis holding
+        // only the parallax headroom. Kept as it was where it already agrees, so no ordinary
+        // screen changes how it moves.
+        readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && (bgRoot.screenIsPortrait ? (parallaxTotalPixelsY > parallaxTotalPixelsX) : (wallpaperHeight > wallpaperWidth))) || Config.options.background.parallax.vertical
         // Position
         property real clockX: (modelData.width / 2)
         property real clockY: (modelData.height / 2)

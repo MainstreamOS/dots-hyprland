@@ -281,6 +281,26 @@ set_thumbnail_path() {
     config_jq --arg path "$path" '.background.thumbnailPath = $path'
 }
 
+# The pixel box one shared wallpaper copy has to cover so that it serves every
+# monitor at that monitor's own resolution. `hyprctl monitors -j` states a mode in
+# the panel's own orientation, so a quarter turned output has its axes exchanged
+# before anything is compared: the odd transforms are the quarter turns, 1 and 3
+# being 90 and 270 and 5 and 7 those two mirrored, and a mirror never changes
+# which axis is which. The largest of each axis rather than the smallest, because
+# the resize is shrink only and so the box is a ceiling, and a ceiling set by the
+# smallest monitor is one every larger monitor has to blow up from. Emits nothing
+# when there are no monitors to read, which leaves the caller's variables empty
+# and skips the scaling rather than guessing at it.
+desired_wallpaper_box() {
+    hyprctl monitors -j 2>/dev/null | jq -r '
+        [ .[] | if (((.transform // 0) % 2) == 1)
+                then { w: .height, h: .width }
+                else { w: .width,  h: .height }
+                end ]
+        | (([ .[].w ] | max) // empty), (([ .[].h ] | max) // empty)
+    ' 2>/dev/null | xargs
+}
+
 # Rewrite the `wallpaper_path = ...` line that the scrolloverview plugin
 # (built from sdata/scrolloverview/) reads, then poke Hyprland to reload
 # its config. The plugin keys its texture cache off the configured path,
@@ -304,7 +324,10 @@ set_scrolloverview_wallpaper() {
 
     # The plugin uploads its wallpaper twice (sharp + pre-blurred), so hand it a
     # monitor-sized copy rather than the raw source (often 4K, and a video the
-    # plugin can't decode). Shrink-only ('>') keeps the visible result identical.
+    # plugin can't decode). The plugin covers the screen with whatever it is given,
+    # so the box is a floor and not a ceiling: '^' fills it instead of fitting
+    # inside it, which is what stops the axis the box did not constrain from
+    # falling short. '>' keeps it shrink only, so a small picture is never blown up.
     local plugin_path="$path"
     local src="$path"
     if is_video "$src"; then
@@ -328,9 +351,9 @@ set_scrolloverview_wallpaper() {
             # folder for as long as it runs, and this is a full decode and encode.
             plugin_path="$scaled"
         elif command -v magick &>/dev/null; then
-            magick "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
+            magick "$src" -resize "${screen_width}x${screen_height}^>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         elif command -v convert &>/dev/null; then
-            convert "$src" -resize "${screen_width}x${screen_height}>" "$scaled" 2>/dev/null && plugin_path="$scaled"
+            convert "$src" -resize "${screen_width}x${screen_height}^>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         fi
         # One monitor-sized copy per picture, and a rotation is pointed at whole
         # folders, so the oldest are dropped rather than kept for a wallpaper
@@ -399,8 +422,7 @@ picture_only_post_process() {
             flock -w 30 8 2>/dev/null || true
         fi
         local screen_width screen_height
-        read -r screen_width screen_height < <(hyprctl monitors -j \
-            | jq -r '([.[].width] | min), ([.[].height] | min)' | xargs)
+        read -r screen_width screen_height < <(desired_wallpaper_box)
         set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
     ) >/dev/null 2>&1 9>&- &
 }
@@ -750,8 +772,7 @@ switch() {
     "$SCRIPT_DIR"/applycolor.sh
 
     # Pass screen width, height, and wallpaper path to post_process
-    max_width_desired="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
-    max_height_desired="$(hyprctl monitors -j | jq '([.[].height] | min)' | xargs)"
+    read -r max_width_desired max_height_desired < <(desired_wallpaper_box)
     post_process "$max_width_desired" "$max_height_desired" "$imgpath"
 }
 
