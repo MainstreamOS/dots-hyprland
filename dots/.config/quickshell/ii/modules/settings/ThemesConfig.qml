@@ -125,12 +125,26 @@ ContentPage {
         // file the index rebuild could not parse, and the theme then vanished
         // from the grid while its directory stayed on disk.
         renameProc.command = ["python3", "-c",
-            "import json, sys\n" +
-            "path, name = sys.argv[1], sys.argv[2]\n" +
-            "meta = json.load(open(path))\n" +
+            "import json, os, sys\n" +
+            "themes_dir, slug, name = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
+            "meta_path = os.path.join(themes_dir, slug, 'meta.json')\n" +
+            "meta = json.load(open(meta_path))\n" +
             "meta['name'] = name\n" +
-            "json.dump(meta, open(path, 'w'))\n",
-            `${root.themesDir}/${theme.slug}/meta.json`, name]
+            "json.dump(meta, open(meta_path, 'w'))\n" +
+            // The grid and both Day and Night pickers read the index, never the
+            // meta files, so a name that stops at meta.json is not a name anyone
+            // sees: the card reverts to the indexed one the moment it redraws.
+            // Rebuilt by re-reading every theme, the way saving and deleting
+            // already rebuild it, so one theme's rename cannot leave the index
+            // disagreeing with the rest of the library.
+            "out = []\n" +
+            "for entry in sorted(os.listdir(themes_dir)):\n" +
+            "    m = os.path.join(themes_dir, entry, 'meta.json')\n" +
+            "    if not os.path.isfile(m): continue\n" +
+            "    try: out.append(json.load(open(m)))\n" +
+            "    except Exception: pass\n" +
+            "json.dump(out, open(os.path.join(themes_dir, 'index.json'), 'w'), indent=2)\n",
+            root.themesDir, theme.slug, name]
         renameProc.running = false
         renameProc.running = true
     }
@@ -1493,16 +1507,25 @@ finally:
                                     if (!visible) return;
                                     settled = false;
                                     text = themeCard.modelData.name;
-                                    forceActiveFocus();
-                                    selectAll();
+                                    // After the swap rather than during it: the
+                                    // field is still being shown at this point,
+                                    // and focus given to an item mid-change does
+                                    // not always stick.
+                                    Qt.callLater(() => {
+                                        if (!cardNameField.visible) return;
+                                        cardNameField.forceActiveFocus();
+                                        cardNameField.selectAll();
+                                    });
                                 }
-                                onAccepted: {
+                                // Fires for Enter and for losing focus alike,
+                                // which is what clicking away is, so both ways
+                                // of finishing take one path. Committing clears
+                                // the slug, which hides the field and drops
+                                // focus, so this arrives a second time; the
+                                // latch is what stops the name being written
+                                // twice.
+                                onEditingFinished: {
                                     if (settled) return;
-                                    settled = true;
-                                    root.commitRename(themeCard.modelData, text);
-                                }
-                                onActiveFocusChanged: {
-                                    if (activeFocus || !visible || settled) return;
                                     settled = true;
                                     root.commitRename(themeCard.modelData, text);
                                 }
