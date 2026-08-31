@@ -204,6 +204,29 @@ Singleton {
         return changed
     }
 
+    // A file naming useUSCS alone predates the units key. That switch shipped
+    // on, so a stored true cannot say whether Fahrenheit was chosen or merely
+    // inherited, and handing it to the location gives a user actually in a
+    // Fahrenheit country the same answer either way. A stored false differs
+    // from what shipped, so it can only have been chosen, and it is the one
+    // worth carrying across. Nothing is written for the true case, so the great
+    // majority of machines take no startup write from this at all. The file is
+    // read rather than the adapter, because a file that already carries `units`
+    // has been migrated and must never be revisited.
+    function migrateWeatherUnits() {
+        let stored = null
+        try {
+            stored = JSON.parse(configFileView.text())
+        } catch (e) {
+            return false
+        }
+        const weather = stored?.bar?.weather
+        if (!weather || weather.units !== undefined || weather.useUSCS !== false) return false
+        if (root.options.bar.weather.units !== "auto") return false
+        root.options.bar.weather.units = "metric"
+        return true
+    }
+
     function reloadFromFile() {
         root._reloading = true
         configFileView.reload()
@@ -269,7 +292,14 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
-            if (root.blockWrites || root.themeApplyInProgress) return
+            // Re-armed rather than dropped. A write falling inside a theme
+            // apply was discarded outright, so a setting changed in that window
+            // reverted on the next read, and a migration lost the one chance it
+            // had to record what it had already decided in memory.
+            if (root.blockWrites || root.themeApplyInProgress) {
+                fileWriteTimer.restart()
+                return
+            }
             configFileView.writeAdapter()
         }
     }
@@ -296,7 +326,8 @@ Singleton {
             // survives because it is the last one.
             const seeded = root.seedBarLayoutFromLegacySwitches()
             const scrubbed = root.scrubRetiredBarModules()
-            if (seeded || scrubbed) fileWriteTimer.restart()
+            const united = root.migrateWeatherUnits()
+            if (seeded || scrubbed || united) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -690,7 +721,14 @@ Singleton {
                     property bool enable: true
                     property bool enableGPS: true // gps based location
                     property string city: "" // When 'enableGPS' is false
-                    property bool useUSCS: true // Instead of metric (SI) units
+                    // "auto" is the location's own answer and means no unit has
+                    // been named. Written from the settings page alone, so any
+                    // other value is a choice that stands.
+                    property string units: "auto" // "auto", "metric", "uscs"
+                    // Kept in step by the settings page and read by nothing, so
+                    // that a rollback to a release predating `units` still finds
+                    // the unit its owner picked.
+                    property bool useUSCS: true
                     property int fetchInterval: 10 // minutes
                 }
                 property JsonObject indicators: JsonObject {

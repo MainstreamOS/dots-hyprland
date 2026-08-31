@@ -1,11 +1,8 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
-import qs.modules.common
-import qs.modules.common.functions
 import QtQuick
 import Quickshell
-import Quickshell.Io
 
 /**
  * Sunrise and sunset for wherever this machine is.
@@ -22,22 +19,14 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // Resolved in the main shell alone. The settings app reads the same file
-    // and looks nothing up, so opening a page cannot start a second lookup and
-    // the two processes always describe the same window.
-    property bool lookupEnabled: false
-    function load() {
-        root.lookupEnabled = true;
-    }
-
-    property real latitude: 0
-    property real longitude: 0
-    property string locationLabel: ""
-    property bool locationKnown: false
-
-    // Trimmed, because the standard paths come back as file:// URLs and this
-    // one is handed to a shell as well as to a FileView.
-    readonly property string cachePath: FileUtils.trimFileProtocol(`${Directories.state}/solar-location.json`)
+    // Location is the only thing in this shell that asks the network where the
+    // machine is. What is taken from it is the last position whose clock agreed
+    // with this one, because a sunrise only means anything against the clock it
+    // is compared to. The weather deliberately reads the other position: it
+    // wants the place it was told about.
+    readonly property real latitude: Location.solarLatitude
+    readonly property real longitude: Location.solarLongitude
+    readonly property bool locationKnown: Location.solarKnown
 
     // Re-derived every minute, which costs a few dozen floating point
     // operations and settles every staleness question at once: the date
@@ -91,77 +80,4 @@ Singleton {
             sunset: clockTime(transit + half)
         };
     }
-
-    // The directory has to be made in the same breath as the write, because a
-    // detached mkdir has not finished by the time a separate write runs, and a
-    // location that never reaches disk is looked up again on every boot, which
-    // is the one thing a machine with no network cannot do. The path and the
-    // payload arrive as arguments rather than inside the script, so a place
-    // name carrying a quote stays data.
-    function store(lat, lon, label) {
-        const payload = JSON.stringify({
-            lat: lat,
-            lon: lon,
-            label: label
-        });
-        Quickshell.execDetached(["bash", "-c", 'mkdir -p "$(dirname "$0")" && printf "%s" "$1" > "$0"', root.cachePath, payload]);
-    }
-
-    function applyLocation(lat, lon, label) {
-        root.latitude = lat;
-        root.longitude = lon;
-        root.locationLabel = label;
-        root.locationKnown = true;
-    }
-
-    FileView {
-        id: cache
-        path: root.cachePath
-        printErrors: false
-        onLoaded: {
-            try {
-                const stored = JSON.parse(cache.text());
-                if (typeof stored.lat === "number" && typeof stored.lon === "number")
-                    root.applyLocation(stored.lat, stored.lon, stored.label ?? "");
-            } catch (e) {
-                // A truncated or hand-edited file just means no location yet;
-                // the lookup below replaces it.
-            }
-        }
-    }
-
-    // ip-api is asked for the offset as well as the position, because a
-    // position whose clock disagrees with this machine's is the shape a VPN
-    // exit node has, and its sunrise would be wrong by that whole difference.
-    // An hour of slack keeps a daylight saving changeover from being read as
-    // one. `fields` is explicit so the offset is actually in the reply.
-    Process {
-        id: locator
-        running: false
-        command: ["curl", "-s", "--max-time", "10", "http://ip-api.com/json/?fields=status,lat,lon,city,offset"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length === 0)
-                    return;
-                try {
-                    const found = JSON.parse(text);
-                    if (found.status !== "success")
-                        return;
-                    const localOffset = -new Date().getTimezoneOffset() * 60;
-                    if (typeof found.offset === "number" && Math.abs(found.offset - localOffset) > 3600)
-                        return;
-                    root.applyLocation(found.lat, found.lon, found.city ?? "");
-                    root.store(found.lat, found.lon, found.city ?? "");
-                } catch (e) {
-                    console.log("[SolarSchedule] location lookup failed: " + e);
-                }
-            }
-        }
-    }
-
-    // One lookup per session once the shell asks for it. A stored location is
-    // still refreshed, since a machine that moved would otherwise keep the old
-    // sun forever, but the stored one stays in force until the reply lands.
-    onLookupEnabledChanged: if (root.lookupEnabled)
-        locator.running = true
 }

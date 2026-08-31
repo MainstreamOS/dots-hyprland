@@ -163,6 +163,7 @@ PRESERVE_SEEDED=""
 PRESERVE_APPS=""
 PRESERVE_DOCK_PINS=""
 PRESERVE_UPDATES=""
+PRESERVE_WEATHER=""
 if [ -f "$SHELL_CONFIG" ]; then
     # What the live config keeps regardless of what a theme carries, read in
     # one pass. Each of these was its own jq, so the file was forked over and
@@ -194,7 +195,7 @@ if [ -f "$SHELL_CONFIG" ]; then
     # `// empty` also treats false as absent, so that is matched here.
     mapfile -t _PRESERVED < <(jq -r '
         [.appearance.themeSchedule, .light.night, .cursor, .bar.seededWidgets,
-         .dock.pinnedApps, .apps, .updates]
+         .dock.pinnedApps, .apps, .updates, .bar.weather]
         | map(if . == null or . == false then "" else tojson end) | .[]' \
         "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_THEME_SCHED="${_PRESERVED[0]:-}"
@@ -204,6 +205,7 @@ if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_DOCK_PINS="${_PRESERVED[4]:-}"
     PRESERVE_APPS="${_PRESERVED[5]:-}"
     PRESERVE_UPDATES="${_PRESERVED[6]:-}"
+    PRESERVE_WEATHER="${_PRESERVED[7]:-}"
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -258,6 +260,12 @@ if [ -n "$PRESERVE_APPS" ]; then    JQ_FILTER+=' | .apps = $apps';    JQ_ARGS+=(
 else                                JQ_FILTER+=' | del(.apps)'; fi
 if [ -n "$PRESERVE_UPDATES" ]; then JQ_FILTER+=' | .updates = $upd';  JQ_ARGS+=(--argjson upd "$PRESERVE_UPDATES");
 else                                JQ_FILTER+=' | del(.updates)'; fi
+# Dropped rather than inherited when there is nothing live to put back, the same
+# as apps and updates. A theme carries where its author was and what they call a
+# degree, and the unit key also records whether that question has been answered
+# at all, so an inherited copy would answer it on this machine's behalf.
+if [ -n "$PRESERVE_WEATHER" ]; then JQ_FILTER+=' | .bar.weather = $weather'; JQ_ARGS+=(--argjson weather "$PRESERVE_WEATHER");
+else                                JQ_FILTER+=' | del(.bar.weather)'; fi
 if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
 else

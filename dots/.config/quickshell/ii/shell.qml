@@ -48,7 +48,7 @@ ShellRoot {
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
-        SolarSchedule.load()
+        Location.load()
         FirstRunExperience.load()
         ConflictKiller.load()
         Cliphist.refresh()
