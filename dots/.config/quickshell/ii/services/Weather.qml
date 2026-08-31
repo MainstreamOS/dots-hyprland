@@ -255,13 +255,93 @@ Singleton {
         }
         stdout: StdioCollector {
             onStreamFinished: {
-                if (text.length === 0) return;
+                if (text.length === 0) {
+                    fallbackFetcher.fetch();
+                    return;
+                }
                 try {
                     const weather = JSON.parse(text);
+                    // The service answers 200 with a body saying it failed, so
+                    // a reply that parsed is not yet a reply that carries
+                    // weather.
+                    if (weather.error === true || !weather.current)
+                        throw new Error(weather.reason ?? "no current conditions");
                     root.lastReply = weather;
                     root.refineData(weather, false);
                 } catch (e) {
                     console.error(`[WeatherService] Weather Error: ${e.message}`);
+                    fallbackFetcher.fetch();
+                }
+            }
+        }
+    }
+
+    // A second forecaster, asked only when the first one has nothing. Its reply
+    // is reshaped into the first's form on the way in, so everything downstream
+    // goes on reading one kind of answer. Kept as a fallback rather than a
+    // choice: the first carries readings this one does not, and an outage is
+    // the only reason to accept the shorter answer.
+    //
+    // Speeds arrive in metres per second here and in kilometres per hour there,
+    // and the conditions are named rather than numbered, so both are converted
+    // rather than passed along to be read as something they are not.
+    readonly property string fallbackReshaper: `
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(1)
+t=d["properties"]["timeseries"][0]
+i=t["data"]["instant"]["details"]
+n=t["data"].get("next_1_hours") or t["data"].get("next_6_hours") or {}
+sym=(n.get("summary") or {}).get("symbol_code","")
+code=0
+for k,v in [("thunder",95),("snow",71),("sleet",68),("rainshowers",80),("heavyrain",65),("lightrain",51),("rain",61),("fog",45),("cloudy",3),("partlycloudy",2),("fair",1),("clearsky",0)]:
+    if k in sym: code=v; break
+print(json.dumps({"current":{
+ "temperature_2m":i.get("air_temperature"),
+ "relative_humidity_2m":i.get("relative_humidity"),
+ "apparent_temperature":i.get("air_temperature"),
+ "precipitation":(n.get("details") or {}).get("precipitation_amount",0),
+ "weather_code":code,
+ "pressure_msl":i.get("air_pressure_at_sea_level"),
+ "surface_pressure":i.get("air_pressure_at_sea_level"),
+ "wind_speed_10m":round((i.get("wind_speed") or 0)*3.6,1),
+ "wind_direction_10m":i.get("wind_from_direction"),
+ "uv_index":i.get("ultraviolet_index_clear_sky",0),
+ "visibility":0}}))
+`
+
+    Process {
+        id: fallbackFetcher
+        function fetch() {
+            if (running) return;
+            const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${root.latitude}&lon=${root.longitude}`;
+            // The service asks callers to identify themselves and turns away
+            // those that do not. URL and program arrive as arguments so neither
+            // is read as shell.
+            command = ["bash", "-c",
+                'curl -s --max-time 15 -H "User-Agent: MainstreamOS/2.0 (https://mainstreamos.org)" "$1" | python3 -c "$2"',
+                "weather", url, root.fallbackReshaper];
+            running = true;
+        }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.length === 0) return;
+                try {
+                    const weather = JSON.parse(text);
+                    // This forecaster reports no sun times, and the reader
+                    // downstream expects the stamped form the other one sends.
+                    // The sun is worked out here from the position anyway, so
+                    // it is dressed in that form rather than left missing.
+                    const stamp = t => t ? `1970-01-01T${t}` : "";
+                    weather.daily = {
+                        sunrise: [stamp(SolarSchedule.sunrise)],
+                        sunset: [stamp(SolarSchedule.sunset)]
+                    };
+                    root.lastReply = weather;
+                    root.refineData(weather, false);
+                    console.log("[WeatherService] Served by the fallback forecaster.");
+                } catch (e) {
+                    console.error(`[WeatherService] Fallback Error: ${e.message}`);
                 }
             }
         }
