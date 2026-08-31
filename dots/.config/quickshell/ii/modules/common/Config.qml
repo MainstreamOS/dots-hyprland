@@ -21,17 +21,20 @@ Singleton {
     // the layout now says the position the spacer used to fake.
     readonly property var defaultBarLayout: ({
         "left": [
-            { "widgets": [ {"id": "sidebarButton", "enabled": true}, {"id": "activeWindow", "enabled": true} ] },
-            { "widgets": [ {"id": "activeWindowPill", "enabled": false} ] }
+            { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
+            { "widgets": [ {"id": "tray", "enabled": true} ] },
+            { "widgets": [ {"id": "activeWindow", "enabled": false}, {"id": "activeWindowPill", "enabled": false} ] },
+            { "widgets": [ {"id": "sidebarButton", "enabled": true} ] }
         ],
         "center": [
-            { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
-            { "widgets": [ {"id": "workspaces", "enabled": true} ] },
-            { "widgets": [ {"id": "clock", "enabled": true}, {"id": "utilButtons", "enabled": true}, {"id": "battery", "enabled": true} ] },
-            { "widgets": [ {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] }
+            { "widgets": [ {"id": "utilButtons", "enabled": true} ] },
+            { "widgets": [ {"id": "clock", "enabled": true} ] },
+            { "widgets": [ {"id": "battery", "enabled": true}, {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] }
         ],
         "right": [
-            { "widgets": [ {"id": "timers", "enabled": true}, {"id": "tray", "enabled": true}, {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
+            { "widgets": [ {"id": "timers", "enabled": true} ] },
+            { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] },
+            { "widgets": [ {"id": "workspaces", "enabled": true} ] }
         ]
     })
     property bool ready: false
