@@ -1756,20 +1756,40 @@ finally:
             }
             StyledComboBox {
                 Layout.preferredWidth: 200
-                // "Follow Night Light" is only offered while Night Light
-                // itself is enabled; a stored "nightlight" mode with Night
-                // Light disabled displays as Off.
-                readonly property bool nightLightAvailable: (Config.options.light.night.mode ?? "disabled") !== "disabled"
-                model: nightLightAvailable
-                    ? [Translation.tr("Off"), Translation.tr("Follow Night Light"), Translation.tr("Set hours")]
-                    : [Translation.tr("Off"), Translation.tr("Set hours")]
-                readonly property var indexMode: nightLightAvailable
-                    ? ["off", "nightlight", "manual"]
-                    : ["off", "manual"]
+                // "Follow Night Light" keys on Hyprsunset.shouldBeOn, which is a
+                // clock-in-window test over light.night.from and .to and never
+                // consults light.night.mode, so the schedule keeps time whether
+                // or not the screen filter is switched on. Every mode the
+                // scheduler honors needs a row of its own: a stored mode with no
+                // row falls through the lookup below and reads as "Off" while
+                // ThemeManager carries on applying it.
+                model: [Translation.tr("Off"), Translation.tr("Follow Night Light"), Translation.tr("Set hours")]
+                readonly property var indexMode: ["off", "nightlight", "manual"]
                 currentIndex: Math.max(0, indexMode.indexOf(Config.options.appearance.themeSchedule.mode))
                 onActivated: index => {
                     Config.options.appearance.themeSchedule.mode = indexMode[index]
                 }
+            }
+            Item { Layout.fillWidth: true }
+        }
+
+        // The hours this mode keeps are Night Light's own and are edited on the
+        // Display page, so naming them here is the only thing standing between
+        // the user and a desktop that re-themes at an hour nothing on the page
+        // ever mentioned. "Set hours" needs no equivalent: its two pickers are
+        // right above, showing the times they set.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 2
+            visible: Config.options.appearance.themeSchedule.mode === "nightlight"
+            Item { Layout.fillWidth: true }
+            StyledText {
+                Layout.alignment: Qt.AlignVCenter
+                text: Translation.tr("Night theme from %1 to %2")
+                    .arg(DateTime.formatTimeOfDay(Config.options.light.night.from))
+                    .arg(DateTime.formatTimeOfDay(Config.options.light.night.to))
+                color: Appearance.colors.colSubtext
+                font.pixelSize: Appearance.font.pixelSize.smaller
             }
             Item { Layout.fillWidth: true }
         }
