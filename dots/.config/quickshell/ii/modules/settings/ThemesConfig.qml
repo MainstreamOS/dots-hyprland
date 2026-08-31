@@ -100,6 +100,144 @@ ContentPage {
         onTriggered: root.statusMessage = ""
     }
 
+    // ── Rename ──────────────────────────────────────────────────────────────
+    // Which card is showing its name as a field rather than a label. Held here
+    // rather than on the card so that opening a second rename closes the first,
+    // instead of leaving two fields open at once.
+    property string renamingSlug: ""
+    function beginRename(theme) {
+        if (!theme) return
+        root.renamingSlug = theme.slug
+    }
+    function cancelRename() {
+        root.renamingSlug = ""
+    }
+    // Only the display name moves. The slug is what the last-applied marker and
+    // the Day and Night pickers store, and it is the theme's directory name, so
+    // renaming through it would strand all three.
+    function commitRename(theme, newName) {
+        const name = (newName ?? "").trim()
+        root.renamingSlug = ""
+        if (!theme || name.length === 0 || name === theme.name) return
+        renameProc.pendingName = name
+        // Serialised, with the name arriving as an argument, for the same reason
+        // the save path writes meta.json this way: a quote in a name produced a
+        // file the index rebuild could not parse, and the theme then vanished
+        // from the grid while its directory stayed on disk.
+        renameProc.command = ["python3", "-c",
+            "import json, sys\n" +
+            "path, name = sys.argv[1], sys.argv[2]\n" +
+            "meta = json.load(open(path))\n" +
+            "meta['name'] = name\n" +
+            "json.dump(meta, open(path, 'w'))\n",
+            `${root.themesDir}/${theme.slug}/meta.json`, name]
+        renameProc.running = false
+        renameProc.running = true
+    }
+    Process {
+        id: renameProc
+        property string pendingName: ""
+        onExited: exitCode => {
+            if (exitCode === 0) {
+                ThemeLibrary.refresh()
+                root.showStatus(Translation.tr("Renamed to \"%1\".").arg(renameProc.pendingName))
+            } else {
+                root.showStatus(Translation.tr("Couldn't rename that theme."))
+            }
+            renameProc.pendingName = ""
+        }
+    }
+
+    // ── Card context menu ───────────────────────────────────────────────────
+    // One instance for the whole grid, pointed at whichever card was right
+    // clicked, drawn the way the shell draws its other context menus.
+    property var menuTheme: null
+    Popup {
+        id: cardMenu
+        padding: 0
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        parent: Overlay.overlay
+        readonly property bool onActiveTheme: root.menuTheme && root.menuTheme.slug === root.lastAppliedSlug
+
+        function openFor(theme, px, py) {
+            root.menuTheme = theme
+            cardMenu.x = px
+            cardMenu.y = py
+            cardMenu.open()
+        }
+
+        background: Item {
+            StyledRectangularShadow {
+                target: cardMenuBg
+            }
+            Rectangle {
+                id: cardMenuBg
+                anchors.fill: parent
+                color: Appearance.m3colors.m3surfaceContainer
+                radius: Appearance.rounding.normal
+            }
+        }
+
+        component MenuRow: RippleButton {
+            Layout.fillWidth: true
+            implicitHeight: 36
+            buttonRadius: Appearance.rounding.small
+            property string symbol: ""
+            property string label: ""
+            implicitWidth: Math.max(rowContent.implicitWidth + 20, 180)
+            contentItem: RowLayout {
+                id: rowContent
+                spacing: 10
+                MaterialSymbol {
+                    Layout.leftMargin: 10
+                    text: symbol
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.m3colors.m3onSurface
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    Layout.rightMargin: 10
+                    text: label
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.m3colors.m3onSurface
+                }
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            MenuRow {
+                symbol: "edit"
+                label: Translation.tr("Rename")
+                onClicked: {
+                    const theme = root.menuTheme
+                    cardMenu.close()
+                    root.beginRename(theme)
+                }
+            }
+
+            // Only on the theme already in force. On every other card this is
+            // what Apply does, and on this one Apply is an update instead, so
+            // without it there is no way to put the current theme back after
+            // something has drifted from it. It stays available while the
+            // schedule is on, because setting again what is already set cannot
+            // fight the schedule.
+            MenuRow {
+                visible: cardMenu.onActiveTheme
+                symbol: "refresh"
+                label: Translation.tr("Reapply")
+                enabled: !root.applyInFlight
+                onClicked: {
+                    const theme = root.menuTheme
+                    cardMenu.close()
+                    if (theme) root.applyTheme(theme)
+                }
+            }
+        }
+    }
+
     function slugify(name) {
         const s = (name || "theme").toString().toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
@@ -1271,6 +1409,22 @@ finally:
                     radius: Appearance.rounding.normal
                     color: isActive ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer2
 
+                    // Above the card's own controls, and deaf to everything but
+                    // the right button, so a left click still reaches Apply or
+                    // Delete underneath while a right click anywhere on the card
+                    // reaches the menu. Those buttons answer to the right button
+                    // as well, so a menu sitting below them would turn a right
+                    // click on Apply into an apply.
+                    MouseArea {
+                        anchors.fill: parent
+                        z: 10
+                        acceptedButtons: Qt.RightButton
+                        onClicked: mouse => {
+                            const at = mapToItem(Overlay.overlay, mouse.x, mouse.y);
+                            cardMenu.openFor(themeCard.modelData, at.x, at.y);
+                        }
+                    }
+
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 10
@@ -1298,14 +1452,65 @@ finally:
                             }
                         }
 
-                        StyledText {
-                            text: themeCard.modelData.name
-                            elide: Text.ElideRight
+                        // The name, and the same line as the field that renames
+                        // it. Swapped in place rather than opened elsewhere, so
+                        // the card keeps its shape while it is being edited.
+                        Item {
                             Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            font.pixelSize: Appearance.font.pixelSize.normal
-                            font.weight: Font.Medium
-                            color: themeCard.isActive ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1
+                            implicitHeight: Math.max(cardNameLabel.implicitHeight, cardNameField.implicitHeight)
+                            readonly property bool renaming: root.renamingSlug === themeCard.modelData.slug
+
+                            StyledText {
+                                id: cardNameLabel
+                                visible: !parent.renaming
+                                anchors.fill: parent
+                                text: themeCard.modelData.name
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                font.weight: Font.Medium
+                                color: themeCard.isActive ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1
+                            }
+
+                            StyledTextInput {
+                                id: cardNameField
+                                visible: parent.renaming
+                                anchors.fill: parent
+                                horizontalAlignment: TextInput.AlignHCenter
+                                verticalAlignment: TextInput.AlignVCenter
+                                selectByMouse: true
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                font.weight: Font.Medium
+                                color: themeCard.isActive ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1
+                                // Enter and clicking away both mean the same
+                                // thing, so the first one to arrive commits and
+                                // the other finds nothing left to do. Without
+                                // that, accepting also drops focus and the name
+                                // would be written twice.
+                                property bool settled: false
+                                onVisibleChanged: {
+                                    if (!visible) return;
+                                    settled = false;
+                                    text = themeCard.modelData.name;
+                                    forceActiveFocus();
+                                    selectAll();
+                                }
+                                onAccepted: {
+                                    if (settled) return;
+                                    settled = true;
+                                    root.commitRename(themeCard.modelData, text);
+                                }
+                                onActiveFocusChanged: {
+                                    if (activeFocus || !visible || settled) return;
+                                    settled = true;
+                                    root.commitRename(themeCard.modelData, text);
+                                }
+                                Keys.onEscapePressed: {
+                                    settled = true;
+                                    root.cancelRename();
+                                }
+                            }
                         }
 
                         // Two buttons: Apply/Update + Delete — styled like the
