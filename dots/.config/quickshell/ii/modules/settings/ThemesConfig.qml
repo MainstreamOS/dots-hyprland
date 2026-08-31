@@ -1785,9 +1785,18 @@ finally:
             Item { Layout.fillWidth: true }
             StyledText {
                 Layout.alignment: Qt.AlignVCenter
-                text: Translation.tr("Night theme from %1 to %2")
-                    .arg(DateTime.formatTimeOfDay(Config.options.light.night.from))
-                    .arg(DateTime.formatTimeOfDay(Config.options.light.night.to))
+                // Hyprsunset's own window rather than the stored hours, because
+                // under a schedule that follows the sun those two differ and
+                // only the first one is what the theme actually turns on.
+                text: {
+                    if (Hyprsunset.solarOverride === false)
+                        return Translation.tr("The sun does not set today");
+                    if (Hyprsunset.solarOverride === true)
+                        return Translation.tr("The sun does not rise today");
+                    return Translation.tr("Night theme from %1 to %2")
+                        .arg(DateTime.formatTimeOfDay(Hyprsunset.from))
+                        .arg(DateTime.formatTimeOfDay(Hyprsunset.to));
+                }
                 color: Appearance.colors.colSubtext
                 font.pixelSize: Appearance.font.pixelSize.smaller
             }

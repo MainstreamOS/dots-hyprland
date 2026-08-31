@@ -3793,7 +3793,35 @@ except Exception:
             }
         }
 
-        // Schedule details: revealed only when scheduleMode === "manual"
+        // "Automatic" follows the sun where this machine is, so the hours are
+        // not the user's to set and are shown rather than offered. They are
+        // read off Hyprsunset, which falls back to the stored pair until a
+        // location is known, so this line always names the window in force.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 32
+            Layout.topMargin: visible ? 8 : 0
+            visible: Config.options.light.night.mode === "automatic"
+
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                text: {
+                    if (Hyprsunset.solarOverride === false)
+                        return Translation.tr("The sun does not set today");
+                    if (Hyprsunset.solarOverride === true)
+                        return Translation.tr("The sun does not rise today");
+                    if (!Hyprsunset.usingSolar)
+                        return Translation.tr("Waiting for your location, using %1 to %2 meanwhile").arg(DateTime.formatTimeOfDay(Hyprsunset.from)).arg(DateTime.formatTimeOfDay(Hyprsunset.to));
+                    return Translation.tr("Sunset %1, sunrise %2").arg(DateTime.formatTimeOfDay(Hyprsunset.from)).arg(DateTime.formatTimeOfDay(Hyprsunset.to));
+                }
+                color: Appearance.colors.colSubtext
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        // Schedule details: revealed only when the mode is "manual"
         // ("Set hours"). Visibility flip is the "drop-down" reveal —
         // the time-pickers slide in beneath the Schedule dropdown and
         // back out when it switches to "Automatic".

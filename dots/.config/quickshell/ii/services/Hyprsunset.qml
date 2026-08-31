@@ -17,8 +17,33 @@ Singleton {
 
     readonly property real gammaLowerLimit: 25
 
-    property string from: Config.options?.light?.night?.from ?? "19:00" 
-    property string to: Config.options?.light?.night?.to ?? "06:30"
+    // Whether the window follows the sun rather than a pair of stored hours.
+    // This keys on scheduleMode rather than mode because the day and night
+    // theme scheduler reads the window while the filter is switched off, and
+    // mode forgets which kind of schedule was chosen the moment it turns
+    // "disabled" or "enabled".
+    readonly property bool followsSun: (Config.options?.light?.night?.scheduleMode ?? "manual") === "automatic"
+    // A located sun replaces the stored hours; anything short of one leaves
+    // them in force, so a machine that has never reached the network keeps
+    // whatever window it was given.
+    readonly property bool usingSolar: root.followsSun && SolarSchedule.valid
+
+    property string from: root.usingSolar ? SolarSchedule.sunset : (Config.options?.light?.night?.from ?? "19:00")
+    property string to: root.usingSolar ? SolarSchedule.sunrise : (Config.options?.light?.night?.to ?? "06:30")
+
+    // A sun that never sets, and one that never rises, have no crossing to
+    // compare a clock against, so they answer the question outright. Handing
+    // back the stored hours instead would warm the screen in the middle of an
+    // Arctic afternoon that never gets dark.
+    readonly property var solarOverride: {
+        if (!root.followsSun)
+            return undefined;
+        if (SolarSchedule.state === "polarDay")
+            return false;
+        if (SolarSchedule.state === "polarNight")
+            return true;
+        return undefined;
+    }
     property bool automatic: Config.options?.light?.night?.automatic && (Config?.ready ?? true)
     property int colorTemperature: Config.options?.light?.night?.colorTemperature ?? 5000
     property int defaultColorTemperature: 6000
@@ -55,6 +80,24 @@ Singleton {
     readonly property bool configReady: Config?.ready ?? true
     onConfigReadyChanged: if (root.configReady) root.reEvaluate()
 
+    // The sun moves the window once a day, and once more when a location first
+    // arrives, so following it cannot storm the way a handler on the stored
+    // hours would: those move on every step of a spin box.
+    onFollowsSunChanged: root.reEvaluate()
+    Connections {
+        target: SolarSchedule
+        enabled: root.followsSun
+        function onSunriseChanged() {
+            root.reEvaluate();
+        }
+        function onSunsetChanged() {
+            root.reEvaluate();
+        }
+        function onStateChanged() {
+            root.reEvaluate();
+        }
+    }
+
     function inBetween(t, from, to) {
         if (from < to) {
             return (t >= from && t <= to);
@@ -73,7 +116,7 @@ Singleton {
         if (root.manualActive !== undefined && (inBetween(from, manualActive, t) || inBetween(to, manualActive, t))) {
             root.manualActive = undefined;
         }
-        root.shouldBeOn = inBetween(t, from, to);
+        root.shouldBeOn = (root.solarOverride !== undefined) ? root.solarOverride : inBetween(t, from, to);
         if (firstEvaluation) {
             firstEvaluation = false;
             root.ensureState();
