@@ -188,6 +188,44 @@ Variants {
             x: 0
             y: 0
 
+            // The shake-to-locate magnifier writes this file while it holds
+            // the screen. Watched rather than asked, because the two are
+            // separate processes and a shell that starts mid-effect still has
+            // to see it.
+            property bool magnifying: false
+            FileView {
+                path: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/shake-zoom.active`
+                watchChanges: true
+                printErrors: false
+                onFileChanged: reload()
+                onLoaded: triggerArea.magnifying = true
+                onLoadFailed: triggerArea.magnifying = false
+            }
+
+            // Asked once per dwell. A pointer the compositor puts somewhere
+            // other than this corner did not approach it, whatever the enter
+            // event said.
+            Process {
+                id: cursorCheck
+                command: ["hyprctl", "-j", "cursorpos"]
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        let at = null;
+                        try {
+                            at = JSON.parse(text);
+                        } catch (e) {
+                            return; // No answer is not permission to fire.
+                        }
+                        const win = triggerArea.QsWindow.window;
+                        const localX = at.x - (win?.screen?.x ?? 0);
+                        const localY = at.y - (win?.screen?.y ?? 0);
+                        if (localX < 0 || localY < 0 || localX >= triggerArea.width || localY >= triggerArea.height)
+                            return;
+                        triggerArea.act();
+                    }
+                }
+            }
+
             // Resolve the configured trigger once and reuse — keeps the
             // binding logic in one place. Falls back to "off" if Config
             // isn't ready yet.
@@ -238,6 +276,24 @@ Variants {
                 interval: 50
                 onTriggered: {
                     if (triggerArea.toggleCooldown) return;
+                    // Nothing while the screen is magnified. Down there the
+                    // pointer is being pushed against an edge to pan the view,
+                    // not taken to a corner on purpose.
+                    if (triggerArea.magnifying) return;
+                    // An entry is not proof the pointer arrived. A focus grab
+                    // refreshes pointer focus across every surface it lists,
+                    // this panel among them, so Hyprland synthesises an enter
+                    // for a pointer that never moved and may be on another
+                    // screen entirely. Ask the compositor where it actually is
+                    // and drop anything that disagrees. One round trip per
+                    // approach to the corner.
+                    cursorCheck.running = false;
+                    cursorCheck.running = true;
+}
+            }
+
+            // Runs only once the compositor has confirmed the pointer.
+            function act() {
 
                     const trig = triggerArea.trigger;
 
@@ -300,8 +356,8 @@ Variants {
                     // toggle the overview back off.
                     triggerArea.toggleCooldown = true;
                     cooldownTimer.restart();
-                }
-            }
+                            }
+
             Timer {
                 id: cooldownTimer
                 interval: 500

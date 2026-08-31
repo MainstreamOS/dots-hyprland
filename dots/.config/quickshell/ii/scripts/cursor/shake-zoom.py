@@ -27,6 +27,12 @@ HOLD = 1.0 if MODE == "grow" else 3.0   # seconds the effect holds after a shake
 SUPERVISE = 1.0       # seconds between "is anyone still watching us" checks
 TAKEOVER = 3.0        # seconds to wait for an older watcher to step aside
 DEAD_AFTER = 5.0      # seconds of unanswered polls before the compositor counts as gone
+# Seconds the detector stays deaf after an effect ends. Finding the pointer is
+# what the shake is for, so the moment it ends the hand is usually still moving
+# over the thing it went looking for, and that movement is exactly the shape the
+# detector is watching for. Without a pause the second trigger costs a fraction
+# of the effort the first one did.
+REARM = 1.2
 
 
 def _runtime_dir():
@@ -105,6 +111,23 @@ _base_theme = "Bibata-Modern-Classic"
 _base_size = 24
 
 
+def _marker_path():
+    return os.path.join(_runtime_dir(), "shake-zoom.active")
+
+
+def _set_marker(on):
+    # A file rather than a message, because the readers are separate processes
+    # that come and go: one that starts while the effect is up still sees it.
+    try:
+        if on:
+            with open(_marker_path(), "w") as f:
+                f.write(MODE)
+        else:
+            os.unlink(_marker_path())
+    except OSError:
+        pass
+
+
 def activate():
     global _base_theme, _base_size
     if MODE == "grow":
@@ -113,6 +136,7 @@ def activate():
         _hyprctl("setcursor", _base_theme, str(int(_base_size * GROW_FACTOR)))
     else:
         set_zoom(ZOOM_FACTOR)
+    _set_marker(True)
 
 
 def deactivate():
@@ -121,6 +145,7 @@ def deactivate():
         _set_nohw(_orig_nohw)
     else:
         set_zoom(1)
+    _set_marker(False)
 
 
 _KEY_LEFTSHIFT = 42
@@ -168,6 +193,9 @@ class ShakeDetector:
     # one, so a shake in any orientation (horizontal, vertical, diagonal)
     # counts equally.
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.prev_vec = None
         self.anchor = None
         self.reversals = deque()
@@ -270,6 +298,7 @@ def main():
     prev = cursorpos(path)
     parent = os.getppid()
     active_until = 0.0
+    rearm_at = 0.0
     answered = time.time()
     supervised = 0.0
     while True:
@@ -293,7 +322,13 @@ def main():
         dx = p[0] - prev[0]
         dy = p[1] - prev[1]
         prev = p
-        if det.feed(now, p[0], p[1], dx, dy):
+        shaking = det.feed(now, p[0], p[1], dx, dy)
+        if now < rearm_at:
+            # Still deaf: keep reading so the detector stays in step with where
+            # the pointer is, but let nothing it sees count yet.
+            det.reset()
+            shaking = False
+        if shaking:
             if not _active:
                 activate()
                 _active = True
@@ -304,7 +339,11 @@ def main():
             else:
                 deactivate()
                 _active = False
-                det.reversals.clear()
+                # The swing that ended the effect leaves an anchor and a
+                # direction behind it, so clearing only the timestamps lets the
+                # next flick start from halfway there.
+                det.reset()
+                rearm_at = now + REARM
 
 
 if __name__ == "__main__":
