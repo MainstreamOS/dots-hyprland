@@ -46,6 +46,15 @@ Singleton {
         reEvaluate();
     }
 
+    // The window above is read from the config file, which arrives after this
+    // singleton is built, so the first evaluation runs against the shipped
+    // defaults. A filter that is switched on gets corrected for free, because
+    // `automatic` turns true on the same event and re-evaluates; a switched off
+    // one has nothing to correct it, and the day and night theme scheduler
+    // follows this window whether the filter runs or not.
+    readonly property bool configReady: Config?.ready ?? true
+    onConfigReadyChanged: if (root.configReady) root.reEvaluate()
+
     function inBetween(t, from, to) {
         if (from < to) {
             return (t >= from && t <= to);
