@@ -112,6 +112,35 @@ local function titleBarsEnabled()
     return v ~= "0"
 end
 
+-- How the bar is painted, saved beside the on/off flag by the same Settings
+-- page and read on the same reload.
+local function readTitleBarFile(name)
+    local f = io.open(HOME .. "/.config/hypr/custom/" .. name, "r")
+    if not f then return nil end
+    local v = f:read("*l")
+    f:close()
+    if v == nil or v == "" then return nil end
+    return v
+end
+
+-- hyprbars takes a single bar_color carrying its own alpha, so the colour and
+-- the opacity are composed here rather than set as two keys.
+--
+-- Returns nil for anything it cannot read as a colour, and the caller then
+-- leaves the key alone: a machine that has never set one, or a theme written
+-- before this existed, keeps whatever the plugin chooses for itself. Better a
+-- bar that looks as it always did than every window wearing a colour nobody
+-- asked for.
+local function titleBarColor()
+    local hex = readTitleBarFile("titlebars.color")
+    if not hex then return nil end
+    hex = hex:gsub("^#", "")
+    if not hex:match("^%x%x%x%x%x%x$") then return nil end
+    local o = tonumber(readTitleBarFile("titlebars.opacity") or "1") or 1
+    if o < 0 then o = 0 elseif o > 1 then o = 1 end
+    return string.format("rgba(%s%02x)", hex, math.floor(o * 255 + 0.5))
+end
+
 local function applyPluginConfig()
     -- scrolloverview block — probe one key first. During a hyprbars toggle
     -- the file watcher + handlePluginLoads chain transiently re-parses
@@ -147,18 +176,26 @@ local function applyPluginConfig()
     -- hyprbars config + buttons — also probed before apply.
     if hyprbarsActive() and keyAvailable("plugin:hyprbars:bar_height") then
         local tbOn = titleBarsEnabled()
+        -- Built first so the colour can be left out entirely. Setting the key
+        -- to nil would not do that: assigning nil to a table field is how you
+        -- remove it, and the field was never there to remove.
+        local hyprbarsCfg = {
+            enabled = tbOn,
+            bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
+            bar_title_enabled = false,
+            bar_height = tbOn and 30 or 0,
+            bar_padding = 10,
+            bar_button_padding = 5,
+            bar_precedence_over_border = true,
+            bar_part_of_window = true,
+        }
+        local barColor = titleBarColor()
+        if barColor then
+            hyprbarsCfg.bar_color = barColor
+        end
         hl.config({
             plugin = {
-                hyprbars = {
-                    enabled = tbOn,
-                    bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
-                    bar_title_enabled = false,
-                    bar_height = tbOn and 30 or 0,
-                    bar_padding = 10,
-                    bar_button_padding = 5,
-                    bar_precedence_over_border = true,
-                    bar_part_of_window = true,
-                },
+                hyprbars = hyprbarsCfg,
             },
         })
 

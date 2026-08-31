@@ -284,6 +284,29 @@
       "default": true,
       "mechanism": "flagfile",
       "path": "titlebars.enabled"
+    },
+    {
+      "key": "titleBarColor",
+      "group": "shape",
+      "label": "Title bar color",
+      "type": "str",
+      "default": "",
+      "mechanism": "flagfile",
+      "path": "titlebars.color",
+      "requires": "titleBars"
+    },
+    {
+      "key": "titleBarOpacity",
+      "group": "shape",
+      "label": "Title bar opacity",
+      "type": "float",
+      "default": 1.0,
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.05,
+      "mechanism": "flagfile",
+      "path": "titlebars.opacity",
+      "requires": "titleBars"
     }
   ]
 }

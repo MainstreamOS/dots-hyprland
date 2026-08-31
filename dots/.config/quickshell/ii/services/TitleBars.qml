@@ -60,18 +60,65 @@ Singleton {
             `printf '%s' '${value ? "1" : "0"}' > '${root.flagPath}' && hyprctl reload`])
     }
 
+    // How the bar is painted. Both persist beside the on/off flag and are read
+    // by general.lua on the same reload.
+    //
+    // An empty color means the plugin keeps the one it chooses for itself: a
+    // theme written before these existed carries neither key, and inventing a
+    // color for it would repaint every bar on the machine off the back of an
+    // update.
+    readonly property string colorPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.color`
+    readonly property string opacityPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.opacity`
+
+    property string color: ""
+    property real opacity: 1.0
+    property bool appearanceLoaded: false
+
+    // Written together, because they compose into one value the plugin reads:
+    // hyprbars takes a single bar_color carrying its own alpha, so a colour
+    // saved without its opacity would land at whatever the other file last
+    // said. One reload covers both.
+    //
+    // The values travel as arguments rather than inside the script, so a colour
+    // string stays a colour string whatever it contains.
+    function setAppearance(newColor, newOpacity) {
+        root.color = newColor
+        root.opacity = newOpacity
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && hyprctl reload',
+            root.colorPath, String(newColor),
+            root.opacityPath, String(newOpacity)])
+    }
+
     Process {
         id: readerProc
-        // Read the flag; a missing file makes `cat` fail so buf stays empty
-        // and we default to on.
-        command: ["sh", "-c", `cat '${root.flagPath}' 2>/dev/null || echo 1`]
+        // All three read in one pass, newline separated, so the service never
+        // shows an on/off state from one moment beside a colour from another.
+        // A missing file makes `cat` fail, and the fallback on each line is the
+        // value that means "as it was".
+        // The newline after each field is written here rather than by the
+        // fallback, because `echo` brings one of its own and `printf` does not:
+        // a missing file would otherwise end a field with two and push
+        // everything after it down a line.
+        command: ["bash", "-c",
+            '{ cat "$0" 2>/dev/null || printf 1; }; printf "\\n"; ' +
+            '{ cat "$1" 2>/dev/null; }; printf "\\n"; ' +
+            '{ cat "$2" 2>/dev/null || printf 1; }; printf "\\n"',
+            root.flagPath, root.colorPath, root.opacityPath]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
         onExited: {
-            root.enabled = readerProc.buf.trim() !== "0"
+            // One line each: the parser has already split on the newlines the
+            // separators put between them.
+            const lines = readerProc.buf.split("\n")
+            root.enabled = (lines[0] ?? "").trim() !== "0"
+            root.color = (lines[1] ?? "").trim()
+            const o = parseFloat((lines[2] ?? "").trim())
+            root.opacity = isNaN(o) ? 1.0 : Math.max(0, Math.min(1, o))
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
+            root.appearanceLoaded = true
         }
     }
 

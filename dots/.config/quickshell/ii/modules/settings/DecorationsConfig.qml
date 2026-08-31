@@ -436,6 +436,11 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
     }
 
     // ── Decorations ──────────────────────────────────────────────────────────
+    // Shown only while title bars are drawn: with them off there is no bar for
+    // a colour to land on, and the controls would be asking about something
+    // that is not on screen. TitleBars.enabled mirrors the same flag file the
+    // toggle writes, so this follows it without the two pages having to agree
+    // with each other.
     ContentSection {
         icon: "auto_awesome"
         title: Translation.tr("Window decorations")
@@ -567,6 +572,59 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                     text: Translation.tr("Show title bars on windows")
                 }
             }
+        }
+    }
+
+    ContentSection {
+        id: titleBarSection
+        icon: "title"
+        title: Translation.tr("Title bars")
+        visible: TitleBars.enabled
+
+        // Held apart from the service until the user lets go, so the whole
+        // desktop is not reloaded on every step of a drag: setAppearance()
+        // runs `hyprctl reload`, and a slider sends a value per pixel.
+        property string pendingColor: TitleBars.color
+        property real pendingOpacity: TitleBars.opacity
+
+        ColorField {
+            text: Translation.tr("Color")
+            buttonIcon: "format_color_fill"
+            value: titleBarSection.pendingColor
+            onEdited: newValue => {
+                titleBarSection.pendingColor = newValue;
+                TitleBars.setAppearance(newValue, titleBarSection.pendingOpacity);
+            }
+            StyledToolTip {
+                text: Translation.tr("Left empty, the title bar keeps the color it comes with.")
+            }
+        }
+
+        ConfigSlider {
+            id: titleBarOpacitySlider
+            text: Translation.tr("Opacity")
+            buttonIcon: "opacity"
+            from: 0
+            to: 100
+            value: Math.round(titleBarSection.pendingOpacity * 100)
+            onMoved: {
+                const stepped = Math.round(value) / 100;
+                if (stepped === titleBarSection.pendingOpacity) return;
+                titleBarSection.pendingOpacity = stepped;
+                titleBarApplyDebounce.restart();
+            }
+            StyledToolTip {
+                text: Translation.tr("Takes effect once a color is set.")
+            }
+        }
+
+        // Applying means reloading the compositor, and a drag sends a value
+        // per step, so the slider is allowed to settle first.
+        Timer {
+            id: titleBarApplyDebounce
+            interval: 400
+            onTriggered: TitleBars.setAppearance(titleBarSection.pendingColor,
+                titleBarSection.pendingOpacity)
         }
     }
 
