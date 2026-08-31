@@ -148,13 +148,15 @@ Scope { // Scope
             // icons can overflow without window clipping.
             readonly property real dockExtent: Appearance.sizes.dockExtentFor(dockRoot.fittedIconSize)
 
-            // Animated on the window rather than on the shared value, so a dial
-            // under the hand still settles smoothly without one screen's fit
-            // walking another screen's dock up and down.
-            property real magnifyHeadroom: Appearance.sizes.dockMagnifyHeadroomFor(dockRoot.fittedIconSize)
-            Behavior on magnifyHeadroom {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
+            // Reached in one step rather than crossed over several frames. This
+            // is half of the window's own thickness, and the other half moves at
+            // once, so spreading this half out buys no smoothness: it only turns
+            // one resize of the layer surface into one per frame. Each of those
+            // is answered by the compositor with events that land here as a
+            // fresh monitor list, and a fresh list re-solves the fit of every
+            // dock on every screen, so a screen narrow enough for its icons to
+            // actually resize takes all the others down with it.
+            readonly property real magnifyHeadroom: Appearance.sizes.dockMagnifyHeadroomFor(dockRoot.fittedIconSize)
 
             exclusiveZone: root.pinned ? Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize) + Appearance.sizes.hyprlandGapsOut : 0
 
