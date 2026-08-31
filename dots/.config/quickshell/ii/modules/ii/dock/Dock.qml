@@ -101,12 +101,62 @@ Scope { // Scope
                 right: dockRoot.dockEdge !== "left"
             }
 
+            // How much of this screen the row may run along. The surface is
+            // anchored to both ends of its axis, so the compositor has already
+            // sized it to the whole output; asking for more is ignored rather
+            // than honored, and anything past it is never painted and never
+            // clickable. Room another panel has reserved along the same axis
+            // comes off, since the dock does not get that either.
+            readonly property var monitorData: HyprlandData.monitors.find(m => m.name === dockRoot.screen?.name)
+            readonly property real axisBudget: {
+                const reserved = dockRoot.monitorData?.reserved ?? [0, 0, 0, 0];
+                const along = dockRoot.dockVertical ? ((reserved[1] ?? 0) + (reserved[3] ?? 0)) : ((reserved[0] ?? 0) + (reserved[2] ?? 0));
+                const extent = dockRoot.dockVertical ? (dockRoot.screen?.height ?? 0) : (dockRoot.screen?.width ?? 0);
+                return extent - along - Appearance.sizes.hyprlandGapsOut * 2;
+            }
+
+            // The row is one line, so its length is first degree in the icon
+            // size: a part that never moves, and a count of slots that each
+            // grow a pixel for every pixel of icon. That is what lets a screen
+            // too short for the row solve for the size that fits instead of
+            // measuring one. It cannot measure: the row's length is what sizes
+            // the things inside it, so reading it back closes a ring, and the
+            // ring is animated, so it would settle as a pulse rather than fail
+            // as an error. The constants below mirror the row further down and
+            // are named for the lines they come from.
+            readonly property int appButtonCount: TaskbarApps.apps.filter(a => a?.appId !== "SEPARATOR").length
+            readonly property int hairlineCount: TaskbarApps.apps.length - dockRoot.appButtonCount
+            readonly property real fittedIconSize: {
+                const showPin = Config.options?.dock.showPinButton ?? true;
+                const showOverview = Config.options?.dock.showOverviewButton ?? true;
+                // Each app button runs 15 past its icon, from the dock's own
+                // thickness less the row padding, and carries listView.spacing
+                // twice. The ends bring a hairline and two dockRow gaps each,
+                // and the overview button its own 15. Plus the row padding and
+                // the one hairline inside the list.
+                const perButton = 17;
+                const fixed = 5 * 2 + 1 + dockRoot.appButtonCount * perButton + dockRoot.hairlineCount * 3 + (showPin ? 1 + 6 : 0) + (showOverview ? 15 + 1 + 6 : 0);
+                const slots = (showPin ? 1 : 0) + (showOverview ? 1 : 0) + dockRoot.appButtonCount;
+                if (slots <= 0)
+                    return Appearance.sizes.dockIconSize;
+                const room = Math.floor((dockRoot.axisBudget - fixed) / slots);
+                return Math.max(Appearance.sizes.dockIconMin, Math.min(Appearance.sizes.dockIconSize, room));
+            }
+
             // The dock's visible thickness plus its screen gap; the extra 60
             // beyond it is headroom on the center-facing side so magnified
             // icons can overflow without window clipping.
-            readonly property real dockExtent: Appearance.sizes.dockExtent
+            readonly property real dockExtent: Appearance.sizes.dockExtentFor(dockRoot.fittedIconSize)
 
-            exclusiveZone: root.pinned ? Appearance.sizes.dockHeight + Appearance.sizes.hyprlandGapsOut : 0
+            // Animated on the window rather than on the shared value, so a dial
+            // under the hand still settles smoothly without one screen's fit
+            // walking another screen's dock up and down.
+            property real magnifyHeadroom: Appearance.sizes.dockMagnifyHeadroomFor(dockRoot.fittedIconSize)
+            Behavior on magnifyHeadroom {
+                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+            }
+
+            exclusiveZone: root.pinned ? Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize) + Appearance.sizes.hyprlandGapsOut : 0
 
             Component.onCompleted: {
                 GlobalFocusGrab.addPersistent(dockRoot);
@@ -126,8 +176,8 @@ Scope { // Scope
                 }
             }
 
-            implicitWidth: dockRoot.dockVertical ? dockRoot.dockExtent + Appearance.sizes.dockMagnifyHeadroom : dockBackground.implicitWidth
-            implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + Appearance.sizes.dockMagnifyHeadroom
+            implicitWidth: dockRoot.dockVertical ? dockRoot.dockExtent + dockRoot.magnifyHeadroom : dockBackground.implicitWidth
+            implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + dockRoot.magnifyHeadroom
             WlrLayershell.namespace: "quickshell:dock" + (dockRoot.dockEdge === "bottom" ? ""
                 : dockRoot.dockEdge.charAt(0).toUpperCase() + dockRoot.dockEdge.slice(1))
             WlrLayershell.layer: GlobalStates.overviewOpen ? WlrLayer.Overlay : WlrLayer.Top
@@ -144,7 +194,7 @@ Scope { // Scope
                 // strip off the screen edge when hidden — keeping only the
                 // hover strip while hover-to-reveal is on. Shares the headroom
                 // with the window above, since the two describe one edge.
-                readonly property real slide: Appearance.sizes.dockMagnifyHeadroom + (dockRoot.reveal ? 1
+                readonly property real slide: dockRoot.magnifyHeadroom + (dockRoot.reveal ? 1
                     : Config.options?.dock.hoverToReveal ? (dockRoot.dockExtent - Config.options.dock.hoverRegionHeight)
                     : (dockRoot.dockExtent + 1))
 
@@ -428,8 +478,8 @@ Scope { // Scope
                                     // overview button at the far end, so the two
                                     // ends of the dock keep pace with each other
                                     // and with what sits between them.
-                                    baseWidth: Appearance.sizes.dockIconSize
-                                    baseHeight: Appearance.sizes.dockIconSize
+                                    baseWidth: dockRoot.fittedIconSize
+                                    baseHeight: dockRoot.fittedIconSize
                                     clickedWidth: baseWidth
                                     clickedHeight: baseHeight + 20
                                     buttonRadius: Appearance.rounding.normal
@@ -445,7 +495,7 @@ Scope { // Scope
                                         // its own, so a fraction here mints a face
                                         // the rounding was meant to prevent.
                                         iconSize: Math.round(Appearance.font.pixelSize.larger
-                                            * Appearance.sizes.dockIconSize / Appearance.sizes.dockIconStock)
+                                            * dockRoot.fittedIconSize / Appearance.sizes.dockIconStock)
                                         color: root.pinned ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer0
                                     }
                                 }

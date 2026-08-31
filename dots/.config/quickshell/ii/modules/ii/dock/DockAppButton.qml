@@ -13,7 +13,7 @@ DockButton {
     property var appToplevel
     property var appListRoot
     property int delegateIndex: -1
-    property real iconSize: Appearance.sizes.dockIconSize
+    property real iconSize: dockRoot.fittedIconSize
     property real countDotWidth: 10
     property real countDotHeight: 4
     property bool appIsActive: appToplevel?.toplevels?.find(t => (t.activated == true)) !== undefined

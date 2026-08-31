@@ -563,10 +563,27 @@ Singleton {
         // the icons is measured from it, so a dock left alone looks the same as
         // it always did and everything grows together once it is changed.
         property real dockIconStock: 35
+        // The size asked for. A dock shows this or the largest size its own
+        // screen can run edge to edge, whichever is smaller, so this stays
+        // exactly what was asked for and the slider and the file keep one
+        // meaning on every screen.
         property real dockIconSize: (Config.options?.dock.iconSize ?? -1) >= 0
             ? Config.options.dock.iconSize : root.sizes.dockIconStock
-        property real dockHeight: root.sizes.dockIconSize + 25
-        property real dockExtent: root.sizes.dockHeight + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut
+        // The bottom of the settings track. A screen too short even for this
+        // has nothing left to give up, so it truncates rather than drawing
+        // icons no slider could have asked for.
+        readonly property real dockIconMin: 16
+        // Thickness, reserved extent and hover headroom as functions of an
+        // icon size rather than only of the configured one, so a dock showing
+        // smaller icons derives all three the same way and they cannot drift.
+        function dockHeightFor(iconSize) {
+            return iconSize + 25;
+        }
+        function dockExtentFor(iconSize) {
+            return root.sizes.dockHeightFor(iconSize) + root.sizes.elevationMargin + root.sizes.hyprlandGapsOut;
+        }
+        property real dockHeight: root.sizes.dockHeightFor(root.sizes.dockIconSize)
+        property real dockExtent: root.sizes.dockExtentFor(root.sizes.dockIconSize)
         // How far a hovered icon grows, as a percentage of itself. Each
         // effect keeps its own key, stock and ceiling, named so the track,
         // the mark on it and the clamp all read the same numbers: the wave
@@ -608,12 +625,12 @@ Singleton {
         // Reserving the ceiling costs nothing to look at: the room is
         // transparent, masked out of the pointer, and the space the dock
         // claims from other windows is measured from its own height elsewhere.
-        property real dockMagnifyHeadroom: {
+        function dockMagnifyHeadroomFor(iconSize) {
             if (Config.options?.dock.hoverEffect === "off") return 0;
             const peak = 1 + root.sizes.dockHoverMagnifyMax / 100;
-            return root.sizes.dockIconSize * (peak - 1)
-                + (Config.options?.dock.hoverEffect === "glow" ? root.sizes.dockGlowReachMax * peak : 0);
+            return iconSize * (peak - 1) + (Config.options?.dock.hoverEffect === "glow" ? root.sizes.dockGlowReachMax * peak : 0);
         }
+        property real dockMagnifyHeadroom: root.sizes.dockMagnifyHeadroomFor(root.sizes.dockIconSize)
         Behavior on dockMagnifyHeadroom {
             animation: root.animation.elementMoveFast.numberAnimation.createObject(this)
         }
