@@ -54,9 +54,7 @@ Item {
                     text: Translation.tr("Enable Bluetooth")
                     checked: Bluetooth.defaultAdapter?.enabled ?? false
                     onCheckedChanged: {
-                        if (Bluetooth.defaultAdapter) {
-                            Bluetooth.defaultAdapter.enabled = checked;
-                        }
+                        BluetoothStatus.setEnabled(checked);
                     }
                 }
             }

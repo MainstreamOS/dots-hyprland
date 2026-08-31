@@ -15,7 +15,7 @@ QuickToggleButton {
     toggled: BluetoothStatus.enabled
     buttonIcon: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
     onClicked: {
-        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter?.enabled
+        BluetoothStatus.toggle()
     }
     altAction: () => {
         Quickshell.execDetached(["bash", "-c", `${Config.options.apps.bluetooth}`])

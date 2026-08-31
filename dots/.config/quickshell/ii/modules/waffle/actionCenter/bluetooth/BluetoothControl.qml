@@ -52,8 +52,8 @@ Item {
                             Layout.rightMargin: 12
                             checked: Bluetooth.defaultAdapter?.enabled ?? false
                             onCheckedChanged: {
+                                BluetoothStatus.setEnabled(checked);
                                 if (Bluetooth.defaultAdapter) {
-                                    Bluetooth.defaultAdapter.enabled = checked;
                                     if (checked) {
                                         Bluetooth.defaultAdapter.discovering = true;
                                     } else {
