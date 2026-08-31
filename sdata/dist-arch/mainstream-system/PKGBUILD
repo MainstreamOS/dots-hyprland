@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=5
+pkgrel=6
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(any)
 license=(None)
@@ -12,6 +12,8 @@ depends=(
   gcc
   pkgconf
   expect
+  python-gobject
+  xdg-desktop-portal
 )
 install=mainstream-system.install
 source=(
@@ -32,10 +34,13 @@ source=(
   hyprbars.conf
   scrolloverview.conf
   mainstream-repair
+  wallpaper-portal
+  mainstream.portal
+  org.freedesktop.impl.portal.desktop.mainstream.service
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP
 )
 
 package() {
@@ -56,4 +61,8 @@ package() {
   install -Dm644 "$srcdir/mainstream.preset"             "$pkgdir/usr/lib/systemd/system-preset/80-mainstream.preset"
   install -Dm644 "$srcdir/hyprbars.conf"                 "$pkgdir/usr/share/mainstream/hyprbars.conf"
   install -Dm644 "$srcdir/scrolloverview.conf"           "$pkgdir/usr/share/mainstream/scrolloverview.conf"
+  install -Dm755 "$srcdir/wallpaper-portal"              "$pkgdir/usr/lib/mainstream/wallpaper-portal"
+  install -Dm644 "$srcdir/mainstream.portal"             "$pkgdir/usr/share/xdg-desktop-portal/portals/mainstream.portal"
+  install -Dm644 "$srcdir/org.freedesktop.impl.portal.desktop.mainstream.service" \
+      "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.mainstream.service"
 }

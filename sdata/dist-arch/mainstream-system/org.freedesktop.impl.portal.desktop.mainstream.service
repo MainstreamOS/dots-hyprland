@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.mainstream
+Exec=/usr/lib/mainstream/wallpaper-portal

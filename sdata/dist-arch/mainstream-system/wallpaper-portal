@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""org.freedesktop.impl.portal.Wallpaper, answered by switchwall.sh.
+
+Applications ask to set a wallpaper through the portal rather than by writing
+anybody's config, which is the only way a sandboxed one can do it at all. Files
+has offered this all along; nothing under Hyprland answered it, so the entry sat
+in the menu and failed on every click. The backends that ship with the system
+cover the interface only for desktops that are not this one: the Hyprland portal
+does not carry Wallpaper, the GTK one does not either, and the xapp one does but
+writes settings that nothing here reads.
+
+The picture is handed to the same script the shell's own wallpaper picker uses,
+so a wallpaper chosen from a file manager lands exactly where one chosen from
+Settings does, colors and all.
+"""
+
+import os
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+BUS_NAME = "org.freedesktop.impl.portal.desktop.mainstream"
+OBJECT_PATH = "/org/freedesktop/portal/desktop"
+
+# The portal's own response codes. Anything other than success is reported to
+# the calling application as a failure, so "we did nothing on purpose" and "it
+# broke" are not distinguishable to it and both belong in ERROR.
+SUCCESS, CANCELLED, ERROR = 0, 1, 2
+
+# Nothing is left running between wallpaper changes. D-Bus starts this back up
+# on the next call, and setting a wallpaper is rare enough that a resident
+# interpreter is not worth the memory.
+IDLE_SECONDS = 60
+
+# What the color generator can open. It reads pictures with Pillow, so a format
+# Pillow has no decoder for would set the wallpaper and then fail partway
+# through the palette. Anything outside this list is converted first rather than
+# refused, because a file manager offers this entry for every image type it can
+# show a thumbnail for, including SVG.
+PILLOW_READABLE = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+
+INTERFACE_XML = """
+<node>
+  <interface name="org.freedesktop.impl.portal.Wallpaper">
+    <method name="SetWallpaperURI">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="uri" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+    </method>
+  </interface>
+</node>
+"""
+
+
+def log(message):
+    print(f"wallpaper-portal: {message}", file=sys.stderr, flush=True)
+
+
+def switchwall_path():
+    return os.path.join(
+        GLib.get_user_config_dir(), "quickshell", "ii", "scripts", "colors", "switchwall.sh"
+    )
+
+
+def readable_copy(path):
+    """A path the color generator can open, converting only when it cannot.
+
+    The converted copy is keyed by the source path and its modification time so
+    that editing a picture in place is not served the previous conversion.
+    """
+    if os.path.splitext(path)[1].lower() in PILLOW_READABLE:
+        return path
+
+    if not GLib.find_program_in_path("magick"):
+        log(f"no decoder for {path} and magick is not installed")
+        return None
+
+    # The picture can go away between the caller naming it and this running, so
+    # every reach for it is guarded rather than assumed.
+    try:
+        stamp = f"{os.path.realpath(path)}|{os.path.getmtime(path)}"
+        key = GLib.compute_checksum_for_string(GLib.ChecksumType.SHA256, stamp, -1)[:16]
+        cache = os.path.join(GLib.get_user_cache_dir(), "quickshell", "user", "generated")
+        os.makedirs(cache, exist_ok=True)
+        converted = os.path.join(cache, f"portal_wallpaper_{key}.png")
+        if os.path.exists(converted) and os.path.getsize(converted) > 0:
+            return converted
+    except OSError as exc:
+        log(f"could not prepare a copy of {path}: {exc}")
+        return None
+
+    try:
+        subprocess.run(["magick", path, converted], check=True, timeout=60)
+    except (subprocess.SubprocessError, OSError) as exc:
+        log(f"could not convert {path}: {exc}")
+        return None
+    return converted
+
+
+def apply_wallpaper(uri, options):
+    """Validate, then hand off. Returns a portal response code.
+
+    The handoff is deliberately not waited on. Applying a wallpaper regenerates
+    the whole palette and takes longer than the caller's D-Bus timeout allows,
+    so a reply that waited for the work to finish would be read as a failure by
+    an application that had in fact succeeded. Everything that can be known
+    before the work starts is therefore checked here, and only then is the reply
+    sent.
+    """
+    where = options.get("set-on", "background")
+    if where == "lockscreen":
+        # The lock screen keeps its own background, and this is not the thing
+        # that sets it. Saying so is better than quietly setting the desktop.
+        log("asked for lockscreen only, which this backend does not set")
+        return ERROR
+
+    try:
+        path, _ = GLib.filename_from_uri(uri)
+    except GLib.Error:
+        log(f"not a local file: {uri}")
+        return ERROR
+
+    if not os.path.isfile(path) or not os.access(path, os.R_OK):
+        log(f"unreadable: {path}")
+        return ERROR
+
+    script = switchwall_path()
+    if not os.access(script, os.X_OK):
+        log(f"missing {script}")
+        return ERROR
+
+    source = readable_copy(path)
+    if source is None:
+        return ERROR
+
+    try:
+        subprocess.Popen(
+            ["bash", script, "--image", source],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        log(f"could not start {script}: {exc}")
+        return ERROR
+
+    log(f"applying {source}")
+    return SUCCESS
+
+
+class WallpaperPortal:
+    def __init__(self, loop):
+        self._loop = loop
+        self._node = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML)
+        self._idle = None
+        self._registration = None
+
+    def register(self, connection):
+        # The closures form, because the plain register_object is deprecated in
+        # PyGObject and warns on every start.
+        self._registration = connection.register_object_with_closures2(
+            OBJECT_PATH, self._node.interfaces[0], self._on_call, None, None
+        )
+        self.touch()
+
+    def touch(self):
+        if self._idle is not None:
+            GLib.source_remove(self._idle)
+        self._idle = GLib.timeout_add_seconds(IDLE_SECONDS, self._quit)
+
+    def _quit(self):
+        self._idle = None
+        self._loop.quit()
+        return GLib.SOURCE_REMOVE
+
+    def _on_call(self, _conn, _sender, _path, _iface, method, params, invocation):
+        self.touch()
+        if method != "SetWallpaperURI":
+            invocation.return_error_literal(
+                Gio.dbus_error_quark(), Gio.DBusError.UNKNOWN_METHOD, method
+            )
+            return
+        # Whatever happens in here, the caller gets a response code. An
+        # exception escaping would reach it as a bus error instead, and the
+        # arguments come from any application that can talk to the portal.
+        try:
+            _handle, _app_id, _parent, uri, options = params.unpack()
+            response = apply_wallpaper(uri, options)
+        except Exception as exc:  # noqa: BLE001
+            log(f"unhandled: {exc}")
+            response = ERROR
+        invocation.return_value(GLib.Variant("(u)", (response,)))
+
+
+def main():
+    loop = GLib.MainLoop()
+    portal = WallpaperPortal(loop)
+
+    def on_acquired(connection, _name):
+        portal.register(connection)
+
+    def on_lost(_connection, name):
+        log(f"lost {name}")
+        loop.quit()
+
+    Gio.bus_own_name(
+        Gio.BusType.SESSION,
+        BUS_NAME,
+        Gio.BusNameOwnerFlags.NONE,
+        on_acquired,
+        None,
+        on_lost,
+    )
+    loop.run()
+
+
+if __name__ == "__main__":
+    main()
