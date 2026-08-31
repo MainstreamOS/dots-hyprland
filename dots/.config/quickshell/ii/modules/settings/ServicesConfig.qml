@@ -100,35 +100,6 @@ ContentPage {
     */
 
     ContentSection {
-        icon: "brightness_medium"
-        title: Translation.tr("Brightness")
-
-        ContentSubsection {
-            title: Translation.tr("Device")
-            tooltip: Translation.tr("Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.")
-
-            ConfigSelectionArray {
-                currentValue: Config.options.brightness.device
-                onSelected: newValue => {
-                    Config.options.brightness.device = newValue;
-                }
-                options: [
-                    {
-                        displayName: Translation.tr("Automatic"),
-                        icon: "auto_mode",
-                        value: ""
-                    },
-                    ...Brightness.availableDevices.map(device => ({
-                                displayName: device,
-                                icon: "light_mode",
-                                value: device
-                            }))
-                ]
-            }
-        }
-    }
-
-    ContentSection {
         icon: "music_cast"
         title: Translation.tr("Music Recognition")
 
@@ -347,5 +318,40 @@ ContentPage {
 
     WeatherSection {
         icon: "weather_mix"
+    }
+
+    ContentSection {
+        // Only worth a row when there is a real choice to make. A machine
+        // with one backlight, or none at all, has nothing this can pick
+        // between: Automatic already resolves to the only one there is. The
+        // case it exists for is a laptop that reports a second, dead
+        // backlight alongside the panel.
+        visible: Brightness.availableDevices.length > 1
+        icon: "brightness_medium"
+        title: Translation.tr("Brightness")
+
+        ContentSubsection {
+            title: Translation.tr("Device")
+            tooltip: Translation.tr("Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.")
+
+            ConfigSelectionArray {
+                currentValue: Config.options.brightness.device
+                onSelected: newValue => {
+                    Config.options.brightness.device = newValue;
+                }
+                options: [
+                    {
+                        displayName: Translation.tr("Automatic"),
+                        icon: "auto_mode",
+                        value: ""
+                    },
+                    ...Brightness.availableDevices.map(device => ({
+                                displayName: device,
+                                icon: "light_mode",
+                                value: device
+                            }))
+                ]
+            }
+        }
     }
 }
