@@ -5199,15 +5199,23 @@ readonly property var drawerApps: root.drawerApps
         id: card0
 
         // ── Window-Layout state ─────────────────────────────────────────
-        // Mirrors what `hyprctl getoption general:layout` reports. We only
-        // expose the four "real" tiling layouts here — float and
-        // per-workspace are handled elsewhere in Settings → Layouts.
+        // Mirrors what `hyprctl getoption general:layout` reports, except for
+        // Float. Float is an overlay rather than a tiling layout: it leaves
+        // general:layout alone and adds per-workspace float rules, exactly as
+        // the picker in Settings → Layouts does. Per-workspace layouts are
+        // still only offered there.
         property string currentLayout: "dwindle"
         readonly property string hyprlandConf: Quickshell.env("HOME") + "/.config/hypr/hyprland.lua"
         readonly property string hyprGeneralConf: Quickshell.env("HOME") + "/.config/hypr/hyprland/general.lua"
+        readonly property string rulesConf: Quickshell.env("HOME") + "/.config/hypr/custom/rules.lua"
+        // Settings → Layouts controls this many workspaces, and the rules it
+        // writes are keyed by workspace number, so the same count has to be
+        // used here or the two pickers would each see the other as partial.
+        readonly property int floatWorkspaceCount: 10
 
         Component.onCompleted: {
             layoutProc.running = true
+            readFloatRulesProc.running = true
             TitleBars.load()
         }
 
@@ -5224,6 +5232,57 @@ readonly property var drawerApps: root.drawerApps
                     }
                 }
             }
+        }
+
+        // Float leaves general:layout untouched, so getoption above cannot see
+        // it. The rules file is the only record, read the same way and with the
+        // same marker as Settings → Layouts, so both pickers agree on what is
+        // currently set.
+        Process {
+            id: readFloatRulesProc
+            property string buf: ""
+            command: ["cat", card0.rulesConf]
+            stdout: SplitParser { onRead: data => readFloatRulesProc.buf += data + "\n" }
+            onExited: {
+                const re = /hl\.window_rule\(\{\s*match\s*=\s*\{\s*workspace\s*=\s*"(\d+)"\s*\}\s*,\s*float\s*=\s*true\s*\}\)\s*--\s*ii-float-rule/g
+                const seen = new Set()
+                let m
+                while ((m = re.exec(readFloatRulesProc.buf)) !== null) {
+                    const idx = parseInt(m[1], 10) - 1
+                    if (idx >= 0 && idx < card0.floatWorkspaceCount) seen.add(idx)
+                }
+                readFloatRulesProc.buf = ""
+                // Only a wholly floating desktop counts as Float here, matching
+                // the settings page. A partial set belongs to per-workspace,
+                // which this picker does not offer and must not misreport.
+                if (seen.size === card0.floatWorkspaceCount) card0.currentLayout = "float"
+            }
+        }
+
+        Process { id: floatRulesProc }
+
+        // Lifted from LayoutsConfig.setFloatRules so both write byte-identical
+        // lines. The trailing marker is what lets either picker remove its own
+        // rules without disturbing hand-written ones in the same file.
+        function setFloatRules(floatArr) {
+            const py =
+                "import re, sys, json\n" +
+                "conf = sys.argv[1]\n" +
+                "floats = json.loads(sys.argv[2])\n" +
+                "text = open(conf).read()\n" +
+                "text = re.sub(r'(?m)^hl\\.window_rule\\(\\{.*?\\}\\)\\s*--\\s*ii-float-rule\\n?', '', text)\n" +
+                "rules = []\n" +
+                "for i, f in enumerate(floats):\n" +
+                "    if f:\n" +
+                "        rules.append('hl.window_rule({ match = { workspace = \"' + str(i + 1) + '\" }, float = true })  -- ii-float-rule')\n" +
+                "if rules:\n" +
+                "    text = text.rstrip() + '\\n' + '\\n'.join(rules) + '\\n'\n" +
+                "else:\n" +
+                "    text = text.rstrip() + '\\n'\n" +
+                "open(conf, 'w').write(text)\n"
+            floatRulesProc.command = ["python3", "-c", py, card0.rulesConf, JSON.stringify(floatArr)]
+            floatRulesProc.running = false
+            floatRulesProc.running = true
         }
 
         // Step 2 — fire the live `hyprctl keyword` after the conf rewrite
@@ -5248,6 +5307,16 @@ readonly property var drawerApps: root.drawerApps
 
         function applyLayout(name) {
             card0.currentLayout = name
+            if (name === "float") {
+                // An overlay, so the tiling layout underneath is left as it is
+                // and only the float rules are added. Same order as the
+                // settings page, which returns here without touching general.
+                card0.setFloatRules(new Array(card0.floatWorkspaceCount).fill(true))
+                return
+            }
+            // Leaving Float has to lift the rules as well, or the chosen tiling
+            // layout would be written while every window kept floating over it.
+            card0.setFloatRules(new Array(card0.floatWorkspaceCount).fill(false))
             const py =
                 "import sys, re\n" +
                 "hy_lua, gen_lua, layout = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
@@ -5847,6 +5916,43 @@ readonly property var drawerApps: root.drawerApps
                                             }
                                         }
                                     }
+
+                                    // Float — scattered windows at their own
+                                    // sizes, overlapping rather than tiled.
+                                    Item {
+                                        visible: card0.currentLayout === "float"
+                                        anchors { fill: parent; margins: 10 }
+                                        Repeater {
+                                            model: [
+                                                { fx: 0.02, fy: 0.10, fw: 0.46, fh: 0.52, n: "1" },
+                                                { fx: 0.40, fy: 0.00, fw: 0.40, fh: 0.44, n: "2" },
+                                                { fx: 0.22, fy: 0.46, fw: 0.44, fh: 0.50, n: "3" },
+                                                { fx: 0.62, fy: 0.38, fw: 0.36, fh: 0.46, n: "4" }
+                                            ]
+                                            Rectangle {
+                                                x: parent.width * modelData.fx
+                                                y: parent.height * modelData.fy
+                                                width: parent.width * modelData.fw
+                                                height: parent.height * modelData.fh
+                                                radius: 3
+                                                color: Appearance.colors.colLayer3
+                                                border.width: 1
+                                                border.color: Appearance.colors.colOutlineVariant
+                                                Rectangle {
+                                                    width: parent.width; height: 9; radius: 2
+                                                    color: Appearance.colors.colLayer2
+                                                    Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
+                                                }
+                                                StyledText {
+                                                    anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
+                                                    text: modelData.n
+                                                    font.pixelSize: Appearance.font.pixelSize.small
+                                                    color: Appearance.colors.colSubtext
+                                                    opacity: 0.4
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                                 StyledComboBox {
@@ -5856,7 +5962,8 @@ readonly property var drawerApps: root.drawerApps
                                         { displayName: Translation.tr("Dwindle (default)"), value: "dwindle",   icon: "view_quilt"     },
                                         { displayName: Translation.tr("Master"),            value: "master",    icon: "splitscreen_right" },
                                         { displayName: Translation.tr("Scrolling"),         value: "scrolling", icon: "view_day"       },
-                                        { displayName: Translation.tr("Monocle"),           value: "monocle",   icon: "crop_square"    }
+                                        { displayName: Translation.tr("Monocle"),           value: "monocle",   icon: "crop_square"    },
+                                        { displayName: Translation.tr("Float"),             value: "float",     icon: "drag_pan"       }
                                     ]
                                     currentIndex: {
                                         const idx = model.findIndex(item => item.value === card0.currentLayout)
@@ -5884,6 +5991,7 @@ readonly property var drawerApps: root.drawerApps
                                         case "master":    return Translation.tr("One main window with a side stack")
                                         case "scrolling": return Translation.tr("Horizontally scrollable window columns")
                                         case "monocle":   return Translation.tr("One focused fullscreen window at a time")
+                                        case "float":     return Translation.tr("All windows float freely on the desktop")
                                         default: return ""
                                         }
                                     }
