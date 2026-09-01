@@ -534,7 +534,7 @@
   "Corner open": "Abrir pelo canto",
   "Enjoy your empty sidebar...": "Aproveite sua barra lateral vazia...",
   "Cloudflare WARP (1.1.1.1)": "Cloudflare WARP (1.1.1.1)",
-  "Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Digite /key para começar com modelos online\nCtrl+O para expandir barra lateral\nCtrl+P para fixar\nCtrl+D para destacar",
+  "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
   "Digital": "Digital",
   "Balance brightness based on content": "Balancear brilho baseado no conteúdo",
   "Open editor": "Abrir editor",

@@ -518,7 +518,7 @@
   "Identify Music": "识别音乐",
   "Focusing": "专注",
   "Sound output": "声音输出",
-  "Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "输入 /key 来开始使用在线模型\nCtrl+O 拓宽侧边栏\nCtrl+P 固定侧边栏\nCtrl+D 分离侧边栏",
+  "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
   "Parallax": "视差效果",
   "EasyEffects": "EasyEffects",
   "Show only when locked": "仅在锁屏时显示",

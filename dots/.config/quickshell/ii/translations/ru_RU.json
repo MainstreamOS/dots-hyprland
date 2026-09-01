@@ -637,7 +637,7 @@
   "Unknown Application": "Неизв. приложение",
   "Used for decorative/expressive text": "Для декоративного / выразительного текста",
   "Used for reading large blocks of text": "Для чтения больших блоков",
-  "Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Введите /key для онлайн-моделей\nCtrl+O - расширить панель\nCtrl+P - закрепить панель\nCtrl+D - открепить панель",
+  "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
   "Health:": "Здоровье:",
   "Widgets": "Виджеты",
   "Saved": "Сохранено",

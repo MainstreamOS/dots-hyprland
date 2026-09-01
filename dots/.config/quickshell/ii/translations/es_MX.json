@@ -439,7 +439,7 @@
   "Auto,": "Auto,",
   "Task View": "Vista de tareas",
   "Bottom-up": "De abajo hacia arriba",
-  "Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Escribe /key para comenzar con modelos en línea\nCtrl+O para expandir la barra lateral\nCtrl+P para anclar la barra lateral\nCtrl+D para desanclar la barra lateral",
+  "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
   "Wallpaper safety enforced": "Seguridad de fondo de pantalla aplicada",
   "Automatic suspend": "Suspensión automática",
   "Music Recognized": "Música reconocida",
