@@ -468,7 +468,17 @@ Singleton {
                     root.ollamaState = Array.isArray(parsed)
                         ? (dataJson.length > 0 ? "ok" : "empty")
                         : (parsed.state ?? "empty");
-                    if (dataJson.length === 0) return;
+                    if (dataJson.length === 0) {
+                        // The server answered but has nothing to think with yet.
+                        // Somebody who just gave their password to start it asked
+                        // for local AI, so land on the setup entry, whose own
+                        // description names the step still outstanding, rather
+                        // than leaving the online model they were moved off
+                        // sitting there as though nothing had happened.
+                        if (root.ollamaSelectWhenReady && root.modelList.includes(root.ollamaSetupModelId))
+                            root.selectOllamaSetupEntry();
+                        return;
+                    }
                     root.modelList = [...root.modelList, ...dataJson];
                     dataJson.forEach(model => {
                         const safeModelName = root.safeModelName(model);
@@ -810,6 +820,18 @@ Singleton {
         return models[currentModelId];
     }
 
+    // Choosing the setup entry by hand starts the walkthrough and leaves the
+    // working model alone, which is why setModel refuses it. This is the other
+    // way in: the walkthrough has been followed as far as it goes and local AI
+    // is the answer, it simply has no model yet. Selecting it keeps the picker
+    // on local AI and lets its description carry the remaining step.
+    function selectOllamaSetupEntry() {
+        if (!root.models[root.ollamaSetupModelId]) return;
+        root.currentModelId = root.ollamaSetupModelId;
+        root.currentModel = root.models[root.ollamaSetupModelId];
+        Persistent.states.ai.model = root.ollamaSetupModelId;
+    }
+
     function setModel(modelId, feedback = true, setPersistentState = true) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
@@ -1058,6 +1080,13 @@ Singleton {
     function sendUserMessage(message) {
         if (message.length === 0) return;
         root.addMessage(message, "user");
+        // The setup entry names no model, so a request built from it would post
+        // an empty one and come back as a failure the user cannot act on. Say
+        // what local AI is still waiting for instead.
+        if (root.currentModelId === root.ollamaSetupModelId) {
+            root.startOllamaWalkthrough();
+            return;
+        }
         requester.makeRequest();
     }
 
