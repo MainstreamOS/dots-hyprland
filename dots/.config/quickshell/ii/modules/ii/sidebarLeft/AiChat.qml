@@ -87,6 +87,11 @@ Item {
         {
             name: "ollama",
             description: Translation.tr("Set up local AI"),
+            // Kept out of the command list: local AI is reached by picking it
+            // under /model, and offering it here as well puts a second door on
+            // one room. It still runs when typed, which is what the setup
+            // walkthrough tells the user to do to fetch a model.
+            hidden: true,
             execute: args => {
                 const action = (args[0] ?? "").toLowerCase();
                 if (action === "pull") {
@@ -637,7 +642,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 });
                             } else if (messageInputField.text.startsWith(root.commandPrefix)) {
                                 root.suggestionQuery = messageInputField.text;
-                                root.suggestionList = root.allCommands.filter(cmd => cmd.name.startsWith(messageInputField.text.substring(1))).map(cmd => {
+                                root.suggestionList = root.allCommands.filter(cmd => !cmd.hidden && cmd.name.startsWith(messageInputField.text.substring(1))).map(cmd => {
                                     return {
                                         name: `${root.commandPrefix}${cmd.name}`,
                                         description: `${cmd.description}`
