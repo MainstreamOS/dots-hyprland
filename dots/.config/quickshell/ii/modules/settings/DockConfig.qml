@@ -169,6 +169,23 @@ ContentPage {
             }
         }
 
+        // The glow's strength is what that effect is chosen for, so it leads.
+        ConfigSlider {
+            visible: Config.options.dock.hoverEffect === "glow"
+            text: Translation.tr("Glow intensity")
+            buttonIcon: "flare"
+            stopIndicatorValues: [Appearance.sizes.dockGlowIntensityStock]
+            from: 0
+            to: 100
+            value: Appearance.sizes.dockGlowIntensity
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === Config.options.dock.glowIntensity)
+                    return;
+                Config.options.dock.glowIntensity = stepped;
+            }
+        }
+
         // How far the hovered icon grows. Each effect carries its own stock
         // and range: the wave has room to be dramatic, the glow's lift is an
         // accent and the track keeps it one.
@@ -465,22 +482,6 @@ ContentPage {
             }
         }
 
-        ConfigSlider {
-            visible: Config.options.dock.hoverEffect === "glow"
-            text: Translation.tr("Glow intensity")
-            buttonIcon: "flare"
-            stopIndicatorValues: [Appearance.sizes.dockGlowIntensityStock]
-            from: 0
-            to: 100
-            value: Appearance.sizes.dockGlowIntensity
-            onMoved: {
-                const stepped = Math.round(value);
-                if (stepped === Config.options.dock.glowIntensity)
-                    return;
-                Config.options.dock.glowIntensity = stepped;
-            }
-        }
-
         ConfigResetButton {
             visible: Config.options.dock.backgroundColorDark !== ""
                 || Config.options.dock.backgroundColorLight !== ""
@@ -490,7 +491,6 @@ ContentPage {
                 || Config.options.dock.badgeTextColorLight !== ""
                 || Config.options.dock.glowColorDark !== ""
                 || Config.options.dock.glowColorLight !== ""
-                || Config.options.dock.glowIntensity >= 0
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default colors")
@@ -503,7 +503,6 @@ ContentPage {
                 Config.options.dock.badgeTextColorLight = ""
                 Config.options.dock.glowColorDark = ""
                 Config.options.dock.glowColorLight = ""
-                Config.options.dock.glowIntensity = -1
             }
         }
 
