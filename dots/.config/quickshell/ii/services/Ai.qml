@@ -560,7 +560,7 @@ Singleton {
             root.startOllamaService();
             break;
         case "empty":
-            root.addMessage(Translation.tr("### One download to go\n\nLocal AI is running but has no model to think with yet. **%1** is a good first one at roughly 2 GB. It downloads once, then works offline.\n\nStart it with:\n\n```\n%2\n```\n\nAny model from [ollama.com/library](https://ollama.com/library) works too, for example `%2 qwen2.5:0.5b`.").arg(root.ollamaSuggestedModel).arg("/ollama pull"), root.interfaceRole);
+            root.addMessage(Translation.tr("### One download to go\n\nLocal AI is running but has no model to think with yet. **%1** is a good first one at roughly 2 GB. It downloads once, then works offline.\n\nStart by entering:\n\n```\n%2\n```\n\nAny model from [ollama.com/library](https://ollama.com/library) works too, for example `%2 qwen2.5:0.5b`.").arg(root.ollamaSuggestedModel).arg("/ollama pull"), root.interfaceRole);
             break;
         default:
             root.addMessage(Translation.tr("Still checking for local AI. Try again in a moment."), root.interfaceRole);
