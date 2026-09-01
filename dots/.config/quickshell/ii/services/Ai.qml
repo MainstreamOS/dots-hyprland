@@ -520,7 +520,6 @@ Singleton {
     }
 
     function syncOllamaSetupEntry() {
-        const listed = root.modelList.includes(root.ollamaSetupModelId);
         // "checking" is deliberately not offered: the first answer usually
         // arrives within a second, and advertising setup for a machine that
         // turns out to be ready would flash an entry and take it away again.
@@ -535,13 +534,17 @@ Singleton {
                 "model": "",
                 "requires_key": false,
             });
-            if (!listed) root.modelList = [...root.modelList, root.ollamaSetupModelId];
-        } else if (listed) {
+        } else if (root.models[root.ollamaSetupModelId]) {
             const remaining = Object.assign({}, root.models);
             delete remaining[root.ollamaSetupModelId];
             root.models = remaining;
-            root.modelList = root.modelList.filter(id => id !== root.ollamaSetupModelId);
         }
+        // Derived from the models rather than added to. modelList starts out
+        // bound to Object.keys(models), so replacing models has already put the
+        // entry in the list by the time this line runs; appending on top of
+        // that offered local AI twice. Membership is asked of models for the
+        // same reason, since the list is only ever a view of it.
+        root.modelList = Object.keys(root.models);
     }
 
     // Picking the setup entry is a request for help rather than a model
