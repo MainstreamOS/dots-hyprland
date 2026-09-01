@@ -496,7 +496,19 @@ Singleton {
                     if (root.ollamaPendingSelect.length > 0) {
                         const justPulled = root.safeModelName(root.ollamaPendingSelect);
                         root.ollamaPendingSelect = "";
+                        // A pull is a choice of its own and settles the question
+                        // the service start left open, or the next refresh would
+                        // pull the selection back to whatever is listed first.
+                        root.ollamaSelectWhenReady = false;
                         if (root.modelList.includes(justPulled)) root.setModel(justPulled);
+                    } else if (root.ollamaSelectWhenReady) {
+                        // Answering the password prompt was a request for local
+                        // AI, so land on it now that the server has something to
+                        // answer with. Only the first arrival counts: after that
+                        // the user's own choice stands.
+                        const firstLocal = root.safeModelName(dataJson[0]);
+                        root.ollamaSelectWhenReady = false;
+                        if (root.modelList.includes(firstLocal)) root.setModel(firstLocal);
                     }
 
                 } catch (e) {
@@ -570,9 +582,16 @@ Singleton {
         }
     }
 
+    // Set while the walkthrough is starting the service, so the model it was
+    // asked for is taken up once the server actually has one to offer. Picking
+    // the setup entry deliberately leaves the working model alone, which is
+    // right while nothing local can answer yet and wrong the moment one can.
+    property bool ollamaSelectWhenReady: false
+
     function startOllamaService() {
         if (root.ollamaBusy) return;
         root.ollamaBusy = true;
+        root.ollamaSelectWhenReady = true;
         ollamaServiceProc.running = true;
     }
 
@@ -585,10 +604,16 @@ Singleton {
         onExited: exitCode => {
             root.ollamaBusy = false;
             if (exitCode === 0) {
+                // The password prompt takes the focus the sidebar closes on, so
+                // answering it puts the conversation away mid-walkthrough. Bring
+                // it back rather than making the user find it again to read how
+                // the step they just completed turned out.
+                GlobalStates.sidebarLeftOpen = true;
                 root.addMessage(Translation.tr("Local AI is running."), root.interfaceRole);
                 root.refreshOllama();
                 return;
             }
+            root.ollamaSelectWhenReady = false;
             // pkexec reports 126 for a prompt that was refused or dismissed
             // and 127 for a helper it could not run at all. Neither means the
             // service failed, so neither should be reported as if it had.
