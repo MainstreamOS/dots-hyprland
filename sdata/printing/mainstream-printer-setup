@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Creates a permanent IPP Everywhere queue for each printer ipp-usb exposes
+# on localhost. Print dialogs put permanent queues in their main list, while
+# a merely discovered printer hides behind "See more" and prints through a
+# temporary queue rebuilt per job, which is the path that fails quietly.
+# ipp-usb claims the device a few seconds after the udev event that starts
+# this unit, so the ports are polled before giving up without complaint on a
+# machine whose printer went away again.
+
+set -u
+
+queue_exists_for() {
+    LANG=C lpstat -v 2>/dev/null | grep -qF "$1"
+}
+
+model_at() {
+    ipptool -tv "$1" /usr/share/cups/ipptool/get-printer-attributes.test 2>/dev/null \
+        | sed -n 's/.*printer-make-and-model ([^)]*) = //p' | head -n1
+}
+
+for _ in $(seq 1 20); do
+    answered=0
+    for port in $(seq 60000 60009); do
+        uri="ipp://localhost:${port}/ipp/print"
+        model=$(model_at "$uri")
+        [[ -n "$model" ]] || continue
+        answered=1
+        queue_exists_for "$uri" && continue
+        name=$(printf '%s' "$model" | tr -c 'A-Za-z0-9' '-' | tr -s '-')
+        name=${name#-}
+        name=${name%-}
+        [[ -n "$name" ]] || name="USB-Printer"
+        LANG=C lpstat -v "$name" >/dev/null 2>&1 && name="${name}-${port}"
+        if lpadmin -p "$name" -E -v "$uri" -m everywhere; then
+            LANG=C lpstat -d 2>/dev/null | grep -q '^no system default' && lpadmin -d "$name"
+        fi
+    done
+    (( answered )) && exit 0
+    sleep 3
+done
+exit 0

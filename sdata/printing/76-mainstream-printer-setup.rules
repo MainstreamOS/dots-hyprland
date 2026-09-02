@@ -1,0 +1,3 @@
+# Runs once per IPP-over-USB capable printer (the same 7/1/4 interface match
+# ipp-usb activates on), at hotplug and at boot coldplug alike.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="07", ATTR{bInterfaceSubClass}=="01", ATTR{bInterfaceProtocol}=="04", TAG+="systemd", ENV{SYSTEMD_WANTS}+="mainstream-printer-setup.service"

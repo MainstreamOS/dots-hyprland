@@ -1073,26 +1073,22 @@ JobRetryLimit 5
 CUPSPOLICYEOF
   fi
   # Apps like Chromium only list permanent CUPS queues, so a driverless USB
-  # printer that ipp-usb claims is invisible until something creates one.
-  # cups-browsed does that within seconds, scoped to loopback announces only,
-  # and it is dependency-started by ipp-usb rather than enabled: an idle box
-  # runs no print daemon at all.
-  if pacman -Qq cups-browsed >/dev/null 2>&1; then
-    echo -e "${STY_CYAN}[$0]: Scoping cups-browsed to IPP-over-USB printers...${STY_RST}"
-    x sudo tee /etc/cups/cups-browsed.conf >/dev/null <<'CBEOF'
-BrowseRemoteProtocols dnssd
-BrowseLocalProtocols none
-CreateIPPPrinterQueues LocalOnly
-CreateRemoteCUPSPrinterQueues No
-KeepGeneratedQueuesOnShutdown Yes
-CBEOF
-    x sudo install -d /etc/systemd/system/ipp-usb.service.d
-    x sudo tee /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf >/dev/null <<'IPPEOF'
-[Unit]
-Wants=cups-browsed.service
-IPPEOF
-    x sudo systemctl daemon-reload
-  fi
+  # printer that ipp-usb claims is invisible until something creates one. A
+  # udev-started oneshot builds a permanent IPP Everywhere queue for it, at
+  # hotplug and at boot alike; an idle box runs no extra print daemon at all.
+  echo -e "${STY_CYAN}[$0]: Installing the USB printer queue setup...${STY_RST}"
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/printing/mainstream-printer-setup" \
+      /usr/local/bin/mainstream-printer-setup
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/mainstream-printer-setup.service" \
+      /etc/systemd/system/mainstream-printer-setup.service
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/76-mainstream-printer-setup.rules" \
+      /etc/udev/rules.d/76-mainstream-printer-setup.rules
+  # Earlier revisions leaned on cups-browsed for the queue; its config and
+  # the drop-in that started it give way to the oneshot above.
+  x sudo rm -f /etc/cups/cups-browsed.conf \
+      /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf
+  x sudo systemctl daemon-reload
+  x sudo udevadm control --reload
   # Managing printers is a desktop task; the unlock prompt guards nothing a
   # local admin could not already do. Server settings still authenticate.
   x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/49-mainstream-printing.rules" \

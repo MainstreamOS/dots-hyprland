@@ -1,0 +1,7 @@
+[Unit]
+Description=Permanent print queue for an IPP-over-USB printer
+After=ipp-usb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mainstream-printer-setup
