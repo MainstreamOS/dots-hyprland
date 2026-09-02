@@ -1042,6 +1042,26 @@ function setup_printing(){
     echo -e "${STY_CYAN}[$0]: Teaching nsswitch to resolve .local printer names...${STY_RST}"
     x sudo sed -i -E 's/^(hosts:.*[[:space:]])(dns)([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] \2\3/' /etc/nsswitch.conf
   fi
+  # CUPS answers the first backend error by stopping the queue, and then goes on
+  # accepting jobs into it without running them, so a single transient failure is
+  # indistinguishable from a machine that cannot print and leaves nothing on
+  # screen to say otherwise. retry-job keeps the queue enabled and the job
+  # visible while it retries. This sets the default for queues created later;
+  # queues that already exist keep whatever policy they were made with.
+  if [[ -f /etc/cups/cupsd.conf ]] && ! sudo grep -q '^ErrorPolicy' /etc/cups/cupsd.conf; then
+    echo -e "${STY_CYAN}[$0]: Setting CUPS queues to retry rather than stop on a backend error...${STY_RST}"
+    x sudo tee -a /etc/cups/cupsd.conf >/dev/null <<'CUPSPOLICYEOF'
+
+ErrorPolicy retry-job
+JobRetryInterval 60
+JobRetryLimit 5
+CUPSPOLICYEOF
+  fi
+  # ipp-usb is installed but intentionally left disabled. Its udev rule starts it
+  # only for a device advertising the IPP-over-USB interface (7/1/4), and udev
+  # replays those add events at boot, so it covers both hotplug and an already
+  # attached printer. Enabling the unit would take devices that belong on the
+  # classic driver path along with it.
 }
 showfun setup_printing
 v setup_printing
