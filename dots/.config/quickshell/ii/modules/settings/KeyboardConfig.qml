@@ -9,5 +9,6 @@ ContentPage {
     // Layouts above the shortcut editor, sharing this page's one scroll area —
     // the editor as a page of its own would nest a flickable inside this one.
     LayoutsSection {}
+    InputSourcesSection {}
     KeybindsSection {}
 }

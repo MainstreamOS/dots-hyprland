@@ -17,6 +17,7 @@ Item {
     property var options: []
     property var layoutIdOf: layout => ""
     property bool ready: false
+    property string searchPlaceholder: Translation.tr("Search layouts…")
     implicitHeight: 40
     enabled: picker.ready && picker.options.length > 0
 
@@ -115,7 +116,7 @@ Item {
             MaterialTextField {
                 id: layoutSearchField
                 Layout.fillWidth: true
-                placeholderText: Translation.tr("Search layouts…")
+                placeholderText: picker.searchPlaceholder
             }
 
             StyledListView {

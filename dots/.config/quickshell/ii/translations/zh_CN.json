@@ -1911,5 +1911,15 @@
   "min": "min",
   "Open Interface settings": "Open Interface settings",
   "Checking for local AI now. The next step appears here in a moment.": "Checking for local AI now. The next step appears here in a moment.",
-  "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar"
+  "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
+  "Input Sources": "Input Sources",
+  "Plain keyboard": "Plain keyboard",
+  "Chinese": "Chinese",
+  "Korean": "Korean",
+  "Vietnamese": "Vietnamese",
+  "Languages that compose characters use an input method; picking one sets it up and switches to it.": "Languages that compose characters use an input method; picking one sets it up and switches to it.",
+  "Search input sources…": "Search input sources…",
+  "Applying input method…": "Applying input method…",
+  "Input method ready.": "Input method ready.",
+  "Could not set the input method.": "Could not set the input method."
 }
