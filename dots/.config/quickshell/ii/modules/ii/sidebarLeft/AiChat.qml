@@ -493,6 +493,17 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     words.push(word);
                 }
                 const updatedText = words.join(" ") + " ";
+                // Picking a model IS the whole intent of /model, so a chosen
+                // entry runs instead of sitting in the field waiting for a
+                // second confirmation. Completing the command name itself
+                // still just fills it in.
+                const parts = updatedText.trim().split(/\s+/);
+                if (parts[0] === root.commandPrefix + "model" && parts.length === 2 && Ai.modelList.includes(parts[1])) {
+                    root.handleInput(parts.join(" "));
+                    messageInputField.clear();
+                    messageInputField.forceActiveFocus();
+                    return;
+                }
                 messageInputField.text = updatedText;
                 messageInputField.cursorPosition = messageInputField.text.length;
                 messageInputField.forceActiveFocus();
