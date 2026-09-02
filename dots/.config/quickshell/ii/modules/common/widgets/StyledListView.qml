@@ -52,6 +52,10 @@ ListView {
     }
 
     Behavior on contentY {
+        // A scrollbar drag is a continuous stream of writes; easing each one
+        // with alwaysRunToEnd stacks overlapping animations that fight the
+        // hand, so the smoothing steps aside while the bar is held.
+        enabled: !(root.ScrollBar.vertical?.pressed ?? false)
         NumberAnimation {
             id: scrollAnim
             alwaysRunToEnd: true

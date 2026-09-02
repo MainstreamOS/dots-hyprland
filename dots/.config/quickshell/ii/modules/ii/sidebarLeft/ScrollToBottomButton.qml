@@ -38,7 +38,15 @@ RippleButton {
     buttonRadius: Appearance.rounding.verysmall
 
     downAction: () => {
-        target.positionViewAtEnd()
+        // positionViewAtEnd works from estimated delegate heights and lands
+        // short on rich messages. It still runs first to instantiate the
+        // tail, then the exact end comes from real geometry, stopping at the
+        // content's edge rather than the runway below it.
+        target.positionViewAtEnd();
+        Qt.callLater(() => {
+            if (target.contentHeight > target.height)
+                target.contentY = target.originY + target.contentHeight - target.height;
+        });
     }
 
     contentItem: Row {
