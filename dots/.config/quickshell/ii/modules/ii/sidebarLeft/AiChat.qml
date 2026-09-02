@@ -232,7 +232,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         }
 
         // Always scroll to bottom when user sends a message
-        messageListView.positionViewAtEnd();
+        messageListView.pinnedToBottom = true;
+        messageListView.scrollToEnd();
     }
 
     Process {
@@ -383,15 +384,31 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
 
                 property int lastResponseLength: 0
-                // onContentHeightChanged: {
-                //     if (atYEnd)
-                //         Qt.callLater(positionViewAtEnd);
-                // }
-                // onCountChanged: {
-                //     // Auto-scroll when new messages are added
-                //     if (atYEnd)
-                //         Qt.callLater(positionViewAtEnd);
-                // }
+                // While a reply streams in, every token grows contentHeight,
+                // and a view that neither follows nor yields makes the chat
+                // unscrollable in practice: the reader chases text that keeps
+                // moving away. Follow the bottom only while the reader is
+                // there. Any scroll away releases the pin, and returning to
+                // the bottom, or sending a message, takes it back up.
+                property bool pinnedToBottom: true
+                property bool autoScrolling: false
+                function scrollToEnd() {
+                    autoScrolling = true;
+                    positionViewAtEnd();
+                    autoScrolling = false;
+                }
+                onContentYChanged: {
+                    if (!autoScrolling)
+                        pinnedToBottom = atYEnd;
+                }
+                onContentHeightChanged: {
+                    if (pinnedToBottom)
+                        Qt.callLater(scrollToEnd);
+                }
+                onCountChanged: {
+                    if (pinnedToBottom)
+                        Qt.callLater(scrollToEnd);
+                }
 
                 add: null // Prevent function calls from being janky
 
