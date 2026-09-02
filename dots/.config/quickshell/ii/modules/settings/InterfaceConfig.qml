@@ -821,6 +821,7 @@ ContentPage {
     */
     // ── Left Sidebar ──────────────────────────────────────────────────────────
     ContentSection {
+        objectName: "leftSidebarSection"
         icon: "side_navigation"
         mirrorIcon: true
         title: Translation.tr("Left Sidebar")

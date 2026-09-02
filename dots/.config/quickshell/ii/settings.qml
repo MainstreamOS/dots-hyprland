@@ -163,6 +163,9 @@ ApplicationWindow {
         const envTab = Quickshell.env("QS_SETTINGS_TAB");
         return envTab ? parseInt(envTab) : 0;
     }
+    // Consumed by the first ContentPage that contains a child with this
+    // objectName; see ContentPage._jumpToPendingSection.
+    property string pendingSettingsSection: Quickshell.env("QS_SETTINGS_SECTION") || ""
     property int currentPage: initialPage
 
     visible: true

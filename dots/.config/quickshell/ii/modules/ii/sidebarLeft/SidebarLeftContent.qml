@@ -1,6 +1,9 @@
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
+import Quickshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -126,6 +129,26 @@ Item {
                         text: Translation.tr("Add tabs from Settings → Interface → Left Sidebar")
                         color: Appearance.colors.colSubtext
                         opacity: 0.8
+                    }
+                    Item { width: 1; height: 8 }
+                    GroupButton {
+                        visible: !root.animeCloset
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        baseWidth: contentItem.implicitWidth + 30
+                        baseHeight: 34
+                        buttonRadius: Appearance.rounding.full
+                        colBackground: Appearance.colors.colSecondaryContainer
+                        onClicked: {
+                            const settingsPath = FileUtils.trimFileProtocol(Directories.config) + "/quickshell/ii/settings.qml";
+                            Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=InterfaceConfig.qml QS_SETTINGS_SECTION=leftSidebarSection quickshell -p '" + settingsPath + "'"]);
+                            GlobalStates.sidebarLeftOpen = false;
+                        }
+                        contentItem: StyledText {
+                            anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            text: Translation.tr("Open Interface settings")
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
                     }
                 }
             }

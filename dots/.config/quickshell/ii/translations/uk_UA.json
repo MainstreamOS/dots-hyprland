@@ -1918,5 +1918,6 @@
   "Usage: %1ollama pull MODEL_NAME": "Usage: %1ollama pull MODEL_NAME",
   "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.": "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.",
   "Your sidebar is empty": "Your sidebar is empty",
-  "min": "min"
+  "min": "min",
+  "Open Interface settings": "Open Interface settings"
 }
