@@ -1,0 +1,10 @@
+/* Printer administration without an unlock for the desktop user.
+   Deliberately excludes server-settings so cupsd.conf and the
+   sharing and remote-admin toggles still require authentication. */
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.opensuse.cupspkhelper.mechanism.all-edit" &&
+        subject.active && subject.local &&
+        subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

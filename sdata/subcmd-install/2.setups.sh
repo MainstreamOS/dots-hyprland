@@ -1065,6 +1065,49 @@ JobRetryInterval 60
 JobRetryLimit 5
 CUPSPOLICYEOF
   fi
+  # Apps like Chromium only list permanent CUPS queues, so a driverless USB
+  # printer that ipp-usb claims is invisible until something creates one.
+  # cups-browsed does that within seconds, scoped to loopback announces only,
+  # and it is dependency-started by ipp-usb rather than enabled: an idle box
+  # runs no print daemon at all.
+  if pacman -Qq cups-browsed >/dev/null 2>&1; then
+    echo -e "${STY_CYAN}[$0]: Scoping cups-browsed to IPP-over-USB printers...${STY_RST}"
+    x sudo tee /etc/cups/cups-browsed.conf >/dev/null <<'CBEOF'
+BrowseRemoteProtocols dnssd
+BrowseLocalProtocols none
+CreateIPPPrinterQueues LocalOnly
+CreateRemoteCUPSPrinterQueues No
+KeepGeneratedQueuesOnShutdown Yes
+CBEOF
+    x sudo install -d /etc/systemd/system/ipp-usb.service.d
+    x sudo tee /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf >/dev/null <<'IPPEOF'
+[Unit]
+Wants=cups-browsed.service
+IPPEOF
+    x sudo systemctl daemon-reload
+  fi
+  # Managing printers is a desktop task; the unlock prompt guards nothing a
+  # local admin could not already do. Server settings still authenticate.
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/49-mainstream-printing.rules" \
+      /usr/share/polkit-1/rules.d/49-mainstream-printing.rules
+  # The banner test page corrupts under libcupsfilters 2.2.x; point testprint
+  # at the PDF sample that takes the verified pdf filter chain, and keep it
+  # pointed there across cups upgrades.
+  if [[ -f /usr/share/cups/data/default-testpage.pdf ]]; then
+    x sudo tee /etc/pacman.d/hooks/96-cups-testpage-pdf.hook >/dev/null <<'HOOKEOF'
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cups
+
+[Action]
+Description = Pointing the CUPS test page at the PDF sample page...
+When = PostTransaction
+Exec = /bin/cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint
+HOOKEOF
+    x sudo cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint
+  fi
   # ipp-usb is installed but intentionally left disabled. Its udev rule starts it
   # only for a device advertising the IPP-over-USB interface (7/1/4), and udev
   # replays those add events at boot, so it covers both hotplug and an already

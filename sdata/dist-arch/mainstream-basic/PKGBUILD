@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=17
+pkgrel=18
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -51,6 +51,7 @@ depends=(
   nano
   man-db
   cups
+  cups-browsed
   cups-pk-helper
   ipp-usb
   system-config-printer
