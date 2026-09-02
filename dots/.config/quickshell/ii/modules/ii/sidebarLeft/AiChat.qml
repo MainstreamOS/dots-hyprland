@@ -434,7 +434,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 shown: Ai.messageIDs.length === 0
                 icon: "neurology"
                 title: Translation.tr("Large language models")
-                description: Translation.tr("Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar")
+                description: Translation.tr("Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar")
                 shape: MaterialShape.Shape.PixelCircle
             }
 
@@ -797,8 +797,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ApiInputBoxIndicator {
                     // Model indicator
                     icon: "api"
-                    text: Ai.currentModel?.name ?? ""
-                    tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(Ai.currentModel?.name ?? "").arg(root.commandPrefix)
+                    text: Ai.currentModel?.name ?? Translation.tr("Local AI (Ollama)")
+                    tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(Ai.currentModel?.name ?? Translation.tr("Local AI (Ollama)")).arg(root.commandPrefix)
                 }
 
                 ApiInputBoxIndicator {

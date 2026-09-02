@@ -533,7 +533,6 @@
   "Corner open": "Abrir pelo canto",
   "Enjoy your empty sidebar...": "Aproveite sua barra lateral vazia...",
   "Cloudflare WARP (1.1.1.1)": "Cloudflare WARP (1.1.1.1)",
-  "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Type /model to choose your model\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar",
   "Digital": "Digital",
   "Balance brightness based on content": "Balancear brilho baseado no conteúdo",
   "Open editor": "Abrir editor",
@@ -1887,7 +1886,6 @@
   "Search layouts…": "Search layouts…",
   "Set up local AI": "Set up local AI",
   "Starting the download of **%1**...": "Starting the download of **%1**...",
-  "Still checking for local AI. Try again in a moment.": "Still checking for local AI. Try again in a moment.",
   "Takes effect once a color is set.": "Takes effect once a color is set.",
   "The local AI helper is missing. Reinstalling the Mainstream OS components restores it.": "The local AI helper is missing. Reinstalling the Mainstream OS components restores it.",
   "This is the newest version.": "This is the newest version.",
@@ -1897,5 +1895,8 @@
   "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.": "Which backlight to drive.\nAutomatic lets brightnessctl choose, which is usually right.\nLaptops with hybrid graphics can expose a second, non-functional backlight: if the brightness keys do nothing, pick the panel explicitly.\nMonitors controlled over DDC are unaffected.",
   "Your sidebar is empty": "Your sidebar is empty",
   "min": "min",
-  "Open Interface settings": "Open Interface settings"
+  "Open Interface settings": "Open Interface settings",
+  "Checking for local AI now. The next step appears here in a moment.": "Checking for local AI now. The next step appears here in a moment.",
+  "Local AI is still waking up. Send that again in a few seconds.": "Local AI is still waking up. Send that again in a few seconds.",
+  "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar"
 }

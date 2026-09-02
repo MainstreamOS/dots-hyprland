@@ -346,7 +346,12 @@ Singleton {
     // re-evaluated, so the name sat on whatever was current when the chat was
     // built. Ollama's list arrives after that, so a saved local model showed as
     // something else entirely until the next interaction.
-    property var currentModel: models[currentModelId] || models[modelList[0]]
+    // No fallback to the first map entry: before the local model fetch
+    // answers, the saved model has no object yet, and the first key is an
+    // online model, so the picker chip claimed Gemini was selected on every
+    // start whose real model is local. Null here renders as local AI still
+    // being looked up, which is the truth of that moment.
+    property var currentModel: models[currentModelId] ?? null
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
@@ -375,7 +380,12 @@ Singleton {
     property string pendingFilePath: ""
 
     Component.onCompleted: {
-        setModel(currentModelId, false, false); // Do necessary setup for model
+        // The default model is local AI, whose setup entry does not exist
+        // until the first status answer arrives. Running it through setModel
+        // here would start the walkthrough unprompted at every shell start;
+        // syncOllamaSetupEntry and the model fetch land the selection instead.
+        if (currentModelId !== root.ollamaSetupModelId)
+            setModel(currentModelId, false, false); // Do necessary setup for model
         root.addUserModels() // Config onReadyChanged above might not fire if config is loaded before this service
     }
 
@@ -424,7 +434,19 @@ Singleton {
     property string ollamaPullMessageId: ""
     property string ollamaPendingSelect: ""
 
-    onOllamaStateChanged: root.syncOllamaSetupEntry()
+    onOllamaStateChanged: {
+        root.syncOllamaSetupEntry();
+        // A walkthrough request that arrived before the first status answer
+        // is honored the moment the answer lands, so nobody is told to wait
+        // and then left to come back on their own.
+        if (root.ollamaWalkthroughPending && root.ollamaState !== "checking") {
+            root.ollamaWalkthroughPending = false;
+            // "ok" needs no walkthrough: the fetch that raised it lands the
+            // model selection itself a moment later.
+            if (root.ollamaState !== "ok")
+                root.startOllamaWalkthrough();
+        }
+    }
 
     // Asking once at startup meant a user who installed Ollama, started the
     // service, or pulled a model had to restart the shell before any of it
@@ -451,6 +473,31 @@ Singleton {
         if (!getOllamaModels.running) getOllamaModels.running = true;
     }
 
+    // The 20s recheck above is paced for a sidebar somebody left open, not
+    // for the seconds right after an install, a service start, or a pull,
+    // when the state is about to change and the user is watching it. A kick
+    // asks again every second and a half for a short burst, and stops early
+    // the moment local AI answers ready.
+    property int ollamaBurstTriesLeft: 0
+    // Set when the walkthrough was asked for while the state was still
+    // unknown, so the answer continues the walkthrough by itself instead of
+    // leaving a message telling the user to come back.
+    property bool ollamaWalkthroughPending: false
+    Timer {
+        id: ollamaBurst
+        interval: 1500
+        repeat: true
+        running: root.ollamaBurstTriesLeft > 0
+        onTriggered: {
+            root.ollamaBurstTriesLeft--;
+            root.refreshOllama();
+        }
+    }
+    function kickOllamaRefresh() {
+        root.ollamaBurstTriesLeft = 8;
+        root.refreshOllama();
+    }
+
     Process {
         id: getOllamaModels
         running: true
@@ -468,6 +515,7 @@ Singleton {
                     root.ollamaState = Array.isArray(parsed)
                         ? (dataJson.length > 0 ? "ok" : "empty")
                         : (parsed.state ?? "empty");
+                    if (root.ollamaState === "ok") root.ollamaBurstTriesLeft = 0;
                     if (dataJson.length === 0) {
                         // The server answered but has nothing to think with yet.
                         // Somebody who just gave their password to start it asked
@@ -519,6 +567,12 @@ Singleton {
                         const firstLocal = root.safeModelName(dataJson[0]);
                         root.ollamaSelectWhenReady = false;
                         if (root.modelList.includes(firstLocal)) root.setModel(firstLocal);
+                    } else if (root.currentModelId === root.ollamaSetupModelId) {
+                        // The saved model is the local AI default and a real
+                        // local model just showed up: that is the machine this
+                        // default was waiting for, so take the first one up.
+                        const firstLocal = root.safeModelName(dataJson[0]);
+                        if (root.modelList.includes(firstLocal)) root.setModel(firstLocal, false);
                     }
 
                 } catch (e) {
@@ -561,6 +615,11 @@ Singleton {
             delete remaining[root.ollamaSetupModelId];
             root.models = remaining;
         }
+        // With local AI as the saved model, a boot that resolves to a
+        // not-ready state must land the picker on the setup entry itself,
+        // or the header shows a model that is not in the list at all.
+        if (wanted && root.currentModelId === root.ollamaSetupModelId)
+            root.currentModel = root.models[root.ollamaSetupModelId];
         // Derived from the models rather than added to. modelList starts out
         // bound to Object.keys(models), so replacing models has already put the
         // entry in the list by the time this line runs; appending on top of
@@ -588,7 +647,9 @@ Singleton {
             root.addMessage(Translation.tr("### One download to go\n\nLocal AI is running but has no model to think with yet. **%1** is a good first one at roughly 2 GB. It downloads once, then works offline.\n\nStart by entering:\n\n```\n%2\n```\n\nAny model from [ollama.com/library](https://ollama.com/library) works too, for example `%2 qwen2.5:0.5b`.").arg(root.ollamaSuggestedModel).arg("/ollama pull"), root.interfaceRole);
             break;
         default:
-            root.addMessage(Translation.tr("Still checking for local AI. Try again in a moment."), root.interfaceRole);
+            root.addMessage(Translation.tr("Checking for local AI now. The next step appears here in a moment."), root.interfaceRole);
+            root.ollamaWalkthroughPending = true;
+            root.kickOllamaRefresh();
         }
     }
 
@@ -620,7 +681,9 @@ Singleton {
                 // the step they just completed turned out.
                 GlobalStates.sidebarLeftOpen = true;
                 root.addMessage(Translation.tr("Local AI is running."), root.interfaceRole);
-                root.refreshOllama();
+                // The server takes a few seconds to start listening, and a
+                // single ask right now usually lands in that gap.
+                root.kickOllamaRefresh();
                 return;
             }
             root.ollamaSelectWhenReady = false;
@@ -712,7 +775,7 @@ Singleton {
                 // Selecting it is the point of having downloaded it, so the
                 // refresh is told to finish the job it was started for.
                 root.ollamaPendingSelect = name;
-                root.refreshOllama();
+                root.kickOllamaRefresh();
                 return;
             }
             const body = failure.length > 0 ? Translation.tr("Could not download **%1**.\n\n```\n%2\n```").arg(name).arg(failure) : Translation.tr("Could not download **%1**.").arg(name);
@@ -1084,6 +1147,31 @@ Singleton {
         // an empty one and come back as a failure the user cannot act on. Say
         // what local AI is still waiting for instead.
         if (root.currentModelId === root.ollamaSetupModelId) {
+            root.startOllamaWalkthrough();
+            return;
+        }
+        // A saved local model has no object until the fetch answers, and a
+        // request without one dies somewhere less explainable than here.
+        // Where the state has already resolved, the walkthrough owns the
+        // answer: it names the exact step this machine is missing, which is
+        // the prompt a first run is supposed to get. Only a state that is
+        // genuinely still unknown asks for patience, and even then it
+        // remembers the request and continues by itself.
+        if (!root.currentModel) {
+            if (root.ollamaState === "ok") {
+                const firstLocal = root.modelList.find(id => id !== root.ollamaSetupModelId && (root.models[id]?.endpoint ?? "").includes("localhost"));
+                if (firstLocal) {
+                    root.setModel(firstLocal);
+                    requester.makeRequest();
+                    return;
+                }
+            }
+            if (root.ollamaState === "checking") {
+                root.addMessage(Translation.tr("Local AI is still waking up. Send that again in a few seconds."), root.interfaceRole);
+                root.ollamaWalkthroughPending = true;
+                root.kickOllamaRefresh();
+                return;
+            }
             root.startOllamaWalkthrough();
             return;
         }
