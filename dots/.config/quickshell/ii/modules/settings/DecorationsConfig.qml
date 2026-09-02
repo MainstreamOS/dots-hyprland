@@ -258,6 +258,7 @@ ContentPage {
         swDimInactive.checked = Qt.binding(() => root.dimInactiveEnabled);
         if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
         swTitleBars.checked = Qt.binding(() => TitleBars.enabled);
+        titleBarSection.resetAppearance();
         activeBorderLane.rearm();
         inactiveBorderLane.rearm();
         const gradientStock = [
@@ -587,10 +588,24 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         property string pendingColor: TitleBars.color
         property real pendingOpacity: TitleBars.opacity
 
+        // Reset back to stock title bar settings in one press: the color file
+        // goes empty, which plugins.lua reads as "leave the key alone", so the
+        // plugin paints its own stock bar again.
+        function resetAppearance() {
+            pendingColor = "";
+            pendingOpacity = 1;
+            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== 1)
+                TitleBars.setAppearance("", 1);
+        }
+
         ColorField {
             text: Translation.tr("Color")
             buttonIcon: "format_color_fill"
             value: titleBarSection.pendingColor
+            // An absent color is this field's stock state, so clearing it must
+            // be allowed; the stand-in is the plugin's own default bar color.
+            allowEmpty: true
+            fallback: "#333333"
             onEdited: newValue => {
                 titleBarSection.pendingColor = newValue;
                 TitleBars.setAppearance(newValue, titleBarSection.pendingOpacity);
@@ -625,6 +640,19 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             interval: 400
             onTriggered: TitleBars.setAppearance(titleBarSection.pendingColor,
                 titleBarSection.pendingOpacity)
+        }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            RippleButtonWithIcon {
+                materialIcon: "settings_backup_restore"
+                mainText: Translation.tr("Reset title bar settings")
+                onClicked: titleBarSection.resetAppearance()
+                StyledToolTip {
+                    text: Translation.tr("The color and opacity go back to how the title bars come")
+                }
+            }
         }
     }
 

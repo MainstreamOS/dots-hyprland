@@ -1907,5 +1907,7 @@
   "Search input sources…": "Search input sources…",
   "Applying input method…": "Applying input method…",
   "Input method ready.": "Input method ready.",
-  "Could not set the input method.": "Could not set the input method."
+  "Could not set the input method.": "Could not set the input method.",
+  "Reset title bar settings": "Reset title bar settings",
+  "The color and opacity go back to how the title bars come": "The color and opacity go back to how the title bars come"
 }
