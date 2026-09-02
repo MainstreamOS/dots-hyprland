@@ -238,8 +238,9 @@ ContentSection {
         StyledText {
             Layout.fillWidth: true
             text: Translation.tr("The selected layouts are available immediately and persist across restarts.")
-            wrapMode: Text.Wrap
+            wrapMode: Text.WordWrap
             color: Appearance.colors.colSubtext
+            font.pixelSize: Appearance.font.pixelSize.smaller
         }
 
         ConfigRow {
