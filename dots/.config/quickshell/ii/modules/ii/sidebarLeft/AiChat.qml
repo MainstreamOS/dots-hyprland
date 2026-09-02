@@ -384,6 +384,36 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 touchpadScrollFactor: Config.options.interactions.scrolling.touchpadScrollFactor * 1.4
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
 
+                // A viewport of runway below the last message, so the prompt
+                // just sent can always reach the top of the view: without it
+                // the list clamps at its end and the newest item cannot be
+                // scrolled above the fold, which silently defeated the jump
+                // for every conversation past the first screen.
+                bottomMargin: height
+
+                // While the scrollbar handle is held, streamed growth keeps
+                // remapping the same hand position onto a longer range, which
+                // yanked the view on every chunk. The bar remembers where the
+                // hand actually put the view and growth restores that anchor;
+                // real hand movement updates it.
+                ScrollBar.vertical: StyledScrollBar {
+                    id: chatScrollBar
+                    property bool compensating: false
+                    property real anchorY: 0
+                    onPressedChanged: if (pressed) anchorY = messageListView.contentY
+                    onPositionChanged: {
+                        if (pressed && !compensating)
+                            anchorY = messageListView.contentY;
+                    }
+                }
+                onContentHeightChanged: {
+                    if (chatScrollBar.pressed) {
+                        chatScrollBar.compensating = true;
+                        contentY = chatScrollBar.anchorY;
+                        chatScrollBar.compensating = false;
+                    }
+                }
+
                 // No bottom-following at all: chasing a growing edge is what
                 // made streaming replies bounce. Instead, the prompt just sent
                 // is scrolled to the top of the view once, and the answer

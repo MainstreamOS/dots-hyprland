@@ -7,6 +7,11 @@ import QtQuick.Layouts
 RippleButton {
     id: root
     required property ListView target
+    // Content-relative end rather than atYEnd: a list with bottom runway
+    // (margin) is only atYEnd deep inside the blank space, which would keep
+    // this button up permanently. Identical to atYEnd on margin-less lists.
+    readonly property bool atContentEnd: target.contentHeight <= target.height
+        || target.contentY >= target.originY + target.contentHeight - target.height - 1
 
     anchors {
         bottom: parent.bottom
@@ -14,8 +19,8 @@ RippleButton {
         bottomMargin: 10
     }
 
-    opacity: !target.atYEnd ? 1 : 0
-    scale: !target.atYEnd ? 1 : 0.7
+    opacity: !root.atContentEnd ? 1 : 0
+    scale: !root.atContentEnd ? 1 : 0.7
     visible: opacity > 0
     Behavior on opacity {
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
