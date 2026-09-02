@@ -45,6 +45,15 @@ RowLayout {
     property real sliderWidth: 0
     signal edited(string newValue)
 
+    // StyledToolTip reads `hovered` off its parent and counts a parent that
+    // has no such property as hovered, so a field without this shows an
+    // attached tooltip for as long as its page is open.
+    property bool hovered: rowHover.hovered
+
+    HoverHandler {
+        id: rowHover
+    }
+
     onValueChanged: {
         if (picker.visible && !picker.decided && picker.emitted[root.value] !== true) {
             picker.decided = true
