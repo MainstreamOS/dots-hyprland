@@ -537,7 +537,14 @@ Item { // Bar content region
     Component {
         id: comp_volume
         Item {
-            implicitWidth: volumeIconButton.implicitWidth
+            // Narrower than the button on purpose: next to the indicators
+            // widget, the icon-to-icon distance is the button's own slack
+            // around its glyph plus the group spacing plus the indicators'
+            // inner padding, which reads wider than the 15 the indicators
+            // keep between their own icons. Giving back 10 lands the seam at
+            // that same rhythm; the button overhangs the slot evenly, so the
+            // hover circle and hit area stay full size.
+            implicitWidth: volumeIconButton.implicitWidth - 10
             implicitHeight: volumeIconButton.implicitHeight
 
             RippleButton {
