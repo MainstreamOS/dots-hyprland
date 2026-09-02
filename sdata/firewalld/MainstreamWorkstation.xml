@@ -5,6 +5,8 @@
   <service name="dhcpv6-client"/>
   <service name="ssh"/>
   <service name="samba-client"/>
+  <service name="mdns"/>
+  <service name="ipp-client"/>
   <port protocol="udp" port="1025-65535"/>
   <port protocol="tcp" port="1025-65535"/>
   <forward/>
