@@ -190,16 +190,49 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo "═══════════════════════════════════════════════════════════"
     echo "  System & [mainstream] packages — pacman -Syu"
     echo "═══════════════════════════════════════════════════════════"
-    pacman -Syu --noconfirm
-    PACMAN_RC=$?
+    PACMAN_LOG=$(mktemp)
+    pacman -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
+    PACMAN_RC=${PIPESTATUS[0]}
     if [[ "$PACMAN_RC" -ne 0 ]]; then
-        echo ""
-        echo "── pacman failed (corrupted cache or busy database are the usual"
-        echo "   transient causes) — retrying once..."
-        sleep 5
-        pacman -Syu --noconfirm
-        PACMAN_RC=$?
+        # When one of our own packages starts shipping a file an older install
+        # or ISO wrote directly, pacman refuses the upgrade with "exists in
+        # filesystem" and no scriptlet can help, because the conflict check
+        # runs before anything installs. That stranding is ours to absorb:
+        # if every conflict names a mainstream package and every path is
+        # unowned on disk, retry once overwriting exactly those paths.
+        # Anything outside those bounds keeps pacman's refusal.
+        mapfile -t _conflicts < <(grep -E '^[[:alnum:]@._+-]+: /.+ exists in filesystem$' "$PACMAN_LOG")
+        _ow_args=()
+        if [[ ${#_conflicts[@]} -gt 0 ]]; then
+            _adoptable=1
+            for _line in "${_conflicts[@]}"; do
+                _pkg="${_line%%:*}"
+                _path="${_line#*: }"
+                _path="${_path% exists in filesystem}"
+                if [[ "$_pkg" != mainstream-* ]] || pacman -Qo -- "$_path" >/dev/null 2>&1; then
+                    _adoptable=0
+                    break
+                fi
+                _ow_args+=(--overwrite "$_path")
+            done
+            if [[ "$_adoptable" -eq 1 ]]; then
+                echo ""
+                echo "── A mainstream package now owns files an older install placed"
+                echo "   directly on disk. Adopting them and retrying..."
+                pacman -Syu --noconfirm "${_ow_args[@]}"
+                PACMAN_RC=$?
+            fi
+        fi
+        if [[ "$PACMAN_RC" -ne 0 ]]; then
+            echo ""
+            echo "── pacman failed (corrupted cache or busy database are the usual"
+            echo "   transient causes) — retrying once..."
+            sleep 5
+            pacman -Syu --noconfirm
+            PACMAN_RC=$?
+        fi
     fi
+    rm -f "$PACMAN_LOG"
 else
     echo ""
     echo "── System packages: skipped (per --skip-system)"
