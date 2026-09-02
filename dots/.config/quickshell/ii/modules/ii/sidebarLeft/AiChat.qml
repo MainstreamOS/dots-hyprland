@@ -545,6 +545,103 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         }
 
+        Rectangle { // Plan-model setup banner
+            visible: Ai.currentModelNeedsSetup
+            Layout.fillWidth: true
+            Layout.bottomMargin: 6
+            implicitHeight: setupCol.implicitHeight + 22
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colPrimaryContainer
+
+            ColumnLayout {
+                id: setupCol
+                anchors {
+                    left: parent.left; right: parent.right
+                    verticalCenter: parent.verticalCenter
+                    leftMargin: 12; rightMargin: 12
+                }
+                spacing: 8
+
+                StyledText {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Appearance.colors.colOnPrimaryContainer
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    text: {
+                        const n = Ai.currentCliSetup?.name ?? "";
+                        switch (Ai.setupState) {
+                        case "installing": return Translation.tr("Installing %1…").arg(n);
+                        case "loggingIn": return Translation.tr("Finish signing in to %1 in the window that just opened…").arg(n);
+                        case "error": return Translation.tr("Setup didn't finish. Try again.");
+                        default: return Translation.tr("%1 needs a one-time sign-in: no API key, just your subscription.").arg(n);
+                        }
+                    }
+                }
+
+                RippleButtonWithIcon {
+                    visible: Ai.setupState === "" || Ai.setupState === "error"
+                    Layout.alignment: Qt.AlignRight
+                    materialIcon: Ai.setupState === "error" ? "refresh" : "login"
+                    mainText: Ai.setupState === "error" ? Translation.tr("Retry")
+                        : Translation.tr("Log in to %1").arg(Ai.currentCliSetup?.name ?? "")
+                    onClicked: Ai.setupCurrentModel()
+                }
+            }
+        }
+
+        Rectangle { // Claude subscription usage meters
+            visible: Ai.currentModel?.api_format === "claude-code" && Ai.claudePlanReady
+                && ClaudeUsage.available && Config.options.bar.claudeUsage.enable
+            Layout.fillWidth: true
+            Layout.bottomMargin: 6
+            implicitHeight: usageCol.implicitHeight + 18
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colLayer2
+
+            component UsageBar: ColumnLayout {
+                id: ub
+                required property string label
+                required property real pct
+                required property double resetMs
+                readonly property bool warning: pct >= Config.options.bar.claudeUsage.warningThreshold
+                Layout.fillWidth: true
+                spacing: 2
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    StyledText { text: ub.label; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext }
+                    Item { Layout.fillWidth: true }
+                    StyledText { text: `${Math.round(ub.pct)}%`; font.pixelSize: Appearance.font.pixelSize.smaller; color: ub.warning ? Appearance.colors.colError : Appearance.colors.colOnLayer1 }
+                    StyledText { visible: ub.resetMs > 0; text: `· ${ClaudeUsage.timeUntil(ub.resetMs)}`; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 12
+                    radius: 6
+                    color: Appearance.colors.colLayer1
+                    Rectangle {
+                        height: parent.height
+                        radius: 6
+                        width: parent.width * Math.max(0, Math.min(1, ub.pct / 100))
+                        color: ub.warning ? Appearance.colors.colError : Appearance.colors.colPrimary
+                        Behavior on width { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
+                    }
+                }
+            }
+
+            ColumnLayout {
+                id: usageCol
+                anchors {
+                    left: parent.left; right: parent.right
+                    verticalCenter: parent.verticalCenter
+                    leftMargin: 12; rightMargin: 12
+                }
+                spacing: 8
+                UsageBar { label: Translation.tr("Session (5h)"); pct: ClaudeUsage.fiveHour; resetMs: ClaudeUsage.fiveHourReset }
+                UsageBar { label: Translation.tr("Weekly");      pct: ClaudeUsage.sevenDay; resetMs: ClaudeUsage.sevenDayReset }
+            }
+        }
+
         Rectangle { // Input area
             id: inputWrapper
             property real spacing: 5

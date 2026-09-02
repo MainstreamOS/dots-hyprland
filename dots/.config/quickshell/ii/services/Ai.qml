@@ -25,6 +25,7 @@ Singleton {
     property Component openaiApiStrategy: OpenAiApiStrategy {}
     property Component mistralApiStrategy: MistralApiStrategy {}
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
+    property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -340,7 +341,9 @@ Singleton {
             "api_format": "openai",
         }),
     }
-    property var modelList: Object.keys(root.models)
+    // Only ever a view of the map. Readonly so no fetch handler can hand it
+    // a snapshot that stops following the models registered afterwards.
+    readonly property var modelList: Object.keys(root.models)
     readonly property var currentModelId: Persistent.states?.ai?.model || modelList[0]
     // Read by the input-box indicator. A plain getModel() call there never
     // re-evaluated, so the name sat on whatever was current when the chat was
@@ -360,6 +363,7 @@ Singleton {
         "gemini": geminiApiStrategy.createObject(this),
         "mistral": mistralApiStrategy.createObject(this),
         "anthropic": anthropicApiStrategy.createObject(this),
+        "claude-code": claudeCodeApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -368,6 +372,169 @@ Singleton {
             const safeModelName = root.safeModelName(model["model"]);
             root.addModel(safeModelName, model)
         });
+    }
+
+    // ── Claude plan (Claude Code CLI) ─────────────────────────────
+    // Sits beside the key-backed entries rather than replacing them: a
+    // subscriber signs in once and spends nothing per token, while anyone
+    // with a key keeps the HTTP path that needs no CLI installed. The five
+    // plan models only join the picker while the CLI reports a live login;
+    // before that a single setup entry holds the seat and the sidebar banner
+    // walks through install and sign-in.
+    readonly property string claudePlanSetupId: "claude-code"
+    readonly property var claudePlanModels: ({
+        "claude-fable": { alias: "fable", name: "Claude Fable" },
+        "claude-opus": { alias: "opus", name: "Claude Opus" },
+        "claude-opus-1m": { alias: "opus[1m]", name: "Claude Opus 1M" },
+        "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet" },
+        "claude-haiku": { alias: "haiku", name: "Claude Haiku" },
+    })
+    readonly property var cliSetup: ({
+        "claude-code": {
+            "name": "Claude Code",
+            "cmd": "claude",
+            "install": "curl -fsSL https://claude.ai/install.sh | bash",
+            "login": "claude auth login --claudeai",
+            "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'"
+        }
+    })
+    property bool claudePlanInstalled: false
+    property bool claudePlanReady: false
+    property string setupState: ""
+    // The native CLI installs to ~/.local/bin, which the compositor session
+    // does not put on PATH for the shell, so every claude invocation carries
+    // its own. Without it the detector reports a logged-in machine as having
+    // no CLI at all.
+    readonly property string cliPathPrefix: "export PATH=\"$HOME/.local/bin:$PATH\"; "
+    readonly property var currentCliSetup: currentModel && !currentModel.requires_key
+        ? (cliSetup[currentModel.api_format] ?? null) : null
+    readonly property bool currentModelNeedsSetup: currentCliSetup !== null
+        && (!claudePlanReady || setupState !== "")
+
+    function syncClaudePlanModels() {
+        if (Config.options?.policies?.ai === 2) return;
+        let next = Object.assign({}, root.models);
+        let changed = false;
+        if (root.claudePlanReady) {
+            if (next[root.claudePlanSetupId]) { delete next[root.claudePlanSetupId]; changed = true; }
+            for (const id of Object.keys(root.claudePlanModels)) {
+                if (next[id]) continue;
+                const planEntry = root.claudePlanModels[id];
+                next[id] = aiModelComponent.createObject(this, {
+                    "name": planEntry.name,
+                    "icon": "spark-symbolic",
+                    "description": Translation.tr("Plan | %1 through your Claude subscription. No API key needed").arg(planEntry.name),
+                    "homepage": "https://www.anthropic.com/claude",
+                    // Never requested: the CLI strategy writes its own
+                    // command. A real address keeps the local-only policy
+                    // honest about this being an online model.
+                    "endpoint": "https://api.anthropic.com",
+                    "model": planEntry.alias,
+                    "requires_key": false,
+                    "api_format": "claude-code",
+                });
+                changed = true;
+            }
+        } else {
+            for (const id of Object.keys(root.claudePlanModels)) {
+                if (next[id]) { delete next[id]; changed = true; }
+            }
+            if (!next[root.claudePlanSetupId]) {
+                next[root.claudePlanSetupId] = aiModelComponent.createObject(this, {
+                    "name": "Claude (Pro/Max plan)",
+                    "icon": "spark-symbolic",
+                    "description": Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
+                    "homepage": "https://docs.anthropic.com/en/docs/claude-code",
+                    "endpoint": "https://api.anthropic.com",
+                    "model": "claude-code",
+                    "requires_key": false,
+                    "api_format": "claude-code",
+                });
+                changed = true;
+            }
+        }
+        if (changed) root.models = next;
+    }
+
+    function detectCli() {
+        const entry = root.cliSetup["claude-code"];
+        const script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${entry.readyCheck}; then echo ready; fi; fi < /dev/null`;
+        cliDetectProc.command = ["bash", "-lc", script];
+        cliDetectProc.running = false;
+        cliDetectProc.running = true;
+    }
+
+    function setupCurrentModel() {
+        const entry = root.currentCliSetup;
+        if (!entry || root.setupState === "installing" || root.setupState === "loggingIn") return;
+        if (root.claudePlanInstalled) {
+            root._runLogin();
+        } else {
+            root.setupState = "installing";
+            installProc.command = ["bash", "-lc", root.cliPathPrefix + entry.install];
+            installProc.running = false;
+            installProc.running = true;
+        }
+    }
+
+    // The login flow is interactive: only under a terminal does the CLI print
+    // its link, open the browser, and take the pasted code back. Headless it
+    // shows nothing and waits forever, so the sign-in gets a real terminal
+    // window and the watcher below notices when the login lands.
+    function _runLogin() {
+        root.setupState = "loggingIn";
+        const script = root.cliPathPrefix + root.cliSetup["claude-code"].login
+            + "; echo; echo 'You can close this window.'; read -r -n 1 -s";
+        Quickshell.execDetached(["bash", "-c",
+            `${Config.options.apps.terminal} -e bash -c '${CF.StringUtils.shellSingleQuoteEscape(script)}'`]);
+        loginWatch.triesLeft = 60;
+    }
+
+    Process {
+        id: cliDetectProc
+        property string buf: ""
+        stdout: SplitParser { onRead: line => cliDetectProc.buf += line + "\n" }
+        onRunningChanged: if (running) buf = ""
+        onExited: (code) => {
+            const wasReady = root.claudePlanReady;
+            root.claudePlanInstalled = cliDetectProc.buf.includes("installed");
+            root.claudePlanReady = cliDetectProc.buf.includes("ready");
+            if (root.claudePlanReady) root.setupState = "";
+            root.syncClaudePlanModels();
+            if (!wasReady && root.claudePlanReady && root.currentModelId === root.claudePlanSetupId) {
+                root.setModel("claude-fable", true);
+                root.addMessage(Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."), root.interfaceRole);
+            }
+            // A lapsed login takes the plan models with it; the selection
+            // falls back to the setup entry rather than dangling on an id
+            // that no longer resolves.
+            if (!root.claudePlanReady && root.claudePlanModels[root.currentModelId] !== undefined) {
+                Persistent.states.ai.model = root.claudePlanSetupId;
+            }
+        }
+    }
+    Process {
+        id: installProc
+        onExited: (code) => {
+            if (code === 0) { root.claudePlanInstalled = true; root._runLogin(); }
+            else { root.setupState = "error"; }
+        }
+    }
+    Timer {
+        id: loginWatch
+        property int triesLeft: 0
+        interval: 2000
+        repeat: true
+        running: triesLeft > 0 && root.setupState === "loggingIn" && !root.claudePlanReady
+        onTriggered: {
+            triesLeft--;
+            root.detectCli();
+            if (triesLeft <= 0) root.setupState = "error";
+        }
+    }
+    onCurrentModelIdChanged: {
+        root.setupState = "";
+        if (root.currentModel?.api_format === "claude-code") root.detectCli();
     }
 
     Connections {
@@ -389,6 +556,8 @@ Singleton {
         if (currentModelId !== root.ollamaSetupModelId)
             setModel(currentModelId, false, false); // Do necessary setup for model
         root.addUserModels() // Config onReadyChanged above might not fire if config is loaded before this service
+        root.syncClaudePlanModels() // The setup entry exists before the CLI answers
+        root.detectCli()
     }
 
     function guessModelLogo(model) {
@@ -534,7 +703,6 @@ Singleton {
                             root.selectOllamaSetupEntry();
                         return;
                     }
-                    root.modelList = [...root.modelList, ...dataJson];
                     dataJson.forEach(model => {
                         const safeModelName = root.safeModelName(model);
                         root.addModel(safeModelName, {
@@ -547,8 +715,6 @@ Singleton {
                             "requires_key": false,
                         })
                     });
-
-                    root.modelList = Object.keys(root.models);
 
                     // The saved model may only now have become selectable, so
                     // take it up rather than leaving the default in place.
@@ -622,13 +788,6 @@ Singleton {
             delete remaining[root.ollamaSetupModelId];
             root.models = remaining;
         }
-
-        // Derived from the models rather than added to. modelList starts out
-        // bound to Object.keys(models), so replacing models has already put the
-        // entry in the list by the time this line runs; appending on top of
-        // that offered local AI twice. Membership is asked of models for the
-        // same reason, since the list is only ever a view of it.
-        root.modelList = Object.keys(root.models);
     }
 
     // Picking the setup entry is a request for help rather than a model
@@ -1076,12 +1235,19 @@ Singleton {
             }
 
             /* Create command string */
+            // A strategy backed by a local command writes its own invocation.
+            // There is no endpoint to post to in that case, so the curl form
+            // below would be addressed at an empty URL.
             let scriptRequestContent = ""
-            scriptRequestContent += `curl --no-buffer "${endpoint}"`
-                + ` ${headerString}`
-                + (authHeader ? ` ${authHeader}` : "")
-                + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
-                + "\n"
+            if (requester.currentStrategy.isCliStrategy) {
+                scriptRequestContent = requester.currentStrategy.buildScriptRequestContent(model, filteredMessageArray, root.systemPrompt, root.temperature);
+            } else {
+                scriptRequestContent += `curl --no-buffer "${endpoint}"`
+                    + ` ${headerString}`
+                    + (authHeader ? ` ${authHeader}` : "")
+                    + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
+                    + "\n"
+            }
             
             /* Send the request */
             const scriptContent = requester.currentStrategy.finalizeScriptContent(scriptShebang + scriptFileSetupContent + scriptRequestContent)

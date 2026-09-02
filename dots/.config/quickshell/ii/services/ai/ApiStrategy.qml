@@ -6,6 +6,11 @@ QtObject {
     // model answers with a call instead of prose, and nothing renders it.
     property bool supportsFunctions: false
 
+    // CLI-based strategies run a local command instead of a curl request.
+    // Ai.qml routes on this flag, which is what lets a subscription-backed
+    // model sit alongside the key-backed ones rather than replacing them.
+    property bool isCliStrategy: false
+
     function buildEndpoint(model: AiModel): string { throw new Error("Not implemented") }
     function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) { throw new Error("Not implemented") }
     function buildAuthorizationHeader(apiKeyEnvVarName: string): string { throw new Error("Not implemented") }

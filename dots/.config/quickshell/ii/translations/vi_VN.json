@@ -1967,5 +1967,17 @@
   "Input method ready.": "Input method ready.",
   "Could not set the input method.": "Could not set the input method.",
   "Reset title bar settings": "Reset title bar settings",
-  "The color and opacity go back to how the title bars come": "The color and opacity go back to how the title bars come"
+  "The color and opacity go back to how the title bars come": "The color and opacity go back to how the title bars come",
+  "Plan | %1 through your Claude subscription. No API key needed": "Plan | %1 through your Claude subscription. No API key needed",
+  "Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed": "Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed",
+  "Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku.": "Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku.",
+  "Installing %1\u2026": "Installing %1\u2026",
+  "Finish signing in to %1 in the window that just opened\u2026": "Finish signing in to %1 in the window that just opened\u2026",
+  "Setup didn't finish. Try again.": "Setup didn't finish. Try again.",
+  "%1 needs a one-time sign-in: no API key, just your subscription.": "%1 needs a one-time sign-in: no API key, just your subscription.",
+  "Retry": "Retry",
+  "Log in to %1": "Log in to %1",
+  "Session (5h)": "Session (5h)",
+  "Weekly": "Weekly",
+  "now": "now"
 }
