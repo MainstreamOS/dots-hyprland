@@ -246,10 +246,18 @@ function setup_gpu_drivers(){
               x sudo pacman -S --needed --noconfirm linux-headers dkms
               # Try the legacy branch; if unavailable, fall back to nouveau and leave a breadcrumb.
               if ! sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
-                echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
-                x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
-                note_failure "NVIDIA ${NVIDIA_GEN} card: proprietary branch ${NVIDIA_DRIVER_FAMILY} not available; installed nouveau instead."
-                flush_failures
+                # A legacy edition boots on a branch the online repos do not
+                # carry, so the resolve failing is the normal repair case
+                # there, not a missing driver. Keeping the installed branch is
+                # the repair; nouveau is only for a machine with nothing.
+                if pacman -Q "${NVIDIA_LOCAL_PKGS[0]}" >/dev/null 2>&1; then
+                  echo -e "${STY_CYAN}[$0]: ${NVIDIA_DRIVER_FAMILY} is already installed; keeping it.${STY_RST}"
+                else
+                  echo -e "${STY_YELLOW}[$0]: Legacy NVIDIA branch ${NVIDIA_DRIVER_FAMILY} unavailable — falling back to nouveau.${STY_RST}"
+                  x sudo pacman -S --needed --noconfirm xf86-video-nouveau mesa
+                  note_failure "NVIDIA ${NVIDIA_GEN} card: proprietary branch ${NVIDIA_DRIVER_FAMILY} not available; installed nouveau instead."
+                  flush_failures
+                fi
               fi
             fi
             ;;

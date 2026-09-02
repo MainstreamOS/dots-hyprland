@@ -7,11 +7,12 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/gpu-config.sh"
 
 # Drive detection from fixture globals instead of real hardware.
-FIX_LSPCI=""; FIX_SYSVENDOR=""; FIX_ESP_MIB=0
+FIX_LSPCI=""; FIX_SYSVENDOR=""; FIX_ESP_MIB=0; FIX_INSTALLED_BRANCH=""
 _gpu_lspci_nn()   { printf '%s\n' "$FIX_LSPCI"; }
 _gpu_lspci()      { printf '%s\n' "$FIX_LSPCI"; }
 _gpu_sys_vendor() { printf '%s' "$FIX_SYSVENDOR"; }
 _gpu_esp_mib()    { echo "$FIX_ESP_MIB"; }
+_gpu_installed_nvidia_branch() { printf '%s' "$FIX_INSTALLED_BRANCH"; }
 
 FAILS=0; CASES=0
 run() { FIX_SYSVENDOR="$2"; FIX_LSPCI="$3"; CASES=$((CASES + 1)); gpu_detect || true; }
@@ -486,6 +487,35 @@ _gpu_module_dirs() { printf '%s\n' /nonexistent-xyz/*/; }
 chk_str tk-none "$(gpu_target_kernel)" ""; CASES=$((CASES + 1))
 chk_str mod-none "$(nvidia_module_present && echo yes || echo no)" "no"; CASES=$((CASES + 1))
 rm -rf "$KDIR"
+
+# ── gpu_classify_nvidia_driver: generation map + installed-branch override ──
+# The write-seam sections above re-source the lib, which restores the real
+# pacman probe; pin the fixture again so these cases stay hermetic.
+_gpu_installed_nvidia_branch() { printf '%s' "$FIX_INSTALLED_BRANCH"; }
+classify() { NVIDIA_GEN="$1"; FIX_INSTALLED_BRANCH="$2"; CASES=$((CASES + 1)); gpu_classify_nvidia_driver; }
+
+# Fresh systems: nothing installed, the generation decides.
+classify turing "";   chk cls-turing NVIDIA_DRIVER_FAMILY nvidia-open
+chk_str cls-turing-repo "${NVIDIA_REPO_PKGS[0]}" nvidia-open
+classify maxwell "";  chk cls-maxwell NVIDIA_DRIVER_FAMILY nvidia-580xx
+chk_str cls-maxwell-local "${NVIDIA_LOCAL_PKGS[0]}" nvidia-580xx-dkms
+classify kepler "";   chk cls-kepler NVIDIA_DRIVER_FAMILY nvidia-470xx
+classify fermi "";    chk cls-fermi NVIDIA_DRIVER_FAMILY nvidia-390xx
+classify prefermi ""; chk cls-prefermi NVIDIA_DRIVER_FAMILY nouveau
+classify none "";     chk cls-none NVIDIA_DRIVER_FAMILY nouveau
+
+# THE REPAIR CASE: a legacy edition runs 580xx that the online repos do not
+# carry. The installed branch must win over every generation verdict so a
+# re-provision keeps the driver that is working instead of migrating it.
+classify maxwell 580xx; chk cls-installed-match NVIDIA_DRIVER_FAMILY nvidia-580xx
+classify turing 580xx;  chk cls-installed-over-turing NVIDIA_DRIVER_FAMILY nvidia-580xx
+chk_str cls-installed-no-repo "${#NVIDIA_REPO_PKGS[@]}" 0
+classify kepler 470xx;  chk cls-installed-470 NVIDIA_DRIVER_FAMILY nvidia-470xx
+classify fermi 390xx;   chk cls-installed-390 NVIDIA_DRIVER_FAMILY nvidia-390xx
+
+# An unrecognized probe answer must not zero the result; the map still runs.
+classify maxwell bogus; chk cls-installed-bogus NVIDIA_DRIVER_FAMILY nvidia-580xx
+FIX_INSTALLED_BRANCH=""
 
 if [[ $FAILS -eq 0 ]]; then echo "gpu_detect: all $CASES cases PASS"; exit 0
 else echo "gpu_detect: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

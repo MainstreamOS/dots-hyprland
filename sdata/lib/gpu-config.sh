@@ -23,6 +23,17 @@
 _gpu_lspci()      { lspci 2>/dev/null || true; }
 _gpu_lspci_nn()   { lspci -nn 2>/dev/null || true; }
 _gpu_sys_vendor() { cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true; }
+_gpu_installed_nvidia_branch() {
+    # Which frozen NVIDIA branch, if any, is installed on the system being
+    # asked about. Empty on a fresh install and inside a not-yet-provisioned
+    # chroot, so classification falls through to the generation map.
+    command -v pacman >/dev/null 2>&1 || { printf ''; return 0; }
+    local b
+    for b in 580xx 470xx 390xx; do
+        if pacman -Q "nvidia-${b}-dkms" >/dev/null 2>&1; then printf '%s' "$b"; return 0; fi
+    done
+    printf ''
+}
 
 # ── gpu_detect ──────────────────────────────────────────────────────────────
 # Single detection pass. Exports (true/false unless noted):
@@ -146,22 +157,43 @@ gpu_detect() {
 # install (live -S from repo; chroot -S + -U + DKMS-against-target-kernel), and
 # is responsible for the nouveau+breadcrumb fallback when local pkgs are absent.
 # Turing+ default is nvidia-open (the locked policy).
+_gpu_frozen_family() {
+    case "$1" in
+        580xx)
+            NVIDIA_DRIVER_FAMILY=nvidia-580xx
+            NVIDIA_LOCAL_PKGS=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils nvidia-580xx-settings libxnvctrl-580xx) ;;
+        470xx)
+            NVIDIA_DRIVER_FAMILY=nvidia-470xx
+            NVIDIA_LOCAL_PKGS=(nvidia-470xx-dkms nvidia-470xx-utils lib32-nvidia-470xx-utils) ;;
+        390xx)
+            NVIDIA_DRIVER_FAMILY=nvidia-390xx
+            NVIDIA_LOCAL_PKGS=(nvidia-390xx-dkms nvidia-390xx-utils lib32-nvidia-390xx-utils) ;;
+    esac
+}
 gpu_classify_nvidia_driver() {
     NVIDIA_DRIVER_FAMILY=none
     NVIDIA_REPO_PKGS=() NVIDIA_LOCAL_PKGS=()
+    # A frozen branch that is already installed wins over the generation map.
+    # Repair and re-provisioning must serve the install that exists: the
+    # legacy edition boots on a proprietary branch the online repos do not
+    # carry, and reclassifying it from scratch is how a repair ends up
+    # replacing a working driver with the fresh-install pick.
+    local _installed
+    _installed="$(_gpu_installed_nvidia_branch)"
+    if [[ -n "$_installed" ]]; then
+        _gpu_frozen_family "$_installed"
+        [[ "$NVIDIA_DRIVER_FAMILY" != none ]] && return 0
+    fi
     case "$NVIDIA_GEN" in
         turing)
             NVIDIA_DRIVER_FAMILY=nvidia-open
             NVIDIA_REPO_PKGS=(nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils libva-nvidia-driver libva-utils) ;;
         maxwell)
-            NVIDIA_DRIVER_FAMILY=nvidia-580xx
-            NVIDIA_LOCAL_PKGS=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils nvidia-580xx-settings libxnvctrl-580xx) ;;
+            _gpu_frozen_family 580xx ;;
         kepler)
-            NVIDIA_DRIVER_FAMILY=nvidia-470xx
-            NVIDIA_LOCAL_PKGS=(nvidia-470xx-dkms nvidia-470xx-utils lib32-nvidia-470xx-utils) ;;
+            _gpu_frozen_family 470xx ;;
         fermi)
-            NVIDIA_DRIVER_FAMILY=nvidia-390xx
-            NVIDIA_LOCAL_PKGS=(nvidia-390xx-dkms nvidia-390xx-utils lib32-nvidia-390xx-utils) ;;
+            _gpu_frozen_family 390xx ;;
         prefermi|none)
             NVIDIA_DRIVER_FAMILY=nouveau
             NVIDIA_REPO_PKGS=(xf86-video-nouveau mesa lib32-mesa) ;;
