@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=18
+pkgrel=19
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -55,5 +55,4 @@ depends=(
   cups-pk-helper
   ipp-usb
   system-config-printer
-  firewall-config
 )

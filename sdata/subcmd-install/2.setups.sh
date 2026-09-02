@@ -447,6 +447,13 @@ if command -v systemctl >/dev/null 2>&1; then
   v sudo systemctl enable bluetooth --now
   if systemctl list-unit-files firewalld.service >/dev/null 2>&1; then
     v sudo systemctl enable firewalld.service || true
+    # The ISO offers the firewall GUI as a pick in the installer's app
+    # selection; the script install has no selection step, so it ships by
+    # default here instead of riding a package dependency, which would drag
+    # it onto ISO installs too.
+    if [[ "$OS_GROUP_ID" == "arch" ]]; then
+      try sudo pacman -S --needed --noconfirm firewall-config
+    fi
     v sudo install -Dm644 "${REPO_ROOT}/sdata/firewalld/MainstreamWorkstation.xml" /etc/firewalld/zones/MainstreamWorkstation.xml
     if [[ "$(sudo firewall-offline-cmd --get-default-zone 2>/dev/null)" != MainstreamWorkstation ]]; then
       v sudo firewall-offline-cmd --set-default-zone=MainstreamWorkstation
