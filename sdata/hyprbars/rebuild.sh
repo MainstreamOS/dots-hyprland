@@ -19,22 +19,22 @@
 #
 #   2. Otherwise, try this list of candidates in order, building each
 #      until one succeeds:
-#        a. The cached "last known good" commit from a prior successful
+#        a. An exact `v<HYPR_VER>` tag if upstream has shipped one.
+#        b. The highest `v<MAJOR>.<MINOR>.*` tag.
+#        c. The default branch (`mainstream` on the MainstreamOS fork).
+#        d. The cached "last known good" commit from a prior successful
 #           run (/var/cache/hyprbars/last-good-ref).
-#        b. An exact `v<HYPR_VER>` tag if upstream has shipped one.
-#        c. The highest `v<MAJOR>.<MINOR>.*` tag.
-#        d. The default branch (`mainstream` on the MainstreamOS fork).
 #        e. Walk backward through the default branch commit-by-commit
 #           until one builds. Capped at WALK_DEPTH commits to avoid
 #           runaway loops against a permanently-broken source.
 #
-#   3. The first working ref is cached as last-known-good for the next
-#      run. Subsequent rebuilds short-circuit on step 2a.
+#   3. The first working ref is cached as last-known-good, kept only as
+#      the way back when nothing newer builds.
 #
-# This means: when hyprland gets a routine patch bump, rebuild reuses
-# the cached commit and finishes in seconds. When hyprland makes a
-# breaking change that the cached commit can't handle, the script
-# self-heals by walking history and updating the cache.
+# This means: fixes that land on the branch reach users on the next
+# rebuild, and when hyprland makes a breaking change that the branch
+# cannot handle yet, the script falls back to the cached commit or
+# walks history until something builds.
 #
 # /etc/hyprbars.conf overrides (sourced as bash, all optional):
 #   HYPRBARS_REPO=<git url>   default: MainstreamOS/hyprland-plugins
@@ -172,12 +172,6 @@ build_at_ref() {
 
 auto_detect_refs() {
     # Echo candidate refs in preferred order, separated by newlines.
-    if [[ -f "$LAST_GOOD_FILE" ]]; then
-        local cached
-        cached=$(cat "$LAST_GOOD_FILE" 2>/dev/null || true)
-        [[ -n "$cached" ]] && echo "$cached"
-    fi
-
     if git -C "$SRC_DIR" rev-parse -q --verify "refs/tags/v${HYPR_VER}" >/dev/null 2>&1; then
         echo "v${HYPR_VER}"
     fi
@@ -189,6 +183,15 @@ auto_detect_refs() {
     [[ -n "$highest" ]] && echo "$highest"
 
     echo "$HYPRBARS_DEFAULT_BRANCH"
+
+    # Last, and only as a way back. A cached ref that still compiles would
+    # otherwise be preferred over the branch forever, so every commit made
+    # after the one that happened to be cached would never reach anybody.
+    if [[ -f "$LAST_GOOD_FILE" ]]; then
+        local cached
+        cached=$(cat "$LAST_GOOD_FILE" 2>/dev/null || true)
+        [[ -n "$cached" ]] && echo "$cached"
+    fi
 }
 
 # ------------------------------------------------------------------

@@ -19,24 +19,24 @@
 #
 #   2. Otherwise, try this list of candidates in order, building each
 #      until one succeeds:
-#        a. The cached "last known good" commit from a prior successful
-#           run (/var/cache/scrolloverview/last-good-ref).
-#        b. The plugin SHA paired with the installed Hyprland commit in
+#        a. The plugin SHA paired with the installed Hyprland commit in
 #           the upstream hyprpm.toml `commit_pins` table, when present.
-#        c. An exact `v<HYPR_VER>` tag if upstream has shipped one.
-#        d. The highest `v<MAJOR>.<MINOR>.*` tag.
-#        e. `main`.
-#        f. Walk backward through `main` commit-by-commit until one
-#           builds. Capped at WALK_DEPTH commits to avoid runaway loops
-#           against a permanently-broken upstream.
+#        b. An exact `v<HYPR_VER>` tag if upstream has shipped one.
+#        c. The highest `v<MAJOR>.<MINOR>.*` tag.
+#        d. The default branch.
+#        e. The cached "last known good" commit from a prior successful
+#           run (/var/cache/scrolloverview/last-good-ref).
+#        f. Walk backward through the default branch commit-by-commit
+#           until one builds. Capped at WALK_DEPTH commits to avoid
+#           runaway loops against a permanently-broken upstream.
 #
-#   3. The first working ref is cached as last-known-good for the next
-#      run. Subsequent rebuilds short-circuit on step 2a.
+#   3. The first working ref is cached as last-known-good, kept only as
+#      the way back when nothing newer builds.
 #
-# This means: when hyprland gets a routine patch bump, rebuild reuses
-# the cached commit and finishes in seconds. When hyprland makes a
-# breaking change that the cached commit can't handle, the script
-# self-heals by walking history and updating the cache.
+# This means: fixes that land on the branch reach users on the next
+# rebuild, and when hyprland makes a breaking change that the branch
+# cannot handle yet, the script falls back to the cached commit or
+# walks history until something builds.
 #
 # /etc/scrolloverview.conf overrides (sourced as bash, all optional):
 #   SCROLLOVERVIEW_REPO=<git url>   default: MainstreamOS/hyprland-scroll-overview
