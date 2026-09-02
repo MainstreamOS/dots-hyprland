@@ -99,6 +99,21 @@ Singleton {
     // Mirrors guessIcon's fallback chain so pins like "GitHub Desktop" still resolve
     // when the user enters the display name instead of the desktop-entry id.
     function guessDesktopEntry(str) {
+        const resolved = root.resolveDesktopEntry(str);
+        if (resolved) return resolved;
+        if (!str || str.length == 0) return null;
+
+        const nameMatches = root.fuzzyQuery(str);
+        if (nameMatches.length > 0) return nameMatches[0];
+
+        return null;
+    }
+
+    // The deterministic part of the chain: the id spellings plus quickshell's
+    // class heuristics (StartupWMClass), and nothing fuzzy. Dock grouping of
+    // windows with pins rides on this, where a fuzzy guess would merge two
+    // unrelated apps into one icon.
+    function resolveDesktopEntry(str) {
         if (!str || str.length == 0) return null;
 
         const direct = DesktopEntries.byId(str);
@@ -127,9 +142,6 @@ Singleton {
 
         const heuristic = DesktopEntries.heuristicLookup(str);
         if (heuristic) return heuristic;
-
-        const nameMatches = root.fuzzyQuery(str);
-        if (nameMatches.length > 0) return nameMatches[0];
 
         return null;
     }
