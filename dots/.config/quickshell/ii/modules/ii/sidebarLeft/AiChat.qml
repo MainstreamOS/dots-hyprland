@@ -217,6 +217,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
     ]
 
     function handleInput(inputText) {
+        // The message this input is about to add lands at the current count;
+        // the view scrolls it to the top when it arrives. Armed before the
+        // dispatch below, or the captured index would already include it.
+        messageListView.promptScrollIndex = messageListView.count;
         if (inputText.startsWith(root.commandPrefix)) {
             // Handle special commands
             const command = inputText.split(" ")[0].substring(1);
@@ -231,9 +235,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             Ai.sendUserMessage(inputText);
         }
 
-        // Always scroll to bottom when user sends a message
-        messageListView.pinnedToBottom = true;
-        messageListView.scrollToEnd();
     }
 
     Process {
@@ -383,40 +384,31 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 touchpadScrollFactor: Config.options.interactions.scrolling.touchpadScrollFactor * 1.4
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
 
-                // While a reply streams in, every token grows contentHeight,
-                // and a view that neither follows nor yields makes the chat
-                // unscrollable in practice: the reader chases text that keeps
-                // moving away. Follow the bottom only while the reader is
-                // there. Any scroll away releases the pin, and returning to
-                // the bottom, or sending a message, takes it back up.
-                property bool pinnedToBottom: true
-                property bool autoScrolling: false
-                function scrollToEnd() {
-                    autoScrolling = true;
-                    // Ride contentY to the arithmetic end instead of asking
-                    // positionViewAtEnd: that call re-estimates the last
-                    // delegate's geometry while a streaming message is still
-                    // laying out, overshoots, and corrects, which read as the
-                    // whole chat bouncing on every chunk. The arithmetic end
-                    // only ever grows while content streams, so the ride down
-                    // is monotonic. Content that fits the viewport stays at
-                    // its rest position, or the top margin's worth would slide
-                    // under the status bar.
-                    if (contentHeight > height)
-                        contentY = originY + contentHeight - height;
-                    autoScrolling = false;
-                }
-                onContentYChanged: {
-                    if (!autoScrolling)
-                        pinnedToBottom = atYEnd;
-                }
-                onContentHeightChanged: {
-                    if (pinnedToBottom)
-                        Qt.callLater(scrollToEnd);
-                }
+                // No bottom-following at all: chasing a growing edge is what
+                // made streaming replies bounce. Instead, the prompt just sent
+                // is scrolled to the top of the view once, and the answer
+                // grows into the space below it, so the view never moves on
+                // its own again and scrolling stays the reader's. The index is
+                // armed by handleInput and consumed on the arrival of the
+                // message it predicted.
+                property int promptScrollIndex: -1
                 onCountChanged: {
-                    if (pinnedToBottom)
-                        Qt.callLater(scrollToEnd);
+                    if (promptScrollIndex < 0) return;
+                    if (count < promptScrollIndex) {
+                        // A command cleared the chat instead of adding to it.
+                        promptScrollIndex = -1;
+                        return;
+                    }
+                    if (count > promptScrollIndex) {
+                        const i = promptScrollIndex;
+                        promptScrollIndex = -1;
+                        Qt.callLater(() => {
+                            positionViewAtIndex(i, ListView.Beginning);
+                            // Beginning ignores topMargin, which would park
+                            // the prompt under the status bar overlay.
+                            contentY -= topMargin;
+                        });
+                    }
                 }
 
                 add: null // Prevent function calls from being janky
