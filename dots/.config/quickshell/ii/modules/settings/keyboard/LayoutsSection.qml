@@ -237,7 +237,7 @@ ContentSection {
 
         StyledText {
             Layout.fillWidth: true
-            text: Translation.tr("Add any layout supported by XKB. The selected layouts are available immediately and persist across restarts.")
+            text: Translation.tr("The selected layouts are available immediately and persist across restarts.")
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
         }

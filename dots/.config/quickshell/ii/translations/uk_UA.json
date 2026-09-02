@@ -1860,7 +1860,7 @@
   "**%1** is ready and selected. It answers on this computer, needs no API key, and keeps working with the network off.": "**%1** is ready and selected. It answers on this computer, needs no API key, and keeps working with the network off.",
   "A download is already running.": "A download is already running.",
   "A newer version is ready to install.": "A newer version is ready to install.",
-  "Add any layout supported by XKB. The selected layouts are available immediately and persist across restarts.": "Add any layout supported by XKB. The selected layouts are available immediately and persist across restarts.",
+  "The selected layouts are available immediately and persist across restarts.": "The selected layouts are available immediately and persist across restarts.",
   "Add tabs from Settings → Interface → Left Sidebar": "Add tabs from Settings → Interface → Left Sidebar",
   "All layouts enabled": "All layouts enabled",
   "Checking for local AI...": "Checking for local AI...",
