@@ -383,7 +383,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 touchpadScrollFactor: Config.options.interactions.scrolling.touchpadScrollFactor * 1.4
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
 
-                property int lastResponseLength: 0
                 // While a reply streams in, every token grows contentHeight,
                 // and a view that neither follows nor yields makes the chat
                 // unscrollable in practice: the reader chases text that keeps
@@ -480,12 +479,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         }
                     }
                     onClicked: {
-                        suggestions.acceptSuggestion(modelData.name);
+                        suggestions.acceptSuggestion(modelData);
                     }
                 }
             }
 
-            function acceptSuggestion(word) {
+            function acceptSuggestion(entry) {
+                const word = entry?.name ?? entry;
                 const words = messageInputField.text.trim().split(/\s+/);
                 if (words.length > 0) {
                     words[words.length - 1] = word;
@@ -493,13 +493,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     words.push(word);
                 }
                 const updatedText = words.join(" ") + " ";
-                // Picking a model IS the whole intent of /model, so a chosen
-                // entry runs instead of sitting in the field waiting for a
-                // second confirmation. Completing the command name itself
-                // still just fills it in.
-                const parts = updatedText.trim().split(/\s+/);
-                if (parts[0] === root.commandPrefix + "model" && parts.length === 2 && Ai.modelList.includes(parts[1])) {
-                    root.handleInput(parts.join(" "));
+                // An entry that completes a whole invocation says so at build
+                // time, so this shared path holds no command names of its own.
+                if (entry?.executeOnAccept) {
+                    root.handleInput(updatedText.trim());
                     messageInputField.clear();
                     messageInputField.forceActiveFocus();
                     return;
@@ -511,8 +508,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
             function acceptSelectedWord() {
                 if (suggestions.selectedIndex >= 0 && suggestions.selectedIndex < suggestionRepeater.count) {
-                    const word = root.suggestionList[suggestions.selectedIndex].name;
-                    suggestions.acceptSuggestion(word);
+                    suggestions.acceptSuggestion(root.suggestionList[suggestions.selectedIndex]);
                 }
             }
         }
@@ -590,7 +586,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     return {
                                         name: `${messageInputField.text.trim().split(" ").length == 1 ? (root.commandPrefix + "model ") : ""}${model.target}`,
                                         displayName: `${Ai.models[model.target].name}`,
-                                        description: `${Ai.models[model.target].description}`
+                                        description: `${Ai.models[model.target].description}`,
+                                        // A model entry completes the whole
+                                        // invocation, so accepting one runs it.
+                                        executeOnAccept: true
                                     };
                                 });
                             } else if (messageInputField.text.startsWith(`${root.commandPrefix}prompt`)) {
@@ -796,9 +795,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                 ApiInputBoxIndicator {
                     // Model indicator
+                    id: modelIndicator
                     icon: "api"
-                    text: Ai.currentModel?.name ?? Translation.tr("Local AI (Ollama)")
-                    tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(Ai.currentModel?.name ?? Translation.tr("Local AI (Ollama)")).arg(root.commandPrefix)
+                    text: Ai.currentModel?.name ?? Ai.ollamaSetupEntryName
+                    tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(modelIndicator.text).arg(root.commandPrefix)
                 }
 
                 ApiInputBoxIndicator {

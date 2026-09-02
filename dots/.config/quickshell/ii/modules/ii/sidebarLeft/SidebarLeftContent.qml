@@ -139,8 +139,7 @@ Item {
                         buttonRadius: Appearance.rounding.full
                         colBackground: Appearance.colors.colSecondaryContainer
                         onClicked: {
-                            const settingsPath = FileUtils.trimFileProtocol(Directories.config) + "/quickshell/ii/settings.qml";
-                            Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=InterfaceConfig.qml QS_SETTINGS_SECTION=leftSidebarSection quickshell -p '" + settingsPath + "'"]);
+                            Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=InterfaceConfig.qml QS_SETTINGS_SECTION=leftSidebarSection quickshell -p '" + StringUtils.shellSingleQuoteEscape(Directories.settingsAppPath) + "'"]);
                             GlobalStates.sidebarLeftOpen = false;
                         }
                         contentItem: StyledText {

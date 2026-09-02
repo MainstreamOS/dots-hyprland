@@ -1955,6 +1955,5 @@
   "min": "min",
   "Open Interface settings": "Open Interface settings",
   "Checking for local AI now. The next step appears here in a moment.": "Checking for local AI now. The next step appears here in a moment.",
-  "Local AI is still waking up. Send that again in a few seconds.": "Local AI is still waking up. Send that again in a few seconds.",
   "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar": "Enter a command to get started\nType /model to switch models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar"
 }

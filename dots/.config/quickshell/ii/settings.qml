@@ -163,8 +163,8 @@ ApplicationWindow {
         const envTab = Quickshell.env("QS_SETTINGS_TAB");
         return envTab ? parseInt(envTab) : 0;
     }
-    // Consumed by the first ContentPage that contains a child with this
-    // objectName; see ContentPage._jumpToPendingSection.
+    // Handed to the loaded page below and cleared once a page reports the
+    // section found, so later page visits start at the top as usual.
     property string pendingSettingsSection: Quickshell.env("QS_SETTINGS_SECTION") || ""
     property int currentPage: initialPage
 
@@ -411,6 +411,17 @@ ApplicationWindow {
                     // we don't apply it as a blanket setting.
                     asynchronous: Config.ready
                         && (root.pages[root.currentPage]?.asynchronous ?? false)
+
+                    onLoaded: {
+                        if (!root.pendingSettingsSection || !item?.scrollToSection) return;
+                        const name = root.pendingSettingsSection;
+                        const page = item;
+                        // After layout: section positions are not final inside onLoaded.
+                        Qt.callLater(() => {
+                            if (page === pageLoader.item && page.scrollToSection(name))
+                                root.pendingSettingsSection = "";
+                        });
+                    }
 
                     function reloadCurrentPage() {
                         if (!Config.ready)
