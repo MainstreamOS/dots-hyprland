@@ -926,7 +926,7 @@ function apply_os_only_prune(){
   local cleanup_map=(
     "gimp:gimp.desktop:org.gimp.GIMP.desktop"
     "mpv:mpv.desktop"
-    "spotify:spotify.desktop"
+    "spotify-launcher:spotify-launcher.desktop"
     "resources:net.nokyan.Resources.desktop"
     "impression:io.gitlab.adhami3310.Impression.desktop"
     "chromium:chromium.desktop"
