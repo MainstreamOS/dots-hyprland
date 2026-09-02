@@ -393,7 +393,17 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 property bool autoScrolling: false
                 function scrollToEnd() {
                     autoScrolling = true;
-                    positionViewAtEnd();
+                    // Ride contentY to the arithmetic end instead of asking
+                    // positionViewAtEnd: that call re-estimates the last
+                    // delegate's geometry while a streaming message is still
+                    // laying out, overshoots, and corrects, which read as the
+                    // whole chat bouncing on every chunk. The arithmetic end
+                    // only ever grows while content streams, so the ride down
+                    // is monotonic. Content that fits the viewport stays at
+                    // its rest position, or the top margin's worth would slide
+                    // under the status bar.
+                    if (contentHeight > height)
+                        contentY = originY + contentHeight - height;
                     autoScrolling = false;
                 }
                 onContentYChanged: {
