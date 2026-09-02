@@ -230,7 +230,7 @@ end
 
 --##! Master Layout
 hl.bind("SUPER + Return", on_layout("master", "swapwithmaster"), {description = "Swap master window"} )
-hl.bind("SUPER + M", on_layout("master", "focusmaster"), {description = "Focus master window"} )
+hl.bind("CTRL + SUPER + Space", on_layout("master", "focusmaster"), {description = "Focus master window"} )
 hl.bind("SUPER + comma", on_layout("master", "addmaster"), {description = "Add master window"} )
 hl.bind("SUPER + Slash", on_layout("master", "removemaster"), {description = "Remove master window"} )
 hl.bind("SUPER + Space", on_layout("master", "orientationnext"), {description = "Swap master layout orientation"} )
