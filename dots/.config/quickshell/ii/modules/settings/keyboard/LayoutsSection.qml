@@ -299,6 +299,11 @@ ContentSection {
                         colBackground: Appearance.colors.colError
                         colBackgroundHover: Appearance.colors.colErrorHover
                         colRipple: Appearance.colors.colErrorActive
+                        // The base button hides its background entirely when
+                        // disabled, which reads as a stray label beside the
+                        // layout rows; keep the fill and let the reduced
+                        // opacity convey the state.
+                        buttonColor: hovered ? colBackgroundHover : colBackground
                         contentItem: RowLayout {
                             spacing: 6
                             anchors.centerIn: parent
