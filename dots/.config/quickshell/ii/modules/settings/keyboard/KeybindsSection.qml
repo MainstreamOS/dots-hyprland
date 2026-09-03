@@ -379,15 +379,28 @@ open(path, "w").write(text)
     }
 
     // ── Filtering ─────────────────────────────────────────────────────────
+    // The name a row shows: the bind's own description first, then the
+    // settings-side name table, then the raw action as the last resort.
+    function _bindDisplayName(b) {
+        if (b.comment && b.comment.length > 0) return b.comment
+        const friendly = dispatchers.friendlyBindName(b.dispatcher || "", b.args || "")
+        if (friendly.length > 0) return friendly
+        return dispatchers.formatBindAction(b.bindType || "", b.dispatcher || "", b.args || "")
+    }
+
     function _filterBind(b) {
         if (!root.showHidden && b.isHidden) return false
         if (b.submap && b.submap !== "global") return false
         const term = root.searchTerm.toLowerCase()
         if (!term) return true
+        // Search what the rows show: the plain-words name, not the command
+        // behind it, so "play" finds media keys without anyone knowing about
+        // playerctl. The raw action still matches for unnamed binds through
+        // the display-name fallback.
         const shortcut = dispatchers.formatShortcut(b.mods || [], b.key || "").toLowerCase()
-        const action = dispatchers.formatBindAction(b.bindType || "", b.dispatcher || "", b.args || "").toLowerCase()
+        const name = root._bindDisplayName(b).toLowerCase()
         const cat = dispatchers.categoryById(dispatchers.categorizeBind(b.bindType || "", b.dispatcher || "")).label.toLowerCase()
-        return shortcut.indexOf(term) >= 0 || action.indexOf(term) >= 0 || cat.indexOf(term) >= 0
+        return shortcut.indexOf(term) >= 0 || name.indexOf(term) >= 0 || cat.indexOf(term) >= 0
     }
 
     function _binsByCategory() {
@@ -693,27 +706,16 @@ open(path, "w").write(text)
                 }
             }
 
-            // Action description
-            ColumnLayout {
+            // Action name. What the bind does in plain words, from its
+            // description or the settings-side name table; the raw command
+            // only shows when neither knows the bind, so a user's own
+            // additions are never mislabeled.
+            StyledText {
                 Layout.fillWidth: true
-                spacing: 0
-                StyledText {
-                    Layout.fillWidth: true
-                    text: bindRow.bind
-                        ? dispatchers.formatBindAction(bindRow.bind.bindType || "", bindRow.bind.dispatcher || "", bindRow.bind.args || "")
-                        : ""
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    elide: Text.ElideRight
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    visible: bindRow.bind && bindRow.bind.comment && bindRow.bind.comment.length > 0
-                    text: bindRow.bind ? (bindRow.bind.comment || "") : ""
-                    color: Appearance.colors.colSubtext
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    elide: Text.ElideRight
-                }
+                text: bindRow.bind ? root._bindDisplayName(bindRow.bind) : ""
+                color: Appearance.colors.colOnLayer1
+                font.pixelSize: Appearance.font.pixelSize.small
+                elide: Text.ElideRight
             }
 
             // Locked badge — relies on the adjacent Override button's

@@ -259,6 +259,119 @@ QtObject {
         return label;
     }
 
+    // Settings-side names for binds that ship without a description. The
+    // cheatsheet stays curated by keybinds.lua alone; this list can still
+    // say "Play/pause media" instead of the playerctl invocation. First
+    // match wins, and a bind nothing here recognizes keeps the raw action
+    // text, so a user's own commands are never mislabeled.
+    readonly property var execNameRules: [
+        { has: "playerctl play-pause", name: Translation.tr("Play/pause media") },
+        { has: "playerctl next", name: Translation.tr("Next track") },
+        { has: "playerctl previous", name: Translation.tr("Previous track") },
+        { has: "@DEFAULT_AUDIO_SINK@ 2%+", name: Translation.tr("Raise volume") },
+        { has: "@DEFAULT_AUDIO_SINK@ 2%-", name: Translation.tr("Lower volume") },
+        { has: "set-mute @DEFAULT_SINK@", name: Translation.tr("Mute/unmute audio") },
+        { has: "set-mute @DEFAULT_SOURCE@", name: Translation.tr("Mute/unmute microphone") },
+        { has: "brightness increment", name: Translation.tr("Increase brightness") },
+        { has: "brightness decrement", name: Translation.tr("Decrease brightness") },
+        { has: "save-numlock-state", name: Translation.tr("Remember the Num Lock state") },
+        { has: "switchwall", name: Translation.tr("Switch wallpaper") },
+        { has: "wlogout", name: Translation.tr("Open the session menu") },
+        { has: "welcome-tutorial", name: Translation.tr("Open the welcome tour") },
+        { has: "cliphist list", name: Translation.tr("Clipboard history") },
+        { has: "fuzzel-emoji", name: Translation.tr("Emoji picker") },
+        { has: "--clipboard-only --mode region", name: Translation.tr("Screenshot a region") },
+        { has: "snip_to_search", name: Translation.tr("Search what is on screen") },
+        { has: "tesseract", name: Translation.tr("Copy text from the screen") },
+        { has: "record.sh --fullscreen", name: Translation.tr("Record the full screen") },
+        { has: "record.sh", name: Translation.tr("Record a region") },
+        { has: "systemctl poweroff", name: Translation.tr("Power off now") },
+        { has: "Urgent notification", name: Translation.tr("Send a test notification (urgent)") },
+        { has: "Test notification with body image", name: Translation.tr("Send a test notification (image)") },
+        { has: "Test notification", name: Translation.tr("Send a test notification") },
+        { has: "pkill fuzzel || fuzzel", name: Translation.tr("Open the app launcher") },
+        { has: "kitty", name: Translation.tr("Open the terminal") },
+        { has: "exec_cmd(terminal)", name: Translation.tr("Open the terminal") },
+    ]
+    readonly property var globalNameRules: [
+        { has: "searchToggleRelease", name: Translation.tr("Toggle search") },
+        { has: "workspaceNumber", name: Translation.tr("Show workspace numbers") },
+        { has: "sidebarLeftToggleDetach", name: Translation.tr("Detach the left sidebar") },
+        { has: "regionOcr", name: Translation.tr("Copy text from the screen") },
+        { has: "regionRecord", name: Translation.tr("Record a region") },
+    ]
+
+    // Binds written as Lua functions arrive with their source text in the
+    // dispatcher field and empty args, so these read the whole line. Loop
+    // binds carry unexpanded variables (focusdir[i]), which is why several
+    // names speak of "that direction" and let the key column say which.
+    readonly property var luaNameRules: [
+        { has: "mediaNextCommand", name: Translation.tr("Next track") },
+        { has: "zoomfunction(-", name: Translation.tr("Zoom out") },
+        { has: "zoomfunction(", name: Translation.tr("Zoom in") },
+        { has: "Wrong close keybind", name: Translation.tr("Show the close shortcut reminder") },
+        { has: "window.drag", name: Translation.tr("Move a window with the mouse") },
+        { has: "window.move({direction", name: Translation.tr("Move the window in that direction") },
+        { has: "window.move({ workspace", name: Translation.tr("Move the window to that workspace") },
+        { has: "window.move({workspace", name: Translation.tr("Move the window to that workspace") },
+        { has: ".focus({direction", name: Translation.tr("Focus the window in that direction") },
+        { has: ".focus({ workspace", name: Translation.tr("Go to that workspace") },
+        { has: ".focus({workspace", name: Translation.tr("Go to that workspace") },
+        { has: "toggle_special", name: Translation.tr("Toggle the scratchpad workspace") },
+        { has: "window.resize", name: Translation.tr("Resize the window") },
+        { has: "splitratio +", name: Translation.tr("Grow the window split") },
+        { has: "splitratio -", name: Translation.tr("Shrink the window split") },
+        // Last: a multiline Lua bind survives parsing only as this fragment,
+        // and a vague name still reads better than source soup.
+        { has: "function(", name: Translation.tr("Run a scripted action") },
+    ]
+
+    function friendlyBindName(dispatcher, args) {
+        const d = dispatcher || "";
+        const a = args || "";
+        const hay = d + " " + a;
+        if (d === "exec" || hay.indexOf("exec_cmd(") >= 0) {
+            for (const rule of execNameRules)
+                if (hay.indexOf(rule.has) >= 0) return rule.name;
+        }
+        for (const rule of globalNameRules)
+            if (hay.indexOf(rule.has) >= 0) return rule.name;
+        for (const rule of luaNameRules)
+            if (hay.indexOf(rule.has) >= 0) return rule.name;
+        const directions = ({
+            "l": Translation.tr("left"), "r": Translation.tr("right"),
+            "u": Translation.tr("up"), "d": Translation.tr("down"),
+        });
+        switch (d) {
+        case "movefocus":
+            return directions[a] ? Translation.tr("Focus the window %1").arg(directions[a]) : "";
+        case "movewindow":
+            return directions[a] ? Translation.tr("Move the window %1").arg(directions[a]) : "";
+        case "workspace":
+            if (/^[0-9]+$/.test(a)) return Translation.tr("Go to workspace %1").arg(a);
+            if (a === "+1" || a === "r+1" || a === "m+1" || a === "e+1") return Translation.tr("Next workspace");
+            if (a === "-1" || a === "r-1" || a === "m-1" || a === "e-1") return Translation.tr("Previous workspace");
+            return "";
+        case "movetoworkspace":
+        case "movetoworkspacesilent":
+            if (/^[0-9]+$/.test(a)) return Translation.tr("Move the window to workspace %1").arg(a);
+            if (a === "+1" || a === "r+1") return Translation.tr("Move the window to the next workspace");
+            if (a === "-1" || a === "r-1") return Translation.tr("Move the window to the previous workspace");
+            return "";
+        case "togglespecialworkspace":
+            return Translation.tr("Toggle the scratchpad workspace");
+        case "layoutmsg":
+            if (a.indexOf("splitratio +") >= 0) return Translation.tr("Grow the window split");
+            if (a.indexOf("splitratio -") >= 0) return Translation.tr("Shrink the window split");
+            return "";
+        case "resizeactive":
+            return Translation.tr("Resize the window");
+        case "submap":
+            return a === "reset" ? Translation.tr("Exit the keybind submap") : "";
+        }
+        return "";
+    }
+
     function formatShortcut(mods, key) {
         const filtered = mods.filter(m => m && m.length > 0);
         if (filtered.length === 0)
