@@ -201,6 +201,56 @@ if [[ -f /etc/nsswitch.conf ]] && ! grep -q 'mdns_minimal' /etc/nsswitch.conf; t
     fi
 fi
 
+# The rest of the printing experience, matching what a fresh install gets:
+# the queue maker that gives an IPP-over-USB printer a permanent queue (the
+# entry print dialogs list up front), the polkit rule that spares the
+# printer app its unlock prompt, the test page that survives libcupsfilters
+# 2.2, and queues that retry a failed job instead of stopping. The queue
+# maker stays inert until ipp-usb arrives, which the mainstream-basic
+# upgrade brings along on the same run.
+mkdir -p /etc/systemd/system/ipp-usb.service.d /etc/pacman.d/hooks /etc/udev/rules.d
+_install_file 0755 "$REPO_DIR/sdata/printing/mainstream-printer-setup" \
+    /usr/local/bin/mainstream-printer-setup "Printer queue setup"
+_install_file 0644 "$REPO_DIR/sdata/printing/mainstream-printer-setup.service" \
+    /etc/systemd/system/mainstream-printer-setup.service "Printer queue unit"
+_install_file 0644 "$REPO_DIR/sdata/printing/76-mainstream-printer-setup.rules" \
+    /etc/udev/rules.d/76-mainstream-printer-setup.rules "Printer queue udev rule"
+_install_file 0644 "$REPO_DIR/sdata/printing/10-mainstream-auto-queue.conf" \
+    /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf "Printer queue trigger"
+_install_file 0644 "$REPO_DIR/sdata/polkit/49-mainstream-printing.rules" \
+    /usr/share/polkit-1/rules.d/49-mainstream-printing.rules "Printer admin polkit rule"
+_install_file 0644 "$REPO_DIR/sdata/printing/96-cups-testpage-pdf.hook" \
+    /etc/pacman.d/hooks/96-cups-testpage-pdf.hook "CUPS test page hook"
+if [[ -f /usr/share/cups/data/default-testpage.pdf ]]; then
+    cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint || true
+fi
+if [[ -f /etc/cups/cupsd.conf ]] && ! grep -q '^ErrorPolicy' /etc/cups/cupsd.conf; then
+    if cat >> /etc/cups/cupsd.conf <<'CUPSPOLICYEOF'
+
+ErrorPolicy retry-job
+JobRetryInterval 60
+JobRetryLimit 5
+CUPSPOLICYEOF
+    then
+        ok "CUPS queues retry rather than stop on a backend error"
+    else
+        warn "Could not set the CUPS error policy"
+        RC=1
+    fi
+fi
+# An earlier unreleased revision leaned on cups-browsed for the queue; its
+# config gives way to the queue maker installed above. Only the config that
+# revision wrote is removed: one a user authored themselves stays theirs.
+if [[ -f /etc/cups/cups-browsed.conf ]] \
+   && [[ "$(md5sum /etc/cups/cups-browsed.conf | cut -d' ' -f1)" == "aacb6fd7ddcab1c2e8a3f726abf1d9bf" ]]; then
+    rm -f /etc/cups/cups-browsed.conf
+fi
+udevadm control --reload 2>/dev/null || true
+systemctl daemon-reload 2>/dev/null || true
+# A printer already plugged in gets its permanent queue on this run rather
+# than at the next replug; with no printer this is a quiet no-op.
+systemctl start mainstream-printer-setup.service 2>/dev/null || true
+
 # ── Update tooling (refreshes itself + updatems + helper) ──────────────────
 # Refreshing the helper while it's mid-run is safe on Linux — the
 # kernel keeps the inode open via the existing fd until the process

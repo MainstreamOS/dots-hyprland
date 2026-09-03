@@ -1089,8 +1089,12 @@ CUPSPOLICYEOF
   x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/10-mainstream-auto-queue.conf" \
       /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf
   # Earlier revisions leaned on cups-browsed for the queue; its config gives
-  # way to the oneshot above.
-  x sudo rm -f /etc/cups/cups-browsed.conf
+  # way to the oneshot above. Only the config those revisions wrote is
+  # removed: one a user authored themselves stays theirs.
+  if [[ -f /etc/cups/cups-browsed.conf ]] \
+     && [[ "$(md5sum /etc/cups/cups-browsed.conf | cut -d' ' -f1)" == "aacb6fd7ddcab1c2e8a3f726abf1d9bf" ]]; then
+    x sudo rm -f /etc/cups/cups-browsed.conf
+  fi
   x sudo systemctl daemon-reload
   x sudo udevadm control --reload
   # Managing printers is a desktop task; the unlock prompt guards nothing a
@@ -1101,18 +1105,8 @@ CUPSPOLICYEOF
   # at the PDF sample that takes the verified pdf filter chain, and keep it
   # pointed there across cups upgrades.
   if [[ -f /usr/share/cups/data/default-testpage.pdf ]]; then
-    x sudo tee /etc/pacman.d/hooks/96-cups-testpage-pdf.hook >/dev/null <<'HOOKEOF'
-[Trigger]
-Operation = Install
-Operation = Upgrade
-Type = Package
-Target = cups
-
-[Action]
-Description = Pointing the CUPS test page at the PDF sample page...
-When = PostTransaction
-Exec = /bin/cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint
-HOOKEOF
+    x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/96-cups-testpage-pdf.hook" \
+        /etc/pacman.d/hooks/96-cups-testpage-pdf.hook
     x sudo cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint
   fi
   # ipp-usb is installed but intentionally left disabled. Its udev rule starts it

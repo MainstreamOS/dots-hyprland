@@ -1,0 +1,13 @@
+# The banner test page corrupts under libcupsfilters 2.2.x, so point
+# testprint at the PDF sample that takes the verified pdf filter chain.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cups
+
+[Action]
+Description = Pointing the CUPS test page at the PDF sample page...
+When = PostTransaction
+Exec = /bin/cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint

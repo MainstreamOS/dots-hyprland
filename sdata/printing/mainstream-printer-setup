@@ -32,7 +32,28 @@ for _ in $(seq 1 20); do
         [[ -n "$name" ]] || name="USB-Printer"
         LANG=C lpstat -v "$name" >/dev/null 2>&1 && name="${name}-${port}"
         if lpadmin -p "$name" -E -v "$uri" -m everywhere; then
-            LANG=C lpstat -d 2>/dev/null | grep -q '^no system default' && lpadmin -d "$name"
+            if LANG=C lpstat -d 2>/dev/null | grep -q '^no system default'; then
+                lpadmin -d "$name"
+            else
+                # ipp-usb owns this printer's USB interface now, so a classic
+                # usb:// or hp: queue for the same printer cannot reach it any
+                # more. A default pointing at that dead queue follows the
+                # working one; queues for other printers, and the dead queue
+                # itself, are left alone.
+                default_queue=$(LANG=C lpstat -d 2>/dev/null | sed 's/^system default destination: //')
+                default_uri=$(LANG=C lpstat -v "$default_queue" 2>/dev/null)
+                case "$default_uri" in
+                *": usb://"*|*": hp:/"*)
+                    matched=0
+                    total=0
+                    for token in $model; do
+                        total=$((total + 1))
+                        case "$default_uri" in *"$token"*) matched=$((matched + 1));; esac
+                    done
+                    [[ $matched -ge 2 && $matched -ge $((total - 1)) ]] && lpadmin -d "$name"
+                    ;;
+                esac
+            fi
         fi
     done
     (( answered )) && exit 0
