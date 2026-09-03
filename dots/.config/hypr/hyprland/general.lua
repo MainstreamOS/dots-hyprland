@@ -2,7 +2,7 @@
 -- the existing enabled default until the user has made a saved choice: on a
 -- cold boot the hardware LEDs initially read off before anything sets them.
 local function inheritedNumlockState()
-    local statePath = os.getenv("HOME") .. "/.local/state/mainstream/numlock"
+    local statePath = (os.getenv("HOME") or "") .. "/.local/state/mainstream/numlock"
     local saved = io.open(statePath, "r")
     if saved then
         local value = saved:read("*l")
