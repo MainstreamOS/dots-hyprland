@@ -208,15 +208,25 @@ git checkout "$REPO_BRANCH" 2>/dev/null || git checkout -B "$REPO_BRANCH" "origi
 # they apply the tag after it.
 BASE_REF="$APPLIED_TAG"
 case "$APPLIED_TAG" in 1.0.3|1.0.4) BASE_REF="1.0.2" ;; esac
+EXTRA_ARGS=()
 if [[ -n "$BASE_REF" ]] && git rev-parse --verify "refs/tags/$BASE_REF" >/dev/null 2>&1; then
     git reset --hard "refs/tags/$BASE_REF" >/dev/null || true
+else
+    # With no base to park on, the jump below can land exactly where the
+    # clone already sits, leaving exp-update an empty hop to read: it
+    # applies nothing, exits clean, and the marker below records the
+    # release as delivered. Comparing the whole tree costs a slower pass
+    # and cannot quietly deliver nothing.
+    warn "No usable base ref (${BASE_REF:-<none>}) — comparing the whole tree instead of the last hop."
+    EXTRA_ARGS+=(--force)
 fi
 git reset --hard "$LATEST_TAG" || die "git reset --hard $LATEST_TAG failed"
 
 say "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)..."
 # The clone is pinned to $LATEST_TAG above; a pull inside exp-update would
 # overshoot the tag to the branch tip and shrink the reflog hop.
-DOTS_SKIP_PULL=1 ./setup exp-update --skip-notice --non-interactive --default-choice backup -p
+DOTS_SKIP_PULL=1 ./setup exp-update --skip-notice --non-interactive --default-choice backup -p \
+    ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 RC=$?
 
 # Make sure the core machinery package landed, whatever exp-update's -p pass did.

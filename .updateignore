@@ -1,0 +1,15 @@
+# Files an update must never overwrite, because the machine owns them
+# rather than the repository.
+#
+# custom/ is the documented place for a user's own Hyprland settings: the
+# installer writes each file once and never again, and Settings keeps the
+# keyboard-layouts block in custom/general.lua. The shipped copies are
+# stubs, so without this every update would offer to replace a user's file
+# with an empty one and, running unattended, would take that offer.
+.config/hypr/custom/
+
+# Settings > Display rewrites monitors.lua with explicit monitor blocks the
+# first time anything changes; the shipped copy is the auto-scale heuristic
+# that runs until then. Replacing it would throw every tuned resolution,
+# refresh rate, scale, position and VRR choice back to guesswork.
+.config/hypr/monitors.lua
