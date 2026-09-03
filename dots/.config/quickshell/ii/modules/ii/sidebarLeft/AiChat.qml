@@ -593,7 +593,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         }
 
         Rectangle { // Claude subscription usage meters
-            visible: Ai.currentModel?.api_format === "claude-code" && Ai.claudePlanReady
+            visible: Ai.currentModel?.api_format === "claude-code" && Ai.cliReady("claude-code")
                 && ClaudeUsage.available && Config.options.bar.claudeUsage.enable
             Layout.fillWidth: true
             Layout.bottomMargin: 6
@@ -606,7 +606,9 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 required property string label
                 required property real pct
                 required property double resetMs
-                readonly property bool warning: pct >= Config.options.bar.claudeUsage.warningThreshold
+                property real warningAt: Config.options.bar.claudeUsage.warningThreshold
+                property var timeUntil: ClaudeUsage.timeUntil
+                readonly property bool warning: pct >= ub.warningAt
                 Layout.fillWidth: true
                 spacing: 2
                 RowLayout {
@@ -615,7 +617,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     StyledText { text: ub.label; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext }
                     Item { Layout.fillWidth: true }
                     StyledText { text: `${Math.round(ub.pct)}%`; font.pixelSize: Appearance.font.pixelSize.smaller; color: ub.warning ? Appearance.colors.colError : Appearance.colors.colOnLayer1 }
-                    StyledText { visible: ub.resetMs > 0; text: `· ${ClaudeUsage.timeUntil(ub.resetMs)}`; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext }
+                    StyledText { visible: ub.resetMs > 0; text: `· ${ub.timeUntil(ub.resetMs)}`; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext }
                 }
                 Rectangle {
                     Layout.fillWidth: true
@@ -642,6 +644,40 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 spacing: 8
                 UsageBar { label: Translation.tr("Session (5h)"); pct: ClaudeUsage.fiveHour; resetMs: ClaudeUsage.fiveHourReset }
                 UsageBar { label: Translation.tr("Weekly");      pct: ClaudeUsage.sevenDay; resetMs: ClaudeUsage.sevenDayReset }
+            }
+        }
+
+        Rectangle { // Codex subscription usage meters
+            visible: Ai.currentModel?.api_format === "codex-cli" && Ai.cliReady("codex-cli")
+                && CodexUsage.available && Config.options.bar.codexUsage.enable
+            Layout.fillWidth: true
+            Layout.bottomMargin: 6
+            implicitHeight: codexUsageCol.implicitHeight + 18
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colLayer2
+
+            ColumnLayout {
+                id: codexUsageCol
+                anchors {
+                    left: parent.left; right: parent.right
+                    verticalCenter: parent.verticalCenter
+                    leftMargin: 12; rightMargin: 12
+                }
+                spacing: 8
+                UsageBar {
+                    label: Translation.tr("Session (5h)")
+                    pct: CodexUsage.fiveHour
+                    resetMs: CodexUsage.fiveHourReset
+                    warningAt: Config.options.bar.codexUsage.warningThreshold
+                    timeUntil: CodexUsage.timeUntil
+                }
+                UsageBar {
+                    label: Translation.tr("Weekly")
+                    pct: CodexUsage.sevenDay
+                    resetMs: CodexUsage.sevenDayReset
+                    warningAt: Config.options.bar.codexUsage.warningThreshold
+                    timeUntil: CodexUsage.timeUntil
+                }
             }
         }
 

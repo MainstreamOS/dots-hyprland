@@ -737,6 +737,11 @@ Singleton {
                     property int warningThreshold: 90 // Turn the gauge red at/above this utilization (%)
                     property int fetchInterval: 5 // minutes
                 }
+                property JsonObject codexUsage: JsonObject {
+                    property bool enable: true // Show ChatGPT subscription usage meters in the AI sidebar
+                    property int warningThreshold: 90 // Turn the gauge red at/above this utilization (%)
+                    property int fetchInterval: 5 // minutes
+                }
                 property JsonObject indicators: JsonObject {
                     property JsonObject notifications: JsonObject {
                         property bool showUnreadCount: false

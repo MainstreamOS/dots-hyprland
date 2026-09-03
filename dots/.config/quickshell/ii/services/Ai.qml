@@ -26,6 +26,7 @@ Singleton {
     property Component mistralApiStrategy: MistralApiStrategy {}
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
     property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
+    property Component codexCliApiStrategy: CodexCliApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -364,6 +365,7 @@ Singleton {
         "mistral": mistralApiStrategy.createObject(this),
         "anthropic": anthropicApiStrategy.createObject(this),
         "claude-code": claudeCodeApiStrategy.createObject(this),
+        "codex-cli": codexCliApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -374,21 +376,15 @@ Singleton {
         });
     }
 
-    // ── Claude plan (Claude Code CLI) ─────────────────────────────
+    // ── Subscription plans behind local CLIs ──────────────────────
     // Sits beside the key-backed entries rather than replacing them: a
     // subscriber signs in once and spends nothing per token, while anyone
-    // with a key keeps the HTTP path that needs no CLI installed. The five
-    // plan models only join the picker while the CLI reports a live login;
+    // with a key keeps the HTTP path that needs no CLI installed. A plan's
+    // models only join the picker while its CLI reports a live login;
     // before that a single setup entry holds the seat and the sidebar banner
-    // walks through install and sign-in.
-    readonly property string claudePlanSetupId: "claude-code"
-    readonly property var claudePlanModels: ({
-        "claude-fable": { alias: "fable", name: "Claude Fable" },
-        "claude-opus": { alias: "opus", name: "Claude Opus" },
-        "claude-opus-1m": { alias: "opus[1m]", name: "Claude Opus 1M" },
-        "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet" },
-        "claude-haiku": { alias: "haiku", name: "Claude Haiku" },
-    })
+    // walks through install and sign-in. Everything here is keyed by
+    // api_format, so another provider's CLI is a set of table rows rather
+    // than another copy of the machinery.
     readonly property var cliSetup: ({
         "claude-code": {
             "name": "Claude Code",
@@ -396,10 +392,62 @@ Singleton {
             "install": "curl -fsSL https://claude.ai/install.sh | bash",
             "login": "claude auth login --claudeai",
             "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'"
+        },
+        "codex-cli": {
+            "name": "Codex",
+            "cmd": "codex",
+            "install": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+            "login": "codex login",
+            "readyCheck": "codex login status >/dev/null 2>&1"
         }
     })
-    property bool claudePlanInstalled: false
-    property bool claudePlanReady: false
+    readonly property var cliPlanModels: ({
+        "claude-code": {
+            "claude-fable": { alias: "fable", name: "Claude Fable" },
+            "claude-opus": { alias: "opus", name: "Claude Opus" },
+            "claude-opus-1m": { alias: "opus[1m]", name: "Claude Opus 1M" },
+            "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet" },
+            "claude-haiku": { alias: "haiku", name: "Claude Haiku" },
+        },
+        // Sol is refused under ChatGPT-account auth (API key only), so the
+        // plan shelf carries the three the subscription actually serves.
+        "codex-cli": {
+            "codex-terra": { alias: "gpt-5.6-terra", name: "Codex Terra" },
+            "codex-luna": { alias: "gpt-5.6-luna", name: "Codex Luna" },
+            "codex-gpt-5-5": { alias: "gpt-5.5", name: "Codex GPT-5.5" },
+        }
+    })
+    readonly property var cliPlans: ({
+        "claude-code": {
+            setupId: "claude-code",
+            setupName: "Claude (Pro/Max plan)",
+            setupDescription: Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
+            setupHomepage: "https://docs.anthropic.com/en/docs/claude-code",
+            modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
+            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."),
+            icon: "spark-symbolic",
+            endpoint: "https://api.anthropic.com",
+            homepage: "https://www.anthropic.com/claude",
+            firstPick: "claude-fable",
+            idPrefix: "claude-",
+        },
+        "codex-cli": {
+            setupId: "codex-plan",
+            setupName: "Codex (ChatGPT plan)",
+            setupDescription: Translation.tr("Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed"),
+            setupHomepage: "https://learn.chatgpt.com/docs/codex/cli",
+            modelDescription: Translation.tr("Plan | %1 through your ChatGPT subscription. No API key needed"),
+            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Terra, Luna, and GPT-5.5."),
+            icon: "openai-symbolic",
+            endpoint: "https://chatgpt.com",
+            homepage: "https://learn.chatgpt.com/docs/codex/cli",
+            firstPick: "codex-terra",
+            idPrefix: "codex-",
+        }
+    })
+    property var cliPlanState: ({})
+    function cliInstalled(fmt) { return root.cliPlanState[fmt]?.installed === true }
+    function cliReady(fmt) { return root.cliPlanState[fmt]?.ready === true }
     property string setupState: ""
     // The native CLI installs to ~/.local/bin, which the compositor session
     // does not put on PATH for the shell, so every claude invocation carries
@@ -409,46 +457,49 @@ Singleton {
     readonly property var currentCliSetup: currentModel && !currentModel.requires_key
         ? (cliSetup[currentModel.api_format] ?? null) : null
     readonly property bool currentModelNeedsSetup: currentCliSetup !== null
-        && (!claudePlanReady || setupState !== "")
+        && (!cliReady(currentModel.api_format) || setupState !== "")
 
-    function syncClaudePlanModels() {
+    function syncCliPlanModels(fmt) {
         if (Config.options?.policies?.ai === 2) return;
+        const plan = root.cliPlans[fmt];
+        const planModels = root.cliPlanModels[fmt];
+        if (!plan || !planModels) return;
         let next = Object.assign({}, root.models);
         let changed = false;
-        if (root.claudePlanReady) {
-            if (next[root.claudePlanSetupId]) { delete next[root.claudePlanSetupId]; changed = true; }
-            for (const id of Object.keys(root.claudePlanModels)) {
+        if (root.cliReady(fmt)) {
+            if (next[plan.setupId]) { delete next[plan.setupId]; changed = true; }
+            for (const id of Object.keys(planModels)) {
                 if (next[id]) continue;
-                const planEntry = root.claudePlanModels[id];
+                const planEntry = planModels[id];
                 next[id] = aiModelComponent.createObject(this, {
                     "name": planEntry.name,
-                    "icon": "spark-symbolic",
-                    "description": Translation.tr("Plan | %1 through your Claude subscription. No API key needed").arg(planEntry.name),
-                    "homepage": "https://www.anthropic.com/claude",
+                    "icon": plan.icon,
+                    "description": plan.modelDescription.arg(planEntry.name),
+                    "homepage": plan.homepage,
                     // Never requested: the CLI strategy writes its own
                     // command. A real address keeps the local-only policy
                     // honest about this being an online model.
-                    "endpoint": "https://api.anthropic.com",
+                    "endpoint": plan.endpoint,
                     "model": planEntry.alias,
                     "requires_key": false,
-                    "api_format": "claude-code",
+                    "api_format": fmt,
                 });
                 changed = true;
             }
         } else {
-            for (const id of Object.keys(root.claudePlanModels)) {
+            for (const id of Object.keys(planModels)) {
                 if (next[id]) { delete next[id]; changed = true; }
             }
-            if (!next[root.claudePlanSetupId]) {
-                next[root.claudePlanSetupId] = aiModelComponent.createObject(this, {
-                    "name": "Claude (Pro/Max plan)",
-                    "icon": "spark-symbolic",
-                    "description": Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
-                    "homepage": "https://docs.anthropic.com/en/docs/claude-code",
-                    "endpoint": "https://api.anthropic.com",
-                    "model": "claude-code",
+            if (!next[plan.setupId]) {
+                next[plan.setupId] = aiModelComponent.createObject(this, {
+                    "name": plan.setupName,
+                    "icon": plan.icon,
+                    "description": plan.setupDescription,
+                    "homepage": plan.setupHomepage,
+                    "endpoint": plan.endpoint,
+                    "model": plan.setupId,
                     "requires_key": false,
-                    "api_format": "claude-code",
+                    "api_format": fmt,
                 });
                 changed = true;
             }
@@ -456,18 +507,26 @@ Singleton {
         if (changed) root.models = next;
     }
 
-    function detectCli() {
-        const entry = root.cliSetup["claude-code"];
+    // One detector serves every CLI; requests that arrive while it is busy
+    // wait their turn in the queue.
+    property var _detectQueue: []
+    function detectCli(fmt) {
+        const entry = root.cliSetup[fmt];
+        if (!entry) return;
+        if (cliDetectProc.running) {
+            if (!root._detectQueue.includes(fmt)) root._detectQueue.push(fmt);
+            return;
+        }
         const script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${entry.readyCheck}; then echo ready; fi; fi < /dev/null`;
+        cliDetectProc.format = fmt;
         cliDetectProc.command = ["bash", "-lc", script];
-        cliDetectProc.running = false;
         cliDetectProc.running = true;
     }
 
     function setupCurrentModel() {
         const entry = root.currentCliSetup;
         if (!entry || root.setupState === "installing" || root.setupState === "loggingIn") return;
-        if (root.claudePlanInstalled) {
+        if (root.cliInstalled(root.currentModel.api_format)) {
             root._runLogin();
         } else {
             root.setupState = "installing";
@@ -478,12 +537,14 @@ Singleton {
     }
 
     // The login flow is interactive: only under a terminal does the CLI print
-    // its link, open the browser, and take the pasted code back. Headless it
-    // shows nothing and waits forever, so the sign-in gets a real terminal
-    // window and the watcher below notices when the login lands.
+    // its link, open the browser, and take back whatever the flow needs. So
+    // the sign-in gets a real terminal window and the watcher below notices
+    // when the login lands.
     function _runLogin() {
+        const entry = root.currentCliSetup;
+        if (!entry) return;
         root.setupState = "loggingIn";
-        const script = root.cliPathPrefix + root.cliSetup["claude-code"].login
+        const script = root.cliPathPrefix + entry.login
             + "; echo; echo 'You can close this window.'; read -r -n 1 -s";
         Quickshell.execDetached(["bash", "-c",
             `${Config.options.apps.terminal} -e bash -c '${CF.StringUtils.shellSingleQuoteEscape(script)}'`]);
@@ -492,32 +553,48 @@ Singleton {
 
     Process {
         id: cliDetectProc
+        property string format: ""
         property string buf: ""
         stdout: SplitParser { onRead: line => cliDetectProc.buf += line + "\n" }
         onRunningChanged: if (running) buf = ""
         onExited: (code) => {
-            const wasReady = root.claudePlanReady;
-            root.claudePlanInstalled = cliDetectProc.buf.includes("installed");
-            root.claudePlanReady = cliDetectProc.buf.includes("ready");
-            if (root.claudePlanReady) root.setupState = "";
-            root.syncClaudePlanModels();
-            if (!wasReady && root.claudePlanReady && root.currentModelId === root.claudePlanSetupId) {
-                root.setModel("claude-fable", true);
-                root.addMessage(Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."), root.interfaceRole);
+            const fmt = cliDetectProc.format;
+            const wasReady = root.cliReady(fmt);
+            const nextState = Object.assign({}, root.cliPlanState);
+            nextState[fmt] = {
+                installed: cliDetectProc.buf.includes("installed"),
+                ready: cliDetectProc.buf.includes("ready"),
+            };
+            root.cliPlanState = nextState;
+            if (nextState[fmt].ready && root.currentModel?.api_format === fmt) root.setupState = "";
+            root.syncCliPlanModels(fmt);
+            const plan = root.cliPlans[fmt];
+            if (!wasReady && nextState[fmt].ready && root.currentModelId === plan.setupId) {
+                root.setModel(plan.firstPick, true);
+                root.addMessage(plan.signedIn, root.interfaceRole);
             }
-            // A lapsed login takes the plan models with it; the selection
-            // falls back to the setup entry rather than dangling on an id
-            // that no longer resolves.
-            if (!root.claudePlanReady && root.claudePlanModels[root.currentModelId] !== undefined) {
-                Persistent.states.ai.model = root.claudePlanSetupId;
+            // A selection this family no longer offers (a lapsed login, or a
+            // model entry that was retired) falls to the best seat still open
+            // rather than dangling on an id that no longer resolves.
+            if (root.models[root.currentModelId] === undefined && root.currentModelId.startsWith(plan.idPrefix)) {
+                Persistent.states.ai.model = nextState[fmt].ready ? plan.firstPick : plan.setupId;
             }
+            const queued = root._detectQueue.shift();
+            if (queued) root.detectCli(queued);
         }
     }
     Process {
         id: installProc
         onExited: (code) => {
-            if (code === 0) { root.claudePlanInstalled = true; root._runLogin(); }
-            else { root.setupState = "error"; }
+            if (code === 0) {
+                const fmt = root.currentModel?.api_format;
+                if (fmt) {
+                    const nextState = Object.assign({}, root.cliPlanState);
+                    nextState[fmt] = Object.assign({}, nextState[fmt], { installed: true });
+                    root.cliPlanState = nextState;
+                }
+                root._runLogin();
+            } else { root.setupState = "error"; }
         }
     }
     Timer {
@@ -525,16 +602,19 @@ Singleton {
         property int triesLeft: 0
         interval: 2000
         repeat: true
-        running: triesLeft > 0 && root.setupState === "loggingIn" && !root.claudePlanReady
+        running: triesLeft > 0 && root.setupState === "loggingIn"
+            && !root.cliReady(root.currentModel?.api_format ?? "")
         onTriggered: {
             triesLeft--;
-            root.detectCli();
+            const fmt = root.currentModel?.api_format;
+            if (fmt) root.detectCli(fmt);
             if (triesLeft <= 0) root.setupState = "error";
         }
     }
     onCurrentModelIdChanged: {
         root.setupState = "";
-        if (root.currentModel?.api_format === "claude-code") root.detectCli();
+        if (root.cliSetup[root.currentModel?.api_format] !== undefined)
+            root.detectCli(root.currentModel.api_format);
     }
 
     Connections {
@@ -556,8 +636,10 @@ Singleton {
         if (currentModelId !== root.ollamaSetupModelId)
             setModel(currentModelId, false, false); // Do necessary setup for model
         root.addUserModels() // Config onReadyChanged above might not fire if config is loaded before this service
-        root.syncClaudePlanModels() // The setup entry exists before the CLI answers
-        root.detectCli()
+        for (const fmt of Object.keys(root.cliSetup)) {
+            root.syncCliPlanModels(fmt) // The setup entries exist before the CLIs answer
+            root.detectCli(fmt)
+        }
     }
 
     function guessModelLogo(model) {
@@ -1154,6 +1236,12 @@ Singleton {
         root.tokenCount.input = -1;
         root.tokenCount.output = -1;
         root.tokenCount.total = -1;
+        // A CLI strategy resumes its session on every request; keeping the id
+        // across a clear would quietly thread the old conversation back in.
+        for (const strategy of Object.values(root.apiStrategies)) {
+            if (strategy.isCliStrategy && strategy.sessionId !== undefined)
+                strategy.sessionId = "";
+        }
     }
 
     FileView {

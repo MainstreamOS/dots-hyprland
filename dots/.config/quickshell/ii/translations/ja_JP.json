@@ -1953,5 +1953,8 @@
   "Log in to %1": "Log in to %1",
   "Session (5h)": "Session (5h)",
   "Weekly": "Weekly",
-  "now": "now"
+  "now": "now",
+  "Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed": "Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed",
+  "Plan | %1 through your ChatGPT subscription. No API key needed": "Plan | %1 through your ChatGPT subscription. No API key needed",
+  "Signed in. The plan models are in the picker now: type /model to choose between Terra, Luna, and GPT-5.5.": "Signed in. The plan models are in the picker now: type /model to choose between Terra, Luna, and GPT-5.5."
 }
