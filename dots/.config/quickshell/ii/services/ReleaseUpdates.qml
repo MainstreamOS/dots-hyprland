@@ -26,6 +26,25 @@ Singleton {
 
     readonly property bool updateAvailable: root.pending.length > 0
     readonly property var latest: root.pending.length > 0 ? root.pending[0] : null
+
+    // What a machine several releases behind is actually being offered. The
+    // newest release alone is a poor description of that: a patch landing days
+    // after a feature release would otherwise be the whole story anyone still
+    // on the older version ever sees of it, and the release it fixes would
+    // reach them as a line saying how many they had missed.
+    //
+    // Security first because it is the reason to act now, then the feature
+    // release that carries the span, then a patch when that is genuinely all
+    // there is. Ties keep the newest, which is where pending already starts.
+    readonly property var headline: {
+        if (root.pending.length === 0) return null;
+        const rank = kind => ({ security: 0, feature: 1, patch: 2 })[String(kind)] ?? 3;
+        let best = root.pending[0];
+        for (let i = 1; i < root.pending.length; i++) {
+            if (rank(root.pending[i].kind) < rank(best.kind)) best = root.pending[i];
+        }
+        return best;
+    }
     readonly property string severity: root.severityOf(root.pending)
 
     // Anything unrecognised reads as "both" — including the "off" that older
@@ -162,11 +181,17 @@ Singleton {
         // release's raw commit range for the website's technical view; merging
         // any of that into changes would put commit subjects in a desktop
         // notification on every installed machine.
-        const summary = String(root.latest.summary ?? "");
-        const changes = (root.latest.changes ?? []).slice(0, 3);
+        const shown = root.headline ?? root.latest;
+        const summary = String(shown.summary ?? "");
+        const changes = (shown.changes ?? []).slice(0, 3);
         let body = summary;
         if (changes.length > 0) body += (body.length > 0 ? "\n" : "") + changes.map(c => "• " + c).join("\n");
-        if (root.pending.length > 1) body += `\n\n${root.pending.length} releases since yours.`;
+        // Name the newest version as well when the release being described is
+        // not it, so a later fix does not look like something left out.
+        if (root.pending.length > 1) {
+            body += `\n\n` + Translation.tr("%1 releases since yours, up to %2.")
+                .arg(root.pending.length).arg(String(root.latest.version));
+        }
 
         notifier.command = ["notify-send", "-a", "Mainstream updates",
             "-i", "mainstream-update",

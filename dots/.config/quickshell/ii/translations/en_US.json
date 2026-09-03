@@ -1876,6 +1876,7 @@
   "Pick an open app…": "Pick an open app…",
   "Re-list the apps open right now": "Re-list the apps open right now",
   "Repair Install": "Repair Install",
+  "%1 releases since yours, up to %2.": "%1 releases since yours, up to %2.",
   "Install from system repo": "Install from system repo",
   "Installs it with the package manager instead. Asks for your password once.": "Installs it with the package manager instead. Asks for your password once.",
   "Repair Package Keys": "Repair Package Keys",
