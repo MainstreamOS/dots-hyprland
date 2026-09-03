@@ -110,8 +110,12 @@ local function openFloatingWindowWithinReach(window)
         return
     end
 
-    local border = tonumber(hl.get_config("general:border_size")) or 0
-    local titleBar = tonumber(hl.get_config("plugin:hyprbars:bar_height")) or 0
+    -- Parenthesized: hl.get_config answers (value, err), and in the last
+    -- argument position both would reach tonumber, handing it the error
+    -- string as a numeric base. A key that is absent -- bar_height whenever
+    -- the plugin is not loaded -- would raise on every window.open.
+    local border = tonumber((hl.get_config("general:border_size"))) or 0
+    local titleBar = tonumber((hl.get_config("plugin:hyprbars:bar_height"))) or 0
     local gapsOut = hl.get_config("general:gaps_out") or {}
     -- The room a tiled window would be handed: the monitor, less what the
     -- panels reserve on each edge, less the gap and border every tile keeps.
