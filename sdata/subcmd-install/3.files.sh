@@ -475,25 +475,11 @@ function setup_hyprland_plugins(){
     fi
   fi
 
-  local _general_lua="$HOME/.config/hypr/custom/general.lua"
-  if [[ -f "$_general_lua" ]]; then
-    if ! grep -qE 'hl\.plugin\.load.*hyprbars\.so' "$_general_lua"; then
-      local _tmp; _tmp=$(mktemp)
-      {
-        echo "-- hyprbars plugin load directive (built from source at install time)"
-        echo "hl.plugin.load(\"${plugin_path}\")"
-        echo ""
-        cat "$_general_lua"
-      } > "$_tmp"
-      mv "$_tmp" "$_general_lua"
-      echo -e "${STY_CYAN}[$0]: Added hl.plugin.load(\"${plugin_path}\") to $_general_lua${STY_RST}"
-    else
-      echo -e "${STY_BLUE}[$0]: $_general_lua already loads hyprbars; skipping.${STY_RST}"
-    fi
-  else
-    echo -e "${STY_YELLOW}[$0]: $_general_lua missing — add this line to a sourced hypr config manually:${STY_RST}"
-    echo -e "${STY_YELLOW}  hl.plugin.load(\"${plugin_path}\")${STY_RST}"
-  fi
+  # No load directive is written here. hyprland/plugins.lua loads this same
+  # path only when the .so was built for the running Hyprland, and a bare
+  # load line written beside it would run without that check — which is how
+  # a stale plugin takes the compositor down at login.
+  echo -e "${STY_BLUE}[$0]: hyprbars.so ready at ${plugin_path} (loaded by hyprland/plugins.lua once it matches the running Hyprland).${STY_RST}"
 
   # ---------------------------------------------------------------------------
   # Install rebuild hook so future `pacman -Syu` keeps hyprbars in sync.
@@ -560,31 +546,10 @@ function setup_scrolloverview_plugin(){
   local plugin_path="$plugin_dir/scrolloverview.so"
   record_installed "$plugin_path"
 
-  # Add the load directive (active, not commented) to custom/general.lua so
-  # the bar's top-left hot corner — which dispatches `scrolloverview:overview
-  # on` — actually has a plugin to talk to. This is a deliberate deviation
-  # from the hyprbars install, which keeps the directive commented because
-  # there's a separate UI toggle for hyprbars; scroll-overview has no such
-  # toggle and the hot corner depends on the plugin being loaded.
-  local _general_lua="$HOME/.config/hypr/custom/general.lua"
-  if [[ -f "$_general_lua" ]]; then
-    if ! grep -qE 'hl\.plugin\.load.*scrolloverview\.so' "$_general_lua"; then
-      local _tmp; _tmp=$(mktemp)
-      {
-        echo "-- scrolloverview plugin load directive (built from source at install time)"
-        echo "hl.plugin.load(\"${plugin_path}\")"
-        echo ""
-        cat "$_general_lua"
-      } > "$_tmp"
-      mv "$_tmp" "$_general_lua"
-      echo -e "${STY_CYAN}[$0]: Added hl.plugin.load(\"${plugin_path}\") to $_general_lua${STY_RST}"
-    else
-      echo -e "${STY_BLUE}[$0]: $_general_lua already loads scrolloverview; skipping.${STY_RST}"
-    fi
-  else
-    echo -e "${STY_YELLOW}[$0]: $_general_lua missing — add this line to a sourced hypr config manually:${STY_RST}"
-    echo -e "${STY_YELLOW}  hl.plugin.load(\"${plugin_path}\")${STY_RST}"
-  fi
+  # As with hyprbars, no load directive is written here: hyprland/plugins.lua
+  # loads this path behind the same version check, and an unguarded copy of
+  # that line is what turns a stale plugin into a failed login.
+  echo -e "${STY_BLUE}[$0]: scrolloverview.so ready at ${plugin_path} (loaded by hyprland/plugins.lua once it matches the running Hyprland).${STY_RST}"
 
   # ---------------------------------------------------------------------------
   # Install rebuild hook so future `pacman -Syu` keeps scrolloverview in sync.
