@@ -40,7 +40,15 @@ function x(){
     echo "  r = Repeat this command (DEFAULT)"
     echo "  e = Exit now"
     echo "  i = Ignore this error and continue (your setup might not work correctly)"
-    local p; read -p " [R/e/i]: " p
+    # read fails at EOF, which happens whenever stdin is not a terminal. Falling
+    # through to the default there would re-run the failing command forever with
+    # nobody able to answer, and the command is not always side effect free: this
+    # loop has re-run a bootloader installer.
+    local p
+    if ! read -p " [R/e/i]: " p; then
+      echo -e "${STY_BLUE}No input available, so not repeating.${STY_RST}"
+      break
+    fi
     case $p in
       [iI]) echo -e "${STY_BLUE}Alright, ignore and continue...${STY_RST}";cmdstatus=2;;
       [eE]) echo -e "${STY_BLUE}Alright, will exit.${STY_RST}";break;;
