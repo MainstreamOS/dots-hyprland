@@ -244,7 +244,19 @@ local function applyPluginConfig()
         --
         -- movetoworkspacesilent has no direct equivalent in hl.dsp; only
         -- two buttons until upstream adds it (or a Lua-side wrapper).
-        if hyprbarsActive() and tbOn then
+        -- add_button appends and the plugin cannot be asked what it already
+        -- holds, so re-running this file adds a second set of the same buttons.
+        -- The mark goes on the plugin's own table, which is what makes its life
+        -- match the buttons': a config reload leaves both in place, and an
+        -- unload and load of the plugin clears both together.
+        --
+        -- A table that will not take the mark reads as unmarked every time, so
+        -- the buttons are added again rather than skipped. Two of each is
+        -- untidy; none at all leaves a window with no way to close it.
+        local buttonsAdded = false
+        pcall(function() buttonsAdded = hl.plugin.hyprbars.__ms_buttons == true end)
+        if hyprbarsActive() and tbOn and not buttonsAdded then
+            pcall(function() hl.plugin.hyprbars.__ms_buttons = true end)
             -- Action strings are shell commands run via the legacy `exec`
             -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
             -- subshell, so the Lua expression after `hyprctl dispatch` must
