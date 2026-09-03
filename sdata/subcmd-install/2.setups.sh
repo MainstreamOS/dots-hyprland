@@ -1083,10 +1083,14 @@ CUPSPOLICYEOF
       /etc/systemd/system/mainstream-printer-setup.service
   x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/76-mainstream-printer-setup.rules" \
       /etc/udev/rules.d/76-mainstream-printer-setup.rules
-  # Earlier revisions leaned on cups-browsed for the queue; its config and
-  # the drop-in that started it give way to the oneshot above.
-  x sudo rm -f /etc/cups/cups-browsed.conf \
+  # Second trigger for the same oneshot: ipp-usb starting means a printer
+  # was claimed, so the queue maker rides along even if the udev event was
+  # missed.
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/10-mainstream-auto-queue.conf" \
       /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf
+  # Earlier revisions leaned on cups-browsed for the queue; its config gives
+  # way to the oneshot above.
+  x sudo rm -f /etc/cups/cups-browsed.conf
   x sudo systemctl daemon-reload
   x sudo udevadm control --reload
   # Managing printers is a desktop task; the unlock prompt guards nothing a

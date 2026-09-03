@@ -1,3 +1,5 @@
-# Runs once per IPP-over-USB capable printer (the same 7/1/4 interface match
-# ipp-usb activates on), at hotplug and at boot coldplug alike.
-ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="07", ATTR{bInterfaceSubClass}=="01", ATTR{bInterfaceProtocol}=="04", TAG+="systemd", ENV{SYSTEMD_WANTS}+="mainstream-printer-setup.service"
+# Mirrors ipp-usb's own activation rules exactly (standard 7/1/4 printers
+# plus HP's non-standard 255/9/1 class), so the queue maker runs for
+# precisely the devices ipp-usb claims, at hotplug and boot coldplug alike.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:070104:*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="mainstream-printer-setup.service"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_VENDOR_ID}=="03f0", ENV{ID_USB_INTERFACES}=="*:ff0901:*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="mainstream-printer-setup.service"
