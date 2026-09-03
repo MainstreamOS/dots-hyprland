@@ -593,9 +593,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // plugin paints its own stock bar again.
         function resetAppearance() {
             pendingColor = "";
-            pendingOpacity = 1;
-            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== 1)
-                TitleBars.setAppearance("", 1);
+            pendingOpacity = 0.5333;
+            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== 0.5333)
+                TitleBars.setAppearance("", 0.5333);
         }
 
         ColorField {
@@ -619,6 +619,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             id: titleBarOpacitySlider
             text: Translation.tr("Opacity")
             buttonIcon: "opacity"
+            stopIndicatorValues: [53]
             from: 0
             to: 100
             value: Math.round(titleBarSection.pendingOpacity * 100)
@@ -627,9 +628,6 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 if (stepped === titleBarSection.pendingOpacity) return;
                 titleBarSection.pendingOpacity = stepped;
                 titleBarApplyDebounce.restart();
-            }
-            StyledToolTip {
-                text: Translation.tr("Takes effect once a color is set.")
             }
         }
 

@@ -71,7 +71,10 @@ Singleton {
     readonly property string opacityPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.opacity`
 
     property string color: ""
-    property real opacity: 1.0
+    // The plugin's untouched bar ships at 88 alpha over its stock gray, so
+    // this default keeps the opacity slider continuous with that look until
+    // the user moves it.
+    property real opacity: 0.5333
     property bool appearanceLoaded: false
 
     // Written together, because they compose into one value the plugin reads:
@@ -103,7 +106,7 @@ Singleton {
         command: ["bash", "-c",
             '{ cat "$0" 2>/dev/null || printf 1; }; printf "\\n"; ' +
             '{ cat "$1" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$2" 2>/dev/null || printf 1; }; printf "\\n"',
+            '{ cat "$2" 2>/dev/null || printf 0.5333; }; printf "\\n"',
             root.flagPath, root.colorPath, root.opacityPath]
         property string buf: ""
         onRunningChanged: if (running) buf = ""

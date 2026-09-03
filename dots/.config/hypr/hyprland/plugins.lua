@@ -137,19 +137,26 @@ end
 -- hyprbars takes a single bar_color carrying its own alpha, so the colour and
 -- the opacity are composed here rather than set as two keys.
 --
--- Returns nil for anything it cannot read as a colour, and the caller then
--- leaves the key alone: a machine that has never set one, or a theme written
--- before this existed, keeps whatever the plugin chooses for itself. Better a
--- bar that looks as it always did than every window wearing a colour nobody
--- asked for.
+-- Returns nil only when NEITHER file holds anything usable, and the caller
+-- then leaves the key alone: a machine that has never touched the settings
+-- keeps whatever the plugin chooses for itself. A saved opacity without a
+-- color composes over the plugin's own stock gray (333333, shipped at 88
+-- alpha), so the opacity slider bites without a color pick and its first
+-- nudge is continuous with the untouched look.
 local function titleBarColor()
     local hex = readTitleBarFile("titlebars.color")
-    if not hex then return nil end
-    hex = hex:gsub("^#", "")
-    if not hex:match("^%x%x%x%x%x%x$") then return nil end
-    local o = tonumber(readTitleBarFile("titlebars.opacity") or "1") or 1
-    if o < 0 then o = 0 elseif o > 1 then o = 1 end
-    return string.format("rgba(%s%02x)", hex, math.floor(o * 255 + 0.5))
+    if hex then
+        hex = hex:gsub("^#", "")
+        if not hex:match("^%x%x%x%x%x%x$") then hex = nil end
+    end
+    local o = readTitleBarFile("titlebars.opacity")
+    if not hex then
+        if not o then return nil end
+        hex = "333333"
+    end
+    local on = tonumber(o or "1") or 1
+    if on < 0 then on = 0 elseif on > 1 then on = 1 end
+    return string.format("rgba(%s%02x)", hex, math.floor(on * 255 + 0.5))
 end
 
 -- The wallpaper the overview draws, saved beside the other runtime flags by
