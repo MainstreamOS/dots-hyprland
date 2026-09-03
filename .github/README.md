@@ -54,6 +54,10 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 - **Themes you can save, schedule, and share** — your whole look — wallpaper, colors, app style, icons, interface changes, window styling, and which edge the dock sits on — saves under a name with a preview and switches back in one tap. Pair a Day and Night theme that follow Night Light or your own set hours, or export a theme to a single file and import it on another computer.
 - **A bar you arrange** — show, hide, and reorder every piece of the bar by dragging, move them between the left, middle, and right, and drop two together to join them into a single rounded group.
 - **A dock on any edge** — put the dock along the top, bottom, left, or right of the screen, and the bar steps aside when you give the dock the edge it was using.
+- **Four bar styles.** Hug, Float, Rect, or Notch, which sits on the screen edge and curves away from it. Set the shape, transparency, color and width of the bar and of each widget on it, and split a floating bar into three strips.
+- **A settings page for the dock.** Size, shape, corner roundness, transparency and color, in a Float, Rect or Notch style.
+- **A dock that behaves how you like.** Set how far an icon grows on hover and whether hovering magnifies or glows, mark open windows with dashes, dots or a count badge, choose the animation when you click an app, and turn the buttons on either side on or off.
+- **Title bars in your colors.** Set their color and opacity, and return to stock in one press.
 - **Windows drawn the way you want** — corner radius, border thickness, the gaps between windows and around the screen, how see-through focused and unfocused windows are, the blur behind them, the shadow beneath them, and how they animate. Give the borders a gradient of your own, or leave them following the wallpaper. One press puts it all back.
 - **A built-in window rule editor** — most desktops leave per-app rules to a config file you edit by hand. Here it is a page in Settings: teach one app where to open, whether it floats, how see-through it is, and what it is allowed to do. Rules save into a theme, so sharing a theme shares the behavior too.
 - **A wallpaper that rotates** — point it at a folder and set a timer; the colors follow along with every picture.
@@ -63,11 +67,14 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 - **A launcher that finds everything** — apps, folders, files, quick math, and your clipboard history.
 - **Overviews** — a hot corner or `Super` + `F10` opens a map of every workspace; drag windows between them and drop files and folders in. The scrolling layout has its own panning view on `Super` + `O`.
 - **Session restore** — log out or reboot and your windows come back on the workspaces they were on.
+- **AI in the sidebar.** Sign in to Claude or ChatGPT with a subscription you already have and no API key to paste, or follow a guided setup for free local AI with Ollama, where nothing you type leaves the computer.
 - **Made with creators in mind** — one-click install for DaVinci Resolve and OBS, with GPU encoding on Wayland.
 - **LocalSend built in** — drag files onto the bar's media widget to send them to any phone, tablet, or computer on your network running [LocalSend](https://localsend.org), and right-click to receive, with live progress and no cloud in the middle. Built into the desktop rather than bundled as a separate app.
 - **Graphics sorted out during the install** — your card is recognized and given drivers that match the model you actually have, across AMD, Intel, and NVIDIA, laptops with two included. The experimental legacy-NVIDIA edition covers older NVIDIA cards, back to the GeForce 400 series.
+- **Your language from the start.** Pick a language and keyboard layout during installation and both are waiting at the login screen and in the desktop. Choosing Chinese, Japanese or Korean installs the matching fonts and input method.
 - **Updates with a safety net** — system packages, Flatpaks, and the desktop update together from a single button, with a restore point taken before and after. A bad update is one boot-menu entry away from being undone, and a marker on the bar tells you when a new release is out.
 - **Repair Install** — one button re-runs the desktop setup and rebuilds its components.
+- **A firewall you can see into.** Every install runs firewalld, and a page on the site explains exactly what it is doing for you.
 - **Verified installs** — a post-install self-check runs on the finished system and writes a health report, so a bad install tells you instead of failing silently.
 - **Signed downloads and packages** — every release is signed with checksums published alongside it, and everything Mainstream adds arrives prebuilt and signed in the [\[mainstream\]](https://github.com/MainstreamOS/packages) repo.
 - **A lean, native base** — native apps as defaults, and the AUR off by default in favor of the signed repo.
