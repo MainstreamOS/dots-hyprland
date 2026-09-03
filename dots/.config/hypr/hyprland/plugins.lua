@@ -154,7 +154,7 @@ local function titleBarColor()
         if not o then return nil end
         hex = "333333"
     end
-    local on = tonumber(o or "1") or 1
+    local on = tonumber(o or "0.5333") or 0.5333
     if on < 0 then on = 0 elseif on > 1 then on = 1 end
     return string.format("rgba(%s%02x)", hex, math.floor(on * 255 + 0.5))
 end

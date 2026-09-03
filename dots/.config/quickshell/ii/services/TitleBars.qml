@@ -118,7 +118,7 @@ Singleton {
             root.enabled = (lines[0] ?? "").trim() !== "0"
             root.color = (lines[1] ?? "").trim()
             const o = parseFloat((lines[2] ?? "").trim())
-            root.opacity = isNaN(o) ? 1.0 : Math.max(0, Math.min(1, o))
+            root.opacity = isNaN(o) ? 0.5333 : Math.max(0, Math.min(1, o))
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true
