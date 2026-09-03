@@ -56,6 +56,21 @@ warn() { printf '%s ! %s  %s\n' "$c_yellow" "$c_rst" "$*" >&2; }
 
 cd "$REPO_DIR" || { echo "cannot cd to $REPO_DIR" >&2; exit 1; }
 
+# Hand over to the copy the release being applied ships, rather than running
+# the one the previous release installed. The update helper calls this script
+# by name, so without this every step added here waits a whole release to
+# take effect, and it refreshes itself at the end — one release too late to
+# do the work it was added for. The guard variable keeps the handover from
+# looping if the install fails to change anything.
+if [[ -z "${UPDATEMS_SYSTEM_REEXEC:-}" && -f "$REPO_DIR/sdata/update/updatems-system" ]] \
+   && ! cmp -s "$REPO_DIR/sdata/update/updatems-system" "$0"; then
+    if install -m755 -o root -g root "$REPO_DIR/sdata/update/updatems-system" \
+            /usr/local/bin/updatems-system 2>/dev/null; then
+        export UPDATEMS_SYSTEM_REEXEC=1
+        exec /usr/local/bin/updatems-system "$@"
+    fi
+fi
+
 # Per-component rc tracking; any non-zero rolls up to a single soft fail
 # (return 1). We DON'T abort on the first failure — best effort, refresh
 # what we can.
