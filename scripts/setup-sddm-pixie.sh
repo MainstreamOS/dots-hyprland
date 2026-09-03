@@ -14,6 +14,18 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
+# `./setup install` normally runs in visual mode, where a failing helper is
+# retried but its shell line is not shown in the install log.  Keep the normal
+# command error on stderr and add the exact source location as well, so this
+# script never degenerates into a bare "rc=1" again.
+report_error() {
+    local rc=$?
+    printf '%b[ERROR]%b setup-sddm-pixie.sh failed at line %s: %s (exit %d)\n' \
+        "$RED" "$NC" "${BASH_LINENO[0]:-$LINENO}" "$BASH_COMMAND" "$rc" >&2
+    exit "$rc"
+}
+trap report_error ERR
+
 # --- Checks ---
 [[ $EUID -eq 0 ]] || error "This script must be run as root"
 
@@ -75,11 +87,14 @@ SDDMEOF
 reseed_greeter_layout() {
     local target="$1" x11="/etc/X11/xorg.conf.d/00-keyboard.conf" layout="" variant=""
     if [[ -f "$x11" ]]; then
-        layout=$(grep -oP 'Option\s+"XkbLayout"\s+"\K[^"]+' "$x11" 2>/dev/null | head -1)
-        variant=$(grep -oP 'Option\s+"XkbVariant"\s+"\K[^"]*' "$x11" 2>/dev/null | head -1)
+        # No match is normal on machines whose localed file has not been
+        # populated yet. With `set -e -o pipefail`, make that an empty value
+        # rather than an unexplained installer failure.
+        layout=$(grep -oP 'Option\s+"XkbLayout"\s+"\K[^"]+' "$x11" 2>/dev/null | head -1 || true)
+        variant=$(grep -oP 'Option\s+"XkbVariant"\s+"\K[^"]*' "$x11" 2>/dev/null | head -1 || true)
     fi
     if [[ -z "$layout" && -f /etc/vconsole.conf ]]; then
-        layout=$(grep -oP '^KEYMAP=\K.*' /etc/vconsole.conf 2>/dev/null | tr -d '"' | head -1)
+        layout=$(grep -oP '^KEYMAP=\K.*' /etc/vconsole.conf 2>/dev/null | tr -d '"' | head -1 || true)
         layout="${layout%%-*}"
     fi
     [[ -n "$layout" ]] || return 0
@@ -100,8 +115,10 @@ if [[ -f "$GREETER_SRC" ]]; then
     # Moved aside rather than removed: lua is found before conf, so the new file
     # already wins, and keeping the old one means a greeter that will not start
     # can be put back by renaming one file.
-    [[ -f /var/lib/sddm/.config/hypr/hyprland.conf ]] \
-        && mv /var/lib/sddm/.config/hypr/hyprland.conf /var/lib/sddm/.config/hypr/hyprland.conf.old
+    if [[ -f /var/lib/sddm/.config/hypr/hyprland.conf ]]; then
+        mv /var/lib/sddm/.config/hypr/hyprland.conf \
+            /var/lib/sddm/.config/hypr/hyprland.conf.old
+    fi
 else
     warn "Greeter config missing at $GREETER_SRC — leaving the existing one alone"
 fi
