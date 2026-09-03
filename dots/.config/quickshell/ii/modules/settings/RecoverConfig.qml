@@ -39,7 +39,21 @@ ContentPage {
     function startRepair() {
         if (isRunning) return;
         outputText = "";
+        keyringMode = false;
         repairProc.command = ["pkexec", "/usr/bin/mainstream-repair"];
+        repairProc.running = true;
+        isRunning = true;
+    }
+
+    // Selects the completion wording; a keyring repair fixes pacman, not the
+    // running shell, so telling the user to restart Hyprland would misdirect.
+    property bool keyringMode: false
+
+    function startKeyringRepair() {
+        if (isRunning) return;
+        outputText = "";
+        keyringMode = true;
+        repairProc.command = ["pkexec", "/usr/local/bin/mainstream-keyring-repair"];
         repairProc.running = true;
         isRunning = true;
     }
@@ -63,7 +77,9 @@ ContentPage {
         onExited: (exitCode, exitStatus) => {
             root.isRunning = false;
             root.outputText = root.outputText.replace(/\s+$/, "");
-            if (exitCode === 0) {
+            if (exitCode === 0 && root.keyringMode) {
+                root.outputText += "\n\n" + Translation.tr("Package keys repaired. Updates work again.");
+            } else if (exitCode === 0) {
                 root.outputText += "\n\n" + Translation.tr("Repair complete. Restart Hyprland for rebuilt components to load.");
             } else if (exitCode === 126 || exitCode === 127) {
                 root.outputText += "\n\n" + Translation.tr("Repair was cancelled or not authorized.");
@@ -179,6 +195,12 @@ ContentPage {
                 mainText: Translation.tr("Repair Install")
                 enabled: !root.isRunning
                 onClicked: root.startRepair()
+            },
+            RippleButtonWithIcon {
+                materialIcon: "key"
+                mainText: Translation.tr("Repair Package Keys")
+                enabled: !root.isRunning
+                onClicked: root.startKeyringRepair()
             },
             RippleButtonWithIcon {
                 materialIcon: "content_copy"

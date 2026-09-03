@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Operator entry point for the keyring repair. The logic is shared with the
+# timer path; the separate name is what makes it findable from a terminal and
+# from the Recovery panel, where "keyring init" would read as a first-boot
+# step nobody would think to re-run.
+set -u
+exec /usr/local/bin/mainstream-keyring-init "$@"

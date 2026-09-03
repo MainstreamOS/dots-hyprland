@@ -1902,6 +1902,8 @@
   "Pick an open app…": "Pick an open app…",
   "Re-list the apps open right now": "Re-list the apps open right now",
   "Repair Install": "Repair Install",
+  "Repair Package Keys": "Repair Package Keys",
+  "Package keys repaired. Updates work again.": "Package keys repaired. Updates work again.",
   "Repair complete. Restart Hyprland for rebuilt components to load.": "Repair complete. Restart Hyprland for rebuilt components to load.",
   "Repair finished with exit code %1.": "Repair finished with exit code %1.",
   "Repair was cancelled or not authorized.": "Repair was cancelled or not authorized.",

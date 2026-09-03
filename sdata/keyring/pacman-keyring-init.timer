@@ -1,0 +1,11 @@
+[Unit]
+Description=Trigger the pacman keyring check off the boot-critical path
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=6h
+AccuracySec=2s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -181,6 +181,7 @@ SNAP_RC=0
 DOTFILES_RC=0
 DOTFILES_SYS_RC=0
 TOPGRADE_RC=0
+MAINSTREAM_REPO_OFFLINE=0
 
 # ── 1. System + [mainstream] packages (pacman) ──────────────────────────────
 # pacman -Syu refreshes every configured repo, so the signed [mainstream] repo
@@ -193,6 +194,56 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     PACMAN_LOG=$(mktemp)
     pacman -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
     PACMAN_RC=${PIPESTATUS[0]}
+    if [[ "$PACMAN_RC" -ne 0 ]]; then
+        # An untrusted [mainstream] signing key aborts the whole transaction,
+        # so core, extra and multilib do not update either. The key material
+        # is already on disk, so this is recoverable in place rather than a
+        # failure worth reporting.
+        if grep -qE 'key "[^"]*" is unknown|missing required signature|could not be looked up remotely|GPGME error|invalid or corrupted database \(PGP signature\)|signature from .* is (unknown|marginal) trust' "$PACMAN_LOG"; then
+            echo ""
+            echo "── The [mainstream] signing key is not trusted here, which blocks"
+            echo "   every repository. Repairing the keyring and retrying..."
+            if [[ -x /usr/local/bin/mainstream-keyring-repair ]]; then
+                /usr/local/bin/mainstream-keyring-repair
+            elif [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
+                /usr/local/bin/mainstream-keyring-init
+            else
+                # Older installs predate the repair tool; the key file and the
+                # fingerprint are enough to re-establish trust by hand.
+                echo "   No repair tool on this machine, importing the key directly."
+                pacman-key --add /usr/local/share/mainstream.pub \
+                    && pacman-key --lsign-key D644BEB9C1B7668E3A6C16DA8D567345B265848E \
+                    && pacman-key --updatedb
+                rm -f /var/lib/pacman/sync/mainstream.db*
+            fi
+            pacman -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
+            PACMAN_RC=${PIPESTATUS[0]}
+            if [[ "$PACMAN_RC" -ne 0 ]] \
+               && grep -qE 'key "[^"]*" is unknown|missing required signature|invalid or corrupted database \(PGP signature\)' "$PACMAN_LOG"; then
+                # Dropping the repo to SigLevel = Never would trade a broken
+                # update for an unverified one. Taking it out of the run
+                # instead keeps the rest of the system updating.
+                echo ""
+                echo "── Still unverified. Taking [mainstream] out of this run so the"
+                echo "   rest of the system can still update."
+                if [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
+                    /usr/local/bin/mainstream-keyring-init --disable-mainstream
+                else
+                    awk -v tag='#MSKEY#' '
+                        /^\[mainstream\]/ { inblock = 1; print tag $0; next }
+                        /^\[/             { inblock = 0 }
+                        inblock && NF     { print tag $0; next }
+                        { print }
+                    ' /etc/pacman.conf > /etc/pacman.conf.mskey-tmp \
+                        && cat /etc/pacman.conf.mskey-tmp > /etc/pacman.conf
+                    rm -f /etc/pacman.conf.mskey-tmp
+                fi
+                MAINSTREAM_REPO_OFFLINE=1
+                pacman -Syu --noconfirm
+                PACMAN_RC=$?
+            fi
+        fi
+    fi
     if [[ "$PACMAN_RC" -ne 0 ]]; then
         # When one of our own packages starts shipping a file an older install
         # or ISO wrote directly, pacman refuses the upgrade with "exists in
@@ -458,6 +509,13 @@ else
     printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
 fi
 printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
+if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
+    printf "  %-30s %s\n" "[mainstream] repo:" "off (untrusted key)"
+    echo ""
+    echo ">>> [mainstream] is switched off because its signing key could not be"
+    echo ">>> verified. Everything else updated. To bring it back, run:"
+    echo ">>>     sudo mainstream-keyring-repair"
+fi
 
 # Exit-code priority. Primary failures (pacman, aur, flatpak) override
 # everything else and propagate their own RC for the QML to surface.
@@ -468,6 +526,7 @@ printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRA
 # shouldn't turn the whole update banner red for a regular user. The
 # log still shows the failure for the power-user case.
 if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
+if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
 if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi
 if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100;            fi

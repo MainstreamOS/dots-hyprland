@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+# Initialize the pacman keyring and keep [mainstream] pointed at the signed
+# GitHub repo. Driven by pacman-keyring-init.service on a timer, and safe to
+# run by hand (see mainstream-keyring-repair).
+#
+# pacman-key --init is unreliable in the Calamares chroot (no gpg-agent,
+# limited entropy), so the real init happens on a booted system with a synced
+# clock and a running gpg-agent.
+#
+# Trust is proven by reading it back out of the keyring before anything
+# destructive happens. pacman-key --add and --lsign-key both exit 0 in cases
+# where nothing reaches the keyring: most notably when a gpg-agent is still
+# bound to a homedir that has already been unlinked, so its writes land in the
+# dead inode. An exit code is not evidence of trust; the keyring is.
+#
+# set -e is deliberately absent. Aborting part-way leaves the repo switched to
+# SigLevel = Required with no trusted key, which blocks core and extra too,
+# and it leaves the journal with no line naming the failing step. Every step
+# below reports its own outcome and returns.
+set -uo pipefail
+
+KEY_FILE=/usr/local/share/mainstream.pub
+KEY_URL=https://mainstreamos.org/mainstream.pub
+FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
+REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
+LOCAL_REPO=/usr/local/share/pkgs
+PACMAN_CONF=/etc/pacman.conf
+PACMAN_CONF_BAK=/etc/pacman.conf.mainstream-keyring-bak
+GNUPG_DIR=/etc/pacman.d/gnupg
+DISABLE_TAG='#MSKEY#'
+
+log()  { printf 'mainstream-keyring: %s\n' "$*"; }
+warn() { printf 'mainstream-keyring: %s\n' "$*" >&2; }
+
+_gpg() { gpg --homedir "$GNUPG_DIR" --batch --no-tty --no-permission-warning "$@"; }
+
+# gpg reports a merely imported key as validity "-" or "q"; only a local
+# signature made by this keyring's own signing key raises it to "f", and only
+# "f" or "u" makes pacman accept a database signed by it.
+key_is_trusted() {
+    [[ -s "$GNUPG_DIR/pubring.gpg" ]] || return 1
+    _gpg --list-keys --with-colons "$FPR" 2>/dev/null | awk -F: '
+        ($1 == "pub" || $1 == "uid") && ($2 == "f" || $2 == "u") { ok = 1 }
+        END { exit !ok }'
+}
+
+# archlinux-keyring carries about a hundred keys, so any healthy keyring is
+# far above this floor and a wiped or half-written one is far below it.
+arch_keyring_populated() {
+    local count
+    count=$(_gpg --list-keys --with-colons 2>/dev/null | grep -c '^pub:')
+    [[ "${count:-0}" -ge 10 ]]
+}
+
+repo_state() {
+    awk -v tag="$DISABLE_TAG" '
+        index($0, tag "[mainstream]") == 1 { print "disabled"; found = 1; exit }
+        /^\[mainstream\]/                  { print "enabled";  found = 1; exit }
+        END { if (!found) print "absent" }
+    ' "$PACMAN_CONF"
+}
+
+repo_is_signed_github() {
+    awk '
+        /^\[mainstream\]/ { inblock = 1; next }
+        /^\[/             { inblock = 0 }
+        inblock && /^SigLevel[[:space:]]*=[[:space:]]*Required/ { sig = 1 }
+        inblock && /^Server[[:space:]]*=[[:space:]]*https:\/\//  { srv = 1 }
+        END { exit !(sig && srv) }
+    ' "$PACMAN_CONF"
+}
+
+# Commenting the block out keeps core, extra and multilib updatable while the
+# key is untrusted. Dropping SigLevel back to Never would trade a broken
+# update for an unverified one, so the repo goes dark instead.
+disable_repo() {
+    [[ "$(repo_state)" == enabled ]] || return 0
+    local tmp="$PACMAN_CONF.mskey-tmp"
+    awk -v tag="$DISABLE_TAG" '
+        /^\[mainstream\]/ { inblock = 1; print tag $0; next }
+        /^\[/             { inblock = 0 }
+        inblock && NF     { print tag $0; next }
+        { print }
+    ' "$PACMAN_CONF" > "$tmp" || { rm -f "$tmp"; return 1; }
+    cat "$tmp" > "$PACMAN_CONF"
+    rm -f "$tmp"
+    warn "[mainstream] disabled until its signing key is trusted; core, extra and multilib still update."
+}
+
+enable_repo() {
+    [[ "$(repo_state)" == disabled ]] || return 0
+    sed -i "s|^${DISABLE_TAG}||" "$PACMAN_CONF"
+    log "[mainstream] re-enabled."
+}
+
+# The fingerprint check is what makes a network fetch safe here: a substituted
+# key cannot carry this fingerprint, so a mismatch is discarded unused.
+file_has_our_key() {
+    gpg --batch --no-tty --show-keys --with-colons "$1" 2>/dev/null \
+        | grep -q "^fpr:::::::::$FPR:"
+}
+
+ensure_key_file() {
+    if [[ -s "$KEY_FILE" ]] && file_has_our_key "$KEY_FILE"; then
+        return 0
+    fi
+    warn "no usable signing key at $KEY_FILE; fetching a copy."
+    local tmp
+    tmp=$(mktemp) || return 1
+    if curl -fsSL --retry 3 --retry-delay 3 --max-time 60 -o "$tmp" "$KEY_URL" \
+        && file_has_our_key "$tmp"; then
+        install -Dm644 -o root -g root "$tmp" "$KEY_FILE"
+        rm -f "$tmp"
+        log "signing key restored to $KEY_FILE."
+        return 0
+    fi
+    rm -f "$tmp"
+    warn "could not obtain a key file matching $FPR."
+    return 1
+}
+
+import_and_sign() {
+    pacman-key --add "$KEY_FILE"  || warn "pacman-key --add reported a failure."
+    pacman-key --lsign-key "$FPR" || warn "pacman-key --lsign-key reported a failure."
+    # The trust db is what pacman consults, and the populate-time build ran
+    # before this key existed, so without this rebuild pacman still sees the
+    # key as unknown trust and rejects the signed database.
+    pacman-key --updatedb || warn "pacman-key --updatedb reported a failure."
+    # Read the result back with no agent in the way.
+    gpgconf --homedir "$GNUPG_DIR" --kill all >/dev/null 2>&1 || true
+}
+
+rebuild_keyring() {
+    log "rebuilding the pacman keyring."
+    gpgconf --homedir "$GNUPG_DIR" --kill all >/dev/null 2>&1 || true
+    rm -rf "$GNUPG_DIR"
+    pacman-key --init               || { warn "pacman-key --init failed.";     return 1; }
+    pacman-key --populate archlinux || { warn "pacman-key --populate failed."; return 1; }
+    pacman-key --updatedb           || warn "pacman-key --updatedb reported a failure."
+}
+
+trust_key() {
+    ensure_key_file || return 1
+
+    # An agent still attached to the homedir keeps writing into it after the
+    # directory is replaced, so it goes first every time.
+    gpgconf --homedir "$GNUPG_DIR" --kill all >/dev/null 2>&1 || true
+
+    if ! arch_keyring_populated; then
+        rebuild_keyring || return 1
+    fi
+
+    import_and_sign
+    if key_is_trusted; then
+        log "signing key $FPR is present and locally signed."
+        return 0
+    fi
+
+    # A homedir left half-written by an earlier run cannot be repaired in
+    # place, so the second attempt starts from nothing.
+    warn "key still untrusted after import; starting from a fresh keyring."
+    rebuild_keyring || return 1
+    import_and_sign
+    if key_is_trusted; then
+        log "signing key $FPR trusted after a keyring rebuild."
+        return 0
+    fi
+
+    warn "signing key $FPR is still untrusted."
+    return 1
+}
+
+point_at_github() {
+    cp -a "$PACMAN_CONF" "$PACMAN_CONF_BAK" || return 1
+    sed -i \
+        -e "s|^Server = file://.*pkgs|Server = $REPO_URL|" \
+        -e "s|^SigLevel = Never|SigLevel = Required|" \
+        "$PACMAN_CONF"
+}
+
+signed_sync_works() {
+    [[ -s /var/lib/pacman/sync/mainstream.db ]] || return 1
+    pacman -Sl mainstream >/dev/null 2>&1
+}
+
+fetch_signed_db() {
+    # The offline install synced an unsigned mainstream.db while the repo was
+    # SigLevel = Never; under Required every pacman read of it fails until a
+    # signed copy replaces it.
+    rm -f /var/lib/pacman/sync/mainstream.db*
+    local i
+    # The GitHub repo is a single server with no mirrors, so one transient
+    # blip must not decide the outcome.
+    for i in 1 2 3 4 5; do
+        if pacman -Sy --noconfirm && signed_sync_works; then
+            return 0
+        fi
+        sleep 5
+    done
+    return 1
+}
+
+[[ $EUID -eq 0 ]] || { warn "must run as root."; exit 1; }
+
+case "${1:-}" in
+    --disable-mainstream) disable_repo; exit 0 ;;
+    --check)
+        key_is_trusted && arch_keyring_populated && repo_is_signed_github && signed_sync_works
+        exit $?
+        ;;
+    "" ) : ;;
+    *  ) warn "unknown argument: $1"; exit 2 ;;
+esac
+
+# Racing a user's own transaction would fail this run and leave a lock behind,
+# and a skipped tick costs nothing.
+if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
+    log "pacman database is locked by another process; retrying on the next tick."
+    exit 0
+fi
+
+if key_is_trusted && arch_keyring_populated && repo_is_signed_github && signed_sync_works; then
+    log "keyring and [mainstream] repo are healthy."
+    exit 0
+fi
+
+log "repairing the keyring and [mainstream] repo state."
+
+if ! trust_key; then
+    disable_repo
+    warn "leaving [mainstream] disabled; this unit retries on its timer."
+    exit 1
+fi
+
+enable_repo
+
+if ! repo_is_signed_github; then
+    point_at_github || { warn "could not rewrite $PACMAN_CONF."; exit 1; }
+fi
+
+if ! fetch_signed_db; then
+    # Nothing is deleted on this path, so the local file repo stays the
+    # working install source wherever it still exists.
+    if [[ -f "$PACMAN_CONF_BAK" ]]; then
+        cat "$PACMAN_CONF_BAK" > "$PACMAN_CONF"
+        rm -f "$PACMAN_CONF_BAK"
+        warn "signed database fetch failed; $PACMAN_CONF rolled back."
+    else
+        disable_repo
+        warn "signed database fetch failed; [mainstream] disabled for now."
+    fi
+    exit 1
+fi
+
+rm -f "$PACMAN_CONF_BAK"
+
+# The baked-in local repo is about 1.3 GB of install media that matters only
+# until the signed repo is proven to work, so it goes after that proof and
+# never before it.
+if [[ -d "$LOCAL_REPO" ]]; then
+    rm -rf "$LOCAL_REPO"
+    log "removed the baked-in local package repo."
+fi
+
+log "[mainstream] is on the signed GitHub repo with a trusted key."
+exit 0

@@ -1,0 +1,25 @@
+[Unit]
+Description=Initialize the pacman keyring and keep [mainstream] on the signed GitHub repo
+# gpg signature validity needs a synced clock, so this wants
+# systemd-time-wait-sync, but it must NOT gate the boot. It is triggered by
+# pacman-keyring-init.timer, NOT WantedBy=multi-user.target. A oneshot wanted
+# by multi-user.target makes multi-user.target WAIT for it; because this unit
+# blocks on the NTP round trip (about 40s on first boot) that froze
+# multi-user.target to roughly 45s. That delayed power-profiles-daemon
+# (After=multi-user.target, dbus-activated), which the quickshell bar
+# synchronously activates at startup via UtilButtons' PowerProfiles binding,
+# so the bar could not paint for about 21s. Off the critical path,
+# multi-user.target reaches early and this keyring work runs in the background
+# after the desktop is already up.
+After=network-online.target systemd-time-wait-sync.service
+Wants=network-online.target systemd-time-wait-sync.service
+
+[Service]
+Type=oneshot
+# RemainAfterExit=yes would leave the unit active, and a timer that fires at
+# an already-active unit does nothing, which turns every later tick into a
+# no-op and makes the whole mechanism run-once again.
+RemainAfterExit=no
+ExecStart=/usr/local/bin/mainstream-keyring-init
+Restart=on-failure
+RestartSec=120

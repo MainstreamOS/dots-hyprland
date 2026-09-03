@@ -258,6 +258,61 @@ systemctl daemon-reload 2>/dev/null || true
 # than at the next replug; with no printer this is a quiet no-op.
 systemctl start mainstream-printer-setup.service 2>/dev/null || true
 
+# ── pacman keyring + [mainstream] repo self-healing ───────────────────────
+# This lands over git rather than over pacman, which is the only delivery path
+# left on a machine whose [mainstream] signing key never got trusted: there
+# pacman -Syu fails for every repo, core and extra included, so a fix shipped
+# as a package could never arrive.
+KEYRING_SRC="$REPO_DIR/sdata/keyring"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/dist-arch/mainstream.pub" \
+    /usr/local/share/mainstream.pub \
+    "[mainstream] signing key"
+
+_install_file 0755 \
+    "$KEYRING_SRC/mainstream-keyring-init" \
+    /usr/local/bin/mainstream-keyring-init \
+    "Keyring init"
+
+_install_file 0755 \
+    "$KEYRING_SRC/mainstream-keyring-repair" \
+    /usr/local/bin/mainstream-keyring-repair \
+    "Keyring repair command"
+
+_install_file 0644 \
+    "$KEYRING_SRC/pacman-keyring-init.service" \
+    /etc/systemd/system/pacman-keyring-init.service \
+    "Keyring init service"
+
+_install_file 0644 \
+    "$KEYRING_SRC/pacman-keyring-init.timer" \
+    /etc/systemd/system/pacman-keyring-init.timer \
+    "Keyring init timer"
+
+systemctl daemon-reload 2>/dev/null || true
+# Installs made while the unit disabled its own timer after one success have
+# no watchdog left, so enabling here is what puts a stranded machine back
+# under one.
+if systemctl enable --now pacman-keyring-init.timer 2>/dev/null; then
+    ok "Keyring check timer enabled"
+else
+    warn "Could not enable pacman-keyring-init.timer"
+    RC=1
+fi
+
+if [[ -x /usr/local/bin/mainstream-keyring-init ]] \
+   && ! /usr/local/bin/mainstream-keyring-init --check >/dev/null 2>&1; then
+    say "Repairing the pacman keyring and [mainstream] repo..."
+    /usr/local/bin/mainstream-keyring-init 2>&1 | sed 's/^/    /'
+    if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+        ok "Keyring and [mainstream] repo verified"
+    else
+        warn "Keyring repair did not complete; the timer retries on its own"
+        RC=1
+    fi
+fi
+
 # ── Update tooling (refreshes itself + updatems + helper) ──────────────────
 # Refreshing the helper while it's mid-run is safe on Linux — the
 # kernel keeps the inode open via the existing fd until the process
