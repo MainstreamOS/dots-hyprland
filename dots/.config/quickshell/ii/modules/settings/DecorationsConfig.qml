@@ -240,7 +240,7 @@ ContentPage {
     function resetWindowSections() {
         const d = root.decoDefaults;
         const pairs = Object.keys(d)
-            .filter(k => k !== "titleBars")
+            .filter(k => k !== "titleBars" && k !== "titleBarColor" && k !== "titleBarOpacity")
             .map(k => `${k}=${d[k]}`);
         if (pairs.length === 0) return;
         root.setDecoration(pairs);
