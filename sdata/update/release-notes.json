@@ -160,5 +160,48 @@
     "changes": [
       "New installs reserve more boot partition space and get a final boot-setup check"
     ]
+  },
+  "2.0.0": {
+    "summary": "Shape the bar, dock and title bars from Settings: four bar styles, a dock with a settings page of its own, and color and transparency throughout, all carried by your themes",
+    "changes": [
+      "Both the Bar and the Dock have gained new styles",
+      "The Bar gains a new \"Notch\" style to live alongside its \"Hug\", \"Float\" and \"Rect\" styles",
+      "You can now change the Bar and bar widgets Shape, Transparency, Color, and Bar Width",
+      "Any floating bar style can be set to be three strips instead of one",
+      "The Dock now graduates to its own settings menu",
+      "The Dock gains both \"Rect\" and \"Notch\" to live alongside its original \"Float\" style",
+      "The new Dock menu also allows you to customize the Dock's Size, Shape, Transparency, and Color",
+      "Change how the Dock behaves, not just how it looks",
+      "Set how big an icon grows on hover, and what hovering does: \"Magnify\" or \"Glow\"",
+      "Choose how open windows are marked: \"Dashes\", \"Dots\" or a \"Count badge\"",
+      "Choose the animation that plays when you click an app",
+      "Turn the buttons on either side of the Dock on or off",
+      "You can now customize the Title Bar Color and Transparency",
+      "Themes now, in addition to what they previously carried, carry all of the new settings added in 2.0.0; all Bar, Dock, and Title Bar customizing including Style, Color, Transparency, Shape, and all new behavioral customizations. HAVE FUN!",
+      "You can now position monitors in the Display settings by dragging them, or by changing them precisely with the new display offset settings",
+      "You can now customize your keybinds and search through them in plain words instead of the commands behind them",
+      "The Float layout is now treated like a first class citizen and got real attention this release, now with a much better workflow",
+      "Sign in to Claude or ChatGPT directly from the sidebar using an existing subscription, or get guided through getting started with local, free AI (Ollama) with a simple, easy to follow first time setup",
+      "Sidebars open from the side your vertical bar is on",
+      "Set wallpapers directly from Files",
+      "Weather's temperature settings (Fahrenheit, Celsius) now respond to your location and are set automatically",
+      "Night light's \"automatic\" now uses your actual sunrise and sunset",
+      "Plug in a USB printer and print, with no driver to hunt down and nothing to set up",
+      "Update handling is even more careful, and the Recovery settings page can now repair the package keys",
+      "The brightness device can be chosen on the Services page in Settings (thanks @M7MMAD-OMAR)",
+      "The right sidebar automatically fits short displays (thanks @Nitin Dixit)",
+      "Want to tune your graphics card? LACT is one checkbox away during install",
+      "Improved Firewall setup, and we are now even more transparent with our new Firewall page on our website listed under the Security section: https://mainstreamos.org/#firewall",
+      "Made it easier to set up Remote access. Check out our new Remote Access page on our website at https://mainstreamos.org/#remote-access",
+      "Increased the ISO's hardware compatibility across the board, including adding Ventoy support",
+      "Improved multilingual installations. Pick your language and your keyboard layout and it will be set up for you at the login screen and inside the OS automatically",
+      "Now including Chinese, Japanese and Korean fonts when you choose Chinese, Japanese or Korean",
+      "Chinese, Japanese or Korean language input is set up and installed automatically when you choose that language, allowing you to type your own language from the first boot",
+      "Focus master moves from SUPER + M to Ctrl+Super+Space so it does not clash with the media playback keybind",
+      "Wallpapers fill a rotated monitor instead of leaving it short",
+      "Num Lock is preserved across sessions (thanks @jussiemion)",
+      "The tray's overflow keeps focus after its menu closes (thanks @jussiemion)",
+      "The login screen now keeps the keyboard layout you chose"
+    ]
   }
 }
