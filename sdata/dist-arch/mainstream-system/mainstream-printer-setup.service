@@ -4,4 +4,4 @@ After=ipp-usb.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/mainstream-printer-setup
+ExecStart=/usr/bin/mainstream-printer-setup

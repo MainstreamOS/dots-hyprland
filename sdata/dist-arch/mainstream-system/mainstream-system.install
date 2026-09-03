@@ -75,6 +75,14 @@ _migrate() {
     _fix_plugin_configs
     _refresh_plugin_refs
     systemctl daemon-reload 2>/dev/null || true
+    # The printer queue maker arrives as a udev rule, which only reaches a
+    # running system once udev rereads its rules. Started once here as well,
+    # so a printer already plugged in gets its permanent queue now rather
+    # than at the next replug; with no printer attached it exits quietly.
+    udevadm control --reload 2>/dev/null || true
+    if [ -d /run/systemd/system ]; then
+        systemctl start --no-block mainstream-printer-setup.service 2>/dev/null || true
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true

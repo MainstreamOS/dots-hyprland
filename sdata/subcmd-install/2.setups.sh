@@ -1072,41 +1072,22 @@ JobRetryInterval 60
 JobRetryLimit 5
 CUPSPOLICYEOF
   fi
-  # Apps like Chromium only list permanent CUPS queues, so a driverless USB
-  # printer that ipp-usb claims is invisible until something creates one. A
-  # udev-started oneshot builds a permanent IPP Everywhere queue for it, at
-  # hotplug and at boot alike; an idle box runs no extra print daemon at all.
-  echo -e "${STY_CYAN}[$0]: Installing the USB printer queue setup...${STY_RST}"
-  x sudo install -Dm755 "${REPO_ROOT}/sdata/printing/mainstream-printer-setup" \
-      /usr/local/bin/mainstream-printer-setup
-  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/mainstream-printer-setup.service" \
-      /etc/systemd/system/mainstream-printer-setup.service
-  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/76-mainstream-printer-setup.rules" \
-      /etc/udev/rules.d/76-mainstream-printer-setup.rules
-  # Second trigger for the same oneshot: ipp-usb starting means a printer
-  # was claimed, so the queue maker rides along even if the udev event was
-  # missed.
-  x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/10-mainstream-auto-queue.conf" \
-      /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf
+  # The queue maker, the printer-app unlock and the test-page hook are files
+  # mainstream-system ships, so they arrive with the package rather than from
+  # here: that is what puts them on a machine at the same moment ipp-usb
+  # lands, whichever way the machine got there.
+  #
   # Earlier revisions leaned on cups-browsed for the queue; its config gives
-  # way to the oneshot above. Only the config those revisions wrote is
+  # way to that queue maker. Only the config those revisions wrote is
   # removed: one a user authored themselves stays theirs.
   if [[ -f /etc/cups/cups-browsed.conf ]] \
      && [[ "$(md5sum /etc/cups/cups-browsed.conf | cut -d' ' -f1)" == "aacb6fd7ddcab1c2e8a3f726abf1d9bf" ]]; then
     x sudo rm -f /etc/cups/cups-browsed.conf
   fi
-  x sudo systemctl daemon-reload
-  x sudo udevadm control --reload
-  # Managing printers is a desktop task; the unlock prompt guards nothing a
-  # local admin could not already do. Server settings still authenticate.
-  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/49-mainstream-printing.rules" \
-      /usr/share/polkit-1/rules.d/49-mainstream-printing.rules
-  # The banner test page corrupts under libcupsfilters 2.2.x; point testprint
-  # at the PDF sample that takes the verified pdf filter chain, and keep it
-  # pointed there across cups upgrades.
+  # The test page the hook keeps pointed at the PDF sample is only swapped in
+  # here for the install that is happening now; the hook itself covers every
+  # cups upgrade after it.
   if [[ -f /usr/share/cups/data/default-testpage.pdf ]]; then
-    x sudo install -Dm644 "${REPO_ROOT}/sdata/printing/96-cups-testpage-pdf.hook" \
-        /etc/pacman.d/hooks/96-cups-testpage-pdf.hook
     x sudo cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint
   fi
   # ipp-usb is installed but intentionally left disabled. Its udev rule starts it

@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=7
+pkgrel=8
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(any)
 license=(None)
@@ -37,10 +37,16 @@ source=(
   wallpaper-portal
   mainstream.portal
   org.freedesktop.impl.portal.desktop.mainstream.service
+  mainstream-printer-setup
+  mainstream-printer-setup.service
+  76-mainstream-printer-setup.rules
+  10-mainstream-auto-queue.conf
+  49-mainstream-printing.rules
+  96-cups-testpage-pdf.hook
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 package() {
@@ -65,4 +71,16 @@ package() {
   install -Dm644 "$srcdir/mainstream.portal"             "$pkgdir/usr/share/xdg-desktop-portal/portals/mainstream.portal"
   install -Dm644 "$srcdir/org.freedesktop.impl.portal.desktop.mainstream.service" \
       "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.mainstream.service"
+
+  install -Dm755 "$srcdir/mainstream-printer-setup"      "$pkgdir/usr/bin/mainstream-printer-setup"
+  install -Dm644 "$srcdir/mainstream-printer-setup.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-printer-setup.service"
+  install -Dm644 "$srcdir/76-mainstream-printer-setup.rules" \
+      "$pkgdir/usr/lib/udev/rules.d/76-mainstream-printer-setup.rules"
+  install -Dm644 "$srcdir/10-mainstream-auto-queue.conf" \
+      "$pkgdir/usr/lib/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf"
+  install -Dm644 "$srcdir/49-mainstream-printing.rules" \
+      "$pkgdir/usr/share/polkit-1/rules.d/49-mainstream-printing.rules"
+  install -Dm644 "$srcdir/96-cups-testpage-pdf.hook" \
+      "$pkgdir/usr/share/libalpm/hooks/96-cups-testpage-pdf.hook"
 }

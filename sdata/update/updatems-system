@@ -208,19 +208,11 @@ fi
 # 2.2, and queues that retry a failed job instead of stopping. The queue
 # maker stays inert until ipp-usb arrives, which the mainstream-basic
 # upgrade brings along on the same run.
-mkdir -p /etc/systemd/system/ipp-usb.service.d /etc/pacman.d/hooks /etc/udev/rules.d
-_install_file 0755 "$REPO_DIR/sdata/printing/mainstream-printer-setup" \
-    /usr/local/bin/mainstream-printer-setup "Printer queue setup"
-_install_file 0644 "$REPO_DIR/sdata/printing/mainstream-printer-setup.service" \
-    /etc/systemd/system/mainstream-printer-setup.service "Printer queue unit"
-_install_file 0644 "$REPO_DIR/sdata/printing/76-mainstream-printer-setup.rules" \
-    /etc/udev/rules.d/76-mainstream-printer-setup.rules "Printer queue udev rule"
-_install_file 0644 "$REPO_DIR/sdata/printing/10-mainstream-auto-queue.conf" \
-    /etc/systemd/system/ipp-usb.service.d/10-mainstream-auto-queue.conf "Printer queue trigger"
-_install_file 0644 "$REPO_DIR/sdata/polkit/49-mainstream-printing.rules" \
-    /usr/share/polkit-1/rules.d/49-mainstream-printing.rules "Printer admin polkit rule"
-_install_file 0644 "$REPO_DIR/sdata/printing/96-cups-testpage-pdf.hook" \
-    /etc/pacman.d/hooks/96-cups-testpage-pdf.hook "CUPS test page hook"
+# The queue maker, the printer-app unlock and the test-page hook now ship in
+# mainstream-system, so they land with the package instead of from here. That
+# matters most on the hop that first brings ipp-usb along: a machine that
+# gained the daemon without the queue maker would have had its old USB queue
+# claimed out from under it and nothing put in its place.
 if [[ -f /usr/share/cups/data/default-testpage.pdf ]]; then
     cp /usr/share/cups/data/default-testpage.pdf /usr/share/cups/data/testprint || true
 fi
@@ -239,8 +231,8 @@ CUPSPOLICYEOF
     fi
 fi
 # An earlier unreleased revision leaned on cups-browsed for the queue; its
-# config gives way to the queue maker installed above. Only the config that
-# revision wrote is removed: one a user authored themselves stays theirs.
+# config gives way to the packaged queue maker. Only the config that revision
+# wrote is removed: one a user authored themselves stays theirs.
 if [[ -f /etc/cups/cups-browsed.conf ]] \
    && [[ "$(md5sum /etc/cups/cups-browsed.conf | cut -d' ' -f1)" == "aacb6fd7ddcab1c2e8a3f726abf1d9bf" ]]; then
     rm -f /etc/cups/cups-browsed.conf
