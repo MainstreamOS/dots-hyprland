@@ -294,7 +294,7 @@ i=t["data"]["instant"]["details"]
 n=t["data"].get("next_1_hours") or t["data"].get("next_6_hours") or {}
 sym=(n.get("summary") or {}).get("symbol_code","")
 code=0
-for k,v in [("thunder",95),("snow",71),("sleet",68),("rainshowers",80),("heavyrain",65),("lightrain",51),("rain",61),("fog",45),("cloudy",3),("partlycloudy",2),("fair",1),("clearsky",0)]:
+for k,v in [("thunder",95),("snow",71),("sleet",68),("rainshowers",80),("heavyrain",65),("lightrain",51),("rain",61),("fog",45),("partlycloudy",2),("cloudy",3),("fair",1),("clearsky",0)]:
     if k in sym: code=v; break
 print(json.dumps({"current":{
  "temperature_2m":i.get("air_temperature"),
