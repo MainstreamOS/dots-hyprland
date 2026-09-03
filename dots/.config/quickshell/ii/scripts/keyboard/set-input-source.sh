@@ -44,8 +44,16 @@ if ! pacman -Q "$pkg" &>/dev/null; then
     pkexec pacman -S --needed --noconfirm fcitx5 fcitx5-configtool fcitx5-gtk fcitx5-qt "$pkg" || exit 1
 fi
 
+# The input method is only reachable once these two files carry it, so a
+# machine that never got them seeded is given them here rather than quietly
+# skipped: the profile below would otherwise be written, the script would
+# report success, and no application would take input.
 env_lua="$HOME/.config/hypr/custom/env.lua"
-if [[ -f "$env_lua" ]] && ! grep -q 'im=fcitx' "$env_lua"; then
+mkdir -p "$(dirname "$env_lua")" || exit 1
+if [[ ! -f "$env_lua" ]]; then
+    printf -- '-- Put extra environment variables here\n-- https://wiki.hypr.land/Configuring/Environment-variables/\n\n' > "$env_lua" || exit 1
+fi
+if ! grep -q 'im=fcitx' "$env_lua"; then
     cat >> "$env_lua" <<'EOF'
 hl.env({ name = "XMODIFIERS", value = "@im=fcitx" })
 hl.env({ name = "QT_IM_MODULE", value = "fcitx" })
@@ -55,7 +63,10 @@ hl.env({ name = "GLFW_IM_MODULE", value = "ibus" })
 EOF
 fi
 execs_lua="$HOME/.config/hypr/custom/execs.lua"
-if [[ -f "$execs_lua" ]] && ! grep -q 'fcitx5' "$execs_lua"; then
+if [[ ! -f "$execs_lua" ]]; then
+    printf -- '-- Custom auto-start commands\n-- https://wiki.hypr.land/Configuring/Keywords/#executing\n\n' > "$execs_lua" || exit 1
+fi
+if ! grep -q 'fcitx5' "$execs_lua"; then
     echo 'hl.on("hyprland.start", function() hl.exec_cmd("fcitx5 -d") end)' >> "$execs_lua"
 fi
 for gtkv in gtk-3.0 gtk-4.0; do
