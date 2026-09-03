@@ -822,10 +822,14 @@ Singleton {
                         const firstLocal = root.safeModelName(dataJson[0]);
                         root.ollamaSelectWhenReady = false;
                         if (root.modelList.includes(firstLocal)) root.setModel(firstLocal);
-                    } else if (root.currentModelId === root.ollamaSetupModelId) {
+                    } else if (Persistent.ready && root.currentModelId === root.ollamaSetupModelId) {
                         // The saved model is the local AI default and a real
                         // local model just showed up: that is the machine this
                         // default was waiting for, so take the first one up.
+                        // Only once the saved state has actually loaded: until
+                        // then currentModelId reads as that same default, and
+                        // this would overwrite whichever model the user picked
+                        // before the file arrived.
                         const firstLocal = root.safeModelName(dataJson[0]);
                         if (root.modelList.includes(firstLocal)) root.setModel(firstLocal, false);
                     }

@@ -49,6 +49,12 @@ Singleton {
         onLoadFailed: error => {
             console.log("Failed to load persistent states file:", error);
             if (error == FileViewError.FileNotFound) {
+                // No file means there is nothing to wait for: the defaults
+                // are the truth. Readers gate on this to avoid acting on a
+                // default that a saved state is about to replace, and a
+                // machine with no state file would otherwise leave them
+                // waiting for a load that never comes.
+                root.ready = true;
                 fileWriteTimer.restart();
             }
         }

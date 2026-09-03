@@ -58,6 +58,12 @@ Singleton {
     // writers like switchwall.sh.
     property bool _reloading: false
 
+    // Set when the file is rewritten from outside while writing is held, which
+    // makes whatever is in memory older than what is on disk. The held write is
+    // then dropped rather than handed back, so an apply or a delete that edited
+    // the file directly is not undone by it.
+    property bool _writeStale: false
+
     readonly property string _applyStatePath: {
         const runtime = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
         return `${runtime}/quickshell-theme-apply.state`
@@ -300,6 +306,16 @@ Singleton {
                 fileWriteTimer.restart()
                 return
             }
+            // Unless the file was rewritten from outside while the writing was
+            // held: applying and deleting a theme both edit this file directly,
+            // and what is in memory predates that edit. Handing it back would
+            // undo them — a deleted theme's wallpaper path, pointing into a
+            // directory that no longer exists, is how that ends up on screen.
+            // The reload those edits triggered carries the truth instead.
+            if (root._writeStale) {
+                root._writeStale = false
+                return
+            }
             configFileView.writeAdapter()
         }
     }
@@ -309,13 +325,19 @@ Singleton {
         path: root.filePath
         watchChanges: true
         blockWrites: root.blockWrites || root.themeApplyInProgress
-        onFileChanged: fileReloadTimer.restart()
+        onFileChanged: {
+            if (root.blockWrites || root.themeApplyInProgress) root._writeStale = true
+            fileReloadTimer.restart()
+        }
         onAdapterUpdated: {
             if (root._reloading) return
             fileWriteTimer.restart()
         }
         onLoaded: {
             root.ready = true
+            // Memory and disk agree again, so anything written from here on is
+            // current and must not be mistaken for the stale write above.
+            root._writeStale = false
             // The migrations run here, where _reloading may still be set and would
             // swallow the write that onAdapterUpdated would otherwise schedule, so
             // the save is asked for directly. Each only fires for a file an older
