@@ -396,7 +396,11 @@ Singleton {
         "codex-cli": {
             "name": "Codex",
             "cmd": "codex",
-            "install": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+            // Codex has no rootless installer of its own, so it comes from the
+            // package manager like local AI does. Naming the command beats
+            // pulling 290 MB through a password prompt the sidebar cannot
+            // explain, and it keeps the tool on the normal update path.
+            "installHint": "sudo pacman -S openai-codex",
             "login": "codex login",
             "readyCheck": "codex login status >/dev/null 2>&1"
         }
@@ -541,13 +545,27 @@ Singleton {
     function setupCurrentModel() {
         const entry = root.currentCliSetup;
         if (!entry || root.setupState === "installing" || root.setupState === "loggingIn") return;
-        if (root.cliInstalled(root.currentModel.api_format)) {
+        const fmt = root.currentModel.api_format;
+        if (root.cliInstalled(fmt)) {
             root._runLogin();
-        } else {
+        } else if (entry.install) {
             root.setupState = "installing";
-            installProc.command = ["bash", "-lc", root.cliPathPrefix + entry.install];
+            // The installer's own exit status proves nothing: a piped download
+            // that fetches nothing still leaves the pipeline reporting the
+            // reading shell's success, and the flow then opens a sign-in
+            // window for a command that is not there. Ending the script on the
+            // command itself is what makes a zero mean the tool exists.
+            installProc.command = ["bash", "-lc", root.cliPathPrefix
+                + "set -o pipefail; " + entry.install
+                + "; command -v " + entry.cmd + " >/dev/null 2>&1"];
             installProc.running = false;
             installProc.running = true;
+        } else {
+            // Nothing to run, so re-read the state in case it was installed by
+            // hand since the last look, and say what to type meanwhile.
+            root.setupState = "needsInstall";
+            root.addMessage(Translation.tr("### %1 is not installed\n\n%1 comes from the package manager. Install it from a terminal:\n\n```\n%2\n```\n\nThen pick **%1** here again.").arg(entry.name).arg(entry.installHint), root.interfaceRole);
+            root.detectCli(fmt);
         }
     }
 

@@ -575,6 +575,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         switch (Ai.setupState) {
                         case "installing": return Translation.tr("Installing %1…").arg(n);
                         case "loggingIn": return Translation.tr("Finish signing in to %1 in the window that just opened…").arg(n);
+                        case "needsInstall": return Translation.tr("%1 is not installed yet. The chat has the command to run.").arg(n);
                         case "error": return Translation.tr("Setup didn't finish. Try again.");
                         default: return Translation.tr("%1 needs a one-time sign-in: no API key, just your subscription.").arg(n);
                         }
@@ -583,9 +584,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                 RippleButtonWithIcon {
                     visible: Ai.setupState === "" || Ai.setupState === "error"
+                        || Ai.setupState === "needsInstall"
                     Layout.alignment: Qt.AlignRight
-                    materialIcon: Ai.setupState === "error" ? "refresh" : "login"
-                    mainText: Ai.setupState === "error" ? Translation.tr("Retry")
+                    materialIcon: (Ai.setupState === "error" || Ai.setupState === "needsInstall")
+                        ? "refresh" : "login"
+                    mainText: Ai.setupState === "needsInstall" ? Translation.tr("Check again")
+                        : Ai.setupState === "error" ? Translation.tr("Retry")
                         : Translation.tr("Log in to %1").arg(Ai.currentCliSetup?.name ?? "")
                     onClicked: Ai.setupCurrentModel()
                 }
