@@ -465,15 +465,8 @@ function setup_hyprland_plugins(){
   # aside rather than deleted, because it is the user's file and anything they
   # added to it is theirs.
   # ---------------------------------------------------------------------------
-  local _custom_general="$HOME/.config/hypr/custom/general.lua"
-  if [[ -f "$_custom_general" ]] && grep -q 'applyPluginConfig' "$_custom_general"; then
-    if mv "$_custom_general" "$_custom_general.pre-plugins-move"; then
-      x install -Dm644 "${REPO_ROOT}/dots/.config/hypr/custom/general.lua" "$_custom_general"
-      echo -e "${STY_CYAN}[$0]: Plugin settings now ship in hyprland/plugins.lua; your old custom/general.lua was kept as general.lua.pre-plugins-move${STY_RST}"
-    else
-      echo -e "${STY_YELLOW}[$0]: Could not move $_custom_general aside; plugins may be configured twice until it is${STY_RST}"
-    fi
-  fi
+  source "${REPO_ROOT}/sdata/lib/migrations.sh"
+  migrate_custom_general_plugin_block "${REPO_ROOT}"
 
   # No load directive is written here. hyprland/plugins.lua loads this same
   # path only when the .so was built for the running Hyprland, and a bare

@@ -1006,6 +1006,15 @@ else
 fi
 
 # Step 3: Update configuration files
+# Repairs to the machine's own files, before anything is compared against the
+# repository. These used to run only on the install path, so the people who
+# update, who are the ones carrying the old state, never got them.
+if [[ -r "${REPO_ROOT}/sdata/lib/migrations.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/sdata/lib/migrations.sh"
+  migrate_custom_general_plugin_block "${REPO_ROOT}"
+fi
+
 log_header "Updating Configuration Files"
 
 process_files=false
