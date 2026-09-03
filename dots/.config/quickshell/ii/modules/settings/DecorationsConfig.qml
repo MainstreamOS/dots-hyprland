@@ -588,14 +588,21 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         property string pendingColor: TitleBars.color
         property real pendingOpacity: TitleBars.opacity
 
+        // The stock bar carries no colour of ours, which plugins.lua reads as
+        // "leave the key alone", at the plugin's own alpha.
+        readonly property real defaultOpacity: 0.5333
+        // Compared with a tolerance because the value makes a round trip
+        // through a file as text, and the slider quantises to whole percents.
+        readonly property bool appearanceChanged: pendingColor !== ""
+            || Math.abs(Number(pendingOpacity) - defaultOpacity) > 0.0001
+
         // Reset back to stock title bar settings in one press: the color file
-        // goes empty, which plugins.lua reads as "leave the key alone", so the
-        // plugin paints its own stock bar again.
+        // goes empty, so the plugin paints its own stock bar again.
         function resetAppearance() {
             pendingColor = "";
-            pendingOpacity = 0.5333;
-            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== 0.5333)
-                TitleBars.setAppearance("", 0.5333);
+            pendingOpacity = defaultOpacity;
+            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== defaultOpacity)
+                TitleBars.setAppearance("", defaultOpacity);
         }
 
         ColorField {
@@ -643,9 +650,13 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 titleBarSection.pendingOpacity)
         }
 
+        // Nothing to put back while the bars are already stock, and a control
+        // that cannot do anything reads as one that is not working. The whole
+        // row goes so no gap is left behind.
         ConfigRow {
             Layout.leftMargin: 8
             Layout.rightMargin: 8
+            visible: titleBarSection.appearanceChanged
             RippleButtonWithIcon {
                 materialIcon: "settings_backup_restore"
                 mainText: Translation.tr("Reset title bar settings")
