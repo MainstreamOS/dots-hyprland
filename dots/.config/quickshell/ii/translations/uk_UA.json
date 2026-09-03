@@ -1998,5 +1998,7 @@
   "Zoom out": "Zoom out",
   "Zoom in": "Zoom in",
   "Exit the keybind submap": "Exit the keybind submap",
-  "Run a scripted action": "Run a scripted action"
+  "Run a scripted action": "Run a scripted action",
+  "Plan | Your Claude subscription. Pick it to use its models": "Plan | Your Claude subscription. Pick it to use its models",
+  "Plan | Your ChatGPT subscription. Pick it to use its models": "Plan | Your ChatGPT subscription. Pick it to use its models"
 }

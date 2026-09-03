@@ -422,6 +422,7 @@ Singleton {
             setupId: "claude-code",
             setupName: "Claude (Pro/Max plan)",
             setupDescription: Translation.tr("Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed"),
+            readyDescription: Translation.tr("Plan | Your Claude subscription. Pick it to use its models"),
             setupHomepage: "https://docs.anthropic.com/en/docs/claude-code",
             modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
             signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."),
@@ -435,6 +436,7 @@ Singleton {
             setupId: "codex-plan",
             setupName: "Codex (ChatGPT plan)",
             setupDescription: Translation.tr("Plan | OpenAI's Codex through your ChatGPT subscription. Sign in from the sidebar, no API key needed"),
+            readyDescription: Translation.tr("Plan | Your ChatGPT subscription. Pick it to use its models"),
             setupHomepage: "https://learn.chatgpt.com/docs/codex/cli",
             modelDescription: Translation.tr("Plan | %1 through your ChatGPT subscription. No API key needed"),
             signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Terra, Luna, and GPT-5.5."),
@@ -448,6 +450,15 @@ Singleton {
     property var cliPlanState: ({})
     function cliInstalled(fmt) { return root.cliPlanState[fmt]?.installed === true }
     function cliReady(fmt) { return root.cliPlanState[fmt]?.ready === true }
+    // Which plan a model id belongs to, answered from the id alone so it also
+    // holds for a model that is not in the picker yet. The setup entry is
+    // deliberately not one of these: it is the way into a plan, not a model
+    // of it, so it stays listed while the plan's own models are put away.
+    function planFormatFor(id) {
+        for (const fmt of Object.keys(root.cliPlanModels))
+            if (root.cliPlanModels[fmt][id] !== undefined) return fmt;
+        return "";
+    }
     property string setupState: ""
     // The native CLI installs to ~/.local/bin, which the compositor session
     // does not put on PATH for the shell, so every claude invocation carries
@@ -466,7 +477,10 @@ Singleton {
         if (!plan || !planModels) return;
         let next = Object.assign({}, root.models);
         let changed = false;
-        if (root.cliReady(fmt)) {
+        // A plan shows its models only while it is the one being used. Two
+        // signed-in plans would otherwise put nine entries in the picker at
+        // once, most of them for the provider nobody is talking to.
+        if (root.cliReady(fmt) && root.planFormatFor(root.currentModelId) === fmt) {
             if (next[plan.setupId]) { delete next[plan.setupId]; changed = true; }
             for (const id of Object.keys(planModels)) {
                 if (next[id]) continue;
@@ -490,11 +504,12 @@ Singleton {
             for (const id of Object.keys(planModels)) {
                 if (next[id]) { delete next[id]; changed = true; }
             }
-            if (!next[plan.setupId]) {
+            const wanted = root.cliReady(fmt) ? plan.readyDescription : plan.setupDescription;
+            if (!next[plan.setupId] || next[plan.setupId].description !== wanted) {
                 next[plan.setupId] = aiModelComponent.createObject(this, {
                     "name": plan.setupName,
                     "icon": plan.icon,
-                    "description": plan.setupDescription,
+                    "description": wanted,
                     "homepage": plan.setupHomepage,
                     "endpoint": plan.endpoint,
                     "model": plan.setupId,
@@ -613,8 +628,12 @@ Singleton {
     }
     onCurrentModelIdChanged: {
         root.setupState = "";
-        if (root.cliSetup[root.currentModel?.api_format] !== undefined)
-            root.detectCli(root.currentModel.api_format);
+        // Both plans re-read the selection: the one just entered brings its
+        // models in, and the one just left puts its own away.
+        for (const fmt of Object.keys(root.cliSetup)) root.syncCliPlanModels(fmt);
+        const fmt = root.planFormatFor(root.currentModelId)
+            || (root.cliSetup[root.currentModel?.api_format] !== undefined ? root.currentModel.api_format : "");
+        if (fmt !== "") root.detectCli(fmt);
     }
 
     Connections {
@@ -1149,6 +1168,24 @@ Singleton {
         // user who was mid-conversation does not lose the model answering it.
         if (modelId === root.ollamaSetupModelId) {
             root.startOllamaWalkthrough();
+            return;
+        }
+        // The entry for a signed-in plan is a door rather than a model: it
+        // stands in for the plan while its models are put away, so opening it
+        // lands on the plan's first model.
+        for (const fmt of Object.keys(root.cliPlans)) {
+            if (modelId === root.cliPlans[fmt].setupId && root.cliReady(fmt)) {
+                root.setModel(root.cliPlans[fmt].firstPick, feedback, setPersistentState);
+                return;
+            }
+        }
+        // A plan's own models are absent from the picker until that plan is in
+        // use, so a switch into one writes the selection and lets the models
+        // follow it in rather than failing the membership check below.
+        const wantedPlan = root.planFormatFor(modelId);
+        if (wantedPlan !== "" && root.cliReady(wantedPlan) && !root.models[modelId]) {
+            if (setPersistentState) Persistent.states.ai.model = modelId;
+            if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(root.cliPlanModels[wantedPlan][modelId].name), root.interfaceRole);
             return;
         }
         if (modelList.indexOf(modelId) !== -1) {
