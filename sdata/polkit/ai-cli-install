@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ai-cli-install — install a plan CLI for the AI sidebar from the system
+# repositories (~/.config/quickshell/ii/services/Ai.qml).
+# Installed at /usr/local/bin/ai-cli-install.
+#
+# The sidebar installs these CLIs from their vendors' own rootless installers,
+# which needs no privilege and is the path it takes first. This exists for the
+# case that path cannot cover: the download itself will not come. Sending
+# somebody to a terminal to finish a job the desktop offered to do is the thing
+# this avoids, so the fallback stays inside the sidebar and costs one prompt.
+#
+# The argument is a name from the table below, never a package name. A helper
+# that runs as root and installs whatever string it is handed is a way to
+# install anything as root, so the caller chooses from a list it does not get
+# to extend.
+
+set -uo pipefail
+
+case "${1:-}" in
+    codex)  pkg=openai-codex ;;
+    ollama) pkg=ollama ;;
+    *)
+        echo "usage: ai-cli-install <codex|ollama>" >&2
+        exit 2
+        ;;
+esac
+
+if pacman -Qq -- "$pkg" >/dev/null 2>&1; then
+    exit 0
+fi
+
+# No -y: refreshing one database and installing against it is how a partial
+# upgrade starts, and this runs on someone's working machine. If the package
+# list is too old to have the target, pacman says so and the sidebar reports
+# it, which is a better outcome than a half-upgraded system.
+pacman -S --needed --noconfirm -- "$pkg" || exit 1
+
+# pacman returning is not proof the command landed somewhere the session can
+# reach, and that gap is exactly what made the sidebar open a sign-in window
+# for a command that was not there.
+command -v "${1}" >/dev/null 2>&1 || {
+    echo "$pkg installed but ${1} is not on PATH." >&2
+    exit 1
+}
+exit 0

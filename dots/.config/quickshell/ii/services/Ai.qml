@@ -389,18 +389,19 @@ Singleton {
         "claude-code": {
             "name": "Claude Code",
             "cmd": "claude",
-            "install": "curl -fsSL https://claude.ai/install.sh | bash",
+            "install": "curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://claude.ai/install.sh | bash",
             "login": "claude auth login --claudeai",
             "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'"
         },
         "codex-cli": {
             "name": "Codex",
             "cmd": "codex",
-            // Codex has no rootless installer of its own, so it comes from the
-            // package manager like local AI does. Naming the command beats
-            // pulling 290 MB through a password prompt the sidebar cannot
-            // explain, and it keeps the tool on the normal update path.
-            "installHint": "sudo pacman -S openai-codex",
+            "install": "curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://chatgpt.com/codex/install.sh | sh",
+            // What ai-cli-install is asked for when the download will not
+            // come. Arch carries the CLI too, signed and on the update path,
+            // and reaching it costs one prompt inside the sidebar rather than
+            // a trip to a terminal.
+            "installFallback": "codex",
             "login": "codex login",
             "readyCheck": "codex login status >/dev/null 2>&1"
         }
@@ -553,19 +554,14 @@ Singleton {
             // The installer's own exit status proves nothing: a piped download
             // that fetches nothing still leaves the pipeline reporting the
             // reading shell's success, and the flow then opens a sign-in
-            // window for a command that is not there. Ending the script on the
-            // command itself is what makes a zero mean the tool exists.
-            installProc.command = ["bash", "-lc", root.cliPathPrefix
-                + "set -o pipefail; " + entry.install
+            // window for a command that is not there. Asking for the command
+            // last is what makes a zero mean the tool is really there, and it
+            // answers for every way an install can fall short, not just that
+            // one.
+            installProc.command = ["bash", "-lc", root.cliPathPrefix + entry.install
                 + "; command -v " + entry.cmd + " >/dev/null 2>&1"];
             installProc.running = false;
             installProc.running = true;
-        } else {
-            // Nothing to run, so re-read the state in case it was installed by
-            // hand since the last look, and say what to type meanwhile.
-            root.setupState = "needsInstall";
-            root.addMessage(Translation.tr("### %1 is not installed\n\n%1 comes from the package manager. Install it from a terminal:\n\n```\n%2\n```\n\nThen pick **%1** here again.").arg(entry.name).arg(entry.installHint), root.interfaceRole);
-            root.detectCli(fmt);
         }
     }
 
@@ -616,6 +612,35 @@ Singleton {
             if (queued) root.detectCli(queued);
         }
     }
+    // When the vendor download will not come, the same CLI is in the system
+    // repositories. One prompt, and the sidebar never sends anybody to a
+    // terminal to finish what it offered to do.
+    function installFromSystemRepo() {
+        const entry = root.currentCliSetup;
+        if (!entry || !entry.installFallback || root.setupState === "installing") return;
+        root.setupState = "installing";
+        fallbackInstallProc.running = false;
+        fallbackInstallProc.command = ["pkexec", "/usr/local/bin/ai-cli-install", entry.installFallback];
+        fallbackInstallProc.running = true;
+    }
+
+    Process {
+        id: fallbackInstallProc
+        onExited: (code) => {
+            // The password prompt takes the focus the sidebar closes on, so
+            // answering it puts the conversation away mid-setup.
+            GlobalStates.sidebarLeftOpen = true;
+            if (code !== 0) { root.setupState = "error"; return; }
+            const fmt = root.currentModel?.api_format;
+            if (fmt) {
+                const nextState = Object.assign({}, root.cliPlanState);
+                nextState[fmt] = Object.assign({}, nextState[fmt], { installed: true });
+                root.cliPlanState = nextState;
+            }
+            root._runLogin();
+        }
+    }
+
     Process {
         id: installProc
         onExited: (code) => {

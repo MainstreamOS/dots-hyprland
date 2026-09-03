@@ -116,6 +116,14 @@ function setup_ollama_setup(){
       /usr/local/bin/ollama-setup
   x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.ollama-setup.policy" \
       /usr/share/polkit-1/actions/org.mainstreamos.ollama-setup.policy
+  # The plan CLIs install themselves from their vendors without privilege, and
+  # this is the way out when that download will not come. Without it the
+  # sidebar's only remaining answer is a command to go and type somewhere else,
+  # which is the thing a settings window exists to avoid.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/ai-cli-install" \
+      /usr/local/bin/ai-cli-install
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.ai-cli-install.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy
 }
 
 function setup_kill_fprintd_service(){

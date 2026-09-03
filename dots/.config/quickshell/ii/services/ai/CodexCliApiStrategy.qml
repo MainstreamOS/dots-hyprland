@@ -27,10 +27,15 @@ ApiStrategy {
         // carry one, and the chat reads fine without it.
         let script = "export PATH=\"$HOME/.local/bin:$PATH\"\n";
         script += "exec codex exec";
-        if (root.sessionId.length > 0) {
+        const resuming = root.sessionId.length > 0;
+        if (resuming) {
             script += ` resume '${CF.StringUtils.shellSingleQuoteEscape(root.sessionId)}'`;
         }
-        script += " --json --sandbox read-only --skip-git-repo-check";
+        script += " --json --skip-git-repo-check";
+        // resume takes no --sandbox: it keeps the mode the thread was opened
+        // with, and passing it anyway is an argument error that ends the run
+        // before a single event, so every turn after the first would fail.
+        if (!resuming) script += " --sandbox read-only";
         if (model.model && model.model !== "codex-plan") {
             script += ` -m '${CF.StringUtils.shellSingleQuoteEscape(model.model)}'`;
         }
