@@ -194,7 +194,13 @@ Variants {
             // to see it.
             property bool magnifying: false
             FileView {
-                path: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/shake-zoom.active`
+                // No /tmp fallback: the writer keeps the marker in the
+                // runtime directory, and watching a different place would
+                // either miss a real effect or, worse, latch onto a file left
+                // there by something else and hold the corner disabled. With
+                // no runtime directory this path cannot resolve, which reads
+                // as no effect running — the safe way to be wrong.
+                path: `${Quickshell.env("XDG_RUNTIME_DIR")}/shake-zoom.active`
                 watchChanges: true
                 printErrors: false
                 onFileChanged: reload()

@@ -118,12 +118,39 @@ def _marker_path():
 def _set_marker(on):
     # A file rather than a message, because the readers are separate processes
     # that come and go: one that starts while the effect is up still sees it.
+    # The writer's pid rides along so a marker left behind by a watcher that
+    # died mid-effect can be told apart from one describing a live effect.
     try:
         if on:
             with open(_marker_path(), "w") as f:
-                f.write(MODE)
+                f.write("%s\n%d\n" % (MODE, os.getpid()))
         else:
             os.unlink(_marker_path())
+    except OSError:
+        pass
+
+
+def _clear_stale_marker():
+    # Readers take the marker to mean the effect is still up, and the hot
+    # corner stays disabled while it is. deactivate() removes it, but a
+    # watcher killed outright — OOM, session teardown — never gets there, and
+    # the hot corner would then be dead for good. A marker whose writer is no
+    # longer a running watcher is dropped here, at the start of the next one.
+    try:
+        with open(_marker_path()) as f:
+            written_by = f.read().split("\n")
+    except OSError:
+        return
+    pid = 0
+    if len(written_by) > 1:
+        try:
+            pid = int(written_by[1].strip() or 0)
+        except ValueError:
+            pid = 0
+    if pid and pid != os.getpid() and _is_watcher(pid):
+        return
+    try:
+        os.unlink(_marker_path())
     except OSError:
         pass
 
@@ -278,6 +305,8 @@ def main():
 
     signal.signal(signal.SIGTERM, _cleanup)
     signal.signal(signal.SIGINT, _cleanup)
+
+    _clear_stale_marker()
 
     # Claim before reading the baseline below, so an outgoing watcher has
     # already restored the real values by the time we sample them.
