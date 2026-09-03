@@ -265,7 +265,22 @@ info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cm
 limine-update
 ensure_limine_header
 [[ -f "$ESP/limine.conf" ]] || error "Failed to generate $ESP/limine.conf"
-grep -q "machine-id=$(tr -d '\n' < /etc/machine-id)" "$ESP/limine.conf" || error "limine-update did not generate a machine-id-targeted OS entry."
+# This gate stands between a good menu and removing whatever bootloader was
+# here before, so it has to recognise our entry in either form it can take.
+# limine-entry-tool marks its own entries with a machine-id comment only while
+# it names UKIs after the machine-id. CUSTOM_UKI_NAME replaces that name, and
+# post-install sets it, so on those machines the entry is identified by the UKI
+# it points at instead and no machine-id ever appears in the file.
+_lm_machine_id="$(tr -d '\n' < /etc/machine-id)"
+_lm_uki_name="$(. /etc/default/limine 2>/dev/null; printf '%s' "${CUSTOM_UKI_NAME:-}")"
+_lm_found=0
+grep -q "machine-id=${_lm_machine_id}" "$ESP/limine.conf" && _lm_found=1
+if [[ $_lm_found -eq 0 && -n "$_lm_uki_name" ]] \
+   && grep -q "${_lm_uki_name}_" "$ESP/limine.conf" \
+   && compgen -G "$ESP/EFI/Linux/${_lm_uki_name}_*.efi" >/dev/null; then
+    _lm_found=1
+fi
+[[ $_lm_found -eq 1 ]] || error "limine-update did not generate an OS entry for this system."
 
 relabel_limine_nvram_entry "Mainstream OS" "$ESP"
 
