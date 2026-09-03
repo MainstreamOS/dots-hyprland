@@ -607,8 +607,11 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             allowEmpty: true
             fallback: "#333333"
             onEdited: newValue => {
+                // The picker commits on every pointer move so the swatch is
+                // its own preview, and applying reloads the compositor, so
+                // the colour waits on the same debounce the slider uses.
                 titleBarSection.pendingColor = newValue;
-                TitleBars.setAppearance(newValue, titleBarSection.pendingOpacity);
+                titleBarApplyDebounce.restart();
             }
             StyledToolTip {
                 text: Translation.tr("Left empty, the title bar keeps the color it comes with.")
