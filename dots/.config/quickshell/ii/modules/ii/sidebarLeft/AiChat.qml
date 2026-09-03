@@ -492,7 +492,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 id: suggestionRepeater
                 model: {
                     suggestions.selectedIndex = 0;
-                    return root.suggestionList.slice(0, 10);
+                    // The flow wraps, so the cap is not about space: it only
+                    // bounds a runaway completion list. Ten hid the tail of
+                    // the model picker once the plan models joined it.
+                    return root.suggestionList.slice(0, 30);
                 }
                 delegate: ApiCommandButton {
                     id: commandButton
