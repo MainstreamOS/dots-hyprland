@@ -468,7 +468,7 @@ function setup_hyprland_plugins(){
   local _custom_general="$HOME/.config/hypr/custom/general.lua"
   if [[ -f "$_custom_general" ]] && grep -q 'applyPluginConfig' "$_custom_general"; then
     if mv "$_custom_general" "$_custom_general.pre-plugins-move"; then
-      install -Dm644 "dots/.config/hypr/custom/general.lua" "$_custom_general"
+      x install -Dm644 "${REPO_ROOT}/dots/.config/hypr/custom/general.lua" "$_custom_general"
       echo -e "${STY_CYAN}[$0]: Plugin settings now ship in hyprland/plugins.lua; your old custom/general.lua was kept as general.lua.pre-plugins-move${STY_RST}"
     else
       echo -e "${STY_YELLOW}[$0]: Could not move $_custom_general aside; plugins may be configured twice until it is${STY_RST}"
