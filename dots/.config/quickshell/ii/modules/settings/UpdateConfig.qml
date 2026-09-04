@@ -38,6 +38,7 @@ ContentPage {
     property bool flagSkipExtras: false
     property bool flagSkipFirmware: true
     property bool flagAutoRebuildQuickshell: true
+    property bool flagEdge: false
     property string customArgs: ""
 
     // Held in QML state from the moment the user submits the password
@@ -58,6 +59,7 @@ ContentPage {
         if (flagSkipExtras)            args.push("--skip-extras");
         if (flagSkipFirmware)          args.push("--skip-firmware");
         if (flagAutoRebuildQuickshell) args.push("--auto-rebuild-quickshell");
+        if (flagEdge)                  args.push("--edge");
         if (customArgs.trim().length > 0) {
             // Custom args are passed through to topgrade when extras runs.
             // Split on whitespace so multi-token args reach topgrade properly.
@@ -461,8 +463,8 @@ ContentPage {
             // toggle a step that can't run.
             ConfigRow {
                 uniform: true
-                visible: root.aurHelperPresent
                 ConfigSwitch {
+                    visible: root.aurHelperPresent
                     buttonIcon: "block"
                     text: Translation.tr("Disable AUR (yay/paru)")
                     checked: root.flagSkipAur
@@ -471,9 +473,15 @@ ContentPage {
                         text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
                     }
                 }
-                // Keep the lone switch at column width instead of stretching
-                // across the full row.
-                Item { Layout.fillWidth: true }
+                ConfigSwitch {
+                    buttonIcon: "science"
+                    text: Translation.tr("Edge updates")
+                    checked: root.flagEdge
+                    onCheckedChanged: root.flagEdge = checked
+                    StyledToolTip {
+                        text: Translation.tr("Follow the newest pushed work instead of the newest release. Fixes reach you before they are released, and so does anything still being worked on. Turning it off puts you back on the latest release.")
+                    }
+                }
             }
 
             Rectangle {

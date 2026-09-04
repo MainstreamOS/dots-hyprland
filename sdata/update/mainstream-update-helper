@@ -40,6 +40,10 @@
 #   --skip-firmware          when extras runs, pass --disable firmware
 #                            to topgrade (firmware updates can prompt
 #                            polkit and time out non-interactively)
+#   --edge                   hand updatems the branch instead of the newest
+#                            release, so pushed work arrives before it is
+#                            tagged. For trying a fix early, and for watching
+#                            a release land on a real machine before tagging.
 #   --auto-rebuild-quickshell  opt-in: after all other steps, run
 #                            `quickshell --private-check-compat` and rebuild
 #                            the owning package on mismatch (makepkg for the
@@ -144,6 +148,7 @@ SKIP_AUR=0
 SKIP_FLATPAK=0
 SKIP_SNAP=0
 SKIP_DOTFILES=0
+EDGE=0
 SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
 AUTO_REBUILD_QS=0
@@ -157,6 +162,7 @@ for arg in "$@"; do
         --skip-dotfiles)            SKIP_DOTFILES=1 ;;
         --skip-extras)              SKIP_EXTRAS=1 ;;
         --skip-firmware)            SKIP_FIRMWARE=1 ;;
+        --edge)                     EDGE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
         *)                          TOPGRADE_EXTRA_ARGS+=("$arg") ;;
     esac
@@ -380,7 +386,9 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     echo "  Mainstream dotfiles — updatems"
     echo "═══════════════════════════════════════════════════════════"
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems
+    _ums_args=()
+    [[ "$EDGE" -eq 1 ]] && _ums_args+=(--edge)
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems "${_ums_args[@]}"
     DOTFILES_RC=$?
 
     # ── 5b. System-level dotfiles bits (updatems-system) ───────────────────

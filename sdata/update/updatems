@@ -41,6 +41,11 @@
 #
 # Options:
 #   -f, --force      re-apply even when already at the latest tag
+#   -e, --edge       follow the branch instead of the newest tag, so work that
+#                    is pushed but not yet released is applied. Two uses: a fix
+#                    can reach the people who hit the bug before it is tagged,
+#                    and a release can be watched landing on a real machine
+#                    without tagging one to find out what it does.
 #   -n, --dry-run    print what would happen, make no changes
 #   -h, --help       show usage
 #
@@ -98,10 +103,11 @@ ensure_mainstream_system() {
 [[ $EUID -ne 0 ]] || die "updatems must not run as root; run as your user account."
 
 # Parse args
-FORCE=0; DRY_RUN=0
+FORCE=0; DRY_RUN=0; EDGE=0
 for arg in "$@"; do
     case "$arg" in
         -f|--force)   FORCE=1 ;;
+        -e|--edge)    EDGE=1 ;;
         -n|--dry-run) DRY_RUN=1 ;;
         -h|--help)
             cat <<EOF
@@ -111,6 +117,7 @@ Update Mainstream OS dotfiles when a remote-tag bump is detected.
 
 Options:
   -f, --force      Force re-apply even when already at latest tag
+  -e, --edge       Follow the branch instead of the newest tag
   -n, --dry-run    Show what would happen, make no changes
   -h, --help       Show this help
 
@@ -161,7 +168,24 @@ if [[ -z "$LATEST_TAG" ]]; then
     warn "No remote tags match '$TAG_REGEX' — nothing to update."
     exit 0
 fi
-say "Latest remote tag: $LATEST_TAG"
+# What the release path applies: the tag itself.
+TARGET_REF="$LATEST_TAG"
+
+# Edge follows the branch instead. The label carries the commit so a machine
+# knows which edge it is on and a later push reads as newer, the way a new tag
+# would. Anything already released stays reachable: turning edge off puts the
+# machine back on the newest tag, which is the same comparison as always.
+if [[ $EDGE -eq 1 ]]; then
+    _edge_sha=$(git rev-parse --short "origin/$REPO_BRANCH" 2>/dev/null)
+    if [[ -z "$_edge_sha" ]]; then
+        die "Edge asked for, but origin/$REPO_BRANCH could not be resolved."
+    fi
+    TARGET_REF="origin/$REPO_BRANCH"
+    LATEST_TAG="edge-$_edge_sha"
+    say "Edge: following origin/$REPO_BRANCH at $_edge_sha"
+else
+    say "Latest remote tag: $LATEST_TAG"
+fi
 
 # ── 4. Compare against marker ──────────────────────────────────────────────
 APPLIED_TAG=""
@@ -220,7 +244,7 @@ else
     warn "No usable base ref (${BASE_REF:-<none>}) — comparing the whole tree instead of the last hop."
     EXTRA_ARGS+=(--force)
 fi
-git reset --hard "$LATEST_TAG" || die "git reset --hard $LATEST_TAG failed"
+git reset --hard "$TARGET_REF" || die "git reset --hard $TARGET_REF failed"
 
 say "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)..."
 # The clone is pinned to $LATEST_TAG above; a pull inside exp-update would
