@@ -1,6 +1,17 @@
 
 project_id: "924063"
 
+# The GitHub integration owns the sync: it uploads new source strings on its
+# own schedule and returns translations as a pull request, which is where they
+# are reviewed before landing. The CLI is here for pushing strings up straight
+# away rather than waiting for the next run:
+#
+#   crowdin upload sources
+#
+# Pulling with `crowdin download` is deliberately not part of the workflow. It
+# writes translations straight into the tree, and doing that in the same cycle
+# as merging the integration's PR means whichever ran last wins.
+#
 # Read from the environment so no token is ever committed. Export it before
 # running the CLI, or keep it in a gitignored identity file and pass
 # --identity. A personal access token with project scope is enough.
