@@ -22,11 +22,19 @@ api_token_env: "CROWDIN_PERSONAL_TOKEN"
 # the root, with translators entering every string in both.
 preserve_hierarchy: true
 
-# The sources live in a Crowdin branch of this name, not at the project root.
-# Without this the CLI works against the root and reports every file as omitted
-# for want of a matching source. A Crowdin branch is its own copy of the strings
-# and has nothing to do with the git branch that shares its name.
-branch: "mainstream"
+# The integration owns source uploads. It pushes new strings into its own
+# Crowdin branch on a schedule and returns translations as a pull request,
+# so `crowdin upload sources` is not part of the routine and should stay out
+# of it. Every CLI upload so far has registered the same file again, because
+# the CLI defaults its branch to "none" and uploads to the project root.
+#
+# If it is ever genuinely needed, the branch name is the literal string the
+# integration created, brackets included:
+#
+#   crowdin upload sources -b '[MainstreamOS.dots-hyprland] mainstream'
+#
+# Passing -b mainstream does not target it. It creates a second branch of
+# that name.
 
 files:
   - source: /dots/.config/quickshell/ii/translations/en_US.json
