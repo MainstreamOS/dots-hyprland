@@ -1,6 +1,22 @@
 
 project_id: "924063"
 
+# Read from the environment so no token is ever committed. Export it before
+# running the CLI, or keep it in a gitignored identity file and pass
+# --identity. A personal access token with project scope is enough.
+api_token_env: "CROWDIN_PERSONAL_TOKEN"
+
+# Without this an upload flattens the source to the project root, which is how
+# the same file came to be registered twice: once at the path below and once at
+# the root, with translators entering every string in both.
+preserve_hierarchy: true
+
+# The sources live in a Crowdin branch of this name, not at the project root.
+# Without this the CLI works against the root and reports every file as omitted
+# for want of a matching source. A Crowdin branch is its own copy of the strings
+# and has nothing to do with the git branch that shares its name.
+branch: "mainstream"
+
 files:
   - source: /dots/.config/quickshell/ii/translations/en_US.json
     translation: /dots/.config/quickshell/ii/translations/%locale_with_underscore%.json
