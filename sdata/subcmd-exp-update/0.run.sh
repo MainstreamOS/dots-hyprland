@@ -1044,6 +1044,13 @@ restore_hypr_autoreload() {
   _hypr_live || return 0
   hyprctl keyword misc:disable_autoreload false >/dev/null 2>&1 || true
 }
+# A run that was killed outright cannot have released anything, and both holds
+# outlive the script that took them. Clearing first costs nothing when there is
+# nothing to clear, and spares the next person a session where their settings
+# quietly stop applying.
+if _hypr_live; then hyprctl keyword misc:disable_autoreload false >/dev/null 2>&1 || true; fi
+if _qs_live; then qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true; fi
+
 trap 'restore_hypr_autoreload; resume_qs_reload' EXIT INT TERM HUP
 if _hypr_live; then
   hyprctl keyword misc:disable_autoreload true >/dev/null 2>&1 || true
