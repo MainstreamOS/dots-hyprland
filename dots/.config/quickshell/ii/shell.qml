@@ -106,6 +106,27 @@ ShellRoot {
         }
     }
 
+    // An update replaces the files this shell is running from, one at a time.
+    // Reloading part-way through means loading a tree that is half old and half
+    // new: panels come back wrong, the controls that would put it right are the
+    // ones that broke, and the way out is a terminal or the power button.
+    //
+    // The updater holds reloading for the copying and releases it afterwards.
+    // Held is never a resting state: releasing always reloads, so the shell ends
+    // on the finished tree whether or not anything changed while it waited.
+    IpcHandler {
+        target: "updates"
+
+        function holdReload(): void {
+            Quickshell.watchFiles = false
+        }
+
+        function resumeReload(): void {
+            Quickshell.watchFiles = true
+            Quickshell.reload(true)
+        }
+    }
+
     GlobalShortcut {
         name: "panelFamilyCycle"
         description: "Cycles panel family"

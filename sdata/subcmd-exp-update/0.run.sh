@@ -1015,6 +1015,44 @@ if [[ -r "${REPO_ROOT}/sdata/lib/migrations.sh" ]]; then
   migrate_custom_general_plugin_block "${REPO_ROOT}"
 fi
 
+# Hyprland watches its config and reloads on every write. The files below are
+# replaced one at a time, so without this it reloads part-way through and reads
+# a tree that is half old and half new, which is what puts a screen of config
+# errors in front of someone who has done nothing wrong. Each of those reloads
+# also re-runs plugins.lua, which is its own trouble.
+#
+# Restored by the trap whatever happens next: leaving it off would quietly stop
+# every later config change from taking effect, which is far worse than the
+# errors this avoids.
+_hypr_live() { command -v hyprctl >/dev/null 2>&1 && hyprctl -j version >/dev/null 2>&1; }
+
+# The same problem, one layer up: these files are what the running shell is
+# built from. Reloading part-way through brings back panels assembled from a
+# half-old tree, and the controls that would put it right are the ones that
+# broke, so the way out is a terminal or the power button.
+_qs_live() { command -v qs >/dev/null 2>&1 && qs -c ii ipc show >/dev/null 2>&1; }
+_qs_held=0
+resume_qs_reload() {
+  [[ "$_qs_held" -eq 0 ]] && return 0
+  _qs_held=0
+  qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
+}
+_hypr_autoreload_restored=0
+restore_hypr_autoreload() {
+  [[ "$_hypr_autoreload_restored" -eq 1 ]] && return 0
+  _hypr_autoreload_restored=1
+  _hypr_live || return 0
+  hyprctl keyword misc:disable_autoreload false >/dev/null 2>&1 || true
+}
+trap 'restore_hypr_autoreload; resume_qs_reload' EXIT INT TERM HUP
+if _hypr_live; then
+  hyprctl keyword misc:disable_autoreload true >/dev/null 2>&1 || true
+fi
+if _qs_live && qs -c ii ipc call updates holdReload >/dev/null 2>&1; then
+  _qs_held=1
+  log_info "Shell reloading held until the new files are all in place"
+fi
+
 log_header "Updating Configuration Files"
 
 process_files=false
@@ -1141,6 +1179,14 @@ else
 fi
 
 # Step 4: Update script permissions
+# The tree is consistent again, so hand Hyprland one reload of the finished
+# thing rather than the several it would have taken along the way.
+if _hypr_live && [[ "$_hypr_autoreload_restored" -eq 0 ]]; then
+  restore_hypr_autoreload
+  hyprctl reload >/dev/null 2>&1 || true
+fi
+resume_qs_reload
+
 log_header "Updating Script Permissions"
 
 if [[ -d "${HOME}/.local/bin" ]]; then
