@@ -19,7 +19,7 @@ The shell — the bar, the side panels, the search box — is a lean, heavily mo
 
 ## Install
 
-- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 2.7 GB), flash it to a USB drive, boot and click through. Dual-boot and full-disk encryption are set up during the install itself. An experimental legacy-NVIDIA edition (4.0 GB) covers older NVIDIA cards, back to the GeForce 400 series.
+- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 3.4 GB), flash it to a USB drive, boot and click through. Dual-boot and full-disk encryption are set up during the install itself. An experimental legacy-NVIDIA edition (4.8 GB) covers older NVIDIA cards, back to the GeForce 400 series.
 - **On an existing Arch install** — one command, about 10 minutes:
 
   ```bash
