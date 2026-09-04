@@ -27,9 +27,11 @@ migrate_custom_general_plugin_block() {
     grep -q 'applyPluginConfig' "$target" 2>/dev/null || return 0
     [[ -f "$shipped" ]] || return 0
 
-    if mv "$target" "$target.pre-plugins-move"; then
+    local backup="$target.pre-plugins-move"
+    [[ -e "$backup" ]] && backup="$backup.$(date +%Y%m%d%H%M%S)"
+    if mv "$target" "$backup"; then
         install -Dm644 "$shipped" "$target"
-        echo "Plugin settings now ship in hyprland/plugins.lua; your old custom/general.lua was kept as general.lua.pre-plugins-move"
+        echo "Plugin settings now ship in hyprland/plugins.lua; your old custom/general.lua was kept as ${backup##*/}"
     else
         echo "Could not move $target aside; plugins may be configured twice until it is" >&2
     fi
