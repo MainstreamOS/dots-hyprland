@@ -278,6 +278,35 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
                 echo "   directly on disk. Adopting them and retrying..."
                 pacman -Syu --noconfirm "${_ow_args[@]}"
                 PACMAN_RC=$?
+            else
+                # Someone else's package wants a path that is already on disk and
+                # owned by nobody, which usually means it was put there by a vendor
+                # installer before the software was packaged here. Taking it over
+                # unasked could throw away whatever is inside, so the choice stays
+                # with the person. Naming the path and the command is the difference
+                # between a dead end and a next step.
+                echo ""
+                echo "── Update stopped: a package wants files that are already on"
+                echo "   disk and belong to no package. That usually means the"
+                echo "   software was installed by its own installer before it was"
+                echo "   packaged here."
+                echo ""
+                for _line in "${_conflicts[@]}"; do
+                    _pkg="${_line%%:*}"
+                    _path="${_line#*: }"
+                    _path="${_path% exists in filesystem}"
+                    echo "   $_path belongs to no package; $_pkg wants it."
+                done
+                echo ""
+                echo "   Look at what is there before deciding. If it is empty, or"
+                echo "   you do not need it, let the package take it over:"
+                echo ""
+                printf "     sudo pacman -Syu"
+                for _line in "${_conflicts[@]}"; do
+                    _path="${_line#*: }"
+                    printf " --overwrite '%s'" "${_path% exists in filesystem}"
+                done
+                echo ""
             fi
         fi
         if [[ "$PACMAN_RC" -ne 0 ]]; then
