@@ -1,6 +1,17 @@
 
 project_id: "924063"
 
+# The GitHub integration owns the sync: it uploads new source strings on its
+# own schedule and returns translations as a pull request, which is where they
+# are reviewed before landing. The CLI is here for pushing strings up straight
+# away rather than waiting for the next run:
+#
+#   crowdin upload sources
+#
+# Pulling with `crowdin download` is deliberately not part of the workflow. It
+# writes translations straight into the tree, and doing that in the same cycle
+# as merging the integration's PR means whichever ran last wins.
+#
 # Read from the environment so no token is ever committed. Export it before
 # running the CLI, or keep it in a gitignored identity file and pass
 # --identity. A personal access token with project scope is enough.
@@ -11,11 +22,18 @@ api_token_env: "CROWDIN_PERSONAL_TOKEN"
 # the root, with translators entering every string in both.
 preserve_hierarchy: true
 
-# The sources live in a Crowdin branch of this name, not at the project root.
-# Without this the CLI works against the root and reports every file as omitted
-# for want of a matching source. A Crowdin branch is its own copy of the strings
-# and has nothing to do with the git branch that shares its name.
-branch: "mainstream"
+# The integration owns source uploads. It pushes new strings into its own
+# Crowdin branch on a schedule and returns translations as a pull request,
+# so `crowdin upload sources` is not part of the routine and should stay out
+# of it. Every CLI upload so far has registered the same file again, because
+# the CLI defaults its branch to "none" and uploads to the project root.
+#
+# If it is ever genuinely needed, read the branch name first. It has changed
+# every time the integration was rebuilt, and a -b that does not match an
+# existing branch silently creates a new one rather than failing:
+#
+#   crowdin branch list
+#   crowdin upload sources -b '<exact name from above>'
 
 files:
   - source: /dots/.config/quickshell/ii/translations/en_US.json
