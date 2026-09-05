@@ -11,7 +11,8 @@ ContentPage {
     id: root
     forceWidth: true
 
-    readonly property string customGeneralConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/general.lua`
+    readonly property string customDir: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
+    readonly property string customGeneralConf: `${root.customDir}/general.lua`
     readonly property string customKeybindsConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/keybinds.lua`
     // Mirrors whether scrolloverview is currently loaded into Hyprland.
     // Source of truth is `hyprctl plugin list` (read by scrollOverviewStateReader),
@@ -19,9 +20,10 @@ ContentPage {
     // startup, so the conf and the live state can diverge. The toggle keeps
     // both in sync by calling `hyprctl plugin load/unload` AND editing the conf.
     property bool scrollOverviewEnabled: false
-    // Layout values for the scroll-overview, also persisted in the
-    // scrolloverview block of custom/general.lua. Defaults match the
-    // plugin's compiled-in defaults.
+    // Layout values for the scroll-overview, saved one value per file under
+    // hypr/custom/ (scrolloverview.layout, .workspace_gap, .scale), which
+    // plugins.lua applies on every reload. Defaults match the plugin's
+    // compiled-in defaults.
     property int scrollOverviewWorkspaceGap: 100     // pixels between workspace previews
     property real scrollOverviewWorkspaceScale: 0.5  // 0.0–1.0 — overview shrink factor
     property string scrollOverviewLayout: "vertical" // "vertical" | "horizontal" — overview scroll axis
@@ -98,63 +100,47 @@ ContentPage {
 
     Process {
         id: scrollOverviewConfReader
-        command: ["cat", root.customGeneralConf]
+        command: ["sh", "-c",
+            'for k in layout workspace_gap scale; do printf "%s=" "$k"; cat "$1/scrolloverview.$k" 2>/dev/null; echo; done; echo "--general--"; cat "$2" 2>/dev/null',
+            "sh", root.customDir, root.customGeneralConf]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => scrollOverviewConfReader.buf += data + "\n" }
         onExited: {
-            // Pull current scrolloverview values from the plugin config
-            // block. In Lua the block is `scrolloverview = { ... }` (with `=`
-            // before the table brace). Lazy [\s\S]*? skips nested blocks
-            // (e.g. `shadow = {}`). If a value isn't present we leave the
-            // default in place — the plugin uses the same defaults internally.
-            // (Title bars enabled-state is read by services/TitleBars.qml.)
-            let gapMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*=\s*\{[\s\S]*?\bworkspace_gap\s*=\s*(\d+)/);
-            if (gapMatch) root.scrollOverviewWorkspaceGap = parseInt(gapMatch[1]);
-            // scale is a float (e.g. 0.5) — accept optional decimal part
-            let scaleMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*=\s*\{[\s\S]*?\bscale\s*=\s*(\d+(?:\.\d+)?)/);
-            if (scaleMatch) root.scrollOverviewWorkspaceScale = parseFloat(scaleMatch[1]);
-            // layout is a quoted Lua string: layout = "vertical" | "horizontal".
-            let layoutMatch = scrollOverviewConfReader.buf.match(/scrolloverview\s*=\s*\{[\s\S]*?\blayout\s*=\s*"([a-z]+)"/);
-            if (layoutMatch) root.scrollOverviewLayout = layoutMatch[1];
+            // The per-value files are what plugins.lua applies on every
+            // reload, so they win. A machine from before the files existed
+            // still carries its values in a scrolloverview block in
+            // custom/general.lua, which is read only for what no file holds.
+            // A value found nowhere leaves the plugin's own default in place.
+            const buf = scrollOverviewConfReader.buf;
+            const cut = buf.indexOf("--general--\n");
+            const files = cut < 0 ? buf : buf.substring(0, cut);
+            const general = cut < 0 ? "" : buf.substring(cut + 12);
+            const fileValue = key => {
+                const m = files.match(new RegExp(`^${key}=(.*)$`, "m"));
+                return m && m[1].trim() !== "" ? m[1].trim() : null;
+            };
+            const blockValue = (key, pattern) => {
+                const m = general.match(new RegExp(`scrolloverview\\s*=\\s*\\{[\\s\\S]*?\\b${key}\\s*=\\s*${pattern}`));
+                return m ? m[1] : null;
+            };
+            const gap = fileValue("workspace_gap") ?? blockValue("workspace_gap", "(\\d+)");
+            if (gap !== null && /^\d+$/.test(gap)) root.scrollOverviewWorkspaceGap = parseInt(gap);
+            const scale = fileValue("scale") ?? blockValue("scale", "(\\d+(?:\\.\\d+)?)");
+            if (scale !== null && /^\d+(?:\.\d+)?$/.test(scale)) root.scrollOverviewWorkspaceScale = parseFloat(scale);
+            const layout = fileValue("layout") ?? blockValue("layout", '"([a-z]+)"');
+            if (layout === "vertical" || layout === "horizontal") root.scrollOverviewLayout = layout;
         }
     }
 
-    // Update one scrolloverview value. Live effect via setHyprKeyword which
-    // routes through `hyprctl eval` + hl.config (Lua-mode replacement for the
-    // Legacy-only `hyprctl keyword`). The plugin re-reads its config pointer
-    // on every overview construction, so the next open picks up the new
-    // value. Persistence via Python regex on custom/general.lua — replaces
-    // an existing line in the `scrolloverview = { ... }` table, or inserts
-    // one right after the opening brace if no line exists yet. Handles integers,
-    // floats, bools, and quoted strings (e.g. layout = "vertical").
-    // Inserted lines get a trailing comma to stay valid Lua table syntax.
+    // Update one scrolloverview value: live through hl.config, and saved as
+    // one file per value under hypr/custom/, which plugins.lua applies on
+    // every reload. The plugin reads its config again on every overview
+    // open, so the next open shows the new value.
     function setScrollOverviewKey(key, value) {
         setHyprKeyword(`plugin:scrolloverview:${key}`, value.toString())
-        // Lua-format the value for persistence: integers/floats/bools verbatim,
-        // anything else gets quoted as a Lua string (e.g. layout = "vertical").
-        const raw = value.toString();
-        const luaVal = (raw === "true" || raw === "false" || /^-?\d+(?:\.\d+)?$/.test(raw))
-            ? raw
-            : `"${raw.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
-        // Block-opener pattern requires `^[ \t]*scrolloverview = {` at line
-        // start (re.M flag) so a doc comment like
-        // `-- scrolloverview = { gesture_distance = ... }` can't shadow the
-        // real block. re.S keeps `[\s\S]*?` matching newlines inside the
-        // block so the key can be located across multiple lines.
-        let py =
-            "import re, sys\n" +
-            "key, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
-            "try:\n" +
-            "    text = open(conf).read()\n" +
-            "except FileNotFoundError:\n" +
-            "    sys.exit(0)\n" +
-            "pattern = r'(^[ \\t]*scrolloverview[ \\t]*=[ \\t]*\\{[\\s\\S]*?[ \\t]*)' + re.escape(key) + r'([ \\t]*=[ \\t]*)(?:\"[^\"]*\"|-?[\\d.]+|true|false)'\n" +
-            "new_text, count = re.subn(pattern, r'\\1' + key + r'\\g<2>' + val, text, count=1, flags=re.M|re.S)\n" +
-            "if count == 0:\n" +
-            "    new_text = re.sub(r'(?m)^([ \\t]*)scrolloverview([ \\t]*=[ \\t]*\\{)', r'\\1scrolloverview\\2\\n            ' + key + ' = ' + val + ',', text, count=1)\n" +
-            "open(conf, 'w').write(new_text)\n";
-        runPy(py, [key, luaVal, root.customGeneralConf])
+        runPy("import sys\nopen(sys.argv[2], 'w').write(sys.argv[1] + '\\n')\n",
+              [value.toString(), `${root.customDir}/scrolloverview.${key}`])
     }
 
     // Live source of truth for whether scrolloverview is loaded into Hyprland.

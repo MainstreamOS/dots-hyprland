@@ -123,9 +123,11 @@ local function titleBarsEnabled()
     return v ~= "0"
 end
 
--- How the bar is painted, saved beside the on/off flag by the same Settings
--- page and read on the same reload.
-local function readTitleBarFile(name)
+-- One value per file under custom/, saved by the Settings pages and read on
+-- every reload, so a value survives a plugin power-cycle and an update. The
+-- title bar's color and opacity and the overview's layout, gap and scale all
+-- live this way.
+local function readCustomValue(name)
     local f = io.open(HOME .. "/.config/hypr/custom/" .. name, "r")
     if not f then return nil end
     local v = f:read("*l")
@@ -144,12 +146,12 @@ end
 -- alpha), so the opacity slider bites without a color pick and its first
 -- nudge is continuous with the untouched look.
 local function titleBarColor()
-    local hex = readTitleBarFile("titlebars.color")
+    local hex = readCustomValue("titlebars.color")
     if hex then
         hex = hex:gsub("^#", "")
         if not hex:match("^%x%x%x%x%x%x$") then hex = nil end
     end
-    local o = readTitleBarFile("titlebars.opacity")
+    local o = readCustomValue("titlebars.opacity")
     if not hex then
         if not o then return nil end
         hex = "333333"
@@ -173,6 +175,22 @@ local function overviewWallpaper()
     return HOME .. "/.config/quickshell/ii/assets/images/default_wallpaper.webp"
 end
 
+-- The overview's own numbers, saved by Settings the same way. A file that
+-- does not parse or is out of range falls back to the shipped value, and an
+-- absent layout file leaves that key alone, so a machine from before these
+-- files existed keeps the layout its own custom/general.lua block sets.
+local function overviewNumber(name, default, min, max)
+    local v = tonumber(readCustomValue(name) or "")
+    if v == nil or v < min or v > max then return default end
+    return v
+end
+
+local function overviewLayout()
+    local v = readCustomValue("scrolloverview.layout")
+    if v == "vertical" or v == "horizontal" then return v end
+    return nil
+end
+
 local function applyPluginConfig()
     -- scrolloverview block — probe one key first. During a hyprbars toggle
     -- the file watcher + handlePluginLoads chain transiently re-parses
@@ -181,25 +199,28 @@ local function applyPluginConfig()
     -- ConfigManager.cpp:454-456 runs before plugin re-registration in the
     -- recursive reload). Skip-on-miss avoids accumulating runtime errors.
     if keyAvailable("plugin:scrolloverview:scale") then
+        local overviewCfg = {
+            gesture_distance = 300,
+            scale = overviewNumber("scrolloverview.scale", 0.50, 0.05, 1),
+            workspace_gap = overviewNumber("scrolloverview.workspace_gap", 100, 0, 500),
+            wallpaper = 2,           -- 0: global only, 1: per-workspace only, 2: both
+            wallpaper_path = overviewWallpaper(),
+            blur = true,
+            shadow = {
+                enabled = true,
+                range = 50,
+                render_power = 3,
+                -- color is registered as CIntValue in the V1-port plugin
+                -- (defaults to -1 = inherit decoration:shadow:color).
+                -- Set via decimal-encoded ARGB if you want to override:
+                --   color = 0x1a1a1aee,
+            },
+        }
+        local layout = overviewLayout()
+        if layout then overviewCfg.layout = layout end
         hl.config({
             plugin = {
-                scrolloverview = {
-                    gesture_distance = 300,
-                    scale = 0.50,
-                    workspace_gap = 100,
-                    wallpaper = 2,           -- 0: global only, 1: per-workspace only, 2: both
-                    wallpaper_path = overviewWallpaper(),
-                    blur = true,
-                    shadow = {
-                        enabled = true,
-                        range = 50,
-                        render_power = 3,
-                        -- color is registered as CIntValue in the V1-port plugin
-                        -- (defaults to -1 = inherit decoration:shadow:color).
-                        -- Set via decimal-encoded ARGB if you want to override:
-                        --   color = 0x1a1a1aee,
-                    },
-                },
+                scrolloverview = overviewCfg,
             },
         })
     end

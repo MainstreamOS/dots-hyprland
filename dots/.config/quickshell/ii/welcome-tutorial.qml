@@ -96,32 +96,19 @@ ApplicationWindow {
     readonly property string imageDir: Quickshell.env("HOME") + "/.config/quickshell/ii/welcome-tutorial-images"
 
     // Scrolling-overview layout (plugin:scrolloverview:layout). Not a Config
-    // option, so it uses the same live(hl.config)+persist(general.lua) path
-    // Settings -> Interface uses, kept self-contained here.
+    // option: it goes live through hl.config and is saved as a file under
+    // hypr/custom/, the same file Settings writes and plugins.lua applies on
+    // every reload.
     property string scrollOverviewLayout: "vertical" // "vertical" | "horizontal"
     function setScrollOverviewLayout(value) {
         if (value === root.scrollOverviewLayout) return;
         root.scrollOverviewLayout = value;
-        // Live: set the plugin key via hl.config (Lua-mode keyword replacement);
-        // the plugin re-reads getLayout() on the next overview open.
+        // The plugin re-reads getLayout() on the next overview open.
         Quickshell.execDetached(["hyprctl", "eval",
             `hl.config({ plugin = { ["scrolloverview.layout"] = "${value}" } })`]);
-        // Persist into custom/general.lua's scrolloverview block: replace an
-        // existing layout = "..." line, or insert one after the block opener.
-        const conf = Quickshell.env("HOME") + "/.config/hypr/custom/general.lua";
-        const py =
-            "import re, sys\n" +
-            "val, conf = sys.argv[1], sys.argv[2]\n" +
-            "try:\n" +
-            "    text = open(conf).read()\n" +
-            "except FileNotFoundError:\n" +
-            "    sys.exit(0)\n" +
-            "pattern = r'(^[ \\t]*scrolloverview[ \\t]*=[ \\t]*\\{[\\s\\S]*?[ \\t]*)layout([ \\t]*=[ \\t]*)\"[^\"]*\"'\n" +
-            "new_text, count = re.subn(pattern, r'\\1layout\\g<2>' + val, text, count=1, flags=re.M|re.S)\n" +
-            "if count == 0:\n" +
-            "    new_text = re.sub(r'(?m)^([ \\t]*)scrolloverview([ \\t]*=[ \\t]*\\{)', r'\\1scrolloverview\\2\\n            layout = ' + val + ',', text, count=1)\n" +
-            "open(conf, 'w').write(new_text)\n";
-        Quickshell.execDetached(["python3", "-c", py, `"${value}"`, conf]);
+        Quickshell.execDetached(["python3", "-c",
+            "import sys\nopen(sys.argv[2], 'w').write(sys.argv[1] + '\\n')\n",
+            value, Quickshell.env("HOME") + "/.config/hypr/custom/scrolloverview.layout"]);
     }
 
     // Shared mockup geometry — the feature cards render the same
