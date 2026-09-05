@@ -234,6 +234,9 @@ hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*
 -- nothing in between. Reading what is actually behind it puts the dim on both
 -- sides of the line, and the line has nothing left to show.
 hl.layer_rule({ match = { namespace = "quickshell:dock[A-Za-z]*" }, xray = false})
+-- The dim over the launcher is there to obscure the apps behind it. With xray
+-- it would frost the wallpaper and leave every window legible through the dim.
+hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, xray = false})
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})
