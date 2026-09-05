@@ -307,6 +307,20 @@ Variants {
         Item {
             anchors.fill: parent
 
+            // Lowest in the stack, so a widget that takes right clicks of its
+            // own still gets them and only bare desktop opens the menu.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                onClicked: event => {
+                    if (GlobalStates.screenLocked) return;
+                    GlobalStates.desktopMenuScreen = bgRoot.screen;
+                    GlobalStates.desktopMenuX = event.x;
+                    GlobalStates.desktopMenuY = event.y;
+                    GlobalStates.desktopMenuOpen = true;
+                }
+            }
+
             // Wallpaper
             StyledImage {
                 id: wallpaper
