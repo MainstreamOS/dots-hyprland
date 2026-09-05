@@ -16,6 +16,27 @@ Scope {
     id: overviewScope
     property bool dontAutoCancelSearch: false
 
+    // The compositor's edge reservations come from a snapshot that layer
+    // open and close events do not refresh, and a mapped layer changing
+    // its zone (a pin, an auto-hide) sends no event at all, so the
+    // snapshot is retaken at every open. The open can move a zone itself
+    // (a bar shown for a held Super hides on the release that opens the
+    // launcher), and that reaches the compositor at the bar's next frame,
+    // after the first query, so a second query follows once it has landed.
+    Connections {
+        target: GlobalStates
+        function onOverviewOpenChanged() {
+            if (!GlobalStates.overviewOpen) return;
+            HyprlandData.updateMonitors();
+            reservationSettle.restart();
+        }
+    }
+    Timer {
+        id: reservationSettle
+        interval: 100
+        onTriggered: if (GlobalStates.overviewOpen) HyprlandData.updateMonitors()
+    }
+
     // Dismiss in-surface (dismissArea + Escape), not the shared focus grab: the
     // always-alive full-screen surface already captures outside clicks, so the
     // grab was redundant and its races broke the dock launcher button.
@@ -145,15 +166,18 @@ Scope {
         // or keyboard, and anything third party, on this screen alone and only
         // while it is actually there. A dock reserves nothing unpinned and
         // overhangs its zone pinned, so its share is added by hand, and a dock
-        // owner keeps the search bar at one height wherever the dock sits.
+        // owner keeps the search bar at one height wherever the dock sits:
+        // with neither the dock nor the bar on top, the content starts a
+        // dock's thickness down, as it does under a top dock.
         readonly property var monitorData: HyprlandData.monitors.find(m => m.id === panelWindow.monitor?.id)
         function edgeClearance(edge) {
             const index = { left: 0, top: 1, right: 2, bottom: 3 }[edge];
             let c = panelWindow.monitorData?.reserved?.[index] ?? 0;
             if (Config.options.dock.enable && Appearance.sizes.dockEdge === edge)
                 c += GlobalStates.dockPinned ? Appearance.sizes.elevationMargin : Appearance.sizes.dockExtent;
-            if (edge === "top" && Config.options.dock.enable && c === 0)
-                c = Appearance.sizes.dockExtent;
+            if (edge === "top" && Config.options.dock.enable
+                    && Appearance.sizes.dockEdge !== "top" && Appearance.sizes.barEdge !== "top")
+                c += Appearance.sizes.dockExtent;
             return c;
         }
 

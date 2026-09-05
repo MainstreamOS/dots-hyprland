@@ -553,9 +553,10 @@ Singleton {
         property string sidebarRightEdge: Config.options.bar.vertical ? root.sizes.barEdge : "right"
         // Whether the two share an edge, and so cannot both be shown.
         property bool sidebarsShareEdge: root.sizes.sidebarLeftEdge === root.sizes.sidebarRightEdge
-        // The dock's visible thickness plus its screen gap. The dock sizes its
-        // window from this and the overview clears the dock's edge by it, so the
-        // two cannot drift apart.
+        // The dock's visible thickness plus its screen gap at the configured
+        // icon size. The overview clears the dock's edge by it; a dock that has
+        // shrunk its icons to fit a short screen is thinner than this, so that
+        // clearance can only err long, never short.
         // The dock is as thick as its icons ask: one slider drives the icon,
         // and the surface grows around it, keeping the stock look identical
         // at the stock icon size.
