@@ -298,17 +298,6 @@ ContentPage {
                         if (_readersFinished) applyAutoSuspend(checked, autoSuspendSecs)
                     }
                 }
-                SubtleNoticeBox {
-                    visible: suspendGate !== ""
-                    Layout.fillWidth: true
-                    Layout.leftMargin: 8
-                    Layout.rightMargin: 8
-                    Layout.topMargin: 4
-                    Layout.bottomMargin: 4
-                    text: suspendGate === "legacy-nvidia"
-                        ? Translation.tr("Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.")
-                        : Translation.tr("Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.")
-                }
                 ConfigRow {
                     enabled: autoSuspendEnabled && suspendGate === ""
                     StyledText {
@@ -338,6 +327,19 @@ ContentPage {
                     }
                 }
             }
+        }
+
+        // Why suspend is off, across the whole section under both delays.
+        SubtleNoticeBox {
+            visible: suspendGate !== ""
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            text: suspendGate === "legacy-nvidia"
+                ? Translation.tr("Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.")
+                : Translation.tr("Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.")
         }
     }
 
