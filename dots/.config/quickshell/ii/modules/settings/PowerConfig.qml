@@ -119,8 +119,7 @@ ContentPage {
     Process {
         id: suspendGateReader
         command: ["bash", "-c",
-            "if lspci -nn 2>/dev/null | grep -qiE 'Navi 4[0-9]|RX 9[0-9]{3}'; then echo rdna4; "
-            + "elif grep -qE '^(580|470|390)[.]' /sys/module/nvidia/version 2>/dev/null; then echo legacy-nvidia; fi"
+            "if grep -qE '^(580|470|390)[.]' /sys/module/nvidia/version 2>/dev/null; then echo legacy-nvidia; fi"
         ]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
@@ -337,9 +336,7 @@ ContentPage {
             Layout.rightMargin: 8
             Layout.topMargin: 4
             Layout.bottomMargin: 4
-            text: suspendGate === "legacy-nvidia"
-                ? Translation.tr("Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.")
-                : Translation.tr("Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.")
+            text: Translation.tr("Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.")
         }
     }
 
