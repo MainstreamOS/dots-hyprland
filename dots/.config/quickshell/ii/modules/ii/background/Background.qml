@@ -148,6 +148,130 @@ Variants {
             // Clock position gets updated after zoom scale is updated
         }
 
+        // The picture on screen, remembered so the next one can be brought
+        // in over it. It is set only once a picture has loaded, so a path
+        // that never loads is never the one being carried off.
+        property url shownWallpaper: ""
+        property bool wallpaperSwapPending: false
+        property string swapEffect: "fade"
+        // The knobs the effects turn. Every one is animated on every run
+        // and the effects differ only in where each ends, so switching the
+        // effect between two changes cannot leave a knob stranded.
+        property real incomingShift: 0    // px the new picture still sits to the right
+        property real incomingZoom: 1     // scale the new picture settles down from
+        property real outgoingShift: 0    // px the old picture has moved left
+        property real outgoingRevealed: 0 // px of the old picture uncovered from the left
+
+        function resetSwapKnobs() {
+            incomingShift = 0;
+            incomingZoom = 1;
+            outgoingShift = 0;
+            outgoingRevealed = 0;
+        }
+
+        // Runs once both pictures are decoded: the new one underneath is
+        // complete before the old one starts to leave, so no frame shows
+        // the bare background.
+        function maybeStartSwap() {
+            if (!wallpaperSwapPending) return;
+            if (wallpaper.status !== Image.Ready || outgoing.status !== Image.Ready) return;
+            wallpaperSwapPending = false;
+            swapEffect = TransitionEffects.resolve(Config.options.background.wallpaperTransition);
+            swapAnimation.restart();
+        }
+
+        function finishSwap() {
+            shaderRunning = false;
+            shaderProgress = 0;
+            shaderTime = 0;
+            outgoing.source = "";
+            outgoing.opacity = 0;
+            resetSwapKnobs();
+        }
+
+        // A shader run keeps the native knobs at rest and drives these
+        // two instead; the shader draws both pictures while it is on.
+        property bool shaderRunning: false
+        property real shaderProgress: 0
+        property real shaderTime: 0
+        readonly property bool swapIsShader: TransitionEffects.isShader(swapEffect)
+        readonly property int swapRunDuration: TransitionEffects.durationFor(swapEffect)
+
+        SequentialAnimation {
+            id: swapAnimation
+            ScriptAction {
+                script: {
+                    bgRoot.incomingShift = bgRoot.swapEffect === "slide" ? bgRoot.logicalScreenWidth : 0;
+                    bgRoot.incomingZoom = bgRoot.swapEffect === "zoom" ? 1.08 : 1;
+                    bgRoot.outgoingShift = 0;
+                    bgRoot.outgoingRevealed = 0;
+                    bgRoot.shaderProgress = 0;
+                    bgRoot.shaderTime = 0;
+                    outgoing.opacity = 1;
+                    bgRoot.shaderRunning = bgRoot.swapIsShader;
+                }
+            }
+            ParallelAnimation {
+                NumberAnimation {
+                    target: outgoing
+                    property: "opacity"
+                    to: (bgRoot.swapEffect === "fade" || bgRoot.swapEffect === "zoom") ? 0 : 1
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animationCurves.expressiveEffects
+                }
+                NumberAnimation {
+                    target: bgRoot
+                    property: "outgoingShift"
+                    to: bgRoot.swapEffect === "slide" ? -bgRoot.logicalScreenWidth : 0
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animationCurves.expressiveEffects
+                }
+                NumberAnimation {
+                    target: bgRoot
+                    property: "incomingShift"
+                    to: 0
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animationCurves.expressiveEffects
+                }
+                NumberAnimation {
+                    target: bgRoot
+                    property: "incomingZoom"
+                    to: 1
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animationCurves.expressiveEffects
+                }
+                NumberAnimation {
+                    target: bgRoot
+                    property: "outgoingRevealed"
+                    to: bgRoot.swapEffect === "wipe" ? bgRoot.logicalScreenWidth : 0
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.animationCurves.expressiveEffects
+                }
+                // A shader's progress is its timeline: the ring, peel or glitch
+                // sweeps the whole screen at one speed, so an easing that settles
+                // early would park the effect at the corners for the rest of the run.
+                NumberAnimation {
+                    target: bgRoot
+                    property: "shaderProgress"
+                    to: bgRoot.swapIsShader ? 1 : 0
+                    duration: bgRoot.swapRunDuration
+                    easing.type: Easing.Linear
+                }
+                NumberAnimation {
+                    target: bgRoot
+                    property: "shaderTime"
+                    to: bgRoot.swapIsShader ? bgRoot.swapRunDuration / 1000 : 0
+                    duration: bgRoot.swapRunDuration
+                }
+            }
+            ScriptAction { script: bgRoot.finishSwap() }
+        }
+
         // Wallpaper zoom scale
         function updateZoomScale() {
             getWallpaperSizeProc.path = bgRoot.wallpaperPath;
@@ -177,8 +301,55 @@ Variants {
             StyledImage {
                 id: wallpaper
                 visible: opacity > 0 && !blurLoader.active
-                opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
+                // Once a picture has shown, the layer stays opaque through
+                // every later load: the last frame is retained while the next
+                // decodes, and the transition above needs a complete picture
+                // underneath from its first frame.
+                opacity: bgRoot.wallpaperIsVideo ? 0 : ((status === Image.Ready || bgRoot.shownWallpaper != "") ? 1 : 0)
                 cache: false
+                // Slide brings the new picture in from the right and zoom
+                // settles it down from slightly larger; both leave x and y,
+                // which the parallax owns, untouched.
+                transform: [
+                    Translate { x: bgRoot.incomingShift },
+                    Scale {
+                        origin.x: wallpaper.width / 2
+                        origin.y: wallpaper.height / 2
+                        xScale: bgRoot.incomingZoom
+                        yScale: bgRoot.incomingZoom
+                    }
+                ]
+                onSourceChanged: {
+                    const effect = Config.options.background.wallpaperTransition;
+                    if (bgRoot.shownWallpaper == "" || effect === "none" || bgRoot.wallpaperIsVideo
+                            || bgRoot.wallpaperSafetyTriggered || source == bgRoot.shownWallpaper) {
+                        swapAnimation.stop();
+                        bgRoot.finishSwap();
+                        bgRoot.wallpaperSwapPending = false;
+                        return;
+                    }
+                    // A change during a run starts over from the picture that
+                    // had finished loading, at its place on screen right now.
+                    swapAnimation.stop();
+                    bgRoot.resetSwapKnobs();
+                    outgoing.x = wallpaper.x;
+                    outgoing.y = wallpaper.y;
+                    outgoing.width = wallpaper.width;
+                    outgoing.height = wallpaper.height;
+                    outgoing.opacity = 1;
+                    outgoing.source = bgRoot.shownWallpaper;
+                    bgRoot.wallpaperSwapPending = true;
+                }
+                onStatusChanged: {
+                    if (status === Image.Ready) {
+                        bgRoot.shownWallpaper = source;
+                        bgRoot.maybeStartSwap();
+                    } else if (status === Image.Error) {
+                        swapAnimation.stop();
+                        bgRoot.finishSwap();
+                        bgRoot.wallpaperSwapPending = false;
+                    }
+                }
                 // Bilinear filtering + mipmap chain. The wallpaper is
                 // continuously resampled by parallax animation and per-monitor
                 // scaling, so nearest-neighbor sampling (smooth: false) with
@@ -282,6 +453,61 @@ Variants {
                 height: bgRoot.scaledWallpaperHeight
             }
 
+            // The picture being replaced, over the new one until the effect
+            // has carried it off, and empty the rest of the time. It keeps
+            // the place the old picture had when the change came, so nothing
+            // shifts under the effect. The window it sits in is what the wipe
+            // narrows from the left; the picture inside holds still so the
+            // new one shows through the uncovered part.
+            Item {
+                id: outgoingClip
+                visible: outgoing.source != "" && !blurLoader.active
+                clip: true
+                x: bgRoot.outgoingRevealed
+                y: 0
+                width: Math.max(0, parent.width - bgRoot.outgoingRevealed)
+                height: parent.height
+
+                Image {
+                    id: outgoing
+                    asynchronous: true
+                    cache: false
+                    smooth: true
+                    mipmap: true
+                    fillMode: Image.PreserveAspectCrop
+                    opacity: 0
+                    sourceSize: {
+                        const dpr = Math.max(1, bgRoot.monitor?.scale ?? 1);
+                        return Qt.size(width * dpr, height * dpr);
+                    }
+                    transform: Translate { x: bgRoot.outgoingShift - bgRoot.outgoingRevealed }
+                    // An old picture that no longer decodes (a slideshow can
+                    // delete it) is simply not shown leaving; the new one is
+                    // already underneath.
+                    onStatusChanged: {
+                        if (status === Image.Ready) bgRoot.maybeStartSwap();
+                        else if (status === Image.Error) {
+                            bgRoot.wallpaperSwapPending = false;
+                            bgRoot.finishSwap();
+                        }
+                    }
+                }
+            }
+
+            Loader {
+                active: bgRoot.shaderRunning
+                anchors.fill: parent
+                sourceComponent: TransitionShader {
+                    fromItem: outgoing
+                    toItem: wallpaper
+                    fromRect: Qt.rect(-outgoing.x, -outgoing.y, bgRoot.logicalScreenWidth, bgRoot.logicalScreenHeight)
+                    toRect: Qt.rect(-wallpaper.x, -wallpaper.y, bgRoot.logicalScreenWidth, bgRoot.logicalScreenHeight)
+                    effect: bgRoot.swapEffect
+                    progress: bgRoot.shaderProgress
+                    time: bgRoot.shaderTime
+                }
+            }
+
             Loader {
                 id: blurLoader
                 active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running || GlobalStates.overviewOpen)
@@ -293,7 +519,7 @@ Variants {
                         id: scaleAnim
                         duration: 400
                         easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.animationCurves.expressiveDefaultSpatial
+                        easing.bezierCurve: Appearance.animationCurves.expressiveEffects
                     }
                 }
                 sourceComponent: GaussianBlur {

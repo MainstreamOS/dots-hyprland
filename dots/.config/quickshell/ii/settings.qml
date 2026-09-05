@@ -16,6 +16,9 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
+// The Background page previews the wallpaper transitions; pages load by path,
+// so the module has to be named here for the scanner to find it.
+import qs.modules.ii.background
 
 ApplicationWindow {
     id: root

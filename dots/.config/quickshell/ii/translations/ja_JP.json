@@ -1992,5 +1992,17 @@
   "Exit the keybind submap": "Exit the keybind submap",
   "Run a scripted action": "Run a scripted action",
   "Plan | Your Claude subscription. Pick it to use its models": "Plan | Your Claude subscription. Pick it to use its models",
-  "Plan | Your ChatGPT subscription. Pick it to use its models": "Plan | Your ChatGPT subscription. Pick it to use its models"
+  "Plan | Your ChatGPT subscription. Pick it to use its models": "Plan | Your ChatGPT subscription. Pick it to use its models",
+  "Ripple": "Ripple",
+  "Peel": "Peel",
+  "Glitch": "Glitch",
+  "CRT": "CRT",
+  "Shatter": "Shatter",
+  "Random": "Random",
+  "Wallpaper transition": "Wallpaper transition",
+  "How one wallpaper gives way to the next": "How one wallpaper gives way to the next",
+  "Crossfade": "Crossfade",
+  "Slide": "Slide",
+  "Zoom": "Zoom",
+  "Wipe": "Wipe"
 }

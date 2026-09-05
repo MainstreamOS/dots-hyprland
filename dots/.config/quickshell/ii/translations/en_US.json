@@ -1994,5 +1994,17 @@
   "Plan | Your Claude subscription. Pick it to use its models": "Plan | Your Claude subscription. Pick it to use its models",
   "Plan | Your ChatGPT subscription. Pick it to use its models": "Plan | Your ChatGPT subscription. Pick it to use its models",
   "Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.": "Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.",
-  "Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.": "Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works."
+  "Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.": "Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.",
+  "Ripple": "Ripple",
+  "Peel": "Peel",
+  "Glitch": "Glitch",
+  "CRT": "CRT",
+  "Shatter": "Shatter",
+  "Random": "Random",
+  "Wallpaper transition": "Wallpaper transition",
+  "How one wallpaper gives way to the next": "How one wallpaper gives way to the next",
+  "Crossfade": "Crossfade",
+  "Slide": "Slide",
+  "Zoom": "Zoom",
+  "Wipe": "Wipe"
 }

@@ -534,6 +534,9 @@ Singleton {
                 }
                 property string wallpaperPath: ""
                 property string thumbnailPath: ""
+                // How one wallpaper gives way to the next: a name from the
+                // TransitionEffects catalog, or "random".
+                property string wallpaperTransition: "fade"
                 property bool hideWhenFullscreen: true
                 // Rotates wallpaperPath through `folder` on a timer. These keys
                 // ride along in a saved theme's config.json snapshot, so the

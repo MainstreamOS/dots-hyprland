@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.ii.background
 import Quickshell.Io
 
 ContentPage {
@@ -12,6 +13,48 @@ ContentPage {
     // The rotation itself lives in the main shell, so asking for one now goes
     // over IPC rather than calling into this process's passive copy.
     Process { id: slideshowNextProc }
+
+    ContentSection {
+        icon: "transition_fade"
+        title: Translation.tr("Wallpaper transition")
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 8
+            Layout.bottomMargin: 8
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                OptionalMaterialSymbol {
+                    icon: "animation"
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 6
+                    text: Translation.tr("How one wallpaper gives way to the next")
+                    color: Appearance.colors.colOnSecondaryContainer
+                }
+            }
+            WallpaperTransitionPreview {
+                Layout.fillWidth: true
+                Layout.maximumHeight: 220
+                effect: Config.options.background.wallpaperTransition
+            }
+            ConfigSelectionArray {
+                Layout.fillWidth: true
+                currentValue: Config.options.background.wallpaperTransition
+                onSelected: newValue => {
+                    Config.options.background.wallpaperTransition = newValue;
+                }
+                options: TransitionEffects.options
+            }
+        }
+    }
 
     ContentSection {
         icon: "gallery_thumbnail"
