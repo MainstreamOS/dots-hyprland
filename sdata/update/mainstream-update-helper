@@ -103,6 +103,17 @@ cleanup() {
     fi
 }
 trap cleanup EXIT INT TERM HUP
+# The trap cannot run after SIGKILL or an OOM kill, and that is exactly when a
+# NOPASSWD rule must not be left behind. A separate unit outlives this process
+# and sweeps the file the moment it is gone.
+if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --quiet --collect --unit="mainstream-update-sudoers-sweep-$$" \
+        /bin/bash -c "while kill -0 $$ 2>/dev/null; do sleep 2; done; rm -f '$TEMP_SUDOERS' '$LEGACY_SUDOERS'" \
+        2>/dev/null || true
+fi
+# The conflict-adoption path below reads pacman's messages; they are only
+# stable in one language.
+export LC_ALL=C.UTF-8
 
 # Bail out early when another package manager already holds the database
 # lock — every pacman step below would fail against it, and the exit trap
@@ -325,7 +336,15 @@ else
 fi
 
 # ── 2. AUR (yay or paru) ────────────────────────────────────────────────────
-if [[ "$SKIP_AUR" -eq 0 ]]; then
+# Anything built or installed against the package set has to wait for it: a
+# failed -Syu already refreshed the databases, so building on top of it is a
+# partial upgrade with a fresh coat of paint.
+PKG_STEP_FAILED=0
+[[ "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]] && PKG_STEP_FAILED=1
+if [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
+    echo ""
+    echo "── AUR: deferred — the system package update failed."
+elif [[ "$SKIP_AUR" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     if command -v yay >/dev/null 2>&1; then
@@ -428,7 +447,12 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     # only — no initramfs rebuild, no kernel-cmdline rewrite. Tracked as
     # a separate Summary line so users can see which half (user-level
     # vs system-bits) failed if one does.
-    if command -v updatems-system >/dev/null 2>&1; then
+    if [[ "$DOTFILES_RC" -ne 0 ]]; then
+        echo ""
+        echo "── Mainstream system bits: skipped — updatems did not finish, so the"
+        echo "   release's root-owned files stay at the version that matches the desktop."
+        DOTFILES_SYS_RC=$DOTFILES_RC
+    elif command -v updatems-system >/dev/null 2>&1; then
         echo ""
         echo "── Mainstream system bits — updatems-system"
         updatems-system "$ORIG_HOME/.cache/dots-hyprland"
@@ -451,7 +475,10 @@ fi
 # mirror going slow can hang topgrade indefinitely with no progress
 # output — observed 57+ minute stall in the wild. Users who want
 # lensfun updates can run `topgrade --only lensfun` manually).
-if [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
+if [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
+    echo ""
+    echo "── Developer extras: deferred — the system package update failed."
+elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  Developer extras — topgrade (cargo, pipx, npm, nix, …)"
@@ -476,7 +503,7 @@ fi
 # Quickshell wasn't rebuilt against the new Qt. The same ABI test
 # the hook runs is `quickshell --private-check-compat`; non-zero
 # exit means mismatch.
-if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
+if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/quickshell ]]; then
     if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
             /usr/bin/quickshell --private-check-compat >/dev/null 2>&1; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
@@ -487,26 +514,35 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 ]] && [[ -x /usr/bin/quickshell ]]; then
             echo "═══════════════════════════════════════════════════════════"
             echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (makepkg)"
             echo "═══════════════════════════════════════════════════════════"
-            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                bash -c "cd '$QS_PKGBUILD_DIR' && makepkg -Afsi --noconfirm" || true
-            echo ">>> Restart Quickshell to pick up the new binary."
+            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                bash -c "cd '$QS_PKGBUILD_DIR' && makepkg -Afsi --noconfirm"; then
+                echo ">>> Restart Quickshell to pick up the new binary."
+            else
+                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+            fi
         elif [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
             # AUR-sourced Quickshell (user installed a helper) — let yay rebuild it.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
             echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (yay)"
             echo "═══════════════════════════════════════════════════════════"
-            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                yay -S --rebuildtree --noconfirm "$QS_PKG" || true
-            echo ">>> Restart Quickshell to pick up the new binary."
+            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                yay -S --rebuildtree --noconfirm "$QS_PKG"; then
+                echo ">>> Restart Quickshell to pick up the new binary."
+            else
+                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+            fi
         elif [[ -n "$QS_PKG" ]] && command -v paru >/dev/null 2>&1; then
             echo ""
             echo "═══════════════════════════════════════════════════════════"
             echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (paru)"
             echo "═══════════════════════════════════════════════════════════"
-            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                paru -S --rebuildtree --noconfirm "$QS_PKG" || true
-            echo ">>> Restart Quickshell to pick up the new binary."
+            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                paru -S --rebuildtree --noconfirm "$QS_PKG"; then
+                echo ">>> Restart Quickshell to pick up the new binary."
+            else
+                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+            fi
         elif [[ -n "$QS_PKG" ]]; then
             echo ""
             echo ">>> Quickshell ABI mismatch detected. Run a full update (or"

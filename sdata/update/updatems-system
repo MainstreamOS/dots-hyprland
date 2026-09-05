@@ -62,7 +62,9 @@ cd "$REPO_DIR" || { echo "cannot cd to $REPO_DIR" >&2; exit 1; }
 # take effect, and it refreshes itself at the end — one release too late to
 # do the work it was added for. The guard variable keeps the handover from
 # looping if the install fails to change anything.
-if [[ -z "${UPDATEMS_SYSTEM_REEXEC:-}" && -f "$REPO_DIR/sdata/update/updatems-system" ]] \
+if [[ -z "${UPDATEMS_SYSTEM_REEXEC:-}" && -f "$REPO_DIR/sdata/update/updatems-system" \
+      && ! -L "$REPO_DIR/sdata/update/updatems-system" ]] \
+   && [[ $(( 8#$(stat -c %a "$REPO_DIR/sdata/update/updatems-system" 2>/dev/null || echo 777) & 8#022 )) -eq 0 ]] \
    && ! cmp -s "$REPO_DIR/sdata/update/updatems-system" "$0"; then
     if install -m755 -o root -g root "$REPO_DIR/sdata/update/updatems-system" \
             /usr/local/bin/updatems-system 2>/dev/null; then
@@ -75,11 +77,25 @@ fi
 # (return 1). We DON'T abort on the first failure — best effort, refresh
 # what we can.
 RC=0
+# Everything installed here runs as root later, and it comes out of a tree the
+# user owns. A symlink or a file others can write is how a checkout that looks
+# like a release turns into something else on the way in.
+_src_ok() {
+    local src="$1" mode
+    [[ -f "$src" && ! -L "$src" ]] || return 1
+    mode=$(stat -c %a "$src" 2>/dev/null) || return 1
+    [[ $(( 8#$mode & 8#022 )) -eq 0 ]]
+}
 _install_file() {
     # $1 mode  $2 src  $3 dst  $4 label
     local mode="$1" src="$2" dst="$3" label="$4"
-    if [[ ! -f "$src" ]]; then
+    if [[ ! -e "$src" ]]; then
         warn "$label source missing at $src — skipping"
+        return 0
+    fi
+    if ! _src_ok "$src"; then
+        warn "$label source is a symlink or writable by others ($src) — refusing to install it as root"
+        RC=1
         return 0
     fi
     if install -m "$mode" -o root -g root "$src" "$dst"; then

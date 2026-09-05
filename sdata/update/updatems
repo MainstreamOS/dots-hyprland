@@ -151,7 +151,8 @@ cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
 
 # ── 2. Fetch tags from origin ───────────────────────────────────────────────
 say "Fetching tags from origin/$REPO_BRANCH..."
-git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /' || die "git fetch failed"
+git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /'
+[[ ${PIPESTATUS[0]} -eq 0 ]] || die "git fetch failed"
 
 # ── 3. Pick the latest release tag ─────────────────────────────────────────
 # Strip peeled-tag suffixes (^{}), keep release tags (excludes the retired
