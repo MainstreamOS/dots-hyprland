@@ -406,7 +406,6 @@ Scope {
 
                 SearchWidget {
                     id: searchWidget
-                    anchors.horizontalCenter: parent.horizontalCenter
                     Layout.alignment: Qt.AlignHCenter
                     // Hidden when the app drawer is expanded (it takes over).
                     // Also hidden when overview was opened in workspaces-only
@@ -437,7 +436,6 @@ Scope {
                 Loader {
                     id: overviewLoader
                     Layout.alignment: Qt.AlignHCenter
-                    anchors.horizontalCenter: parent.horizontalCenter
                     active: GlobalStates.overviewOpen && panelWindow.monitorIsFocused && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
                     Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
                     opacity: appDrawer.expanded ? 0 : 1
