@@ -20,6 +20,11 @@ MODE = sys.argv[1] if len(sys.argv) > 1 else "zoom"
 ZOOM_FACTOR = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0
 GROW_FACTOR = float(sys.argv[3]) if len(sys.argv) > 3 else 2.5
 POLL = 1.0 / 60.0
+# A still pointer is polled at a fraction of that. Sixty round trips a second
+# to the compositor, for the life of the session, buys nothing while nothing
+# moves, and the first sample that does move brings the rate straight back.
+IDLE_POLL = 1.0 / 8.0
+IDLE_AFTER = 1.0      # seconds without movement before the slow rate applies
 WINDOW = 0.6          # seconds a reversal stays "recent"
 MIN_SEG = 30          # px a swing must cover to count as a reversal
 MIN_REVERSALS = 4     # reversals within WINDOW to trigger the zoom
@@ -330,8 +335,9 @@ def main():
     rearm_at = 0.0
     answered = time.time()
     supervised = 0.0
+    last_moved = time.time()
     while True:
-        time.sleep(POLL)
+        time.sleep(POLL if time.time() - last_moved < IDLE_AFTER else IDLE_POLL)
         now = time.time()
         # Nothing sends us a signal when the shell dies of anything other than
         # a clean shutdown, so notice that we've been orphaned and leave.
@@ -351,6 +357,8 @@ def main():
         dx = p[0] - prev[0]
         dy = p[1] - prev[1]
         prev = p
+        if dx or dy:
+            last_moved = now
         shaking = det.feed(now, p[0], p[1], dx, dy)
         if now < rearm_at:
             # Still deaf: keep reading so the detector stays in step with where
