@@ -2004,5 +2004,22 @@
   "Crossfade": "Crossfade",
   "Slide": "Slide",
   "Zoom": "Zoom",
-  "Wipe": "Wipe"
+  "Wipe": "Wipe",
+  "Clocks": "Clocks",
+  "Draggable widgets stay where they are, and their resize handles hide.": "Draggable widgets stay where they are, and their resize handles hide.",
+  "Drop an image onto the widget to set the picture.": "Drop an image onto the widget to set the picture.",
+  "Lock widget positions": "Lock widget positions",
+  "Media player": "Media player",
+  "More widgets": "More widgets",
+  "Pick each city on the widget itself.": "Pick each city on the widget itself.",
+  "Picture": "Picture",
+  "Pixel": "Pixel",
+  "Pixel clock settings": "Pixel clock settings",
+  "Resources stacked vertically": "Resources stacked vertically",
+  "Something": "Something",
+  "Timers stacked vertically": "Timers stacked vertically",
+  "To do": "To do",
+  "Use the clock's font": "Use the clock's font",
+  "Visualizer": "Visualizer",
+  "World clock": "World clock"
 }

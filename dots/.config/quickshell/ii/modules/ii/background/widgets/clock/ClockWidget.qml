@@ -78,6 +78,24 @@ AbstractBackgroundWidget {
                 textHorizontalAlignment: root.textHorizontalAlignment
             }
         }
+
+        FadeLoader {
+            id: pixelClockLoader
+            anchors.horizontalCenter: parent.horizontalCenter
+            shown: root.clockStyle === "pixel" && (root.shouldShow)
+            fade: false
+            sourceComponent: Column {
+                spacing: 10
+                PixelClock {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+                FadeLoader {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    shown: Config.options.background.widgets.clock.quote.enable && Config.options.background.widgets.clock.quote.text !== ""
+                    sourceComponent: CookieQuote {}
+                }
+            }
+        }
         StatusRow {
             anchors.horizontalCenter: parent.horizontalCenter
         }

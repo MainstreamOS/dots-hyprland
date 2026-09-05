@@ -49,7 +49,7 @@ Item {
                 text: Config.options.background.widgets.clock.quote.text
                 color: Appearance.colors.colOnSecondaryContainer
                 font {
-                    family: Appearance.font.family.reading
+                    family: Config.options.background.widgets.clock.quote.followClock ? Config.options.background.widgets.clock.digital.font.family : Appearance.font.family.reading
                     pixelSize: Appearance.font.pixelSize.large
                     weight: Font.Normal
                 }

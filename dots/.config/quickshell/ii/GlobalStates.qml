@@ -43,6 +43,9 @@ Singleton {
     // corner re-entry (e.g. the workspaceNumber overlay on a Super press) doesn't
     // re-ripple / re-dispatch while the plugin overview is already up.
     property bool scrollOverviewOpen: false
+    // A desktop widget with a text field asks for the keyboard through this;
+    // the background layer takes focus on demand only while it is set.
+    property bool desktopWidgetKeyboardFocus: false
     // Screen rounding as the corners should actually draw it. While the
     // scroll-overview is up this reports 0 so the workspace cards don't show
     // rounded-corner artifacts where rounded windows and rounded screen

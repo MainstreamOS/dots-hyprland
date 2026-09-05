@@ -270,6 +270,11 @@ ContentPage {
                             displayName: Translation.tr("Cookie"),
                             icon: "cookie",
                             value: "cookie"
+                        },
+                        {
+                            displayName: Translation.tr("Pixel"),
+                            icon: "grid_on",
+                            value: "pixel"
                         }
                     ]
                 }
@@ -293,6 +298,11 @@ ContentPage {
                             displayName: Translation.tr("Cookie"),
                             icon: "cookie",
                             value: "cookie"
+                        },
+                        {
+                            displayName: Translation.tr("Pixel"),
+                            icon: "grid_on",
+                            value: "pixel"
                         }
                     ]
                 }
@@ -674,14 +684,40 @@ ContentPage {
         }
 
         ContentSubsection {
+            visible: Config.options.background.widgets.clock.style === "pixel" || Config.options.background.widgets.clock.styleLocked === "pixel"
+            title: Translation.tr("Pixel clock settings")
+            ConfigSelectionArray {
+                currentValue: Config.options.background.widgets.clock.pixel.orientation
+                onSelected: newValue => {
+                    Config.options.background.widgets.clock.pixel.orientation = newValue;
+                }
+                options: [
+                    { displayName: Translation.tr("Vertical"),   icon: "swap_vert",  value: "vertical" },
+                    { displayName: Translation.tr("Horizontal"), icon: "swap_horiz", value: "horizontal" }
+                ]
+            }
+        }
+
+        ContentSubsection {
             title: Translation.tr("Quote")
 
-            ConfigSwitch {
-                buttonIcon: "check"
-                text: Translation.tr("Enable")
-                checked: Config.options.background.widgets.clock.quote.enable
-                onCheckedChanged: {
-                    Config.options.background.widgets.clock.quote.enable = checked;
+            ConfigRow {
+                uniform: true
+                ConfigSwitch {
+                    buttonIcon: "check"
+                    text: Translation.tr("Enable")
+                    checked: Config.options.background.widgets.clock.quote.enable
+                    onCheckedChanged: {
+                        Config.options.background.widgets.clock.quote.enable = checked;
+                    }
+                }
+                ConfigSwitch {
+                    buttonIcon: "font_download"
+                    text: Translation.tr("Use the clock's font")
+                    checked: Config.options.background.widgets.clock.quote.followClock
+                    onCheckedChanged: {
+                        Config.options.background.widgets.clock.quote.followClock = checked;
+                    }
                 }
             }
             MaterialTextArea {
@@ -738,6 +774,180 @@ ContentPage {
                         value: "mostBusy"
                     },
                 ]
+            }
+        }
+    }
+
+    ContentSection {
+        icon: "widgets"
+        title: Translation.tr("More widgets")
+
+        ConfigSwitch {
+            buttonIcon: "lock"
+            text: Translation.tr("Lock widget positions")
+            checked: Config.options.background.widgetsLocked
+            onCheckedChanged: {
+                Config.options.background.widgetsLocked = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("Draggable widgets stay where they are, and their resize handles hide.")
+            }
+        }
+
+        GridLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            columns: 3
+            rowSpacing: 8
+            columnSpacing: 8
+            Repeater {
+                model: [
+                    { key: "media",       icon: "music_note",     name: Translation.tr("Media player") },
+                    { key: "calendar",    icon: "calendar_month", name: Translation.tr("Calendar") },
+                    { key: "worldClock",  icon: "public",         name: Translation.tr("World clock") },
+                    { key: "notes",       icon: "note_stack_add", name: Translation.tr("Notes") },
+                    { key: "todo",        icon: "add_task",       name: Translation.tr("To do") },
+                    { key: "timers",      icon: "timer",          name: Translation.tr("Timers") },
+                    { key: "resources",   icon: "memory",         name: Translation.tr("Resources") },
+                    { key: "visualizer",  icon: "graphic_eq",     name: Translation.tr("Visualizer") },
+                    { key: "customImage", icon: "image",          name: Translation.tr("Picture") }
+                ]
+                delegate: Rectangle {
+                    id: widgetCard
+                    required property var modelData
+                    readonly property bool on: Config.options.background.widgets[modelData.key].enable
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 96
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer1
+                    border.width: 1
+                    border.color: Appearance.colors.colLayer0Border
+                    ColumnLayout {
+                        anchors {
+                            top: parent.top
+                            left: parent.left
+                            right: parent.right
+                            margins: 12
+                        }
+                        spacing: 0
+                        RowLayout {
+                            Layout.fillWidth: true
+                            MaterialSymbol {
+                                text: widgetCard.modelData.icon
+                                iconSize: Appearance.font.pixelSize.normal + 5
+                                color: Appearance.colors.colPrimary
+                            }
+                            Item { Layout.fillWidth: true }
+                            ConfigSwitch {
+                                Layout.fillWidth: false
+                                checked: widgetCard.on
+                                onCheckedChanged: {
+                                    Config.options.background.widgets[widgetCard.modelData.key].enable = checked;
+                                }
+                            }
+                        }
+                        StyledText {
+                            text: widgetCard.modelData.name
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        StyledText {
+                            text: widgetCard.on ? Translation.tr("On") : Translation.tr("Off")
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
+                }
+            }
+        }
+
+        ContentSubsection {
+            visible: Config.options.background.widgets.customImage.enable
+            title: Translation.tr("Picture")
+            ConfigSpinBox {
+                icon: "photo_size_select_large"
+                text: Translation.tr("Size")
+                value: Config.options.background.widgets.customImage.size
+                from: 80
+                to: 800
+                stepSize: 10
+                onValueChanged: {
+                    Config.options.background.widgets.customImage.size = value;
+                }
+            }
+            ConfigSelectionShapeArray {
+                currentValue: Config.options.background.widgets.customImage.shape
+                shapeColor: Appearance.colors.colPrimary
+                backgroundColor: Appearance.colors.colPrimaryContainer
+                options: [
+                    "Circle", "Square", "Slanted", "Arch", "Arrow", "SemiCircle", "Oval", "Pill",
+                    "Triangle", "Diamond", "ClamShell", "Pentagon", "Gem", "Sunny", "VerySunny",
+                    "Cookie4Sided", "Cookie6Sided", "Cookie7Sided", "Cookie9Sided", "Cookie12Sided",
+                    "Ghostish", "Clover4Leaf", "Clover8Leaf", "Burst", "SoftBurst", "Flower",
+                    "Puffy", "PuffyDiamond", "PixelCircle", "Bun", "Heart"
+                ]
+                onSelected: newValue => {
+                    Config.options.background.widgets.customImage.shape = newValue;
+                }
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+                text: Translation.tr("Drop an image onto the widget to set the picture.")
+                font.pixelSize: Appearance.font.pixelSize.small
+                color: Appearance.colors.colSubtext
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        ContentSubsection {
+            visible: Config.options.background.widgets.worldClock.enable
+            title: Translation.tr("World clock")
+            ConfigSpinBox {
+                icon: "schedule"
+                text: Translation.tr("Clocks")
+                value: Config.options.background.widgets.worldClock.clockCount
+                from: 1
+                to: 8
+                stepSize: 1
+                onValueChanged: {
+                    Config.options.background.widgets.worldClock.clockCount = value;
+                }
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+                text: Translation.tr("Pick each city on the widget itself.")
+                font.pixelSize: Appearance.font.pixelSize.small
+                color: Appearance.colors.colSubtext
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        ContentSubsection {
+            visible: Config.options.background.widgets.resources.enable || Config.options.background.widgets.timers.enable
+            title: Translation.tr("Layout")
+            ConfigRow {
+                uniform: true
+                ConfigSwitch {
+                    visible: Config.options.background.widgets.resources.enable
+                    buttonIcon: "memory"
+                    text: Translation.tr("Resources stacked vertically")
+                    checked: Config.options.background.widgets.resources.vertical
+                    onCheckedChanged: {
+                        Config.options.background.widgets.resources.vertical = checked;
+                    }
+                }
+                ConfigSwitch {
+                    visible: Config.options.background.widgets.timers.enable
+                    buttonIcon: "timer"
+                    text: Translation.tr("Timers stacked vertically")
+                    checked: Config.options.background.widgets.timers.vertical
+                    onCheckedChanged: {
+                        Config.options.background.widgets.timers.vertical = checked;
+                    }
+                }
             }
         }
     }

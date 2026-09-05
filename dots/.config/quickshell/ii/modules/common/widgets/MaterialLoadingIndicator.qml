@@ -7,6 +7,8 @@ import qs.modules.common.widgets
 Rectangle {
     id: root
 
+    property color colBg: Appearance.colors.colPrimaryContainer
+    property color colShape: Appearance.colors.colOnPrimaryContainer
     property bool loading: true
     property double pullProgress: 0
 
@@ -15,7 +17,7 @@ Rectangle {
     implicitWidth: implicitSize
     implicitHeight: implicitSize
     radius: Math.min(width, height) / 2
-    color: Appearance.colors.colPrimaryContainer
+    color: root.colBg
     property double baseShapeSize: root.implicitSize * 0.7
     property double leapZoomSize: root.baseShapeSize * 1.2
     property double leapZoomProgress: 0
@@ -82,7 +84,7 @@ Rectangle {
             const progressSecondHalf = Math.max(root.leapZoomProgress - 0.5, 0) * 2;
             return root.baseShapeSize + leapZoomDiff * progressFirstHalf - leapZoomDiff * progressSecondHalf;
         }
-        color: Appearance.colors.colOnPrimaryContainer
+        color: root.colShape
 
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }

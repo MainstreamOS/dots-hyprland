@@ -187,6 +187,23 @@ Singleton {
         onTriggered: refreshCountdown()
     }
 
+    function formatSeconds(totalSeconds) {
+        const s = Math.max(0, Math.round(totalSeconds));
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m}:${sec.toString().padStart(2, "0")}`;
+    }
+
+    function addCountdownMinutes(minutes) {
+        const addSeconds = minutes * 60;
+        if (root.countdownRunning) {
+            Persistent.states.timer.countdown.duration += addSeconds;
+        } else {
+            Persistent.states.timer.countdown.duration = (Persistent.states.timer.countdown.duration ?? 0) + addSeconds;
+            countdownSecondsLeft = Persistent.states.timer.countdown.duration;
+        }
+    }
+
     function toggleCountdown() {
         Persistent.states.timer.countdown.running = !countdownRunning;
         if (Persistent.states.timer.countdown.running) {

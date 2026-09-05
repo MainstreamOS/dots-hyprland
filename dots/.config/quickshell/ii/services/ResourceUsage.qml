@@ -35,6 +35,11 @@ Singleton {
     property list<real> cpuUsageHistory: []
     property list<real> memoryUsageHistory: []
     property list<real> swapUsageHistory: []
+    property real diskTotal: 1
+    property real diskUsed: 0
+    property real diskFree: 0
+    property real diskUsedPercentage: diskTotal > 0 ? diskUsed / diskTotal : 0
+    property list<real> diskUsageHistory: []
 
     function kbToGbString(kb) {
         return (kb / (1024 * 1024)).toFixed(1) + " GB";
@@ -59,10 +64,33 @@ Singleton {
         }
     }
 
+    function updateDiskUsageHistory() {
+        diskUsageHistory = [...diskUsageHistory, diskUsedPercentage];
+        if (diskUsageHistory.length > historyLength) {
+            diskUsageHistory.shift();
+        }
+    }
+
     function updateHistories() {
         updateMemoryUsageHistory();
         updateSwapUsageHistory();
         updateCpuUsageHistory();
+        updateDiskUsageHistory();
+    }
+
+    Process {
+        id: diskProc
+        command: ["sh", "-c", "df -k / | awk 'NR==2{print $2,$3,$4}'"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parts = text.trim().split(" ").map(Number);
+                if (parts.length >= 3 && parts[0] > 0) {
+                    root.diskTotal = parts[0];
+                    root.diskUsed = parts[1];
+                    root.diskFree = parts[2];
+                }
+            }
+        }
     }
 
     // Poll only while something actually displays the data: the bar resources
@@ -72,10 +100,12 @@ Singleton {
         && GlobalStates.barOpen && !GlobalStates.screenLocked
     readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
         && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
+    // The desktop resources widget is a third reader, hidden with the lock screen.
+    readonly property bool desktopWatching: Config.options.background.widgets.resources.enable && !GlobalStates.screenLocked
 
     Timer {
         interval: Config.options?.resources?.updateInterval ?? 3000
-        running: root.barWatching || root.overlayWatching
+        running: root.barWatching || root.overlayWatching || root.desktopWatching
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -113,13 +143,17 @@ Singleton {
 
             // Parse CPU frequency
             const cpuInfo = fileCpuinfo.text();
-            const cpuCoreFrequencies = cpuInfo.match(/cpu MHz\s+:\s+(\d+\.\d+)\n/g).map(x => Number(x.match(/\d+\.\d+/)));
-            const cpuCoreFreqencyAvg = cpuCoreFrequencies.reduce((a, b) => a + b, 0) / cpuCoreFrequencies.length;
-            cpuFreqency = cpuCoreFreqencyAvg / 1000;
+            // The first tick can land before the file has been read.
+            const cpuCoreFrequencies = (cpuInfo.match(/cpu MHz\s+:\s+(\d+\.\d+)\n/g) ?? []).map(x => Number(x.match(/\d+\.\d+/)));
+            if (cpuCoreFrequencies.length > 0) {
+                const cpuCoreFreqencyAvg = cpuCoreFrequencies.reduce((a, b) => a + b, 0) / cpuCoreFrequencies.length;
+                cpuFreqency = cpuCoreFreqencyAvg / 1000;
+            }
             
 
             //read cpu temp
             tempProc.running = true
+            diskProc.running = true
 
             root.updateHistories();
         }

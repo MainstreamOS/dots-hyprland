@@ -36,6 +36,14 @@ Singleton {
     readonly property bool use12HourClock: /a/i.test(root.clockFormat)
     readonly property string amText: /A/.test(root.clockFormat) ? "AM" : "am"
     readonly property string pmText: /A/.test(root.clockFormat) ? "PM" : "pm"
+    readonly property int hour24: clock.date.getHours()
+    readonly property int hour12: (hour24 % 12 === 0) ? 12 : hour24 % 12
+    readonly property string hourStr: (use12HourClock ? hour12 : hour24).toString().padStart(2, "0")
+    readonly property string minuteStr: clock.date.getMinutes().toString().padStart(2, "0")
+    readonly property string digitH0: hourStr.charAt(0)
+    readonly property string digitH1: hourStr.charAt(1)
+    readonly property string digitM0: minuteStr.charAt(0)
+    readonly property string digitM1: minuteStr.charAt(1)
 
     // Schedules persist as "HH:mm" 24-hour whatever the clock shows, because
     // the services acting on them (Hyprsunset, the day and night theme
