@@ -29,16 +29,22 @@ Scope {
         // layer is click-through by design (empty mask), so keeping it visible
         // permanently has no input-side effect; contentFade.opacity already
         // makes it visually invisible while the overview is closed.
+        // The surface stays mapped so opening is instant, but the compositor
+        // runs its blur pass over the surface's whole extent on every damaged
+        // frame, closed or not. Closed, it is kept to a single pixel and grows
+        // back to the screen the moment it is asked to show.
+        readonly property bool spanning: GlobalStates.overviewOpen || contentFade.opacity > 0
         visible: (Config.options.overview.keepSurfaceAlive ?? true)
-            || GlobalStates.overviewOpen
-            || contentFade.opacity > 0
+            || spanning
 
         anchors {
-            top: true
-            bottom: true
-            left: true
-            right: true
+            top: dimWindow.spanning
+            bottom: dimWindow.spanning
+            left: dimWindow.spanning
+            right: dimWindow.spanning
         }
+        implicitWidth: 1
+        implicitHeight: 1
 
         // Purely visual — all input passes through
         mask: Region {}
