@@ -96,11 +96,17 @@ gpu_detect() {
 
     if [[ $HAS_NVIDIA == true ]]; then
         local pci_line pci_id
-        pci_line="$(grep -iE 'NVIDIA|GeForce|Quadro|Tesla' <<<"$lspci_nn" | head -1 || true)"
+        pci_line="$(grep -iE 'NVIDIA|GeForce|Quadro|Tesla' <<<"$gpu_lines" | head -1 || true)"
         pci_id="$(grep -oE '\[10de:[0-9a-fA-F]{4}\]' <<<"$pci_line" | tail -1 | grep -oE '[0-9a-fA-F]{4}' | tail -1 || true)"
         NVIDIA_PCI_DEC=$((16#${pci_id:-0}))
         if   [[ $NVIDIA_PCI_DEC -ge 7682 ]]; then NVIDIA_GEN=turing
         elif [[ $NVIDIA_PCI_DEC -ge 4928 ]]; then NVIDIA_GEN=maxwell
+        # Fermi and Kepler interleave: GF119 0x1040, GF110 0x1080, GF117 0x1140
+        # and GF116 0x1240 all sit above GK107 at 0x0FC0, while Kepler owns
+        # 0x0FC0-0x103F, 0x1180-0x123F and 0x1280 up. A 390xx card handed
+        # 470xx here has no driver at all.
+        elif (( (NVIDIA_PCI_DEC >= 16#1040 && NVIDIA_PCI_DEC <= 16#117f) \
+             || (NVIDIA_PCI_DEC >= 16#1240 && NVIDIA_PCI_DEC <= 16#127f) )); then NVIDIA_GEN=fermi
         elif [[ $NVIDIA_PCI_DEC -ge 4032 ]]; then NVIDIA_GEN=kepler
         elif [[ $NVIDIA_PCI_DEC -ge 1728 ]]; then NVIDIA_GEN=fermi
         else                                       NVIDIA_GEN=prefermi
@@ -117,14 +123,16 @@ gpu_detect() {
         # Modern integrated Radeon (Ryzen APUs) — some new IDs sit below the
         # APU-exemption window (e.g. Krackan 0x1114), so rescue them by name.
         # 'Radeon NxxxM' / bare 'Radeon Graphics' never appear on pre-GCN parts.
-        if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$lspci_names"; then IS_OLD_AMD=false; fi
+        local amd_display_names
+        amd_display_names="$(grep -iE 'VGA|3D|Display' <<<"$lspci_names" || true)"
+        if grep -iqE '\bRadeon [678][0-9]0M\b|Radeon Graphics' <<<"$amd_display_names"; then IS_OLD_AMD=false; fi
         # Pre-GCN fusion APUs (radeon module, no RADV) — exact id windows win
         # over the name tests above; see the header for the GCN parts excluded.
         if (( (AMD_DEC >= 16#9640 && AMD_DEC <= 16#964f) \
            || (AMD_DEC >= 16#9802 && AMD_DEC <= 16#980a) \
            || (AMD_DEC >= 16#9900 && AMD_DEC <= 16#9919) \
            || (AMD_DEC >= 16#9990 && AMD_DEC <= 16#99a4) )); then IS_OLD_AMD=true; fi
-        if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$lspci_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
+        if grep -iqE 'Navi 4[0-9]|RX 9[0-9]{3}|gfx12' <<<"$amd_display_names"; then IS_RDNA4=true; IS_OLD_AMD=false; fi
     fi
 
     if [[ $HAS_INTEL == true ]]; then

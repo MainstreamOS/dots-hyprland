@@ -78,6 +78,25 @@ run nv-fermi "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF
 chk nv-fermi NVIDIA_PCI_DEC 1728; chk nv-fermi NVIDIA_GEN fermi
 run nv-prefermi "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation G92 [GeForce 8800 GT] [10de:0611] (rev a2)"
 chk nv-prefermi NVIDIA_PCI_DEC 1553; chk nv-prefermi NVIDIA_GEN prefermi
+# Fermi parts whose IDs sit above GK107 (0x0FC0), and the Kepler parts around them.
+run nv-fermi-gf110 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF110 [GeForce GTX 580] [10de:1080] (rev a1)"
+chk nv-fermi-gf110 NVIDIA_GEN fermi
+run nv-fermi-gf119 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF119 [GeForce GT 520] [10de:1040] (rev a1)"
+chk nv-fermi-gf119 NVIDIA_GEN fermi
+run nv-fermi-gf117 "" "01:00.0 3D controller [0302]: NVIDIA Corporation GF117M [GeForce 610M/710M/810M/820M / GT 620M/625M/630M/720M] [10de:1140] (rev a1)"
+chk nv-fermi-gf117 NVIDIA_GEN fermi
+run nv-fermi-gf116 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GF116 [GeForce GTX 550 Ti] [10de:1244] (rev a1)"
+chk nv-fermi-gf116 NVIDIA_GEN fermi
+run nv-kepler-gk107 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK107 [GeForce GT 640] [10de:0fc1] (rev a1)"
+chk nv-kepler-gk107 NVIDIA_GEN kepler
+run nv-kepler-gk110 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK110 [GeForce GTX 780] [10de:1004] (rev a1)"
+chk nv-kepler-gk110 NVIDIA_GEN kepler
+run nv-kepler-gk104 "" "01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK104 [GeForce GTX 680] [10de:1180] (rev a1)"
+chk nv-kepler-gk104 NVIDIA_GEN kepler
+# The display ID must come from a display line even when another NVIDIA device lists first.
+run nv-audio-first "" "00:1f.0 Audio device [0403]: NVIDIA Corporation GP107GL High Definition Audio Controller [10de:0fb9] (rev a1)
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU116 [GeForce GTX 1660] [10de:2184] (rev a1)"
+chk nv-audio-first NVIDIA_GEN turing
 
 # 10-12. Intel generation ladder — xe (Gen12+), modern (Gen8-11), legacy (Gen4-7.5)
 run intel-arc "" "03:00.0 VGA compatible controller [0300]: Intel Corporation DG2 [Arc A770] [8086:56a0] (rev 08)"
