@@ -206,6 +206,14 @@ hl.layer_rule({ match = { namespace = "osk[0-9]*" }, ignore_alpha = 0.6})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur_popups = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
+-- The catch-all above also blurs surfaces nothing is ever seen through: the
+-- wallpaper layer itself, the corner masks and the hot-corner ripple. The
+-- wallpaper covers the whole screen, and the blur pass runs over its full
+-- extent on every damaged frame although none of it reaches the screen.
+-- Measured on a 4K desktop, that was most of what blur cost, with the bar,
+-- dock and sidebars a fraction of it. The overview's dim stays blurred: what
+-- it frosts behind the overview is very much seen.
+hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotCornerRipple)" }, blur = false})
 -- Blur stops at a fixed alpha, so with the shared 0.79 the bar loses its blur
 -- between two neighboring steps of its own transparency slider, and where that
 -- lands moves with the interface's transparency setting — around 7% of the
