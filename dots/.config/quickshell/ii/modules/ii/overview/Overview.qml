@@ -136,6 +136,26 @@ Scope {
             left: true
             right: true
         }
+        // While it is open the compositor sends every click to this surface,
+        // wherever the click lands, so the surface has to be under every place
+        // a click can land. Displaced by a pinned dock's exclusive zone it was
+        // not, and a press on that dock's launcher button, which should close
+        // this, reached a stretch of screen nothing was listening to.
+        exclusionMode: ExclusionMode.Ignore
+        // The bar and the dock keep the content clear of their edges; the
+        // window itself now runs under both.
+        function edgeClearance(edge) {
+            let c = 0;
+            if (Appearance.sizes.barEdge === edge)
+                c += (edge === "left" || edge === "right") ? Appearance.sizes.verticalBarWidth : Appearance.sizes.barHeight;
+            if (Config.options.dock.enable && Appearance.sizes.dockEdge === edge)
+                c += Appearance.sizes.dockExtent;
+            return c;
+        }
+        readonly property real clearTop: edgeClearance("top")
+        readonly property real clearBottom: edgeClearance("bottom")
+        readonly property real clearLeft: edgeClearance("left")
+        readonly property real clearRight: edgeClearance("right")
 
         Connections {
             target: GlobalStates
@@ -296,38 +316,46 @@ Scope {
         }
 
         // An open overview captures clicks across the whole screen, but the
-        // only thing that closes it is the dismiss area inside the flickable.
-        // The top clearance sits outside that area, so a click landing there
-        // does nothing at all — and the dock's launcher button, which the
-        // clearance is reserved for, reads as dead after opening the overview
-        // because the press that should toggle it back is swallowed.
+        // only thing that closes it is the dismiss area inside the flickable,
+        // and that stops at the clearance kept for the bar and the dock. A
+        // click on either of those while this is open, the dock's launcher
+        // button above all, means close.
         MouseArea {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: flickable.anchors.topMargin
-            enabled: GlobalStates.overviewOpen && flickable.anchors.topMargin > 0
+            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+            height: panelWindow.clearTop
+            enabled: GlobalStates.overviewOpen && height > 0
+            onClicked: GlobalStates.overviewOpen = false
+        }
+        MouseArea {
+            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+            height: panelWindow.clearBottom
+            enabled: GlobalStates.overviewOpen && height > 0
+            onClicked: GlobalStates.overviewOpen = false
+        }
+        MouseArea {
+            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+            width: panelWindow.clearLeft
+            enabled: GlobalStates.overviewOpen && width > 0
+            onClicked: GlobalStates.overviewOpen = false
+        }
+        MouseArea {
+            anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
+            width: panelWindow.clearRight
+            enabled: GlobalStates.overviewOpen && width > 0
             onClicked: GlobalStates.overviewOpen = false
         }
 
         StyledFlickable {
             id: flickable
             anchors.fill: parent
-            // A dock owner needs clearance under the top edge wherever it sits,
-            // so the search bar keeps one height as the dock moves: an unpinned
-            // top dock reveals over the overview and a dock on another edge
-            // leaves the top bare, so both start the content a dock's thickness
-            // down. A pinned top dock displaces this window by its exclusive
-            // zone, which stops at the pill and leaves the shadow band
-            // uncovered, so only that remainder is added; a top bar displaces
-            // the window on its own. With no dock at all there is nothing to
-            // clear, and reserving a strip would only push the launcher down.
-            anchors.topMargin: {
-                if (!Config.options.dock.enable || Appearance.sizes.barEdge === "top") return 0;
-                if (Appearance.sizes.dockEdge === "top" && GlobalStates.dockPinned)
-                    return Appearance.sizes.elevationMargin;
-                return Appearance.sizes.dockExtent;
-            }
+            // The content keeps clear of the bar and the dock on whichever
+            // edges they hold, so the search bar sits at one height as the
+            // dock moves and nothing lands under either of them. The window
+            // no longer relies on being displaced for that.
+            anchors.topMargin: panelWindow.clearTop
+            anchors.bottomMargin: panelWindow.clearBottom
+            anchors.leftMargin: panelWindow.clearLeft
+            anchors.rightMargin: panelWindow.clearRight
             contentWidth: columnLayout.implicitWidth
             contentHeight: columnLayout.implicitHeight
             clip: true
