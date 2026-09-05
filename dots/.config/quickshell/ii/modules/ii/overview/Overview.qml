@@ -137,25 +137,25 @@ Scope {
             right: true
         }
         // While it is open the compositor sends every click to this surface,
-        // wherever the click lands, so the surface has to be under every place
-        // a click can land. Displaced by a pinned dock's exclusive zone it was
-        // not, and a press on that dock's launcher button, which should close
-        // this, reached a stretch of screen nothing was listening to.
+        // wherever the click lands, so the surface lies under every place a
+        // click can land, exclusive zones included.
         exclusionMode: ExclusionMode.Ignore
-        // The bar and the dock keep the content clear of their edges; the
-        // window itself now runs under both.
+        // Content keeps clear of whatever holds an edge. The compositor's
+        // resolved reservation covers the bar, a pinned dock, a pinned sidebar
+        // or keyboard, and anything third party, on this screen alone and only
+        // while it is actually there. A dock reserves nothing unpinned and
+        // overhangs its zone pinned, so its share is added by hand, and a dock
+        // owner keeps the search bar at one height wherever the dock sits.
+        readonly property var monitorData: HyprlandData.monitors.find(m => m.id === panelWindow.monitor?.id)
         function edgeClearance(edge) {
-            let c = 0;
-            if (Appearance.sizes.barEdge === edge)
-                c += (edge === "left" || edge === "right") ? Appearance.sizes.verticalBarWidth : Appearance.sizes.barHeight;
+            const index = { left: 0, top: 1, right: 2, bottom: 3 }[edge];
+            let c = panelWindow.monitorData?.reserved?.[index] ?? 0;
             if (Config.options.dock.enable && Appearance.sizes.dockEdge === edge)
-                c += Appearance.sizes.dockExtent;
+                c += GlobalStates.dockPinned ? Appearance.sizes.elevationMargin : Appearance.sizes.dockExtent;
+            if (edge === "top" && Config.options.dock.enable && c === 0)
+                c = Appearance.sizes.dockExtent;
             return c;
         }
-        readonly property real clearTop: edgeClearance("top")
-        readonly property real clearBottom: edgeClearance("bottom")
-        readonly property real clearLeft: edgeClearance("left")
-        readonly property real clearRight: edgeClearance("right")
 
         Connections {
             target: GlobalStates
@@ -316,46 +316,25 @@ Scope {
         }
 
         // An open overview captures clicks across the whole screen, but the
-        // only thing that closes it is the dismiss area inside the flickable,
-        // and that stops at the clearance kept for the bar and the dock. A
-        // click on either of those while this is open, the dock's launcher
-        // button above all, means close.
+        // dismiss area inside the flickable stops at the clearance kept for
+        // the bar and the dock. This backdrop sits under the flickable and
+        // takes what lands outside it: a click on either band while this is
+        // open, the dock's launcher button above all, means close.
         MouseArea {
-            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-            height: panelWindow.clearTop
-            enabled: GlobalStates.overviewOpen && height > 0
-            onClicked: GlobalStates.overviewOpen = false
-        }
-        MouseArea {
-            anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
-            height: panelWindow.clearBottom
-            enabled: GlobalStates.overviewOpen && height > 0
-            onClicked: GlobalStates.overviewOpen = false
-        }
-        MouseArea {
-            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-            width: panelWindow.clearLeft
-            enabled: GlobalStates.overviewOpen && width > 0
-            onClicked: GlobalStates.overviewOpen = false
-        }
-        MouseArea {
-            anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
-            width: panelWindow.clearRight
-            enabled: GlobalStates.overviewOpen && width > 0
+            anchors.fill: parent
+            enabled: GlobalStates.overviewOpen && !contentFade.appDragging
             onClicked: GlobalStates.overviewOpen = false
         }
 
         StyledFlickable {
             id: flickable
             anchors.fill: parent
-            // The content keeps clear of the bar and the dock on whichever
-            // edges they hold, so the search bar sits at one height as the
-            // dock moves and nothing lands under either of them. The window
-            // no longer relies on being displaced for that.
-            anchors.topMargin: panelWindow.clearTop
-            anchors.bottomMargin: panelWindow.clearBottom
-            anchors.leftMargin: panelWindow.clearLeft
-            anchors.rightMargin: panelWindow.clearRight
+            // Inset by whatever holds each edge, so nothing sits under the
+            // bar or the dock.
+            anchors.topMargin: panelWindow.edgeClearance("top")
+            anchors.bottomMargin: panelWindow.edgeClearance("bottom")
+            anchors.leftMargin: panelWindow.edgeClearance("left")
+            anchors.rightMargin: panelWindow.edgeClearance("right")
             contentWidth: columnLayout.implicitWidth
             contentHeight: columnLayout.implicitHeight
             clip: true

@@ -29,11 +29,10 @@ Scope {
         // layer is click-through by design (empty mask), so keeping it visible
         // permanently has no input-side effect; contentFade.opacity already
         // makes it visually invisible while the overview is closed.
-        // The surface stays mapped so opening is instant, but the compositor
-        // runs its blur pass over the surface's whole extent on every damaged
-        // frame, closed or not. Closed, it is kept to a single pixel and grows
-        // back to the screen the moment it is asked to show.
-        readonly property bool spanning: GlobalStates.overviewOpen || contentFade.opacity > 0
+        // The compositor blurs a mapped surface over its whole extent on
+        // every damaged frame, closed or not, so closed it is kept to one
+        // pixel, and only the screen that shows it spans.
+        readonly property bool spanning: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused) || contentFade.opacity > 0
         visible: (Config.options.overview.keepSurfaceAlive ?? true)
             || spanning
 
@@ -52,7 +51,9 @@ Scope {
         Item {
             id: contentFade
             anchors.fill: parent
-            opacity: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused) ? 1 : 0
+            // The surface grows before it fades in, so a slow configure from a
+            // busy compositor lands as a late fade rather than a pop partway.
+            opacity: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused && dimWindow.width > 1) ? 1 : 0
             Behavior on opacity {
                 NumberAnimation {
                     duration: Appearance.animation.elementMoveFast.duration

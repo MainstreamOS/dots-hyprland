@@ -554,7 +554,7 @@ Singleton {
         // Whether the two share an edge, and so cannot both be shown.
         property bool sidebarsShareEdge: root.sizes.sidebarLeftEdge === root.sizes.sidebarRightEdge
         // The dock's visible thickness plus its screen gap. The dock sizes its
-        // window from this and the overview clears the top edge by it, so the
+        // window from this and the overview clears the dock's edge by it, so the
         // two cannot drift apart.
         // The dock is as thick as its icons ask: one slider drives the icon,
         // and the surface grows around it, keeping the stock look identical
