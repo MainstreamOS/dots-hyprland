@@ -207,7 +207,7 @@ quarantine_stale_targets() {
         [[ -f "$target" ]] || continue
         stamp="$target.builtfor"
         built_for=""
-        [[ -r "$stamp" ]] && built_for="$(<"$stamp")"
+        [[ -r "$stamp" ]] && built_for="$(sed -n '1p' "$stamp" 2>/dev/null)"
         if [[ "$built_for" != "$hypr_ver" ]]; then
             mv -f "$target" "$target.stale" &&                 log "quarantined $target (built for ${built_for:-unknown}, Hyprland is $hypr_ver)"
         fi
@@ -256,6 +256,46 @@ EOF
 # Resolve and build
 # ------------------------------------------------------------------
 SUCCESS_REF=""
+
+first_resolvable_sha() {
+    local ref sha spec
+    while IFS= read -r ref; do
+        [[ -z "$ref" ]] && continue
+        for spec in "origin/$ref" "$ref" "tags/$ref"; do
+            sha=$(git -C "$SRC_DIR" rev-parse -q --verify "${spec}^{commit}" 2>/dev/null) || continue
+            [[ -n "$sha" ]] && { printf '%s\n' "$sha"; return 0; }
+        done
+    done < <(auto_detect_refs)
+}
+
+# Every target already carries this Hyprland version and this commit, so
+# there is nothing a rebuild would change. Without this the timer recompiled
+# the same sources on every boot: eight seconds of CPU and half a gigabyte
+# of memory to arrive back where it started.
+#
+# A stamp written before the commit line existed reports an empty one, which
+# never matches and so pulls that install onto the current sources once.
+plugin_is_current() {
+    local want_sha="$1" target stamp
+    [[ -n "$want_sha" ]] || return 1
+    (( ${#TARGETS[@]} )) || return 1
+    for target in "${TARGETS[@]}"; do
+        stamp="$target.builtfor"
+        [[ -f "$target" && -r "$stamp" ]] || return 1
+        [[ "$(sed -n '1p' "$stamp" 2>/dev/null)" == "$HYPR_VER"  ]] || return 1
+        [[ "$(sed -n '2p' "$stamp" 2>/dev/null)" == "$want_sha" ]] || return 1
+    done
+    return 0
+}
+
+if [[ -z "$HYPRBARS_REF" ]]; then
+    WANT_SHA="$(first_resolvable_sha)"
+    if plugin_is_current "$WANT_SHA"; then
+        log "Already built from ${WANT_SHA:0:7} against Hyprland $HYPR_VER — nothing to do."
+        clear_or_recovered_status "$HYPR_VER"
+        exit 0
+    fi
+fi
 
 if [[ -n "$HYPRBARS_REF" ]]; then
     log "Using explicit HYPRBARS_REF=$HYPRBARS_REF (no fallback)"
@@ -323,13 +363,14 @@ BUILT_SO="$SRC_DIR/hyprbars/hyprbars.so"
 # reproducible even if the original ref was a moving branch like main.
 mkdir -p "$(dirname "$LAST_GOOD_FILE")"
 git -C "$SRC_DIR" rev-parse HEAD > "$LAST_GOOD_FILE"
+BUILT_SHA="$(git -C "$SRC_DIR" rev-parse HEAD)"
 
 # Distribute. Preserve owner so Hyprland (running as the user) can read it.
 for target in "${TARGETS[@]}"; do
     user_home="${target%/.local/share/hyprland/plugins/hyprbars.so}"
     user="$(stat -c '%U' "$user_home")"
     install -m 755 -o "$user" -g "$user" "$BUILT_SO" "$target"
-    printf '%s\n' "$HYPR_VER" > "$target.builtfor"
+    printf '%s\n%s\n' "$HYPR_VER" "$BUILT_SHA" > "$target.builtfor"
     chown "$user:$user" "$target.builtfor"
     rm -f "$target.stale"
     log "Updated $target (owner: $user)"
