@@ -16,6 +16,14 @@ dest_dir="$(dirname "$dest")"
 
 # Source must be a regular file (not a symlink, device, etc.)
 [[ -f "$src" && ! -L "$src" ]] || exit 1
+# Root copies the file into a world-readable place, so the person asking has
+# to be able to read it themselves; otherwise this is a way to publish any
+# file on the system by naming it as a wallpaper.
+caller="${PKEXEC_UID:-}"
+[[ "$caller" =~ ^[0-9]+$ ]] || exit 1
+caller_name="$(getent passwd "$caller" | cut -d: -f1)"
+[[ -n "$caller_name" ]] || exit 1
+runuser -u "$caller_name" -- test -r "$src" || exit 1
 
 # Destination must not be a symlink (prevent symlink attacks)
 [[ ! -L "$dest" ]] || exit 1

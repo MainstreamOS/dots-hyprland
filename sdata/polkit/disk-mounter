@@ -156,7 +156,8 @@ mount_block() {
     # Resolve the device from the UUID we will mount, so a hostile caller can't
     # aim the relabel/chown at a different device than the one being mounted.
     local resolved; resolved="$(blkid -U "$uuid" 2>/dev/null || true)"
-    [[ -n "$resolved" && -b "$resolved" ]] && device="$resolved"
+    [[ -n "$resolved" && -b "$resolved" ]] || { log "UUID $uuid does not resolve to a block device"; exit 1; }
+    device="$resolved"
     resolve_caller
 
     # Optional relabel. If $label is non-empty AND differs from the current

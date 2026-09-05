@@ -133,10 +133,24 @@ import_and_sign() {
 rebuild_keyring() {
     log "rebuilding the pacman keyring."
     gpgconf --homedir "$GNUPG_DIR" --kill all >/dev/null 2>&1 || true
+    # The old keyring stays on disk until the new one is proven. A rebuild
+    # that fails halfway would otherwise leave no keyring at all, and every
+    # package operation with it.
+    local keep="$GNUPG_DIR.rebuild-$$"
+    rm -rf "$keep"
+    if [[ -d "$GNUPG_DIR" ]]; then
+        mv "$GNUPG_DIR" "$keep" || { warn "could not set the old keyring aside."; return 1; }
+    fi
+    if pacman-key --init && pacman-key --populate archlinux; then
+        pacman-key --updatedb || warn "pacman-key --updatedb reported a failure."
+        rm -rf "$keep"
+        return 0
+    fi
+    warn "keyring rebuild failed; restoring the previous keyring."
+    gpgconf --homedir "$GNUPG_DIR" --kill all >/dev/null 2>&1 || true
     rm -rf "$GNUPG_DIR"
-    pacman-key --init               || { warn "pacman-key --init failed.";     return 1; }
-    pacman-key --populate archlinux || { warn "pacman-key --populate failed."; return 1; }
-    pacman-key --updatedb           || warn "pacman-key --updatedb reported a failure."
+    [[ -d "$keep" ]] && mv "$keep" "$GNUPG_DIR"
+    return 1
 }
 
 trust_key() {
@@ -176,6 +190,13 @@ point_at_github() {
         -e "s|^Server = file://.*pkgs|Server = $REPO_URL|" \
         -e "s|^SigLevel = Never|SigLevel = Required|" \
         "$PACMAN_CONF"
+    # sed succeeds whether or not the lines it was aimed at existed, and the
+    # offline repository is deleted on the strength of this rewrite.
+    if ! grep -qF "Server = $REPO_URL" "$PACMAN_CONF" || ! grep -q '^SigLevel = Required' "$PACMAN_CONF"; then
+        warn "pacman.conf did not take the GitHub repository settings; restoring it."
+        cp -a "$PACMAN_CONF_BAK" "$PACMAN_CONF"
+        return 1
+    fi
 }
 
 signed_sync_works() {

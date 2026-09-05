@@ -60,6 +60,7 @@ DENYLIST=(
     xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     polkit hyprpolkitagent seatd
     bash zsh sudo systemd dbus
+    linux linux-firmware linux-headers
 )
 
 # App bundles: mainstream-* metas that represent one user-facing app
@@ -78,7 +79,17 @@ is_bundle() {  # $1 = pkgname
 # the removable app bundles, sorted.
 protected_set() {
     {
+        # base and base-devel are packages now, not groups, so the group
+        # query returns nothing on a current system and this list protected
+        # nothing. The names themselves and what they depend on are what the
+        # group used to cover.
         pacman -Qqg base base-devel mainstream 2>/dev/null || true
+        pacman -Qq base base-devel mainstream 2>/dev/null || true
+        for _m in base base-devel mainstream; do
+            pacman -Qi "$_m" 2>/dev/null \
+                | awk -F': *' '/^Depends On/{print $2}' \
+                | tr ' ' '\n' | sed 's/[<>=].*//' | grep -v '^None$' || true
+        done
         printf '%s\n' "${DENYLIST[@]}"
     } | sort -u | grep -vxF -f <(printf '%s\n' "${APP_BUNDLES[@]}")
 }
@@ -244,7 +255,10 @@ cmd_remove() {  # $1 = pkg
     pacman -Qq -- "$pkg" >/dev/null 2>&1 || die "$pkg is not installed"
 
     local cascade bad
-    cascade="$(pacman -Rs --print --print-format '%n' -- "$pkg" 2>/dev/null || true)"
+    # An empty cascade passes the protection check below, so a dry run that
+    # failed must stop the removal rather than wave it through.
+    cascade="$(pacman -Rs --print --print-format '%n' -- "$pkg" 2>/dev/null)" \
+        || die "could not resolve what removing $pkg would take with it"
     bad="$(comm -12 <(printf '%s\n' "$cascade" | sort -u) <(protected_set))"
     [ -z "$bad" ] || die "removal would affect protected packages: $(echo $bad)"
 
