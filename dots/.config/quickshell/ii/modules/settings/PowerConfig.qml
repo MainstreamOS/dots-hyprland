@@ -18,6 +18,7 @@ ContentPage {
     property bool autoSuspendEnabled: true
     property int autoSuspendSecs: 900
     property bool _readersFinished: false
+    property string suspendGate: ""
 
     readonly property string hyprIdleConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hypridle.conf`
 
@@ -26,6 +27,7 @@ ContentPage {
         logindReader.running = true
         screenBlankReader.running = true
         autoSuspendReader.running = true
+        suspendGateReader.running = true
     }
 
     // ── Readers ──────────────────────────────────────────────────────────────
@@ -109,6 +111,21 @@ ContentPage {
             }
             if (!screenBlankReader.running) _readersFinished = true
         }
+    }
+
+    // Hardware where idle suspend stays off whatever the delay says. Mirrors the
+    // test in hypridle.conf's $suspend_cmd, so the page can say so instead of
+    // showing a delay that never fires.
+    Process {
+        id: suspendGateReader
+        command: ["bash", "-c",
+            "if lspci -nn 2>/dev/null | grep -qiE 'Navi 4[0-9]|RX 9[0-9]{3}'; then echo rdna4; "
+            + "elif grep -qE '^(580|470|390)[.]' /sys/module/nvidia/version 2>/dev/null; then echo legacy-nvidia; fi"
+        ]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => suspendGateReader.buf += data }
+        onExited: (code) => { suspendGate = suspendGateReader.buf.trim() }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -274,14 +291,26 @@ ContentPage {
                     Layout.fillWidth: true
                     buttonIcon: "bedtime"
                     text: Translation.tr("Automatic Suspend")
+                    enabled: suspendGate === ""
                     checked: autoSuspendEnabled
                     onCheckedChanged: {
                         autoSuspendEnabled = checked
                         if (_readersFinished) applyAutoSuspend(checked, autoSuspendSecs)
                     }
                 }
+                SubtleNoticeBox {
+                    visible: suspendGate !== ""
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 8
+                    Layout.rightMargin: 8
+                    Layout.topMargin: 4
+                    Layout.bottomMargin: 4
+                    text: suspendGate === "legacy-nvidia"
+                        ? Translation.tr("Automatic suspend stays off on the legacy NVIDIA driver: the desktop does not reliably come back from sleep on it. Suspending by hand still works, but the session may need a fresh login afterward.")
+                        : Translation.tr("Automatic suspend stays off on this graphics card: it does not reliably come back from sleep on Linux yet. Suspending by hand still works.")
+                }
                 ConfigRow {
-                    enabled: autoSuspendEnabled
+                    enabled: autoSuspendEnabled && suspendGate === ""
                     StyledText {
                         text: Translation.tr("Delay")
                         font.pixelSize: Appearance.font.pixelSize.normal
