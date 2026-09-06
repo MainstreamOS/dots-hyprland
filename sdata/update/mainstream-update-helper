@@ -115,6 +115,32 @@ fi
 # stable in one language.
 export LC_ALL=C.UTF-8
 
+# A root filesystem mounted read-only fails every step below in its own
+# words: the sudoers rule cannot be written, pacman cannot take its lock,
+# flatpak warns on every ref it holds. Said once here instead, with the
+# reason, which is one of two things: the machine was started from a
+# snapshot in the boot menu, which is read-only by design, or the
+# filesystem hit an error and the kernel took it read-only to protect it.
+root_mount="$(findmnt -no OPTIONS,SOURCE / 2>/dev/null || true)"
+if [[ ",${root_mount%% *}," == *,ro,* ]]; then
+    echo ">>> The system is mounted read-only, so nothing can be updated."
+    if [[ "${root_mount#* }" == *"/.snapshots/"* || "${root_mount#* }" == *"@snapshots"* ]]; then
+        echo ">>> It was started from a snapshot in the boot menu, which is always"
+        echo ">>> read-only. To get back to your normal system, reboot and in the"
+        echo ">>> boot menu choose the entry named \"linux\", the one sitting right"
+        echo ">>> underneath the Mainstream OS list. If you booted the snapshot to"
+        echo ">>> recover from a bad update, make it permanent first: Settings >"
+        echo ">>> Recovery > Restore Snapshot, then reboot into that \"linux\" entry"
+        echo ">>> and run the update again."
+    else
+        echo ">>> The filesystem took itself read-only, which it does after an"
+        echo ">>> error. Reboot, then run the update again. If it happens again,"
+        echo ">>> the disk needs checking: Settings > Recovery, or from a terminal"
+        echo ">>> \"sudo dmesg | grep -i btrfs\" shows what went wrong."
+    fi
+    exit 1
+fi
+
 # Bail out early when another package manager already holds the database
 # lock — every pacman step below would fail against it, and the exit trap
 # must never clear a lock owned by a live foreign process.
