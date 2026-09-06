@@ -210,16 +210,22 @@ ContentPage {
                 donateLink: "https://github.com/sponsors/end-4"
             }
             ForkCard {
-                image: `${Directories.home}/.local/share/icons/about-outfoxxed.png`
-                name: "Quickshell"
-                subtitle: Translation.tr("outfoxxed — Shell framework")
-                link: "https://git.outfoxxed.me/quickshell/quickshell"
+                image: `${Directories.home}/.local/share/icons/about-pctrade.png`
+                name: "end4-pC"
+                subtitle: Translation.tr("pctrade — Widgets")
+                link: "https://github.com/pctrade/end4-pC"
             }
             ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-yayuuu.png`
                 name: Translation.tr("Scroll Overview")
                 subtitle: Translation.tr("yayuuu — Hyprland plugin")
                 link: "https://github.com/yayuuu/hyprland-scroll-overview"
+            }
+            ForkCard {
+                image: `${Directories.home}/.local/share/icons/about-outfoxxed.png`
+                name: "Quickshell"
+                subtitle: Translation.tr("outfoxxed — Shell framework")
+                link: "https://git.outfoxxed.me/quickshell/quickshell"
             }
             ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-calamares.png`
