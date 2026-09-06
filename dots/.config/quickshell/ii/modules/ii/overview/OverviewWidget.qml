@@ -301,7 +301,14 @@ Item {
                                 }
                                 const percentageX = (window.x - xOffset) / root.workspaceImplicitWidth
                                 const percentageY = (window.y - yOffset) / root.workspaceImplicitHeight
-                                Hyprland.dispatch(`hl.dsp.window.move({ x = "${percentageX * root.screen.width}", y = "${percentageY * root.screen.height}", window = "address:${window.windowData?.address}" })`)
+                                // The thumbnail shows the screen less what the panels reserve, so the
+                                // drop maps into that room; spreading it over the whole screen put a
+                                // window dropped near the top under the bar. The config turns the
+                                // spot into the move to make, with the title bar kept within reach.
+                                const reserved = monitorData?.reserved ?? [0, 0, 0, 0]
+                                const roomX = reserved[0] + percentageX * (root.screen.width - reserved[0] - reserved[2])
+                                const roomY = reserved[1] + percentageY * (root.screen.height - reserved[1] - reserved[3])
+                                Hyprland.dispatch(`MainstreamFloatMoveWithinReach("address:${window.windowData?.address}", ${Math.round(roomX)}, ${Math.round(roomY)})`)
                             }
                         }
                         onClicked: (event) => {
