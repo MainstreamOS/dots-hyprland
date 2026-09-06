@@ -454,10 +454,13 @@ ContentPage {
             //                                checker fetches. Where a machine
             //                                is told about updates is not
             //                                something a look decides.)
+            //   - background.widgetsLocked (whether the desktop widgets can be
+            //                                dragged is how this machine is
+            //                                used, not part of a look.)
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates) | del(.background.widgetsLocked)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.
@@ -781,12 +784,15 @@ ContentPage {
     readonly property string pyPortable: `
 import json, os
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 
 STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
          ("screenRecord", "savePath"), ("screenSnip", "savePath"),
          ("background", "thumbnailPath"), ("background", "wallpaperPath"),
          ("background", "slideshow", "folder"),
+         ("background", "widgetsLocked"),
+         # The picture widget names a file in its owner's home.
+         ("background", "widgets", "customImage", "path"),
          ("dock", "pinnedApps"),
          # A theme file arrives from somewhere else. Every apps.* value is run
          # as a shell command by the button that owns it, and updates.* names
@@ -945,11 +951,11 @@ raw = json.load(open(os.path.join(theme_dir, "config.json")))
 images = slideshow_images(slideshow_folder(raw)) if include else []
 cfg = portable(raw)
 meta = json.load(open(os.path.join(theme_dir, "meta.json")))
-# Stamp the layout this archive was written against, so a future reader can
-# recognise a theme it only partly understands instead of applying it blind.
-# Only a bundle carrying pictures claims the newer layout, so a theme without
-# one still lands cleanly on a build that predates them.
-meta["formatVersion"] = FORMAT_VERSION if images else 1
+# Stamp the layout this archive was written against, so a reader can recognise
+# a theme it only partly understands instead of applying it blind. Every
+# archive claims it: widget places are shares of the screen now, and a build
+# from before reads them as pixels, so it should say so when it imports one.
+meta["formatVersion"] = FORMAT_VERSION
 with tarfile.open(out_path, "w:gz") as tar:
     entry(tar, "config.json", cfg)
     entry(tar, "meta.json", meta)
@@ -1198,6 +1204,13 @@ try:
             os.path.join(dest, "slideshow")
     elif isinstance(ss, dict) and ss.get("enable"):
         ss["enable"] = False
+
+    # The picture widget's file stayed behind on export, so a theme that had
+    # it on would show this machine's last picture, or the drop prompt, in the
+    # other person's spot. Off until the importer drops a picture of their own.
+    pic = ((cfg.get("background") or {}).get("widgets") or {}).get("customImage")
+    if isinstance(pic, dict) and pic.get("enable") and not pic.get("path"):
+        pic["enable"] = False
 
     # A look the machine doesn't have would otherwise be written into gsettings
     # as a name nothing can resolve, leaving the desktop on a fallback and, for

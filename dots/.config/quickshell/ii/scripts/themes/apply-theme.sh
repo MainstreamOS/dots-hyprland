@@ -164,6 +164,7 @@ PRESERVE_APPS=""
 PRESERVE_DOCK_PINS=""
 PRESERVE_UPDATES=""
 PRESERVE_WEATHER=""
+PRESERVE_WIDGETS_KNOWN=""
 if [ -f "$SHELL_CONFIG" ]; then
     # What the live config keeps regardless of what a theme carries, read in
     # one pass. Each of these was its own jq, so the file was forked over and
@@ -188,6 +189,9 @@ if [ -f "$SHELL_CONFIG" ]; then
     #                             manifest this machine believes about
     #                             releases. A theme carrying either would be
     #                             choosing what runs here.
+    #   background.widgets        read for its names only: every desktop widget
+    #                             this build knows, so the ones a snapshot never
+    #                             heard of can be switched off further down.
     #
     # One value per line, which is safe because tojson escapes any newline
     # inside a value rather than emitting it. Reading them tab separated would
@@ -195,7 +199,7 @@ if [ -f "$SHELL_CONFIG" ]; then
     # `// empty` also treats false as absent, so that is matched here.
     mapfile -t _PRESERVED < <(jq -r '
         [.appearance.themeSchedule, .light.night, .cursor, .bar.seededWidgets,
-         .dock.pinnedApps, .apps, .updates, .bar.weather]
+         .dock.pinnedApps, .apps, .updates, .bar.weather, .background.widgets]
         | map(if . == null or . == false then "" else tojson end) | .[]' \
         "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_THEME_SCHED="${_PRESERVED[0]:-}"
@@ -206,6 +210,7 @@ if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_APPS="${_PRESERVED[5]:-}"
     PRESERVE_UPDATES="${_PRESERVED[6]:-}"
     PRESERVE_WEATHER="${_PRESERVED[7]:-}"
+    PRESERVE_WIDGETS_KNOWN="${_PRESERVED[8]:-}"
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -248,6 +253,16 @@ if ! jq -e '.dock | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; t
     PRESERVE_DOCK_POS=$(jq -c '.dock.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     [ -n "$PRESERVE_DOCK_POS" ] && { JQ_FILTER+=' | .dock.position = $dockpos'; JQ_ARGS+=(--argjson dockpos "$PRESERVE_DOCK_POS"); }
 fi
+# Which desktop widgets are on, and where each sits, is part of the look, and a
+# snapshot taken before a widget existed says nothing about it. Silence would
+# leave the previous theme's widget standing, since the adapter keeps a value
+# the file stops naming, so every widget the live config knows and the snapshot
+# does not is switched off outright. Whether the widgets can be dragged is a
+# preference, so the live answer stays.
+[ -n "$PRESERVE_WIDGETS_KNOWN" ]  && { JQ_FILTER+=' | .background.widgets = ((($known | objects | with_entries(.value = {enable: false})) // {}) + ((.background.widgets | objects) // {}))'; JQ_ARGS+=(--argjson known "$PRESERVE_WIDGETS_KNOWN"); }
+PRESERVE_WIDGETS_LOCKED=$(jq -c '.background.widgetsLocked | select(. != null)' "$SHELL_CONFIG" 2>/dev/null || true)
+if [ -n "$PRESERVE_WIDGETS_LOCKED" ]; then JQ_FILTER+=' | .background.widgetsLocked = $locked'; JQ_ARGS+=(--argjson locked "$PRESERVE_WIDGETS_LOCKED");
+else                                     JQ_FILTER+=' | del(.background.widgetsLocked)'; fi
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }
