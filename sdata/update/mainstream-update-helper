@@ -111,6 +111,18 @@ if command -v systemd-run >/dev/null 2>&1; then
         /bin/bash -c "while kill -0 $$ 2>/dev/null; do sleep 2; done; rm -f '$TEMP_SUDOERS' '$LEGACY_SUDOERS'" \
         2>/dev/null || true
 fi
+# Messages come out in the caller's language, through the same files the
+# shell reads. Picked before the locale below is forced, since that one is
+# for pacman's messages, not the user's.
+if [[ -r /usr/local/lib/mainstream-tr.sh ]]; then
+    # shellcheck source=/dev/null
+    source /usr/local/lib/mainstream-tr.sh
+    tr_init "$ORIG_USER"
+else
+    t()  { printf '%s' "$1"; }
+    tf() { local fmt="$1"; shift; printf -- "$fmt" "$@"; }
+fi
+
 # The conflict-adoption path below reads pacman's messages; they are only
 # stable in one language.
 export LC_ALL=C.UTF-8
@@ -123,20 +135,11 @@ export LC_ALL=C.UTF-8
 # filesystem hit an error and the kernel took it read-only to protect it.
 root_mount="$(findmnt -no OPTIONS,SOURCE / 2>/dev/null || true)"
 if [[ ",${root_mount%% *}," == *,ro,* ]]; then
-    echo ">>> The system is mounted read-only, so nothing can be updated."
+    echo ">>> $(t "The system is mounted read-only, so nothing can be updated.")"
     if [[ "${root_mount#* }" == *"/.snapshots/"* || "${root_mount#* }" == *"@snapshots"* ]]; then
-        echo ">>> It was started from a snapshot in the boot menu, which is always"
-        echo ">>> read-only. To get back to your normal system, reboot and in the"
-        echo ">>> boot menu choose the entry named \"linux\", the one sitting right"
-        echo ">>> underneath the Mainstream OS list. If you booted the snapshot to"
-        echo ">>> recover from a bad update, make it permanent first: Settings >"
-        echo ">>> Recovery > Restore Snapshot, then reboot into that \"linux\" entry"
-        echo ">>> and run the update again."
+        echo ">>> $(t "It was started from a snapshot in the boot menu, which is always read-only. To get back to your normal system, reboot and in the boot menu choose the entry named \"linux\", the one sitting right underneath the Mainstream OS list. If you booted the snapshot to recover from a bad update, make it permanent first: Settings > Recovery > Restore Snapshot, then reboot into that \"linux\" entry and run the update again.")"
     else
-        echo ">>> The filesystem took itself read-only, which it does after an"
-        echo ">>> error. Reboot, then run the update again. If it happens again,"
-        echo ">>> the disk needs checking: Settings > Recovery, or from a terminal"
-        echo ">>> \"sudo dmesg | grep -i btrfs\" shows what went wrong."
+        echo ">>> $(t "The filesystem took itself read-only, which it does after an error. Reboot, then run the update again. If it happens again, the disk needs checking: Settings > Recovery, or from a terminal \"sudo dmesg | grep -i btrfs\" shows what went wrong.")"
     fi
     exit 1
 fi
@@ -145,8 +148,7 @@ fi
 # lock — every pacman step below would fail against it, and the exit trap
 # must never clear a lock owned by a live foreign process.
 if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
-    echo ">>> Another package manager is running (pacman database is locked)."
-    echo ">>> Let it finish or stop it, then run the update again."
+    echo ">>> $(t "Another package manager is running (pacman database is locked). Let it finish or stop it, then run the update again.")"
     exit 1
 fi
 
@@ -232,7 +234,7 @@ MAINSTREAM_REPO_OFFLINE=0
 if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  System & [mainstream] packages — pacman -Syu"
+    echo "  $(t "System & [mainstream] packages — pacman -Syu")"
     echo "═══════════════════════════════════════════════════════════"
     PACMAN_LOG=$(mktemp)
     pacman -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
@@ -244,8 +246,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
         # failure worth reporting.
         if grep -qE 'key "[^"]*" is unknown|missing required signature|could not be looked up remotely|GPGME error|invalid or corrupted database \(PGP signature\)|signature from .* is (unknown|marginal) trust' "$PACMAN_LOG"; then
             echo ""
-            echo "── The [mainstream] signing key is not trusted here, which blocks"
-            echo "   every repository. Repairing the keyring and retrying..."
+            echo "── $(t "The [mainstream] signing key is not trusted here, which blocks every repository. Repairing the keyring and retrying...")"
             if [[ -x /usr/local/bin/mainstream-keyring-repair ]]; then
                 /usr/local/bin/mainstream-keyring-repair
             elif [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
@@ -253,7 +254,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
             else
                 # Older installs predate the repair tool; the key file and the
                 # fingerprint are enough to re-establish trust by hand.
-                echo "   No repair tool on this machine, importing the key directly."
+                echo "   $(t "No repair tool on this machine, importing the key directly.")"
                 pacman-key --add /usr/local/share/mainstream.pub \
                     && pacman-key --lsign-key D644BEB9C1B7668E3A6C16DA8D567345B265848E \
                     && pacman-key --updatedb
@@ -267,8 +268,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
                 # update for an unverified one. Taking it out of the run
                 # instead keeps the rest of the system updating.
                 echo ""
-                echo "── Still unverified. Taking [mainstream] out of this run so the"
-                echo "   rest of the system can still update."
+                echo "── $(t "Still unverified. Taking [mainstream] out of this run so the rest of the system can still update.")"
                 if [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
                     /usr/local/bin/mainstream-keyring-init --disable-mainstream
                 else
@@ -311,8 +311,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
             done
             if [[ "$_adoptable" -eq 1 ]]; then
                 echo ""
-                echo "── A mainstream package now owns files an older install placed"
-                echo "   directly on disk. Adopting them and retrying..."
+                echo "── $(t "A mainstream package now owns files an older install placed directly on disk. Adopting them and retrying...")"
                 pacman -Syu --noconfirm "${_ow_args[@]}"
                 PACMAN_RC=$?
             else
@@ -323,20 +322,16 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
                 # with the person. Naming the path and the command is the difference
                 # between a dead end and a next step.
                 echo ""
-                echo "── Update stopped: a package wants files that are already on"
-                echo "   disk and belong to no package. That usually means the"
-                echo "   software was installed by its own installer before it was"
-                echo "   packaged here."
+                echo "── $(t "Update stopped: a package wants files that are already on disk and belong to no package. That usually means the software was installed by its own installer before it was packaged here.")"
                 echo ""
                 for _line in "${_conflicts[@]}"; do
                     _pkg="${_line%%:*}"
                     _path="${_line#*: }"
                     _path="${_path% exists in filesystem}"
-                    echo "   $_path belongs to no package; $_pkg wants it."
+                    echo "   $(tf "%s belongs to no package; %s wants it." "$_path" "$_pkg")"
                 done
                 echo ""
-                echo "   Look at what is there before deciding. If it is empty, or"
-                echo "   you do not need it, let the package take it over:"
+                echo "   $(t "Look at what is there before deciding. If it is empty, or you do not need it, let the package take it over:")"
                 echo ""
                 printf "     sudo pacman -Syu"
                 for _line in "${_conflicts[@]}"; do
@@ -348,8 +343,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
         fi
         if [[ "$PACMAN_RC" -ne 0 ]]; then
             echo ""
-            echo "── pacman failed (corrupted cache or busy database are the usual"
-            echo "   transient causes) — retrying once..."
+            echo "── $(t "pacman failed (corrupted cache or busy database are the usual transient causes) — retrying once...")"
             sleep 5
             pacman -Syu --noconfirm
             PACMAN_RC=$?
@@ -358,7 +352,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     rm -f "$PACMAN_LOG"
 else
     echo ""
-    echo "── System packages: skipped (per --skip-system)"
+    echo "── $(t "System packages: skipped (per --skip-system)")"
 fi
 
 # ── 2. AUR (yay or paru) ────────────────────────────────────────────────────
@@ -369,36 +363,36 @@ PKG_STEP_FAILED=0
 [[ "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]] && PKG_STEP_FAILED=1
 if [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo ""
-    echo "── AUR: deferred — the system package update failed."
+    echo "── $(t "AUR: deferred — the system package update failed.")"
 elif [[ "$SKIP_AUR" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     if command -v yay >/dev/null 2>&1; then
-        echo "  AUR packages — yay -Sua"
+        echo "  $(t "AUR packages — yay -Sua")"
         echo "═══════════════════════════════════════════════════════════"
         runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
             yay -Sua --noconfirm
         AUR_RC=$?
     elif command -v paru >/dev/null 2>&1; then
-        echo "  AUR packages — paru -Sua"
+        echo "  $(t "AUR packages — paru -Sua")"
         echo "═══════════════════════════════════════════════════════════"
         runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
             paru -Sua --noconfirm
         AUR_RC=$?
     else
-        echo "  AUR: no helper (yay/paru) installed — skipping"
+        echo "  $(t "AUR: no helper (yay/paru) installed — skipping")"
         echo "═══════════════════════════════════════════════════════════"
     fi
 else
     echo ""
-    echo "── AUR: skipped (per --skip-aur)"
+    echo "── $(t "AUR: skipped (per --skip-aur)")"
 fi
 
 # ── 3. Flatpak (system + user) ──────────────────────────────────────────────
 if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  Flatpak — flatpak update (system + user)"
+    echo "  $(t "Flatpak — flatpak update (system + user)")"
     echo "═══════════════════════════════════════════════════════════"
     # System-wide flatpaks update as root (no sudo needed; we are root).
     flatpak update --noninteractive --system
@@ -416,7 +410,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     fi
 elif [[ "$SKIP_FLATPAK" -ne 0 ]]; then
     echo ""
-    echo "── Flatpak: skipped (per --skip-flatpak)"
+    echo "── $(t "Flatpak: skipped (per --skip-flatpak)")"
 fi
 
 # ── 4. Snap (refresh as root, bypasses polkit) ──────────────────────────────
@@ -431,13 +425,13 @@ fi
 if [[ "$SKIP_SNAP" -eq 0 ]] && command -v snap >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  Snap packages — snap refresh"
+    echo "  $(t "Snap packages — snap refresh")"
     echo "═══════════════════════════════════════════════════════════"
     snap refresh
     SNAP_RC=$?
 elif [[ "$SKIP_SNAP" -ne 0 ]]; then
     echo ""
-    echo "── Snap: skipped (per --skip-snap)"
+    echo "── $(t "Snap: skipped (per --skip-snap)")"
 fi
 
 # ── 5. Mainstream dotfiles (updatems) ───────────────────────────────────────
@@ -451,14 +445,12 @@ fi
 # Runs as the calling user (updatems refuses root).
 if [[ "$SKIP_DOTFILES" -eq 0 && "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]]; then
     echo ""
-    echo "── Dotfiles: deferred — the system package update failed, and dotfile"
-    echo "   releases can depend on packages it would have installed. Re-run the"
-    echo "   update once the package step succeeds."
+    echo "── $(t "Dotfiles: deferred — the system package update failed, and dotfile releases can depend on packages it would have installed. Re-run the update once the package step succeeds.")"
     DOTFILES_DEFERRED=1
 elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  Mainstream dotfiles — updatems"
+    echo "  $(t "Mainstream dotfiles — updatems")"
     echo "═══════════════════════════════════════════════════════════"
     _ums_args=()
     [[ "$EDGE" -eq 1 ]] && _ums_args+=(--edge)
@@ -475,18 +467,17 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     # vs system-bits) failed if one does.
     if [[ "$DOTFILES_RC" -ne 0 ]]; then
         echo ""
-        echo "── Mainstream system bits: skipped — updatems did not finish, so the"
-        echo "   release's root-owned files stay at the version that matches the desktop."
+        echo "── $(t "Mainstream system bits: skipped — updatems did not finish, so the release's root-owned files stay at the version that matches the desktop.")"
         DOTFILES_SYS_RC=$DOTFILES_RC
     elif command -v updatems-system >/dev/null 2>&1; then
         echo ""
-        echo "── Mainstream system bits — updatems-system"
+        echo "── $(t "Mainstream system bits — updatems-system")"
         updatems-system "$ORIG_HOME/.cache/dots-hyprland"
         DOTFILES_SYS_RC=$?
     fi
 elif [[ "$SKIP_DOTFILES" -ne 0 ]]; then
     echo ""
-    echo "── Dotfiles: skipped (per --skip-dotfiles)"
+    echo "── $(t "Dotfiles: skipped (per --skip-dotfiles)")"
 fi
 
 # ── 6. Extras (topgrade for developer ecosystems) ───────────────────────────
@@ -503,11 +494,11 @@ fi
 # lensfun updates can run `topgrade --only lensfun` manually).
 if [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo ""
-    echo "── Developer extras: deferred — the system package update failed."
+    echo "── $(t "Developer extras: deferred — the system package update failed.")"
 elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
-    echo "  Developer extras — topgrade (cargo, pipx, npm, nix, …)"
+    echo "  $(t "Developer extras — topgrade (cargo, pipx, npm, nix, …)")"
     echo "═══════════════════════════════════════════════════════════"
     TG_ARGS=(--cleanup --yes --disable system --disable flatpak --disable snap --disable lensfun)
     if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
@@ -521,7 +512,7 @@ elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     TOPGRADE_RC=$?
 elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo ""
-    echo "── Developer extras: skipped (per --skip-extras)"
+    echo "── $(t "Developer extras: skipped (per --skip-extras)")"
 fi
 
 # ── 7. Quickshell ABI mismatch follow-up ────────────────────────────────────
@@ -538,41 +529,40 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
             # [mainstream] build — rebuild from the dotfiles PKGBUILD with makepkg.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
-            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (makepkg)"
+            echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" makepkg)"
             echo "═══════════════════════════════════════════════════════════"
             if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
                 bash -c "cd '$QS_PKGBUILD_DIR' && makepkg -Afsi --noconfirm"; then
-                echo ">>> Restart Quickshell to pick up the new binary."
+                echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else
-                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+                echo ">>> $(t "Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build.")"
             fi
         elif [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
             # AUR-sourced Quickshell (user installed a helper) — let yay rebuild it.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
-            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (yay)"
+            echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" yay)"
             echo "═══════════════════════════════════════════════════════════"
             if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
                 yay -S --rebuildtree --noconfirm "$QS_PKG"; then
-                echo ">>> Restart Quickshell to pick up the new binary."
+                echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else
-                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+                echo ">>> $(t "Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build.")"
             fi
         elif [[ -n "$QS_PKG" ]] && command -v paru >/dev/null 2>&1; then
             echo ""
             echo "═══════════════════════════════════════════════════════════"
-            echo "  Quickshell ABI mismatch — rebuilding $QS_PKG (paru)"
+            echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" paru)"
             echo "═══════════════════════════════════════════════════════════"
             if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
                 paru -S --rebuildtree --noconfirm "$QS_PKG"; then
-                echo ">>> Restart Quickshell to pick up the new binary."
+                echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else
-                echo ">>> Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build."
+                echo ">>> $(t "Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build.")"
             fi
         elif [[ -n "$QS_PKG" ]]; then
             echo ""
-            echo ">>> Quickshell ABI mismatch detected. Run a full update (or"
-            echo ">>> pacman -Syu) once the [mainstream] repo ships a rebuilt $QS_PKG."
+            echo ">>> $(tf "Quickshell ABI mismatch detected. Run a full update (or pacman -Syu) once the [mainstream] repo ships a rebuilt %s." "$QS_PKG")"
         fi
     fi
 fi
@@ -585,16 +575,16 @@ fi
 status_for() {
     local skip="$1" rc="$2"
     if [[ "$skip" -eq 1 ]]; then
-        echo "skipped"
+        echo "$(t "skipped")"
     elif [[ "$rc" -eq 0 ]]; then
-        echo "ok"
+        echo "$(t "ok")"
     else
-        echo "FAILED (rc=$rc)"
+        echo "$(tf "FAILED (rc=%s)" "$rc")"
     fi
 }
 echo ""
 echo "═══════════════════════════════════════════════════════════"
-echo "  Summary"
+echo "  $(t "Summary")"
 echo "═══════════════════════════════════════════════════════════"
 printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"   "$PACMAN_RC")"
 printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
@@ -611,8 +601,7 @@ printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRA
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
     printf "  %-30s %s\n" "[mainstream] repo:" "off (untrusted key)"
     echo ""
-    echo ">>> [mainstream] is switched off because its signing key could not be"
-    echo ">>> verified. Everything else updated. To bring it back, run:"
+    echo ">>> $(t "[mainstream] is switched off because its signing key could not be verified. Everything else updated. To bring it back, run:")"
     echo ">>>     sudo mainstream-keyring-repair"
 fi
 

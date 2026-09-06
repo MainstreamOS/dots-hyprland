@@ -338,6 +338,11 @@ _install_file 0755 \
     /usr/local/bin/mainstream-update-helper \
     "Update helper"
 
+_install_file 0644 \
+    "$REPO_DIR/sdata/lib/tr.sh" \
+    /usr/local/lib/mainstream-tr.sh \
+    "Script translations"
+
 _install_file 0755 \
     "$REPO_DIR/sdata/update/updatems" \
     /usr/local/bin/updatems \

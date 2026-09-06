@@ -691,6 +691,7 @@ function setup_update_helper(){
   fi
   x sudo install -Dm755 "${REPO_ROOT}/sdata/update/mainstream-update-helper" \
       /usr/local/bin/mainstream-update-helper
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/tr.sh" /usr/local/lib/mainstream-tr.sh
 }
 
 function setup_updatems(){
