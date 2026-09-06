@@ -23,11 +23,12 @@ AbstractBackgroundWidget {
     property bool hasActiveMusic: false
     readonly property real musicOffset: hasActiveMusic ? -90 : 0 // Move up by 90px to center with music box (which is 180px below center)
     needsColText: clockStyle === "digital"
-    x: forceCenter ? ((root.screenWidth - root.width) / 2) : targetX
-    y: forceCenter ? ((root.screenHeight - root.height) / 2 + musicOffset) : targetY
+    x: forceCenter ? ((root.screenWidth - root.width) / 2) : placeX
+    y: forceCenter ? ((root.screenHeight - root.height) / 2 + musicOffset) : placeY
     visibleWhenLocked: true
     
     Behavior on y {
+        enabled: root.animateYPos
         NumberAnimation {
             duration: Appearance.animation.elementMove.duration
             easing.type: Appearance.animation.elementMove.type

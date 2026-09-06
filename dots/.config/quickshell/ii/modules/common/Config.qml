@@ -484,13 +484,14 @@ Singleton {
             }
 
             property JsonObject background: JsonObject {
+                // x and y put a widget's center across the screen, 0 to 1, so a theme lays them out alike on every monitor.
                 property JsonObject widgets: JsonObject {
                     property JsonObject clock: JsonObject {
                         property bool enable: true
                         property bool showOnlyWhenLocked: false
                         property string placementStrategy: "leastBusy" // "free", "leastBusy", "mostBusy"
-                        property real x: 100
-                        property real y: 100
+                        property real x: 0.2
+                        property real y: 0.2
                         property string style: "digital"        // Options: "cookie", "digital", "pixel"
                         property string styleLocked: "digital"  // Options: "cookie", "digital", "pixel"
                         property JsonObject cookie: JsonObject {
@@ -532,48 +533,48 @@ Singleton {
                     property JsonObject weather: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                     }
                     property JsonObject calendar: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                         property string sizeMode: "2x2"
                     }
                     property JsonObject worldClock: JsonObject {
                         property bool enable: false
                         property list<string> timezones: ["Australia/Sydney", "Asia/Tokyo", "Europe/London", "America/New_York"]
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                         property string sizeMode: "2x2"
                         property int clockCount: 4
                     }
                     property JsonObject notes: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                     }
                     property JsonObject todo: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                     }
                     property JsonObject visualizer: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 0
-                        property real y: 0
+                        property real x: 0.5
+                        property real y: 1
                     }
                     property JsonObject customImage: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                         property string path: ""
                         property string shape: "Cookie4Sided"
                         property real size: 200
@@ -581,23 +582,23 @@ Singleton {
                     property JsonObject resources: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                         property bool vertical: false
                     }
                     property JsonObject timers: JsonObject {
                         property bool enable: false
                         property string placementStrategy: "free"
-                        property real x: 400
-                        property real y: 100
+                        property real x: 0.25
+                        property real y: 0.2
                         property bool vertical: false
                     }
                     property JsonObject media: JsonObject {
                         property bool enable: false
                         property bool showLyrics: false
                         property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
-                        property real x: 800
-                        property real y: 500
+                        property real x: 0.5
+                        property real y: 0.5
                         property string sizeMode: "1x3"
                     }
                 }
