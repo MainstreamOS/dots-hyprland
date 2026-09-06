@@ -100,6 +100,31 @@ mac_needs_brcmfmac_quirk() {
     esac
 }
 
+# ── mac_needs_wl_driver ─────────────────────────────────────────────────────
+# The BCM4360 in the 2013-2015 Macs and the BCM4331 in the 2012 ones are the
+# two chips brcmfmac never drove; only Broadcom's out-of-tree wl driver does,
+# which Arch carries as a DKMS package that blacklists the in-tree drivers
+# itself. BCM4360 is 14e4:43a0, BCM4331 is 14e4:4331.
+mac_needs_wl_driver() {
+    mac_is_apple || return 1
+    local pci; pci="$(_mac_pci)"
+    case "$pci" in
+        *14e4:43a0*|*14e4:4331*) return 0 ;;
+        *)                       return 1 ;;
+    esac
+}
+
+# The packages that driver needs: the module source, DKMS, and headers for
+# the kernel that is installed, named for the kernel package in use.
+mac_wl_packages() {
+    local kernel=linux
+    if command -v pacman >/dev/null 2>&1; then
+        kernel="$(pacman -Qqs '^linux(-zen|-lts|-hardened)?$' 2>/dev/null | head -n 1)"
+        [ -n "$kernel" ] || kernel=linux
+    fi
+    echo "broadcom-wl-dkms dkms ${kernel}-headers"
+}
+
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────
 # The Broadcom chips Apple paired with the T2, and the one in the 2019 iMacs,
 # run on firmware that linux-firmware does not carry and nobody may ship.
@@ -132,9 +157,15 @@ mac_apply_autoconfig() {
     fi
 
     if mac_needs_spi_input; then
-        # intel_lpss_pci brings up the SPI controller the keyboard hangs off.
+        # The SPI controller the keyboard hangs off is a plain PCI device on
+        # the 2015 12-inch MacBook and sits behind Intel's LPSS bridge on
+        # every later model, so the two need different modules to reach it.
         if command -v mkinitcpio_add_modules >/dev/null 2>&1; then
-            mkinitcpio_add_modules applespi intel_lpss_pci spi_pxa2xx_platform
+            if [ "$(_mac_product)" = "MacBook8,1" ]; then
+                mkinitcpio_add_modules applespi spi_pxa2xx_platform spi_pxa2xx_pci
+            else
+                mkinitcpio_add_modules applespi intel_lpss_pci spi_pxa2xx_platform
+            fi
         fi
     fi
 
@@ -187,6 +218,34 @@ mac_apply_autoconfig() {
     return 0
 }
 
+# ── mac_apply_session_quirks ────────────────────────────────────────────────
+# The part of the above a running session can take without a reboot, for the
+# live image the installer runs from: the Broadcom handshake fix, since the
+# firmware's own attempt fails on the routers most homes have and the live
+# session is where people first try to get online, and the media keys. The
+# Wi-Fi driver is reloaded so the option takes; the keyboard's is not, since
+# the keyboard is on it, so its setting goes in through sysfs instead.
+mac_apply_session_quirks() {
+    local modprobe_dir="${MODPROBE_DIR:-/etc/modprobe.d}"
+    local fnmode="${MAC_FNMODE_PARAM:-/sys/module/hid_apple/parameters/fnmode}"
+    mac_is_apple || return 0
+
+    printf 'options hid_apple fnmode=2\n' \
+        | _mac_write_file "$modprobe_dir/mainstream-apple.conf" 644
+    if [ -w "$fnmode" ]; then
+        echo 2 > "$fnmode" 2>/dev/null || true
+    fi
+
+    if mac_needs_brcmfmac_quirk; then
+        printf 'options brcmfmac feature_disable=0x82000\n' \
+            | _mac_write_file "$modprobe_dir/mainstream-apple-wifi.conf" 644
+        ${GPU_SUDO:-} modprobe -r brcmfmac_wcc brcmfmac 2>/dev/null || true
+        ${GPU_SUDO:-} modprobe brcmfmac 2>/dev/null || true
+    fi
+
+    return 0
+}
+
 # ── mac_fetch_firmware_now ──────────────────────────────────────────────────
 # One attempt from an installer that has a network, so the desktop can come up
 # with Wi-Fi on the first boot. Best effort and bounded; the timer covers the
@@ -208,6 +267,7 @@ mac_report() {
     mac_needs_spi_input      && echo "  SPI keyboard and trackpad: applespi added to the initramfs"
     mac_needs_nvme_quirk     && echo "  NVMe suspend quirk applied"
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
+    mac_needs_wl_driver      && echo "  Broadcom wl driver: $(mac_wl_packages)"
     mac_needs_apple_firmware && echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
     [ "$class" = t2 ] && cat <<'T2'
   T2 security chip present. The internal keyboard, trackpad, audio and fan

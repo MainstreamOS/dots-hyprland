@@ -890,6 +890,10 @@ function setup_gpu_autoconfig(){
   gpu_apply_autoconfig
   if [ "$(mac_class)" != none ]; then
     mac_report
+    if mac_needs_wl_driver; then
+      # shellcheck disable=SC2046
+      x sudo pacman -S --needed --noconfirm $(mac_wl_packages)
+    fi
     if mac_needs_apple_firmware; then
       x sudo pacman -S --needed --noconfirm 7zip
       x sudo install -Dm755 "${REPO_ROOT}/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware

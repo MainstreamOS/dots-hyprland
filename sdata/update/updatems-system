@@ -348,6 +348,50 @@ _install_file 0755 \
     /usr/local/bin/updatems-system \
     "updatems-system"
 
+# ── Apple hardware ─────────────────────────────────────────────────────────
+# The Mac quirks ran at install time only, so a Mac installed before one
+# existed never gained it: the firmware fetch for the T2 chips, the wl driver
+# for the 2012-2015 Broadcom parts, the SPI and NVMe fixes. Applied here from
+# the same library the installer uses; a no-op on anything that is not a Mac.
+# The initramfs is not rebuilt here, in keeping with the rest of this script:
+# a module added to its list lands on the next kernel update.
+MAC_LIB_SRC="$REPO_DIR/sdata/lib/mac-config.sh"
+GPU_LIB_SRC="$REPO_DIR/sdata/lib/gpu-config.sh"
+if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" == Apple* ]]; then
+    # shellcheck source=/dev/null
+    source "$GPU_LIB_SRC"
+    # shellcheck source=/dev/null
+    source "$MAC_LIB_SRC"
+    say "Apple hardware: applying the Mac quirks..."
+    mac_report 2>/dev/null | sed 's/^/    /' || true
+    if mac_needs_wl_driver; then
+        # shellcheck disable=SC2046
+        if pacman -S --noconfirm --needed $(mac_wl_packages) 2>&1 | sed 's/^/    /'; then
+            ok "Broadcom wl driver installed"
+        else
+            warn "Could not install the Broadcom wl driver"
+            RC=1
+        fi
+    fi
+    if mac_needs_apple_firmware; then
+        _install_file 0755 "$REPO_DIR/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware "Mac firmware fetch"
+        _install_file 0644 "$REPO_DIR/sdata/mac/macrecovery.py" /usr/local/lib/mainstream-mac/macrecovery.py "macrecovery"
+        _install_file 0644 "$REPO_DIR/sdata/mac/NOTICE" /usr/local/lib/mainstream-mac/NOTICE "Mac firmware notice"
+        for f in "$REPO_DIR"/sdata/mac/asahi_firmware/*.py; do
+            _install_file 0644 "$f" "/usr/local/lib/mainstream-mac/asahi_firmware/$(basename "$f")" "asahi_firmware/$(basename "$f")"
+        done
+        pacman -S --noconfirm --needed 7zip 2>&1 | sed 's/^/    /' || { warn "Could not install 7zip"; RC=1; }
+    fi
+    if mac_apply_autoconfig; then
+        ok "Mac quirks applied"
+    else
+        warn "Mac quirks did not fully apply"
+        RC=1
+    fi
+    systemctl daemon-reload 2>/dev/null || true
+    mac_fetch_firmware_now 2>&1 | sed 's/^/    /' || true
+fi
+
 if [[ $RC -eq 0 ]]; then
     ok "System-level refresh complete."
 else

@@ -23,7 +23,15 @@ set -euo pipefail
 LIB="${MAC_FIRMWARE_LIB:-/usr/local/lib/mainstream-mac}"
 MAC_LIB="${MAC_FIRMWARE_MAC_LIB:-/usr/local/lib/mac-config.sh}"
 FW_DIR="${MAC_FIRMWARE_DIR:-/usr/lib/firmware}"
-WORK="${MAC_FIRMWARE_WORKDIR:-/var/cache/mainstream/mac-firmware}"
+# The live image keeps its writable layer in a small RAM overlay that cannot
+# hold the download, so a session run from it works under /tmp instead.
+if [ -n "${MAC_FIRMWARE_WORKDIR:-}" ]; then
+    WORK="$MAC_FIRMWARE_WORKDIR"
+elif [ -d /run/archiso ]; then
+    WORK=/tmp/mainstream-mac-firmware
+else
+    WORK=/var/cache/mainstream/mac-firmware
+fi
 TIMER=mainstream-mac-firmware.timer
 
 force=0 quiet=0 check=0 from_dmg="" from_tree=""
