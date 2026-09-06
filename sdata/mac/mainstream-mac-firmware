@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# Fetch the Wi-Fi and Bluetooth firmware this Mac's Broadcom chips need.
+#
+# Apple's T2-era Macs carry Broadcom chips whose firmware is not in
+# linux-firmware and may not be redistributed, so nothing is shipped. Instead
+# this machine asks Apple's recovery service for its own recovery image, the
+# same one Internet Recovery would fetch, opens it here, and lifts the firmware
+# out of it under the names the brcmfmac and hci_bcm4377 drivers look for.
+# The image is verified against Apple's chunklist before anything is read.
+#
+# Usage: mainstream-mac-firmware [--force] [--quiet] [--check]
+#                                [--from-dmg <BaseSystem.dmg>] [--from-tree <dir>]
+#   --check      exit 0 when the firmware is already in place, 1 otherwise
+#   --force      fetch even when the machine does not look like it needs it,
+#                or the firmware is already there
+#   --from-dmg   use a recovery image already on disk instead of downloading
+#   --from-tree  use a macOS /usr/share/firmware tree already on disk
+#
+# Runs as root. Exit 0 also means "nothing to do" and "offline for now": the
+# timer that drives it retries until the firmware lands, then stops itself.
+set -euo pipefail
+
+LIB="${MAC_FIRMWARE_LIB:-/usr/local/lib/mainstream-mac}"
+MAC_LIB="${MAC_FIRMWARE_MAC_LIB:-/usr/local/lib/mac-config.sh}"
+FW_DIR="${MAC_FIRMWARE_DIR:-/usr/lib/firmware}"
+WORK="${MAC_FIRMWARE_WORKDIR:-/var/cache/mainstream/mac-firmware}"
+TIMER=mainstream-mac-firmware.timer
+
+force=0 quiet=0 check=0 from_dmg="" from_tree=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --force)     force=1 ;;
+        --quiet)     quiet=1 ;;
+        --check)     check=1 ;;
+        --from-dmg)  from_dmg="${2:-}"; shift ;;
+        --from-tree) from_tree="${2:-}"; shift ;;
+        -h|--help)   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+log() {
+    logger -t mainstream-mac-firmware -- "$*" 2>/dev/null || true
+    [ "$quiet" = 1 ] || echo "$*"
+}
+fail() { log "$*"; exit 1; }
+
+have_firmware() {
+    local f
+    for f in "$FW_DIR"/brcm/brcmfmac4364*-pcie.apple*.bin "$FW_DIR"/brcm/brcmfmac4377*-pcie.apple*.bin "$FW_DIR"/brcm/brcmfmac4355*-pcie.apple*.bin; do
+        [ -e "$f" ] && return 0
+    done
+    return 1
+}
+
+if [ "$check" = 1 ]; then
+    have_firmware && exit 0
+    exit 1
+fi
+
+if [ "$force" = 0 ] && have_firmware; then
+    log "Firmware already in place."
+    systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+    exit 0
+fi
+
+if [ "$force" = 0 ] && [ -z "$from_dmg" ] && [ -z "$from_tree" ]; then
+    if [ -r "$MAC_LIB" ]; then
+        # shellcheck source=/dev/null
+        source "$MAC_LIB"
+        if ! mac_needs_apple_firmware; then
+            log "This machine does not need Apple's Broadcom firmware."
+            systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+            exit 0
+        fi
+    fi
+fi
+
+[ -w "$FW_DIR" ] || fail "This needs to run as root to write $FW_DIR."
+command -v python3 >/dev/null || fail "python3 is missing."
+[ -r "$LIB/macrecovery.py" ] || fail "$LIB/macrecovery.py is missing."
+[ -r "$LIB/asahi_firmware/wifi.py" ] || fail "$LIB/asahi_firmware is missing."
+
+rm -rf "$WORK"
+mkdir -p "$WORK"
+cleanup() { rm -rf "$WORK"; }
+trap cleanup EXIT
+
+tree="$from_tree"
+
+if [ -z "$tree" ]; then
+    dmg="$from_dmg"
+    if [ -z "$dmg" ]; then
+        # Quiet when there is no route out: the timer will be back.
+        if ! ip route get 1.1.1.1 >/dev/null 2>&1; then
+            [ "$quiet" = 1 ] || echo "No network yet; will try again later."
+            exit 0
+        fi
+        # A Mac's DMI board name is its Apple board id, which is what the
+        # recovery service keys the image on. Anything else gets the generic
+        # recent-Mac id, whose image carries the same firmware tree.
+        bid="$(cat /sys/class/dmi/id/board_name 2>/dev/null || true)"
+        case "$bid" in Mac-*) ;; *) bid="" ;; esac
+        log "Downloading this Mac's recovery image from Apple${bid:+ for board $bid}..."
+        mkdir -p "$WORK/recovery"
+        if ! python3 "$LIB/macrecovery.py" ${bid:+-b "$bid"} -os latest -o "$WORK/recovery" -n BaseSystem download >"$WORK/download.log" 2>&1; then
+            tail -n 3 "$WORK/download.log" | while read -r line; do log "  $line"; done
+            fail "Could not download the recovery image; will try again later."
+        fi
+        dmg="$WORK/recovery/BaseSystem.dmg"
+    fi
+    [ -r "$dmg" ] || fail "Recovery image not found at $dmg."
+    command -v 7z >/dev/null || fail "7z is missing (package 7zip)."
+
+    # 7-Zip reads the disk image and the HFS+ volume inside it as one archive,
+    # so the firmware tree is addressed by its path under the volume's name and
+    # only that subtree is pulled out of the 2 GB image. An older build that
+    # stops at the volume gets a second pass over it. The exit codes are not
+    # trusted either way: a warning on some unrelated entry would end the run,
+    # so the result is judged by the tree it leaves behind.
+    log "Opening the recovery image..."
+    mkdir -p "$WORK/tree"
+    fwpath="$(7z l -slt "$dmg" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1)"
+    if [ -n "$fwpath" ]; then
+        7z x -y -o"$WORK/tree" "$dmg" "$fwpath" -r >/dev/null 2>&1 || true
+    else
+        mkdir -p "$WORK/dmg"
+        7z x -y -o"$WORK/dmg" "$dmg" >/dev/null 2>&1 || true
+        hfs="$(find "$WORK/dmg" -type f -size +100M | head -n 1)"
+        [ -n "$hfs" ] || fail "No volume found inside the recovery image."
+        fwpath="$(7z l -slt "$hfs" 2>/dev/null | sed -n 's/^Path = //p' | grep -E '(^|/)usr/share/firmware$' | head -n 1)"
+        [ -n "$fwpath" ] || fail "No firmware tree inside the recovery image."
+        7z x -y -o"$WORK/tree" "$hfs" "$fwpath" -r >/dev/null 2>&1 || true
+    fi
+    tree="$WORK/tree/$fwpath"
+fi
+
+[ -d "$tree/wifi" ] || fail "No wifi firmware directory under $tree."
+
+log "Preparing the firmware files..."
+mkdir -p "$WORK/wifi" "$WORK/bluetooth"
+( cd "$LIB" && python3 -m asahi_firmware.wifi "$tree/wifi" "$WORK/wifi" ) >"$WORK/wifi.log" 2>&1 \
+    || fail "Could not prepare the Wi-Fi firmware."
+if [ -d "$tree/bluetooth" ]; then
+    ( cd "$LIB" && python3 -m asahi_firmware.bluetooth "$tree/bluetooth" "$WORK/bluetooth" ) >"$WORK/bluetooth.log" 2>&1 \
+        || log "Bluetooth firmware could not be prepared; Wi-Fi goes ahead."
+fi
+
+installed=0
+for pkg in "$WORK/wifi" "$WORK/bluetooth"; do
+    [ -s "$pkg/firmware.tar" ] || continue
+    tar -xf "$pkg/firmware.tar" -C "$FW_DIR" --no-same-owner
+    n=$(grep -c '^FILE ' "$pkg/manifest.txt" 2>/dev/null || echo 0)
+    log "Installed $n firmware files from $(basename "$pkg")."
+    installed=$((installed + n))
+done
+[ "$installed" -gt 0 ] || fail "The recovery image held no usable firmware."
+chown -R root:root "$FW_DIR/brcm" 2>/dev/null || true
+
+# On a running system the drivers can pick the files up right away; in an
+# installer chroot there is nothing loaded to reload.
+if [ -d /run/systemd/system ] && [ "$FW_DIR" = /usr/lib/firmware ]; then
+    modprobe -r brcmfmac_wcc brcmfmac 2>/dev/null || true
+    modprobe brcmfmac 2>/dev/null || true
+    modprobe -r hci_bcm4377 2>/dev/null || true
+    modprobe hci_bcm4377 2>/dev/null || true
+    systemctl disable --now "$TIMER" >/dev/null 2>&1 || true
+fi
+
+log "Wi-Fi and Bluetooth firmware is in place."

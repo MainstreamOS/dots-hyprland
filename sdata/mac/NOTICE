@@ -1,0 +1,20 @@
+Third-party code carried here so a Mac can fetch its own Wi-Fi and Bluetooth
+firmware from Apple's recovery image on the machine itself. Nothing Apple
+owns is stored in this repository.
+
+macrecovery.py
+  From OpenCorePkg, Utilities/macrecovery, by vit9696 and the Acidanthera
+  contributors. BSD 3-Clause License. Talks to Apple's recovery service for
+  a board id and verifies the download against its chunklist.
+  https://github.com/acidanthera/OpenCorePkg
+
+asahi_firmware/ (core.py, cpio.py, wifi.py, bluetooth.py)
+  From the Asahi Linux installer, by The Asahi Linux Contributors. MIT
+  License. Turns the firmware tree inside a macOS image into the file names
+  the brcmfmac and hci_bcm4377 drivers look for.
+  https://github.com/AsahiLinux/asahi-installer
+
+Local change: bluetooth.py imports FWPackage from asahi_firmware.core, as
+wifi.py does; upstream's entry point imports it from the package itself,
+whose __init__ is empty, so that path fails when run as a module.
+

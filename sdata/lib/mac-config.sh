@@ -9,7 +9,9 @@
 # T2 machines (2018-2020) are detected but not configured. Their internal
 # keyboard, trackpad, audio and fan control live behind a patched kernel this
 # project does not ship, and reporting that plainly beats leaving someone to
-# work out why the keyboard is dead.
+# work out why the keyboard is dead. Their Wi-Fi and Bluetooth are another
+# matter: the drivers are in the stock kernel and only the firmware is
+# missing, and that the machine can fetch from Apple for itself.
 #
 # Write seams match gpu-config.sh so both libraries behave the same when sourced
 # together:
@@ -98,6 +100,19 @@ mac_needs_brcmfmac_quirk() {
     esac
 }
 
+# ── mac_needs_apple_firmware ────────────────────────────────────────────────
+# The Broadcom chips Apple paired with the T2, and the one in the 2019 iMacs,
+# run on firmware that linux-firmware does not carry and nobody may ship.
+# BCM4364 is 14e4:4464, BCM4377 is 14e4:4488, BCM4355 is 14e4:43dc.
+mac_needs_apple_firmware() {
+    mac_is_apple || return 1
+    local pci; pci="$(_mac_pci)"
+    case "$pci" in
+        *14e4:4464*|*14e4:4488*|*14e4:43dc*) return 0 ;;
+        *)                                   return 1 ;;
+    esac
+}
+
 # ── mac_apply_autoconfig ────────────────────────────────────────────────────
 # Idempotent. A no-op on anything that is not an Apple machine.
 mac_apply_autoconfig() {
@@ -140,6 +155,47 @@ mac_apply_autoconfig() {
         ${GPU_SUDO:-} systemctl enable mainstream-mac-nvme.service >/dev/null 2>&1 || true
     fi
 
+    # The firmware fetch needs a network the machine may not have until
+    # something wired is plugged in, so a timer keeps asking until the files
+    # are in place, and the script stops the timer itself once they are.
+    if mac_needs_apple_firmware; then
+        printf '%s\n' \
+            '[Unit]' \
+            "Description=Fetch this Mac's Wi-Fi and Bluetooth firmware from Apple's recovery image" \
+            'After=network-online.target' \
+            'Wants=network-online.target' \
+            'ConditionPathExists=/usr/local/bin/mainstream-mac-firmware' \
+            '' \
+            '[Service]' \
+            'Type=oneshot' \
+            'ExecStart=/usr/local/bin/mainstream-mac-firmware --quiet' \
+            | _mac_write_file "$systemd_dir/mainstream-mac-firmware.service" 644
+        printf '%s\n' \
+            '[Unit]' \
+            "Description=Keep fetching this Mac's Wi-Fi and Bluetooth firmware until it is in place" \
+            '' \
+            '[Timer]' \
+            'OnBootSec=1min' \
+            'OnUnitActiveSec=20min' \
+            '' \
+            '[Install]' \
+            'WantedBy=timers.target' \
+            | _mac_write_file "$systemd_dir/mainstream-mac-firmware.timer" 644
+        ${GPU_SUDO:-} systemctl enable mainstream-mac-firmware.timer >/dev/null 2>&1 || true
+    fi
+
+    return 0
+}
+
+# ── mac_fetch_firmware_now ──────────────────────────────────────────────────
+# One attempt from an installer that has a network, so the desktop can come up
+# with Wi-Fi on the first boot. Best effort and bounded; the timer covers the
+# rest. Prints nothing when there is nothing to do.
+mac_fetch_firmware_now() {
+    mac_needs_apple_firmware || return 0
+    local script="${MAC_FIRMWARE_SCRIPT:-/usr/local/bin/mainstream-mac-firmware}"
+    [ -x "$script" ] || return 0
+    ${GPU_SUDO:-} timeout 900 "$script" || true
     return 0
 }
 
@@ -152,6 +208,7 @@ mac_report() {
     mac_needs_spi_input      && echo "  SPI keyboard and trackpad: applespi added to the initramfs"
     mac_needs_nvme_quirk     && echo "  NVMe suspend quirk applied"
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
+    mac_needs_apple_firmware && echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
     [ "$class" = t2 ] && cat <<'T2'
   T2 security chip present. The internal keyboard, trackpad, audio and fan
   control need a patched kernel that is not shipped here. A USB keyboard and

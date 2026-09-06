@@ -890,7 +890,17 @@ function setup_gpu_autoconfig(){
   gpu_apply_autoconfig
   if [ "$(mac_class)" != none ]; then
     mac_report
+    if mac_needs_apple_firmware; then
+      x sudo pacman -S --needed --noconfirm 7zip
+      x sudo install -Dm755 "${REPO_ROOT}/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware
+      x sudo install -Dm644 "${REPO_ROOT}/sdata/mac/macrecovery.py" /usr/local/lib/mainstream-mac/macrecovery.py
+      x sudo install -Dm644 "${REPO_ROOT}/sdata/mac/NOTICE" /usr/local/lib/mainstream-mac/NOTICE
+      for f in "${REPO_ROOT}"/sdata/mac/asahi_firmware/*.py; do
+        x sudo install -Dm644 "$f" "/usr/local/lib/mainstream-mac/asahi_firmware/$(basename "$f")"
+      done
+    fi
     mac_apply_autoconfig
+    mac_fetch_firmware_now
   fi
   # A reason nobody can read is the same as no reason.
   flush_failures
