@@ -239,6 +239,9 @@ hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overviewDim)" }
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})
+-- A menu belongs under the pointer at once. The stock layer animation
+-- scales it up from 93%, which reads as the menu arriving from somewhere.
+hl.layer_rule({ match = { namespace = "quickshell:desktopMenu" }, animation = "fade"})
 hl.layer_rule({ match = { namespace = "quickshell:dock" }, animation = "slide bottom"})
 hl.layer_rule({ match = { namespace = "quickshell:dockTop" }, animation = "slide top"})
 hl.layer_rule({ match = { namespace = "quickshell:dockLeft" }, animation = "slide left"})
