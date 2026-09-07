@@ -159,7 +159,12 @@ installed=0
 for pkg in "$WORK/wifi" "$WORK/bluetooth"; do
     [ -s "$pkg/firmware.tar" ] || continue
     tar -xf "$pkg/firmware.tar" -C "$FW_DIR" --no-same-owner
-    n=$(grep -c '^FILE ' "$pkg/manifest.txt" 2>/dev/null || echo 0)
+    # grep -c prints 0 and still exits 1 when it matches nothing, so the
+    # fallback would append a second 0 and the sum below would be arithmetic
+    # on "0\n0". Under set -e that aborts the run with the firmware already
+    # unpacked but the drivers never reloaded and the timer never stopped.
+    n=$(grep -c '^FILE ' "$pkg/manifest.txt" 2>/dev/null) || true
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
     log "Installed $n firmware files from $(basename "$pkg")."
     installed=$((installed + n))
 done
