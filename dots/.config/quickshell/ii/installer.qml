@@ -26,6 +26,18 @@ ApplicationWindow {
     title: Translation.tr("Welcome")
     color: Appearance.m3colors.m3surfaceContainerLow
 
+    // What this machine needs plugged in before it can be installed, written by
+    // the live session for the Macs whose built-in input or Wi-Fi cannot work
+    // there. Empty on every other machine.
+    property string macNotice: ""
+    FileView {
+        path: "/run/mainstream-mac-notice"
+        // text() is a call, so it is read here rather than bound: a binding
+        // through it would be evaluated once, while the file is still loading,
+        // and never again.
+        onLoaded: root.macNotice = (text() || "").trim()
+    }
+
     // ── Monitor data ──
     property var monitors: []
     property var pendingChanges: ({})
@@ -279,6 +291,14 @@ ApplicationWindow {
                     color: Appearance.colors.colOnLayer1
                     Layout.alignment: Qt.AlignHCenter
                 }
+
+                    // ── This machine needs something plugged in ──
+                    NoticeBox {
+                        visible: root.macNotice.length > 0
+                        Layout.fillWidth: true
+                        materialIcon: "usb"
+                        text: root.macNotice
+                    }
 
                     // ── Internet notice ──
                     NoticeBox {
