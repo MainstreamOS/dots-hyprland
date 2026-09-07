@@ -118,6 +118,9 @@ if [[ -r /usr/local/lib/mainstream-tr.sh ]]; then
     # shellcheck source=/dev/null
     source /usr/local/lib/mainstream-tr.sh
     tr_init "$ORIG_USER"
+    # The scripts run from here inherit the locale forced below for pacman's
+    # sake; this carries the language the user reads past it.
+    export MAINSTREAM_UI_LANG="$MAINSTREAM_TR_LANG"
 else
     t()  { printf '%s' "$1"; }
     tf() { local fmt="$1"; shift; printf -- "$fmt" "$@"; }
@@ -586,20 +589,20 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  $(t "Summary")"
 echo "═══════════════════════════════════════════════════════════"
-printf "  %-30s %s\n" "System packages (pacman):"     "$(status_for "$SKIP_SYSTEM"   "$PACMAN_RC")"
-printf "  %-30s %s\n" "AUR (yay/paru):"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
-printf "  %-30s %s\n" "Flatpak:"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC")"
-printf "  %-30s %s\n" "Snap:"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC")"
+printf "  %-30s %s\n" "$(t "System packages (pacman):")"     "$(status_for "$SKIP_SYSTEM"   "$PACMAN_RC")"
+printf "  %-30s %s\n" "$(t "AUR (yay/paru):")"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
+printf "  %-30s %s\n" "$(t "Flatpak:")"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC")"
+printf "  %-30s %s\n" "$(t "Snap:")"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC")"
 if [[ "${DOTFILES_DEFERRED:-0}" -eq 1 ]]; then
-    printf "  %-30s %s\n" "Dotfiles (updatems):"          "deferred (system update failed)"
-    printf "  %-30s %s\n" "System bits (updatems-system):" "deferred (system update failed)"
+    printf "  %-30s %s\n" "$(t "Dotfiles (updatems):")"          "$(t "deferred (system update failed)")"
+    printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(t "deferred (system update failed)")"
 else
-    printf "  %-30s %s\n" "Dotfiles (updatems):"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
-    printf "  %-30s %s\n" "System bits (updatems-system):" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
+    printf "  %-30s %s\n" "$(t "Dotfiles (updatems):")"          "$(status_for "$SKIP_DOTFILES" "$DOTFILES_RC")"
+    printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
 fi
-printf "  %-30s %s\n" "Developer extras (topgrade):"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
+printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
-    printf "  %-30s %s\n" "[mainstream] repo:" "off (untrusted key)"
+    printf "  %-30s %s\n" "$(t "[mainstream] repo:")" "$(t "off (untrusted key)")"
     echo ""
     echo ">>> $(t "[mainstream] is switched off because its signing key could not be verified. Everything else updated. To bring it back, run:")"
     echo ">>>     sudo mainstream-keyring-repair"

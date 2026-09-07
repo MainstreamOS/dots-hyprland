@@ -21,8 +21,12 @@ def unescape(s):
 def keys_in(path):
     found = []
     for line in open(path, encoding="utf-8"):
+        if line.lstrip().startswith("#"):
+            continue
         for m in CALL.finditer(line):
             k = unescape(m.group(1))
+            if "$" in k:
+                continue
             if k and k not in found:
                 found.append(k)
     return found

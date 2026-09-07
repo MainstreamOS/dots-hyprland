@@ -20,13 +20,23 @@ MAINSTREAM_TR_LANG="en_US"
 MAINSTREAM_TR_FILES=()
 
 tr_init() {
-    local user="${1:-${SUDO_USER:-$USER}}" home lang f
-    home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6)"
-    [ -n "$home" ] || home="$HOME"
+    local user="${1:-${SUDO_USER:-${USER:-}}}" home lang f
+    home="$( { getent passwd "$user" 2>/dev/null || true; } | cut -d: -f6)"
+    [ -n "$home" ] || home="${HOME:-/root}"
+    # A script run as root for nobody in particular still speaks to the one
+    # person whose home holds the shell, so that home is the one read, for
+    # the language as much as for the files.
+    if [ "$(id -u)" = 0 ] && [ ! -d "$home/.config/quickshell/ii/translations" ]; then
+        for f in /home/*/.config/quickshell/ii/translations; do
+            [ -d "$f" ] && { home="${f%/.config/quickshell/ii/translations}"; break; }
+        done
+    fi
 
     lang="$(jq -r '.language.ui // "auto"' "$home/.config/illogical-impulse/config.json" 2>/dev/null || true)"
     if [ -z "$lang" ] || [ "$lang" = auto ] || [ "$lang" = null ]; then
-        lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-en_US}}}"
+        # A parent that already settled the language hands it down here,
+        # since it may have forced its own locale for tool output since.
+        lang="${MAINSTREAM_UI_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en_US}}}}"
         lang="${lang%%.*}"
         lang="${lang%%@*}"
     fi
@@ -44,7 +54,8 @@ tr_init() {
 t() {
     local key="$1" f v
     for f in "${MAINSTREAM_TR_FILES[@]}"; do
-        v="$(jq -r --arg k "$key" 'if has($k) then .[$k] else empty end' "$f" 2>/dev/null)" || v=""
+        # Only a string is a translation; the shell falls back on anything else too.
+        v="$(jq -r --arg k "$key" 'if has($k) and (.[$k] | type == "string") then .[$k] else empty end' "$f" 2>/dev/null)" || v=""
         if [ -n "$v" ]; then
             # A translation ending in /*keep*/ is one the translator marked as final.
             v="${v%/\*keep\*/}"
@@ -56,9 +67,18 @@ t() {
 }
 
 tf() {
-    local fmt
-    fmt="$(t "$1")"
+    local key="$1" fmt
+    fmt="$(t "$key")"
     shift
+    # A translation is only a format if it kept the key's %s and gained no
+    # other %: a stray percent sign or a %1 from the shell's own style would
+    # otherwise garble the line, so such a translation is set aside and the
+    # English speaks.
+    local stripped="${fmt//%s/}" keystripped="${key//%s/}"
+    if [ "${stripped//%/}" != "$stripped" ] \
+        || [ $(( ${#fmt} - ${#stripped} )) -ne $(( ${#key} - ${#keystripped} )) ]; then
+        fmt="$key"
+    fi
     # shellcheck disable=SC2059
     printf -- "$fmt" "$@"
 }

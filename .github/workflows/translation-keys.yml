@@ -1,0 +1,27 @@
+name: Script messages are translatable
+
+on:
+  push:
+    paths:
+      - "sdata/lib/tr.sh"
+      - "sdata/lib/tr-keys.py"
+      - "sdata/update/**"
+      - "dots/.config/quickshell/ii/translations/en_US.json"
+  pull_request:
+    paths:
+      - "sdata/lib/tr.sh"
+      - "sdata/lib/tr-keys.py"
+      - "sdata/update/**"
+      - "dots/.config/quickshell/ii/translations/en_US.json"
+
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every message a script prints has its key in en_US.json
+        run: |
+          python3 sdata/lib/tr-keys.py \
+            sdata/update/mainstream-update-helper \
+            sdata/update/updatems \
+            sdata/update/updatems-system

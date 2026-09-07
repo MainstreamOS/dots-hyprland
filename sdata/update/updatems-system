@@ -54,6 +54,24 @@ say()  { printf '%s==>%s %s\n' "$c_blue"   "$c_rst" "$*"; }
 ok()   { printf '%s OK%s  %s\n' "$c_green"  "$c_rst" "$*"; }
 warn() { printf '%s ! %s  %s\n' "$c_yellow" "$c_rst" "$*" >&2; }
 
+# Messages in the caller's language, through the same files the shell reads:
+# the installed library, or the clone's copy on the hop that first brings it.
+if [[ -r /usr/local/lib/mainstream-tr.sh ]]; then
+    # shellcheck source=/dev/null
+    source /usr/local/lib/mainstream-tr.sh
+elif [[ -r "$REPO_DIR/sdata/lib/tr.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$REPO_DIR/sdata/lib/tr.sh"
+fi
+if declare -F tr_init >/dev/null; then
+    # The clone belongs to the person this runs for, whether they came
+    # through sudo or pkexec, so its owner names the language.
+    tr_init "${SUDO_USER:-$(stat -c %U "$REPO_DIR" 2>/dev/null || true)}"
+else
+    t()  { printf '%s' "$1"; }
+    tf() { local fmt="$1"; shift; printf -- "$fmt" "$@"; }
+fi
+
 cd "$REPO_DIR" || { echo "cannot cd to $REPO_DIR" >&2; exit 1; }
 
 # Hand over to the copy the release being applied ships, rather than running
@@ -90,18 +108,18 @@ _install_file() {
     # $1 mode  $2 src  $3 dst  $4 label
     local mode="$1" src="$2" dst="$3" label="$4"
     if [[ ! -e "$src" ]]; then
-        warn "$label source missing at $src — skipping"
+        warn "$(tf "%s source missing at %s — skipping" "$label" "$src")"
         return 0
     fi
     if ! _src_ok "$src"; then
-        warn "$label source is a symlink or writable by others ($src) — refusing to install it as root"
+        warn "$(tf "%s source is a symlink or writable by others (%s) — refusing to install it as root" "$label" "$src")"
         RC=1
         return 0
     fi
     if install -m "$mode" -o root -g root "$src" "$dst"; then
-        ok "$label refreshed -> $dst"
+        ok "$(tf "%s refreshed -> %s" "$label" "$dst")"
     else
-        warn "$label install failed (src=$src dst=$dst)"
+        warn "$(tf "%s install failed (src=%s dst=%s)" "$label" "$src" "$dst")"
         RC=1
     fi
 }
@@ -110,35 +128,35 @@ _install_file() {
 PLY_SRC="$REPO_DIR/sdata/plymouth/mainstream"
 PLY_DST="/usr/share/plymouth/themes/mainstream"
 if [[ -d "$PLY_SRC" ]]; then
-    say "Refreshing Plymouth theme -> $PLY_DST"
+    say "$(tf "Refreshing Plymouth theme -> %s" "$PLY_DST")"
     if rm -rf "$PLY_DST" && cp -r "$PLY_SRC" "$PLY_DST"; then
         chown -R root:root "$PLY_DST"
         find "$PLY_DST" -type d -exec chmod 755 {} +
         find "$PLY_DST" -type f -exec chmod 644 {} +
-        ok "Plymouth theme refreshed (initramfs NOT rebuilt; takes effect on the next mkinitcpio pass)"
+        ok "$(t "Plymouth theme refreshed (initramfs NOT rebuilt; takes effect on the next mkinitcpio pass)")"
     else
-        warn "Plymouth theme refresh failed"
+        warn "$(t "Plymouth theme refresh failed")"
         RC=1
     fi
 else
-    warn "No Plymouth source at $PLY_SRC — skipping"
+    warn "$(tf "No Plymouth source at %s — skipping" "$PLY_SRC")"
 fi
 
 # ── SDDM background helper + polkit ────────────────────────────────────────
 _install_file 0755 \
     "$REPO_DIR/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh" \
     /usr/local/bin/sddm-bg-helper \
-    "SDDM bg helper"
+    "$(t "SDDM bg helper")"
 
 _install_file 0644 \
     "$REPO_DIR/sdata/polkit/org.illogicalimpulse.sddm-bg.policy" \
     /usr/share/polkit-1/actions/org.illogicalimpulse.sddm-bg.policy \
-    "SDDM polkit action"
+    "$(t "SDDM polkit action")"
 
 _install_file 0644 \
     "$REPO_DIR/sdata/polkit/50-sddm-bg.rules" \
     /usr/share/polkit-1/rules.d/50-sddm-bg.rules \
-    "SDDM polkit rules"
+    "$(t "SDDM polkit rules")"
 
 # ── SDDM greeter config: .conf → .lua ──────────────────────────────────────
 # Hyprland 0.56.1 puts a notice on screen for any .conf config and drops the
@@ -180,17 +198,17 @@ GREETER_DIR=/var/lib/sddm/.config/hypr
 GREETER_SRC="$REPO_DIR/sdata/sddm/hyprland.lua"
 if [[ -d "$GREETER_DIR" ]]; then
     if [[ ! -f "$GREETER_SRC" ]]; then
-        warn "SDDM greeter config source missing at $GREETER_SRC — skipping"
+        warn "$(tf "SDDM greeter config source missing at %s — skipping" "$GREETER_SRC")"
     elif install -m 600 -o sddm -g sddm "$GREETER_SRC" "$GREETER_DIR/hyprland.lua"; then
         reseed_greeter_layout "$GREETER_DIR/hyprland.lua"
         if [[ -f "$GREETER_DIR/hyprland.conf" ]]; then
             mv "$GREETER_DIR/hyprland.conf" "$GREETER_DIR/hyprland.conf.old"
-            ok "SDDM greeter config moved to Lua (old kept as hyprland.conf.old)"
+            ok "$(t "SDDM greeter config moved to Lua (old kept as hyprland.conf.old)")"
         else
-            ok "SDDM greeter config refreshed -> $GREETER_DIR/hyprland.lua"
+            ok "$(tf "SDDM greeter config refreshed -> %s" "$GREETER_DIR/hyprland.lua")"
         fi
     else
-        warn "SDDM greeter config install failed — leaving the existing one alone"
+        warn "$(t "SDDM greeter config install failed — leaving the existing one alone")"
         RC=1
     fi
 fi
@@ -210,9 +228,9 @@ if systemctl cat cups.socket &>/dev/null; then
     if systemctl is-enabled cups.socket &>/dev/null; then
         : # already on, nothing to say
     elif systemctl enable cups.socket &>/dev/null; then
-        ok "Printing enabled (cups.socket)"
+        ok "$(t "Printing enabled (cups.socket)")"
     else
-        warn "Could not enable cups.socket"
+        warn "$(t "Could not enable cups.socket")"
         RC=1
     fi
 fi
@@ -225,9 +243,9 @@ fi
 if [[ -f /etc/nsswitch.conf ]] && ! grep -q 'mdns_minimal' /etc/nsswitch.conf; then
     if sed -i -E 's/^(hosts:.*[[:space:]])(dns)([[:space:]]|$)/\1mdns_minimal [NOTFOUND=return] \2\3/' /etc/nsswitch.conf \
        && grep -q 'mdns_minimal' /etc/nsswitch.conf; then
-        ok "Network printers resolvable (nss-mdns)"
+        ok "$(t "Network printers resolvable (nss-mdns)")"
     else
-        warn "Could not add mdns_minimal to /etc/nsswitch.conf"
+        warn "$(t "Could not add mdns_minimal to /etc/nsswitch.conf")"
         RC=1
     fi
 fi
@@ -255,9 +273,9 @@ JobRetryInterval 60
 JobRetryLimit 5
 CUPSPOLICYEOF
     then
-        ok "CUPS queues retry rather than stop on a backend error"
+        ok "$(t "CUPS queues retry rather than stop on a backend error")"
     else
-        warn "Could not set the CUPS error policy"
+        warn "$(t "Could not set the CUPS error policy")"
         RC=1
     fi
 fi
@@ -284,47 +302,47 @@ KEYRING_SRC="$REPO_DIR/sdata/keyring"
 _install_file 0644 \
     "$REPO_DIR/sdata/dist-arch/mainstream.pub" \
     /usr/local/share/mainstream.pub \
-    "[mainstream] signing key"
+    "$(t "[mainstream] signing key")"
 
 _install_file 0755 \
     "$KEYRING_SRC/mainstream-keyring-init" \
     /usr/local/bin/mainstream-keyring-init \
-    "Keyring init"
+    "$(t "Keyring init")"
 
 _install_file 0755 \
     "$KEYRING_SRC/mainstream-keyring-repair" \
     /usr/local/bin/mainstream-keyring-repair \
-    "Keyring repair command"
+    "$(t "Keyring repair command")"
 
 _install_file 0644 \
     "$KEYRING_SRC/pacman-keyring-init.service" \
     /etc/systemd/system/pacman-keyring-init.service \
-    "Keyring init service"
+    "$(t "Keyring init service")"
 
 _install_file 0644 \
     "$KEYRING_SRC/pacman-keyring-init.timer" \
     /etc/systemd/system/pacman-keyring-init.timer \
-    "Keyring init timer"
+    "$(t "Keyring init timer")"
 
 systemctl daemon-reload 2>/dev/null || true
 # Installs made while the unit disabled its own timer after one success have
 # no watchdog left, so enabling here is what puts a stranded machine back
 # under one.
 if systemctl enable --now pacman-keyring-init.timer 2>/dev/null; then
-    ok "Keyring check timer enabled"
+    ok "$(t "Keyring check timer enabled")"
 else
-    warn "Could not enable pacman-keyring-init.timer"
+    warn "$(t "Could not enable pacman-keyring-init.timer")"
     RC=1
 fi
 
 if [[ -x /usr/local/bin/mainstream-keyring-init ]] \
    && ! /usr/local/bin/mainstream-keyring-init --check >/dev/null 2>&1; then
-    say "Repairing the pacman keyring and [mainstream] repo..."
+    say "$(t "Repairing the pacman keyring and [mainstream] repo...")"
     /usr/local/bin/mainstream-keyring-init 2>&1 | sed 's/^/    /'
     if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
-        ok "Keyring and [mainstream] repo verified"
+        ok "$(t "Keyring and [mainstream] repo verified")"
     else
-        warn "Keyring repair did not complete; the timer retries on its own"
+        warn "$(t "Keyring repair did not complete; the timer retries on its own")"
         RC=1
     fi
 fi
@@ -336,22 +354,22 @@ fi
 _install_file 0755 \
     "$REPO_DIR/sdata/update/mainstream-update-helper" \
     /usr/local/bin/mainstream-update-helper \
-    "Update helper"
+    "$(t "Update helper")"
 
 _install_file 0644 \
     "$REPO_DIR/sdata/lib/tr.sh" \
     /usr/local/lib/mainstream-tr.sh \
-    "Script translations"
+    "$(t "Script translations")"
 
 _install_file 0755 \
     "$REPO_DIR/sdata/update/updatems" \
     /usr/local/bin/updatems \
-    "updatems"
+    "$(t "updatems")"
 
 _install_file 0755 \
     "$REPO_DIR/sdata/update/updatems-system" \
     /usr/local/bin/updatems-system \
-    "updatems-system"
+    "$(t "updatems-system")"
 
 # ── Apple hardware ─────────────────────────────────────────────────────────
 # The Mac quirks ran at install time only, so a Mac installed before one
@@ -367,30 +385,30 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
     source "$GPU_LIB_SRC"
     # shellcheck source=/dev/null
     source "$MAC_LIB_SRC"
-    say "Apple hardware: applying the Mac quirks..."
+    say "$(t "Apple hardware: applying the Mac quirks...")"
     mac_report 2>/dev/null | sed 's/^/    /' || true
     if mac_needs_wl_driver; then
         # shellcheck disable=SC2046
         if pacman -S --noconfirm --needed $(mac_wl_packages) 2>&1 | sed 's/^/    /'; then
-            ok "Broadcom wl driver installed"
+            ok "$(t "Broadcom wl driver installed")"
         else
-            warn "Could not install the Broadcom wl driver"
+            warn "$(t "Could not install the Broadcom wl driver")"
             RC=1
         fi
     fi
     if mac_needs_apple_firmware; then
-        _install_file 0755 "$REPO_DIR/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware "Mac firmware fetch"
-        _install_file 0644 "$REPO_DIR/sdata/mac/macrecovery.py" /usr/local/lib/mainstream-mac/macrecovery.py "macrecovery"
-        _install_file 0644 "$REPO_DIR/sdata/mac/NOTICE" /usr/local/lib/mainstream-mac/NOTICE "Mac firmware notice"
+        _install_file 0755 "$REPO_DIR/sdata/mac/mainstream-mac-firmware" /usr/local/bin/mainstream-mac-firmware "$(t "Mac firmware fetch")"
+        _install_file 0644 "$REPO_DIR/sdata/mac/macrecovery.py" /usr/local/lib/mainstream-mac/macrecovery.py "$(t "macrecovery")"
+        _install_file 0644 "$REPO_DIR/sdata/mac/NOTICE" /usr/local/lib/mainstream-mac/NOTICE "$(t "Mac firmware notice")"
         for f in "$REPO_DIR"/sdata/mac/asahi_firmware/*.py; do
             _install_file 0644 "$f" "/usr/local/lib/mainstream-mac/asahi_firmware/$(basename "$f")" "asahi_firmware/$(basename "$f")"
         done
-        pacman -S --noconfirm --needed 7zip 2>&1 | sed 's/^/    /' || { warn "Could not install 7zip"; RC=1; }
+        pacman -S --noconfirm --needed 7zip 2>&1 | sed 's/^/    /' || { warn "$(t "Could not install 7zip")"; RC=1; }
     fi
     if mac_apply_autoconfig; then
-        ok "Mac quirks applied"
+        ok "$(t "Mac quirks applied")"
     else
-        warn "Mac quirks did not fully apply"
+        warn "$(t "Mac quirks did not fully apply")"
         RC=1
     fi
     systemctl daemon-reload 2>/dev/null || true
@@ -398,8 +416,8 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
 fi
 
 if [[ $RC -eq 0 ]]; then
-    ok "System-level refresh complete."
+    ok "$(t "System-level refresh complete.")"
 else
-    warn "System-level refresh finished with errors (see above)."
+    warn "$(t "System-level refresh finished with errors (see above).")"
 fi
 exit "$RC"
