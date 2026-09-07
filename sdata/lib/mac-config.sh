@@ -134,6 +134,20 @@ mac_kernel_is_stock() {
     [ -n "$(pacman -Qq linux 2>/dev/null)" ]
 }
 
+# Whether the kernel this system runs drives the T2. The MacBook edition ships
+# linux-t2, which carries the bridge driver the internal keyboard, trackpad and
+# audio hang off; every other edition ships Arch's kernel, which does not. The
+# answer changes what is true to say about a T2 machine, so ask before saying
+# any of it.
+mac_has_t2_support() {
+    if command -v pacman >/dev/null 2>&1 \
+       && [ -n "$(pacman -Qq linux-t2 2>/dev/null)" ]; then
+        return 0
+    fi
+    modinfo -k "$(uname -r)" apple-bce >/dev/null 2>&1 && return 0
+    modinfo -k "$(uname -r)" t2bce     >/dev/null 2>&1
+}
+
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────
 # The Broadcom chips Apple paired with the T2, and the one in the 2019 iMacs,
 # run on firmware that linux-firmware does not carry and nobody may ship.
@@ -331,10 +345,19 @@ mac_report() {
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
     mac_needs_wl_driver      && echo "  Broadcom wl driver: $(mac_wl_packages)"
     mac_needs_apple_firmware && echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
-    [ "$class" = t2 ] && cat <<'T2'
+    if [ "$class" = t2 ]; then
+        if mac_has_t2_support; then
+            cat <<'T2'
+  T2 security chip present, and this edition carries the kernel that drives it.
+  The internal keyboard, trackpad, audio and fan control all work.
+T2
+        else
+            cat <<'T2'
   T2 security chip present. The internal keyboard, trackpad, audio and fan
   control need a patched kernel that is not shipped here. A USB keyboard and
   mouse are required on this machine.
 T2
+        fi
+    fi
     return 0
 }
