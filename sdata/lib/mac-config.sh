@@ -145,11 +145,19 @@ mac_apply_autoconfig() {
     local systemd_dir="${SYSTEMD_DIR:-/etc/systemd/system}"
     mac_is_apple || return 0
 
-    # Media keys without holding fn, which is what the printed keycaps promise.
-    # Gated on Apple hardware: an Apple keyboard quirk applied to every machine
-    # is a surprise nobody asked for.
-    printf 'options hid_apple fnmode=2\n' \
+    # Media keys without holding fn, the way the keycaps read and the way the
+    # same machine behaves under macOS. fnmode 1 is fkeyslast: brightness and
+    # volume are the plain press and F1 to F12 want fn. Gated on Apple
+    # hardware, since an Apple keyboard quirk applied to every machine is a
+    # surprise nobody asked for.
+    printf 'options hid_apple fnmode=1\n' \
         | _mac_write_file "$modprobe_dir/mainstream-apple.conf" 644
+    if mac_needs_spi_input; then
+        # These keyboards are not hid_apple at all, so that option never
+        # reaches them. applespi carries the same knob under its own name.
+        printf 'options applespi fnmode=1\n' \
+            | _mac_write_file "$modprobe_dir/mainstream-apple-spi.conf" 644
+    fi
 
     if mac_needs_brcmfmac_quirk; then
         printf 'options brcmfmac feature_disable=0x82000\n' \
@@ -218,6 +226,41 @@ mac_apply_autoconfig() {
     return 0
 }
 
+# ── mac_load_spi_input ──────────────────────────────────────────────────────
+# The keyboard and trackpad of a 2015-2017 Retina Mac, brought up in a running
+# session. An installed system gets these through the initramfs; the live image
+# the installer runs from has nothing, so a machine whose only pointer is the
+# trackpad can arrive at the installer unable to use it.
+#
+# The reload at the end is for a probe that is known to come up with the
+# keyboard alive and the trackpad missing. A machine whose trackpad did appear
+# is left alone: reloading a working input device under someone's fingers is
+# worse than doing nothing.
+mac_load_spi_input() {
+    local module waited=0
+    local devices="${MAC_INPUT_DEVICES:-/proc/bus/input/devices}"
+    mac_needs_spi_input || return 0
+
+    for module in intel_lpss_pci spi_pxa2xx_platform spi_pxa2xx_pci applespi; do
+        ${GPU_SUDO:-} modprobe "$module" 2>/dev/null || true
+    done
+
+    # Five seconds, because this runs before the network comes up and a slow
+    # answer here delays that. A trackpad that has not appeared by then is the
+    # case the reload exists for.
+    while [ "$waited" -lt 50 ]; do
+        if grep -q 'Apple SPI Touchpad' "$devices" 2>/dev/null; then
+            return 0
+        fi
+        waited=$((waited + 1))
+        sleep 0.1
+    done
+
+    ${GPU_SUDO:-} modprobe -r applespi 2>/dev/null || true
+    ${GPU_SUDO:-} modprobe applespi 2>/dev/null || true
+    return 0
+}
+
 # ── mac_apply_session_quirks ────────────────────────────────────────────────
 # The part of the above a running session can take without a reboot, for the
 # live image the installer runs from: the Broadcom handshake fix, since the
@@ -228,12 +271,22 @@ mac_apply_autoconfig() {
 mac_apply_session_quirks() {
     local modprobe_dir="${MODPROBE_DIR:-/etc/modprobe.d}"
     local fnmode="${MAC_FNMODE_PARAM:-/sys/module/hid_apple/parameters/fnmode}"
+    local spi_fnmode="${MAC_SPI_FNMODE_PARAM:-/sys/module/applespi/parameters/fnmode}"
     mac_is_apple || return 0
 
-    printf 'options hid_apple fnmode=2\n' \
+    mac_load_spi_input
+
+    printf 'options hid_apple fnmode=1\n' \
         | _mac_write_file "$modprobe_dir/mainstream-apple.conf" 644
     if [ -w "$fnmode" ]; then
-        echo 2 > "$fnmode" 2>/dev/null || true
+        echo 1 > "$fnmode" 2>/dev/null || true
+    fi
+    if mac_needs_spi_input; then
+        printf 'options applespi fnmode=1\n' \
+            | _mac_write_file "$modprobe_dir/mainstream-apple-spi.conf" 644
+        if [ -w "$spi_fnmode" ]; then
+            echo 1 > "$spi_fnmode" 2>/dev/null || true
+        fi
     fi
 
     if mac_needs_brcmfmac_quirk; then
