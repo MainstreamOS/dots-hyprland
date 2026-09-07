@@ -397,14 +397,63 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "Flatpak — flatpak update (system + user)")"
     echo "═══════════════════════════════════════════════════════════"
-    # System-wide flatpaks update as root (no sudo needed; we are root).
-    flatpak update --noninteractive --system
+    # flatpak gives up on a dropped download without trying again: it files a
+    # connection reset under an error code its own retry list does not carry,
+    # so one interrupted transfer of the remote's index ends the whole run.
+    # The retry it does not do is done here, the way the pacman step above
+    # does it. A connect or resolve failure is the exception, because flatpak
+    # does spend five attempts of its own on those and a sixth would only
+    # make a dead network take longer to say so.
+    FLATPAK_LOG=$(mktemp)
+    FP_NO_RETRY='While fetching .*: \[(5|6|7)\]|Could not resolve host|Could not connect to server'
+
+    # Runs one half of the step, once more after a pause if it did not
+    # finish. What is read out of the output decides whether to try again and
+    # nothing else: the code this returns is the update's own, so a fetch
+    # error that flatpak itself prints as a passing warning can never turn a
+    # real failure into a success.
+    flatpak_leg() {
+        local scope="$1" rc
+        : > "$FLATPAK_LOG"
+        if [[ "$scope" == system ]]; then
+            # System-wide flatpaks update as root (no sudo needed; we are root).
+            flatpak update --noninteractive --system 2>&1 | tee "$FLATPAK_LOG"
+            rc=${PIPESTATUS[0]}
+        else
+            # Per-user flatpaks need to run as the user (they live under
+            # ~/.local/share/flatpak/) — runuser with HOME set.
+            runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                flatpak update --noninteractive --user 2>&1 | tee "$FLATPAK_LOG"
+            rc=${PIPESTATUS[0]}
+        fi
+        if [[ "$rc" -ne 0 ]] && ! grep -qE "$FP_NO_RETRY" "$FLATPAK_LOG"; then
+            echo ""
+            echo "── $(t "Flatpak did not finish (a dropped download is the usual cause), retrying once...")"
+            sleep 5
+            if [[ "$scope" == system ]]; then
+                flatpak update --noninteractive --system
+                rc=$?
+            else
+                runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+                    flatpak update --noninteractive --user
+                rc=$?
+            fi
+        fi
+        return "$rc"
+    }
+
+    # Named, because the two halves are separate processes whose output runs
+    # together: an error from the first sitting next to "Nothing to update."
+    # from the second reads as one run contradicting itself.
+    echo ""
+    echo "── $(t "Flatpak: apps installed for everyone")"
+    flatpak_leg system
     FP_SYS_RC=$?
-    # Per-user flatpaks need to run as the user (they live under
-    # ~/.local/share/flatpak/) — runuser with HOME set.
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-        flatpak update --noninteractive --user
+    echo ""
+    echo "── $(t "Flatpak: apps installed for you only")"
+    flatpak_leg user
     FP_USR_RC=$?
+    rm -f "$FLATPAK_LOG"
     # Either non-zero counts as a flatpak failure.
     if [[ "$FP_SYS_RC" -ne 0 ]]; then
         FLATPAK_RC="$FP_SYS_RC"

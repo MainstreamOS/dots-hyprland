@@ -2180,5 +2180,8 @@
   "These open on their own after you log in. Turning one off does not uninstall it.": "These open on their own after you log in. Turning one off does not uninstall it.",
   "Videos": "Videos",
   "Web Browser": "Web Browser",
-  "Looking for apps…": "Looking for apps…"
+  "Looking for apps…": "Looking for apps…",
+  "Flatpak did not finish (a dropped download is the usual cause), retrying once...": "Flatpak did not finish (a dropped download is the usual cause), retrying once...",
+  "Flatpak: apps installed for everyone": "Flatpak: apps installed for everyone",
+  "Flatpak: apps installed for you only": "Flatpak: apps installed for you only"
 }
