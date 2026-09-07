@@ -116,7 +116,7 @@ _install_file() {
         RC=1
         return 0
     fi
-    if install -m "$mode" -o root -g root "$src" "$dst"; then
+    if install -D -m "$mode" -o root -g root "$src" "$dst"; then
         ok "$(tf "%s refreshed -> %s" "$label" "$dst")"
     else
         warn "$(tf "%s install failed (src=%s dst=%s)" "$label" "$src" "$dst")"
@@ -389,7 +389,11 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
     mac_report 2>/dev/null | sed 's/^/    /' || true
     if mac_needs_wl_driver; then
         # shellcheck disable=SC2046
-        if pacman -S --noconfirm --needed $(mac_wl_packages) 2>&1 | sed 's/^/    /'; then
+        pacman -S --noconfirm --needed $(mac_wl_packages) 2>&1 | sed 's/^/    /'
+        # Without pipefail the status here would be sed's, which succeeds on
+        # any input, so a pacman that could not install anything would be
+        # reported as a driver that is now present.
+        if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
             ok "$(t "Broadcom wl driver installed")"
         else
             warn "$(t "Could not install the Broadcom wl driver")"
@@ -403,7 +407,8 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
         for f in "$REPO_DIR"/sdata/mac/asahi_firmware/*.py; do
             _install_file 0644 "$f" "/usr/local/lib/mainstream-mac/asahi_firmware/$(basename "$f")" "asahi_firmware/$(basename "$f")"
         done
-        pacman -S --noconfirm --needed 7zip 2>&1 | sed 's/^/    /' || { warn "$(t "Could not install 7zip")"; RC=1; }
+        pacman -S --noconfirm --needed 7zip 2>&1 | sed 's/^/    /'
+        [[ ${PIPESTATUS[0]} -eq 0 ]] || { warn "$(t "Could not install 7zip")"; RC=1; }
     fi
     if mac_apply_autoconfig; then
         ok "$(t "Mac quirks applied")"
