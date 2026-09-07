@@ -53,8 +53,14 @@ Scope {
                 }
             }
 
+            // Darker than the shared default, which is faint enough to vanish
+            // over a bright wallpaper. Deeper rather than wider on purpose:
+            // the card is kept one elevation margin from the screen edges, so
+            // a larger blur would be cut off exactly where the menu is most
+            // likely to open.
             StyledRectangularShadow {
                 target: menuCard
+                color: ColorUtils.transparentize(Appearance.m3colors.m3shadow, 0.4)
             }
 
             Rectangle {
