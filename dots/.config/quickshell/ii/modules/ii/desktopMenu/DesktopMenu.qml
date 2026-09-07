@@ -85,6 +85,21 @@ Scope {
                     }
                     spacing: 0
 
+                    // The bar and the dock carry their Settings icons, so the
+                    // row here and the page it opens read as the same thing.
+                    DesktopMenuItem {
+                        iconName: "toast"
+                        iconRotation: 180
+                        label: Translation.tr("Personalize Bar")
+                        onClicked: menuWindow.openSettingsPage("BarConfig.qml")
+                    }
+
+                    DesktopMenuItem {
+                        iconName: "dock_to_bottom"
+                        label: Translation.tr("Personalize Dock")
+                        onClicked: menuWindow.openSettingsPage("DockConfig.qml")
+                    }
+
                     DesktopMenuItem {
                         iconName: "image"
                         label: Translation.tr("Change Wallpaper")
@@ -124,6 +139,10 @@ Scope {
     component DesktopMenuItem: RippleButton {
         id: menuItemRoot
         property string iconName
+        // The bar's glyph is a toast, which points the wrong way for a strip
+        // along an edge, so Settings turns it over. A row here showing it the
+        // other way up would not read as the same thing.
+        property int iconRotation: 0
         property string label
         Layout.fillWidth: true
         implicitHeight: 36
@@ -143,6 +162,7 @@ Scope {
                 text: menuItemRoot.iconName
                 iconSize: Appearance.font.pixelSize.normal
                 color: Appearance.m3colors.m3onSurface
+                rotation: menuItemRoot.iconRotation
                 Layout.alignment: Qt.AlignVCenter
             }
 

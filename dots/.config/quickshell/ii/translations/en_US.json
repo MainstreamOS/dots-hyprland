@@ -2185,5 +2185,7 @@
   "Looking for apps…": "Looking for apps…",
   "Flatpak did not finish (a dropped download is the usual cause), retrying once...": "Flatpak did not finish (a dropped download is the usual cause), retrying once...",
   "Flatpak: apps installed for everyone": "Flatpak: apps installed for everyone",
-  "Flatpak: apps installed for you only": "Flatpak: apps installed for you only"
+  "Flatpak: apps installed for you only": "Flatpak: apps installed for you only",
+  "Personalize Bar": "Personalize Bar",
+  "Personalize Dock": "Personalize Dock"
 }
