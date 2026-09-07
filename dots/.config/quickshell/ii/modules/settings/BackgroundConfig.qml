@@ -188,6 +188,11 @@ ContentPage {
         title: Translation.tr("Widget: Clock")
 
         function stylePresent(styleName) {
+            // A clock that is switched off is wearing no style, so the panels
+            // that dress one go away with it.
+            if (!Config.options.background.widgets.clock.enable) {
+                return false;
+            }
             if (!Config.options.background.widgets.clock.showOnlyWhenLocked && Config.options.background.widgets.clock.style === styleName) {
                 return true;
             }
@@ -217,6 +222,7 @@ ContentPage {
             }
             ConfigSelectionArray {
                 Layout.fillWidth: false
+                visible: Config.options.background.widgets.clock.enable
                 currentValue: Config.options.background.widgets.clock.placementStrategy
                 onSelected: newValue => {
                     Config.options.background.widgets.clock.placementStrategy = newValue;
@@ -243,6 +249,7 @@ ContentPage {
 
         ConfigSwitch {
             buttonIcon: "lock_clock"
+            visible: Config.options.background.widgets.clock.enable
             text: Translation.tr("Show only when locked")
             checked: Config.options.background.widgets.clock.showOnlyWhenLocked
             onCheckedChanged: {
@@ -251,6 +258,7 @@ ContentPage {
         }
 
         ConfigRow {
+            visible: Config.options.background.widgets.clock.enable
             ContentSubsection {
                 visible: !Config.options.background.widgets.clock.showOnlyWhenLocked
                 title: Translation.tr("Clock style")
@@ -684,7 +692,7 @@ ContentPage {
         }
 
         ContentSubsection {
-            visible: Config.options.background.widgets.clock.style === "pixel" || Config.options.background.widgets.clock.styleLocked === "pixel"
+            visible: settingsClock.stylePresent("pixel")
             title: Translation.tr("Pixel clock settings")
             ConfigSelectionArray {
                 currentValue: Config.options.background.widgets.clock.pixel.orientation
@@ -699,6 +707,7 @@ ContentPage {
         }
 
         ContentSubsection {
+            visible: Config.options.background.widgets.clock.enable
             title: Translation.tr("Quote")
 
             ConfigRow {
