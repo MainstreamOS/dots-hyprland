@@ -129,6 +129,16 @@ Scope {
                         label: Translation.tr("Display Settings")
                         onClicked: menuWindow.openSettingsPage("DisplayConfig.qml")
                     }
+
+                    ContextMenuSeparator {}
+
+                    // On its own at the end, because a theme is the one thing
+                    // here that changes everything above it at once.
+                    DesktopMenuItem {
+                        iconName: "style"
+                        label: Translation.tr("Switch Theme")
+                        onClicked: menuWindow.openSettingsPage("ThemesConfig.qml")
+                    }
                 }
             }
 
