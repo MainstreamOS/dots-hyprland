@@ -1,0 +1,4 @@
+module qs.modules.settings.manageApps
+AppPicker 1.0 AppPicker.qml
+DefaultAppsSection 1.0 DefaultAppsSection.qml
+AutostartSection 1.0 AutostartSection.qml

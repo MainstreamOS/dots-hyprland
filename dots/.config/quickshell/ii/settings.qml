@@ -135,6 +135,12 @@ ApplicationWindow {
         },
         {
             group: 4,
+            name: Translation.tr("Manage"),
+            icon: "apps",
+            component: "modules/settings/ManageAppsConfig.qml"
+        },
+        {
+            group: 4,
             name: Translation.tr("Update"),
             icon: "system_update_alt",
             component: "modules/settings/UpdateConfig.qml"
