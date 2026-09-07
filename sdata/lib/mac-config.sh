@@ -119,10 +119,19 @@ mac_needs_wl_driver() {
 mac_wl_packages() {
     local kernel=linux
     if command -v pacman >/dev/null 2>&1; then
-        kernel="$(pacman -Qqs '^linux(-zen|-lts|-hardened)?$' 2>/dev/null | head -n 1)"
+        kernel="$(pacman -Qqs '^linux(-zen|-lts|-hardened|-t2)?$' 2>/dev/null | head -n 1)"
         [ -n "$kernel" ] || kernel=linux
     fi
     echo "broadcom-wl-dkms dkms ${kernel}-headers"
+}
+
+# Whether this machine runs a kernel the image's staged header package does not
+# match. The MacBook edition boots linux-t2, and the headers staged for an
+# offline install are Arch's, so a driver built against them would be built for
+# a kernel that is not running.
+mac_kernel_is_stock() {
+    command -v pacman >/dev/null 2>&1 || return 0
+    [ -n "$(pacman -Qq linux 2>/dev/null)" ]
 }
 
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────
