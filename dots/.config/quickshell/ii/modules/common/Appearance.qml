@@ -643,6 +643,11 @@ Singleton {
         property real barShortenScreenWidthThreshold: 1200 // Shorten if screen width is at most this value
         property real barHellaShortenScreenWidthThreshold: 1000 // Shorten even more...
         property real elevationMargin: 10
+        // The top-left rectangle the hot corner answers in. Shared, because
+        // the overview has to answer in the same one: while it is open the
+        // pointer no longer reaches the corner's own surface.
+        property real hotCornerWidth: 106
+        property real hotCornerHeight: 19
         property real fabShadowRadius: 5
         property real fabHoveredShadowRadius: 7
         property real hyprlandGapsOut: 5

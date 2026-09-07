@@ -350,6 +350,54 @@ Scope {
             onClicked: GlobalStates.overviewOpen = false
         }
 
+        // The corner that opened this cannot close it. While the overview is
+        // up the pointer stops reaching the hot corner's surface underneath,
+        // so its own close path never runs and the gesture only works one way.
+        // This answers in the same rectangle instead, on the same dwell, and
+        // fires the same ripple, so the corner behaves the same in both
+        // directions. Only while the corner is what opens this overview.
+        //
+        // Armed by leaving rather than by a timer: the pointer is already in
+        // the corner at the moment the overview opens, and closing on that
+        // would shut it again the instant it appeared.
+        MouseArea {
+            id: cornerClose
+            z: 100
+            x: 0
+            y: 0
+            width: Appearance.sizes.hotCornerWidth
+            height: Appearance.sizes.hotCornerHeight
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+            enabled: GlobalStates.overviewOpen
+                && (Config.options?.bar.hotCorners.trigger ?? "off") === "default"
+            // Ready the moment the overview appears, unless the pointer is
+            // still sitting in the corner, which is where it is when the corner
+            // itself just opened this. Then it waits for the pointer to leave,
+            // so the overview does not shut again the instant it is shown.
+            //
+            // Deciding this by where the pointer already is, rather than after
+            // a wait, is what makes the first return to the corner close it.
+            // The overview appears once the ripple has played, by which time
+            // the pointer has usually already moved on, and an arming rule that
+            // ignored that spent the first visit doing nothing.
+            property bool armed: false
+            onEnabledChanged: armed = enabled && !containsMouse
+            onExited: {
+                cornerCloseDwell.stop();
+                armed = true;
+            }
+            onEntered: if (armed) cornerCloseDwell.restart()
+            Timer {
+                id: cornerCloseDwell
+                interval: 50
+                onTriggered: {
+                    GlobalStates.hotCornerTriggered();
+                    GlobalStates.overviewOpen = false;
+                }
+            }
+        }
+
         StyledFlickable {
             id: flickable
             anchors.fill: parent

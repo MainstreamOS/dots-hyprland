@@ -88,6 +88,16 @@ Variants {
             target: GlobalStates
             function onHotCornerTriggered() {
                 ripplePanel.trigger();
+                // Whatever fired this has just acted on the corner's behalf,
+                // the overview closing itself from the same rectangle included.
+                // The pointer lands back on this surface the moment that other
+                // surface lets go of it, and Hyprland synthesises an entry for
+                // a pointer that never moved. Without holding the corner off,
+                // that entry reads as a fresh approach and opens again what was
+                // just closed.
+                triggerArea.toggleCooldown = true;
+                triggerArea.awaitingExit = true;
+                cooldownTimer.restart();
             }
         }
 
@@ -183,8 +193,8 @@ Variants {
         // timer arms.
         MouseArea {
             id: triggerArea
-            width: 106
-            height: 19
+            width: Appearance.sizes.hotCornerWidth
+            height: Appearance.sizes.hotCornerHeight
             x: 0
             y: 0
 
@@ -246,6 +256,14 @@ Variants {
             // is unaffected.
             property bool toggleCooldown: false
 
+            // Set whenever the corner has just been acted on, and cleared only
+            // by the pointer actually leaving the rectangle. A timed hold is
+            // not enough on its own: after a close the pointer is still in the
+            // corner, so the moment the hold expires the next twitch reads as a
+            // fresh approach and opens again what was just closed. Coming back
+            // has to mean coming back.
+            property bool awaitingExit: false
+
             // Disable only when the user explicitly set the trigger to "off".
             //
             // Previously this also disabled when scrolloverview plugin wasn't
@@ -282,6 +300,7 @@ Variants {
                 interval: 50
                 onTriggered: {
                     if (triggerArea.toggleCooldown) return;
+                    if (triggerArea.awaitingExit) return;
                     // Nothing while the screen is magnified. Down there the
                     // pointer is being pushed against an edge to pan the view,
                     // not taken to a corner on purpose.
@@ -468,7 +487,10 @@ Variants {
                 // toggles the overview off (scrolloverview included now).
                 dwellTimer.restart();
             }
-            onExited: dwellTimer.stop()
+            onExited: {
+                dwellTimer.stop();
+                triggerArea.awaitingExit = false;
+            }
         }
     }
 }
