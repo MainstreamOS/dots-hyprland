@@ -85,21 +85,10 @@ Scope {
                     }
                     spacing: 0
 
-                    // The bar and the dock carry their Settings icons, so the
-                    // row here and the page it opens read as the same thing.
-                    DesktopMenuItem {
-                        iconName: "toast"
-                        iconRotation: 180
-                        label: Translation.tr("Personalize Bar")
-                        onClicked: menuWindow.openSettingsPage("BarConfig.qml")
-                    }
-
-                    DesktopMenuItem {
-                        iconName: "toast"
-                        label: Translation.tr("Personalize Dock")
-                        onClicked: menuWindow.openSettingsPage("DockConfig.qml")
-                    }
-
+                    // A menu opened on the wallpaper leads with the wallpaper.
+                    // The two rows for the desktop itself come first and
+                    // together, then the pair of strips along its edges, then
+                    // the monitor, which is the least desktop thing here.
                     DesktopMenuItem {
                         iconName: "image"
                         label: Translation.tr("Change Wallpaper")
@@ -117,6 +106,23 @@ Scope {
                         label: Translation.tr("Personalize Desktop")
                         onClicked: menuWindow.openSettingsPage("BackgroundConfig.qml")
                     }
+
+                    ContextMenuSeparator {}
+
+                    DesktopMenuItem {
+                        iconName: "toast"
+                        iconRotation: 180
+                        label: Translation.tr("Personalize Bar")
+                        onClicked: menuWindow.openSettingsPage("BarConfig.qml")
+                    }
+
+                    DesktopMenuItem {
+                        iconName: "toast"
+                        label: Translation.tr("Personalize Dock")
+                        onClicked: menuWindow.openSettingsPage("DockConfig.qml")
+                    }
+
+                    ContextMenuSeparator {}
 
                     DesktopMenuItem {
                         iconName: "display_settings"
