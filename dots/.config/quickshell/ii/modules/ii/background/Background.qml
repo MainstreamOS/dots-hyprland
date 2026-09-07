@@ -172,6 +172,17 @@ Variants {
         property real outgoingShift: 0    // px the old picture has moved left
         property real outgoingRevealed: 0 // px of the old picture uncovered from the left
 
+        // Slide has to carry a picture its own width, not the screen's. The
+        // parallax leaves both pictures wider than the screen and sitting at a
+        // negative x, so a screen's worth of travel stops with a column of the
+        // old one still on show, and clearing it at the end of the run swaps
+        // that column for the new picture in a single frame. Both pictures use
+        // the one distance so they stay a pair, and the leaving one only has
+        // to reach the left edge for the arriving one to be clear of the right.
+        readonly property real slideDistance: Math.max(
+            outgoing.x + outgoing.width,
+            bgRoot.logicalScreenWidth - wallpaper.x)
+
         function resetSwapKnobs() {
             incomingShift = 0;
             incomingZoom = 1;
@@ -211,7 +222,7 @@ Variants {
             id: swapAnimation
             ScriptAction {
                 script: {
-                    bgRoot.incomingShift = bgRoot.swapEffect === "slide" ? bgRoot.logicalScreenWidth : 0;
+                    bgRoot.incomingShift = bgRoot.swapEffect === "slide" ? bgRoot.slideDistance : 0;
                     bgRoot.incomingZoom = bgRoot.swapEffect === "zoom" ? 1.08 : 1;
                     bgRoot.outgoingShift = 0;
                     bgRoot.outgoingRevealed = 0;
@@ -233,7 +244,7 @@ Variants {
                 NumberAnimation {
                     target: bgRoot
                     property: "outgoingShift"
-                    to: bgRoot.swapEffect === "slide" ? -bgRoot.logicalScreenWidth : 0
+                    to: bgRoot.swapEffect === "slide" ? -bgRoot.slideDistance : 0
                     duration: bgRoot.swapRunDuration
                     easing.type: Easing.BezierSpline
                     easing.bezierCurve: Appearance.animationCurves.expressiveEffects
