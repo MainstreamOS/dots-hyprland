@@ -55,7 +55,9 @@ ApplicationWindow {
         {
             group: 2,
             name: Translation.tr("Dock"),
-            icon: "dock_to_bottom",
+            // The bar's glyph the other way up, so the two entries are one
+            // shape distinguished only by which edge it sits on.
+            icon: "toast",
             component: "modules/settings/DockConfig.qml"
         },
         {

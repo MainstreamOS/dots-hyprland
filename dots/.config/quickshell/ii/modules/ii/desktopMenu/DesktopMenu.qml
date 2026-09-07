@@ -95,7 +95,7 @@ Scope {
                     }
 
                     DesktopMenuItem {
-                        iconName: "dock_to_bottom"
+                        iconName: "toast"
                         label: Translation.tr("Personalize Dock")
                         onClicked: menuWindow.openSettingsPage("DockConfig.qml")
                     }
