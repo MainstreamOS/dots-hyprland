@@ -393,6 +393,7 @@ ApplicationWindow {
                                 toggled: root.currentPage === index
                                 onPressed: root.currentPage = index
                                 buttonIcon: modelData.icon
+                                buttonIconRotation: modelData.iconRotation ?? 0
                                 buttonText: modelData.name
                             }
                         }
@@ -511,6 +512,11 @@ ApplicationWindow {
         id: navBtn
         property bool toggled: false
         property string buttonIcon
+        // A glyph that only reads correctly one way up, the bar's among them,
+        // is turned here. NavigationRailButton has carried this for its own
+        // rows all along; this one had the value passed to it and nowhere to
+        // put it, so the bar's icon sat upside down.
+        property real buttonIconRotation: 0
         property string buttonText
 
         readonly property real baseSize: 56
@@ -559,6 +565,7 @@ ApplicationWindow {
                     fill: navBtn.toggled ? 1 : 0
                     font.weight: (navBtn.toggled || navBtn.hovered) ? Font.DemiBold : Font.Normal
                     text: navBtn.buttonIcon
+                    rotation: navBtn.buttonIconRotation
                     color: navBtn.toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer1
 
                     Behavior on color {
