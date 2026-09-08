@@ -9,7 +9,7 @@ Text {
 
     // Asked of the compositor rather than of Qt, which cannot see a fractional
     // scale: a window on a 150% screen is told its ratio is 2. See ScreenScale.
-    renderType: ScreenScale.renderTypeFor(Screen.name)
+    renderType: ScreenScale.renderTypeFor(Screen.name, font.pixelSize)
     verticalAlignment: Text.AlignVCenter
     property bool shouldUseNumberFont: /^\d+$/.test(root.text)
     property var defaultFont: shouldUseNumberFont ? Appearance.font.family.numbers : Appearance.font.family.main

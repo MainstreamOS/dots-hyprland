@@ -476,6 +476,12 @@ DockButton {
                         anchors.centerIn: parent
                         text: root.windowCount > 9 ? "9+" : root.windowCount
                         font.pixelSize: badgeLoader.diameter * 0.62
+                        // Distance field whatever the screen does. This digit
+                        // rides the parent's hover magnification, and a glyph
+                        // hinted onto whole pixels and then enlarged is jagged.
+                        // The icons beside it dodge that by rasterizing at the
+                        // hover peak; a glyph cannot be pre-rasterized bigger.
+                        renderType: Text.QtRendering
                         color: Appearance.colors.colDockBadgeText
                     }
                 }

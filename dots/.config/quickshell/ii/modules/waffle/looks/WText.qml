@@ -4,7 +4,7 @@ import qs.modules.common
 Text {
     id: root
 
-    renderType: ScreenScale.renderTypeFor(Screen.name)
+    renderType: ScreenScale.renderTypeFor(Screen.name, font.pixelSize)
     verticalAlignment: Text.AlignVCenter
     color: Looks.colors.fg
 
