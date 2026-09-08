@@ -143,7 +143,18 @@ role_write_mimes() {
                   image/jxl"
             ;;
         pdf)
-            echo "application/pdf"
+            # The whole family the install hands to the document viewer, so
+            # picking a different one here moves all of it rather than leaving
+            # comics and DjVu behind on the old app.
+            echo "application/pdf application/x-bzpdf application/x-gzpdf
+                  application/x-xzpdf application/postscript
+                  application/x-bzpostscript application/x-gzpostscript
+                  image/x-eps application/x-dvi application/x-bzdvi
+                  application/x-gzdvi image/vnd.djvu+multipage
+                  application/oxps application/vnd.ms-xpsdocument
+                  application/vnd.comicbook+zip application/vnd.comicbook-rar
+                  application/x-cbz application/x-cbr application/x-cb7
+                  application/x-cbt"
             ;;
         *)
             echo ""

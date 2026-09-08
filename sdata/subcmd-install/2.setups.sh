@@ -636,6 +636,44 @@ function setup_default_image_viewer(){
 showfun setup_default_image_viewer
 v setup_default_image_viewer
 
+# Set GNOME Papers as default for the document types it opens. Without this a
+# PDF opens in the browser, which is what claims the type when nothing else does.
+# Skipped if the desktop entry isn't installed.
+function setup_default_pdf_viewer(){
+  local desktop=org.gnome.Papers.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping document viewer defaults.${STY_RST}"
+    return 0
+  fi
+  local document_types=(
+    application/pdf
+    application/x-bzpdf
+    application/x-gzpdf
+    application/x-xzpdf
+    application/postscript
+    application/x-bzpostscript
+    application/x-gzpostscript
+    image/x-eps
+    application/x-dvi
+    application/x-bzdvi
+    application/x-gzdvi
+    image/vnd.djvu+multipage
+    application/oxps
+    application/vnd.ms-xpsdocument
+    application/vnd.comicbook+zip
+    application/vnd.comicbook-rar
+    application/x-cbz
+    application/x-cbr
+    application/x-cb7
+    application/x-cbt
+  )
+  for mime in "${document_types[@]}"; do
+    v xdg-mime default "$desktop" "$mime"
+  done
+}
+showfun setup_default_pdf_viewer
+v setup_default_pdf_viewer
+
 # Optional: Limine + Snapper automatic backup setup (Arch, btrfs, UEFI only)
 function setup_limine_snapper(){
   local ROOT_FSTYPE
