@@ -177,14 +177,15 @@ WindowDialog {
         // Opens the full Settings → Display page (Night Light section
         // at the bottom). Same launch pattern as BluetoothDialog /
         // WifiDialog: spawn a new Quickshell process pointed at the
-        // shared settings.qml with QS_SETTINGS_PAGE preselected to
-        // Display's index (7). Closes the right sidebar afterward so
-        // the settings window isn't hidden behind it.
+        // shared settings.qml, naming the page by its file so the link
+        // cannot drift when the list is reordered, and naming the section
+        // so it opens scrolled to Night Light. Closes the right sidebar
+        // afterward so the settings window isn't hidden behind it.
         DialogButton {
             buttonText: Translation.tr("Details")
             onClicked: {
                 const settingsPath = FileUtils.trimFileProtocol(Directories.config) + "/quickshell/ii/settings.qml";
-                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=7 quickshell -p '" + settingsPath + "'"]);
+                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=DisplayConfig.qml QS_SETTINGS_SECTION=nightLightSection quickshell -p '" + settingsPath + "'"]);
                 GlobalStates.sidebarRightOpen = false;
             }
         }

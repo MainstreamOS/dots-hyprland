@@ -61,7 +61,7 @@ WindowDialog {
             buttonText: Translation.tr("Details")
             onClicked: {
                 const settingsPath = FileUtils.trimFileProtocol(Directories.config) + "/quickshell/ii/settings.qml";
-                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=2 quickshell -p '" + settingsPath + "'"]);
+                Quickshell.execDetached(["sh", "-c", "QS_SETTINGS_PAGE=BluetoothConfig.qml quickshell -p '" + settingsPath + "'"]);
                 GlobalStates.sidebarRightOpen = false;
             }
         }

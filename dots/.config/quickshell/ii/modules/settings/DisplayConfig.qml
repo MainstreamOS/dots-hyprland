@@ -3734,6 +3734,7 @@ except Exception:
     // changes here take effect on the next minute boundary at the
     // latest (or immediately when toggling Enable now).
     ContentSection {
+        objectName: "nightLightSection"
         icon: "nightlight"
         title: Translation.tr("Night Light")
 
