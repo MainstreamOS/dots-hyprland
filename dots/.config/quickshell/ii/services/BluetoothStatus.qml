@@ -60,6 +60,23 @@ Singleton {
     // connection to remembered devices. Ask trusted audio devices once during
     // shell startup, after bluetoothd has had a chance to populate the device
     // list. Input devices must manage their own reconnects.
+    //
+    // Asked through bluetoothctl rather than device.connect(), and asked of
+    // devices that already report themselves connected, which both look wrong
+    // and are the whole point.
+    //
+    // bluetoothd runs at boot and reconnects trusted devices before any user
+    // session exists to offer it an audio endpoint, so it brings up the control
+    // channel alone: the speaker reports connected, its buttons work, and no
+    // sink is ever offered. BlueZ's own Connect fixes exactly that, because it
+    // "connects all profiles the remote device supports... if only subset of
+    // profiles is already connected it will try to connect currently
+    // disconnected ones". Verified against a live speaker in that state.
+    //
+    // device.connect() cannot reach it: quickshell refuses the call at its own
+    // layer when the device is connected, and never asks BlueZ. That is what
+    // was lost when this moved out of a shell hook and into here, and it is why
+    // the request goes back out through bluetoothctl.
 
     function reconnectTrustedAudioDevicesAtStartup() {
         startupReconnectTimer.restart();
@@ -76,8 +93,8 @@ Singleton {
 
         onTriggered: {
             for (const device of Bluetooth.devices.values) {
-                if (device.trusted && isAudioDevice(device) && !device.connected)
-                    device.connect();
+                if (device.trusted && isAudioDevice(device))
+                    Quickshell.execDetached(["bluetoothctl", "connect", device.address]);
             }
         }
     }
