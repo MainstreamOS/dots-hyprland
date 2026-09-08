@@ -68,6 +68,9 @@ hl.bind("CTRL + SUPER + T", hl.dsp.exec_cmd(qsScripts.."/colors/switchwall.sh"),
 -- Light/dark toggle — added by upstream merge (CTRL+SUPER+SHIFT+D powertoys-style).
 -- Wired to a GlobalShortcut in MaterialThemeLoader.qml; same name keeps that intact.
 hl.bind("CTRL + SUPER + SHIFT + D", hl.dsp.global("quickshell:toggleLightDark"), {description = "Toggle light/dark mode"} )
+-- Walks the saved themes in the order the Themes page lists them, so the key
+-- and the page agree about what comes next.
+hl.bind("CTRL + SUPER + N", hl.dsp.exec_cmd(qsScripts.."/themes/next-theme.sh"), {description = "Next theme"} )
 hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("killall ydotool qs quickshell; qs -c $qsConfig &"), {description = "Restart widgets"} )
 hl.bind("CTRL + SUPER + P", hl.dsp.global("quickshell:panelFamilyCycle"), {description = "Cycle panel family"} )
 -- Cycle the layouts selected in Settings → Keyboard. `current` targets the
