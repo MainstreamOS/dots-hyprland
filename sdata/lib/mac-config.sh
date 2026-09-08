@@ -140,12 +140,22 @@ mac_kernel_is_stock() {
 # answer changes what is true to say about a T2 machine, so ask before saying
 # any of it.
 mac_has_t2_support() {
-    if command -v pacman >/dev/null 2>&1 \
-       && [ -n "$(pacman -Qq linux-t2 2>/dev/null)" ]; then
-        return 0
+    local kver; kver="$(uname -r)"
+    # The kernel that is running is the one that matters, and a running system
+    # keeps its modules where they can be read. An installer chroot does not:
+    # uname there reports the kernel of the image doing the installing, whose
+    # modules sit outside this root, so the absence of that directory is what
+    # says to ask the package set instead. Asking the package set first got this
+    # backwards on a machine with the T2 kernel installed but booted from an
+    # entry for another one, where it is the running kernel that decides whether
+    # the keyboard works.
+    if [ -d "/usr/lib/modules/$kver" ]; then
+        modinfo -k "$kver" apple-bce >/dev/null 2>&1 && return 0
+        modinfo -k "$kver" t2bce     >/dev/null 2>&1 && return 0
+        return 1
     fi
-    modinfo -k "$(uname -r)" apple-bce >/dev/null 2>&1 && return 0
-    modinfo -k "$(uname -r)" t2bce     >/dev/null 2>&1
+    command -v pacman >/dev/null 2>&1 || return 1
+    [ -n "$(pacman -Qq linux-t2 2>/dev/null)" ]
 }
 
 # ── mac_needs_apple_firmware ────────────────────────────────────────────────
