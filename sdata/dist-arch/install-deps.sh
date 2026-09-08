@@ -41,6 +41,11 @@ remove_deprecated_dependencies(){
   printf "${STY_CYAN}[$0]: Removing deprecated dependencies:${STY_RST}\n"
   local list=()
   list+=(illogical-impulse-{microtex,pymyc-aur,oneui4-icons-git})
+  # Dropped in this fork with no mainstream-* counterpart, so the replaces[]
+  # sweep in install-local-pkgbuild never names them: the KDE meta-package is
+  # gone for good, and microtex builds with !debug now, leaving its old debug
+  # split with nothing to remove it.
+  list+=(illogical-impulse-{kde,microtex-git-debug})
   list+=(hyprland-qtutils)
   list+=({quickshell,hyprutils,hyprpicker,hyprlang,hypridle,hyprland-qt-support,hyprland-qtutils,hyprlock,xdg-desktop-portal-hyprland,hyprcursor,hyprwayland-scanner,hyprland}-git)
   list+=(matugen-bin)
@@ -158,6 +163,26 @@ v implicitize_old_dependencies
 # Build each local meta-package directly: cd into its dir, source the PKGBUILD,
 # install its deps with pacman, then makepkg.
 # (https://github.com/end-4/dots-hyprland/issues/581 — yay -Bi was unreliable.)
+# pacman reads replaces[] only during a sysupgrade, but the meta-packages arrive
+# through pacman -U (makepkg -i) and pacman -S (the [mainstream] prebuilt), so
+# the previous illogical-impulse-* name keeps owning its files and the install
+# dies on a file conflict. Declaring conflicts[] is not a way out: that prompt
+# defaults to no, which --noconfirm then answers.
+# replaces[] is read in a subshell because install-local-pkgbuild sources every
+# PKGBUILD into one shell and three of them declare none to overwrite a stale value.
+remove-previous-package-name() {
+  local location=$1
+  local previous
+  while read -r previous; do
+    [ -n "$previous" ] || continue
+    pacman -Qq "$previous" &>/dev/null || continue
+    printf "${STY_CYAN}[$0]: Removing previous package name '%s'${STY_RST}\n" "$previous"
+    if ! sudo pacman --noconfirm -Rdd "$previous"; then
+      printf "${STY_YELLOW}[$0]: WARNING: could not remove '%s', the install may fail on file conflicts.${STY_RST}\n" "$previous"
+    fi
+  done < <(source "$location/PKGBUILD"; printf '%s\n' "${replaces[@]:-}")
+}
+
 install-local-pkgbuild() {
   local location=$1
   local installflags=$2
@@ -291,6 +316,8 @@ install-local-pkgbuild() {
   _orig_ignorepkg=$(grep "^IgnorePkg" /etc/pacman.conf || true)
   _pacman_conf_block_kde
 
+  remove-previous-package-name .
+
   # man makepkg:
   # -A, --ignorearch: Ignore a missing or incomplete arch field in the build script.
   # -s, --syncdeps: Install missing dependencies using pacman. When build-time or run-time
@@ -315,6 +342,8 @@ install-quickshell() {
   local location=$1
   local installflags=$2
   local pkg=mainstream-quickshell-git
+
+  remove-previous-package-name "$location"
 
   if pacman -Si "$pkg" >/dev/null 2>&1; then
     if retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" "$pkg"; then
