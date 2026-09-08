@@ -161,6 +161,21 @@ mac_needs_apple_firmware() {
     esac
 }
 
+# Whether the firmware those chips need is already on this system. The chip test
+# above answers "does this machine need it", which is not the same question: a
+# test image bakes it in, and an installed machine has already fetched it. Same
+# names mainstream-mac-firmware --check looks for, kept here so the answer does
+# not depend on that script being installed.
+mac_apple_firmware_present() {
+    local dir="${MAC_FIRMWARE_DIR:-/usr/lib/firmware}" f
+    for f in "$dir"/brcm/brcmfmac4364*-pcie.apple*.bin \
+             "$dir"/brcm/brcmfmac4377*-pcie.apple*.bin \
+             "$dir"/brcm/brcmfmac4355*-pcie.apple*.bin; do
+        [ -e "$f" ] && return 0
+    done
+    return 1
+}
+
 # ── mac_apply_autoconfig ────────────────────────────────────────────────────
 # Idempotent. A no-op on anything that is not an Apple machine.
 mac_apply_autoconfig() {
@@ -344,7 +359,13 @@ mac_report() {
     mac_needs_nvme_quirk     && echo "  NVMe suspend quirk applied"
     mac_needs_brcmfmac_quirk && echo "  Broadcom WPA offload disabled"
     mac_needs_wl_driver      && echo "  Broadcom wl driver: $(mac_wl_packages)"
-    mac_needs_apple_firmware && echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
+    if mac_needs_apple_firmware; then
+        if mac_apple_firmware_present; then
+            echo "  Broadcom firmware: already in place"
+        else
+            echo "  Broadcom firmware: fetched from Apple's recovery image on this machine, timer enabled"
+        fi
+    fi
     if [ "$class" = t2 ]; then
         if mac_has_t2_support; then
             cat <<'T2'
