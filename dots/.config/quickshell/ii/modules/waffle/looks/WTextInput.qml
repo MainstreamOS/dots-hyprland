@@ -1,9 +1,10 @@
 import QtQuick
+import qs.modules.common
 import QtQuick.Controls
 
 TextInput {
     id: root
-    renderType: Text.NativeRendering
+    renderType: ScreenScale.renderTypeFor(Screen.name)
     verticalAlignment: Text.AlignVCenter
     color: Looks.colors.fg
 

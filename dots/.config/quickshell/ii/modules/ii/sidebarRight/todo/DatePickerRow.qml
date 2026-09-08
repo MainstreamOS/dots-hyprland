@@ -75,7 +75,7 @@ RowLayout {
             font.pixelSize: Appearance.font.pixelSize.small
             font.family: Appearance.font.family.main
             color: Appearance.colors.colOnLayer1
-            renderType: Text.NativeRendering
+            renderType: ScreenScale.renderTypeFor(Screen.name)
             readOnly: !firstSpinBox.editable
             validator: firstSpinBox.validator
             inputMethodHints: Qt.ImhDigitsOnly
@@ -125,7 +125,7 @@ RowLayout {
             font.pixelSize: Appearance.font.pixelSize.small
             font.family: Appearance.font.family.main
             color: Appearance.colors.colOnLayer1
-            renderType: Text.NativeRendering
+            renderType: ScreenScale.renderTypeFor(Screen.name)
             readOnly: !secondSpinBox.editable
             validator: secondSpinBox.validator
             inputMethodHints: Qt.ImhDigitsOnly
@@ -173,7 +173,7 @@ RowLayout {
             font.pixelSize: Appearance.font.pixelSize.small
             font.family: Appearance.font.family.main
             color: Appearance.colors.colOnLayer1
-            renderType: Text.NativeRendering
+            renderType: ScreenScale.renderTypeFor(Screen.name)
             readOnly: !yearSpinBox.editable
             validator: yearSpinBox.validator
             inputMethodHints: Qt.ImhDigitsOnly

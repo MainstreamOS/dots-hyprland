@@ -7,7 +7,7 @@ TextField {
     id: root
     
     clip: true
-    renderType: Text.NativeRendering
+    renderType: ScreenScale.renderTypeFor(Screen.name)
     verticalAlignment: Text.AlignVCenter
     color: Looks.colors.fg
 

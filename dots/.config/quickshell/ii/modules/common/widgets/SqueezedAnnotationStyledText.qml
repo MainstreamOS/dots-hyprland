@@ -68,7 +68,7 @@ Item {
         text: root.text
         rotation: root.rotate90 ? 90 : 0
 
-        renderType: Text.QtRendering
+        renderType: ScreenScale.renderTypeFor(Screen.name)
         wrapMode: Text.Wrap
     }    
 }

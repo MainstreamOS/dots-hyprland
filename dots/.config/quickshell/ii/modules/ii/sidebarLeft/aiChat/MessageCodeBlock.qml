@@ -212,7 +212,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         readOnly: !editing
                         selectByMouse: enableMouseSelection || editing
-                        renderType: Text.NativeRendering
+                        renderType: ScreenScale.renderTypeFor(Screen.name)
                         font.family: Appearance.font.family.monospace
                         font.hintingPreference: Font.PreferNoHinting // Prevent weird bold text
                         font.pixelSize: Appearance.font.pixelSize.small

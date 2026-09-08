@@ -1,4 +1,5 @@
 import QtQuick
+import qs.modules.common
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
@@ -80,7 +81,7 @@ Scope {
 					}
 
 					Text {
-						renderType: Text.NativeRendering
+						renderType: ScreenScale.renderTypeFor(Screen.name)
 						font.family: "Google Sans Flex"
 						font.pointSize: 14
 						text: root.failed ? "Quickshell: Reload failed" : "Quickshell reloaded"
@@ -88,7 +89,7 @@ Scope {
 					}
 
 					Text {
-						renderType: Text.NativeRendering
+						renderType: ScreenScale.renderTypeFor(Screen.name)
 						font.family: "JetBrains Mono NF"
 						font.pointSize: 11
 						text: root.errorString

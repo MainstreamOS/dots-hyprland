@@ -21,7 +21,7 @@ TextField {
         hintingPreference: Font.PreferFullHinting
         variableAxes: Appearance.font.variableAxes.main
     }
-    renderType: Text.NativeRendering
+    renderType: ScreenScale.renderTypeFor(Screen.name)
     selectedTextColor: Appearance.colors.colOnSecondaryContainer
     selectionColor: Appearance.colors.colSecondaryContainer
 

@@ -7,7 +7,9 @@ Text {
     property real animationDistanceX: 0
     property real animationDistanceY: 6
 
-    renderType: Text.NativeRendering
+    // Asked of the compositor rather than of Qt, which cannot see a fractional
+    // scale: a window on a 150% screen is told its ratio is 2. See ScreenScale.
+    renderType: ScreenScale.renderTypeFor(Screen.name)
     verticalAlignment: Text.AlignVCenter
     property bool shouldUseNumberFont: /^\d+$/.test(root.text)
     property var defaultFont: shouldUseNumberFont ? Appearance.font.family.numbers : Appearance.font.family.main

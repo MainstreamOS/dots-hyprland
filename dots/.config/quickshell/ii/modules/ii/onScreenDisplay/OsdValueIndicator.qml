@@ -56,7 +56,7 @@ Item {
                         alignWhenCentered: !root.rotateIcon
                     }
                     color: Appearance.colors.colOnLayer0
-                    renderType: Text.QtRendering
+                    renderType: ScreenScale.renderTypeFor(Screen.name)
 
                     text: root.icon
                     iconSize: 20 + 10 * (root.scaleIcon ? value : 1)

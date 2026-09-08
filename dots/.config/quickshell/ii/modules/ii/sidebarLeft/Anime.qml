@@ -348,7 +348,7 @@ Item {
                     Layout.fillWidth: true
                     padding: 10
                     color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
-                    renderType: Text.NativeRendering
+                    renderType: ScreenScale.renderTypeFor(Screen.name)
                     placeholderText: Translation.tr('Enter tags, or "%1" for commands').arg(root.commandPrefix)
 
                     background: null
