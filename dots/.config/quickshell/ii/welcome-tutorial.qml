@@ -118,11 +118,11 @@ ApplicationWindow {
     readonly property int mockW: 600
     readonly property int mockH: 380
     readonly property int barW: 560
-    readonly property int barSlotW: 16
+    readonly property int barSlotW: 12
     readonly property int barSlotH: 16
     readonly property int barSlotR: 2
     readonly property int barIconSize: 10
-    readonly property int barIndicatorInset: 1
+    readonly property int barIndicatorInset: 0
 
     // Shared 36-app drawer dataset and Dwindle-ish tile templates,
     // used by the mockup cards that render a drawer / tiled windows.
@@ -547,7 +547,10 @@ ApplicationWindow {
     // matches the real shell's BarGroup.qml (colLayer1 with a touch
     // of transparency, soft rounding, no border).
     component PillBg : Rectangle {
-        color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+        // The bar sets its groups apart by giving each one a filled pill. At a
+        // third transparent they washed into the strip and the grouping, which
+        // is the thing these panels are pointing at, stopped reading.
+        color: Appearance.colors.colLayer1
         radius: 8
         border.width: 0
     }
@@ -725,8 +728,8 @@ ApplicationWindow {
             readonly property real hi: Math.max(idxPair.idx1, idxPair.idx2)
             x: lo * card.barSlotW + card.barIndicatorInset
             width: (hi - lo) * card.barSlotW + card.barSlotW - 2 * card.barIndicatorInset
-            height: card.barSlotH - 2 * card.barIndicatorInset
-            y: card.barIndicatorInset
+            height: card.barSlotW - 2 * card.barIndicatorInset
+            y: (card.barSlotH - height) / 2
             radius: height / 2
             color: Appearance.m3colors.m3primary
             opacity: 0.9
@@ -958,7 +961,7 @@ ApplicationWindow {
         readonly property int barSlotH: root.barSlotH
         readonly property int barSlotR: root.barSlotR            // smaller inactive dot, highlight + icon unchanged
         readonly property int barIconSize: root.barIconSize
-        readonly property int barIndicatorInset: root.barIndicatorInset   // → 14×14 circle at rest
+        readonly property int barIndicatorInset: root.barIndicatorInset   // → 12×12 circle at rest, a ring wider than the 10px icon on it
 
         // ── Tiled-windows background ─────────────────────────────────
         // Same dimensions and position as Card6DockPreview's tile area
@@ -1075,12 +1078,12 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "colorize"; iconSize: 10
+                                            text: "videocam"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "keyboard"; iconSize: 10
+                                            text: "mic"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -1092,7 +1095,7 @@ ApplicationWindow {
                                     StyledText {
                                         id: clockText
                                         anchors.centerIn: parent
-                                        text: "12:53"
+                                        text: "9:41 AM"
                                         font.pixelSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
@@ -1107,13 +1110,13 @@ ApplicationWindow {
                                         spacing: 2
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "cloud"
+                                            text: "clear_day"
                                             iconSize: 11
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         StyledText {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "74°"
+                                            text: "73°F"
                                             font.pixelSize: 9
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -1144,7 +1147,7 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "wifi"; iconSize: 10
+                                            text: "settings"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -1546,12 +1549,12 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "colorize"; iconSize: 10
+                                            text: "videocam"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "keyboard"; iconSize: 10
+                                            text: "mic"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -1563,7 +1566,7 @@ ApplicationWindow {
                                     StyledText {
                                         id: clockText3
                                         anchors.centerIn: parent
-                                        text: "12:53"
+                                        text: "9:41 AM"
                                         font.pixelSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
@@ -1578,13 +1581,13 @@ ApplicationWindow {
                                         spacing: 2
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "cloud"
+                                            text: "clear_day"
                                             iconSize: 11
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         StyledText {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "74°"
+                                            text: "73°F"
                                             font.pixelSize: 9
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -1615,7 +1618,7 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "wifi"; iconSize: 10
+                                            text: "settings"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -3212,12 +3215,12 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "colorize"; iconSize: 10
+                                            text: "videocam"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "keyboard"; iconSize: 10
+                                            text: "mic"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -3229,7 +3232,7 @@ readonly property var drawerApps: root.drawerApps
                                     StyledText {
                                         id: clockText8
                                         anchors.centerIn: parent
-                                        text: "12:53"
+                                        text: "9:41 AM"
                                         font.pixelSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
@@ -3244,13 +3247,13 @@ readonly property var drawerApps: root.drawerApps
                                         spacing: 2
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "cloud"
+                                            text: "clear_day"
                                             iconSize: 11
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         StyledText {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "74°"
+                                            text: "73°F"
                                             font.pixelSize: 9
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -3281,7 +3284,7 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "wifi"; iconSize: 10
+                                            text: "settings"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -4163,6 +4166,34 @@ readonly property var drawerApps: root.drawerApps
                             border.width: 1
                             z: 2
 
+                            // The tray sits past what is playing, the way the
+                            // other panels draw it.
+                            Rectangle {
+                                id: sysTray11
+                                anchors.left: mediaPill11.right
+                                anchors.leftMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: card5.barPillH
+                                width: trayIcons11.implicitWidth + 12
+                                radius: 8
+                                color: Appearance.colors.colLayer1
+                                Row {
+                                    id: trayIcons11
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    MaterialSymbol {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "bluetooth"; iconSize: 10
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+                                    MaterialSymbol {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "cast"; iconSize: 10
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+                                }
+                            }
+
                             // Now playing pill, opening the bar: the window
                             // title that used to stand here ships switched off.
                             Rectangle {
@@ -4173,7 +4204,7 @@ readonly property var drawerApps: root.drawerApps
                                 height: card5.barPillH
                                 width: mediaRow11.implicitWidth + 12
                                 radius: 8
-                                color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+                                color: Appearance.colors.colLayer1
                                 Row {
                                     id: mediaRow11
                                     anchors.centerIn: parent
@@ -4211,7 +4242,7 @@ readonly property var drawerApps: root.drawerApps
                                 radius: 8
                                 color: card5.barDragActive
                                     ? ColorUtils.transparentize(Appearance.colors.colPrimary, 0.82)
-                                    : ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+                                    : Appearance.colors.colLayer1
                                 border.color: card5.barDragActive
                                     ? Appearance.colors.colPrimary
                                     : "transparent"
@@ -4230,9 +4261,9 @@ readonly property var drawerApps: root.drawerApps
                                     Rectangle {
                                         id: activeIndicator11
                                         x: card5.activeWs * card5.barSlotW + card5.barIndicatorInset
-                                        y: card5.barIndicatorInset
+                                        y: (card5.barSlotH - height) / 2
                                         width: card5.barSlotW - 2 * card5.barIndicatorInset
-                                        height: card5.barSlotH - 2 * card5.barIndicatorInset
+                                        height: card5.barSlotW - 2 * card5.barIndicatorInset
                                         radius: height / 2
                                         color: Appearance.m3colors.m3primary
                                         opacity: 0.9
@@ -4314,7 +4345,7 @@ readonly property var drawerApps: root.drawerApps
                                 height: card5.barPillH
                                 width: trayRow11.implicitWidth + 12
                                 radius: 8
-                                color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+                                color: Appearance.colors.colLayer1
                                 Row {
                                     id: trayRow11
                                     anchors.centerIn: parent
@@ -4322,11 +4353,6 @@ readonly property var drawerApps: root.drawerApps
                                     MaterialSymbol {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: "volume_up"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "wifi"; iconSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
                                     MaterialSymbol {
@@ -4341,17 +4367,44 @@ readonly property var drawerApps: root.drawerApps
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.verticalCenter: parent.verticalCenter
+                                Rectangle {
+                                    height: card5.barPillH
+                                    width: utilRow11.implicitWidth + 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    radius: 8
+                                    color: Appearance.colors.colLayer1
+                                    Row {
+                                        id: utilRow11
+                                        anchors.centerIn: parent
+                                        spacing: 5
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "screenshot_region"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "videocam"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "mic"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                    }
+                                }
                                 spacing: 4
                                 Rectangle {
                                     height: card5.barPillH
                                     width: clockText11.implicitWidth + 16
                                     anchors.verticalCenter: parent.verticalCenter
                                     radius: 8
-                                    color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+                                    color: Appearance.colors.colLayer1
                                     StyledText {
                                         id: clockText11
                                         anchors.centerIn: parent
-                                        text: "12:34 AM"
+                                        text: "9:41 AM"
                                         font.pixelSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
@@ -4361,20 +4414,20 @@ readonly property var drawerApps: root.drawerApps
                                     width: weatherRow11.implicitWidth + 10
                                     anchors.verticalCenter: parent.verticalCenter
                                     radius: 8
-                                    color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.3)
+                                    color: Appearance.colors.colLayer1
                                     Row {
                                         id: weatherRow11
                                         anchors.centerIn: parent
                                         spacing: 2
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "cloud"
+                                            text: "clear_day"
                                             iconSize: 11
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         StyledText {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "74°"
+                                            text: "73°F"
                                             font.pixelSize: 9
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -5015,12 +5068,12 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "colorize"; iconSize: 10
+                                            text: "videocam"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "keyboard"; iconSize: 10
+                                            text: "mic"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
@@ -5032,7 +5085,7 @@ readonly property var drawerApps: root.drawerApps
                                     StyledText {
                                         id: clockText12
                                         anchors.centerIn: parent
-                                        text: "12:53"
+                                        text: "9:41 AM"
                                         font.pixelSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
@@ -5047,13 +5100,13 @@ readonly property var drawerApps: root.drawerApps
                                         spacing: 2
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "cloud"
+                                            text: "clear_day"
                                             iconSize: 11
                                             color: Appearance.colors.colOnLayer1
                                         }
                                         StyledText {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "74°"
+                                            text: "73°F"
                                             font.pixelSize: 9
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -5084,7 +5137,7 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "wifi"; iconSize: 10
+                                            text: "settings"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
                                     }
