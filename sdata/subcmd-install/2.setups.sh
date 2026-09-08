@@ -562,6 +562,60 @@ function setup_default_video_player(){
 showfun setup_default_video_player
 v setup_default_video_player
 
+# Set mpv as default for audio too. Without this the type falls to whatever
+# desktop entry claims it, which on a machine with Spotify installed is a
+# streaming client being handed a local file it cannot really play.
+function setup_default_audio_player(){
+  local audio_types=(
+    audio/aac audio/ac3 audio/flac audio/mp4 audio/mpeg audio/ogg
+    audio/opus audio/vorbis audio/wav audio/webm audio/x-aac audio/x-aiff
+    audio/x-ape audio/x-flac audio/x-m4a audio/x-matroska audio/x-mp3
+    audio/x-mpeg audio/x-ms-wma audio/x-musepack audio/x-opus+ogg
+    audio/x-scpls audio/x-vorbis+ogg audio/x-wav audio/x-wavpack
+  )
+  for mime in "${audio_types[@]}"; do
+    v xdg-mime default mpv.desktop "$mime"
+  done
+}
+showfun setup_default_audio_player
+v setup_default_audio_player
+
+# Set Nautilus as default file manager. The ISO install already does this; the
+# setup run did not, so opening a folder from an app depended on whatever else
+# had claimed inode/directory.
+function setup_default_file_manager(){
+  local desktop=org.gnome.Nautilus.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping file manager default.${STY_RST}"
+    return 0
+  fi
+  v xdg-mime default "$desktop" inode/directory
+}
+showfun setup_default_file_manager
+v setup_default_file_manager
+
+# Set Chromium as the default browser. Nothing set one before, on either
+# install path, so https and mailto went to whichever entry registered them
+# first: on a machine with any browser installed that browser also became the
+# mail client, which is a surprising thing to find under a "default apps" list.
+function setup_default_browser(){
+  local desktop=chromium.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping browser default.${STY_RST}"
+    return 0
+  fi
+  command -v xdg-settings >/dev/null 2>&1 && v xdg-settings set default-web-browser "$desktop"
+  local web_types=(
+    x-scheme-handler/http x-scheme-handler/https
+    text/html application/xhtml+xml
+  )
+  for mime in "${web_types[@]}"; do
+    v xdg-mime default "$desktop" "$mime"
+  done
+}
+showfun setup_default_browser
+v setup_default_browser
+
 # Set GNOME Text Editor as default for plain-text and common text-ish MIME types.
 # Skipped if the desktop entry isn't present (e.g. gnome-text-editor not installed).
 function setup_default_text_editor(){
