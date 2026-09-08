@@ -68,7 +68,10 @@ Item {
         text: root.text
         rotation: root.rotate90 ? 90 : 0
 
-        renderType: ScreenScale.renderTypeFor(Screen.name)
+        // Distance field whatever the screen does. This text is rotated, and a
+        // glyph hinted onto whole pixels and then turned is pixelated at any
+        // scale.
+        renderType: Text.QtRendering
         wrapMode: Text.Wrap
     }    
 }

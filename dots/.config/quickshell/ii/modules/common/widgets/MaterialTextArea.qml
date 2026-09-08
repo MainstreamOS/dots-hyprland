@@ -16,7 +16,9 @@ TextArea {
     Material.background: Appearance.m3colors.m3surface
     Material.foreground: Appearance.m3colors.m3onSurface
     Material.containerStyle: Material.Filled
-    renderType: ScreenScale.renderTypeFor(Screen.name)
+    // Distance field whatever the screen does, for the reason MaterialTextField
+    // carries: hinting makes the small placeholder text look wrong at any scale.
+    renderType: Text.QtRendering
 
     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
     selectionColor: Appearance.colors.colSecondaryContainer
