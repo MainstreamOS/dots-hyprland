@@ -129,10 +129,17 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 
 Contributions are welcome — code, docs, bug reports, or ideas. Two are especially wanted:
 
-- **Translations.** Mainstream should feel native well beyond English. If you speak another language, help is genuinely appreciated.
+- **Translations.** Mainstream should feel native well beyond English. If you speak another language, help is genuinely appreciated: [translate on Crowdin](https://crowdin.com/project/mainstreamos), no git or JSON editing required.
 - **Honest feedback.** Nobody working on Mainstream is above reproach — if a decision looks off or something needs addressing, open an issue or a discussion. Questions and criticism are how it gets better.
 
 Fixes to the upstream shell go back to [illogical-impulse](https://github.com/end-4/dots-hyprland) as pull requests.
+
+## Sponsor
+
+Mainstream is free and stays that way. If it saved you an afternoon, any of these help:
+
+- [GitHub Sponsors](https://github.com/sponsors/MainstreamOS), recurring, no platform cut
+- [Ko-fi](https://ko-fi.com/mainstreamos), a one-off tip
 
 ## Thank you
 
