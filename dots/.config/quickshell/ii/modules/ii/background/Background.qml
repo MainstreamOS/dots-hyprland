@@ -632,6 +632,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -643,6 +644,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -654,6 +656,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -665,6 +668,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -676,6 +680,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                         wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
                         hasActiveMusic: widgetCanvas.hasActiveMusic
                     }
@@ -689,6 +694,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -700,6 +706,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -711,6 +718,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -722,6 +730,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -733,6 +742,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
@@ -744,6 +754,7 @@ Variants {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
             }

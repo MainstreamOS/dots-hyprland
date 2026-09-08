@@ -36,7 +36,7 @@ ContentPage {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     Layout.leftMargin: 6
-                    text: Translation.tr("How one wallpaper gives way to the next")
+                    text: Translation.tr("How one wallpaper transitions to the next")
                     color: Appearance.colors.colOnSecondaryContainer
                 }
             }
@@ -178,6 +178,37 @@ ContentPage {
             stepSize: 1
             onValueChanged: {
                 Config.options.background.parallax.workspaceZoom = value / 100;
+            }
+        }
+    }
+
+    ContentSection {
+        icon: "blur_on"
+        title: Translation.tr("Widget appearance")
+
+        ConfigSwitch {
+            buttonIcon: "blur_on"
+            text: Translation.tr("Frosted widget backgrounds")
+            checked: Config.options.background.widgets.blur.enable
+            onCheckedChanged: {
+                Config.options.background.widgets.blur.enable = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("Blur the wallpaper behind each widget card. Every widget that is on pays for its own, so older graphics may prefer this off.")
+            }
+        }
+
+        ConfigSlider {
+            visible: Config.options.background.widgets.blur.enable
+            text: Translation.tr("Blur amount")
+            value: Config.options.background.widgets.blur.radius
+            usePercentTooltip: false
+            buttonIcon: "deblur"
+            from: 4
+            to: 48
+            stopIndicatorValues: [24]
+            onMoved: {
+                Config.options.background.widgets.blur.radius = value;
             }
         }
     }

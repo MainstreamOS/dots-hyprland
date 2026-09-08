@@ -135,6 +135,20 @@ AbstractBackgroundWidget {
         color: Appearance.colors.colPrimaryContainer
         clip: true
 
+        Loader {
+            anchors.fill: parent
+            active: Config.options.background.widgets.blur.enable && root.wallpaperItem !== null
+            sourceComponent: FastBlurred {
+                anchors.fill: parent
+                blurSource: root.wallpaperItem
+                cardRadius: card.radius
+                tint: Appearance.colors.colLayer1
+                tintOpacity: 0.55
+                trackX: root.x
+                trackY: root.y
+            }
+        }
+
         Behavior on implicitHeight {
             NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
         }

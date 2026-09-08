@@ -486,6 +486,13 @@ Singleton {
             property JsonObject background: JsonObject {
                 // x and y put a widget's center across the screen, 0 to 1, so a theme lays them out alike on every monitor.
                 property JsonObject widgets: JsonObject {
+                    // Frosted glass behind every widget card. Off as it ships,
+                    // and reached through a Loader, so a machine that leaves it
+                    // off never builds the sampler, the blur or the mask.
+                    property JsonObject blur: JsonObject {
+                        property bool enable: false
+                        property real radius: 24
+                    }
                     property JsonObject clock: JsonObject {
                         property bool enable: true
                         property bool showOnlyWhenLocked: false
@@ -606,7 +613,7 @@ Singleton {
                 property bool widgetsLocked: false
                 property string wallpaperPath: ""
                 property string thumbnailPath: ""
-                // How one wallpaper gives way to the next: a name from the
+                // How one wallpaper transitions to the next: a name from the
                 // TransitionEffects catalog, or "random".
                 property string wallpaperTransition: "fade"
                 property bool hideWhenFullscreen: true

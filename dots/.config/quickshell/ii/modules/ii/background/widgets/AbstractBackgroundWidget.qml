@@ -15,6 +15,9 @@ AbstractWidget {
     required property int scaledScreenWidth
     required property int scaledScreenHeight
     required property real wallpaperScale
+    // The picture the card samples for its frosted backdrop. Null when there
+    // is nothing in the scene to sample, such as a video wallpaper.
+    property Item wallpaperItem: null
     property bool visibleWhenLocked: false
     property var configEntry: Config.options.background.widgets[configEntryName]
     property string placementStrategy: configEntry.placementStrategy
