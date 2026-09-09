@@ -19,11 +19,16 @@ Singleton {
     // the spacer that used to divide the right section. Without it the right
     // section packs to the screen edge and they would ride against the tray, so
     // the layout now says the position the spacer used to fake.
+    //
+    // Workspaces open the left section, where a workspace strip is read for on
+    // every other desktop, and media moves across to the right so the two sides
+    // carry a similar weight instead of the left holding both.
     readonly property var defaultBarLayout: ({
         "left": [
-            { "widgets": [ {"id": "resources", "enabled": false}, {"id": "media", "enabled": true} ] },
+            { "widgets": [ {"id": "resources", "enabled": false} ] },
+            { "widgets": [ {"id": "workspaces", "enabled": true} ] },
             { "widgets": [ {"id": "tray", "enabled": true} ] },
-            { "widgets": [ {"id": "activeWindow", "enabled": false}, {"id": "activeWindowPill", "enabled": false} ] },
+            { "widgets": [ {"id": "activeWindowPill", "enabled": false}, {"id": "activeWindow", "enabled": false} ] },
             { "widgets": [ {"id": "sidebarButton", "enabled": true} ] }
         ],
         "center": [
@@ -33,8 +38,8 @@ Singleton {
         ],
         "right": [
             { "widgets": [ {"id": "timers", "enabled": true} ] },
-            { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] },
-            { "widgets": [ {"id": "workspaces", "enabled": true} ] }
+            { "widgets": [ {"id": "media", "enabled": true} ] },
+            { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
         ]
     })
     property bool ready: false
