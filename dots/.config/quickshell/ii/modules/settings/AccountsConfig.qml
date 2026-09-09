@@ -163,7 +163,21 @@ ContentPage {
                 const conf = "/var/lib/AccountsService/users/" + user
                 imageApplyProc.command = ["pkexec", "bash", "-c",
                     'mkdir -p /var/lib/AccountsService/icons /var/lib/AccountsService/users'
-                    + ' && cp "$1" "$2" && chmod 644 "$2"'
+                    // Normalize rather than copy what was picked. The login screen draws
+                    // the avatar at 272 logical pixels, which is over 500 real ones on a
+                    // HiDPI panel, so a small image arrives there enlarged and soft. A
+                    // large one is worse in the other direction: a multi-megabyte photo
+                    // sat in /var/lib for a circle a couple of hundred pixels across.
+                    // Square-cropped from the middle and capped at 512, and never scaled
+                    // up, since enlarging here would only add weight, not detail.
+                    + ' && edge=$(identify -format "%[fx:min(w,h)]" "$1[0]" 2>/dev/null || echo 0)'
+                    + ' && case "$edge" in ""|*[!0-9]*) edge=0 ;; esac'
+                    + ' && if [ "$edge" -gt 0 ]; then'
+                    + '   if [ "$edge" -gt 512 ]; then edge=512; fi;'
+                    + '   magick "$1[0]" -auto-orient -resize "${edge}x${edge}^"'
+                    + '     -gravity center -extent "${edge}x${edge}" "$2";'
+                    + ' else cp "$1" "$2"; fi'
+                    + ' && chmod 644 "$2" && echo "$edge"'
                     + ' && if [ -f "$3" ] && grep -q "^Icon=" "$3"; then'
                     + '   sed -i "s|^Icon=.*|Icon=$2|" "$3";'
                     + ' elif [ -f "$3" ]; then'
@@ -179,9 +193,19 @@ ContentPage {
 
         Process {
             id: imageApplyProc
+            // The helper reports the edge length it settled on, so the status
+            // line can say when a picture is smaller than the login screen will
+            // draw it instead of letting the result be a surprise at logout.
+            property string buf: ""
+            onRunningChanged: if (running) buf = ""
+            stdout: SplitParser { onRead: data => imageApplyProc.buf += data }
             onExited: (code) => {
                 if (code === 0) {
-                    root.showStatus(Translation.tr("Login image updated!"), false)
+                    const edge = parseInt(imageApplyProc.buf.trim(), 10)
+                    if (edge > 0 && edge < 512)
+                        root.showStatus(Translation.tr("Login image updated. At %1 pixels it may look soft on the login screen.").arg(edge), false)
+                    else
+                        root.showStatus(Translation.tr("Login image updated!"), false)
                     faceImage.source = ""
                     faceImage.source = "file:///var/lib/AccountsService/icons/" + account.name
                 } else {
