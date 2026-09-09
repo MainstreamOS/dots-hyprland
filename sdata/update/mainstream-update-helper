@@ -206,6 +206,20 @@ for arg in "$@"; do
         --skip-firmware)            SKIP_FIRMWARE=1 ;;
         --edge)                     EDGE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
+        --*)
+            # An unrecognized flag is almost always a newer Settings page talking
+            # to an older helper. The ISO bakes its own copy of this script, and
+            # that copy only catches up when updatems-system runs partway through
+            # the first update, so a fresh install can be a release behind for
+            # exactly one run. No topgrade flag passthrough is documented above,
+            # so a flag arriving here was never meant to be forwarded: doing so
+            # reported the skew as an "unexpected argument" from a tool that had
+            # nothing to do with it, and left the flag's own work undone without
+            # saying so.
+            echo "$(t "Unknown option:") $arg" >&2
+            echo "$(t "This build of the update helper does not support it. Run an update without it once to refresh the helper, then try again.")" >&2
+            exit 2
+            ;;
         *)                          TOPGRADE_EXTRA_ARGS+=("$arg") ;;
     esac
 done
