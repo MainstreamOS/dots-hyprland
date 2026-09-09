@@ -98,7 +98,44 @@ wait_for_repo() {
   log "[mainstream] answered after ${waited}s"
 }
 
-pac() { wait_for_repo; log "run: pacman -S --needed --noconfirm $*"; pacman -S --needed --noconfirm "$@"; }
+# The repo race above is not the only one. Another of our own jobs can be holding
+# the pacman lock at exactly this moment: mainstream-keyring-init runs a
+# five-attempt `pacman -Sy` from a timer that first fires 20s into the boot, which
+# is the same minute a new user reaches the Welcome app's install page. The fleet's
+# timers answer a busy database by yielding until their next tick. Someone who just
+# pressed Install has no next tick, so wait for the lock rather than fail on it.
+wait_for_pacman_lock() {
+  [[ -e /var/lib/pacman/db.lck ]] || return 0
+  local waited=0
+  while [[ -e /var/lib/pacman/db.lck ]]; do
+    # A lock with no pacman behind it is debris from a killed transaction, which
+    # would otherwise block every install on this machine forever. The rest of the
+    # fleet clears it on the same test.
+    if ! pgrep -x pacman >/dev/null 2>&1; then
+      log "pacman database lock is stale (no pacman running); removing it"
+      rm -f /var/lib/pacman/db.lck 2>/dev/null
+      return 0
+    fi
+    if (( waited == 0 )); then
+      log "pacman database is locked by another process; waiting for it to finish"
+      notify "Waiting for another update to finish" "Your install starts as soon as the package manager is free."
+    fi
+    sleep 3
+    waited=$((waited + 3))
+    if (( waited >= 600 )); then
+      log "pacman database still locked after ${waited}s; giving up"
+      return 1
+    fi
+  done
+  log "pacman database lock cleared after ${waited}s"
+}
+
+pac() {
+  wait_for_repo
+  wait_for_pacman_lock || { log "could not get the pacman lock"; return 1; }
+  log "run: pacman -S --needed --noconfirm $*"
+  pacman -S --needed --noconfirm "$@"
+}
 
 install_gaming() {
   notify "Installing Desktop Gaming…" "Steam and the 32-bit gaming stack"
@@ -110,12 +147,16 @@ install_gaming() {
   log "detected GPU line: ${gpu:-<none>}"
   log "packages: ${pkgs[*]}"
   if pac "${pkgs[@]}"; then notify "Desktop Gaming installed" "Steam and the gaming stack are ready."
-  else notify "Desktop Gaming install failed" "See $LOGFILE." critical; fi
+  else notify "Desktop Gaming install failed" "See $LOGFILE." critical; return 1; fi
 }
 
 install_gamescope() {
   notify "Setting up Steam Big Picture…" "gamescope session (Super + G)"
-  pac mainstream-gaming
+  if ! pac mainstream-gaming; then
+    log "pac mainstream-gaming FAILED"
+    notify "Steam Big Picture setup failed" "See $LOGFILE." critical
+    return 1
+  fi
   if [[ -x /usr/bin/gaming-mode-install ]]; then
     log "running gaming-mode-install (pulls Steam + the 32-bit stack)"
     if gaming-mode-install; then
@@ -132,17 +173,19 @@ install_gamescope() {
     else
       log "gaming-mode-install FAILED"
       notify "Steam Big Picture setup failed" "See $LOGFILE." critical
+      return 1
     fi
   else
     log "gaming-mode-install MISSING — did 'pac mainstream-gaming' fail? is [mainstream] configured?"
     notify "Steam Big Picture setup failed" "gaming-mode-install not found." critical
+    return 1
   fi
 }
 
 install_obs() {
   notify "Installing OBS Studio…" "mainstream-obs"
   if pac mainstream-obs; then notify "OBS Studio installed" "Find it in your apps."
-  else notify "OBS install failed" "See $LOGFILE." critical; fi
+  else notify "OBS install failed" "See $LOGFILE." critical; return 1; fi
 }
 
 install_resolve() {  # "" | --studio   [install|update]
@@ -168,7 +211,7 @@ install_resolve() {  # "" | --studio   [install|update]
   rm -f "$SUDOERS_TMP"
   log "$name installer exited: $rc"
   if (( rc == 0 )); then notify "$name $done_" "Launch it from your apps."
-  else notify "$name $failed" "See the log: $LOGFILE" critical; fi
+  else notify "$name $failed" "See the log: $LOGFILE" critical; return 1; fi
 }
 
 # Update whichever edition is actually installed. The edition is read from
@@ -195,12 +238,15 @@ update_resolve() {
   esac
 }
 
+failed_items=()
+
 run_item() {  # label  fn...
   local label=$1; shift
   log "════════ START: $label ════════"
   local t0=$SECONDS rc=0
   "$@" || rc=$?
   log "════════ END: $label — exit $rc, $((SECONDS - t0))s ════════"
+  (( rc == 0 )) || failed_items+=("$label")
 }
 
 (( $# )) || { log "nothing selected — exiting"; exit 0; }
@@ -234,4 +280,11 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
 done
 
 log "all install tasks finished"
+
+if (( ${#failed_items[@]} )); then
+  log "FAILED: ${failed_items[*]}"
+  notify "Some installs did not finish" "Not finished: ${failed_items[*]}. See $LOGFILE." critical
+  exit 1
+fi
+
 notify "Installs finished" "All selected items are done."
