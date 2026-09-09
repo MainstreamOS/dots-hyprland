@@ -86,60 +86,70 @@ ContentSection {
 
     Process {
         id: layoutCatalogProc
-        // base.lst contains layouts first and variants afterwards. A tab makes
-        // descriptions with spaces unambiguous for SplitParser.
+        // base.lst has three sections: "! layout" (base layouts), "! variant"
+        // (layout variants — including the "mac" Macintosh variants, e.g.
+        // "de: German (Macintosh)" — that this picker used to miss because
+        // the old script bailed out as soon as it reached that section), and
+        // "! option" (key-remap options, irrelevant here). Each printed line
+        // is tagged "layout" or "variant" so SplitParser can tell them apart;
+        // a tab keeps descriptions with spaces unambiguous.
         // `custom` is XKB's placeholder for a user-supplied definition, not
         // a selectable layout that this settings panel can configure.
-        command: ["awk", '/^! layout/{in_layout=1; next} /^! variant/{exit} in_layout && NF >= 2 && $1 != \"custom\" {code=$1; $1=\"\"; sub(/^[[:space:]]+/, \"\"); print code \"\\t\" $0}', root.xkbLayoutList]
+        command: ["awk", `
+            /^! layout/  { section = "layout"; next }
+            /^! variant/ { section = "variant"; next }
+            /^!/         { section = ""; next }
+            section == "layout" && NF >= 2 && $1 != "custom" {
+                code = $1; $1 = ""; sub(/^[[:space:]]+/, "")
+                print "layout\\t" code "\\t" $0
+            }
+            section == "variant" && NF >= 2 {
+                variant = $1; $1 = ""; sub(/^[[:space:]]+/, "")
+                colon = index($0, ": ")
+                if (colon > 0) {
+                    code = substr($0, 1, colon - 1)
+                    desc = substr($0, colon + 2)
+                    print "variant\\t" code "\\t" variant "\\t" desc
+                }
+            }
+        `, root.xkbLayoutList]
         stdout: SplitParser {
             onRead: data => {
                 const fields = data.trim().split("\t")
-                if (fields.length < 2)
-                    return
-                root.availableLayouts = [...root.availableLayouts, {
-                    code: fields[0],
-                    name: fields.slice(1).join("\t")
-                }]
+                if (fields[0] === "layout" && fields.length >= 3) {
+                    root.availableLayouts = [...root.availableLayouts, {
+                        code: fields[1],
+                        name: fields.slice(2).join("\t")
+                    }]
+                } else if (fields[0] === "variant" && fields.length >= 4) {
+                    root.availableLayouts = [...root.availableLayouts, {
+                        code: fields[1],
+                        variant: fields[2],
+                        name: fields.slice(3).join("\t")
+                    }]
+                }
             }
         }
         onExited: {
-            root.availableLayouts = [...root.availableLayouts,
-                {
-                    code: "us",
-                    variant: "dvorak",
-                    name: Translation.tr("English (US) — Dvorak")
-                },
-                {
-                    code: "us",
-                    variant: "colemak",
-                    name: Translation.tr("English (US) — Colemak")
-                },
-                {
-                    code: "us",
-                    variant: "colemak_dh",
-                    name: Translation.tr("English (US) — Colemak-DH")
-                },
-                {
-                    code: "us",
-                    variant: "workman",
-                    name: Translation.tr("English (US) — Workman")
-                },
-                {
-                    code: "us",
-                    variant: "dvp",
-                    name: Translation.tr("English (US) — Programmer Dvorak")
-                },
-                {
-                    code: "fr",
-                    variant: "bepo",
-                    name: Translation.tr("French — Bépo")
-                },
-                {
-                    code: "de",
-                    variant: "neo",
-                    name: Translation.tr("German — Neo 2")
-                }
+            // base.lst's own "! variant" section now supplies every variant
+            // it knows about (Dvorak, Colemak, the various "mac" layouts,
+            // etc). xkeyboard-config versions differ on which of these they
+            // ship though — Colemak-DH in particular is a fairly recent
+            // addition — so keep a small fallback list for older systems,
+            // only adding an entry if base.lst didn't already provide it.
+            const fallbackVariants = [
+                { code: "us", variant: "dvorak", name: Translation.tr("English (US) — Dvorak") },
+                { code: "us", variant: "colemak", name: Translation.tr("English (US) — Colemak") },
+                { code: "us", variant: "colemak_dh", name: Translation.tr("English (US) — Colemak-DH") },
+                { code: "us", variant: "workman", name: Translation.tr("English (US) — Workman") },
+                { code: "us", variant: "dvp", name: Translation.tr("English (US) — Programmer Dvorak") },
+                { code: "fr", variant: "bepo", name: Translation.tr("French — Bépo") },
+                { code: "de", variant: "neo", name: Translation.tr("German — Neo 2") }
             ]
+            for (const candidate of fallbackVariants) {
+                if (!root.availableLayouts.some(layout => root.layoutId(layout) === root.layoutId(candidate)))
+                    root.availableLayouts = [...root.availableLayouts, candidate]
+            }
             root.catalogLoaded = true
         }
     }
