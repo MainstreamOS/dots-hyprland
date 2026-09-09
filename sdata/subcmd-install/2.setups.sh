@@ -536,8 +536,15 @@ function setup_fonts(){
 showfun setup_fonts
 v setup_fonts
 
+# The same look the ISO install gets from /etc/dconf/db/local.d/00-dark-mode.
+# Settings reads these back to fill the System look pickers, and a value that
+# names no installed theme selects nothing, so leaving gtk-theme at the GNOME
+# default left App style blank on a script install.
 v gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+v gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
 v gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+v gsettings set org.gnome.desktop.interface cursor-theme 'Bibata-Modern-Classic'
+v gsettings set org.gnome.desktop.interface cursor-size 24
 v gsettings set org.gnome.desktop.wm.preferences button-layout ":"
 
 # Set mpv as default video player for all video MIME types
