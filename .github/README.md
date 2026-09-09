@@ -49,6 +49,7 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
     - **Touchpad gestures** — remap every swipe and pinch, applied instantly.
     - **Title bars** — toggle window title bars on or off instantly.
     - **App management** — install and remove native packages and Flatpaks, no terminal.
+    - **Default apps and startup.** Choose which app opens which kind of file across ten roles, and what starts up when you log in, from one page. Every role arrives already set on a fresh install.
     - **Auto drive mounting** — set a drive up once and it's ready every login; format blank disks and unlock encrypted ones in the app.
 - **Whole-desktop Material You** — pick a wallpaper, a still image or a video, and the shell, the settings app, your terminal, your apps, your folder icons, and the lock screen all recolor to match it.
 - **Themes you can save, schedule, and share** — your whole look — wallpaper, colors, app style, icons, interface changes, window styling, and which edge the dock sits on — saves under a name with a preview and switches back in one tap. Pair a Day and Night theme that follow Night Light or your own set hours, or export a theme to a single file and import it on another computer.
@@ -60,6 +61,9 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 - **Title bars in your colors.** Set their color and opacity, and return to stock in one press.
 - **Windows drawn the way you want** — corner radius, border thickness, the gaps between windows and around the screen, how see-through focused and unfocused windows are, the blur behind them, the shadow beneath them, and how they animate. Give the borders a gradient of your own, or leave them following the wallpaper. One press puts it all back.
 - **A built-in window rule editor** — most desktops leave per-app rules to a config file you edit by hand. Here it is a page in Settings: teach one app where to open, whether it floats, how see-through it is, and what it is allowed to do. Rules save into a theme, so sharing a theme shares the behavior too.
+- **Widgets on your desktop.** Eleven of them: the clock, weather, a calendar, world clocks, notes, a to do list, timers, system resources, a music visualizer, media controls and a picture of your own. Drag each where you want it, and give them frosted glass that samples the wallpaper behind. A theme remembers which are on and where they sit, and the clock gains a third style, a chunky pixel readout.
+- **A menu on the wallpaper.** Right click the desktop to change the wallpaper, switch theme, and reach the bar and dock settings without opening Settings first.
+- **A wallpaper that changes with style.** Ten ways for one picture to transition to the next: crossfade, slide, zoom, wipe, circle, ripple, peel, glitch, CRT and shatter, or let it pick at random.
 - **A wallpaper that rotates** — point it at a folder and set a timer; the colors follow along with every picture.
 - **App style, icons, pointer, and fonts** — all pickers in Settings, with a font list that shows each font in its own lettering. Your choice carries into your apps, not just the shell.
 - **Gaming Mode** — `Super` + `G` puts the desktop away and hands the machine to a full-screen gamescope Steam session, the same session model a Steam Deck runs, then gives the desktop back. AMD, Intel, and NVIDIA alike. Proton GE is installed and set as Steam's default, so Windows titles run the first time you open them.
