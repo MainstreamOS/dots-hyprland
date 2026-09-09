@@ -307,9 +307,49 @@ if pacman -Qi grub &>/dev/null; then
     info "Removed GRUB"
 fi
 
-if bootctl is-installed &>/dev/null 2>&1; then
-    bootctl remove 2>/dev/null || true
+# bootctl only finds the ESP by itself on the layouts it likes, which is why
+# $ESP above carries a fallback for when --print-esp-path comes back empty.
+# Asking it again here without saying where to look is how a machine with its
+# ESP at /boot/efi kept its systemd-boot: is-installed answered no, this branch
+# never ran, and the loader Limine had just superseded stayed on the disk to be
+# listed back to the user as a boot option that goes nowhere.
+_sdb_removed=0
+if bootctl --esp-path="$ESP" is-installed &>/dev/null; then
+    bootctl --esp-path="$ESP" remove &>/dev/null || true
+    _sdb_removed=1
     info "Removed systemd-boot"
+fi
+
+# Whatever bootctl declined to claim. The loader binary is what makes a
+# superseded systemd-boot appear as an entry, so removing it is enough; its
+# $ESP/loader directory is inert without it and may belong to another system
+# sharing this ESP, so it is left alone.
+#
+# $ESP/EFI/BOOT/BOOTX64.EFI is deliberately never touched. Limine installs
+# itself there as the removable-media fallback, so deleting it would cost the
+# machine a boot path on firmware that looks nowhere else.
+if [[ -d "$ESP/EFI/systemd" ]]; then
+    rm -rf "$ESP/EFI/systemd" 2>/dev/null || true
+    _sdb_removed=1
+    info "Removed leftover systemd-boot files from the ESP"
+fi
+
+# The NVRAM entry outlives the files it points at, and the firmware keeps
+# offering it. "Linux Boot Manager" is the name systemd-boot registers itself
+# under, so nothing else answers to it.
+if [[ $_sdb_removed -eq 1 ]] && command -v efibootmgr >/dev/null 2>&1; then
+    while read -r _bootnum; do
+        [[ -n "$_bootnum" ]] || continue
+        efibootmgr -b "$_bootnum" -B >/dev/null 2>&1 || true
+        info "Removed the systemd-boot NVRAM entry (Boot$_bootnum)"
+    done < <(efibootmgr 2>/dev/null \
+        | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]*$/\1/p')
+fi
+
+# Say the menu over again now that the old loader is gone, so an entry written
+# for it on an earlier run does not outlive it.
+if [[ $_sdb_removed -eq 1 ]] && command -v limine-update >/dev/null 2>&1; then
+    limine-update >/dev/null 2>&1 || warn "limine-update failed after removing systemd-boot."
 fi
 
 # --- Step 3: Install and configure snapper ---
