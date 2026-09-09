@@ -190,6 +190,50 @@ ensure_limine_header() {
     rm -f "$tmpfile"
 }
 
+# limine.conf keeps its entries across runs by design: ensure_limine_header
+# refreshes the header and leaves everything below it alone. So an entry that
+# FIND_BOOTLOADERS generated on an earlier run outlives the setting being turned
+# off, and turning the probe off only stops new ones being written.
+#
+# Two of them never boot anything. EFI/BOOT/BOOTX64.EFI is Limine's own
+# removable-media copy, so an entry aiming there chainloads this menu back into
+# itself; the file has to stay, because some firmware looks nowhere else, but
+# nothing should offer it as a destination. The other points at a systemd-boot
+# this install replaced.
+#
+# Matched on where an entry points rather than on its label, which Limine writes
+# in its own words and which a user may have renamed. Windows and any real OS
+# entry are chainloads too, so only these two paths are named.
+prune_chainload_entries() {
+    local limine_conf="$ESP/limine.conf" tmpfile
+    [[ -f "$limine_conf" ]] || return 0
+    tmpfile=$(mktemp)
+    awk '
+        function flush(   i) {
+            if (n > 0 && !drop) for (i = 1; i <= n; i++) print buf[i]
+            n = 0; drop = 0
+        }
+        /^[[:space:]]*\// { flush(); buf[++n] = $0; next }
+        {
+            if (n > 0) {
+                buf[++n] = $0
+                low = tolower($0)
+                if (low ~ /path:/ && (low ~ /efi\/boot\/bootx64\.efi/ || low ~ /efi\/systemd\//)) drop = 1
+            } else print
+        }
+        END { flush() }
+    ' "$limine_conf" > "$tmpfile"
+    # Never hand back a menu with nothing left to boot. Nothing should be able
+    # to drop every entry, since the OS entry was verified present further up and
+    # is not one of the paths matched here, but this file decides whether the
+    # machine comes back and a cheap check is worth more than the assumption.
+    if [[ -s "$tmpfile" ]] && grep -qi 'path:' "$tmpfile" && ! cmp -s "$limine_conf" "$tmpfile"; then
+        install -m 644 "$tmpfile" "$limine_conf"
+        info "Removed boot entries that lead nowhere"
+    fi
+    rm -f "$tmpfile"
+}
+
 # --- Checks ---
 [[ $EUID -eq 0 ]] || error "This script must be run as root"
 [[ -d /sys/firmware/efi ]] || error "System must be booted in UEFI mode"
@@ -346,11 +390,14 @@ if [[ $_sdb_removed -eq 1 ]] && command -v efibootmgr >/dev/null 2>&1; then
         | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]*$/\1/p')
 fi
 
-# Say the menu over again now that the old loader is gone, so an entry written
-# for it on an earlier run does not outlive it.
+# Say the menu over again now that the old loader is gone, then take out the
+# entries that lead nowhere. Regeneration first, so the prune has the last word.
+# The prune runs either way: an install can carry the fallback entry from an
+# earlier run without having had systemd-boot on it at all.
 if [[ $_sdb_removed -eq 1 ]] && command -v limine-update >/dev/null 2>&1; then
     limine-update >/dev/null 2>&1 || warn "limine-update failed after removing systemd-boot."
 fi
+prune_chainload_entries
 
 # --- Step 3: Install and configure snapper ---
 info "Installing snapper..."
