@@ -865,12 +865,14 @@ function _limine_configure_generator_defaults(){
   # branding overlays change later.
   if command -v limine-update >/dev/null 2>&1 || command -v limine-mkinitcpio >/dev/null 2>&1 || [[ -f /etc/default/limine ]]; then
     _limine_default_upsert "TARGET_OS_NAME" '"Mainstream OS\\"'
-    # Probe for other systems sharing the disk, which is how systemd-boot and
-    # rEFInd installs turn up on their own. It costs an auto-generated
-    # "/EFI fallback" entry too: $ESP/EFI/BOOT/BOOTX64.EFI is Limine itself
-    # here, so that one chainloads Limine into itself and wants pruning
-    # wherever the entries get written.
-    _limine_default_upsert "FIND_BOOTLOADERS" "yes"
+    # Off, because every entry this probe produced here was a dead one. It
+    # reads this ESP only, so on a machine that just had its bootloader
+    # replaced it re-advertises the systemd-boot we superseded, and it offers
+    # $ESP/EFI/BOOT/BOOTX64.EFI as an "EFI fallback" that is Limine itself and
+    # chainloads back into this menu. Another OS worth booting is registered by
+    # hand with limine-entry-tool --add-efi, which is already how Windows
+    # gets in.
+    _limine_default_upsert "FIND_BOOTLOADERS" "no"
   fi
 }
 

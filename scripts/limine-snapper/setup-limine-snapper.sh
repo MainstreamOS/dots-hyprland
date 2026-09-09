@@ -242,12 +242,12 @@ command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not
 info "Seeding Limine header and generator config..."
 write_limine_header
 upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
-# Auto-generate top-level entries for systemd-boot and rEFInd, so another
-# system sharing the disk appears without being registered by hand. The same
-# probe also offers the default EFI loader, and $ESP/EFI/BOOT/BOOTX64.EFI is
-# Limine itself here, so that entry chainloads Limine back into itself and is
-# worth pruning wherever the menu is written.
-upsert_shell_setting "/etc/default/limine" "FIND_BOOTLOADERS" "yes"
+# Off. The probe reads this ESP only, so the entries it generated were the
+# systemd-boot this script had just superseded and an "EFI fallback" pointing at
+# $ESP/EFI/BOOT/BOOTX64.EFI, which is Limine itself and chainloads back into
+# this menu. Neither boots anything. Another OS worth offering is registered
+# explicitly below with limine-entry-tool --add-efi, as Windows already is.
+upsert_shell_setting "/etc/default/limine" "FIND_BOOTLOADERS" "no"
 
 ROOT_TOKEN="root=UUID=$ROOT_UUID"
 if [[ -n "$ROOT_PARTUUID" ]]; then
