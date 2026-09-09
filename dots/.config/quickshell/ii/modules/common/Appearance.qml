@@ -563,7 +563,7 @@ Singleton {
         // The icon size the dock ships with. Whatever is sized in proportion to
         // the icons is measured from it, so a dock left alone looks the same as
         // it always did and everything grows together once it is changed.
-        property real dockIconStock: 35
+        property real dockIconStock: 40
         // The size asked for. A dock shows this or the largest size its own
         // screen can run edge to edge, whichever is smaller, so this stays
         // exactly what was asked for and the slider and the file keep one
