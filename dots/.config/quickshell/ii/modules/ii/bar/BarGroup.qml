@@ -13,6 +13,11 @@ Item {
     property bool glowing: false
     implicitWidth: vertical ? Appearance.sizes.baseVerticalBarWidth : (gridLayout.implicitWidth + padding * 2)
     implicitHeight: vertical ? (gridLayout.implicitHeight + padding * 2) : Appearance.sizes.baseBarHeight
+    // A group every widget has hidden itself out of has nothing to wrap, and the
+    // padding alone still draws a pill. Hiding the group is what stops an empty
+    // one appearing, since a widget switching itself off only shrinks the layout
+    // to nothing rather than taking the background with it.
+    visible: root.vertical ? gridLayout.implicitHeight > 0 : gridLayout.implicitWidth > 0
     default property alias items: gridLayout.children
 
     Rectangle {

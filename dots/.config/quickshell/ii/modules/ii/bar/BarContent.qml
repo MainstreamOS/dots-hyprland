@@ -61,7 +61,11 @@ Item { // Bar content region
         case "battery": return root.useShortenedForm < 2 && Battery.available;
         case "volume": return root.useShortenedForm === 0;
         case "weather": return root.useShortenedForm === 0;
-        case "tray": return root.useShortenedForm === 0;
+        // Nothing has registered an icon yet on a fresh install, and the slot
+        // would otherwise hold a pill with nothing inside it. Same reasoning as
+        // releaseUpdates below.
+        case "tray": return root.useShortenedForm === 0
+            && (TrayService.pinnedItems.length > 0 || TrayService.unpinnedItems.length > 0);
         // Nothing to say while you're up to date, and the slot would otherwise
         // hold space for an icon that isn't drawn.
         case "releaseUpdates": return ReleaseUpdates.updateAvailable && ReleaseUpdates.wantTray;
