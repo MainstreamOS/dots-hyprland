@@ -251,5 +251,28 @@
       "The tray's overflow keeps focus after its menu closes (thanks @jussiemion)",
       "The login screen now keeps the keyboard layout you chose"
     ]
+  },
+  "2.2.0": {
+    "date": "2026-09-09",
+    "kind": "feature",
+    "summary": "The desktop comes alive: right-click your wallpaper for a menu, choose how one wallpaper transitions to the next, and place eleven new widgets anywhere you like, with sharper text on scaled displays and support for Intel and T2 Macs",
+    "changes": [
+      "New simpler default bar layout",
+      "New Manage page in Settings for setting your default apps and what starts at login",
+      "Eleven new desktop widgets: the clock (now in a third style, Pixel, alongside digital and cookie), weather, a calendar, world clocks, notes, a to-do list, timers, system resources, a music visualizer, media controls and a picture widget (thanks @pctrade)",
+      "Choose how one wallpaper transitions to the next: crossfade, slide, zoom, wipe, circle, ripple, peel, glitch, CRT and shatter, or let it pick at random (thanks @pctrade for the shader transitions)",
+      "Right-click the desktop for a menu that lets you change your wallpaper, switch themes, and personalize your bar and dock, all from the same place",
+      "New Ctrl + Super + N keybind for switching through themes on the fly",
+      "The keyboard layouts now gain extra variants, including new Macintosh and International layouts, among others",
+      "When the Default Overview is selected for Trigger Overview, it can now be toggled closed from the left hot corner that opened it",
+      "Night Light's Details button now opens the Display settings it names",
+      "Increased support for Intel Macs from 2012 to 2015 and added support for T2 Macs from 2018 to 2020",
+      "Idle suspend is now left off on the legacy NVIDIA driver branches by default",
+      "The updater will now tell you if the system is mounted read-only when you try to update from inside a snapshot, and how to finish recovery",
+      "The update helpers will now speak your language, not just English",
+      "Refreshed translations across all 13 languages",
+      "Text is sharper on scaled displays",
+      "General performance improvements"
+    ]
   }
 }
