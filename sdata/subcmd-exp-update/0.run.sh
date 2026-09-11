@@ -730,6 +730,41 @@ get_changed_files() {
   find "$dir_path" -type f -print0 2>/dev/null
 }
 
+# Whatever order the copy runs in, a reload that lands part-way through has to
+# find a tree it can still load. It always can if files that do not exist yet
+# are written before files that are being replaced.
+#
+# A tree carrying modules the running shell.qml does not reference yet loads
+# fine. A shell.qml that has already been replaced and references a module not
+# yet written does not, and that is exactly the shape users hit:
+#   module "qs.modules.ii.desktopMenu" is not installed
+#
+# The reload hold is still the primary guard. This makes the window it covers
+# survivable rather than fatal if it ever fails to engage again.
+order_additions_first() {
+  local repo_dir_path="$1" home_dir_path="$2"
+  local repo_file rel_path home_file
+  local -a additions=() modifications=()
+
+  while IFS= read -r -d '' repo_file; do
+    rel_path="${repo_file#"$repo_dir_path"/}"
+    home_file="${home_dir_path}/${rel_path}"
+    if [[ -e "$home_file" ]]; then
+      modifications+=("$repo_file")
+    else
+      additions+=("$repo_file")
+    fi
+  done < <(get_changed_files "$repo_dir_path")
+
+  local f
+  if (( ${#additions[@]} )); then
+    for f in "${additions[@]}"; do printf '%s\0' "$f"; done
+  fi
+  if (( ${#modifications[@]} )); then
+    for f in "${modifications[@]}"; do printf '%s\0' "$f"; done
+  fi
+}
+
 # Function to check if we have new commits
 has_new_commits() {
   if git rev-parse --verify HEAD@{1} &>/dev/null; then
@@ -1167,7 +1202,7 @@ if [[ "$process_files" == true ]]; then
         fi
         ((files_created++))
       fi
-    done 9< <(get_changed_files "$repo_dir_path") || true
+    done 9< <(order_additions_first "$repo_dir_path" "$home_dir_path") || true
     echo
   done
 
