@@ -18,7 +18,6 @@ ContentPage {
     property bool autoSuspendEnabled: true
     property int autoSuspendSecs: 900
     property bool _readersFinished: false
-    property string suspendGate: ""
 
     readonly property string hyprIdleConf: `${CF.FileUtils.trimFileProtocol(Directories.config)}/hypr/hypridle.conf`
 
@@ -27,7 +26,6 @@ ContentPage {
         logindReader.running = true
         screenBlankReader.running = true
         autoSuspendReader.running = true
-        suspendGateReader.running = true
     }
 
     // ── Readers ──────────────────────────────────────────────────────────────
@@ -111,21 +109,6 @@ ContentPage {
             }
             if (!screenBlankReader.running) _readersFinished = true
         }
-    }
-
-    // Hardware where idle suspend stays off whatever the delay says. Mirrors the
-    // test in hypridle.conf's $suspend_cmd, so the page can say so instead of
-    // showing a delay that never fires.
-    Process {
-        id: suspendGateReader
-        command: ["bash", "-c",
-            "if lspci -nn 2>/dev/null | grep -qiE 'Navi 4[0-9]|RX 9[0-9]{3}'; then echo rdna4; "
-            + "elif grep -qE '^(580|470|390)[.]' /sys/module/nvidia/version 2>/dev/null; then echo legacy-nvidia; fi"
-        ]
-        property string buf: ""
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => suspendGateReader.buf += data }
-        onExited: (code) => { suspendGate = suspendGateReader.buf.trim() }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -291,7 +274,6 @@ ContentPage {
                     Layout.fillWidth: true
                     buttonIcon: "bedtime"
                     text: Translation.tr("Automatic Suspend")
-                    enabled: suspendGate === ""
                     checked: autoSuspendEnabled
                     onCheckedChanged: {
                         autoSuspendEnabled = checked
@@ -299,7 +281,7 @@ ContentPage {
                     }
                 }
                 ConfigRow {
-                    enabled: autoSuspendEnabled && suspendGate === ""
+                    enabled: autoSuspendEnabled
                     StyledText {
                         text: Translation.tr("Delay")
                         font.pixelSize: Appearance.font.pixelSize.normal
