@@ -264,6 +264,39 @@ else
 fi
 git reset --hard "$TARGET_REF" || die "git reset --hard $TARGET_REF failed"
 
+# exp-update already holds Quickshell's watchFiles and Hyprland's
+# autoreload during the file copy (see 0.run.sh), but only if qs/hyprctl
+# can reach their sockets — which they can't under runuser's stripped env.
+# Recover what's needed so that hold logic actually engages.
+: "${XDG_RUNTIME_DIR:=/run/user/$(id -u)}"
+export XDG_RUNTIME_DIR
+: "${WAYLAND_DISPLAY:=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')}"
+export WAYLAND_DISPLAY
+# Newest first, but taking the first one that actually answers rather than the
+# first one listed. Hyprland leaves an instance directory behind when it exits
+# uncleanly, and mtime order alone would hand us a dead socket.
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    for _sig in $(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null); do
+        [[ -d "$XDG_RUNTIME_DIR/hypr/$_sig" ]] || continue
+        if HYPRLAND_INSTANCE_SIGNATURE="$_sig" hyprctl -j version >/dev/null 2>&1; then
+            HYPRLAND_INSTANCE_SIGNATURE="$_sig"
+            break
+        fi
+    done
+    unset _sig
+fi
+export HYPRLAND_INSTANCE_SIGNATURE
+
+# The bug this recovery exists for was invisible: the hold was skipped and the
+# update carried on looking fine. Say so if the recovery did not take, rather
+# than leaving the next person to find it the same way.
+if ! qs -c ii ipc show >/dev/null 2>&1; then
+    warn "$(t "Quickshell is not reachable; its reload hold will be skipped during the file sync.")"
+fi
+if ! hyprctl -j version >/dev/null 2>&1; then
+    warn "$(t "Hyprland is not reachable; its autoreload hold will be skipped during the file sync.")"
+fi
+
 say "$(t "Running ./setup exp-update (non-interactive, backup-on-conflict, -p)...")"
 # The clone is pinned to $LATEST_TAG above; a pull inside exp-update would
 # overshoot the tag to the branch tip and shrink the reflog hop.
