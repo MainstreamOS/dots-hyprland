@@ -9,6 +9,7 @@ import qs.modules.common.functions as CF
 import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import QtMultimedia
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -58,7 +59,7 @@ Variants {
         property int workspaceChunkSize: Config?.options.bar.workspaces.shown ?? 10
         property int totalWorkspaces: Math.ceil(lastWorkspaceId / workspaceChunkSize) * workspaceChunkSize
         // Wallpaper
-        property bool wallpaperIsVideo: Config.options.background.wallpaperPath.endsWith(".mp4") || Config.options.background.wallpaperPath.endsWith(".webm") || Config.options.background.wallpaperPath.endsWith(".mkv") || Config.options.background.wallpaperPath.endsWith(".avi") || Config.options.background.wallpaperPath.endsWith(".mov")
+        property bool wallpaperIsVideo: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
         property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
         property bool wallpaperSafetyTriggered: {
             const enabled = Config.options.workSafety.enable.wallpaper;
@@ -488,6 +489,34 @@ Variants {
                 height: bgRoot.scaledWallpaperHeight
             }
 
+            // mpvpaper draws a video wallpaper on its own surface, which this
+            // panel cannot sample and which the compositor hides once a session
+            // lock is up, leaving the lock nothing live to blur.
+            Loader {
+                id: lockVideo
+                anchors.fill: wallpaper
+                active: bgRoot.wallpaperIsVideo && !bgRoot.wallpaperSafetyTriggered
+                    && (GlobalStates.screenLocked || scaleAnim.running)
+                visible: !blurLoader.active
+                sourceComponent: VideoOutput {
+                    // Named rather than reached through `parent`: the player
+                    // still drives a VideoOutput found that way, but the frames
+                    // never reach an effect reading the same item, which is why
+                    // the lock blurred a still of the video instead of the video.
+                    id: lockVideoOutput
+                    readonly property bool showing: lockVideoPlayer.playbackState === MediaPlayer.PlayingState
+                    fillMode: VideoOutput.PreserveAspectCrop
+                    MediaPlayer {
+                        id: lockVideoPlayer
+                        videoOutput: lockVideoOutput
+                        source: Config.options.background.wallpaperPath
+                        loops: MediaPlayer.Infinite
+                        Component.onCompleted: play()
+                        onErrorOccurred: stop()
+                    }
+                }
+            }
+
             // The picture being replaced, over the new one until the effect
             // has carried it off, and empty the rest of the time. It keeps
             // the place the old picture had when the change came, so nothing
@@ -558,7 +587,9 @@ Variants {
                     }
                 }
                 sourceComponent: GaussianBlur {
-                    source: wallpaper
+                    // The still until the video is really running, so a file
+                    // the decoder cannot open leaves the blur something to read.
+                    source: (lockVideo.item?.showing ?? false) ? lockVideo.item : wallpaper
                     // Full lock radius when locked; slightly lighter blur for overview
                     radius: GlobalStates.screenLocked
                         ? Config.options.lock.blur.radius
