@@ -172,7 +172,12 @@ ContentPage {
             // don't have those toolchains installed at all — aren't
             // alarmed by an extras pass that errored on tools they
             // never touch.
-            if (exitCode === 0 || exitCode === 100) {
+            // 101 is the dotfiles step failing, which leaves the machine on its
+            // old release. That is not an extras failure and must not read as one:
+            // a user was told "completed successfully" while still on 1.3.2.
+            if (exitCode === 101) {
+                root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
+            } else if (exitCode === 0 || exitCode === 100) {
                 root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
             } else {
                 root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
