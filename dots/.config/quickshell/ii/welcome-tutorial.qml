@@ -457,8 +457,8 @@ ApplicationWindow {
 
     component Card1Install : Item {
         id: installCard
-        // Six categories outgrow the fixed window, so the list scrolls and the
-        // edge fade shows there is more below the fold.
+        // Six categories outgrow the fixed window, so the list scrolls, and a
+        // pill over the bottom edge says so until the end is reached.
         StyledFlickable {
             id: installFlick
             anchors.fill: parent
@@ -606,6 +606,50 @@ ApplicationWindow {
         ScrollEdgeFade {
             target: installFlick
             color: Appearance.m3colors.m3surfaceContainerLow
+        }
+        RippleButton {
+            id: moreBelow
+            readonly property bool atEnd: installFlick.contentHeight <= installFlick.height || installFlick.atYEnd
+            anchors { bottom: installFlick.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 10 }
+            z: 100
+            opacity: atEnd ? 0 : 1
+            scale: atEnd ? 0.7 : 1
+            visible: opacity > 0
+            Behavior on opacity { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
+            Behavior on scale { animation: Appearance.animation.elementResize.numberAnimation.createObject(this) }
+            implicitWidth: moreBelowRow.implicitWidth + 12 * 2
+            implicitHeight: moreBelowRow.implicitHeight + 5 * 2
+            colBackground: Appearance.colors.colSecondary
+            colBackgroundHover: Appearance.colors.colSecondaryHover
+            colRipple: Appearance.colors.colSecondaryActive
+            buttonRadius: Appearance.rounding.full
+            downAction: () => {
+                pageDown.to = Math.min(installFlick.contentY + installFlick.height * 0.8, installFlick.contentHeight - installFlick.height);
+                pageDown.restart();
+            }
+            NumberAnimation {
+                id: pageDown
+                target: installFlick
+                property: "contentY"
+                duration: 300
+                easing.type: Easing.OutCubic
+            }
+            contentItem: Row {
+                id: moreBelowRow
+                spacing: 4
+                MaterialSymbol {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "keyboard_arrow_down"
+                    iconSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnSecondary
+                }
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Translation.tr("More apps below")
+                    font.pixelSize: Appearance.font.pixelSize.smallie
+                    color: Appearance.colors.colOnSecondary
+                }
+            }
         }
     }
 
