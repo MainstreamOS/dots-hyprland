@@ -35,6 +35,37 @@ Layout=
 [GroupOrder]
 0=Default
 EOF
+    # Everything the engine path below adds comes out again. Left in place,
+    # the GTK setting alone has every GTK app start fcitx5 over D-Bus, and it
+    # then sits between the keyboard and the apps for nothing, one key behind
+    # on every layout switch.
+    env_lua="$HOME/.config/hypr/custom/env.lua"
+    if [[ -f "$env_lua" ]]; then
+        grep -vxF -e 'hl.env({ name = "XMODIFIERS", value = "@im=fcitx" })' \
+                  -e 'hl.env({ name = "QT_IM_MODULE", value = "fcitx" })' \
+                  -e 'hl.env({ name = "QT_IM_MODULES", value = "wayland;fcitx" })' \
+                  -e 'hl.env({ name = "SDL_IM_MODULE", value = "fcitx" })' \
+                  -e 'hl.env({ name = "GLFW_IM_MODULE", value = "ibus" })' \
+            "$env_lua" > "$env_lua.tmp"
+        # grep answers 1 when nothing is left, which is a file that held only
+        # those lines, not a failure.
+        if (( $? <= 1 )); then mv -f "$env_lua.tmp" "$env_lua"; else rm -f "$env_lua.tmp"; fi
+    fi
+    execs_lua="$HOME/.config/hypr/custom/execs.lua"
+    if [[ -f "$execs_lua" ]]; then
+        grep -vxF 'hl.on("hyprland.start", function() hl.exec_cmd("fcitx5 -d") end)' \
+            "$execs_lua" > "$execs_lua.tmp"
+        if (( $? <= 1 )); then mv -f "$execs_lua.tmp" "$execs_lua"; else rm -f "$execs_lua.tmp"; fi
+    fi
+    for gtkv in gtk-3.0 gtk-4.0; do
+        ini="$HOME/.config/$gtkv/settings.ini"
+        [[ -f "$ini" ]] && sed -i '/^gtk-im-module=fcitx$/d' "$ini"
+    done
+    # The fcitx5 package ships an XDG autostart entry, so it would come back at
+    # the next login whatever else is undone. A user copy marked hidden stands
+    # in front of it.
+    mkdir -p "$HOME/.config/autostart"
+    printf '[Desktop Entry]\nType=Application\nName=Fcitx 5\nHidden=true\n' > "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
     pkill -x fcitx5 2>/dev/null
     echo "plain keyboard"
     exit 0
@@ -78,6 +109,8 @@ for gtkv in gtk-3.0 gtk-4.0; do
         printf '[Settings]\ngtk-im-module=fcitx\n' > "$ini"
     fi
 done
+
+rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
 
 cat > "$profile" <<EOF
 [Groups/0]
