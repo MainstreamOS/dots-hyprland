@@ -79,14 +79,33 @@ Singleton {
 
     readonly property var comboModel: root.timezoneList.map(tz => ({ label: root.labelFor(tz), tz: tz, icon: "" }))
 
-    property list<string> timezones: Config.options?.background?.widgets?.worldClock?.timezones ?? [
-        "Australia/Sydney", "Asia/Tokyo", "Europe/London", "America/New_York"
+    readonly property int maxClocks: 8
+    readonly property var defaultTimezones: [
+        "Australia/Sydney", "Asia/Tokyo", "Europe/London", "America/New_York",
+        "Asia/Kolkata", "Europe/Berlin", "America/Los_Angeles", "Asia/Dubai"
     ]
 
+    // How many clocks the widget shows, and the zone behind each one. The
+    // stored list can be shorter than the count (an older config, or a count
+    // raised in Settings), so the defaults fill in the rest, and a zone name
+    // ends up inside a shell command below, so only real zone names pass.
+    readonly property int clockCount: Math.min(Math.max(Config.options?.background?.widgets?.worldClock?.clockCount ?? 4, 1), root.maxClocks)
+    readonly property list<string> timezones: {
+        const stored = Config.options?.background?.widgets?.worldClock?.timezones ?? []
+        const list = []
+        for (let i = 0; i < root.clockCount; i++) {
+            const tz = stored[i]
+            list.push((typeof tz === "string" && /^[A-Za-z0-9_+\/-]+$/.test(tz)) ? tz : root.defaultTimezones[i])
+        }
+        return list
+    }
+
     function setTimezone(index, tz) {
-        let updated = root.timezones.slice()
+        // Written to the config only: the list above is a binding on it, and
+        // assigning it here would cut that binding, after which a change made
+        // in Settings would never reach the widget again.
+        const updated = root.timezones.slice()
         updated[index] = tz
-        root.timezones = updated
         Config.options.background.widgets.worldClock.timezones = updated
     }
 
@@ -109,10 +128,17 @@ Singleton {
         onTriggered: root.now = new Date()
     }
 
-    property var offsetsMinutes: [0, 0, 0, 0]
+    property var offsetsMinutes: []
+    property bool offsetsStale: false
 
+    // The query is started again only once the previous run has ended:
+    // stopping and starting a Process in the same breath can lose the start,
+    // which left a newly picked city on the old city's offset.
     function refreshOffsets() {
-        offsetProc.running = false
+        if (offsetProc.running) {
+            root.offsetsStale = true
+            return
+        }
         offsetProc.running = true
     }
 
@@ -136,6 +162,12 @@ Singleton {
                     const sign = m[1] === "-" ? -1 : 1
                     return sign * (parseInt(m[2]) * 60 + parseInt(m[3]))
                 })
+            }
+        }
+        onExited: {
+            if (root.offsetsStale) {
+                root.offsetsStale = false
+                offsetProc.running = true
             }
         }
     }

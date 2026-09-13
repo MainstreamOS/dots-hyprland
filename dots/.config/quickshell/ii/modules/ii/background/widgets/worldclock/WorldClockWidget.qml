@@ -15,11 +15,13 @@ AbstractBackgroundWidget {
 
     property string sizeMode: root.configEntry.sizeMode ?? "2x2"
 
-    readonly property int clockCount: Math.min(Math.max(root.configEntry.clockCount ?? 4, 1), 4)
+    readonly property int clockCount: WorldClock.clockCount
     readonly property real fourByOneWidth: root.clockCount * 132 + (root.clockCount - 1) * 12
+    // The card grows by a row of city tiles for every two clocks past four.
+    readonly property int gridRows: Math.ceil(root.clockCount / 2)
 
     property real widgetWidth:  sizeMode === "2x2" ? 276 : root.fourByOneWidth
-    property real widgetHeight: sizeMode === "2x2" ? 252 : 120
+    property real widgetHeight: sizeMode === "2x2" ? 252 + (root.gridRows - 2) * 60 : 120
 
     readonly property real widthToggleFraction: 0.3
     readonly property real widthToggleDelta: (root.fourByOneWidth - 276) * root.widthToggleFraction
@@ -38,7 +40,9 @@ AbstractBackgroundWidget {
 
     property string localCityName: Weather.data?.city ?? "..."
     property string localTime: DateTime.time
-    property string localDate: Qt.locale().toString(new Date(), "dddd, MMMM dd yyyy")
+    // Follows the shell's clock, so the date turns over at midnight rather
+    // than staying at whatever it was when the widget was created.
+    property string localDate: Qt.locale().toString(DateTime.clock.date, "dddd, MMMM dd yyyy")
     property var worldCities: WorldClock.entries
     property bool showingSettings: false
 
@@ -275,37 +279,24 @@ AbstractBackgroundWidget {
                                 text: Translation.tr("Clocks")
                                 value: Config.options.background.widgets.worldClock.clockCount
                                 from: 1
-                                to: 4
+                                to: WorldClock.maxClocks
                                 stepSize: 1
                                 onValueChanged: {
                                     Config.options.background.widgets.worldClock.clockCount = value;
                                 }
                             }
 
-                            StyledComboBoxSearch {
-                                model: WorldClock.comboModel
-                                colBackground: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.8)
-                                textRole: "label"
-                                currentIndex: WorldClock.comboModel.findIndex(m => m.tz === WorldClock.timezones[0])
-                                onActivated: (idx) => WorldClock.setTimezone(0, WorldClock.comboModel[idx].tz)
-                            }
-                            StyledComboBoxSearch {
-                                model: WorldClock.comboModel; textRole: "label"
-                                colBackground: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.8)
-                                currentIndex: WorldClock.comboModel.findIndex(m => m.tz === WorldClock.timezones[1])
-                                onActivated: (idx) => WorldClock.setTimezone(1, WorldClock.comboModel[idx].tz)
-                            }
-                            StyledComboBoxSearch {
-                                model: WorldClock.comboModel; textRole: "label"
-                                colBackground: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.8)
-                                currentIndex: WorldClock.comboModel.findIndex(m => m.tz === WorldClock.timezones[2])
-                                onActivated: (idx) => WorldClock.setTimezone(2, WorldClock.comboModel[idx].tz)
-                            }
-                            StyledComboBoxSearch {
-                                model: WorldClock.comboModel; textRole: "label"
-                                colBackground: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.8)
-                                currentIndex: WorldClock.comboModel.findIndex(m => m.tz === WorldClock.timezones[3])
-                                onActivated: (idx) => WorldClock.setTimezone(3, WorldClock.comboModel[idx].tz)
+                            // One picker per clock, however many there are.
+                            Repeater {
+                                model: WorldClock.clockCount
+                                delegate: StyledComboBoxSearch {
+                                    required property int index
+                                    model: WorldClock.comboModel
+                                    textRole: "label"
+                                    colBackground: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.8)
+                                    currentIndex: WorldClock.comboModel.findIndex(m => m.tz === WorldClock.timezones[index])
+                                    onActivated: (idx) => WorldClock.setTimezone(index, WorldClock.comboModel[idx].tz)
+                                }
                             }
                         }
                     }
