@@ -2201,5 +2201,10 @@
   "could not move the damaged clone aside": "could not move the damaged clone aside",
   "Fresh clone in place. Any local edits are still in %s.": "Fresh clone in place. Any local edits are still in %s.",
   "Quickshell is not reachable; its reload hold will be skipped during the file sync.": "Quickshell is not reachable; its reload hold will be skipped during the file sync.",
-  "Hyprland is not reachable; its autoreload hold will be skipped during the file sync.": "Hyprland is not reachable; its autoreload hold will be skipped during the file sync."
+  "Hyprland is not reachable; its autoreload hold will be skipped during the file sync.": "Hyprland is not reachable; its autoreload hold will be skipped during the file sync.",
+  "Keyboard layout diagnostics": "Keyboard layout diagnostics",
+  "SDDM greeter session config": "SDDM greeter session config",
+  "SDDM theme refreshed": "SDDM theme refreshed",
+  "SDDM theme not refreshed (no network, or local changes in it)": "SDDM theme not refreshed (no network, or local changes in it)",
+  "SDDM theme not refreshed (no network)": "SDDM theme not refreshed (no network)"
 }

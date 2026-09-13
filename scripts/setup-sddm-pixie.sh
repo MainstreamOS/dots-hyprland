@@ -31,9 +31,7 @@ trap report_error ERR
 
 # --- Step 1: Install SDDM ---
 # layer-shell-qt is required by the Qt6 SDDM greeter when it runs under Wayland
-# (GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell, set below).
-# QML_XHR_ALLOW_FILE_READ lets the theme read the keyboard bridge's state file
-# through XMLHttpRequest, which Qt refuses for local files unless told to.
+# (see sdata/sddm/10-wayland.conf).
 info "Installing SDDM..."
 pacman -S --needed --noconfirm sddm layer-shell-qt
 systemctl enable sddm
@@ -60,60 +58,22 @@ else
 fi
 
 # --- Step 2b: SDDM Wayland greeter (run the greeter under Hyprland/Wayland) ---
-# sddm-greeter-qt6 uses layer-shell via QT_WAYLAND_SHELL_INTEGRATION; start-hyprland
-# ships with the hyprland package. The theme is set here (not in the pixie block
-# above) so the Wayland session is configured even if the theme clone failed.
+# The drop-in lives in the repo so updatems-system and the image install the
+# same file. It names the theme too, so the Wayland session is configured even
+# if the theme clone failed.
 info "Configuring the SDDM Wayland greeter..."
-mkdir -p /etc/sddm.conf.d
-cat > /etc/sddm.conf.d/10-wayland.conf <<'SDDMEOF'
-[General]
-DisplayServer=wayland
-GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,QML_XHR_ALLOW_FILE_READ=1
-
-[Wayland]
-CompositorCommand=start-hyprland
-
-[Theme]
-Current=pixie
-SDDMEOF
+SDDM_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sdata/sddm"
+install -Dm644 "$SDDM_SRC/10-wayland.conf" /etc/sddm.conf.d/10-wayland.conf
 
 # Lua, not .conf: 0.56.1 shows a deprecation notice on any .conf config, and the
 # greeter is the first thing anyone sees. The format goes away in 0.57.
 # updatems-system installs the same file, so it lives in the repo rather than in
 # a heredoc here — two copies of a login-screen config is one too many.
 
-# The repo copy of the greeter config carries no keyboard layout: the machine
-# does. The installer appends the recorded layout to this file at first boot,
-# and a pristine refresh would silently send a non-US greeter back to QWERTY,
-# locking the password box to letters the keyboard does not have.
-reseed_greeter_layout() {
-    local target="$1" x11="/etc/X11/xorg.conf.d/00-keyboard.conf" layout="" variant=""
-    if [[ -f "$x11" ]]; then
-        # No match is normal on machines whose localed file has not been
-        # populated yet. With `set -e -o pipefail`, make that an empty value
-        # rather than an unexplained installer failure.
-        layout=$(grep -oP 'Option\s+"XkbLayout"\s+"\K[^"]+' "$x11" 2>/dev/null | head -1 || true)
-        variant=$(grep -oP 'Option\s+"XkbVariant"\s+"\K[^"]*' "$x11" 2>/dev/null | head -1 || true)
-    fi
-    if [[ -z "$layout" && -f /etc/vconsole.conf ]]; then
-        layout=$(grep -oP '^KEYMAP=\K.*' /etc/vconsole.conf 2>/dev/null | tr -d '"' | head -1 || true)
-        layout="${layout%%-*}"
-    fi
-    [[ -n "$layout" ]] || return 0
-    [[ "$layout" =~ ^[a-z]{2,8}(,[a-z]{2,8})*$ ]] || return 0
-    [[ "$variant" =~ ^[a-z0-9_]*(,[a-z0-9_]*)*$ ]] || variant=""
-    {
-        printf '\nhl.config({\n    input = {\n        kb_layout = "%s",\n' "$layout"
-        [[ -n "$variant" ]] && printf '        kb_variant = "%s",\n' "$variant"
-        printf '    },\n})\n'
-    } >> "$target"
-}
-
 mkdir -p /var/lib/sddm/.config/hypr
 GREETER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/sdata/sddm/hyprland.lua"
 if [[ -f "$GREETER_SRC" ]]; then
     install -m600 "$GREETER_SRC" /var/lib/sddm/.config/hypr/hyprland.lua
-    reseed_greeter_layout /var/lib/sddm/.config/hypr/hyprland.lua
     # Moved aside rather than removed: lua is found before conf, so the new file
     # already wins, and keeping the old one means a greeter that will not start
     # can be put back by renaming one file.

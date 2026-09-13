@@ -18,10 +18,17 @@ Singleton {
     property string currentLayoutCode: ""
     // For the service
     property var baseLayoutFilePath: "/usr/share/X11/xkb/rules/base.lst"
+    // The keyboard whose layout the bar reports: the one Hyprland calls main,
+    // unless that is an input method's virtual keyboard, which forwards keys a
+    // group behind and must never be the one followed; then the first real
+    // keyboard. Every other device is kept on its index.
+    property string mainKeyboardName: ""
+    property int mainLayoutIndex: 0
+    // What the previous devices query found in effect. The event path updates
+    // currentLayoutName ahead of the query, so a switch is judged against this.
+    property string fetchedLayoutName: ""
 
-    // Re-reads the layout list from Hyprland. Settings calls this after it
-    // applies a new list with hyprctl eval, which rebuilds the keymaps without
-    // a config reload.
+    // Re-reads the layout list from Hyprland, coalescing a burst of events.
     function refresh() {
         refreshTimer.restart();
     }
@@ -87,6 +94,15 @@ Singleton {
         }
     }
 
+    // The layout you switch to leads the list: shortly after a switch, localed
+    // is told the active layout leads, so the login screen and the next session
+    // start in it. Debounced past the per-keyboard burst.
+    Timer {
+        id: rememberTimer
+        interval: 600
+        onTriggered: Quickshell.execDetached(["python3", Quickshell.shellPath("scripts/keyboard/write-layouts.py"), "--from-hyprland", "--lead-active", "--localed-only"])
+    }
+
     // Find out available layouts and current active layout
     Process {
         id: fetchLayoutsProc
@@ -97,14 +113,35 @@ Singleton {
             id: devicesCollector
             onStreamFinished: {
                 try {
-                    const keyboards = JSON.parse(devicesCollector.text)["keyboards"] || [];
-                    const hyprlandKeyboard = keyboards.find(kb => kb.main === true) || keyboards[0];
-                    if (!hyprlandKeyboard)
+                    const keyboards = (JSON.parse(devicesCollector.text)["keyboards"] || []).filter(kb => !(kb["name"] || "").startsWith("hl-virtual"));
+                    const main = keyboards.find(kb => kb.main === true) || keyboards[0];
+                    if (!main)
                         return;
-                    root.layoutCodes = (hyprlandKeyboard["layout"] || "").split(",").filter(Boolean);
-                    root.currentLayoutName = hyprlandKeyboard["active_keymap"];
+                    const previousName = root.fetchedLayoutName;
+                    root.fetchedLayoutName = main["active_keymap"];
+                    root.mainKeyboardName = main["name"] || "";
+                    root.mainLayoutIndex = main["active_layout_index"] || 0;
+                    root.layoutCodes = (main["layout"] || "").split(",").filter(Boolean);
+                    root.currentLayoutName = main["active_keymap"];
+                    // The layout you switch to leads the list: a fetch that finds
+                    // the real keyboard on a different layout than last time is
+                    // the one sure sign of a switch, whichever device spoke first.
+                    if (previousName && previousName !== root.currentLayoutName && root.layoutCodes.length > 1)
+                        rememberTimer.restart();
+
+                    // A keyboard plugged in after a switch starts on the first
+                    // layout while the others are elsewhere, and the switch
+                    // bind would then walk them apart for good. Any device
+                    // with the same list but a different index is put on the
+                    // main keyboard's.
+                    for (const kb of keyboards) {
+                        const name = kb["name"] || "";
+                        if (kb === main || name.startsWith("hl-virtual") || kb["layout"] !== main["layout"])
+                            continue;
+                        if ((kb["active_layout_index"] || 0) !== root.mainLayoutIndex)
+                            Quickshell.execDetached(["hyprctl", "switchxkblayout", name, String(root.mainLayoutIndex)]);
+                    }
                 } catch (e) {
-                    console.warn("[HyprlandXkb] Could not read keyboards:", e);
                 }
             }
         }
@@ -115,14 +152,16 @@ Singleton {
         target: Hyprland
         function onRawEvent(event) {
             if (event.name === "activelayout") {
-                // A keymap event while only one layout is known means the list
-                // itself changed: an eval or a keyword rebuilds the keymaps with
-                // no reload, and so does a keyboard being plugged in.
-                if (root.layoutCodes.length <= 1)
-                    root.refresh();
+                // One devices query per burst, whatever caused it: a switch, an
+                // eval, a keyboard plugged in.
+                root.refresh();
 
                 const dataString = event.data;
-                root.currentLayoutName = dataString.substring(dataString.indexOf(",") + 1);
+                const eventName = dataString.substring(dataString.indexOf(",") + 1);
+                const device = dataString.substring(0, dataString.indexOf(","));
+                if (root.mainKeyboardName && device !== root.mainKeyboardName)
+                    return;
+                root.currentLayoutName = eventName;
 
                 // Update layout for on-screen keyboard (osk)
                 Config.options.osk.layout = root.currentLayoutName.split(" (")[0];

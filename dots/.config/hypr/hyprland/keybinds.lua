@@ -73,9 +73,7 @@ hl.bind("CTRL + SUPER + SHIFT + D", hl.dsp.global("quickshell:toggleLightDark"),
 hl.bind("CTRL + SUPER + N", hl.dsp.exec_cmd(qsScripts.."/themes/next-theme.sh"), {description = "Next theme"} )
 hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("killall ydotool qs quickshell; qs -c $qsConfig &"), {description = "Restart widgets"} )
 hl.bind("CTRL + SUPER + P", hl.dsp.global("quickshell:panelFamilyCycle"), {description = "Cycle panel family"} )
--- Cycle the layouts selected in Settings → Keyboard. `current` targets the
--- keyboard that owns the focused input, so it also works with external boards.
--- Every keyboard at once. Hyprland's "current" keyboard is whichever device
+-- Cycle the layouts selected in Settings → Keyboard, on every keyboard at once. Hyprland's "current" keyboard is whichever device
 -- sent the last key event, releases included, and on some keyboards the
 -- modifiers and the letter arrive from different evdev nodes, so a switch
 -- aimed at "current" now and then lands on a device nobody types on while
