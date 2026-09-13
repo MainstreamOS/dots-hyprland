@@ -381,6 +381,7 @@ ApplicationWindow {
         property string optKey
         property string optTitle
         property string optDesc
+        // An icon theme name, or a file path for an app the theme has no icon for.
         property string optIcon
         // Already installed and current: nothing to do, so the row reports state
         // instead of offering an install that would be a no-op.
@@ -410,10 +411,10 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 12
             spacing: 12
-            MaterialSymbol {
-                text: optRoot.optIcon
-                iconSize: 26
-                color: optRoot.selected ? Appearance.m3colors.m3primary : Appearance.colors.colOnLayer0
+            AppIcon {
+                source: optRoot.optIcon
+                fallback: "application-x-executable"
+                implicitSize: 32
             }
             ColumnLayout {
                 spacing: 1
@@ -510,12 +511,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "gaming"; optIcon: "sports_esports"
+                        optKey: "gaming"; optIcon: "steam"
                         optTitle: Translation.tr("Desktop Gaming")
                         optDesc: Translation.tr("Steam, Proton and GPU drivers — play on your desktop.")
                     }
                     InstallOption {
-                        optKey: "gamescope"; optIcon: "stadia_controller"
+                        optKey: "gamescope"; optIcon: "steamdeck-gaming-return"
                         optTitle: Translation.tr("Desktop + Big Picture")
                         optDesc: Translation.tr("Includes everything in Desktop Gaming but adds a Console style gamescope session on pressing Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.")
                     }
@@ -526,12 +527,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "resolve"; optIcon: "movie"
+                        optKey: "resolve"; optIcon: "davinci-resolve"
                         optTitle: Translation.tr("DaVinci Resolve")
                         optDesc: Translation.tr("Free edition. Large download.")
                     }
                     InstallOption {
-                        optKey: "resolve-studio"; optIcon: "video_settings"
+                        optKey: "resolve-studio"; optIcon: "davinci-resolve"
                         optTitle: Translation.tr("DaVinci Resolve Studio")
                         optDesc: Translation.tr("Paid edition (needs your license). Large download.")
                     }
@@ -542,12 +543,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "obs"; optIcon: "videocam"
+                        optKey: "obs"; optIcon: "com.obsproject.Studio"
                         optTitle: Translation.tr("OBS Studio")
                         optDesc: Translation.tr("mainstream-obs — record and stream.")
                     }
                     InstallOption {
-                        optKey: "blender"; optIcon: "view_in_ar"
+                        optKey: "blender"; optIcon: "blender"
                         optTitle: Translation.tr("Blender")
                         optDesc: Translation.tr("3D modeling, animation and video editing.")
                     }
@@ -558,12 +559,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "gimp"; optIcon: "image"
+                        optKey: "gimp"; optIcon: "gimp"
                         optTitle: Translation.tr("GIMP")
                         optDesc: Translation.tr("Photo editing and retouching.")
                     }
                     InstallOption {
-                        optKey: "krita"; optIcon: "brush"
+                        optKey: "krita"; optIcon: "org.kde.krita"
                         optTitle: Translation.tr("Krita")
                         optDesc: Translation.tr("Digital painting and illustration.")
                     }
@@ -574,12 +575,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "libreoffice"; optIcon: "description"
+                        optKey: "libreoffice"; optIcon: "libreoffice-startcenter"
                         optTitle: Translation.tr("LibreOffice")
                         optDesc: Translation.tr("Writer, Calc and Impress. Opens Word, Excel and PowerPoint files.")
                     }
                     InstallOption {
-                        optKey: "onlyoffice"; optIcon: "edit_document"
+                        optKey: "onlyoffice"; optIcon: "org.onlyoffice.desktopeditors"
                         optTitle: Translation.tr("OnlyOffice")
                         optDesc: Translation.tr("Editors with a familiar Microsoft Office look. Installs from Flathub.")
                     }
@@ -590,12 +591,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     InstallOption {
-                        optKey: "sunshine"; optIcon: "cast"
+                        optKey: "sunshine"; optIcon: root.imageDir + "/sunshine.svg"
                         optTitle: Translation.tr("Sunshine")
                         optDesc: Translation.tr("Stream this PC's games to your other devices.")
                     }
                     InstallOption {
-                        optKey: "moonlight"; optIcon: "connected_tv"
+                        optKey: "moonlight"; optIcon: "com.moonlight_stream.Moonlight"
                         optTitle: Translation.tr("Moonlight")
                         optDesc: Translation.tr("Play games streamed from another PC.")
                     }
