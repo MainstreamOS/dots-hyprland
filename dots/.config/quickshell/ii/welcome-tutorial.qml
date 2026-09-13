@@ -51,7 +51,7 @@ ApplicationWindow {
     // Install page (card 1): which apps the user ticked to install in the background.
     readonly property int installCardIndex: 1
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
-                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false })
+                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false })
     readonly property int installCount: {
         var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
     }
@@ -546,7 +546,11 @@ ApplicationWindow {
                         optTitle: Translation.tr("OBS Studio")
                         optDesc: Translation.tr("mainstream-obs — record and stream.")
                     }
-                    Item { Layout.fillWidth: true }
+                    InstallOption {
+                        optKey: "blender"; optIcon: "view_in_ar"
+                        optTitle: Translation.tr("Blender")
+                        optDesc: Translation.tr("3D modeling, animation and video editing.")
+                    }
                 }
 
                 InstallCategory { text: Translation.tr("Image Editing") }

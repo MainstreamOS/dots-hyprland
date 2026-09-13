@@ -7,7 +7,7 @@
 # /var/log/mainstream-welcome-install.log and the journal, so a failed install can be
 # traced after the fact:  tail -f /var/log/mainstream-welcome-install.log
 #
-# Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs gimp krita libreoffice onlyoffice sunshine moonlight resolve resolve-studio
+# Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs blender gimp krita libreoffice onlyoffice sunshine moonlight resolve resolve-studio
 #
 # 'resolve-update' is the same run as 'resolve'/'resolve-studio' but picks the
 # edition from `install-davinci-resolve --check --json` instead of being told,
@@ -297,6 +297,7 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
     obs)             run_app "OBS Studio"    pac  mainstream-obs ;;
+    blender)         run_app "Blender"       pac  blender ;;
     gimp)            run_app "GIMP"          pac  gimp ;;
     krita)           run_app "Krita"         pac  krita ;;
     libreoffice)     run_item "LibreOffice"  install_libreoffice ;;
