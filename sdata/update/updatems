@@ -166,10 +166,41 @@ fi
 
 cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
 
+# A clone that has lost an object cannot be fetched into, and every later run
+# dies on the same fetch, so the update path stays closed until somebody deletes
+# the directory by hand. The clone is a cache: nothing in it cannot be cloned
+# again, except the applied-tag marker and whatever an auto-stash holds. The
+# marker is carried across. The stash points at objects that may be the damaged
+# ones, so the old tree is set aside rather than deleted and its path is said.
+_recover_corrupt_clone() {
+    local aside="${CLONE_DIR}.corrupt-$(date +%Y%m%d-%H%M%S)"
+    local saved_marker=""
+    [[ -f "$MARKER" ]] && saved_marker=$(<"$MARKER")
+    warn "$(tf "The dotfiles clone at %s is damaged. Setting it aside as %s and cloning again." "$CLONE_DIR" "$aside")"
+    cd / || die "cannot leave $CLONE_DIR"
+    mv "$CLONE_DIR" "$aside" || die "$(t "could not move the damaged clone aside")"
+    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$CLONE_DIR" || die "git clone failed"
+    git -C "$CLONE_DIR" submodule update --init --recursive 2>/dev/null \
+        || warn "submodule init had non-zero exit (continuing)"
+    [[ -n "$saved_marker" ]] && printf '%s\n' "$saved_marker" > "$MARKER"
+    cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
+    ok "$(tf "Fresh clone in place. Any local edits are still in %s." "$aside")"
+}
+
 # ── 2. Fetch tags from origin ───────────────────────────────────────────────
 say "$(tf "Fetching tags from origin/%s..." "$REPO_BRANCH")"
-git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1 | sed 's/^/    /'
-[[ ${PIPESTATUS[0]} -eq 0 ]] || die "git fetch failed"
+_fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
+[[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+if [[ $_fetch_rc -ne 0 ]]; then
+    # Only a damaged clone is rebuilt. A fetch that failed for want of a network
+    # is no reason to throw the clone away, so anything else still dies here.
+    if grep -qE 'is empty|bad object|did not send all necessary objects|corrupt|unable to read|could not read' <<<"$_fetch_out"; then
+        _recover_corrupt_clone
+        _fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
+        [[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+    fi
+    [[ $_fetch_rc -eq 0 ]] || die "git fetch failed"
+fi
 
 # ── 3. Pick the latest release tag ─────────────────────────────────────────
 # Strip peeled-tag suffixes (^{}), keep release tags (excludes the retired
