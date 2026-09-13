@@ -2194,5 +2194,12 @@
   "Greeter runtime directory (tmpfiles)": "Greeter runtime directory (tmpfiles)",
   "Greeter runtime directory not created now; it will exist after a reboot": "Greeter runtime directory not created now; it will exist after a reboot",
   "Greeter environment updated in %s": "Greeter environment updated in %s",
-  "Could not update the greeter environment in %s": "Could not update the greeter environment in %s"
+  "Could not update the greeter environment in %s": "Could not update the greeter environment in %s",
+  "Unknown option:": "Unknown option:",
+  "This build of the update helper does not support it. Run an update without it once to refresh the helper, then try again.": "This build of the update helper does not support it. Run an update without it once to refresh the helper, then try again.",
+  "The dotfiles clone at %s is damaged. Setting it aside as %s and cloning again.": "The dotfiles clone at %s is damaged. Setting it aside as %s and cloning again.",
+  "could not move the damaged clone aside": "could not move the damaged clone aside",
+  "Fresh clone in place. Any local edits are still in %s.": "Fresh clone in place. Any local edits are still in %s.",
+  "Quickshell is not reachable; its reload hold will be skipped during the file sync.": "Quickshell is not reachable; its reload hold will be skipped during the file sync.",
+  "Hyprland is not reachable; its autoreload hold will be skipped during the file sync.": "Hyprland is not reachable; its autoreload hold will be skipped during the file sync."
 }
