@@ -19,6 +19,8 @@ ORIG_HOME=$(getent passwd "$ORIG_USER" | cut -d: -f6)
 
 CLONE_DIR="${MAINSTREAM_DOTFILES_DIR:-$ORIG_HOME/.cache/dots-hyprland}"
 TAG_REGEX='^[0-9]{1,2}\.[0-9]+\.[0-9]+$'
+REPO_URL="${MAINSTREAM_DOTFILES_REPO:-https://github.com/MainstreamOS/dots-hyprland.git}"
+REPO_BRANCH="${MAINSTREAM_DOTFILES_BRANCH:-mainstream}"
 
 TEMP_SUDOERS="/etc/sudoers.d/99-mainstream-repair-active"
 rm -f "$TEMP_SUDOERS"
@@ -58,9 +60,54 @@ if [[ ! -d "$CLONE_DIR/.git" ]]; then
     echo "    no dotfiles clone at $CLONE_DIR — open the Update page once to bootstrap it, then retry." >&2
     exit 1
 fi
-run_as_user git -C "$CLONE_DIR" fetch --tags --force --prune origin 2>&1 | sed 's/^/    /' \
-    || echo "    (tag fetch failed — using the current checkout)"
-LATEST_TAG=$(run_as_user git -C "$CLONE_DIR" tag 2>/dev/null | grep -E "$TAG_REGEX" | sort -V | tail -n1)
+# The same recovery updatems carries. A clone that has lost an object cannot be
+# fetched into, and a repair that cannot fetch has only stale tags to choose
+# from, which is how one machine was pinned to 1.4.2 while 2.2.0 was current.
+_recover_corrupt_clone() {
+    local aside="${CLONE_DIR}.corrupt-$(date +%Y%m%d-%H%M%S)"
+    local marker="$CLONE_DIR/.updatems-applied-tag" saved_marker=""
+    [[ -f "$marker" ]] && saved_marker=$(<"$marker")
+    echo "    the dotfiles clone is damaged; setting it aside as $aside and cloning again"
+    mv "$CLONE_DIR" "$aside" || { echo "    could not move the damaged clone aside" >&2; return 1; }
+    run_as_user git clone --branch "$REPO_BRANCH" "$REPO_URL" "$CLONE_DIR" || { echo "    git clone failed" >&2; return 1; }
+    run_as_user git -C "$CLONE_DIR" submodule update --init --recursive >/dev/null 2>&1 || true
+    [[ -n "$saved_marker" ]] && run_as_user tee "$marker" <<<"$saved_marker" >/dev/null
+    echo "    fresh clone in place; any local edits are still in $aside"
+}
+
+_fetch_out=$(run_as_user git -C "$CLONE_DIR" fetch --tags --force --prune origin 2>&1); _fetch_rc=$?
+[[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+if [[ $_fetch_rc -ne 0 ]] && grep -qE 'is empty|bad object|did not send all necessary objects|corrupt|unable to read|could not read' <<<"$_fetch_out"; then
+    _recover_corrupt_clone && {
+        _fetch_out=$(run_as_user git -C "$CLONE_DIR" fetch --tags --force --prune origin 2>&1); _fetch_rc=$?
+        [[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+    }
+fi
+# Without a successful fetch there is no way to know what the latest release
+# is: the tags in the clone are only as new as the last fetch that worked, and
+# pinning to one of those is how a repair pinned a machine to 1.4.2 while 2.2.0
+# was current. So a failed fetch means the current checkout, as the message
+# says, rather than the highest stale tag that happens to be lying around.
+LATEST_TAG=""
+if [[ $_fetch_rc -eq 0 ]]; then
+    LATEST_TAG=$(run_as_user git -C "$CLONE_DIR" tag 2>/dev/null | grep -E "$TAG_REGEX" | sort -V | tail -n1)
+else
+    echo "    (tag fetch failed — using the current checkout)"
+fi
+
+# Never pin backwards. The highest tag in the clone is the latest release only
+# when the fetch just succeeded; on a stale clone it is whatever was last
+# fetched, and resetting a 2.x machine to a 1.x tag is a downgrade dressed up
+# as a repair. Compare with what this machine has applied and refuse to go down.
+APPLIED_TAG=""
+[[ -f "$CLONE_DIR/.updatems-applied-tag" ]] && APPLIED_TAG=$(<"$CLONE_DIR/.updatems-applied-tag")
+[[ -z "$APPLIED_TAG" && -r /etc/mainstream-dotfiles-tag ]] && APPLIED_TAG=$(</etc/mainstream-dotfiles-tag)
+if [[ -n "$LATEST_TAG" && "$APPLIED_TAG" =~ $TAG_REGEX ]] \
+   && [[ "$(printf '%s\n%s\n' "$APPLIED_TAG" "$LATEST_TAG" | sort -V | tail -n1)" != "$LATEST_TAG" ]]; then
+    echo "    refusing to pin to $LATEST_TAG: this machine has $APPLIED_TAG applied and the clone holds nothing newer" >&2
+    echo "    (the fetch did not bring the current release in; running the current checkout instead)"
+    LATEST_TAG=""
+fi
 if [[ -n "$LATEST_TAG" ]]; then
     run_as_user git -C "$CLONE_DIR" stash push --include-untracked -m "mainstream-repair auto-stash" >/dev/null 2>&1 || true
     if run_as_user git -C "$CLONE_DIR" reset --hard "$LATEST_TAG" >/dev/null 2>&1; then
