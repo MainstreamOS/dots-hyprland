@@ -2188,5 +2188,11 @@
   "Flatpak: apps installed for you only": "Flatpak: apps installed for you only",
   "Personalize Bar": "Personalize Bar",
   "Personalize Dock": "Personalize Dock",
-  "Switch Theme": "Switch Theme"
+  "Switch Theme": "Switch Theme",
+  "Keyboard layout polkit rules": "Keyboard layout polkit rules",
+  "SDDM keyboard bridge": "SDDM keyboard bridge",
+  "Greeter runtime directory (tmpfiles)": "Greeter runtime directory (tmpfiles)",
+  "Greeter runtime directory not created now; it will exist after a reboot": "Greeter runtime directory not created now; it will exist after a reboot",
+  "Greeter environment updated in %s": "Greeter environment updated in %s",
+  "Could not update the greeter environment in %s": "Could not update the greeter environment in %s"
 }

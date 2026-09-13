@@ -79,6 +79,9 @@ ContentSection {
             "hyprctl", "eval",
             'hl.config({ input = { kb_layout = "' + layouts + '", kb_variant = "' + variants + '" } })'
         ])
+        // An eval rebuilds the keymaps without a config reload, which is the
+        // one signal the bar's layout service waits for.
+        HyprlandXkb.refresh()
         layoutWriter.command = ["python3", Quickshell.shellPath("scripts/keyboard/write-layouts.py"), root.customGeneralConf, layouts, variants]
         layoutWriter.running = false
         layoutWriter.running = true
@@ -154,9 +157,10 @@ ContentSection {
         }
     }
 
-    // Hyprland's devices JSON reports the comma-separated layouts but not
-    // their variants. Prefer the managed override when it exists so an entry
-    // such as US Dvorak survives reopening Settings with its variant intact.
+    // Prefer the managed override when it exists: it is the list this page
+    // wrote, in the order it wrote it. Without one, ask Hyprland, whose
+    // devices JSON carries the layouts and their variants; on a fresh install
+    // that is the list the installer recorded.
     Process {
         id: persistedLayoutsProc
         command: ["cat", root.customGeneralConf]
@@ -192,7 +196,8 @@ ContentSection {
                     const keyboards = JSON.parse(text).keyboards || []
                     const mainKeyboard = keyboards.find(keyboard => keyboard.main) || keyboards[0]
                     const layouts = mainKeyboard?.layout?.split(",").filter(Boolean) || []
-                    const removedCustom = root.setSelectedLayouts(layouts.length > 0 ? layouts : ["us"], [])
+                    const variants = mainKeyboard?.variant?.split(",") || []
+                    const removedCustom = root.setSelectedLayouts(layouts.length > 0 ? layouts : ["us"], variants)
                     if (removedCustom)
                         root.applyLayouts()
                 } catch (error) {

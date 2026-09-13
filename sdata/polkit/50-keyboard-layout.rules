@@ -1,0 +1,10 @@
+// Settings → Keyboard hands the enabled layouts to systemd-localed, which is
+// what the login screen reads, so the two type in the same layouts. Whoever is
+// sitting at the machine in a live session may decide what its keyboard types,
+// without a password: the value is the login screen's layout, nothing more.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.locale1.set-keyboard" &&
+        subject.active && subject.local) {
+        return polkit.Result.YES;
+    }
+});

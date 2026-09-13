@@ -174,3 +174,11 @@ hl.config({
 })
 
 hl.window_rule({ match = { class = "^(sddm-greeter-qt6)$" }, fullscreen = true })
+
+-- The greeter's QML cannot spawn a process, so the layout picker in the theme
+-- talks to this instance through two files in the sddm account's cache. The
+-- bridge is the other end of that: it publishes the layout in effect and
+-- applies the one the user picks. Without it the picker draws but does nothing.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("/usr/local/bin/pixie-sddm-keyboard-bridge.sh")
+end)

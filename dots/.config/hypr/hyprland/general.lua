@@ -17,6 +17,54 @@ local function inheritedNumlockState()
     return true
 end
 
+-- The layout the machine was set up with, read from the same file the login
+-- screen reads: systemd-localed's X11 config, which the installer's keyboard
+-- page writes, then the console keymap. Read at every start rather than copied
+-- in once, so an update that refreshes this file cannot send the desktop back
+-- to QWERTY. Settings → Keyboard writes its own list into custom/general.lua,
+-- which is sourced after this file and wins.
+local function systemKeyboardLayout()
+    local conf = io.open("/etc/X11/xorg.conf.d/00-keyboard.conf", "r")
+    if conf then
+        local layout, variant
+        for line in conf:lines() do
+            layout = layout or line:match('Option%s+"XkbLayout"%s+"([^"]*)"')
+            variant = variant or line:match('Option%s+"XkbVariant"%s+"([^"]*)"')
+        end
+        conf:close()
+        -- localed writes XKB names here, one or a comma-separated list.
+        if layout and layout:match("^[%a,]+$") then
+            if not (variant and variant:match("^[%w_,%-]*$")) then
+                variant = ""
+            end
+            return layout, variant
+        end
+    end
+
+    local vconsole = io.open("/etc/vconsole.conf", "r")
+    if vconsole then
+        local keymap
+        for line in vconsole:lines() do
+            keymap = keymap or line:match("^KEYMAP=(.-)%s*$")
+        end
+        vconsole:close()
+        if keymap then
+            keymap = keymap:gsub('"', "")
+            -- Console keymaps carry a variant after a dash and a hardware
+            -- number at the end (fr-latin1, jp106); XKB knows neither.
+            keymap = keymap:match("^([^-]+)") or keymap
+            keymap = keymap:gsub("%d+$", "")
+            if keymap:match("^%a%a+$") then
+                return keymap, ""
+            end
+        end
+    end
+
+    return "us", ""
+end
+
+local kbLayout, kbVariant = systemKeyboardLayout()
+
 -- MONITOR CONFIG
 hl.monitor({
     output = "",
@@ -182,7 +230,8 @@ end
 
 hl.config({
     input = {
-        kb_layout = "us",
+        kb_layout = kbLayout,
+        kb_variant = kbVariant,
         numlock_by_default = inheritedNumlockState(),
         repeat_delay = 250,
         repeat_rate = 35,

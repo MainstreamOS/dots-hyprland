@@ -50,6 +50,11 @@ function setup_sddm_bg_polkit(){
   x sudo cp "${REPO_ROOT}/sdata/polkit/50-sddm-bg.rules" /usr/share/polkit-1/rules.d/
 }
 
+function setup_keyboard_layout_polkit(){
+  # Settings → Keyboard hands the enabled layouts to systemd-localed, which the login screen reads, so both type in the same ones
+  x sudo cp "${REPO_ROOT}/sdata/polkit/50-keyboard-layout.rules" /usr/share/polkit-1/rules.d/
+}
+
 function setup_power_key_polkit(){
   # Install helper script and polkit policy/rule so the settings panel can change HandlePowerKey without a password
   x sudo cp "${REPO_ROOT}/sdata/polkit/power-key-helper.sh" /usr/local/bin/power-key-helper
@@ -423,6 +428,9 @@ v setup_user_group
 
 showfun setup_sddm_bg_polkit
 v setup_sddm_bg_polkit
+
+showfun setup_keyboard_layout_polkit
+v setup_keyboard_layout_polkit
 
 showfun setup_disk_mounter
 v setup_disk_mounter

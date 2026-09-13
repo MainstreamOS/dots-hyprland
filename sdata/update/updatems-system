@@ -213,6 +213,48 @@ if [[ -d "$GREETER_DIR" ]]; then
     fi
 fi
 
+# ── Keyboard layout: login screen and Settings agree ──────────────────────
+# Settings → Keyboard hands its list to systemd-localed, which is what the
+# greeter reads at start, so the two type in the same layouts. The rule lets an
+# active local user do that without a password.
+_install_file 0644 \
+    "$REPO_DIR/sdata/polkit/50-keyboard-layout.rules" \
+    /usr/share/polkit-1/rules.d/50-keyboard-layout.rules \
+    "$(t "Keyboard layout polkit rules")"
+
+# The greeter's own layout picker: its QML cannot run hyprctl, so this script
+# runs beside it and does the switching. The greeter config above starts it.
+_install_file 0755 \
+    "$REPO_DIR/sdata/sddm/pixie-sddm-keyboard-bridge.sh" \
+    /usr/local/bin/pixie-sddm-keyboard-bridge.sh \
+    "$(t "SDDM keyboard bridge")"
+
+# The bridge and the greeter meet in a directory under /run that root creates
+# at boot; created now as well so the next login does not wait for a reboot.
+_install_file 0644 \
+    "$REPO_DIR/sdata/sddm/mainstream-greeter.conf" \
+    /usr/lib/tmpfiles.d/mainstream-greeter.conf \
+    "$(t "Greeter runtime directory (tmpfiles)")"
+if [[ -f /usr/lib/tmpfiles.d/mainstream-greeter.conf ]] && ! systemd-tmpfiles --create mainstream-greeter.conf 2>/dev/null; then
+    warn "$(t "Greeter runtime directory not created now; it will exist after a reboot")"
+fi
+
+# The picker reads its state through file:// in QML, which Qt refuses unless
+# the greeter is told to allow it. Every file that sets the greeter's
+# environment gets the switch, since the last one SDDM reads wins.
+for conf in /etc/sddm.conf /etc/sddm.conf.d/*.conf; do
+    [[ -f "$conf" ]] || continue
+    grep -q '^GreeterEnvironment=' "$conf" || continue
+    grep -q 'QML_XHR_ALLOW_FILE_READ' "$conf" && continue
+    if sed -i -e 's/^GreeterEnvironment=$/GreeterEnvironment=QML_XHR_ALLOW_FILE_READ=1/' -e 't' \
+              -e 's/^\(GreeterEnvironment=.\+\)$/\1,QML_XHR_ALLOW_FILE_READ=1/' "$conf"; then
+        ok "$(tf "Greeter environment updated in %s" "$conf")"
+    else
+        warn "$(tf "Could not update the greeter environment in %s" "$conf")"
+        RC=1
+    fi
+done
+
 # ── Printing ──────────────────────────────────────────────────────────────
 # The spooler is reached through its socket rather than its service, and
 # systemd starts it on the first print job. Arch ships no preset for cups and

@@ -32,6 +32,8 @@ trap report_error ERR
 # --- Step 1: Install SDDM ---
 # layer-shell-qt is required by the Qt6 SDDM greeter when it runs under Wayland
 # (GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell, set below).
+# QML_XHR_ALLOW_FILE_READ lets the theme read the keyboard bridge's state file
+# through XMLHttpRequest, which Qt refuses for local files unless told to.
 info "Installing SDDM..."
 pacman -S --needed --noconfirm sddm layer-shell-qt
 systemctl enable sddm
@@ -66,7 +68,7 @@ mkdir -p /etc/sddm.conf.d
 cat > /etc/sddm.conf.d/10-wayland.conf <<'SDDMEOF'
 [General]
 DisplayServer=wayland
-GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell
+GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,QML_XHR_ALLOW_FILE_READ=1
 
 [Wayland]
 CompositorCommand=start-hyprland
@@ -121,6 +123,19 @@ if [[ -f "$GREETER_SRC" ]]; then
     fi
 else
     warn "Greeter config missing at $GREETER_SRC — leaving the existing one alone"
+fi
+# The greeter's layout picker cannot run hyprctl from QML; this script does the
+# switching for it and is started from the greeter config installed above.
+BRIDGE_SRC="$(dirname "$GREETER_SRC")/pixie-sddm-keyboard-bridge.sh"
+if [[ -f "$BRIDGE_SRC" ]]; then
+    install -m755 "$BRIDGE_SRC" /usr/local/bin/pixie-sddm-keyboard-bridge.sh
+    # The bridge and the greeter meet in a directory under /run that root
+    # creates at boot; created now as well so the next login does not wait
+    # for a reboot.
+    install -m644 "$(dirname "$GREETER_SRC")/mainstream-greeter.conf" /usr/lib/tmpfiles.d/mainstream-greeter.conf
+    systemd-tmpfiles --create mainstream-greeter.conf || warn "Greeter runtime directory not created; it will exist after a reboot"
+else
+    warn "Keyboard bridge missing at $BRIDGE_SRC; the login screen's layout picker will draw but do nothing"
 fi
 chown -R sddm:sddm /var/lib/sddm
 chmod 700 /var/lib/sddm/.config
