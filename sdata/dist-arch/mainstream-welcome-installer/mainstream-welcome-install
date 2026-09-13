@@ -7,7 +7,7 @@
 # /var/log/mainstream-welcome-install.log and the journal, so a failed install can be
 # traced after the fact:  tail -f /var/log/mainstream-welcome-install.log
 #
-# Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs resolve resolve-studio
+# Usage (as root, via pkexec):  mainstream-welcome-install gaming gamescope obs gimp krita libreoffice onlyoffice sunshine moonlight resolve resolve-studio
 #
 # 'resolve-update' is the same run as 'resolve'/'resolve-studio' but picks the
 # edition from `install-davinci-resolve --check --json` instead of being told,
@@ -131,10 +131,37 @@ wait_for_pacman_lock() {
 }
 
 pac() {
-  wait_for_repo
+  # Wait on [mainstream] only for targets it has to provide; the rest resolve now.
+  pacman -Sp "$@" >/dev/null 2>&1 || wait_for_repo
   wait_for_pacman_lock || { log "could not get the pacman lock"; return 1; }
   log "run: pacman -S --needed --noconfirm $*"
   pacman -S --needed --noconfirm "$@"
+}
+
+flat() {  # flathub ref
+  command -v flatpak >/dev/null 2>&1 || { log "flatpak is not installed"; return 1; }
+  flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
+  log "run: flatpak install --system --noninteractive -y flathub $1"
+  # A second try covers the transient fetch errors flatpak does not retry itself.
+  flatpak install --system --noninteractive -y flathub "$1" \
+    || { log "flatpak install failed once, retrying"; flatpak install --system --noninteractive -y flathub "$1"; }
+}
+
+install_with() {  # pac|flat  label  target...
+  local via=$1 label=$2; shift 2
+  notify "Installing $label…" "$*"
+  if "$via" "$@"; then notify "$label installed" "Find it in your apps."
+  else notify "$label install failed" "See $LOGFILE." critical; return 1; fi
+}
+
+install_libreoffice() {
+  # A box already on the still release keeps it; fresh conflicts with it.
+  if pacman -Q libreoffice-still >/dev/null 2>&1; then
+    log "libreoffice-still is installed, leaving it in place"
+    notify "LibreOffice already installed" "The still release is in place."
+    return 0
+  fi
+  install_with pac "LibreOffice" libreoffice-fresh
 }
 
 install_gaming() {
@@ -180,12 +207,6 @@ install_gamescope() {
     notify "Steam Big Picture setup failed" "gaming-mode-install not found." critical
     return 1
   fi
-}
-
-install_obs() {
-  notify "Installing OBS Studio…" "mainstream-obs"
-  if pac mainstream-obs; then notify "OBS Studio installed" "Find it in your apps."
-  else notify "OBS install failed" "See $LOGFILE." critical; return 1; fi
 }
 
 install_resolve() {  # "" | --studio   [install|update]
@@ -249,6 +270,10 @@ run_item() {  # label  fn...
   (( rc == 0 )) || failed_items+=("$label")
 }
 
+run_app() {  # label  pac|flat  target...
+  run_item "$1" install_with "$2" "$1" "${@:3}"
+}
+
 (( $# )) || { log "nothing selected — exiting"; exit 0; }
 
 log "=================================================================="
@@ -271,7 +296,13 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
   case $opt in
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
-    obs)             run_item "OBS Studio"              install_obs ;;
+    obs)             run_app "OBS Studio"    pac  mainstream-obs ;;
+    gimp)            run_app "GIMP"          pac  gimp ;;
+    krita)           run_app "Krita"         pac  krita ;;
+    libreoffice)     run_item "LibreOffice"  install_libreoffice ;;
+    onlyoffice)      run_app "OnlyOffice"    flat org.onlyoffice.desktopeditors ;;
+    sunshine)        run_app "Sunshine"      pac  sunshine ;;
+    moonlight)       run_app "Moonlight"     pac  moonlight-qt ;;
     resolve)         run_item "DaVinci Resolve"         install_resolve "" ;;
     resolve-studio)  run_item "DaVinci Resolve Studio"  install_resolve --studio ;;
     resolve-update)  run_item "DaVinci Resolve update"  update_resolve ;;
