@@ -18,7 +18,13 @@ Singleton {
     property string currentLayoutCode: ""
     // For the service
     property var baseLayoutFilePath: "/usr/share/X11/xkb/rules/base.lst"
-    property bool needsLayoutRefresh: false
+
+    // Re-reads the layout list from Hyprland. Settings calls this after it
+    // applies a new list with hyprctl eval, which rebuilds the keymaps without
+    // a config reload.
+    function refresh() {
+        refreshTimer.restart();
+    }
 
     // Update the layout code according to the layout name (Hyprland gives the name not the code)
     onCurrentLayoutNameChanged: root.updateLayoutCode()
@@ -65,14 +71,23 @@ Singleton {
                     
                     return false;
                 });
-                // console.log("[HyprlandXkb] Found line:", foundLine);
-                // console.log("[HyprlandXkb] Layout:", root.currentLayoutName, "| Code:", root.currentLayoutCode);
-                // console.log("[HyprlandXkb] Cached layout codes:", JSON.stringify(root.cachedLayoutCodes, null, 2));
             }
         }
     }
 
-    // Find out available layouts and current active layout. Should only be necessary on init
+    // A layout change reaches here once per keyboard, and a mouse or a headset
+    // with a key interface counts as one, so a burst of a dozen events is
+    // normal. They collapse into a single devices query.
+    Timer {
+        id: refreshTimer
+        interval: 150
+        onTriggered: {
+            fetchLayoutsProc.running = false;
+            fetchLayoutsProc.running = true;
+        }
+    }
+
+    // Find out available layouts and current active layout
     Process {
         id: fetchLayoutsProc
         running: true
@@ -81,12 +96,16 @@ Singleton {
         stdout: StdioCollector {
             id: devicesCollector
             onStreamFinished: {
-                const parsedOutput = JSON.parse(devicesCollector.text);
-                const hyprlandKeyboard = parsedOutput["keyboards"].find(kb => kb.main === true);
-                root.layoutCodes = hyprlandKeyboard["layout"].split(",");
-                root.currentLayoutName = hyprlandKeyboard["active_keymap"];
-                // console.log("[HyprlandXkb] Fetched | Layouts (multiple: " + (root.layoutCodes.length > 1) + "): "
-                //     + root.layoutCodes.join(", ") + " | Active: " + root.currentLayoutName);
+                try {
+                    const keyboards = JSON.parse(devicesCollector.text)["keyboards"] || [];
+                    const hyprlandKeyboard = keyboards.find(kb => kb.main === true) || keyboards[0];
+                    if (!hyprlandKeyboard)
+                        return;
+                    root.layoutCodes = (hyprlandKeyboard["layout"] || "").split(",").filter(Boolean);
+                    root.currentLayoutName = hyprlandKeyboard["active_keymap"];
+                } catch (e) {
+                    console.warn("[HyprlandXkb] Could not read keyboards:", e);
+                }
             }
         }
     }
@@ -96,23 +115,21 @@ Singleton {
         target: Hyprland
         function onRawEvent(event) {
             if (event.name === "activelayout") {
-                if (root.needsLayoutRefresh) {
-                    root.needsLayoutRefresh = false;
-                    fetchLayoutsProc.running = true;
-                }
+                // A keymap event while only one layout is known means the list
+                // itself changed: an eval or a keyword rebuilds the keymaps with
+                // no reload, and so does a keyboard being plugged in.
+                if (root.layoutCodes.length <= 1)
+                    root.refresh();
 
-                // If there's only one layout, the updated layout is always the same
-                if (root.layoutCodes.length <= 1) return;
-
-                // Update when layout might have changed
                 const dataString = event.data;
                 root.currentLayoutName = dataString.substring(dataString.indexOf(",") + 1);
 
                 // Update layout for on-screen keyboard (osk)
                 Config.options.osk.layout = root.currentLayoutName.split(" (")[0];
             } else if (event.name == "configreloaded") {
-                // Mark layout code list to be updated when config is reloaded
-                root.needsLayoutRefresh = true;
+                // A reload whose layout list did not change carries no keymap
+                // event, so ask rather than wait for one.
+                root.refresh();
             }
         }
     }

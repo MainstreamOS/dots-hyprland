@@ -75,7 +75,12 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("killall ydotool qs quickshell; qs -
 hl.bind("CTRL + SUPER + P", hl.dsp.global("quickshell:panelFamilyCycle"), {description = "Cycle panel family"} )
 -- Cycle the layouts selected in Settings → Keyboard. `current` targets the
 -- keyboard that owns the focused input, so it also works with external boards.
-hl.bind("CTRL + SUPER + K", hl.dsp.exec_cmd("hyprctl switchxkblayout current next"), {description = "Next keyboard layout"} )
+-- Every keyboard at once. Hyprland's "current" keyboard is whichever device
+-- sent the last key event, releases included, and on some keyboards the
+-- modifiers and the letter arrive from different evdev nodes, so a switch
+-- aimed at "current" now and then lands on a device nobody types on while
+-- the bar reports the layout of the other.
+hl.bind("CTRL + SUPER + K", hl.dsp.exec_cmd("hyprctl switchxkblayout all next"), {description = "Next keyboard layout"} )
 
 -- Save the new LED state after the real Num Lock event has reached Hyprland.
 -- locked keeps state tracking active on the lock screen, while non_consuming
