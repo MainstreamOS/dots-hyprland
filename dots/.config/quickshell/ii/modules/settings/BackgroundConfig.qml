@@ -187,14 +187,20 @@ ContentPage {
         title: Translation.tr("Widget appearance")
 
         ConfigSwitch {
+            id: frostedSwitch
             buttonIcon: "blur_on"
             text: Translation.tr("Frosted widget backgrounds")
+            // A video wallpaper is drawn below the shell by another process, so
+            // a card has nothing here to sample and the frost cannot appear.
+            enabled: !Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
             checked: Config.options.background.widgets.blur.enable
             onCheckedChanged: {
                 Config.options.background.widgets.blur.enable = checked;
             }
             StyledToolTip {
-                text: Translation.tr("Blur the wallpaper behind each widget card. Every widget that is on pays for its own, so older graphics may prefer this off.")
+                text: frostedSwitch.enabled
+                    ? Translation.tr("Blur the wallpaper behind each widget card. Every widget that is on pays for its own, so older graphics may prefer this off.")
+                    : Translation.tr("Not available while a video wallpaper is set")
             }
         }
 
