@@ -9,6 +9,7 @@
 # meta-packages below.
 MAINSTREAM_KEY_FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
 MAINSTREAM_REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
+MAINSTREAM_MIRROR_URL=https://downloads.sourceforge.net/project/mainstreamos/mainstream-repo
 
 # Retry a command with increasing backoff. The [mainstream] repo is a single
 # GitHub-hosted server (no mirrors), so a transient network blip pulling its db
@@ -31,7 +32,7 @@ setup-mainstream-repo(){
   x sudo pacman-key --add "${REPO_ROOT}/sdata/dist-arch/mainstream.pub"
   x sudo pacman-key --lsign-key "$MAINSTREAM_KEY_FPR"
   if ! grep -q '^\[mainstream\]' /etc/pacman.conf; then
-    printf '\n[mainstream]\nSigLevel = Required\nServer = %s\n' "$MAINSTREAM_REPO_URL" \
+    printf '\n[mainstream]\nSigLevel = Required\nServer = %s\nServer = %s\n' "$MAINSTREAM_REPO_URL" "$MAINSTREAM_MIRROR_URL" \
       | sudo tee -a /etc/pacman.conf >/dev/null
   fi
   retry x sudo pacman -Sy

@@ -23,6 +23,7 @@ KEY_FILE=/usr/local/share/mainstream.pub
 KEY_URL=https://mainstreamos.org/mainstream.pub
 FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
 REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
+MIRROR_URL=https://downloads.sourceforge.net/project/mainstreamos/mainstream-repo
 LOCAL_REPO=/usr/local/share/pkgs
 PACMAN_CONF=/etc/pacman.conf
 PACMAN_CONF_BAK=/etc/pacman.conf.mainstream-keyring-bak
@@ -184,6 +185,26 @@ trust_key() {
     return 1
 }
 
+# A second server carrying the same signed packages. pacman walks the list in
+# order and only reaches this one when the first cannot be had, so it costs
+# nothing while GitHub is up. Runs ahead of the health check below, because a
+# machine that is already healthy never reaches the repair path.
+ensure_mirror() {
+    grep -qF "Server = $REPO_URL" "$PACMAN_CONF" || return 0
+    grep -qF "Server = $MIRROR_URL" "$PACMAN_CONF" && return 0
+    local tmp
+    tmp=$(mktemp) || return 0
+    if sed "\\|^Server = ${REPO_URL}$|a Server = ${MIRROR_URL}" "$PACMAN_CONF" > "$tmp" \
+        && grep -qF "Server = $MIRROR_URL" "$tmp" \
+        && grep -qF "Server = $REPO_URL" "$tmp"; then
+        cat "$tmp" > "$PACMAN_CONF"
+        log "added the SourceForge mirror to [mainstream]."
+    else
+        warn "could not add the SourceForge mirror; leaving $PACMAN_CONF alone."
+    fi
+    rm -f "$tmp"
+}
+
 point_at_github() {
     cp -a "$PACMAN_CONF" "$PACMAN_CONF_BAK" || return 1
     sed -i \
@@ -239,6 +260,8 @@ if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
     log "pacman database is locked by another process; retrying on the next tick."
     exit 0
 fi
+
+ensure_mirror
 
 if key_is_trusted && arch_keyring_populated && repo_is_signed_github && signed_sync_works; then
     log "keyring and [mainstream] repo are healthy."
