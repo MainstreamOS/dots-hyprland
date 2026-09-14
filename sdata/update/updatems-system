@@ -493,6 +493,28 @@ if [[ -x /usr/local/bin/mainstream-limine-windows ]]; then
     /usr/local/bin/mainstream-limine-windows || true
 fi
 
+# ── Install leftovers ──────────────────────────────────────────────────────
+# The finalize step that sweeps these runs at install time only, so a machine
+# installed before it covered them is still carrying the dotfiles archive the
+# image ships and archiso's build-date stamp. Nothing reads either once the
+# install is done: updatems keeps its own clone under the user's cache.
+# /tmp/dotfiles-setup is listed too for the installs whose /tmp is real
+# storage. Where /tmp is a tmpfs the unpacked copy underneath it cannot be
+# reached from a running system, and it is inert there.
+if [[ -f /run/archiso/bootmnt/arch/version ]] || mountpoint -q /run/archiso 2>/dev/null; then
+    :
+else
+    for _leftover in /usr/local/share/dots-hyprland.tar.zst /tmp/dotfiles-setup /version; do
+        [[ -e "$_leftover" ]] || continue
+        if rm -rf -- "$_leftover"; then
+            ok "$(tf "Removed the install leftover %s" "$_leftover")"
+        else
+            warn "$(tf "Could not remove %s" "$_leftover")"
+            RC=1
+        fi
+    done
+fi
+
 if [[ $RC -eq 0 ]]; then
     ok "$(t "System-level refresh complete.")"
 else
