@@ -263,7 +263,7 @@ if getent passwd sddm >/dev/null 2>&1; then
         else
             PIXIE_TMP=$(mktemp -d)
             if git clone --depth=1 -q https://github.com/MainstreamOS/pixie-sddm.git "$PIXIE_TMP" 2>/dev/null; then
-                for item in components Main.qml metadata.desktop theme.conf LICENSE; do
+                for item in components Main.qml VideoBackground.qml metadata.desktop theme.conf LICENSE; do
                     [[ -e "$PIXIE_TMP/$item" ]] && cp -r "$PIXIE_TMP/$item" "$PIXIE_DIR/"
                 done
                 [[ -d "$PIXIE_TMP/assets" ]] && cp -r "$PIXIE_TMP/assets/." "$PIXIE_DIR/assets/"

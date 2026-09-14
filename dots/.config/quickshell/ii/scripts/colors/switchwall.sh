@@ -73,6 +73,21 @@ set_sddm_background() {
         pkexec sddm-bg-helper "$tmpfile" "$dest" 2>/dev/null
     fi
     rm -f "$tmpfile"
+
+    # A moving wallpaper travels too, so the login screen moves the way the
+    # desktop does. The still stays beside it: the greeter shows it until there
+    # is a frame to cover it, and reads the accent colour from it either way.
+    local video_dest="$sddm_bg_dir/${username}.mp4"
+    if is_video "$1"; then
+        if cp "$1" "$video_dest" 2>/dev/null; then
+            chmod 644 "$video_dest" 2>/dev/null
+        elif command -v sddm-bg-helper &>/dev/null; then
+            pkexec sddm-bg-helper "$1" "$video_dest" 2>/dev/null
+        fi
+    elif [[ -e "$video_dest" ]]; then
+        rm -f "$video_dest" 2>/dev/null \
+            || { command -v sddm-bg-helper &>/dev/null && pkexec sddm-bg-helper --clear "$video_dest" 2>/dev/null; }
+    fi
 }
 
 post_process() {
