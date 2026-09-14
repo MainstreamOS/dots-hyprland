@@ -5,4 +5,9 @@ sudo_command = "pkexec"
 # /usr/local/lib/{hyprbars,scrolloverview}/rebuild.sh), so no plugin
 # repos are registered with hyprpm and `hyprpm update` always returns
 # exit 1 ("No repos to update") — which topgrade treats as a failure.
-disable = ["hyprpm"]
+# Skip uv as well. uv is installer scaffolding here, pulled in as a dependency
+# of mainstream-python to build the color venv, and the install deletes its
+# cache once that venv exists. Nothing on the desktop manages Python projects
+# with it, so `uv cache prune` is housekeeping for a cache we do not keep, and
+# a permission error inside it was enough to fail the whole extras pass.
+disable = ["hyprpm", "uv"]
