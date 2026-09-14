@@ -254,5 +254,14 @@
       "Frosted widget backgrounds is dimmed on the Background page while a video wallpaper is set",
       "Ctrl + Super + K to switch keyboard layouts is now more consistent"
     ]
+  },
+  "2.3.1": {
+    "date": "2026-09-14",
+    "kind": "fix",
+    "summary": "A patch on 2.3.0: Gemini 3 models can use tools in the AI sidebar again, and Brazilian Portuguese gains another 52 translated strings",
+    "changes": [
+      "The AI sidebar's Gemini 3 models no longer stop with an error the moment they run a tool, so asking one to change your wallpaper or look something up on your system works through to the answer",
+      "More of the interface is translated in Brazilian Portuguese (thanks @douglasboardman)"
+    ]
   }
 }
