@@ -682,11 +682,11 @@ fi
 # shouldn't turn the whole update banner red for a regular user. The
 # log still shows the failure for the power-user case.
 if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
-if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
 if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi
 if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 101;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 101;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
+if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 exit 0
