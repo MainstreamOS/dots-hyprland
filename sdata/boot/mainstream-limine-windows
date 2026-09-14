@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# mainstream-limine-windows — put Windows in the Limine menu, on whichever drive
+# it lives.
+#
+# Limine's own FIND_BOOTLOADERS probe only looks for systemd-boot, rEFInd and the
+# generic EFI/BOOT fallback, and only under the one EFI System Partition we
+# mounted, so a Windows install is invisible to it. This walks every fixed ESP on
+# the machine instead, and hands each Windows Boot Manager it finds to
+# limine-entry-tool, which records the loader's partition GUID rather than a
+# mountpoint, so the entry resolves at boot whatever drive it came from.
+#
+# Safe to run on every update: an entry that already exists is left alone, and an
+# ESP this script mounted is always unmounted again.
+
+set -uo pipefail
+
+readonly ESP_TYPE_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+readonly WINDOWS_LOADER=EFI/Microsoft/Boot/bootmgfw.efi
+# Cross-drive chainloading of bootmgfw.efi panicked until Limine connected every
+# UEFI controller before opening the image, released in 12.4.0.
+readonly LIMINE_FLOOR=12.4.0
+
+say()  { printf '  %s\n' "$*"; }
+warn() { printf '  ! %s\n' "$*" >&2; }
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || { warn "must run as root"; exit 1; }
+[[ -d /sys/firmware/efi ]] || exit 0
+command -v limine-entry-tool >/dev/null 2>&1 || exit 0
+command -v findmnt >/dev/null 2>&1 || exit 0
+
+# A Limine older than the fix does not merely fail to boot Windows, it panics on
+# the entry, so on those a missing entry is the better outcome.
+if command -v limine >/dev/null 2>&1; then
+    limine_ver=$(limine --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+    if [[ -n $limine_ver ]] \
+        && [[ $(printf '%s\n%s\n' "$LIMINE_FLOOR" "$limine_ver" | sort -V | head -n1) != "$LIMINE_FLOOR" ]]; then
+        warn "Limine $limine_ver is older than $LIMINE_FLOOR; leaving the menu alone."
+        exit 0
+    fi
+fi
+
+ESP_PATH=$(bootctl --print-esp-path 2>/dev/null) || ESP_PATH=""
+[[ -n $ESP_PATH ]] || { [[ -d /boot/efi/EFI ]] && ESP_PATH=/boot/efi; }
+[[ -n $ESP_PATH ]] || { [[ -d /boot/EFI ]] && ESP_PATH=/boot; }
+[[ -n $ESP_PATH && -f "$ESP_PATH/limine.conf" ]] || exit 0
+
+mounted_here=()
+cleanup() {
+    local m
+    for m in "${mounted_here[@]-}"; do
+        [[ -n $m ]] || continue
+        umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null
+        rmdir "$m" 2>/dev/null
+    done
+}
+trap cleanup EXIT
+
+# lsblk's own PATH column would overwrite the shell's command search path the
+# moment its key=value output is eval'd, so the device is rebuilt from KNAME.
+found=0
+while IFS= read -r line; do
+    KNAME= PARTTYPE= FSTYPE= PARTUUID= HOTPLUG= RM= TRAN=
+    eval "$line" 2>/dev/null || continue
+    [[ $PARTTYPE == "$ESP_TYPE_GUID" && $FSTYPE == vfat ]] || continue
+    # A drive that can be unplugged is not something to promise at boot: a
+    # Windows installer stick would be registered and then vanish.
+    [[ ${HOTPLUG:-0} == 0 && ${RM:-0} == 0 && ${TRAN:-} != usb ]] || continue
+    # Limine addresses the partition by GUID, which an MBR disk does not have.
+    [[ $PARTUUID =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || continue
+
+    mp=$(findmnt -rno TARGET -S "PARTUUID=$PARTUUID" 2>/dev/null | head -n1)
+    if [[ -z $mp ]]; then
+        mp="/run/mainstream-esp-$PARTUUID"
+        mkdir -p "$mp" || continue
+        if ! mount -o ro,nodev,nosuid,noexec,noatime -t vfat "/dev/disk/by-partuuid/$PARTUUID" "$mp" 2>/dev/null; then
+            rmdir "$mp" 2>/dev/null
+            continue
+        fi
+        mounted_here+=("$mp")
+    fi
+
+    loader="$mp/$WINDOWS_LOADER"
+    [[ -f $loader ]] || continue
+
+    # The tool keys on the entry name, so a second run over the same install is
+    # a no-op rather than a duplicate.
+    found=$((found + 1))
+    name="Windows"
+    [[ $found -gt 1 ]] && name="Windows ($found)"
+    if grep -qi "bootmgfw" "$ESP_PATH/limine.conf" 2>/dev/null \
+        && grep -qiF "$PARTUUID" "$ESP_PATH/limine.conf" 2>/dev/null; then
+        say "$name is already in the menu."
+        continue
+    fi
+    if limine-entry-tool --add-efi "$name" "$loader" \
+        --comment "Windows Boot Manager" --priority 15 --quiet --no-mutex --no-hooks; then
+        say "Added a '$name' entry for the install on $KNAME."
+    else
+        warn "Could not add a boot entry for the Windows install on $KNAME."
+    fi
+done < <(lsblk -Pno KNAME,PARTTYPE,FSTYPE,PARTUUID,HOTPLUG,RM,TRAN 2>/dev/null)
+
+exit 0

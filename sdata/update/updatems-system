@@ -484,6 +484,15 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
     mac_fetch_firmware_now 2>&1 | sed 's/^/    /' || true
 fi
 
+# A machine that gained a Windows install after the first boot never had
+# anything look for it again, and the installers only ever checked the one ESP
+# they mounted. Refreshed and re-run on every update so the menu catches up.
+_install_file 755 "$REPO_DIR/sdata/boot/mainstream-limine-windows" \
+    /usr/local/bin/mainstream-limine-windows "$(t "Windows boot entry scanner")"
+if [[ -x /usr/local/bin/mainstream-limine-windows ]]; then
+    /usr/local/bin/mainstream-limine-windows || true
+fi
+
 if [[ $RC -eq 0 ]]; then
     ok "$(t "System-level refresh complete.")"
 else
