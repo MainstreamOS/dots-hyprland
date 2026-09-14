@@ -22,17 +22,17 @@ jobs:
         env:
           SF_KEY: ${{ secrets.SF_SSH_PRIVATE_KEY }}
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SF_KEY" > ~/.ssh/sf
-          chmod 600 ~/.ssh/sf
+          install -d -m 700 /tmp/sf
+          printf '%s\n' "$SF_KEY" > /tmp/sf/key
+          chmod 600 /tmp/sf/key
           # Pinned rather than accepted on sight: a mirror fetched over a
           # trusted-on-first-use connection is a mirror anyone can stand in for.
-          printf '%s\n' 'git.code.sf.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGObtXLh/mZom0pXjE5Mu211O+JvtzolqdNKVA+XJ466' > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' 'git.code.sf.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGObtXLh/mZom0pXjE5Mu211O+JvtzolqdNKVA+XJ466' > /tmp/sf/known_hosts
+          chmod 600 /tmp/sf/known_hosts
 
       - name: Push branches and tags to SourceForge
         env:
-          GIT_SSH_COMMAND: ssh -i ~/.ssh/sf -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/home/runner/.ssh/known_hosts
+          GIT_SSH_COMMAND: ssh -i /tmp/sf/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/sf/known_hosts
         run: |
           git clone --bare --no-tags https://github.com/${{ github.repository }}.git repo.git
           git -C repo.git fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
