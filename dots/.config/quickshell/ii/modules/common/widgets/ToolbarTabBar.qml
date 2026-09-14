@@ -56,18 +56,35 @@ Item {
         implicitHeight: contentItem.children[root.currentIndex]?.implicitHeight ?? 0
         radius: height / 2
         // Animation
-        property Item targetItem: contentItem.children[root.currentIndex]
+        //
+        // A TabBar with no current tab reports -1, and it passes through that
+        // for an instant whenever the tabs are rebuilt or the view driving the
+        // index empties. Nothing sits at that index, and an item property
+        // cannot be handed nothing at all, so the indicator keeps the tab it
+        // already had until a real one is there. It must not be restored when
+        // the gap opens either: that is the same as dropping the indicator on
+        // the left edge and letting it slide back once the tabs return. The
+        // bounds below read it for the moment before it has anything, which is
+        // where it starts from anyway: the first tab is laid out at zero.
+        property Item targetItem: null
+        Binding {
+            target: activeIndicator
+            property: "targetItem"
+            value: contentItem.children[root.currentIndex] ?? null
+            when: root.currentIndex >= 0 && root.currentIndex < contentItem.children.length
+            restoreMode: Binding.RestoreNone
+        }
         AnimatedTabIndexPair {
             id: leftBound
             idx1Duration: 50
             idx2Duration: 200
-            index: activeIndicator.targetItem.x
+            index: activeIndicator.targetItem?.x ?? 0
         }
         AnimatedTabIndexPair {
             id: rightBound
             idx1Duration: 50
             idx2Duration: 200
-            index: activeIndicator.targetItem.x + activeIndicator.targetItem.width
+            index: (activeIndicator.targetItem?.x ?? 0) + (activeIndicator.targetItem?.width ?? 0)
         }
         x: Math.min(leftBound.idx1, leftBound.idx2)
         width: Math.max(rightBound.idx1, rightBound.idx2) - x
