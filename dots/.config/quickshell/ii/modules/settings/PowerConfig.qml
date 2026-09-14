@@ -354,7 +354,7 @@ ContentPage {
                         `command -v pixie-sddm-set-state >/dev/null 2>&1 && pixie-sddm-set-state videoFrameRate ${JSON.stringify(String(newValue))}; :`]);
                     if (Wallpapers.isVideoFile(Config.options.background.wallpaperPath))
                         Quickshell.execDetached(["bash", "-c",
-                            `"$HOME/.config/quickshell/ii/scripts/colors/switchwall.sh" --noswitch --picture-only --keep-slideshow`]);
+                            `VIDEO_FPS_CAP_OVERRIDE=${newValue} "$HOME/.config/quickshell/ii/scripts/colors/switchwall.sh" --noswitch --picture-only --keep-slideshow`]);
                 }
                 options: [
                     { displayName: Translation.tr("15 fps"),    value: 15 },

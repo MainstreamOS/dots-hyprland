@@ -512,6 +512,10 @@ Variants {
                         source: Config.options.background.wallpaperPath
                         loops: MediaPlayer.Infinite
                         Component.onCompleted: play()
+                        // A wallpaper swapped while the screen is locked arrives
+                        // after construction, so it needs starting the same way
+                        // the first one did.
+                        onSourceChanged: if (source != "") play()
                         onErrorOccurred: stop()
                     }
                 }

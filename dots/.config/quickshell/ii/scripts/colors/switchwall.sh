@@ -151,7 +151,10 @@ THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
 # warm, so uncovering resumes instantly instead of re-opening the file.
 # A capped wallpaper draws fewer frames, which is the whole cost of a video
 # wallpaper once it is decoded. 0 means the file's own rate.
-VIDEO_FPS_CAP="$(jq -r '.background.videoFrameRate // 0' "$SHELL_CONFIG_FILE" 2>/dev/null || echo 0)"
+# Settings passes the rate on the command line because its own write of
+# config.json is deferred, so reading the file here would return the rate the
+# user just replaced.
+VIDEO_FPS_CAP="${VIDEO_FPS_CAP_OVERRIDE:-$(jq -r '.background.videoFrameRate // 0' "$SHELL_CONFIG_FILE" 2>/dev/null || echo 0)}"
 [[ "$VIDEO_FPS_CAP" =~ ^[0-9]+$ ]] || VIDEO_FPS_CAP=0
 VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
 if [[ "$VIDEO_FPS_CAP" -gt 0 ]]; then
