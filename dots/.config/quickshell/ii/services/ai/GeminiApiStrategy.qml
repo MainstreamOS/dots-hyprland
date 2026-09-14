@@ -23,13 +23,18 @@ ApiStrategy {
             const geminiApiRoleName = (message.role === "assistant") ? "model" : message.role;
             const usingSearch = tools[0]?.google_search !== undefined
             if (!usingSearch && message.functionCall != undefined && message.functionName.length > 0) {
+                const callPart = {
+                    functionCall: {
+                        "name": message.functionName,
+                        "args": message.functionArgs ?? {}
+                    }
+                };
+                if (message.functionThoughtSignature && message.functionThoughtSignature.length > 0) {
+                    callPart.thoughtSignature = message.functionThoughtSignature;
+                }
                 return {
                     "role": geminiApiRoleName,
-                    "parts": [{
-                        functionCall: {
-                            "name": message.functionName,
-                        }
-                    }]
+                    "parts": [callPart]
                 }
             }
             if (!usingSearch && message.functionResponse != undefined && message.functionName.length > 0) {
@@ -131,9 +136,12 @@ ApiStrategy {
             
             // Function call handling
             if (dataJson.candidates[0]?.content?.parts[0]?.functionCall) {
-                const functionCall = dataJson.candidates[0]?.content?.parts[0]?.functionCall;
+                const responsePart = dataJson.candidates[0].content.parts[0];
+                const functionCall = responsePart.functionCall;
                 message.functionName = functionCall.name;
                 message.functionCall = functionCall.name;
+                message.functionArgs = functionCall.args;
+                message.functionThoughtSignature = responsePart.thoughtSignature ?? functionCall.thoughtSignature ?? "";
                 const newContent = `\n\n[[ Function: ${functionCall.name}(${JSON.stringify(functionCall.args, null, 2)}) ]]\n`
                 message.rawContent += newContent;
                 message.content += newContent;
