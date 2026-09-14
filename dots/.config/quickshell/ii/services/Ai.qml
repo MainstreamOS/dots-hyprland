@@ -669,7 +669,18 @@ Singleton {
             if (triesLeft <= 0) root.setupState = "error";
         }
     }
+    // Nothing here while the service is still being built. The id resolves the
+    // first time any binding above asks for it, and the work below registers a
+    // plan's models, which rewrites the map those same bindings are reading:
+    // Qt takes a binding whose own evaluation changed what it depends on for a
+    // loop and abandons it, so whichever property asked first went unanswered
+    // for the rest of the session. The startup pass below does all of this
+    // once, for every plan rather than only the selected one, so a start loses
+    // nothing by leaving it alone.
+    property bool _startupDone: false
+
     onCurrentModelIdChanged: {
+        if (!root._startupDone) return;
         root.setupState = "";
         // Both plans re-read the selection: the one just entered brings its
         // models in, and the one just left puts its own away.
@@ -702,6 +713,10 @@ Singleton {
             root.syncCliPlanModels(fmt) // The setup entries exist before the CLIs answer
             root.detectCli(fmt)
         }
+        // Last: everything above is the work the selection handler skips while
+        // the service is being built, and a selection made from here on is its
+        // own to answer.
+        root._startupDone = true
     }
 
     function guessModelLogo(model) {
