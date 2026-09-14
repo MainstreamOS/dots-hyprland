@@ -554,22 +554,6 @@ ApplicationWindow {
                     }
                 }
 
-                InstallCategory { text: Translation.tr("Image Editing") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "gimp"; optIcon: "gimp"
-                        optTitle: Translation.tr("GIMP")
-                        optDesc: Translation.tr("Photo editing and retouching.")
-                    }
-                    InstallOption {
-                        optKey: "krita"; optIcon: "org.kde.krita"
-                        optTitle: Translation.tr("Krita")
-                        optDesc: Translation.tr("Digital painting and illustration.")
-                    }
-                }
-
                 InstallCategory { text: Translation.tr("Office") }
                 RowLayout {
                     Layout.fillWidth: true
@@ -583,6 +567,22 @@ ApplicationWindow {
                         optKey: "onlyoffice"; optIcon: "org.onlyoffice.desktopeditors"
                         optTitle: Translation.tr("OnlyOffice")
                         optDesc: Translation.tr("Editors with a familiar Microsoft Office look. Installs from Flathub.")
+                    }
+                }
+
+                InstallCategory { text: Translation.tr("Image Editing") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    InstallOption {
+                        optKey: "gimp"; optIcon: "gimp"
+                        optTitle: Translation.tr("GIMP")
+                        optDesc: Translation.tr("Photo editing and retouching.")
+                    }
+                    InstallOption {
+                        optKey: "krita"; optIcon: "org.kde.krita"
+                        optTitle: Translation.tr("Krita")
+                        optDesc: Translation.tr("Digital painting and illustration.")
                     }
                 }
 
