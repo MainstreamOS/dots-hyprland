@@ -170,7 +170,26 @@ install_gaming() {
   local gpu; gpu=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
   case "$gpu" in *\[1002:*) pkgs+=(vulkan-radeon lib32-vulkan-radeon) ;; esac
   case "$gpu" in *\[8086:*) pkgs+=(vulkan-intel lib32-vulkan-intel) ;; esac
-  case "$gpu" in *\[10de:*) pkgs+=(lib32-nvidia-utils) ;; esac
+  case "$gpu" in
+    *\[10de:*)
+      # The 32-bit driver has to match whichever NVIDIA branch is installed.
+      # Naming lib32-nvidia-utils always pulls mainline, which conflicts with a
+      # legacy branch over nvidia-libgl and aborts the whole transaction; and a
+      # legacy lib32 package exists in no online repo, so naming one that is
+      # already installed aborts it too, before --needed can skip it.
+      nvidia_pkg=$(pacman -Qq 2>/dev/null | grep -E '^nvidia(-[0-9]+xx)?-utils$' | head -n1 || true)
+      if [[ -n "$nvidia_pkg" ]]; then
+        lib32_pkg="lib32-$nvidia_pkg"
+        if pacman -Qq "$lib32_pkg" &>/dev/null; then
+          :
+        elif pacman -Si "$lib32_pkg" &>/dev/null; then
+          pkgs+=("$lib32_pkg")
+        else
+          log "$lib32_pkg is neither installed nor in any repo; 32-bit titles may not run on this driver branch."
+        fi
+      fi
+      ;;
+  esac
   log "detected GPU line: ${gpu:-<none>}"
   log "packages: ${pkgs[*]}"
   if pac "${pkgs[@]}"; then notify "Desktop Gaming installed" "Steam and the gaming stack are ready."
