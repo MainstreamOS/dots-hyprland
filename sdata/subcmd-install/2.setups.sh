@@ -259,7 +259,15 @@ function setup_gpu_drivers(){
               # The *-dkms packages build against the kernel, so linux-headers + dkms must be present first.
               x sudo pacman -S --needed --noconfirm linux-headers dkms
               # Try the legacy branch; if unavailable, fall back to nouveau and leave a breadcrumb.
-              if ! sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
+              if sudo pacman -S --needed --noconfirm "${NVIDIA_LOCAL_PKGS[@]}" egl-wayland; then
+                # These branches ship no VA-API driver of their own, so every
+                # video player and game stream would decode on the CPU. 390xx is
+                # below the driver's floor and is left out.
+                case "$NVIDIA_DRIVER_FAMILY" in
+                  nvidia-580xx|nvidia-470xx)
+                    try sudo pacman -S --needed --noconfirm libva-nvidia-driver libva-utils ;;
+                esac
+              else
                 # A legacy edition boots on a branch the online repos do not
                 # carry, so the resolve failing is the normal repair case
                 # there, not a missing driver. Keeping the installed branch is

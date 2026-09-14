@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-welcome-installer
 pkgver=1.1
-pkgrel=3
+pkgrel=4
 pkgdesc='Mainstream OS Welcome app installers — one-click app installs + DaVinci Resolve'
 arch=(any)
 license=(MIT)
@@ -23,8 +23,10 @@ source=(
   mainstream-resolve-update-check
   mainstream-resolve-update-check.service
   mainstream-resolve-update-check.timer
+  sunshine-inhibit.conf
 )
 sha256sums=(
+  SKIP
   SKIP
   SKIP
   SKIP
@@ -49,6 +51,11 @@ package() {
   # Enabled by shipping the symlink rather than a user preset: a preset only
   # applies to accounts created after it lands, which on an OS image is every
   # account except the one that already exists.
+  # Sunshine's own unit is what every launch route ends at: its desktop entry
+  # starts this unit rather than the binary.
+  install -Dm644 "$srcdir/sunshine-inhibit.conf" \
+                 "$pkgdir/usr/lib/systemd/user/app-dev.lizardbyte.app.Sunshine.service.d/10-mainstream-inhibit.conf"
+
   install -d "$pkgdir/usr/lib/systemd/user/timers.target.wants"
   ln -s ../mainstream-resolve-update-check.timer \
         "$pkgdir/usr/lib/systemd/user/timers.target.wants/mainstream-resolve-update-check.timer"
