@@ -624,6 +624,10 @@ Singleton {
                 // How one wallpaper transitions to the next: a name from the
                 // TransitionEffects catalog, or "random".
                 property string wallpaperTransition: "fade"
+                // Frames per second a video wallpaper is drawn at. 0 leaves it
+                // at the file's own rate; a cap trades smoothness for the power
+                // a full-rate video costs on every frame it is on screen.
+                property int videoFrameRate: 0
                 property bool hideWhenFullscreen: true
                 // Rotates wallpaperPath through `folder` on a timer. These keys
                 // ride along in a saved theme's config.json snapshot, so the

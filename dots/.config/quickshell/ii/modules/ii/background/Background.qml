@@ -587,9 +587,32 @@ Variants {
                     }
                 }
                 sourceComponent: GaussianBlur {
+                    id: lockBlur
                     // The still until the video is really running, so a file
                     // the decoder cannot open leaves the blur something to read.
-                    source: (lockVideo.item?.showing ?? false) ? lockVideo.item : wallpaper
+                    readonly property Item liveSource: (lockVideo.item?.showing ?? false) ? lockVideo.item : wallpaper
+                    readonly property bool capped: (lockVideo.item?.showing ?? false)
+                        && Config.options.background.videoFrameRate > 0
+                    // A still only changes when it is replaced, so the blur costs
+                    // nothing between wallpapers. A video would have it redrawing
+                    // on every frame, which is the whole bill on a locked machine,
+                    // so a capped one is read through a copy taken on a timer.
+                    ShaderEffectSource {
+                        id: lockBlurThrottle
+                        anchors.fill: parent
+                        visible: false
+                        sourceItem: lockBlur.liveSource
+                        hideSource: false
+                        live: false
+                    }
+                    Timer {
+                        running: lockBlur.capped
+                        interval: Math.max(16, Math.round(1000 / Config.options.background.videoFrameRate))
+                        repeat: true
+                        triggeredOnStart: true
+                        onTriggered: lockBlurThrottle.scheduleUpdate()
+                    }
+                    source: lockBlur.capped ? lockBlurThrottle : lockBlur.liveSource
                     // Full lock radius when locked; slightly lighter blur for overview
                     radius: GlobalStates.screenLocked
                         ? Config.options.lock.blur.radius

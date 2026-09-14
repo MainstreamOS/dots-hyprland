@@ -149,7 +149,17 @@ THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
 # is covered, including by a fullscreen window, so a video wallpaper costs
 # nothing while nobody can see it. Pause rather than stop keeps the decoder
 # warm, so uncovering resumes instantly instead of re-opening the file.
+# A capped wallpaper draws fewer frames, which is the whole cost of a video
+# wallpaper once it is decoded. 0 means the file's own rate.
+VIDEO_FPS_CAP="$(jq -r '.background.videoFrameRate // 0' "$SHELL_CONFIG_FILE" 2>/dev/null || echo 0)"
+[[ "$VIDEO_FPS_CAP" =~ ^[0-9]+$ ]] || VIDEO_FPS_CAP=0
 VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
+if [[ "$VIDEO_FPS_CAP" -gt 0 ]]; then
+    # display-resample exists to match the monitor, which is the opposite of a
+    # cap, so a capped wallpaper is timed off the clock instead.
+    VIDEO_OPTS="${VIDEO_OPTS/video-sync=display-resample/video-sync=audio}"
+    VIDEO_OPTS="$VIDEO_OPTS vf=fps=$VIDEO_FPS_CAP"
+fi
 
 is_video() {
     local extension="${1##*.}"

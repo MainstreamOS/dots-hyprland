@@ -310,6 +310,59 @@ ContentPage {
                 }
             }
         }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            // Matches ConfigSwitch's vertical padding so the selector sits with
+            // the same breathing room as the switches above it.
+            Layout.topMargin: 8
+            Layout.bottomMargin: 8
+            OptionalMaterialSymbol {
+                icon: "motion_photos_on"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Live wallpaper")
+                color: Appearance.colors.colOnSecondaryContainer
+                MouseArea {
+                    id: videoFrameRateInfo
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.WhatsThisCursor
+                    StyledToolTip {
+                        extraVisibleCondition: false
+                        alternativeVisibleCondition: videoFrameRateInfo.containsMouse
+                        text: Translation.tr("How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power.")
+                    }
+                }
+            }
+            ConfigSelectionArray {
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignVCenter
+                currentValue: Config.options.background.videoFrameRate
+                onSelected: newValue => {
+                    Config.options.background.videoFrameRate = newValue;
+                    // The desktop's player reads its options once, when it starts,
+                    // so the wallpaper goes back up for a new rate to take hold.
+                    // The lock and the login screen read the number itself.
+                    Quickshell.execDetached(["bash", "-c",
+                        `command -v pixie-sddm-set-state >/dev/null 2>&1 && pixie-sddm-set-state videoFrameRate ${JSON.stringify(String(newValue))}; :`]);
+                    if (Wallpapers.isVideoFile(Config.options.background.wallpaperPath))
+                        Quickshell.execDetached(["bash", "-c",
+                            `"$HOME/.config/quickshell/ii/scripts/colors/switchwall.sh" --noswitch --picture-only --keep-slideshow`]);
+                }
+                options: [
+                    { displayName: Translation.tr("15 fps"),    value: 15 },
+                    { displayName: Translation.tr("30 fps"),    value: 30 },
+                    { displayName: Translation.tr("Unlimited"), value: 0 },
+                ]
+            }
+        }
     }
 
     // ── Battery ───────────────────────────────────────────────────────────────

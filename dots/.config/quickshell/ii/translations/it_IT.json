@@ -2225,5 +2225,10 @@
   "Blender": "Blender",
   "3D modeling, animation and video editing.": "3D modeling, animation and video editing.",
   "More apps below": "More apps below",
-  "Not available while a video wallpaper is set": "Not available while a video wallpaper is set"
+  "Not available while a video wallpaper is set": "Not available while a video wallpaper is set",
+  "Live wallpaper": "Live wallpaper",
+  "15 fps": "15 fps",
+  "30 fps": "30 fps",
+  "Unlimited": "Unlimited",
+  "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power.": "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power."
 }
