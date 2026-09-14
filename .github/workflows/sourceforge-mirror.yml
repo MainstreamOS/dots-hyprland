@@ -1,0 +1,42 @@
+name: Mirror to SourceForge
+
+# GitHub is a single point of failure for updates: updatems clones and reads its
+# release tags from it. This keeps a second copy on SourceForge that the updater
+# can fall back to when GitHub is unreachable.
+
+on:
+  push:
+    branches: [mainstream]
+    tags: ['*']
+  workflow_dispatch: {}
+
+concurrency:
+  group: sourceforge-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up the SourceForge key
+        env:
+          SF_KEY: ${{ secrets.SF_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SF_KEY" > ~/.ssh/sf
+          chmod 600 ~/.ssh/sf
+          # Pinned rather than accepted on sight: a mirror fetched over a
+          # trusted-on-first-use connection is a mirror anyone can stand in for.
+          printf '%s\n' 'git.code.sf.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGObtXLh/mZom0pXjE5Mu211O+JvtzolqdNKVA+XJ466' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Push branches and tags to SourceForge
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/sf -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/home/runner/.ssh/known_hosts
+        run: |
+          git clone --bare --no-tags https://github.com/${{ github.repository }}.git repo.git
+          git -C repo.git fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          # Named refspecs rather than --mirror: GitHub also advertises the
+          # repository's pull request refs, which do not belong on a mirror.
+          git -C repo.git push --prune ssh://mainstreamos@git.code.sf.net/p/mainstreamos/code \
+            '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
