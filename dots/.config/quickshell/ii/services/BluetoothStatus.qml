@@ -110,13 +110,18 @@ Singleton {
     // Nothing outside that list looks at this, so nothing needs telling; the
     // sort is reading what was recorded moments earlier in its own run.
     property var discoveryOrder: ({})
-    property int discoveryCounter: 0
 
     function trackDiscoveryOrder(devices) {
         for (const d of devices) {
             const addr = d.address;
+            // The ordinal is how many addresses are already recorded, counted
+            // from the map itself so that nothing outside it has to be kept. A
+            // counter of its own would be a declared property, read and written
+            // right here inside the list's own binding, which leaves the list
+            // depending on a number its own run changes: every device seen
+            // would ask for the list to be built again.
             if (addr && !(addr in discoveryOrder))
-                discoveryOrder[addr] = discoveryCounter++;
+                discoveryOrder[addr] = Object.keys(discoveryOrder).length;
         }
     }
 
