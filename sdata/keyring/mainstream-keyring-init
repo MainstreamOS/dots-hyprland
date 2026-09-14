@@ -190,13 +190,13 @@ trust_key() {
 # nothing while GitHub is up. Runs ahead of the health check below, because a
 # machine that is already healthy never reaches the repair path.
 ensure_mirror() {
-    grep -qF "Server = $REPO_URL" "$PACMAN_CONF" || return 0
+    grep -qxF "Server = $REPO_URL" "$PACMAN_CONF" || return 0
     grep -qF "Server = $MIRROR_URL" "$PACMAN_CONF" && return 0
     local tmp
     tmp=$(mktemp) || return 0
     if sed "\\|^Server = ${REPO_URL}$|a Server = ${MIRROR_URL}" "$PACMAN_CONF" > "$tmp" \
-        && grep -qF "Server = $MIRROR_URL" "$tmp" \
-        && grep -qF "Server = $REPO_URL" "$tmp"; then
+        && grep -qxF "Server = $MIRROR_URL" "$tmp" \
+        && grep -qxF "Server = $REPO_URL" "$tmp"; then
         cat "$tmp" > "$PACMAN_CONF"
         log "added the SourceForge mirror to [mainstream]."
     else
@@ -280,6 +280,7 @@ enable_repo
 
 if ! repo_is_signed_github; then
     point_at_github || { warn "could not rewrite $PACMAN_CONF."; exit 1; }
+    ensure_mirror
 fi
 
 if ! fetch_signed_db; then
