@@ -47,8 +47,9 @@ runuser -u "$caller_name" -- test -r "$src" || exit 1
 [[ ! -L "$dest" ]] || exit 1
 [[ ! -L "$dest_dir" ]] || exit 1
 
-# A still to show, or the moving version of the same wallpaper
-[[ "$dest" == *.jpg || "$dest" == *.mp4 ]] || exit 1
+# A still to show, or the moving version of the same wallpaper, and named for
+# the person asking so one account cannot place another account's background.
+[[ "$dest" == "$dest_dir/$caller_name.jpg" || "$dest" == "$dest_dir/$caller_name.mp4" ]] || exit 1
 
 mkdir -p "$dest_dir"
 cp -- "$src" "$dest"
