@@ -15,6 +15,12 @@ Item {
     id: root
     property real padding: 4
     property var inputField: messageInputField
+    // Guarded wherever the strings below read it. The sidebar builds its pages
+    // inside a binding that also depends on the translated tab names, so every
+    // chat is discarded and built again the moment translations land, and the
+    // translated strings of the one on its way out are asked for a value once
+    // more after its own id has gone. Nothing shows them by then, so they are
+    // left empty rather than reaching through an id that is no longer there.
     property string commandPrefix: "/"
 
     property var suggestionQuery: ""
@@ -745,7 +751,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         wrapMode: TextArea.Wrap
                         padding: 10
                         color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
-                        placeholderText: Translation.tr('Message the model... "%1" for commands').arg(root.commandPrefix)
+                        placeholderText: root ? Translation.tr('Message the model... "%1" for commands').arg(root.commandPrefix) : ""
 
                         background: null
 
@@ -982,14 +988,14 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     id: modelIndicator
                     icon: "api"
                     text: Ai.currentModel?.name ?? Ai.ollamaSetupEntryName
-                    tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(modelIndicator.text).arg(root.commandPrefix)
+                    tooltipText: root ? Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(modelIndicator.text).arg(root.commandPrefix) : ""
                 }
 
                 ApiInputBoxIndicator {
                     // Tool indicator
                     icon: "service_toolbox"
                     text: Ai.currentTool.charAt(0).toUpperCase() + Ai.currentTool.slice(1)
-                    tooltipText: Translation.tr("Current tool: %1\nSet it with %2tool TOOL").arg(Ai.currentTool).arg(root.commandPrefix)
+                    tooltipText: root ? Translation.tr("Current tool: %1\nSet it with %2tool TOOL").arg(Ai.currentTool).arg(root.commandPrefix) : ""
                 }
 
                 Item {
