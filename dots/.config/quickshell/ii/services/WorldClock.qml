@@ -104,7 +104,13 @@ Singleton {
         // Written to the config only: the list above is a binding on it, and
         // assigning it here would cut that binding, after which a change made
         // in Settings would never reach the widget again.
-        const updated = root.timezones.slice()
+        // Copied from the stored list rather than the binding above, which is
+        // clamped to clockCount: copying the clamped view would drop every
+        // city chosen beyond the current count.
+        const stored = Config.options?.background?.widgets?.worldClock?.timezones ?? []
+        const updated = Array.from(stored)
+        for (let i = updated.length; i < index; i++)
+            updated[i] = root.timezones[i] ?? root.defaultTimezones[i]
         updated[index] = tz
         Config.options.background.widgets.worldClock.timezones = updated
     }

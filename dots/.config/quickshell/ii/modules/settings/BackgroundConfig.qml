@@ -956,7 +956,7 @@ ContentPage {
                 text: Translation.tr("Clocks")
                 value: Config.options.background.widgets.worldClock.clockCount
                 from: 1
-                to: 8
+                to: WorldClock.maxClocks
                 stepSize: 1
                 onValueChanged: {
                     Config.options.background.widgets.worldClock.clockCount = value;
