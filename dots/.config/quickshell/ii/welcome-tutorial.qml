@@ -868,12 +868,26 @@ ApplicationWindow {
 
     // The "now playing" pill that sits just right of the active-window
     // text in the bar. Shared by every card that renders the bar.
+    // The monochrome glyphs apps publish for the tray, which is what the bar
+    // shows. Taken by path because the active icon theme inherits from
+    // Papirus-Dark, and only plain Papirus carries these panel icons. They are
+    // drawn with fill:currentColor, so the mask recolors them cleanly.
+    component TrayAppIcon : AppIcon {
+        property string trayIcon
+        source: "/usr/share/icons/Papirus/24x24/panel/" + trayIcon
+        implicitSize: 11
+        isMask: true
+        color: Appearance.colors.colOnLayer1
+    }
+
     component MediaPill : PillBg {
-        // Left unset where the pill opens the bar, which is where the shipped
-        // layout puts it.
+        // The shipped layout puts this in the right-hand group, where a Row
+        // owns x, so anchoring it there would fight the layout. anchorLeftTo
+        // stays for the mockups that still place the pill by hand.
         property Item anchorLeftTo: null
+        property bool inRow: false
         required property var card
-        anchors.left: anchorLeftTo ? anchorLeftTo.right : parent.left
+        anchors.left: inRow ? undefined : (anchorLeftTo ? anchorLeftTo.right : parent.left)
         anchors.leftMargin: anchorLeftTo ? 8 : 10
         anchors.verticalCenter: parent.verticalCenter
         height: card.barPillH
@@ -1157,15 +1171,63 @@ ApplicationWindow {
                             // Active-window text column on the far left
                             // (mirrors the real shell's ActiveWindow.qml:
                             // top line dim, bottom line bright).
-                            // Left: what is playing, then the tray. The window
-                            // title the bar used to open with ships switched
-                            // off, so the media pill opens the bar.
-                            MediaPill { id: mediaPill; card: card2 }
+                            // Left: the workspaces, then the tray, the way the
+                            // shipped layout orders them. The window title the
+                            // bar used to open with is still switched off.
+                            PillBg {
+                                id: workspacePill
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: card2.barPillH
+                                width: barWsStrip.implicitWidth + 10
+                                Item {
+                                    id: barWsStrip
+                                    anchors.centerIn: parent
+                                    implicitWidth: card2.barSlotW * card2.totalWs
+                                    implicitHeight: card2.barSlotH
+
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card2 }
+
+                                    Row {
+                                        z: 2
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: card2.totalWs
+                                            delegate: Item {
+                                                required property int index
+                                                width: card2.barSlotW
+                                                height: card2.barSlotH
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: card2.barSlotR * 2
+                                                    height: card2.barSlotR * 2
+                                                    radius: width / 2
+                                                    color: Appearance.colors.colOnLayer0
+                                                    opacity: 0.35
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    IconImage {
+                                        z: 3
+                                        readonly property string primary: card2.primaryAppFor(card2.currentWs)
+                                        visible: primary !== ""
+                                        implicitSize: card2.barIconSize
+                                        x: card2.currentWs * card2.barSlotW + (card2.barSlotW - implicitSize) / 2
+                                        y: (card2.barSlotH - implicitSize) / 2
+                                        source: primary !== ""
+                                            ? Quickshell.iconPath(primary, "image-missing")
+                                            : ""
+                                    }
+                                }
+                            }
 
                             PillBg {
                                 id: sysTrayPill
-                                anchors.left: mediaPill.right
-                                anchors.leftMargin: 6
+                                anchors.left: workspacePill.right
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card2.barPillH
                                 width: trayRow.implicitWidth + 12
@@ -1173,16 +1235,8 @@ ApplicationWindow {
                                     id: trayRow
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "bluetooth"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "cloud_sync"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
                                 }
                             }
 
@@ -1254,14 +1308,15 @@ ApplicationWindow {
                                 }
                             }
 
-                            // Right: the status icons, then the workspaces
+                            // Right: what is playing, then the status icons
                             // against the screen edge.
                             Row {
                                 id: barRight
                                 anchors.right: parent.right
                                 anchors.rightMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 4
+                                spacing: 3
+                                MediaPill { id: mediaPill; card: card2; inRow: true }
                                 PillBg {
                                     height: card2.barPillH
                                     width: indicatorRow.implicitWidth + 12
@@ -1277,55 +1332,18 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "settings"; iconSize: 10
+                                            text: "lan"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
-                                    }
-                                }
-                                PillBg {
-                                    id: workspacePill
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: card2.barPillH
-                                    width: barWsStrip.implicitWidth + 10
-                                    Item {
-                                        id: barWsStrip
-                                        anchors.centerIn: parent
-                                        implicitWidth: card2.barSlotW * card2.totalWs
-                                        implicitHeight: card2.barSlotH
-
-                                        WorkspaceIndicator { anchors.fill: parent; z: 1; card: card2 }
-
-                                        Row {
-                                            z: 2
-                                            anchors.fill: parent
-                                            Repeater {
-                                                model: card2.totalWs
-                                                delegate: Item {
-                                                    required property int index
-                                                    width: card2.barSlotW
-                                                    height: card2.barSlotH
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: card2.barSlotR * 2
-                                                        height: card2.barSlotR * 2
-                                                        radius: width / 2
-                                                        color: Appearance.colors.colOnLayer0
-                                                        opacity: 0.35
-                                                    }
-                                                }
-                                            }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "bluetooth"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
-
-                                        IconImage {
-                                            z: 3
-                                            readonly property string primary: card2.primaryAppFor(card2.currentWs)
-                                            visible: primary !== ""
-                                            implicitSize: card2.barIconSize
-                                            x: card2.currentWs * card2.barSlotW + (card2.barSlotW - implicitSize) / 2
-                                            y: (card2.barSlotH - implicitSize) / 2
-                                            source: primary !== ""
-                                                ? Quickshell.iconPath(primary, "image-missing")
-                                                : ""
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "settings"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
                                     }
                                 }
@@ -1628,15 +1646,63 @@ ApplicationWindow {
                             border.width: 1
 
                             // Active-window text
-                            // Left: what is playing, then the tray. The window
-                            // title the bar used to open with ships switched
-                            // off, so the media pill opens the bar.
-                            MediaPill { id: mediaPill3; card: card6 }
+                            // Left: the workspaces, then the tray, the way the
+                            // shipped layout orders them. The window title the
+                            // bar used to open with is still switched off.
+                            PillBg {
+                                id: workspacePill3
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: card6.barPillH
+                                width: barWsStrip3.implicitWidth + 10
+                                Item {
+                                    id: barWsStrip3
+                                    anchors.centerIn: parent
+                                    implicitWidth: card6.barSlotW * card6.totalWs
+                                    implicitHeight: card6.barSlotH
+
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card6 }
+
+                                    Row {
+                                        z: 2
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: card6.totalWs
+                                            delegate: Item {
+                                                required property int index
+                                                width: card6.barSlotW
+                                                height: card6.barSlotH
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: card6.barSlotR * 2
+                                                    height: card6.barSlotR * 2
+                                                    radius: width / 2
+                                                    color: Appearance.colors.colOnLayer0
+                                                    opacity: 0.35
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    IconImage {
+                                        z: 3
+                                        readonly property string primary: card6.primaryAppFor(card6.currentWs)
+                                        visible: primary !== ""
+                                        implicitSize: card6.barIconSize
+                                        x: card6.currentWs * card6.barSlotW + (card6.barSlotW - implicitSize) / 2
+                                        y: (card6.barSlotH - implicitSize) / 2
+                                        source: primary !== ""
+                                            ? Quickshell.iconPath(primary, "image-missing")
+                                            : ""
+                                    }
+                                }
+                            }
 
                             PillBg {
                                 id: sysTrayPill3
-                                anchors.left: mediaPill3.right
-                                anchors.leftMargin: 6
+                                anchors.left: workspacePill3.right
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card6.barPillH
                                 width: trayRow3.implicitWidth + 12
@@ -1644,16 +1710,8 @@ ApplicationWindow {
                                     id: trayRow3
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "bluetooth"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "cloud_sync"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
                                 }
                             }
 
@@ -1725,14 +1783,15 @@ ApplicationWindow {
                                 }
                             }
 
-                            // Right: the status icons, then the workspaces
+                            // Right: what is playing, then the status icons
                             // against the screen edge.
                             Row {
                                 id: barRight3
                                 anchors.right: parent.right
                                 anchors.rightMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 4
+                                spacing: 3
+                                MediaPill { id: mediaPill3; card: card6; inRow: true }
                                 PillBg {
                                     height: card6.barPillH
                                     width: indicatorRow3.implicitWidth + 12
@@ -1748,55 +1807,18 @@ ApplicationWindow {
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "settings"; iconSize: 10
+                                            text: "lan"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
-                                    }
-                                }
-                                PillBg {
-                                    id: workspacePill3
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: card6.barPillH
-                                    width: barWsStrip3.implicitWidth + 10
-                                    Item {
-                                        id: barWsStrip3
-                                        anchors.centerIn: parent
-                                        implicitWidth: card6.barSlotW * card6.totalWs
-                                        implicitHeight: card6.barSlotH
-
-                                        WorkspaceIndicator { anchors.fill: parent; z: 1; card: card6 }
-
-                                        Row {
-                                            z: 2
-                                            anchors.fill: parent
-                                            Repeater {
-                                                model: card6.totalWs
-                                                delegate: Item {
-                                                    required property int index
-                                                    width: card6.barSlotW
-                                                    height: card6.barSlotH
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: card6.barSlotR * 2
-                                                        height: card6.barSlotR * 2
-                                                        radius: width / 2
-                                                        color: Appearance.colors.colOnLayer0
-                                                        opacity: 0.35
-                                                    }
-                                                }
-                                            }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "bluetooth"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
-
-                                        IconImage {
-                                            z: 3
-                                            readonly property string primary: card6.primaryAppFor(card6.currentWs)
-                                            visible: primary !== ""
-                                            implicitSize: card6.barIconSize
-                                            x: card6.currentWs * card6.barSlotW + (card6.barSlotW - implicitSize) / 2
-                                            y: (card6.barSlotH - implicitSize) / 2
-                                            source: primary !== ""
-                                                ? Quickshell.iconPath(primary, "image-missing")
-                                                : ""
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "settings"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
                                     }
                                 }
@@ -3172,10 +3194,17 @@ readonly property var drawerApps: root.drawerApps
             "Pinned apps along the bottom edge, available from every workspace. We'll cover pinning shortly.",
             "Opens the launcher — every installed app, one click away."
         ]
-        // Centre-x of each pointer target. Bar pills (0–5) tuned by eye
-        // against the bar layout. Dock (6) sits at the dock's centre.
-        // App drawer (7) lands on the rightmost dock cell.
-        readonly property var sectionXs: [79, 153, 260, 310, 356, 489, 300, 360]
+        // Centre-x of each pointer target. The three pills that move with the
+        // bar layout are measured off the pills themselves, so the pointer
+        // cannot drift away from what it is naming. The centre group and the
+        // dock hold still, and stay tuned by eye.
+        readonly property var sectionXs: [
+            barX + barRight8.x + mediaPill8.x + mediaPill8.width / 2,
+            barX + sysTrayPill8.x + sysTrayPill8.width / 2,
+            260, 310, 356,
+            barX + workspacePill8.x + workspacePill8.width / 2,
+            300, 360
+        ]
         // Per-section pointer y + arrow direction. Bar sections point up
         // from just below the bar; dock sections point down from just
         // above the dock.
@@ -3294,15 +3323,63 @@ readonly property var drawerApps: root.drawerApps
                             border.width: 1
                             z: 2
 
-                            // Left: what is playing, then the tray. The window
-                            // title the bar used to open with ships switched
-                            // off, so the media pill opens the bar.
-                            MediaPill { id: mediaPill8; card: card1 }
+                            // Left: the workspaces, then the tray, the way the
+                            // shipped layout orders them. The window title the
+                            // bar used to open with is still switched off.
+                            PillBg {
+                                id: workspacePill8
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: card1.barPillH
+                                width: barWsStrip8.implicitWidth + 10
+                                Item {
+                                    id: barWsStrip8
+                                    anchors.centerIn: parent
+                                    implicitWidth: card1.barSlotW * card1.totalWs
+                                    implicitHeight: card1.barSlotH
+
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card1 }
+
+                                    Row {
+                                        z: 2
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: card1.totalWs
+                                            delegate: Item {
+                                                required property int index
+                                                width: card1.barSlotW
+                                                height: card1.barSlotH
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: card1.barSlotR * 2
+                                                    height: card1.barSlotR * 2
+                                                    radius: width / 2
+                                                    color: Appearance.colors.colOnLayer0
+                                                    opacity: 0.35
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    IconImage {
+                                        z: 3
+                                        readonly property string primary: card1.primaryAppFor(card1.currentWs)
+                                        visible: primary !== ""
+                                        implicitSize: card1.barIconSize
+                                        x: card1.currentWs * card1.barSlotW + (card1.barSlotW - implicitSize) / 2
+                                        y: (card1.barSlotH - implicitSize) / 2
+                                        source: primary !== ""
+                                            ? Quickshell.iconPath(primary, "image-missing")
+                                            : ""
+                                    }
+                                }
+                            }
 
                             PillBg {
                                 id: sysTrayPill8
-                                anchors.left: mediaPill8.right
-                                anchors.leftMargin: 6
+                                anchors.left: workspacePill8.right
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card1.barPillH
                                 width: trayRow8.implicitWidth + 12
@@ -3310,16 +3387,8 @@ readonly property var drawerApps: root.drawerApps
                                     id: trayRow8
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "bluetooth"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "cloud_sync"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
                                 }
                             }
 
@@ -3391,14 +3460,15 @@ readonly property var drawerApps: root.drawerApps
                                 }
                             }
 
-                            // Right: the status icons, then the workspaces
+                            // Right: what is playing, then the status icons
                             // against the screen edge.
                             Row {
                                 id: barRight8
                                 anchors.right: parent.right
                                 anchors.rightMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 4
+                                spacing: 3
+                                MediaPill { id: mediaPill8; card: card1; inRow: true }
                                 PillBg {
                                     height: card1.barPillH
                                     width: indicatorRow8.implicitWidth + 12
@@ -3414,55 +3484,18 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "settings"; iconSize: 10
+                                            text: "lan"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
-                                    }
-                                }
-                                PillBg {
-                                    id: workspacePill8
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: card1.barPillH
-                                    width: barWsStrip8.implicitWidth + 10
-                                    Item {
-                                        id: barWsStrip8
-                                        anchors.centerIn: parent
-                                        implicitWidth: card1.barSlotW * card1.totalWs
-                                        implicitHeight: card1.barSlotH
-
-                                        WorkspaceIndicator { anchors.fill: parent; z: 1; card: card1 }
-
-                                        Row {
-                                            z: 2
-                                            anchors.fill: parent
-                                            Repeater {
-                                                model: card1.totalWs
-                                                delegate: Item {
-                                                    required property int index
-                                                    width: card1.barSlotW
-                                                    height: card1.barSlotH
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: card1.barSlotR * 2
-                                                        height: card1.barSlotR * 2
-                                                        radius: width / 2
-                                                        color: Appearance.colors.colOnLayer0
-                                                        opacity: 0.35
-                                                    }
-                                                }
-                                            }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "bluetooth"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
-
-                                        IconImage {
-                                            z: 3
-                                            readonly property string primary: card1.primaryAppFor(card1.currentWs)
-                                            visible: primary !== ""
-                                            implicitSize: card1.barIconSize
-                                            x: card1.currentWs * card1.barSlotW + (card1.barSlotW - implicitSize) / 2
-                                            y: (card1.barSlotH - implicitSize) / 2
-                                            source: primary !== ""
-                                                ? Quickshell.iconPath(primary, "image-missing")
-                                                : ""
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "settings"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
                                     }
                                 }
@@ -4199,7 +4232,11 @@ readonly property var drawerApps: root.drawerApps
         // right end of the bar off this same margin, so the two cannot drift
         // apart and leave the file dropping onto empty bar.
         readonly property int barPillRightMargin: 10
-        readonly property int barPillX: barX + barW - barPillRightMargin - barPillW
+        readonly property int barPillLeftMargin: 10
+        // The workspace pill is against the left edge, so the slots the drag
+        // aims at are measured from there. Shared with the pill's own anchor
+        // below so the two cannot drift apart.
+        readonly property int barPillX: barX + barPillLeftMargin
         readonly property int barPillY: barY + (barH - barPillH) / 2
         readonly property int barStripX: barPillX + barPillPadH
         readonly property int barStripY: barPillY + barPillPadV
@@ -4296,12 +4333,12 @@ readonly property var drawerApps: root.drawerApps
                             border.width: 1
                             z: 2
 
-                            // The tray sits past what is playing, the way the
+                            // The tray sits past the workspaces, the way the
                             // other panels draw it.
                             Rectangle {
                                 id: sysTray11
-                                anchors.left: mediaPill11.right
-                                anchors.leftMargin: 6
+                                anchors.left: workspacePill11.right
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card5.barPillH
                                 width: trayIcons11.implicitWidth + 12
@@ -4311,25 +4348,17 @@ readonly property var drawerApps: root.drawerApps
                                     id: trayIcons11
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "bluetooth"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "cast"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
                                 }
                             }
 
-                            // Now playing pill, opening the bar: the window
-                            // title that used to stand here ships switched off.
+                            // Now playing, in the right-hand group where the
+                            // shipped layout puts it.
                             Rectangle {
                                 id: mediaPill11
-                                anchors.left: parent.left
-                                anchors.leftMargin: 10
+                                anchors.right: sysTrayPill11.left
+                                anchors.rightMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card5.barPillH
                                 width: mediaRow11.implicitWidth + 12
@@ -4364,8 +4393,8 @@ readonly property var drawerApps: root.drawerApps
                             // Workspace pill — with new feedback features
                             Rectangle {
                                 id: workspacePill11
-                                anchors.right: parent.right
-                                anchors.rightMargin: card5.barPillRightMargin
+                                anchors.left: parent.left
+                                anchors.leftMargin: card5.barPillLeftMargin
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card5.barPillH
                                 width: card5.barPillW
@@ -4466,12 +4495,13 @@ readonly property var drawerApps: root.drawerApps
                                 }
                             }
 
-                            // System tray pill (right)
+                            // The status icons against the right edge, past
+                            // what is playing, the way the bar orders them.
                             Rectangle {
                                 id: sysTrayPill11
-                                anchors.right: workspacePill11.left
+                                anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                anchors.rightMargin: 6
+                                anchors.rightMargin: card5.barPillRightMargin
                                 height: card5.barPillH
                                 width: trayRow11.implicitWidth + 12
                                 radius: 8
@@ -4483,6 +4513,16 @@ readonly property var drawerApps: root.drawerApps
                                     MaterialSymbol {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: "volume_up"; iconSize: 10
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+                                    MaterialSymbol {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "lan"; iconSize: 10
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+                                    MaterialSymbol {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "bluetooth"; iconSize: 10
                                         color: Appearance.colors.colOnLayer1
                                     }
                                     MaterialSymbol {
@@ -5147,15 +5187,63 @@ readonly property var drawerApps: root.drawerApps
                             border.width: 1
                             z: 2
 
-                            // Left: what is playing, then the tray. The window
-                            // title the bar used to open with ships switched
-                            // off, so the media pill opens the bar.
-                            MediaPill { id: mediaPill12; card: card7 }
+                            // Left: the workspaces, then the tray, the way the
+                            // shipped layout orders them. The window title the
+                            // bar used to open with is still switched off.
+                            PillBg {
+                                id: workspacePill12
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: card7.barPillH
+                                width: barWsStrip12.implicitWidth + 10
+                                Item {
+                                    id: barWsStrip12
+                                    anchors.centerIn: parent
+                                    implicitWidth: card7.barSlotW * card7.totalWs
+                                    implicitHeight: card7.barSlotH
+
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: card7 }
+
+                                    Row {
+                                        z: 2
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: card7.totalWs
+                                            delegate: Item {
+                                                required property int index
+                                                width: card7.barSlotW
+                                                height: card7.barSlotH
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: card7.barSlotR * 2
+                                                    height: card7.barSlotR * 2
+                                                    radius: width / 2
+                                                    color: Appearance.colors.colOnLayer0
+                                                    opacity: 0.35
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    IconImage {
+                                        z: 3
+                                        readonly property string primary: card7.primaryAppFor(card7.currentWs)
+                                        visible: primary !== ""
+                                        implicitSize: card7.barIconSize
+                                        x: card7.currentWs * card7.barSlotW + (card7.barSlotW - implicitSize) / 2
+                                        y: (card7.barSlotH - implicitSize) / 2
+                                        source: primary !== ""
+                                            ? Quickshell.iconPath(primary, "image-missing")
+                                            : ""
+                                    }
+                                }
+                            }
 
                             PillBg {
                                 id: sysTrayPill12
-                                anchors.left: mediaPill12.right
-                                anchors.leftMargin: 6
+                                anchors.left: workspacePill12.right
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 height: card7.barPillH
                                 width: trayRow12.implicitWidth + 12
@@ -5163,16 +5251,8 @@ readonly property var drawerApps: root.drawerApps
                                     id: trayRow12
                                     anchors.centerIn: parent
                                     spacing: 6
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "bluetooth"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: "cloud_sync"; iconSize: 10
-                                        color: Appearance.colors.colOnLayer1
-                                    }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
                                 }
                             }
 
@@ -5244,14 +5324,15 @@ readonly property var drawerApps: root.drawerApps
                                 }
                             }
 
-                            // Right: the status icons, then the workspaces
+                            // Right: what is playing, then the status icons
                             // against the screen edge.
                             Row {
                                 id: barRight12
                                 anchors.right: parent.right
                                 anchors.rightMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 4
+                                spacing: 3
+                                MediaPill { id: mediaPill12; card: card7; inRow: true }
                                 PillBg {
                                     height: card7.barPillH
                                     width: indicatorRow12.implicitWidth + 12
@@ -5267,55 +5348,18 @@ readonly property var drawerApps: root.drawerApps
                                         }
                                         MaterialSymbol {
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "settings"; iconSize: 10
+                                            text: "lan"; iconSize: 10
                                             color: Appearance.colors.colOnLayer1
                                         }
-                                    }
-                                }
-                                PillBg {
-                                    id: workspacePill12
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: card7.barPillH
-                                    width: barWsStrip12.implicitWidth + 10
-                                    Item {
-                                        id: barWsStrip12
-                                        anchors.centerIn: parent
-                                        implicitWidth: card7.barSlotW * card7.totalWs
-                                        implicitHeight: card7.barSlotH
-
-                                        WorkspaceIndicator { anchors.fill: parent; z: 1; card: card7 }
-
-                                        Row {
-                                            z: 2
-                                            anchors.fill: parent
-                                            Repeater {
-                                                model: card7.totalWs
-                                                delegate: Item {
-                                                    required property int index
-                                                    width: card7.barSlotW
-                                                    height: card7.barSlotH
-                                                    Rectangle {
-                                                        anchors.centerIn: parent
-                                                        width: card7.barSlotR * 2
-                                                        height: card7.barSlotR * 2
-                                                        radius: width / 2
-                                                        color: Appearance.colors.colOnLayer0
-                                                        opacity: 0.35
-                                                    }
-                                                }
-                                            }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "bluetooth"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
-
-                                        IconImage {
-                                            z: 3
-                                            readonly property string primary: card7.primaryAppFor(card7.currentWs)
-                                            visible: primary !== ""
-                                            implicitSize: card7.barIconSize
-                                            x: card7.currentWs * card7.barSlotW + (card7.barSlotW - implicitSize) / 2
-                                            y: (card7.barSlotH - implicitSize) / 2
-                                            source: primary !== ""
-                                                ? Quickshell.iconPath(primary, "image-missing")
-                                                : ""
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "settings"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
                                         }
                                     }
                                 }
