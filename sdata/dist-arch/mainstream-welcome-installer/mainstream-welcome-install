@@ -196,6 +196,19 @@ install_gaming() {
   else notify "Desktop Gaming install failed" "See $LOGFILE." critical; return 1; fi
 }
 
+install_vr_streaming() {
+  # wayvr comes along even when only this row is ticked: WiVRn has no dashboard
+  # of its own, so without it a headset shows nothing the user can act on.
+  local pkgs=(wivrn-server wivrn-dashboard xrizer lib32-xrizer xr-hardware wayvr openxr openvr)
+  notify "Installing Wireless VR streaming…" "${pkgs[*]}"
+  if pac "${pkgs[@]}"; then
+    notify "Wireless VR streaming installed" "Open WiVRn to pair your headset."
+  else
+    notify "Wireless VR streaming install failed" "See $LOGFILE." critical
+    return 1
+  fi
+}
+
 install_gamescope() {
   notify "Setting up Steam Big Picture…" "gamescope session (Super + G)"
   if ! pac mainstream-gaming; then
@@ -315,6 +328,8 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
   case $opt in
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
+    vr)              run_app "VR headset support" pac  wayvr openxr openvr ;;
+    vr-streaming)    run_item "Wireless VR streaming"    install_vr_streaming ;;
     obs)             run_app "OBS Studio"    pac  mainstream-obs ;;
     blender)         run_app "Blender"       pac  blender ;;
     gimp)            run_app "GIMP"          pac  gimp ;;

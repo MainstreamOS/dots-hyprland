@@ -51,7 +51,7 @@ ApplicationWindow {
     // Install page (card 1): which apps the user ticked to install in the background.
     readonly property int installCardIndex: 1
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
-                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false })
+                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false, "vr-streaming": false })
     readonly property int installCount: {
         var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
     }
@@ -389,7 +389,10 @@ ApplicationWindow {
         readonly property string status: root.installStatus(optKey)
         readonly property bool selected: !locked && (root.installSelections[optKey] === true)
         Layout.fillWidth: true
-        Layout.preferredHeight: 74
+        // Follows the text rather than a fixed 74: a narrower tile, or a
+        // translation that runs longer than the English, wraps to another line
+        // and would otherwise spill out of the card.
+        Layout.preferredHeight: Math.max(74, optContent.implicitHeight + 24)
         radius: Appearance.rounding.normal
         opacity: locked ? 0.6 : 1
         color: selected
@@ -417,6 +420,7 @@ ApplicationWindow {
                 implicitSize: 32
             }
             ColumnLayout {
+                id: optContent
                 spacing: 1
                 Layout.fillWidth: true
                 StyledText {
@@ -518,7 +522,7 @@ ApplicationWindow {
                     InstallOption {
                         optKey: "gamescope"; optIcon: "steamdeck-gaming-return"
                         optTitle: Translation.tr("Desktop + Big Picture")
-                        optDesc: Translation.tr("Includes everything in Desktop Gaming but adds a Console style gamescope session on pressing Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.")
+                        optDesc: Translation.tr("Everything in Desktop Gaming, plus a console style session on Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.")
                     }
                 }
 
@@ -599,6 +603,22 @@ ApplicationWindow {
                         optKey: "moonlight"; optIcon: "com.moonlight_stream.Moonlight"
                         optTitle: Translation.tr("Moonlight")
                         optDesc: Translation.tr("Play games streamed from another PC.")
+                    }
+                }
+
+                InstallCategory { text: Translation.tr("VR Headsets") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    InstallOption {
+                        optKey: "vr"; optIcon: "steamvr"
+                        optTitle: Translation.tr("VR Headset Support")
+                        optDesc: Translation.tr("Your desktop and apps inside a headset, via SteamVR or Steam Link.")
+                    }
+                    InstallOption {
+                        optKey: "vr-streaming"; optIcon: "network-wireless"
+                        optTitle: Translation.tr("Wireless VR Streaming")
+                        optDesc: Translation.tr("Play on a Quest, Pico or Vive Focus over Wi-Fi or USB.")
                     }
                 }
             }
