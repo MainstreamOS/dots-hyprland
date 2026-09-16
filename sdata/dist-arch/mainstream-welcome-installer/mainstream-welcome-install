@@ -328,7 +328,7 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
   case $opt in
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
-    vr)              run_app "VR headset support" pac  wayvr openxr openvr ;;
+    vr)              run_app "VR headset support" pac  wayvr openxr openvr xr-hardware ;;
     vr-streaming)    run_item "Wireless VR streaming"    install_vr_streaming ;;
     obs)             run_app "OBS Studio"    pac  mainstream-obs ;;
     blender)         run_app "Blender"       pac  blender ;;
