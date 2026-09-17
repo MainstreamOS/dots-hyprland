@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# user-manager — create and manage accounts for the Accounts page in Settings
+# (~/.config/quickshell/ii/modules/settings/AccountsConfig.qml).
+# Installed at /usr/local/bin/user-manager.
+#
+# Subcommand dispatch:
+#
+#   list
+#       Emit a JSON array of the machine's human accounts with their full
+#       name, shell, home and whether they are an administrator. Read-only,
+#       runs UNPRIVILEGED.
+#
+#   create <user> [full name]
+#       Create the account and provision its home to the same standard the
+#       installer applies to the first user. Reads the password from stdin,
+#       and sets it LAST so the login screen cannot admit the account before
+#       its home is ready. Invoked via pkexec.
+#
+#   provision <user>
+#       Re-run provisioning over an existing account. This is what repairs an
+#       account created before this helper existed, and it is deliberately
+#       the same code path as create so the two cannot diverge.
+#
+#   set-password <user>       reads the new password from stdin
+#   set-admin <user> yes|no   add to or remove from wheel
+#   rename <user> <new name>  change the full name (GECOS), not the login
+#   delete <user> keep-home|remove-home
+#   set-avatar <user> <path>  install a face icon for the login screen
+#
+# Every subcommand except list is invoked via pkexec and matches the polkit
+# action org.mainstreamos.user-manager.
+
+set -euo pipefail
+
+PROVISION_LIB=/usr/local/lib/mainstream-provision-user.sh
+
+# Mirrored into the provisioning log as well, so one file holds the whole
+# story of an account: what was asked for, what ran, and what it found.
+MANAGER_LOG=/var/log/mainstream/user-provision.log
+log() {
+    local line
+    printf -v line '%s [user-manager] %s' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+    mkdir -p "$(dirname "$MANAGER_LOG")" 2>/dev/null || true
+    printf '%s\n' "$line" >> "$MANAGER_LOG" 2>/dev/null || true
+    echo "$line" >&2
+}
+die() { log "ERROR: $*"; exit 22; }
+
+# useradd's own rule, plus its 32-character ceiling. Checked here as the last
+# stop rather than trusting the caller: this runs as root and the name reaches
+# a shell command.
+valid_name() {
+    [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,30}\$?$ ]]
+}
+
+# Accounts below the login UID floor belong to the system. Refusing them here
+# means no subcommand can be aimed at root or at a service account.
+require_human_user() {  # $1 = user
+    local uid
+    valid_name "$1" || die "not a valid user name: $1"
+    uid="$(id -u "$1" 2>/dev/null)" || die "no such user: $1"
+    (( uid >= 1000 && uid < 65534 )) || die "refusing to act on system account: $1"
+}
+
+# The account the Settings page is running as must not be able to lock itself
+# out, and the machine must keep at least one administrator.
+last_admin() {  # $1 = user
+    local admins
+    admins="$(getent group wheel | cut -d: -f4 | tr ',' '\n' | grep -c '[^[:space:]]' || true)"
+    [[ "$admins" -le 1 ]] && id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -qx wheel
+}
+
+# A uid above the login floor is not enough to make an account a person: a
+# daemon handed one would otherwise render as a card with Delete and a working
+# Make-administrator switch. A shell that cannot log in says it is not.
+_no_login_shell() {  # $1 = shell
+    case "${1##*/}" in
+        nologin|false|halt|shutdown|sync|""|sync) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+cmd_list() {
+    local first=1 rows=()
+    while IFS=: read -r name _ uid _ gecos home shell; do
+        (( uid >= 1000 && uid < 65534 )) || continue
+        _no_login_shell "$shell" && continue
+        local admin=false
+        id -nG "$name" 2>/dev/null | tr ' ' '\n' | grep -qx wheel && admin=true
+        rows+=("$(jq -nc --arg name "$name" --arg fullName "${gecos%%,*}" \
+                        --arg home "$home" --arg shell "$shell" --argjson admin "$admin" \
+                   '{name:$name, fullName:$fullName, home:$home, shell:$shell, admin:$admin}')") \
+            || die "could not build the account list"
+    done < <(getent passwd)
+    echo -n '['
+    local row
+    for row in ${rows[@]+"${rows[@]}"}; do
+        (( first )) || echo -n ','
+        first=0
+        printf '%s' "$row"
+    done
+    echo ']'
+}
+
+cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wheel
+    local u="${1:-}" full="${2:-}" admin="${3:-}" pw
+    valid_name "$u" || die "not a valid user name: $u"
+    id "$u" >/dev/null 2>&1 && die "user already exists: $u"
+    [[ -r "$PROVISION_LIB" ]] || die "provisioning library missing at $PROVISION_LIB"
+
+    pw="$(cat)"
+    [[ -n "$pw" ]] || die "no password supplied on stdin"
+
+    # -m seeds the home from /etc/skel, which is the whole point: the new
+    # account starts from the same tree a fresh install starts from.
+    log "creating $u"
+    useradd -m -c "$full" -s /bin/bash "$u" || die "useradd failed for $u"
+
+    # shellcheck source=/dev/null
+    source "$PROVISION_LIB"
+    # Asked for here rather than by a second authenticated call afterwards: a
+    # prompt the user dismisses at that point leaves an account that can already
+    # be logged into as a standard user, whatever the switch said.
+    if [[ "$admin" == admin ]]; then
+        PROVISION_ADMIN=1
+        log "$u will be an administrator"
+    fi
+    # No password has been set yet, so nothing can reach this account, and it
+    # holds nothing anyone typed. Removing it leaves the machine as it was
+    # rather than leaving a broken entry on the Accounts page.
+    if ! provision_user_home "$u" fresh; then
+        log "provisioning failed for $u; removing the half-built account"
+        userdel -r "$u" >/dev/null 2>&1 || log "WARN: could not remove $u after the failed provision"
+        die "could not set up a home for $u; the account was not created"
+    fi
+
+    # Last, so an account can never be reachable at the login screen before
+    # its home is finished.
+    printf '%s:%s\n' "$u" "$pw" | chpasswd || die "could not set the password for $u"
+    log "$u created and provisioned"
+}
+
+cmd_provision() {  # $1 = user
+    local u="${1:-}"
+    require_human_user "$u"
+    [[ -r "$PROVISION_LIB" ]] || die "provisioning library missing at $PROVISION_LIB"
+    # shellcheck source=/dev/null
+    source "$PROVISION_LIB"
+    provision_user_home "$u" || die "provisioning failed for $u"
+    log "$u provisioned"
+}
+
+# The stored hash is checked with the same crypt(3) the login stack uses, so
+# whatever scheme /etc/login.defs picked (yescrypt here) is handled by libcrypt
+# rather than reimplemented.
+_password_matches() {  # $1 = user  $2 = password
+    local hash
+    hash="$(getent shadow "$1" 2>/dev/null | cut -d: -f2)"
+    # A locked or empty entry has no password to match, so nothing can verify.
+    case "$hash" in ''|'!'*|'*'*) return 1 ;; esac
+    HASH="$hash" PW="$2" python3 -c '
+import ctypes, os, sys
+lib = ctypes.CDLL("libcrypt.so.2")
+lib.crypt.restype = ctypes.c_char_p
+lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+h = os.environ["HASH"].encode()
+got = lib.crypt(os.environ["PW"].encode(), h)
+sys.exit(0 if got and got == h else 1)
+' 2>/dev/null
+}
+
+cmd_set_password() {  # $1 = user  $2 = "verify" to require the current password first
+    local u="${1:-}" mode="${2:-}" old="" pw
+    require_human_user "$u"
+    if [[ "$mode" == verify ]]; then
+        # Two lines on stdin, current then new, so neither ever reaches argv.
+        IFS= read -r old || true
+        [[ -n "$old" ]] || die "no current password supplied"
+        _password_matches "$u" "$old" || die "the current password is not correct"
+    fi
+    pw="$(cat)"
+    pw="${pw%$'\n'}"
+    [[ -n "$pw" ]] || die "no password supplied on stdin"
+    printf '%s:%s\n' "$u" "$pw" | chpasswd || die "could not set the password for $u"
+    log "password changed for $u"
+}
+
+cmd_set_admin() {  # $1 = user  $2 = yes|no
+    local u="${1:-}" want="${2:-}"
+    require_human_user "$u"
+    case "$want" in
+        yes) usermod -aG wheel "$u"; log "$u is now an administrator" ;;
+        no)
+            last_admin "$u" && die "$u is the only administrator; promote someone else first"
+            gpasswd -d "$u" wheel >/dev/null 2>&1 || true
+            log "$u is no longer an administrator" ;;
+        *) die "expected yes or no, got: $want" ;;
+    esac
+}
+
+cmd_rename() {  # $1 = user  $2 = new full name
+    local u="${1:-}" full="${2:-}"
+    require_human_user "$u"
+    usermod -c "$full" "$u" || die "could not rename $u"
+    log "full name updated for $u"
+}
+
+cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
+    local u="${1:-}" mode="${2:-keep-home}"
+    require_human_user "$u"
+    [[ "$u" == "$(id -un "${PKEXEC_UID:-0}" 2>/dev/null)" ]] && die "refusing to delete the account asking"
+    last_admin "$u" && die "$u is the only administrator; promote someone else first"
+    case "$mode" in
+        remove-home) userdel -r "$u" || die "could not delete $u" ;;
+        keep-home)   userdel "$u"    || die "could not delete $u" ;;
+        *) die "expected keep-home or remove-home, got: $mode" ;;
+    esac
+    log "$u deleted ($mode)"
+}
+
+cmd_set_avatar() {  # $1 = user  $2 = source image
+    local u="${1:-}" src="${2:-}" home dest conf edge
+    require_human_user "$u"
+    [[ -f "$src" && ! -L "$src" ]] || die "not a regular file: $src"
+    home="$(getent passwd "$u" | cut -d: -f6)"
+    dest="/var/lib/AccountsService/icons/$u"
+    conf="/var/lib/AccountsService/users/$u"
+    mkdir -p /var/lib/AccountsService/icons /var/lib/AccountsService/users
+
+    # Normalized rather than copied as picked. The login screen draws the
+    # avatar at 272 logical pixels, over 500 real ones on a HiDPI panel, so a
+    # small picture arrives there enlarged and soft, and a large one leaves a
+    # multi-megabyte photo in /var/lib for a circle a couple of hundred pixels
+    # across. Square-cropped from the middle, capped at 512, and never scaled
+    # up, since enlarging here would add weight and not detail.
+    # The first frame is taken by dropping the rest, not by the [0] selector:
+    # ImageMagick copies a selected frame to a temporary file with no
+    # extension and then cannot work out how to read it back, whatever the
+    # format, so every picture fell through to an unresized copy.
+    # Read whole, then take the first line. Piping into head lets identify die
+    # on SIGPIPE, and under pipefail the `|| echo 0` then APPENDS to what it had
+    # already printed, giving a two-line value that falls through to a plain copy.
+    edge="$(identify -format '%[fx:min(w,h)]\n' "$src" 2>/dev/null || true)"
+    edge="${edge%%$'\n'*}"
+    case "$edge" in ''|*[!0-9]*) edge=0 ;; esac
+    if [[ "$edge" -gt 0 ]]; then
+        (( edge > 512 )) && edge=512
+        # The destination carries no extension, so the format is named rather
+        # than guessed from a filename that has nothing to guess from.
+        magick "$src" -auto-orient -delete 1--1 -resize "${edge}x${edge}^" \
+            -gravity center -extent "${edge}x${edge}" "PNG:$dest" \
+            || die "could not prepare the image for $u"
+    else
+        cp "$src" "$dest" || die "could not copy the image for $u"
+    fi
+    chmod 644 "$dest"
+    install -Dm644 -o "$u" -g "$u" "$dest" "$home/.face"
+
+    if [[ -f "$conf" ]] && grep -q '^Icon=' "$conf"; then
+        sed -i "s|^Icon=.*|Icon=$dest|" "$conf"
+    elif [[ -f "$conf" ]]; then
+        sed -i "/^\[User\]/a Icon=$dest" "$conf"
+    else
+        printf '[User]\nIcon=%s\n' "$dest" > "$conf"
+    fi
+
+    # The only thing on stdout, so the page can say when a picture is smaller
+    # than the login screen will draw it.
+    printf '%s\n' "$edge"
+    log "avatar set for $u (${edge}px)"
+}
+
+# Every invocation is recorded before it runs, minus anything from stdin,
+# which is where passwords travel precisely so they never reach a log.
+[[ "${1:-}" == "list" ]] || log "invoked: $* (by uid ${PKEXEC_UID:-$(id -u)})"
+
+case "${1:-}" in
+    list)          cmd_list ;;
+    create)        shift; cmd_create "$@" ;;
+    provision)     shift; cmd_provision "$@" ;;
+    set-password)  shift; cmd_set_password "$@" ;;
+    set-admin)     shift; cmd_set_admin "$@" ;;
+    rename)        shift; cmd_rename "$@" ;;
+    delete)        shift; cmd_delete "$@" ;;
+    set-avatar)    shift; cmd_set_avatar "$@" ;;
+    *) die "unknown subcommand: ${1:-<none>}" ;;
+esac

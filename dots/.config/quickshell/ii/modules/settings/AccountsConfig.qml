@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 
 ContentPage {
@@ -14,8 +15,14 @@ ContentPage {
 
     property var accounts: []
     property string currentUser: ""
-    property string currentUserHome: ""
     property string statusMessage: ""
+    // Provisioning a home runs a font cache rebuild and a pile of xdg-mime
+    // calls, which outlasts the banner's own four-second timeout, so the
+    // banner is held open for as long as something is actually working.
+    readonly property bool busy: createAccountProc.running || adminProc.running || repairProc.running
+    // The clear timer can fire mid-run, which would otherwise leave the last
+    // message pinned forever, so it is restarted the moment work finishes.
+    onBusyChanged: if (!busy) statusClearTimer.restart()
     property bool statusIsError: false
 
     Component.onCompleted: {
@@ -27,6 +34,22 @@ ContentPage {
         accountListProc.running = true
     }
 
+    // The helper writes "ERROR: <reason>" to stderr before it exits, and that
+    // reason is the only thing that distinguishes a taken login name from a
+    // refused password. Without it every failure read the same.
+    //
+    // The LAST such line is the one that ended the run: the provisioning
+    // library logs to the same stream, so an earlier warning would otherwise
+    // win. The reason is shown beside the translated sentence rather than in
+    // place of it, because it comes back in English whatever the locale.
+    function helperReason(raw, fallback) {
+        if (!raw) return fallback
+        const all = String(raw).match(/ERROR:\s*([^\n]+)/g)
+        if (!all || all.length === 0) return fallback
+        const last = all[all.length - 1].replace(/^ERROR:\s*/, "").trim()
+        return last.length > 0 ? fallback + " (" + last + ")" : fallback
+    }
+
     function showStatus(msg, isError) {
         root.statusMessage = msg
         root.statusIsError = isError
@@ -36,7 +59,8 @@ ContentPage {
     Timer {
         id: statusClearTimer
         interval: 4000
-        onTriggered: root.statusMessage = ""
+        running: false
+        onTriggered: if (!root.busy) root.statusMessage = ""
     }
 
     Process {
@@ -54,48 +78,32 @@ ContentPage {
 
     Process {
         id: accountListProc
-        // Read /etc/passwd directly — no shell, no awk, no quoting issues.
-        // SplitParser strips the newline before calling onRead, so we add it
-        // back manually so split("\n") works correctly in onExited.
-        command: ["cat", "/etc/passwd"]
+        // The helper knows what the passwd file alone cannot say: whether an
+        // account is an administrator. Same command the create path uses, so
+        // the list can never describe accounts by different rules than the
+        // ones that made them.
+        command: ["/usr/local/bin/user-manager", "list"]
         property string buf: ""
         property string err: ""
         onRunningChanged: { if (running) { buf = ""; err = "" } }
-        stdout: SplitParser { onRead: data => accountListProc.buf += data + "\n" }
-        stderr: SplitParser { onRead: data => accountListProc.err += data + "\n" }
+        stdout: StdioCollector { onStreamFinished: accountListProc.buf += this.text }
+        stderr: StdioCollector { onStreamFinished: accountListProc.err += this.text }
         onExited: (code) => {
             if (code !== 0) {
                 root.showStatus(Translation.tr("Could not load accounts: ") + err.trim(), true)
                 buf = ""; err = ""
                 return
             }
-            const lines = buf.trim().split("\n").filter(l => l.length > 0)
+            let parsed = []
+            try { parsed = JSON.parse(buf) } catch (e) {
+                root.showStatus(Translation.tr("Could not read the account list."), true)
+                buf = ""; err = ""
+                return
+            }
             buf = ""; err = ""
-            // Parse colon-separated /etc/passwd fields:
-            // name:pw:uid:gid:gecos:home:shell
-            const noLoginShells = ["nologin", "false", "halt", "shutdown", "sync"]
-            const parsed = lines
-                .map(line => {
-                    const p = line.split(":")
-                    return {
-                        name:      p[0] ?? "",
-                        uid:       parseInt(p[2] ?? "0"),
-                        home:      p[5] ?? "",
-                        shell:     p[6] ?? "",
-                        isCurrent: (p[0] ?? "") === root.currentUser
-                    }
-                })
-                .filter(a => a.uid >= 1000 && a.uid < 65534
-                             && !noLoginShells.some(s => a.shell.includes(s)))
-            // Cache current user's home before stripping fields
-            const me = parsed.find(a => a.isCurrent)
-            if (me) root.currentUserHome = me.home
-            parsed.sort((a, b) => {
-                if (a.isCurrent) return -1
-                if (b.isCurrent) return 1
-                return a.name.localeCompare(b.name)
-            })
-            root.accounts = parsed.map(a => ({ name: a.name, isCurrent: a.isCurrent }))
+            parsed = parsed.map(a => Object.assign({}, a, { isCurrent: a.name === root.currentUser }))
+            parsed.sort((a, b) => a.isCurrent ? -1 : (b.isCurrent ? 1 : a.name.localeCompare(b.name)))
+            root.accounts = parsed
         }
     }
 
@@ -135,6 +143,21 @@ ContentPage {
 
         Process {
             id: actionProc
+            property string pendingPassword: ""
+            property string err: ""
+            stderr: StdioCollector { onStreamFinished: actionProc.err = this.text }
+            // A password handed over as an argument is readable in ps by
+            // anyone on the machine for as long as the command runs, so it
+            // goes down stdin instead. stdinEnabled must be on before running
+            // flips, or the write lands after the helper has already read.
+            onRunningChanged: {
+                if (running) err = ""
+                if (running && pendingPassword.length > 0) {
+                    write(pendingPassword + "\n")
+                    pendingPassword = ""
+                    stdinEnabled = false
+                }
+            }
             onExited: (code) => {
                 if (code === 0) {
                     root.showStatus(Translation.tr("Done! Changes have been saved."), false)
@@ -144,7 +167,8 @@ ContentPage {
                     root.refresh()
                     item.expanded = false
                 } else {
-                    root.showStatus(Translation.tr("Something went wrong. Please try again."), true)
+                    root.showStatus(root.helperReason(actionProc.err,
+                        Translation.tr("Something went wrong. Please try again.")), true)
                 }
             }
         }
@@ -158,35 +182,8 @@ ContentPage {
             onExited: (code) => {
                 if (code !== 0 || imagePickerProc.buf.trim().length === 0) return
                 const src = imagePickerProc.buf.trim()
-                const user = account.name
-                const dest = "/var/lib/AccountsService/icons/" + user
-                const conf = "/var/lib/AccountsService/users/" + user
-                imageApplyProc.command = ["pkexec", "bash", "-c",
-                    'mkdir -p /var/lib/AccountsService/icons /var/lib/AccountsService/users'
-                    // Normalize rather than copy what was picked. The login screen draws
-                    // the avatar at 272 logical pixels, which is over 500 real ones on a
-                    // HiDPI panel, so a small image arrives there enlarged and soft. A
-                    // large one is worse in the other direction: a multi-megabyte photo
-                    // sat in /var/lib for a circle a couple of hundred pixels across.
-                    // Square-cropped from the middle and capped at 512, and never scaled
-                    // up, since enlarging here would only add weight, not detail.
-                    + ' && edge=$(identify -format "%[fx:min(w,h)]" "$1[0]" 2>/dev/null || echo 0)'
-                    + ' && case "$edge" in ""|*[!0-9]*) edge=0 ;; esac'
-                    + ' && if [ "$edge" -gt 0 ]; then'
-                    + '   if [ "$edge" -gt 512 ]; then edge=512; fi;'
-                    + '   magick "$1[0]" -auto-orient -resize "${edge}x${edge}^"'
-                    + '     -gravity center -extent "${edge}x${edge}" "$2";'
-                    + ' else cp "$1" "$2"; fi'
-                    + ' && chmod 644 "$2" && echo "$edge"'
-                    + ' && if [ -f "$3" ] && grep -q "^Icon=" "$3"; then'
-                    + '   sed -i "s|^Icon=.*|Icon=$2|" "$3";'
-                    + ' elif [ -f "$3" ]; then'
-                    + '   sed -i "/^\\[User\\]/a Icon=$2" "$3";'
-                    + ' else'
-                    + '   printf \'[User]\\nIcon=%s\\n\' "$2" > "$3";'
-                    + ' fi',
-                    "--", src, dest, conf
-                ]
+                imageApplyProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                    "set-avatar", account.name, src]
                 imageApplyProc.running = true
             }
         }
@@ -197,8 +194,10 @@ ContentPage {
             // line can say when a picture is smaller than the login screen will
             // draw it instead of letting the result be a surprise at logout.
             property string buf: ""
-            onRunningChanged: if (running) buf = ""
+            property string err: ""
+            onRunningChanged: if (running) { buf = ""; err = "" }
             stdout: SplitParser { onRead: data => imageApplyProc.buf += data }
+            stderr: StdioCollector { onStreamFinished: imageApplyProc.err = this.text }
             onExited: (code) => {
                 if (code === 0) {
                     const edge = parseInt(imageApplyProc.buf.trim(), 10)
@@ -209,7 +208,8 @@ ContentPage {
                     faceImage.source = ""
                     faceImage.source = "file:///var/lib/AccountsService/icons/" + account.name
                 } else {
-                    root.showStatus(Translation.tr("Could not update the login image."), true)
+                    root.showStatus(root.helperReason(imageApplyProc.err,
+                        Translation.tr("Could not update the login image.")), true)
                 }
             }
         }
@@ -292,8 +292,8 @@ ContentPage {
                     }
                     StyledText {
                         text: account.isCurrent
-                            ? Translation.tr("Signed in")
-                            : Translation.tr("Standard account")
+                            ? (account.admin ? Translation.tr("Signed in, administrator") : Translation.tr("Signed in"))
+                            : (account.admin ? Translation.tr("Administrator") : Translation.tr("Standard account"))
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: Appearance.colors.colSubtext
                     }
@@ -329,8 +329,10 @@ ContentPage {
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: Appearance.colors.colOutlineVariant; opacity: 0.4 }
 
-                // Action buttons row 1
-                RowLayout {
+                // Action buttons, wrapping: there are more of them than fit
+                // one line at this card width, and a fixed row pushed the last
+                // of them outside the card.
+                Flow {
                     Layout.fillWidth: true
                     spacing: 8
 
@@ -367,8 +369,7 @@ ContentPage {
                         implicitWidth: changeNameContent.implicitWidth + 28
                         implicitHeight: 34
                         buttonRadius: Appearance.rounding.full
-                        enabled: !item.working && !account.isCurrent
-                        opacity: account.isCurrent ? 0.35 : 1.0
+                        enabled: !item.working
                         colBackground: item.showChangeName ? Appearance.colors.colPrimary : Appearance.colors.colLayer2
                         colBackgroundHover: item.showChangeName ? Appearance.colors.colPrimaryHover : Appearance.colors.colLayer2Hover
                         onClicked: {
@@ -385,20 +386,15 @@ ContentPage {
                                 color: item.showChangeName ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer2
                             }
                             StyledText {
-                                text: Translation.tr("Change Login Name")
+                                text: Translation.tr("Change Full Name")
                                 font.pixelSize: Appearance.font.pixelSize.small
                                 color: item.showChangeName ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer2
                             }
                         }
-                        StyledToolTip {
-                            extraVisibleCondition: account.isCurrent
-                            text: Translation.tr("You cannot change the login name of the account you are currently signed in to.")
-                        }
                     }
                 }
 
-                // Action buttons row 2
-                RowLayout {
+                Flow {
                     Layout.fillWidth: true
                     spacing: 8
 
@@ -426,7 +422,82 @@ ContentPage {
                         }
                     }
 
-                    Item { Layout.fillWidth: true }
+                    // An account with no administrator rights is asked for
+                    // somebody else's password to use its own machine, so the
+                    // state is shown here rather than left to be discovered.
+                    RippleButton {
+                        implicitWidth: adminContent.implicitWidth + 28
+                        implicitHeight: 34
+                        buttonRadius: Appearance.rounding.full
+                        enabled: !item.working && !adminProc.running && !account.isCurrent
+                        colBackground: Appearance.colors.colLayer2
+                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        onClicked: {
+                            adminProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                                "set-admin", account.name, account.admin ? "no" : "yes"]
+                            adminProc.running = true
+                            root.showStatus(account.admin
+                                ? Translation.tr("Removing administrator rights from %1…").arg(account.name)
+                                : Translation.tr("Making %1 an administrator…").arg(account.name), false)
+                        }
+                        StyledToolTip {
+                            text: account.isCurrent
+                                ? Translation.tr("You cannot change your own administrator rights.")
+                                : Translation.tr("An administrator can install software, change system settings and manage other accounts.")
+                        }
+                        contentItem: RowLayout {
+                            id: adminContent
+                            anchors.centerIn: parent; spacing: 5
+                            MaterialSymbol {
+                                text: account.admin ? "shield_person" : "person"
+                                iconSize: 14
+                                color: account.admin ? Appearance.m3colors.m3primary : Appearance.colors.colOnLayer2
+                            }
+                            StyledText {
+                                text: account.admin ? Translation.tr("Administrator") : Translation.tr("Standard")
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: account.admin ? Appearance.m3colors.m3primary : Appearance.colors.colOnLayer2
+                            }
+                        }
+                    }
+
+
+                    // Repairing and creating are the same code path, so an
+                    // account made before that path existed can be brought up
+                    // to what a fresh install would have given it.
+                    RippleButton {
+                        implicitWidth: repairContent.implicitWidth + 28
+                        implicitHeight: 34
+                        buttonRadius: Appearance.rounding.full
+                        enabled: !item.working && !repairProc.running
+                        colBackground: Appearance.colors.colLayer2
+                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        onClicked: {
+                            repairProc.target = account.name
+                            repairProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                                "provision", account.name]
+                            repairProc.running = true
+                            root.showStatus(Translation.tr("Setting up %1's desktop…").arg(account.name), false)
+                        }
+                        StyledToolTip {
+                            text: Translation.tr("Give this account the groups, settings and first-run setup a newly installed system gives its first user. Safe to run more than once.")
+                        }
+                        contentItem: RowLayout {
+                            id: repairContent
+                            anchors.centerIn: parent; spacing: 5
+                            MaterialSymbol {
+                                text: repairProc.running && repairProc.target === account.name ? "hourglass_top" : "healing"
+                                iconSize: 14
+                                color: Appearance.colors.colOnLayer2
+                            }
+                            StyledText {
+                                text: Translation.tr("Repair Account")
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colOnLayer2
+                            }
+                        }
+                    }
+
 
                     RippleButton {
                         implicitWidth: removeContent.implicitWidth + 28
@@ -529,12 +600,19 @@ ContentPage {
                             colBackgroundHover: Appearance.colors.colPrimaryHover
                             onClicked: {
                                 const user = account.name
-                                const pass = newPassField.text
+                                // Changing your own password sends the current
+                                // one first, on its own line, for the helper to
+                                // check against the stored hash. Requiring it in
+                                // the field and then not sending it made the
+                                // page look like it verified something.
+                                const pass = account.isCurrent
+                                    ? oldPassField.text + "\n" + newPassField.text
+                                    : newPassField.text
                                 oldPassField.text = ""; newPassField.text = ""; confirmPassField.text = ""
-                                actionProc.command = ["pkexec", "bash", "-c",
-                                    'printf "%s:%s\\n" "$1" "$2" | chpasswd',
-                                    "--", user, pass
-                                ]
+                                actionProc.pendingPassword = pass
+                                actionProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                                    "set-password", user].concat(account.isCurrent ? ["verify"] : [])
+                                actionProc.stdinEnabled = true
                                 actionProc.running = true
                             }
                             contentItem: RowLayout {
@@ -547,14 +625,14 @@ ContentPage {
                     }
                 }
 
-                // ── Change login name form ────────────────────────────────────
+                // ── Change display name form ──────────────────────────────────
                 ColumnLayout {
                     visible: item.showChangeName
                     Layout.fillWidth: true
                     spacing: 8
 
                     StyledText {
-                        text: Translation.tr("This is the name used to sign in. It must have no spaces.")
+                        text: Translation.tr("The name shown on the login screen. The name used to sign in does not change.")
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: Appearance.colors.colSubtext
                         wrapMode: Text.WordWrap
@@ -563,8 +641,8 @@ ContentPage {
                     MaterialTextField {
                         id: newNameField
                         Layout.fillWidth: true
-                        placeholderText: Translation.tr("New login name")
-                        text: account.name
+                        placeholderText: Translation.tr("Full name")
+                        text: account.fullName ?? ""
                         inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                     }
                     RowLayout {
@@ -575,22 +653,21 @@ ContentPage {
                             buttonRadius: Appearance.rounding.full
                             colBackground: Appearance.colors.colLayer3
                             colBackgroundHover: Appearance.colors.colLayer3Hover
-                            onClicked: { item.showChangeName = false; newNameField.text = account.name }
+                            onClicked: { item.showChangeName = false; newNameField.text = account.fullName ?? "" }
                             contentItem: StyledText { anchors.centerIn: parent; text: Translation.tr("Cancel"); color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
                         }
                         RippleButton {
                             implicitWidth: 80; implicitHeight: 32
                             buttonRadius: Appearance.rounding.full
-                            enabled: newNameField.text.length >= 1
-                                     && newNameField.text !== account.name
-                                     && !newNameField.text.includes(" ")
+                            enabled: newNameField.text.trim().length >= 1
+                                     && newNameField.text.trim() !== (account.fullName ?? "")
                                      && !item.working
                             colBackground: Appearance.colors.colPrimary
                             colBackgroundHover: Appearance.colors.colPrimaryHover
                             onClicked: {
                                 const oldName = account.name
                                 const newName = newNameField.text.trim()
-                                actionProc.command = ["pkexec", "usermod", "-l", newName, oldName]
+                                actionProc.command = ["pkexec", "/usr/local/bin/user-manager", "rename", oldName, newName]
                                 actionProc.running = true
                             }
                             contentItem: RowLayout {
@@ -655,8 +732,8 @@ ContentPage {
                             colBackgroundHover: Qt.rgba(0.9, 0.2, 0.2, 0.9)
                             onClicked: {
                                 actionProc.command = deleteFilesSwitch.checked
-                                    ? ["pkexec", "userdel", "-r", account.name]
-                                    : ["pkexec", "userdel", account.name]
+                                    ? ["pkexec", "/usr/local/bin/user-manager", "delete", account.name, "remove-home"]
+                                    : ["pkexec", "/usr/local/bin/user-manager", "delete", account.name, "keep-home"]
                                 actionProc.running = true
                             }
                             contentItem: RowLayout {
@@ -690,23 +767,32 @@ ContentPage {
             Layout.fillWidth: true
             implicitHeight: statusMsgRow.implicitHeight + 12
             radius: Appearance.rounding.normal
-            color: root.statusIsError ? Qt.rgba(0.85, 0.2, 0.2, 0.12) : Qt.rgba(0.2, 0.75, 0.3, 0.12)
+            color: root.busy ? ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.88)
+                : (root.statusIsError ? Qt.rgba(0.85, 0.2, 0.2, 0.12) : Qt.rgba(0.2, 0.75, 0.3, 0.12))
             border.width: 1
-            border.color: root.statusIsError ? Qt.rgba(0.85, 0.2, 0.2, 0.3) : Qt.rgba(0.2, 0.75, 0.3, 0.3)
+            border.color: root.busy ? ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.6)
+                : (root.statusIsError ? Qt.rgba(0.85, 0.2, 0.2, 0.3) : Qt.rgba(0.2, 0.75, 0.3, 0.3))
             RowLayout {
                 id: statusMsgRow
                 anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 10 }
                 spacing: 8
                 MaterialSymbol {
-                    text: root.statusIsError ? "error" : "check_circle"
+                    text: root.busy ? "progress_activity" : (root.statusIsError ? "error" : "check_circle")
                     iconSize: 14
-                    color: root.statusIsError ? Appearance.colors.colError : "#4caf50"
+                    color: root.busy ? Appearance.m3colors.m3primary
+                        : (root.statusIsError ? Appearance.colors.colError : "#4caf50")
+                    RotationAnimator on rotation {
+                        running: root.busy
+                        loops: Animation.Infinite
+                        from: 0; to: 360; duration: 1100
+                    }
                 }
                 StyledText {
                     Layout.fillWidth: true
                     text: root.statusMessage
                     font.pixelSize: Appearance.font.pixelSize.small
-                    color: root.statusIsError ? Appearance.colors.colError : "#4caf50"
+                    color: root.busy ? Appearance.m3colors.m3primary
+                        : (root.statusIsError ? Appearance.colors.colError : "#4caf50")
                     wrapMode: Text.WordWrap
                 }
             }
@@ -739,6 +825,11 @@ ContentPage {
         ConfigRow {
             uniform: true
             MaterialTextField {
+                id: fullNameField
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("Full name")
+            }
+            MaterialTextField {
                 id: newUserField
                 Layout.fillWidth: true
                 placeholderText: Translation.tr("Login name (no spaces)")
@@ -754,19 +845,29 @@ ContentPage {
         }
 
         ConfigSwitch {
-            id: createHomeSwitch
-            buttonIcon: "folder"
-            text: Translation.tr("Set up a personal folder for this account")
-            checked: true
+            id: makeAdminSwitch
+            buttonIcon: "shield_person"
+            text: Translation.tr("Let this person administer the computer")
+            checked: false
         }
 
-        ConfigSwitch {
-            id: copyConfigSwitch
-            buttonIcon: "content_copy"
-            enabled: createHomeSwitch.checked
-            opacity: createHomeSwitch.checked ? 1.0 : 0.4
-            text: Translation.tr("Copy your app settings into their account")
-            checked: true
+        // Says what is still missing instead of leaving the button dead and
+        // silent, which reads as the page being broken.
+        StyledText {
+            Layout.fillWidth: true
+            visible: text.length > 0
+            text: {
+                if (createAccountProc.running) return ""
+                const login = newUserField.text.trim()
+                if (login.length === 0) return Translation.tr("Choose a login name to continue.")
+                if (newUserField.text.includes(" ")) return Translation.tr("A login name cannot contain spaces.")
+                if (!/^[a-z_][a-z0-9_-]*$/.test(login)) return Translation.tr("A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit.")
+                if (newUserPassField.text.length === 0) return Translation.tr("Set a password so they can sign in.")
+                return ""
+            }
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
         }
 
         RowLayout {
@@ -775,56 +876,44 @@ ContentPage {
             RippleButton {
                 implicitWidth: 150; implicitHeight: 40
                 buttonRadius: Appearance.rounding.full
-                enabled: newUserField.text.length >= 1
-                         && !newUserField.text.includes(" ")
-                         && !createAccountProc.running
+                enabled: !createAccountProc.running
                 colBackground: Appearance.colors.colPrimary
                 colBackgroundHover: Appearance.colors.colPrimaryHover
                 onClicked: {
                     const username = newUserField.text.trim()
                     const password = newUserPassField.text
-                    const homeFlag = createHomeSwitch.checked ? "-m" : "-M"
-                    const srcConfig = root.currentUserHome + "/.config"
-                    const srcLocalShare = root.currentUserHome + "/.local/share"
-                    const srcVenv = root.currentUserHome + "/.local/state/quickshell/.venv"
-                    // Build script using positional args to avoid shell injection
-                    // $1 = homeFlag, $2 = username, $3 = password, $4 = srcConfig, $5 = srcLocalShare, $6 = srcVenv
-                    let script = 'useradd $1 -s /bin/bash "$2"'
-                    if (password.length > 0)
-                        script += ' && printf "%s:%s\\n" "$2" "$3" | chpasswd'
-                    if (createHomeSwitch.checked) {
-                        // 1. Create standard XDG home directories
-                        script += ' && mkdir -p "/home/$2/Desktop" "/home/$2/Documents" "/home/$2/Downloads" "/home/$2/Music" "/home/$2/Pictures" "/home/$2/Public" "/home/$2/Templates" "/home/$2/Videos"'
-                        script += ' && chown "$2:$2" "/home/$2/Desktop" "/home/$2/Documents" "/home/$2/Downloads" "/home/$2/Music" "/home/$2/Pictures" "/home/$2/Public" "/home/$2/Templates" "/home/$2/Videos"'
+                    if (username.length === 0) {
+                        root.showStatus(Translation.tr("Choose a login name first."), true); return
                     }
-                    if (createHomeSwitch.checked && copyConfigSwitch.checked) {
-                        // Copy .config from current user
-                        script += ' && mkdir -p "/home/$2/.config"'
-                        script += ' && [ -d "$4" ] && cp -a "$4/." "/home/$2/.config/" && chown -R "$2:$2" "/home/$2/.config"'
-                        // 2. Write canonical user-dirs.dirs so Nautilus recognises the standard folders
-                        //    (written after config copy so it always reflects the dirs we just created)
-                        script += " && { echo 'XDG_DESKTOP_DIR=\"$HOME/Desktop\"'; echo 'XDG_DOWNLOAD_DIR=\"$HOME/Downloads\"'; echo 'XDG_TEMPLATES_DIR=\"$HOME/Templates\"'; echo 'XDG_PUBLICSHARE_DIR=\"$HOME/Public\"'; echo 'XDG_DOCUMENTS_DIR=\"$HOME/Documents\"'; echo 'XDG_MUSIC_DIR=\"$HOME/Music\"'; echo 'XDG_PICTURES_DIR=\"$HOME/Pictures\"'; echo 'XDG_VIDEOS_DIR=\"$HOME/Videos\"'; } > \"/home/$2/.config/user-dirs.dirs\""
-                        script += ' && chown "$2:$2" "/home/$2/.config/user-dirs.dirs"'
-                        // 3. Copy hidden .desktop app entries from ~/.local/share/applications
-                        script += ' && if [ -d "$5/applications" ]; then mkdir -p "/home/$2/.local/share/applications" && cp -a "$5/applications/." "/home/$2/.local/share/applications/" && chown -R "$2:$2" "/home/$2/.local/share/applications"; fi'
-                        // 4. Copy Google Sans Flex font (illogical-impulse-google-sans-flex) and rebuild font cache
-                        script += ' && if [ -d "$5/fonts/illogical-impulse-google-sans-flex" ]; then mkdir -p "/home/$2/.local/share/fonts" && cp -a "$5/fonts/illogical-impulse-google-sans-flex" "/home/$2/.local/share/fonts/" && chown -R "$2:$2" "/home/$2/.local/share/fonts" && fc-cache -f "/home/$2/.local/share/fonts"; fi'
-                        // 5. Copy Python venv and re-home all hardcoded paths from source user to new user
-                        //    Mirrors the "pre-baked venv" branch in post-install: fix shebangs, activate scripts, pyvenv.cfg
-                        script += ' && if [ -d "$6" ]; then'
-                        script += '   SRC_HOME="${4%/.config}";'
-                        script += '   DEST_VENV="/home/$2/.local/state/quickshell/.venv";'
-                        script += '   mkdir -p "/home/$2/.local/state/quickshell" && cp -a "$6/." "$DEST_VENV/";'
-                        script += '   find "$DEST_VENV/bin" -type f -exec sed -i "1s|#!$SRC_HOME/|#!/home/$2/|" {} + 2>/dev/null || true;'
-                        script += '   for _act in "$DEST_VENV/bin/activate" "$DEST_VENV/bin/activate.csh" "$DEST_VENV/bin/activate.fish"; do [ -f "$_act" ] && sed -i "s|$SRC_HOME/|/home/$2/|g" "$_act"; done;'
-                        script += '   sed -i "s|$SRC_HOME/|/home/$2/|g" "$DEST_VENV/pyvenv.cfg" 2>/dev/null || true;'
-                        script += '   chown -R "$2:$2" "/home/$2/.local/state/quickshell";'
-                        script += ' fi'
+                    if (!(new RegExp("^[a-z_][a-z0-9_-]*$")).test(username)) {
+                        root.showStatus(Translation.tr("A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit."), true); return
                     }
-                    createAccountProc.command = ["pkexec", "bash", "-c", script, "--", homeFlag, username, password, srcConfig, srcLocalShare, srcVenv]
+                    if (username.length > 31) {
+                        root.showStatus(Translation.tr("That login name is too long."), true); return
+                    }
+                    if (password.length === 0) {
+                        root.showStatus(Translation.tr("Set a password so they can sign in."), true); return
+                    }
+                    // Nothing is copied out of this account. useradd -m seeds the new
+                    // home from /etc/skel, and the helper provisions it the same way
+                    // the installer provisions the first user, so the person who
+                    // signs in gets a fresh desktop rather than a copy of this one.
+                    createAccountProc.pendingPassword = password
+                    // Held on the process, because the fields below are cleared
+                    // the moment this returns and the result arrives later.
+                    createAccountProc.pendingUser = username
+                    // Asked for as part of create, so there is no second
+                    // authentication to dismiss and no window in which the
+                    // account is usable but not an administrator.
+                    createAccountProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                        "create", username, fullNameField.text.trim()]
+                        .concat(makeAdminSwitch.checked ? ["admin"] : [])
+                    createAccountProc.stdinEnabled = true
                     createAccountProc.running = true
+                    root.showStatus(Translation.tr("Creating %1 and setting up their desktop…").arg(username), false)
                     newUserField.text = ""
                     newUserPassField.text = ""
+                    fullNameField.text = ""
                 }
                 contentItem: RowLayout {
                     anchors.centerIn: parent; spacing: 6
@@ -853,13 +942,60 @@ ContentPage {
     }
 
     Process {
+        id: adminProc
+        property string err: ""
+        onRunningChanged: if (running) err = ""
+        stderr: StdioCollector { onStreamFinished: adminProc.err = this.text }
+        onExited: (code) => {
+            if (code !== 0)
+                root.showStatus(root.helperReason(adminProc.err,
+                    Translation.tr("Could not change who administers this computer.")), true)
+            accountListProc.running = true
+        }
+    }
+
+    Process {
+        id: repairProc
+        property string target: ""
+        property string err: ""
+        onRunningChanged: if (running) err = ""
+        stderr: StdioCollector { onStreamFinished: repairProc.err = this.text }
+        onExited: (code) => {
+            root.showStatus(code === 0
+                ? Translation.tr("Account repaired. The desktop finishes setting itself up the next time they sign in.")
+                : root.helperReason(repairProc.err, Translation.tr("Could not repair that account.")), code !== 0)
+            accountListProc.running = true
+        }
+    }
+
+    Process {
         id: createAccountProc
+        property string pendingPassword: ""
+        property string pendingUser: ""
+        property string err: ""
+        stderr: StdioCollector { onStreamFinished: createAccountProc.err = this.text }
+        // stdinEnabled has to be on before running goes true, or the write
+        // lands after the helper has already read. Closing the stream is what
+        // lets the helper's read return instead of blocking.
+        onRunningChanged: {
+            // Cleared as the run starts, or a run that fails without saying
+            // anything reports the previous failure's reason.
+            if (running) err = ""
+            if (running && pendingPassword.length > 0) {
+                write(pendingPassword + "\n")
+                pendingPassword = ""
+                stdinEnabled = false
+            }
+        }
         onExited: (code) => {
             if (code === 0) {
-                root.showStatus(Translation.tr("Account created! They can now sign in."), false)
+                createAccountProc.pendingUser = ""
+                root.showStatus(Translation.tr("Account created. They can sign in now, and the desktop finishes setting itself up the first time they do."), false)
                 postCreateRefreshTimer.start()
             } else {
-                root.showStatus(Translation.tr("Could not create the account. That login name may already be taken, or it contained invalid characters."), true)
+                root.showStatus(root.helperReason(createAccountProc.err,
+                    Translation.tr("Could not create the account. That login name may already be taken, or it contained invalid characters.")), true)
+                root.refresh()
             }
         }
     }

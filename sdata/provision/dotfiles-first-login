@@ -1,0 +1,328 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dotfiles-first-login
+# Triggered by a Hyprland exec-once backed by a per-user systemd service.
+# Sets dark mode, builds the python venv (if missing), and runs the full
+# color pipeline at idle priority so the bar paints first and the theme
+# catches up a moment later.
+# Self-removes first-login triggers and dotfiles repo on success.
+# =============================================================================
+MARKER="$HOME/.dotfiles-pending-user-setup"
+[[ -f "$MARKER" ]] || exit 0
+
+# -----------------------------------------------------------------------------
+# FIX: Ensure ~/.local/bin is in PATH.
+# SDDM launches Hyprland without sourcing the user's shell config, so tools
+# installed to ~/.local/bin (uv, matugen, etc.) are invisible to this script
+# when it runs via XDG autostart or exec-once. Without this, `command -v uv`
+# silently fails, the venv is never built, and setup is stuck indefinitely
+# until the user runs the script manually from a terminal where PATH is full.
+# -----------------------------------------------------------------------------
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
+DOTFILES_DIR="$HOME/dots-hyprland"
+[[ -d "$DOTFILES_DIR" ]] || DOTFILES_DIR="/opt/dots-hyprland"
+
+VENV_PATH="$HOME/.local/state/quickshell/.venv"
+DEFAULT_WALL="$HOME/.config/quickshell/ii/assets/images/default_wallpaper.webp"
+SWITCHWALL="$HOME/.config/quickshell/ii/scripts/colors/switchwall.sh"
+AUTOSTART_FILE="$HOME/.config/autostart/dotfiles-first-login.desktop"
+SYSTEMD_SERVICE_FILE="$HOME/.config/systemd/user/dotfiles-first-login.service"
+HYPR_EXECS_FILE="$HOME/.config/hypr/custom/execs.lua"
+LOG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles-first-login.log"
+mkdir -p "$(dirname "$LOG")"
+
+# A home is mode 700, so when a first login fails the only account that can
+# read this log is the one that cannot get in. The journal is the copy that
+# always works, since any user may write to it and an administrator reads it
+# back with: journalctl -t mainstream-first-login
+# The shared file is best effort, for the case where it is group-writable.
+SHARED_LOG=/var/log/mainstream/user-provision.log
+_fl_log() {
+    local line
+    printf -v line '%s [first-login %s] %s' "$(date '+%Y-%m-%d %H:%M:%S')" "$USER" "$*"
+    printf '%s\n' "$line" >> "$LOG" 2>/dev/null || true
+    printf '%s\n' "$line" >> "$SHARED_LOG" 2>/dev/null || true
+    command -v systemd-cat >/dev/null 2>&1 \
+        && printf '%s\n' "$line" | systemd-cat -t mainstream-first-login 2>/dev/null || true
+    printf '%s\n' "$line" >&2
+}
+
+_fl_log "starting: shell=$SHELL home=$HOME marker=$([[ -f "$HOME/.dotfiles-pending-user-setup" ]] && echo present || echo absent)"
+trap '_fl_log "exiting rc=$?"' EXIT
+
+install_venv_requirements() {
+    local python_bin="$1"
+    local requirements="$2"
+    local relaxed_requirements
+
+    if uv pip install --python "$python_bin" -r "$requirements"; then
+        return 0
+    fi
+
+    echo "[first-login] pinned requirements failed; retrying without the cffi pin"
+    relaxed_requirements=$(mktemp)
+    grep -vE '^cffi==' "$requirements" > "$relaxed_requirements"
+
+    if uv pip install --python "$python_bin" -r "$relaxed_requirements"; then
+        rm -f "$relaxed_requirements"
+        return 0
+    fi
+
+    rm -f "$relaxed_requirements"
+    return 1
+}
+
+venv_has_materialyoucolor() {
+    local venv_path="$1"
+    compgen -G "$venv_path/lib/python*/site-packages/materialyoucolor*" >/dev/null
+}
+
+source /usr/local/lib/mainstream-venv-common.sh
+
+generated_colors_ready() {
+    # Both the bar's color map (colors.json, read by MaterialThemeLoader) and
+    # the app/GTK theme (material_colors.scss) must be present and non-trivial.
+    local gen="$HOME/.local/state/quickshell/user/generated"
+    [[ -s "$gen/colors.json" ]] \
+        && grep -q on_background "$gen/colors.json" 2>/dev/null \
+        && grep -Eq '^\$onBackground: #[[:xdigit:]]{6};$' "$gen/material_colors.scss" 2>/dev/null
+}
+
+run_first_login_setup() {
+    echo "[first-login] start $(date -Is)"
+    # Yield CPU and I/O to the shell so the bar paints first on first login;
+    # the color pipeline (matugen + venv build) catches up at idle priority
+    # a moment after the bar is up. Both are unprivileged (lowering only).
+    renice -n 19 -p "$BASHPID" >/dev/null 2>&1 || true
+    ionice -c 3  -p "$BASHPID" >/dev/null 2>&1 || true
+    echo "[first-login] PATH=$PATH"
+
+    # Wait for compositor — autostart can fire before WAYLAND_DISPLAY is set.
+    # Increased to 60 seconds to cover slower hardware and SDDM startup races.
+    for _i in $(seq 1 60); do
+        [[ -n "$WAYLAND_DISPLAY" || -n "$DISPLAY" ]] && break
+        sleep 1
+    done
+
+    if [[ -z "$WAYLAND_DISPLAY" && -z "$DISPLAY" ]]; then
+        echo "[first-login] WARN: no compositor display after 60s; continuing anyway"
+    fi
+
+    # The installer already generates the theme from the default wallpaper (it
+    # runs the same pipeline as the user during post-install), so on a normal
+    # install the colors are baked in before the first boot. When they are, skip
+    # the whole color pipeline below — re-running it just thrashes CPU/I/O while
+    # the bar is loading and racing its first paint, with no visible change. The
+    # venv build/check still runs unconditionally (the running shell needs it).
+    COLORS_PRESENT=0
+    if generated_colors_ready; then
+        COLORS_PRESENT=1
+        echo "[first-login] generated theme already present; skipping color pipeline"
+    fi
+
+    # PHASE 1 — fast path: dark mode + initial matugen colors
+    if command -v gsettings &>/dev/null; then
+        gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface font-name 'Google Sans Flex Medium 11 @opsz=11,wght=500' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface document-font-name 'Readex Pro 11' 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrains Mono NF 11' 2>/dev/null || true
+        gsettings set org.gnome.desktop.wm.preferences button-layout ":" 2>/dev/null || true
+    fi
+
+    # FIX: Added --prefer less-saturation (pick least saturated candidate color
+    # non-interactively — no terminal needed) and --type scheme-neutral.
+    # Without --prefer, matugen detects multiple source colors in the wallpaper
+    # and halts waiting for user input via an interactive TUI, which never
+    # arrives in an autostart context. Valid values are: darkness, lightness,
+    # saturation, less-saturation, value, closest-to-fallback.
+    if (( ! COLORS_PRESENT )) && [[ -f "$DEFAULT_WALL" ]] && command -v matugen &>/dev/null; then
+        mkdir -p "$HOME/.local/state/quickshell/user/generated/wallpaper"
+        matugen image "$DEFAULT_WALL" --mode dark --prefer less-saturation --type scheme-neutral || true
+    fi
+
+    hyprctl reload 2>/dev/null || true
+
+    # FIX: Create a stub for plasma-apply-colorscheme if it doesn't exist.
+    # kde-material-you-colors calls this KDE Plasma binary unconditionally; on
+    # a pure Hyprland system it's absent (exit 127), causing kde-material-you-
+    # colors to crash mid-run. The stub lets it exit cleanly — the color scheme
+    # files it writes to ~/.local/share/color-schemes/ are still generated and
+    # used by switchwall for GTK/Qt theming regardless.
+    if ! command -v plasma-apply-colorscheme &>/dev/null; then
+        STUB_DIR="$HOME/.local/bin"
+        mkdir -p "$STUB_DIR"
+        cat > "$STUB_DIR/plasma-apply-colorscheme" << 'STUB_EOF'
+#!/usr/bin/env bash
+# stub — plasma-apply-colorscheme not available on this Hyprland system
+exit 0
+STUB_EOF
+        chmod +x "$STUB_DIR/plasma-apply-colorscheme"
+        echo "[first-login] created plasma-apply-colorscheme stub at $STUB_DIR"
+    fi
+
+    # PHASE 2 — venv build + full color pipeline
+    if systemctl --user list-unit-files ydotool.service &>/dev/null 2>&1; then
+        systemctl --user enable ydotool --now 2>/dev/null || true
+    fi
+
+    REQUIREMENTS="$DOTFILES_DIR/sdata/uv/requirements.txt"
+    [[ -f "$REQUIREMENTS" ]] || REQUIREMENTS="$HOME/.local/share/quickshell/sdata/uv/requirements.txt"
+
+    repair_venv_paths "$VENV_PATH"
+
+    # Rebuild venv if it is missing or incomplete.
+    NEED_VENV=0
+    if [[ ! -f "$VENV_PATH/bin/python" ]]; then
+        NEED_VENV=1
+    elif ! venv_has_materialyoucolor "$VENV_PATH"; then
+        NEED_VENV=1
+    fi
+
+    if (( NEED_VENV )); then
+        # Diagnose exactly why we cannot build before attempting, so the log
+        # is useful if startup fails again instead of silently doing nothing.
+        if ! command -v uv &>/dev/null; then
+            echo "[first-login] ERROR: uv not found in PATH — cannot build venv"
+            echo "[first-login]   PATH was: $PATH"
+            echo "[first-login]   Check that uv is installed (pacman -Q uv or ~/.local/bin/uv)"
+        elif [[ ! -x /usr/bin/python ]]; then
+            echo "[first-login] ERROR: /usr/bin/python not executable — cannot build venv"
+        elif [[ ! -f "$REQUIREMENTS" ]]; then
+            echo "[first-login] ERROR: requirements.txt not found at $REQUIREMENTS"
+        else
+            echo "[first-login] (re)building venv at $VENV_PATH"
+            rm -rf "$VENV_PATH"
+            mkdir -p "$(dirname "$VENV_PATH")"
+            if uv venv --python /usr/bin/python "$VENV_PATH" && \
+               install_venv_requirements "$VENV_PATH/bin/python" "$REQUIREMENTS" && \
+               venv_has_materialyoucolor "$VENV_PATH"; then
+                repair_venv_paths "$VENV_PATH"
+                echo "[first-login] venv ready"
+            else
+                echo "[first-login] venv build failed; keeping first-login retry state"
+                rm -rf "$VENV_PATH"
+            fi
+        fi
+    fi
+
+    VENV_READY=0
+    if [[ -f "$VENV_PATH/bin/python" ]] && venv_has_materialyoucolor "$VENV_PATH"; then
+        VENV_READY=1
+    fi
+
+    FISH_ENV_DIR="$HOME/.config/fish/conf.d"
+    mkdir -p "$FISH_ENV_DIR"
+    echo "set -gx ILLOGICAL_IMPULSE_VIRTUAL_ENV '$VENV_PATH'" \
+        > "$FISH_ENV_DIR/illogical-impulse-venv.fish"
+    grep -q "ILLOGICAL_IMPULSE_VIRTUAL_ENV" "$HOME/.bashrc" 2>/dev/null || \
+        echo "export ILLOGICAL_IMPULSE_VIRTUAL_ENV='$VENV_PATH'" >> "$HOME/.bashrc"
+
+    COLORS_READY=$COLORS_PRESENT
+    if (( ! COLORS_PRESENT )) && (( VENV_READY )) && [[ -f "$SWITCHWALL" ]]; then
+        echo "[first-login] running switchwall full pipeline"
+        export ILLOGICAL_IMPULSE_VIRTUAL_ENV="$VENV_PATH"
+        # FIX: Redirect stdin from /dev/null so switchwall's stty probe doesn't
+        # error with "Inappropriate ioctl for device" when running without a TTY.
+        if bash "$SWITCHWALL" --image "$DEFAULT_WALL" --mode dark </dev/null && generated_colors_ready; then
+            COLORS_READY=1
+        else
+            echo "[first-login] switchwall failed; keeping first-login retry state"
+        fi
+
+        # Intentionally no Quickshell restart here: switchwall's fs-event
+        # already triggers a live reload of the bar/clock, and a pkill+respawn
+        # during first login produced a visible flicker / blank shell window
+        # while the venv pipeline was still settling.
+    fi
+
+    # Colors are generated at install, but on a baked install two things still need
+    # doing on the live session (the heavy pipeline is skipped): persist the default
+    # wallpaper path into config.json so the desktop shows it and the generated colors
+    # bind to it, then apply the existing theme cheaply — no regeneration. Done in a
+    # detached subshell once the bar is up so it never holds up teardown.
+    if (( COLORS_PRESENT )); then
+        APPLYCOLOR="$HOME/.config/quickshell/ii/scripts/colors/applycolor.sh"
+        echo "[first-login] setting default wallpaper + applying existing theme (no regen)"
+        (
+            _waited=0
+            for _j in $(seq 1 90); do
+                hyprctl layers -j 2>/dev/null | grep -Eq '"namespace": *"quickshell:(bar|verticalBar)"' && break
+                sleep 0.5
+                _waited=$_j
+            done
+            echo "[first-login] bar up after $(awk "BEGIN{print $_waited/2}")s"
+            # quickshell owns config.json now (complete), so edit it in place rather than
+            # hand-seeding a partial one at install — that is what previously broke session
+            # restore. Only set the wallpaper when it is still unset.
+            CFG="$HOME/.config/illogical-impulse/config.json"
+            _before=$(jq -r '.background.wallpaperPath // "<absent>"' "$CFG" 2>/dev/null || echo "<unreadable>")
+            echo "[first-login] wallpaperPath before seed: '$_before'"
+            if [[ -f "$CFG" && -f "$DEFAULT_WALL" ]] && command -v jq &>/dev/null \
+               && [[ -z "$(jq -r '.background.wallpaperPath // ""' "$CFG" 2>/dev/null)" ]]; then
+                _t=$(mktemp "${CFG}.XXXXXX") \
+                    && jq --arg w "$DEFAULT_WALL" \
+                         '.background.wallpaperPath=$w | .background.thumbnailPath=$w' "$CFG" > "$_t" \
+                    && mv "$_t" "$CFG" \
+                    && echo "[first-login] wrote wallpaperPath" \
+                    || { rm -f "$_t"; echo "[first-login] WARN: write failed"; }
+            else
+                echo "[first-login] skipped seed (already set, or jq/wallpaper missing)"
+            fi
+            # One settle before applycolor, because the shell's own write
+            # timers can still be holding the value this just wrote.
+            sleep 2
+            [[ -f "$APPLYCOLOR" ]] && nice -n 19 ionice -c 3 bash "$APPLYCOLOR" </dev/null >/dev/null 2>&1
+            qs -c ii ipc call theme reload >/dev/null 2>&1 || true
+            echo "[first-login] wallpaperPath after applycolor+reload: '$(jq -r '.background.wallpaperPath // "<absent>"' "$CFG" 2>/dev/null)'"
+        ) >> "$LOG" 2>&1 &
+        disown
+    fi
+
+    if (( COLORS_READY )) && command -v notify-send &>/dev/null; then
+        notify-send "Setup Complete" \
+            "Your Hyprland desktop is fully configured!" \
+            --icon=system-software-install 2>/dev/null || true
+    fi
+
+    if (( VENV_READY && COLORS_READY )); then
+        rm -f "$MARKER"
+        rm -f "$AUTOSTART_FILE"
+        rm -f "$SYSTEMD_SERVICE_FILE"
+        if [[ -f "$HYPR_EXECS_FILE" ]]; then
+            sed -i \
+                -e '\|dotfiles-first-login.service|d' \
+                -e '\|/usr/local/bin/dotfiles-first-login|d' \
+                "$HYPR_EXECS_FILE" 2>/dev/null || true
+        fi
+        if [[ "$DOTFILES_DIR" == "$HOME/dots-hyprland" ]]; then
+            rm -rf "$DOTFILES_DIR"
+        fi
+    else
+        echo "[first-login] setup is still incomplete; keeping retry marker and autostart entry"
+    fi
+
+    echo "[first-login] done $(date -Is)"
+}
+
+# Everything this writes also goes to the journal. The background form
+# detaches and the parent returns immediately, so without this the only record
+# of the work lives in a file inside a home that only the new user can read,
+# which is no use when the question is why that user's desktop came up wrong.
+# Read it back with: journalctl -t mainstream-first-login
+_fl_run() {
+    if command -v systemd-cat >/dev/null 2>&1; then
+        run_first_login_setup 2>&1 | tee -a "$LOG" | systemd-cat -t mainstream-first-login
+    else
+        run_first_login_setup >> "$LOG" 2>&1
+    fi
+}
+
+if [[ "${DOTFILES_FIRST_LOGIN_FOREGROUND:-0}" == "1" ]]; then
+    _fl_run
+else
+    _fl_run &
+    disown
+fi

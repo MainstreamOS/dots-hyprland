@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for the Accounts page's account management helper.
+
+    Listing accounts is a read-only pass over the passwd database and runs
+    unprivileged, so it never reaches this action. Creating, provisioning,
+    renaming, deleting an account, changing a password, and granting or
+    revoking administrator all go through pkexec and match here.
+
+    `allow_active = auth_admin_keep` means: in an active local session the
+    user authenticates as an admin ONCE, then a short run of account edits
+    does not re-prompt for each one. `allow_inactive` and `allow_any` keep
+    the full-strength prompt, so an SSH or inactive session cannot inherit
+    that.
+
+    Unlike the app-remover action, no rules file grants this without a
+    password. Creating an account and handing it administrator rights is
+    worth one authentication, even for someone already in wheel.
+
+    The exec.path annotation binds this policy to the system-installed
+    helper; pkexec invocations of /usr/local/bin/user-manager match it.
+-->
+<policyconfig>
+    <vendor>Mainstream OS</vendor>
+    <vendor_url>https://mainstreamos.org</vendor_url>
+    <icon_name>system-users</icon_name>
+
+    <action id="org.mainstreamos.user-manager">
+        <description>Manage user accounts</description>
+        <description xml:lang="en_US">Manage user accounts</description>
+        <message>Authentication is required to manage user accounts</message>
+        <message xml:lang="en_US">Authentication is required to manage user accounts</message>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/user-manager</annotate>
+        <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+    </action>
+</policyconfig>

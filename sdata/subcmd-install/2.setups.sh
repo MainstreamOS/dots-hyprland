@@ -92,6 +92,25 @@ function setup_disk_mounter(){
   fi
 }
 
+function setup_user_manager(){
+  # Install the privileged helper and its polkit policy for the Accounts page
+  # in Settings, plus the provisioning library the helper and the installer
+  # both call so a new account is built the same way the first one was.
+  #
+  # No rules file: unlike removing an app, creating an account and granting it
+  # administrator is worth one authentication even for a member of wheel.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/user-manager" \
+      /usr/local/bin/user-manager
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.user-manager.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/provision-user.sh" \
+      /usr/local/lib/mainstream-provision-user.sh
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/venv-common.sh" \
+      /usr/local/lib/mainstream-venv-common.sh
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/provision/dotfiles-first-login" \
+      /usr/local/bin/dotfiles-first-login
+}
+
 function setup_app_remover(){
   # Install the privileged helper + polkit policy used by the
   # ~/.config/quickshell/ii/app-remover.qml app ("Uninstall Apps").
@@ -445,6 +464,8 @@ v setup_disk_mounter
 
 showfun setup_app_remover
 v setup_app_remover
+showfun setup_user_manager
+v setup_user_manager
 
 showfun setup_ollama_setup
 v setup_ollama_setup

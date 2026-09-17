@@ -142,6 +142,78 @@ else
     warn "$(tf "No Plymouth source at %s — skipping" "$PLY_SRC")"
 fi
 
+# ── /etc/skel, so a new account is not stuck on install day ───────────────
+# skel is written once, when the machine is installed, and nothing has been
+# updating it since. On a machine that has taken a few months of updates that
+# means a newly created user gets the desktop as it was the day the machine was
+# installed: an older bar layout, plugins built for a compositor that has since
+# moved on, and none of the fixes in between.
+#
+# The same tree build.sh uses when it seeds skel for the image, and the one
+# exclusion list, shared with provisioning so the two cannot drift.
+if [[ ! -d "$REPO_DIR/dots" ]] || ! command -v rsync >/dev/null 2>&1; then
+    warn "$(t "Cannot refresh /etc/skel; a new account would be set up from an older desktop.")"
+    RC=1
+elif ! _src_ok "$REPO_DIR/sdata/lib/provision-user.sh"; then
+    # Read as root out of a tree the user owns, so it gets the same symlink and
+    # writability test every file installed from here already gets.
+    warn "$(t "The provisioning library is missing or writable by others; leaving /etc/skel alone.")"
+    RC=1
+else
+    say "$(t "Refreshing /etc/skel from the dotfiles...")"
+    # shellcheck source=/dev/null
+    source "$REPO_DIR/sdata/lib/provision-user.sh"
+    SKEL_EXCLUDES=()
+    for _ex in "${PROVISION_SKEL_EXCLUDES[@]+"${PROVISION_SKEL_EXCLUDES[@]}"}"; do
+        SKEL_EXCLUDES+=( --exclude="$_ex" )
+    done
+    if [[ ${#SKEL_EXCLUDES[@]} -eq 0 ]]; then
+        # An empty list would mirror the dotfiles over skel with deletions and
+        # nothing held back, taking the pre-baked virtualenv and the plugin
+        # binaries with it. A library that loads without its list is not one to
+        # act on.
+        warn "$(t "The provisioning library carries no exclusion list; leaving /etc/skel alone.")"
+        RC=1
+    elif rsync -a --delete "${SKEL_EXCLUDES[@]}" \
+        "$REPO_DIR/dots/" /etc/skel/ >/dev/null 2>&1; then
+        chown -R root:root /etc/skel 2>/dev/null || true
+        ok "$(t "/etc/skel now matches this release.")"
+    else
+        warn "$(t "Could not refresh /etc/skel; a new account would be set up from an older desktop.")"
+        RC=1
+    fi
+fi
+
+# ── Accounts: the shared provisioning path ────────────────────────────────
+# An account made from Settings used to be built by its own code, which
+# drifted from what the installer does until a new user got a desktop the
+# installer would never have produced. Both call this library now, so these
+# have to reach machines that already exist.
+_install_file 0644 \
+    "$REPO_DIR/sdata/lib/provision-user.sh" \
+    /usr/local/lib/mainstream-provision-user.sh \
+    "$(t "User provisioning library")"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/lib/venv-common.sh" \
+    /usr/local/lib/mainstream-venv-common.sh \
+    "$(t "Venv path helper")"
+
+_install_file 0755 \
+    "$REPO_DIR/sdata/provision/dotfiles-first-login" \
+    /usr/local/bin/dotfiles-first-login \
+    "$(t "First-login setup")"
+
+_install_file 0755 \
+    "$REPO_DIR/sdata/polkit/user-manager" \
+    /usr/local/bin/user-manager \
+    "$(t "Account manager")"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/polkit/org.mainstreamos.user-manager.policy" \
+    /usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy \
+    "$(t "Account manager polkit action")"
+
 # ── SDDM background helper + polkit ────────────────────────────────────────
 _install_file 0755 \
     "$REPO_DIR/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh" \
