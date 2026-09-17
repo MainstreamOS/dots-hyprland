@@ -203,11 +203,13 @@ ApplicationWindow {
     Process {
         id: recenterProc
         command: ["hyprctl", "monitors", "-j"]
-        stdout: SplitParser {
-            splitMarker: ""
-            onRead: data => {
+        // Collected whole. A parser with an empty marker hands over each raw
+        // pipe read as it arrives, so on a machine with several screens the
+        // JSON arrived in pieces and every piece failed to parse.
+        stdout: StdioCollector {
+            onStreamFinished: {
                 try {
-                    let mons = JSON.parse(data);
+                    let mons = JSON.parse(this.text);
                     if (!mons || mons.length === 0) return;
                     let mon = mons.find(m => m.focused) || mons[0];
                     let scale = mon.scale || 1.0;
@@ -221,6 +223,13 @@ ApplicationWindow {
                     let logicalH = pxH / scale;
                     let tx = Math.round(mon.x + (logicalW - root.width)  / 2);
                     let ty = Math.round(mon.y + (logicalH - root.height) / 2);
+                    // Asking for a position it already asked for is what let a
+                    // resize become a move become another resize, forking two
+                    // hyprctl processes each time round.
+                    if (tx === root.lastRecenterX && ty === root.lastRecenterY)
+                        return;
+                    root.lastRecenterX = tx;
+                    root.lastRecenterY = ty;
                     // Wayland xdg-shell does not allow clients to set their
                     // own x/y after creation — assigning root.x/root.y is a
                     // no-op on Hyprland. Ask the compositor to move us via
@@ -234,12 +243,18 @@ ApplicationWindow {
                     ];
                     recenterMoveProc.running = false;
                     recenterMoveProc.running = true;
-                } catch (e) {}
+                } catch (e) {
+                    console.log("settings: could not read monitors for recenter:", e);
+                }
             }
         }
     }
 
     Process { id: recenterMoveProc; command: [] }
+
+    // Where the last move asked for, so the same request is not made twice.
+    property int lastRecenterX: -100000
+    property int lastRecenterY: -100000
 
     // Debounce — give hyprctl reload a beat to land before we query so we
     // don't read the pre-apply geometry.
