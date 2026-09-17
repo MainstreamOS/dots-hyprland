@@ -11,21 +11,6 @@ import qs.modules.settings.services
 
 ContentPage {
     forceWidth: true
-    /*
-    ContentSection {
-        icon: "notifications"
-        title: Translation.tr("Notifications")
-        ConfigSwitch {
-            buttonIcon: "counter_2"
-            text: Translation.tr("Unread indicator: show count")
-            checked: Config.options.bar.indicators.notifications.showUnreadCount
-            onCheckedChanged: {
-                Config.options.bar.indicators.notifications.showUnreadCount = checked;
-            }
-        }
-    }
-    */
-
     // ── Widget layout ─────────────────────────────────────────────────────────
     ContentSection {
         icon: "reorder"
@@ -519,7 +504,6 @@ ContentPage {
                 Config.options.bar.workspaces.showNumberDelay = value;
             }
         }
-        /*
         ContentSubsection {
             title: Translation.tr("Number style")
 
@@ -547,7 +531,6 @@ ContentPage {
                 ]
             }
         }
-        */
     }
 
     ContentSection {
@@ -649,7 +632,20 @@ ContentPage {
         }
     }
 
-    /*
+    ContentSection {
+        icon: "notifications"
+        title: Translation.tr("Notifications")
+
+        ConfigSwitch {
+            buttonIcon: "counter_2"
+            text: Translation.tr("Unread indicator: show count")
+            checked: Config.options.bar.indicators.notifications.showUnreadCount
+            onCheckedChanged: {
+                Config.options.bar.indicators.notifications.showUnreadCount = checked;
+            }
+        }
+    }
+
     ContentSection {
         icon: "tooltip"
         title: Translation.tr("Tooltips")
@@ -662,5 +658,4 @@ ContentPage {
             }
         }
     }
-    */
 }
