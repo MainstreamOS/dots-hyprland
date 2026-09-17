@@ -70,9 +70,12 @@ ApplicationWindow {
     Process {
         id: recenterProc
         command: ["hyprctl", "monitors", "-j"]
-        stdout: SplitParser {
-            splitMarker: ""
-            onRead: data => {
+        // Collected whole. SplitParser with an empty marker hands over each
+        // raw pipe read as it arrives, so anything past the first chunk showed
+        // up as truncated JSON and was swallowed by the catch below.
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const data = this.text;
                 try {
                     let mons = JSON.parse(data);
                     if (!mons || mons.length === 0) return;
@@ -86,6 +89,14 @@ ApplicationWindow {
                     let logicalH = pxH / scale;
                     let tx = Math.round(mon.x + (logicalW - root.width)  / 2);
                     let ty = Math.round(mon.y + (logicalH - root.height) / 2);
+                    // Asking for a position it has already asked for is what
+                    // turned a resize into a move into another resize, forking
+                    // two hyprctl processes each time round. A genuinely new
+                    // target is always honoured; only a repeat is dropped.
+                    if (tx === root.lastRecenterX && ty === root.lastRecenterY)
+                        return;
+                    root.lastRecenterX = tx;
+                    root.lastRecenterY = ty;
                     // Wayland xdg-shell does not allow clients to set their
                     // own x/y after creation — assigning root.x/root.y is a
                     // no-op on Hyprland. Ask the compositor to move us via
@@ -100,16 +111,22 @@ ApplicationWindow {
                     // (relative defaults to false → absolute coords).
                     recenterMoveProc.command = [
                         "hyprctl", "dispatch",
-                        `hl.dsp.window.move({x = ${tx}, y = ${ty}, window = "title:^${titleRegex}$"})`
+                        `hl.dsp.window.move({ x = ${tx}, y = ${ty}, window = [[title:^${titleRegex}$]] })`
                     ];
                     recenterMoveProc.running = false;
                     recenterMoveProc.running = true;
-                } catch (e) {}
+                } catch (e) {
+                    console.log("installer: could not read monitors for recenter:", e);
+                }
             }
         }
     }
 
     Process { id: recenterMoveProc; command: [] }
+
+    // Where the last move asked for, so the same request is not made twice.
+    property int lastRecenterX: -100000
+    property int lastRecenterY: -100000
 
     // Debounce — give hyprctl reload a beat to land before we query so we
     // don't read the pre-apply geometry.
@@ -199,6 +216,14 @@ ApplicationWindow {
     }
 
     function applyMonitorChanges(monitorName) {
+        // Writing from an empty list produces a file with nothing in it, and
+        // the reload that follows makes every output fall back to a guessed
+        // mode right as the installer hands over. DisplayConfig guards the
+        // same way.
+        if (root.monitors.length === 0) {
+            console.log("installer: no monitors read yet, not writing monitors.lua");
+            return false;
+        }
         let blocks = [];
         monitors.forEach(mon => {
             let p = pendingChanges[mon.name] ?? {};
@@ -212,33 +237,66 @@ ApplicationWindow {
             .replace(/\\/g, "\\\\")
             .replace(/'/g, "\\'")
             .replace(/\n/g, "\\n");
+        let escapedPath = root.monitorsConfPath
+            .replace(/\\/g, "\\\\")
+            .replace(/'/g, "\\'");
         let py =
-            "path = '" + root.monitorsConfPath + "'\n" +
+            "path = '" + escapedPath + "'\n" +
             "content = '" + escaped + "'\n" +
             "open(path, 'w').write(content)\n";
         writeProc.command = ["python3", "-c", py];
         writeProc.running = false;
         writeProc.running = true;
+        return true;
     }
 
     Process {
         id: monitorProc
         command: ["hyprctl", "monitors", "all", "-j"]
-        stdout: SplitParser {
-            splitMarker: ""
-            onRead: data => {
+        // Whole-output collector for the same reason as recenterProc: this
+        // JSON carries every mode of every output and does not fit one read.
+        stdout: StdioCollector {
+            onStreamFinished: {
                 try {
-                    let parsed = JSON.parse(data);
+                    let parsed = JSON.parse(this.text);
                     root.monitors = parsed;
                     parsed.forEach(m => root.initPending(m));
-                } catch (e) {}
+                } catch (e) {
+                    console.log("installer: could not read the monitor list:", e);
+                }
             }
         }
     }
 
     Process {
         id: writeProc
-        onExited: reloadProc.running = true
+        // Quickshell emits no exited signal at all when a command cannot be
+        // started, only runningChanged, so hanging the rest of the chain on
+        // onExited alone left Start Install silently dead forever. Both the
+        // failure to start and a non-zero exit are handled here.
+        property bool sawExit: false
+        onRunningChanged: {
+            if (running) {
+                sawExit = false;
+            } else if (!sawExit) {
+                root.applyFailed(Translation.tr("Could not save the display settings."));
+            }
+        }
+        onExited: (exitCode) => {
+            sawExit = true;
+            if (exitCode === 0) {
+                reloadProc.running = true;
+            } else {
+                root.applyFailed(Translation.tr("Could not save the display settings."));
+            }
+        }
+    }
+
+    // Shown in place of a silent dead button when the apply chain breaks.
+    property string applyError: ""
+    function applyFailed(message) {
+        root.applyError = message;
+        root.startInstallQueued = false;
     }
 
     Process {
@@ -258,13 +316,25 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: { refreshMonitors(); recenterTimer.restart(); }
+    Component.onCompleted: {
+        // A reload triggered by any watched file changing would take this
+        // instance down with its in-flight processes, which during the apply
+        // chain means the write or the reload disappears and Calamares never
+        // starts. settings.qml switches this off for the same reason.
+        Quickshell.watchFiles = false;
+        refreshMonitors();
+        recenterTimer.restart();
+    }
 
     // ── Main content ──
     ColumnLayout {
         anchors {
             fill: parent
             margins: root.width > 600 ? 40 : 20
+            // The Start Install button floats over this layout; without room
+            // reserved for it, it covered the bottom of the Wi-Fi list and
+            // took the clicks meant for the last network.
+            bottomMargin: (root.width > 600 ? 40 : 20) + 60
         }
         spacing: 0
 
@@ -744,6 +814,37 @@ ApplicationWindow {
 
     }
 
+    // Whatever went wrong in the apply chain, said out loud. Before this the
+    // button simply stopped responding with nothing on screen to explain it.
+    Rectangle {
+        visible: root.applyError.length > 0
+        anchors {
+            bottom: parent.bottom
+            horizontalCenter: parent.horizontalCenter
+            bottomMargin: 80
+        }
+        z: 11
+        implicitWidth: Math.min(applyErrorRow.implicitWidth + 24, root.width - 40)
+        implicitHeight: 36
+        radius: Appearance.rounding.small
+        color: Appearance.m3colors.m3errorContainer
+        RowLayout {
+            id: applyErrorRow
+            anchors.centerIn: parent
+            spacing: 6
+            MaterialSymbol {
+                text: "error"
+                iconSize: 18
+                color: Appearance.m3colors.m3onErrorContainer
+            }
+            StyledText {
+                text: root.applyError
+                color: Appearance.m3colors.m3onErrorContainer
+                font.pixelSize: Appearance.font.pixelSize.small
+            }
+        }
+    }
+
     // ── Start Install button (floating over content) ──
     RippleButton {
         anchors {
@@ -765,8 +866,16 @@ ApplicationWindow {
             // monitorName arg is irrelevant — we just need the file written
             // and hyprctl reloaded. The reloadProc onExited handler then
             // launches Calamares once startInstallQueued is set.
+            root.applyError = "";
             root.startInstallQueued = true;
-            root.applyMonitorChanges("");
+            // The monitor list may not have arrived yet. Rather than write a
+            // config built from nothing, go straight to the installer with the
+            // display left exactly as the live session set it up.
+            if (!root.applyMonitorChanges("")) {
+                root.startInstallQueued = false;
+                Quickshell.execDetached(["sudo", "-E", "calamares"]);
+                Qt.quit();
+            }
         }
 
         contentItem: RowLayout {
