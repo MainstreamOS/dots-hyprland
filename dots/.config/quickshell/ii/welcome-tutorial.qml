@@ -51,7 +51,7 @@ ApplicationWindow {
     // Install page (card 1): which apps the user ticked to install in the background.
     readonly property int installCardIndex: 1
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
-                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false, "vr-streaming": false })
+                                        "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false })
     readonly property int installCount: {
         var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
     }
@@ -612,13 +612,8 @@ ApplicationWindow {
                     spacing: 12
                     InstallOption {
                         optKey: "vr"; optIcon: "steamvr"
-                        optTitle: Translation.tr("VR Headset Support")
-                        optDesc: Translation.tr("Your desktop and apps inside a headset, via SteamVR or Steam Link.")
-                    }
-                    InstallOption {
-                        optKey: "vr-streaming"; optIcon: "network-wireless"
-                        optTitle: Translation.tr("Wireless VR Streaming")
-                        optDesc: Translation.tr("Play on a Quest, Pico or Vive Focus over Wi-Fi or USB.")
+                        optTitle: Translation.tr("Extra VR Headset Support")
+                        optDesc: Translation.tr("Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.")
                     }
                 }
             }

@@ -2230,5 +2230,11 @@
   "15 fps": "15 fps",
   "30 fps": "30 fps",
   "Unlimited": "Unlimited",
-  "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power.": "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power."
+  "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power.": "How often a video wallpaper is redrawn, on the desktop and on the lock and login screens. A lower rate costs less power.",
+  "Everything in Desktop Gaming, plus a console style session on Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.": "Everything in Desktop Gaming, plus a console style session on Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.",
+  "VR Headsets": "VR Headsets",
+  "Your desktop and apps inside a Quest, Pico or Vive Focus, with the runtime it needs.": "Your desktop and apps inside a Quest, Pico or Vive Focus, with the runtime it needs.",
+  "Two surfaces always within reach. The bar across the top handles status — what's playing, background apps, quick actions, the time, the weather, and your workspaces. The dock at the bottom holds your pinned apps and the app drawer.": "Two surfaces always within reach. The bar across the top handles status — what's playing, background apps, quick actions, the time, the weather, and your workspaces. The dock at the bottom holds your pinned apps and the app drawer.",
+  "Extra VR Headset Support": "Extra VR Headset Support",
+  "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.": "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR."
 }

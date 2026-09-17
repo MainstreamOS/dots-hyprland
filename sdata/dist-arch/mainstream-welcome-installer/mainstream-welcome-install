@@ -196,15 +196,28 @@ install_gaming() {
   else notify "Desktop Gaming install failed" "See $LOGFILE." critical; return 1; fi
 }
 
-install_vr_streaming() {
-  # wayvr comes along even when only this row is ticked: WiVRn has no dashboard
-  # of its own, so without it a headset shows nothing the user can act on.
+# The whole stack. There used to be a second row for wireless streaming, but
+# both installed this same set: WiVRn is the one OpenXR runtime we ship, and
+# streaming to a standalone headset is what it does, so the two rows were the
+# same thing named twice.
+#
+# wayvr comes along even when only the streaming row is ticked: WiVRn has no
+# dashboard of its own, so without it a headset shows nothing the user can act on.
+#
+# wivrn.service is deliberately NOT enabled here. Upstream ships it for headless
+# setups; the normal path is the dashboard, which starts the server and runs a
+# first-time wizard. Enabling it would leave a streaming server listening at
+# every login for somebody who tried VR once. Nor is an active OpenXR runtime
+# written: wivrn-server takes that over itself while a headset is connected and
+# puts back what was there before, so a pointer of ours would only fight it.
+install_vr_stack() {  # $1 = what to call it in the notifications
+  local what="${1:-VR headset support}"
   local pkgs=(wivrn-server wivrn-dashboard xrizer lib32-xrizer xr-hardware wayvr openxr openvr)
-  notify "Installing Wireless VR streaming…" "${pkgs[*]}"
+  notify "Installing $what…" "${pkgs[*]}"
   if pac "${pkgs[@]}"; then
-    notify "Wireless VR streaming installed" "Open WiVRn to pair your headset."
+    notify "$what installed" "Open WiVRn to pair your headset, then start it before your VR app."
   else
-    notify "Wireless VR streaming install failed" "See $LOGFILE." critical
+    notify "$what install failed" "See $LOGFILE." critical
     return 1
   fi
 }
@@ -328,8 +341,7 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
   case $opt in
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
-    vr)              run_app "VR headset support" pac  wayvr openxr openvr xr-hardware ;;
-    vr-streaming)    run_item "Wireless VR streaming"    install_vr_streaming ;;
+    vr)              run_item "VR headset support"      install_vr_stack "VR headset support" ;;
     obs)             run_app "OBS Studio"    pac  mainstream-obs ;;
     blender)         run_app "Blender"       pac  blender ;;
     gimp)            run_app "GIMP"          pac  gimp ;;
