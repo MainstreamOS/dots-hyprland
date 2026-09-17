@@ -516,7 +516,7 @@ ContentPage {
                 StyledText {
                     id: outputDisplay
                     width: outputFlickable.width
-                    text: root.outputText || Translation.tr("No output yet. Press \"Start update\" to begin.")
+                    text: root.outputText || Translation.tr("Enter your password and press \"Start update\" to begin.")
                     font.family: Appearance.font.family.monospace
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: root.outputText ? Appearance.colors.colOnLayer0 : Appearance.m3colors.m3outlineVariant
