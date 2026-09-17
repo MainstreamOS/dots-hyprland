@@ -5633,12 +5633,6 @@ readonly property var drawerApps: root.drawerApps
             editLayoutProc.running = true
         }
 
-        // Random-wallpaper helper (matches welcome.qml)
-        Process {
-            id: konachanWallProc
-            command: ["bash", "-c", Quickshell.shellPath("scripts/colors/random/random_konachan_wall.sh")]
-        }
-
         // Re-runs the wallpaper-switch script in --noswitch mode to
         // re-derive theme colors from the current wallpaper when the
         // palette type changes. Mirrors QuickConfig.qml's themeApplyProc
@@ -5795,23 +5789,6 @@ readonly property var drawerApps: root.drawerApps
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            // Random Konachan wallpaper — visible iff weeb=Yes,
-                            // matching welcome.qml's policy gating.
-                            RippleButtonWithIcon {
-                                Layout.fillWidth: true
-                                visible: Config.options.policies.weeb === 1
-                                buttonRadius: Appearance.rounding.small
-                                materialIcon: "ifl"
-                                mainText: konachanWallProc.running
-                                    ? Translation.tr("Be patient...")
-                                    : Translation.tr("Random: Konachan")
-                                onClicked: {
-                                    konachanWallProc.running = true
-                                }
-                                StyledToolTip {
-                                    text: Translation.tr("Random SFW Anime wallpaper from Konachan\nImage is saved to ~/Pictures/Wallpapers")
-                                }
-                            }
                             RippleButtonWithIcon {
                                 Layout.fillWidth: true
                                 buttonRadius: Appearance.rounding.small
