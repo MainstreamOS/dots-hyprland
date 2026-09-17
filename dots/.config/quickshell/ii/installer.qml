@@ -23,7 +23,12 @@ ApplicationWindow {
     height: 800
     minimumWidth: 500
     minimumHeight: 600
-    title: Translation.tr("Welcome")
+    // Deliberately not translated. This string is the window's identity, not
+    // a label: the rule that floats the installer matches on it, and the
+    // dispatch that centres the window builds a regex from it. Translating it
+    // would leave the installer tiled and the centring aimed at nothing, on
+    // the live image, with nothing logged to say why.
+    title: "Welcome"
     color: Appearance.m3colors.m3surfaceContainerLow
 
     // What this machine needs plugged in before it can be installed, written by
@@ -190,18 +195,6 @@ ApplicationWindow {
         return lines.join("\n");
     }
 
-    function initPending(monitor) {
-        let name = monitor.name;
-        if (!pendingChanges[name]) {
-            pendingChanges[name] = {
-                width: monitor.width,
-                height: monitor.height,
-                refreshRate: monitor.refreshRate,
-                scale: monitor.scale,
-            };
-        }
-    }
-
     function updatePending(monName, key, value) {
         let p = Object.assign({}, pendingChanges[monName] ?? {});
         p[key] = value;
@@ -215,7 +208,7 @@ ApplicationWindow {
         pendingChanges = Object.assign({}, pendingChanges);
     }
 
-    function applyMonitorChanges(monitorName) {
+    function applyMonitorChanges() {
         // Writing from an empty list produces a file with nothing in it, and
         // the reload that follows makes every output fall back to a guessed
         // mode right as the installer hands over. DisplayConfig guards the
@@ -260,7 +253,6 @@ ApplicationWindow {
                 try {
                     let parsed = JSON.parse(this.text);
                     root.monitors = parsed;
-                    parsed.forEach(m => root.initPending(m));
                 } catch (e) {
                     console.log("installer: could not read the monitor list:", e);
                 }
@@ -292,6 +284,12 @@ ApplicationWindow {
         }
     }
 
+    // The one place that knows how to hand over to the installer.
+    function launchInstaller() {
+        Quickshell.execDetached(["sudo", "-E", "calamares"]);
+        Qt.quit();
+    }
+
     // Shown in place of a silent dead button when the apply chain breaks.
     property string applyError: ""
     function applyFailed(message) {
@@ -303,16 +301,18 @@ ApplicationWindow {
         id: reloadProc
         command: ["hyprctl", "reload"]
         onExited: {
-            Qt.callLater(root.refreshMonitors);
-            recenterTimer.restart();
-            // Launch Calamares only after the apply chain has completed, so
-            // the new scale/mode is in effect before the installer takes the
-            // foreground.
+            // Nothing below matters once the installer is taking over, and
+            // this is the busiest moment of the live session. Re-reading the
+            // monitors and re-centring here cost another two or three
+            // processes and a full rebuild of the display rows for a window
+            // about to close.
             if (root.startInstallQueued) {
                 root.startInstallQueued = false;
-                Quickshell.execDetached(["sudo", "-E", "calamares"]);
-                Qt.quit();
+                root.launchInstaller();
+                return;
             }
+            Qt.callLater(root.refreshMonitors);
+            recenterTimer.restart();
         }
     }
 
@@ -384,6 +384,39 @@ ApplicationWindow {
                     ContentSection {
                         icon: "monitor"
                         title: Translation.tr("Display")
+                        // One Apply, because applying has only ever been one
+                        // thing: the whole file is rewritten and the
+                        // compositor reloaded whichever monitor's button was
+                        // pressed. A button per monitor offered a choice that
+                        // was never carried out, and on two screens it meant
+                        // two reloads and two flashes to do one job.
+                        headerExtra: [
+                            RippleButton {
+                                implicitWidth: applyRow.implicitWidth + 24
+                                implicitHeight: 34
+                                buttonRadius: Appearance.rounding.full
+                                colBackground: Appearance.colors.colPrimary
+                                colBackgroundHover: Appearance.colors.colPrimaryHover
+                                onClicked: {
+                                    root.applyError = "";
+                                    root.applyMonitorChanges();
+                                }
+                                contentItem: RowLayout {
+                                    id: applyRow
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    MaterialSymbol {
+                                        text: "check"
+                                        iconSize: 18
+                                        color: Appearance.colors.colOnPrimary
+                                    }
+                                    StyledText {
+                                        text: Translation.tr("Apply")
+                                        color: Appearance.colors.colOnPrimary
+                                    }
+                                }
+                            }
+                        ]
 
                         Repeater {
                             model: root.monitors
@@ -391,7 +424,6 @@ ApplicationWindow {
                             delegate: ColumnLayout {
                                 id: monDelegate
                                 required property var modelData
-                                required property int index
 
                                 property var mon: modelData
                                 property string monName: mon.name
@@ -507,7 +539,6 @@ ApplicationWindow {
                                                     model: monDelegate.modeModel
                                                     delegate: Rectangle {
                                                         required property var modelData
-                                                        required property int index
                                                         width: ListView.view.width
                                                         height: 36
                                                         radius: Appearance.rounding.small
@@ -621,7 +652,6 @@ ApplicationWindow {
                                                     model: scaleRow.scaleOptions
                                                     delegate: Rectangle {
                                                         required property var modelData
-                                                        required property int index
                                                         width: ListView.view.width
                                                         height: 36
                                                         radius: Appearance.rounding.small
@@ -654,34 +684,6 @@ ApplicationWindow {
                                 }
 
                                 // Apply button
-                                RippleButton {
-                                    Layout.alignment: Qt.AlignRight
-                                    Layout.topMargin: 8
-                                    implicitWidth: applyRow.implicitWidth + 24
-                                    implicitHeight: 36
-                                    buttonRadius: Appearance.rounding.full
-                                    colBackground: Appearance.colors.colPrimary
-                                    colBackgroundHover: Appearance.colors.colPrimaryHover
-
-                                    onClicked: root.applyMonitorChanges(monDelegate.monName)
-
-                                    contentItem: RowLayout {
-                                        id: applyRow
-                                        anchors.centerIn: parent
-                                        spacing: 6
-                                        MaterialSymbol {
-                                            text: "check"
-                                            iconSize: 18
-                                            color: Appearance.colors.colOnPrimary
-                                        }
-                                        StyledText {
-                                            text: root.monitors.length > 1
-                                                ? Translation.tr("Apply %1").arg(monDelegate.monName)
-                                                : Translation.tr("Apply")
-                                            color: Appearance.colors.colOnPrimary
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
@@ -860,21 +862,16 @@ ApplicationWindow {
         colBackgroundHover: Appearance.colors.colPrimaryHover
 
         onClicked: {
-            // Apply every monitor's pending settings (mode + scale) before
-            // handing off to Calamares. applyMonitorChanges already iterates
-            // over all monitors and writes the full monitors.lua, so the
-            // monitorName arg is irrelevant — we just need the file written
-            // and hyprctl reloaded. The reloadProc onExited handler then
-            // launches Calamares once startInstallQueued is set.
+            // Everything pending is written and the compositor reloaded
+            // before handing off, so Calamares opens at the chosen scale.
             root.applyError = "";
             root.startInstallQueued = true;
             // The monitor list may not have arrived yet. Rather than write a
             // config built from nothing, go straight to the installer with the
             // display left exactly as the live session set it up.
-            if (!root.applyMonitorChanges("")) {
+            if (!root.applyMonitorChanges()) {
                 root.startInstallQueued = false;
-                Quickshell.execDetached(["sudo", "-E", "calamares"]);
-                Qt.quit();
+                root.launchInstaller();
             }
         }
 
