@@ -83,6 +83,14 @@ function setup_disk_mounter(){
   x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.disk-mounter.policy" \
       /usr/share/polkit-1/actions/org.mainstreamos.disk-mounter.policy
 
+  # Privileged half of Settings > Gaming: the scheduler service and the two
+  # kernel options. auth_admin_keep caches the prompt, so flipping both kernel
+  # switches in one visit asks once rather than twice.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/gaming-tuning" \
+      /usr/local/bin/gaming-tuning
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.gaming-tuning.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.gaming-tuning.policy
+
   # Enable avahi-daemon so the app's Network tab can discover SMB hosts
   # on the LAN via avahi-browse. Idempotent; --now also starts it.
   if command -v systemctl >/dev/null 2>&1; then
@@ -431,6 +439,9 @@ function setup_gamescope(){
   case "$OS_GROUP_ID" in
     arch)
       x sudo pacman -S --needed --noconfirm gamescope python-evdev jq seatd
+      # The 32-bit halves of GameMode and MangoHud, for 32-bit games. Best-effort:
+      # they need the multilib repository, and a host without it must not abort here.
+      try sudo pacman -S --needed --noconfirm lib32-gamemode lib32-mangohud
       ;;
     fedora)
       x sudo dnf install -y gamescope python3-evdev jq seatd

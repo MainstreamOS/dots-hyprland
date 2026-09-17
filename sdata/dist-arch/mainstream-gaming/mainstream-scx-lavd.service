@@ -1,0 +1,18 @@
+[Unit]
+Description=Responsive scheduler (scx_lavd)
+# Without sched_ext in the running kernel the scheduler cannot attach at all,
+# so fail the condition rather than spending a start attempt on it.
+ConditionPathExists=/sys/kernel/sched_ext
+
+[Service]
+# exec rather than simple: a scheduler that cannot even be started is then
+# reported to the enable that asked for it, instead of to the log alone.
+Type=exec
+ExecStart=/usr/bin/scx_lavd
+# The kernel ejects a misbehaving scheduler on its own and takes the standard
+# one back. Restarting would re-enter the same fault in a loop, so a failure is
+# left standing where the user and the log can see it.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

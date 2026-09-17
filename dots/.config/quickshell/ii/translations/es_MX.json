@@ -2272,5 +2272,21 @@
   "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.": "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.",
   "Another update is already running. Let it finish, then try again.": "Another update is already running. Let it finish, then try again.",
   "[DRY-RUN] The dotfiles clone at %s is damaged; would set it aside as %s and clone again.": "[DRY-RUN] The dotfiles clone at %s is damaged; would set it aside as %s and clone again.",
-  "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop": "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop"
+  "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop": "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop",
+  "Cannot refresh /etc/skel; a new account would be set up from an older desktop.": "Cannot refresh /etc/skel; a new account would be set up from an older desktop.",
+  "The provisioning library is missing or writable by others; leaving /etc/skel alone.": "The provisioning library is missing or writable by others; leaving /etc/skel alone.",
+  "Refreshing /etc/skel from the dotfiles...": "Refreshing /etc/skel from the dotfiles...",
+  "The provisioning library carries no exclusion list; leaving /etc/skel alone.": "The provisioning library carries no exclusion list; leaving /etc/skel alone.",
+  "/etc/skel now matches this release.": "/etc/skel now matches this release.",
+  "Could not refresh /etc/skel; a new account would be set up from an older desktop.": "Could not refresh /etc/skel; a new account would be set up from an older desktop.",
+  "User provisioning library": "User provisioning library",
+  "Venv path helper": "Venv path helper",
+  "First-login setup": "First-login setup",
+  "Account manager": "Account manager",
+  "Account manager polkit action": "Account manager polkit action",
+  "Gaming tuning helper": "Gaming tuning helper",
+  "Gaming tuning polkit action": "Gaming tuning polkit action",
+  "Windows boot entry scanner": "Windows boot entry scanner",
+  "Removed the install leftover %s": "Removed the install leftover %s",
+  "Could not remove %s": "Could not remove %s"
 }

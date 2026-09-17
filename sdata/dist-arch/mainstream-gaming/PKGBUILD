@@ -1,15 +1,22 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=8
+pkgrel=9
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
 depends=(
   gamescope
+  gamemode
+  scx-scheds
+  mangohud
   gamescope-session-git
   gamescope-session-steam-git
   vulkan-tools
+)
+optdepends=(
+  'lib32-gamemode: GameMode for 32-bit games'
+  'lib32-mangohud: the overlay in 32-bit games'
 )
 source=(
   gaming-mode
@@ -24,12 +31,18 @@ source=(
   gamescope-session.desktop
   gamescope-session-steam.desktop
   gamescope-drm.conf
+  gamescope-gamemode.conf
   ntsync.conf
+  61-ioschedulers.rules
+  mainstream-scx-lavd.service
   mainstream-steam-gamescope-preload
   mainstream-steam-gamescope-preload.service
   mainstream-steam-gamescope-preload.timer
 )
 sha256sums=(
+  SKIP
+  SKIP
+  SKIP
   SKIP
   SKIP
   SKIP
@@ -71,9 +84,17 @@ package() {
 
   install -Dm644 "$srcdir/gamescope-drm.conf" \
                  "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@.service.d/10-gamescope-drm.conf"
+  install -Dm644 "$srcdir/gamescope-gamemode.conf" \
+                 "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@.service.d/20-gamemode.conf"
 
   install -Dm644 "$srcdir/ntsync.conf" \
                  "$pkgdir/usr/lib/modules-load.d/ntsync.conf"
+
+  install -Dm644 "$srcdir/61-ioschedulers.rules" \
+                 "$pkgdir/usr/lib/udev/rules.d/61-ioschedulers.rules"
+
+  install -Dm644 "$srcdir/mainstream-scx-lavd.service" \
+                 "$pkgdir/usr/lib/systemd/system/mainstream-scx-lavd.service"
 
   install -Dm755 "$srcdir/mainstream-steam-gamescope-preload" \
                  "$pkgdir/usr/bin/mainstream-steam-gamescope-preload"

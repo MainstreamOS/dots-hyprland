@@ -1,0 +1,20 @@
+# Mechanical drives only, once, when they appear. BFQ keeps the desktop
+# responsive while a slow disk is busy, which is what a game loading off a
+# hard drive does to a machine. NVMe is left on none and SATA SSDs on
+# mq-deadline, where BFQ costs throughput and buys nothing.
+#
+# add only: a change event fires every time something closes the disk node
+# after writing (a partitioner, mkfs, dd), and acting on it would put BFQ
+# back over a scheduler the user or another tool chose afterwards.
+#
+# The kernel reports rotational=1 for any SCSI or ATA disk that does not say
+# otherwise, which includes flash behind a USB bridge and the emulated disks
+# of virtual machines, so those are skipped by their bus and model. Numbered
+# after 60-persistent-storage, which is what fills in ID_BUS and ID_MODEL.
+ACTION!="add", GOTO="ioschedulers_end"
+SUBSYSTEM!="block", GOTO="ioschedulers_end"
+KERNEL!="sd[a-z]", GOTO="ioschedulers_end"
+ENV{ID_BUS}=="usb", GOTO="ioschedulers_end"
+ENV{ID_MODEL}=="QEMU_HARDDISK|VBOX_HARDDISK|Virtual_disk|VMware_Virtual*", GOTO="ioschedulers_end"
+ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+LABEL="ioschedulers_end"

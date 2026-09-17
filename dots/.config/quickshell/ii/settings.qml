@@ -124,6 +124,12 @@ ApplicationWindow {
             component: "modules/settings/PowerConfig.qml"
         },
         {
+            group: 3,
+            name: Translation.tr("Gaming"),
+            icon: "sports_esports",
+            component: "modules/settings/GamingConfig.qml"
+        },
+        {
             group: 4,
             name: Translation.tr("Accounts"),
             icon: "manage_accounts",

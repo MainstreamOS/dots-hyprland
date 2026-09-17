@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Privileged half of Settings > Gaming. Runs under pkexec.
+set -euo pipefail
+
+SERVICE=mainstream-scx-lavd.service
+CMDLINE=/etc/kernel/cmdline
+# A value somebody set by hand for one of these keys is kept here while a
+# switch is on, and put back when it goes off.
+STATE=/var/lib/mainstream-gaming
+
+# The caller names a switch, never a kernel parameter. Anything reaching the
+# boot line comes out of these tables, so a caller cannot use this helper to
+# put arbitrary text in front of the kernel. Off is explicit for huge pages
+# because the kernel's own default is always, so taking the token away would
+# change nothing.
+declare -A ON=(
+  [splitlock]='split_lock_detect=off'
+  [hugepages]='transparent_hugepage=always'
+)
+declare -A OFF=(
+  [splitlock]=''
+  [hugepages]='transparent_hugepage=madvise'
+)
+
+die() { printf 'gaming-tuning: %s\n' "$*" >&2; exit 1; }
+
+set_kernel_opt() {
+    local name="$1" want="$2" on off key line before foreign="" token="" out=() t
+    on="${ON[$name]:-}"
+    [ -n "$on" ] || die "unknown option: $name"
+    off="${OFF[$name]}"
+    key="${on%%=*}"
+    [ -w "$CMDLINE" ] || die "cannot write $CMDLINE"
+    command -v limine-update >/dev/null || die "limine-update is not installed"
+
+    line="$(cat "$CMDLINE")"
+    before="$line"
+    # Splitting the line unquoted would glob a token containing * or ? against
+    # the working directory, which is not a thing to risk on a boot line.
+    set -f
+    for t in $line; do
+        if [ "${t%%=*}" = "$key" ]; then
+            if [ "$t" != "$on" ] && [ "$t" != "$off" ]; then foreign="$t"; fi
+            continue
+        fi
+        out+=("$t")
+    done
+
+    mkdir -p "$STATE"
+    if [ "$want" = on ]; then
+        if [ -n "$foreign" ]; then printf '%s\n' "$foreign" > "$STATE/$key.prev"; fi
+        token="$on"
+    elif [ -r "$STATE/$key.prev" ]; then
+        token="$(cat "$STATE/$key.prev")"
+        rm -f "$STATE/$key.prev"
+    elif [ -n "$foreign" ]; then
+        # Off was asked for over a value this helper never set; it stays.
+        token="$foreign"
+    else
+        token="$off"
+    fi
+    if [ -n "$token" ]; then out+=("$token"); fi
+
+    printf '%s\n' "${out[*]}" > "$CMDLINE"
+    # The command line is embedded in the boot image, so the file alone
+    # changes nothing until the image is rebuilt. That takes a while, and if
+    # it fails the file goes back to what it was, so the page never shows a
+    # change the machine will not boot with.
+    if ! limine-update >/dev/null; then
+        printf '%s\n' "$before" > "$CMDLINE"
+        die "the boot image could not be rebuilt, so the change was undone"
+    fi
+}
+
+case "${1:-}" in
+    scheduler)
+        case "${2:-}" in
+            on)  systemctl enable --now "$SERVICE" ;;
+            off) systemctl disable --now "$SERVICE" ;;
+            *)   die "scheduler takes on or off" ;;
+        esac
+        ;;
+    kernelopt)
+        case "${3:-}" in
+            on|off) set_kernel_opt "${2:-}" "$3" ;;
+            *)      die "kernelopt takes a name then on or off" ;;
+        esac
+        ;;
+    *)
+        die "usage: gaming-tuning scheduler on|off | kernelopt <name> on|off"
+        ;;
+esac
