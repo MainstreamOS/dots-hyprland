@@ -187,10 +187,9 @@ Variants {
         }
 
         // ── Trigger MouseArea ────────────────────────────────────────
-        // Sits at the top-left of the panel = top-left of the screen.
-        // Tighter activation region (60% of the original 176×32) so the
-        // user has to commit a bit more to the corner before the dwell
-        // timer arms.
+        // Sits at the top-left of the panel = top-left of the screen, and
+        // ends before the bar's first widget: this surface is above the bar,
+        // so anything inside the rectangle never reaches what is under it.
         MouseArea {
             id: triggerArea
             width: Appearance.sizes.hotCornerWidth

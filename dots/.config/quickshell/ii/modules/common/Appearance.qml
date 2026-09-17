@@ -646,7 +646,17 @@ Singleton {
         // The top-left rectangle the hot corner answers in. Shared, because
         // the overview has to answer in the same one: while it is open the
         // pointer no longer reaches the corner's own surface.
-        property real hotCornerWidth: 106
+        //
+        // It has to end before the bar's first widget begins, since it sits
+        // on a surface above the bar and takes every hover, click and scroll
+        // inside it: a strip that ran along the top edge covered half the
+        // height of the workspace pill and opened the overview instead of
+        // switching workspaces. The first widget starts at the bar's
+        // screenRounding inset, and a few pixels short of that keeps the
+        // pill's hover halo clear as well. A pointer pushed into the corner
+        // stops at the screen edge, so a small rectangle is still easy to hit
+        // on purpose and hard to hit on the way to something else.
+        property real hotCornerWidth: root.rounding.screenRounding - 3
         property real hotCornerHeight: 19
         property real fabShadowRadius: 5
         property real fabHoveredShadowRadius: 7
