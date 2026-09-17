@@ -87,6 +87,27 @@ Item {
     Config.options.cheatsheet.useMouseSymbol ? mouseSymbolMap : {},
     )
 
+    // Hyprland does not care how a key is spelled, so the same binding file
+    // holds both `F1` and `f10`. The maps above are written one way, so the
+    // lookup folds case rather than expecting the binds to agree with them.
+    // A capitalization pass used to live in CheatsheetKeybindsCategory.qml and
+    // went with that file when the cheatsheet was reverted, which is what left
+    // the function key symbols working for some binds and not others.
+    readonly property var keySubstitutionsFolded: {
+        const folded = {};
+        for (const k in root.keySubstitutions)
+            folded[k.toLowerCase()] = root.keySubstitutions[k];
+        return folded;
+    }
+    function substituteKey(k) {
+        if (k === undefined || k === null)
+            return k;
+        if (root.keySubstitutions[k] !== undefined)
+            return root.keySubstitutions[k];
+        const folded = root.keySubstitutionsFolded[String(k).toLowerCase()];
+        return folded !== undefined ? folded : k;
+    }
+
     // Same tree shape as `keybinds`, keeping only binds whose description,
     // section name, or key combo (raw or substituted) matches the query.
     readonly property var filteredKeybinds: {
@@ -98,7 +119,7 @@ Item {
             for (const section of (column.children || [])) {
                 const binds = (section.keybinds || []).filter(bind => {
                     const keys = (bind.mods || []).concat(bind.key || []);
-                    const keyText = keys.concat(keys.map(k => root.keySubstitutions[k] || k)).join(" ").toLowerCase();
+                    const keyText = keys.concat(keys.map(k => root.substituteKey(k))).join(" ").toLowerCase();
                     return (bind.comment || "").toLowerCase().includes(q)
                         || (section.name || "").toLowerCase().includes(q)
                         || keyText.includes(q);
@@ -180,13 +201,13 @@ Item {
                                                 // key into one label, run subs as
                                                 // we go.
                                                 for (let j = 0; j < mods.length; j++) {
-                                                    mods[j] = root.keySubstitutions[mods[j]] || mods[j];
+                                                    mods[j] = root.substituteKey(mods[j]);
                                                 }
                                                 let joined = mods.join(" ");
                                                 const k = binds[i].key;
                                                 if (!root.keyBlacklist.includes(k)) {
                                                     if (joined.length > 0) joined += " ";
-                                                    joined += (root.keySubstitutions[k] || k);
+                                                    joined += root.substituteKey(k);
                                                 }
                                                 mods = [joined];
                                             }
@@ -221,7 +242,7 @@ Item {
                                                     model: modelData.mods
                                                     delegate: KeyboardKey {
                                                         required property var modelData
-                                                        key: root.keySubstitutions[modelData] || modelData
+                                                        key: root.substituteKey(modelData)
                                                         pixelSize: Config.options.cheatsheet.fontSize.key
                                                     }
                                                 }
@@ -236,7 +257,7 @@ Item {
                                                     id: keybindKey
                                                     visible: Config.options.cheatsheet.splitButtons
                                                         && !root.keyBlacklist.includes(modelData.key)
-                                                    key: root.keySubstitutions[modelData.key] || modelData.key
+                                                    key: root.substituteKey(modelData.key)
                                                     pixelSize: Config.options.cheatsheet.fontSize.key
                                                     color: Appearance.colors.colOnLayer0
                                                 }
