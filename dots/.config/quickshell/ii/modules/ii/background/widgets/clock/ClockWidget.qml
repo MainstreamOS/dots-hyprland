@@ -19,7 +19,6 @@ AbstractBackgroundWidget {
     readonly property string clockStyle: GlobalStates.screenLocked ? Config.options.background.widgets.clock.styleLocked : Config.options.background.widgets.clock.style
     readonly property bool forceCenter: (GlobalStates.screenLocked && Config.options.lock.centerClock)
     readonly property bool shouldShow: (!Config.options.background.widgets.clock.showOnlyWhenLocked || GlobalStates.screenLocked)
-    property bool wallpaperSafetyTriggered: false
     property bool hasActiveMusic: false
     readonly property real musicOffset: hasActiveMusic ? -90 : 0 // Move up by 90px to center with music box (which is 180px below center)
     needsColText: clockStyle === "digital"
@@ -115,7 +114,7 @@ AbstractBackgroundWidget {
             id: statusTextBg
             anchors.centerIn: parent
             clip: true
-            opacity: (safetyStatusText.shown || lockStatusText.shown) ? 1 : 0
+            opacity: lockStatusText.shown ? 1 : 0
             visible: opacity > 0
             implicitHeight: statusTextRow.implicitHeight + 5 * 2
             implicitWidth: statusTextRow.implicitWidth + 5 * 2
@@ -139,12 +138,6 @@ AbstractBackgroundWidget {
                 Item {
                     Layout.fillWidth: root.textHorizontalAlignment !== Text.AlignLeft
                     implicitWidth: 1
-                }
-                ClockStatusText {
-                    id: safetyStatusText
-                    shown: root.wallpaperSafetyTriggered
-                    statusIcon: "hide_image"
-                    statusText: Translation.tr("Wallpaper safety enforced")
                 }
                 ClockStatusText {
                     id: lockStatusText

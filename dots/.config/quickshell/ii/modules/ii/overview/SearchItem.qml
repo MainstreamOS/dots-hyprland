@@ -34,7 +34,6 @@ RippleButton {
     property string bigText: entry?.iconType === LauncherSearchResult.IconType.Text ? entry?.iconName ?? "" : ""
     property string materialSymbol: entry.iconType === LauncherSearchResult.IconType.Material ? entry?.iconName ?? "" : ""
     property string cliphistRawString: entry?.rawValue ?? ""
-    property bool blurImage: entry?.blurImage ?? false
     
     visible: root.entryShown
     enabled: !root.isSeparator
@@ -257,7 +256,6 @@ RippleButton {
                     entry: root.cliphistRawString
                     maxWidth: contentColumn.width
                     maxHeight: 140
-                    blur: root.blurImage
                 }
             }
         }

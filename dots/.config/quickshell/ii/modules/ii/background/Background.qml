@@ -61,12 +61,6 @@ Variants {
         // Wallpaper
         property bool wallpaperIsVideo: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
         property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
-        property bool wallpaperSafetyTriggered: {
-            const enabled = Config.options.workSafety.enable.wallpaper;
-            const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
-            const sensitiveNetwork = (CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords));
-            return enabled && sensitiveWallpaper && sensitiveNetwork;
-        }
         // Preserve a minimum 10% headroom so parallax has range to move through even when
         // workspaceZoom is 1. Matches pre-refactor behavior which had a hardcoded 1.1 baseline.
         readonly property real parallaxRation: Math.max(1.1, Config.options.background.parallax.workspaceZoom)
@@ -111,7 +105,7 @@ Variants {
         property real clockX: (modelData.width / 2)
         property real clockY: (modelData.height / 2)
         property var textHorizontalAlignment: {
-            if ((Config.options.lock.centerClock && GlobalStates.screenLocked) || wallpaperSafetyTriggered)
+            if (Config.options.lock.centerClock && GlobalStates.screenLocked)
                 return Text.AlignHCenter;
             if (clockX < screen.width / 3)
                 return Text.AlignLeft;
@@ -124,8 +118,6 @@ Variants {
         property color dominantColor: Appearance.colors.colPrimary // Default, to be changed
         property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
         property color colText: {
-            if (wallpaperSafetyTriggered)
-                return CF.ColorUtils.mix(Appearance.colors.colOnLayer0, Appearance.colors.colPrimary, 0.75);
             return (GlobalStates.screenLocked && shouldBlur) ? Appearance.colors.colOnLayer0 : CF.ColorUtils.colorWithLightness(Appearance.colors.colPrimary, (dominantColorIsDark ? 0.8 : 0.12));
         }
         Behavior on colText {
@@ -145,14 +137,7 @@ Variants {
             left: true
             right: true
         }
-        color: {
-            if (!bgRoot.wallpaperSafetyTriggered || bgRoot.wallpaperIsVideo)
-                return "transparent";
-            return CF.ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colPrimary, 0.75);
-        }
-        Behavior on color {
-            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-        }
+        color: "transparent"
 
         onWallpaperPathChanged: {
             bgRoot.updateZoomScale();
@@ -358,7 +343,7 @@ Variants {
                 onSourceChanged: {
                     const effect = Config.options.background.wallpaperTransition;
                     if (bgRoot.shownWallpaper == "" || effect === "none" || bgRoot.wallpaperIsVideo
-                            || bgRoot.wallpaperSafetyTriggered || source == bgRoot.shownWallpaper) {
+                            || source == bgRoot.shownWallpaper) {
                         swapAnimation.stop();
                         bgRoot.finishSwap();
                         bgRoot.wallpaperSwapPending = false;
@@ -462,7 +447,7 @@ Variants {
                 // Fall back to the bundled default wallpaper when no path is set
                 // (e.g. a fresh install before a wallpaper has been chosen), so the
                 // background is never blank.
-                source: bgRoot.wallpaperSafetyTriggered ? "" : (bgRoot.wallpaperPath || Quickshell.shellPath("assets/images/default_wallpaper.webp"))
+                source: bgRoot.wallpaperPath || Quickshell.shellPath("assets/images/default_wallpaper.webp")
                 fillMode: Image.PreserveAspectCrop
                 Behavior on x {
                     NumberAnimation {
@@ -495,7 +480,7 @@ Variants {
             Loader {
                 id: lockVideo
                 anchors.fill: wallpaper
-                active: bgRoot.wallpaperIsVideo && !bgRoot.wallpaperSafetyTriggered
+                active: bgRoot.wallpaperIsVideo
                     && (GlobalStates.screenLocked || scaleAnim.running)
                 visible: !blurLoader.active
                 sourceComponent: VideoOutput {
@@ -739,7 +724,6 @@ Variants {
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
                         wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
-                        wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
                         hasActiveMusic: widgetCanvas.hasActiveMusic
                     }
                 }

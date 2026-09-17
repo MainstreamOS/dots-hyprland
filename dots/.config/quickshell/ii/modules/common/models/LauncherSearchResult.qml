@@ -13,7 +13,6 @@ QtObject {
     property string iconName: ""
     property var iconType: LauncherSearchResult.IconType.None
     property string verb: ""
-    property bool blurImage: false
     property var execute: () => {
         print("Not implemented");
     }
