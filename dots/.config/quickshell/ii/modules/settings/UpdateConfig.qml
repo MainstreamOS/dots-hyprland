@@ -495,31 +495,6 @@ ContentPage {
                 }
             }
         ]
-        /*
-        // Which version is installed, and where an update would take it. In a
-        // notice of its own rather than beside the section title, where it read
-        // as part of the heading instead of as a thing being reported.
-        NoticeBox {
-            Layout.fillWidth: true
-            visible: ReleaseUpdates.installedVersion.length > 0
-            materialIcon: ReleaseUpdates.latest ? "system_update_alt" : "check_circle"
-            text: ReleaseUpdates.latest
-                ? Translation.tr("A newer version is ready to install.")
-                : Translation.tr("This is the newest version.")
-
-            StyledText {
-                // Reads "1.0.5 → 1.0.6" while a release is waiting and drops to
-                // the bare version once there is nothing to move to, so the
-                // arrow only ever points at a release that actually exists.
-                text: ReleaseUpdates.latest
-                    ? `${ReleaseUpdates.installedVersion} → ${ReleaseUpdates.latest.version}`
-                    : ReleaseUpdates.installedVersion
-                font.pixelSize: Appearance.font.pixelSize.small
-                font.family: Appearance.font.family.monospace
-                color: Appearance.colors.colOnPrimaryContainer
-            }
-        }
-        */
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 200
