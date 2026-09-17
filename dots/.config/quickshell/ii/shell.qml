@@ -67,6 +67,7 @@ ShellRoot {
         ThemeManager._autoApplyEnabled = true
         WallpaperSlideshow.load()
         BorderGradient.load()
+        LauncherBlur.load()
         // Same story for the wallpaper rotation — see _rotationEnabled.
         WallpaperSlideshow._rotationEnabled = true
     }

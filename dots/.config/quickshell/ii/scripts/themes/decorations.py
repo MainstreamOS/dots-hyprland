@@ -12,6 +12,8 @@ means or where it lives.
     decorations.py write    <general.lua> <values.json> [--flag-dir DIR]
     decorations.py restore  <general.lua> <values.json> [--flag-dir DIR] [--push]
     decorations.py set      <general.lua> key=value ... [--flag-dir DIR]
+    decorations.py sync     <general.lua> [--flag-dir DIR] [--keys a,b,...]
+    decorations.py push-defaults <general.lua> [--keys a,b,...]
     decorations.py push     <values.json> [--no-reload]
 
 Where a setting lives is derived from its hyprctl keyword rather than stated
@@ -381,7 +383,7 @@ def _write_locked(general_path, values, flag_dir=None, schema=None):
     return written
 
 
-def push(values, schema=None, allow_reload=True):
+def push(values, schema=None, allow_reload=True, keys=None):
     """Send the settings to the running compositor.
 
     `hyprctl keyword` is Legacy-only in 0.55 ("can't work with non-legacy
@@ -404,6 +406,8 @@ def push(values, schema=None, allow_reload=True):
     sections = {}
     for row in schema["keys"]:
         if not row.get("hypr"):
+            continue
+        if keys is not None and row["key"] not in keys:
             continue
         value = resolve(values, row)
         if value is None:
@@ -549,6 +553,24 @@ def main(argv):
         except Exception:
             return 0
         push(values, allow_reload="--no-reload" not in rest)
+        return 0
+    if verb in ("sync", "push-defaults"):
+        # `sync <general.lua> [--keys a,b]` puts the compositor back to what
+        # the file says; `push-defaults <general.lua> [--keys a,b]` hands it
+        # the stock values instead. Neither writes. The launcher borrows the
+        # shipped blur depth while it is open and this pair is how it does so:
+        # the user's own depth comes back from the file, the one place the
+        # settings page and a theme apply both write, so nothing remembered
+        # elsewhere can go stale.
+        keys = None
+        if "--keys" in rest and rest.index("--keys") + 1 < len(rest):
+            keys = set(rest[rest.index("--keys") + 1].split(","))
+        schema = load_schema()
+        if verb == "sync":
+            push(read(general, flag_dir, schema), schema, allow_reload=False, keys=keys)
+        else:
+            push({row["key"]: row["default"] for row in schema["keys"] if "default" in row},
+                 schema, allow_reload=False, keys=keys)
         return 0
     print("unknown verb: " + verb, file=sys.stderr)
     return 2
