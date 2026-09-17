@@ -2233,6 +2233,11 @@
   "VR Headsets": "VR Headsets",
   "Your desktop and apps inside a Quest, Pico or Vive Focus, with the runtime it needs.": "Your desktop and apps inside a Quest, Pico or Vive Focus, with the runtime it needs.",
   "Two surfaces always within reach. The bar across the top handles status — what's playing, background apps, quick actions, the time, the weather, and your workspaces. The dock at the bottom holds your pinned apps and the app drawer.": "Two surfaces always within reach. The bar across the top handles status — what's playing, background apps, quick actions, the time, the weather, and your workspaces. The dock at the bottom holds your pinned apps and the app drawer.",
+  "Nothing to stop: that update is no longer running.": "Nothing to stop: that update is no longer running.",
+  "The update did not finish. The record above stops where it stopped.": "The update did not finish. The record above stops where it stopped.",
+  "Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.": "Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.",
+  "The update could not be started (launcher exit code %1).": "The update could not be started (launcher exit code %1).",
+  "Before you click Update, take a moment to test anything important \\u2014 printers, audio, external drives, browsers, or any apps you rely on daily. After the update completes, test those same things again. Most updates go smoothly, but it's good to know right away if something needs attention.": "Before you click Update, take a moment to test anything important \\u2014 printers, audio, external drives, browsers, or any apps you rely on daily. After the update completes, test those same things again. Most updates go smoothly, but it's good to know right away if something needs attention.",
   "Extra VR Headset Support": "Extra VR Headset Support",
   "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.": "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR."
 }

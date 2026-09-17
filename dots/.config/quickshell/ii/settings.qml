@@ -266,10 +266,39 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        // An app must not tear itself down under the user. Quickshell reloads
+        // an instance whenever a file it loaded changes, and the update copies
+        // this very tree in, so the window used to restart part way through
+        // an update and, since a reload kills the objects' child processes,
+        // took the running update with it. The next launch loads the new
+        // files; this one keeps what it started with.
+        Quickshell.watchFiles = false
         MaterialThemeLoader.reapplyTheme()
         ThemeLibrary.load()
         Config.readWriteDelay = 0 // Settings app always only sets one var at a time so delay isn't needed
         recenterTimer.restart()
+    }
+
+    // An update under way is what the person opening Settings most likely
+    // wants to see, so it is shown unless a page was asked for by name.
+    Process {
+        running: !Quickshell.env("QS_SETTINGS_PAGE")
+        // The pid has to name a live process. A run that was killed, or a
+        // machine that lost power, leaves the file behind for good, and
+        // existence alone would then force this page open on every launch
+        // for the rest of the machine's life.
+        command: ["bash", "-c",
+            'p=$(cat "$0" 2>/dev/null) || exit 1;'
+            + ' case "$p" in ""|*[!0-9]*) exit 1 ;; esac;'
+            + ' kill -0 "$p" 2>/dev/null || exit 1;'
+            + ' [ ! -f "$1" ]',
+            Quickshell.env("HOME") + "/.local/state/mainstream/update.pid",
+            Quickshell.env("HOME") + "/.local/state/mainstream/update.exit"]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) return
+            const idx = root.pages.findIndex(page => page.component.endsWith("UpdateConfig.qml"))
+            if (idx !== -1) root.currentPage = idx
+        }
     }
 
     minimumWidth: 750

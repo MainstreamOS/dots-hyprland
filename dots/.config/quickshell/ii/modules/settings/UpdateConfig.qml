@@ -15,6 +15,18 @@ ContentPage {
     property bool isRunning: false
     property bool userStopped: false
 
+    // The update runs in a session of its own and writes here, so this page
+    // is only ever a viewer of it: a window that reloads or closes no longer
+    // takes the update with it, and whatever it printed, including how it
+    // ended, is still there to show the next time the page opens.
+    readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/mainstream"
+    readonly property string logPath: stateDir + "/update.log"
+    readonly property string exitPath: stateDir + "/update.exit"
+    readonly property string pidPath: stateDir + "/update.pid"
+    readonly property string launcher: Quickshell.shellPath("scripts/update/run-detached.sh")
+    // The launcher ends the log with this once the helper has exited.
+    readonly property string exitSentinel: "@@MAINSTREAM-UPDATE-EXIT "
+
     // Whether an AUR helper (yay or paru) is actually installed. The AUR
     // update switch is only shown when one is — Mainstream ships none by
     // default, so for most users the toggle would be a no-op control for a
@@ -98,38 +110,92 @@ ContentPage {
         // doesn't sit on screen for the rest of the run.
         pendingPassword = passwordField.text;
         passwordField.text = "";
-        helperProc.command = buildHelperArgs();
+        helperProc.command = ["bash", root.launcher, root.stateDir].concat(buildHelperArgs());
         helperProc.stdinEnabled = true;
         helperProc.running = true;
         isRunning = true;
     }
 
-    function stopUpdate() {
-        if (!isRunning) return;
-        userStopped = true;
-        if (helperProc.running) helperProc.signal(15);
+    function showStopFailed() {
+        root.outputText += "\n" + Translation.tr("Nothing to stop: that update is no longer running.");
+        root.isRunning = false;
+        probeProc.running = true;
     }
 
-    // Single privileged helper process. The helper at
-    // /usr/local/bin/mainstream-update-helper handles topgrade, the
-    // drop-to-user AUR step, the Quickshell ABI rebuild, and the
-    // pacman db.lck cleanup on stop — all inside one sudo invocation
-    // so the user only authenticates once.
+    function stopUpdate() {
+        if (!isRunning) return;
+        // Not marked as stopped until the signal has actually been delivered.
+        // The launcher forks, so the pid can be written a moment after the
+        // page thinks the run began; a Stop pressed in that window used to
+        // report a stopped run over a summary showing every step succeeded.
+        stopProc.running = true;
+    }
+
+    // Everything that happens once the helper has exited, whether this page
+    // watched it end or found the record afterwards.
+    function finish(exitCode) {
+        tailProc.running = false;
+        root.isRunning = false;
+        root.pendingPassword = "";
+        // Strip trailing whitespace before appending the completion line, so
+        // the auto-scrolled viewport lands on the Summary text rather than on
+        // the blank lines the log ends with.
+        root.outputText = root.outputText.replace(/\s+$/, "");
+        if (root.userStopped) {
+            root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
+            return;
+        }
+        if (exitCode < 0) {
+            root.outputText += "\n\n" + Translation.tr("The update did not finish. The record above stops where it stopped.");
+            return;
+        }
+        // sudo exits 1 on auth failure with a specific stderr line;
+        // surface a clearer message than a bare "exit code 1".
+        const authFailed = root.outputText.indexOf("incorrect password") !== -1
+            || root.outputText.indexOf("Sorry, try again") !== -1;
+        if (authFailed) {
+            root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
+            return;
+        }
+        // Exit code 100 is the helper's "primary path ok but developer-tool
+        // extras failed" signal, rendered the same as a full success: the
+        // Summary block already marks the failed extras step, and users who
+        // do not have those toolchains are not alarmed by a pass that erred
+        // on tools they never touch. 101 is the dotfiles step failing, which
+        // leaves the machine on its old release and must not read as success.
+        if (exitCode === 101) {
+            root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
+        } else if (exitCode === 0 || exitCode === 100) {
+            root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
+        } else {
+            root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
+        }
+    }
+
+    // A chunk of the record, usually one line. The sentinel is the helper's
+    // exit and is never shown; it is looked for anywhere in the chunk rather
+    // than at its start, because the parser can hand it over glued to the
+    // blank line the launcher writes before it.
+    function takeLine(line) {
+        const at = line.indexOf(root.exitSentinel);
+        if (at === -1) {
+            root.outputText += line + "\n";
+            return;
+        }
+        if (at > 0) root.outputText += line.substring(0, at);
+        const code = parseInt(line.substring(at + root.exitSentinel.length), 10);
+        root.finish(isNaN(code) ? -1 : code);
+    }
+
+    // Launches the update and nothing more. The helper itself runs under
+    // run-detached.sh in its own session; this process is over within a
+    // moment, once the password has been handed on.
     Process {
         id: helperProc
-        stdout: SplitParser {
-            onRead: data => { root.outputText += data + "\n"; }
-        }
-        stderr: SplitParser {
-            onRead: data => { root.outputText += data + "\n"; }
-        }
         onRunningChanged: {
-            // When the process flips from idle → running, push the
-            // password into stdin so `sudo -S` can authenticate, then
-            // immediately close the stdin stream — the helper doesn't
-            // read further input, and leaving the pipe open holds the
-            // process group open in some edge cases. This is the same
-            // pattern disk-mounter.qml uses.
+            // When the process flips from idle to running, push the password
+            // into stdin so `sudo -S` can authenticate, then close the stream:
+            // the launcher waits for exactly that one line.
             if (running && root.pendingPassword.length > 0) {
                 write(root.pendingPassword + "\n");
                 root.pendingPassword = "";
@@ -137,52 +203,107 @@ ContentPage {
             }
         }
         onExited: (exitCode, exitStatus) => {
-            root.isRunning = false;
-            // Drop any straggler password from QML state, even on
-            // error paths where pendingPassword may still be set.
             root.pendingPassword = "";
-            // Strip trailing whitespace before appending the completion
-            // line. SplitParser tends to emit an empty trailing chunk
-            // when the stream ends in a newline (`printf "...\n"`), and
-            // the stdout handler re-adds another \n to that empty —
-            // result is 1-2 extra blank lines after the helper's
-            // Summary block. Normalising here keeps the auto-scrolled
-            // viewport landing on the actual Summary text, not on
-            // dead whitespace.
-            root.outputText = root.outputText.replace(/\s+$/, "");
-            if (root.userStopped) {
-                root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
+            if (exitCode !== 0) {
+                root.isRunning = false;
+                root.outputText = Translation.tr("The update could not be started (launcher exit code %1).").arg(exitCode);
                 return;
             }
-            // sudo exits 1 on auth failure with a specific stderr line;
-            // surface a clearer message than a bare "exit code 1".
-            const authFailed = root.outputText.indexOf("incorrect password") !== -1
-                || root.outputText.indexOf("Sorry, try again") !== -1;
-            if (authFailed) {
-                root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
-                return;
-            }
-            // Exit code 100 is the helper's "primary path ok but
-            // developer-tool extras failed" signal. We deliberately
-            // render it the same as a full success: the Summary block
-            // above already marks the failed extras step as
-            // "FAILED (rc=N)", so power users who use those tools
-            // (cargo, pipx, npm, nix, …) see the failure when they
-            // scroll through the log. Regular users — who likely
-            // don't have those toolchains installed at all — aren't
-            // alarmed by an extras pass that errored on tools they
-            // never touch.
-            // 101 is the dotfiles step failing, which leaves the machine on its
-            // old release. That is not an extras failure and must not read as one:
-            // a user was told "completed successfully" while still on 1.3.2.
-            if (exitCode === 101) {
-                root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
-            } else if (exitCode === 0 || exitCode === 100) {
-                root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
-            } else {
-                root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
+            tailProc.running = true;
+        }
+    }
+
+    // Follows the record from its first line, so a page that opens part way
+    // through a run shows everything the helper has said so far.
+    Process {
+        id: tailProc
+        command: ["tail", "-n", "+1", "-F", root.logPath]
+        stdout: SplitParser { onRead: data => root.takeLine(data) }
+    }
+
+    // The helper is the child of the recorded session leader. It is signalled
+    // rather than the leader, which would only defer the signal until the
+    // helper finished on its own.
+    Process {
+        id: stopProc
+        // The pid has to still be the session the launcher recorded: a file
+        // left by a killed run names a number the kernel has since handed to
+        // something else, and signalling its children hits a bystander.
+        command: ["bash", "-c",
+            'p=$(cat "$0" 2>/dev/null) || exit 1;'
+            + ' case "$p" in ""|*[!0-9]*) exit 1 ;; esac;'
+            + ' kill -0 "$p" 2>/dev/null || exit 1;'
+            + ' [ "$(cut -d" " -f6 /proc/$p/stat 2>/dev/null)" = "$p" ] || exit 1;'
+            + ' pkill -TERM -P "$p"',
+            root.pidPath]
+        onExited: (code) => {
+            if (code === 0)
+                root.userStopped = true;
+            else
+                root.showStopFailed();
+        }
+    }
+
+    // Asked once when the page opens: is a run under way, and if not, is there
+    // a record of the last one to show.
+    Process {
+        id: probeProc
+        running: true
+        command: ["bash", "-c",
+            'if [ -f "$1" ]; then echo "finished $(cat "$1")";'
+            // The pid file outlives a run that was killed or lost to a power
+            // cut, so it has to name a live process to mean anything. Without
+            // this the page latches into a run that can never end, and both
+            // buttons that could clear it are disabled while it believes one
+            // is in progress.
+            + ' elif [ -f "$2" ] && kill -0 "$(cat "$2")" 2>/dev/null; then echo running;'
+            + ' elif [ -s "$0" ]; then rm -f "$2"; echo "finished -1";'
+            + ' else rm -f "$2"; echo none; fi',
+            root.logPath, root.exitPath, root.pidPath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const answer = this.text.trim();
+                if (answer === "running") {
+                    root.outputText = "";
+                    root.isRunning = true;
+                    tailProc.running = true;
+                } else if (answer.indexOf("finished ") === 0) {
+                    root.pendingExitCode = parseInt(answer.substring("finished ".length), 10);
+                    recordProc.running = true;
+                }
             }
         }
+    }
+    property int pendingExitCode: -1
+
+    // The finished record, read whole; its sentinel line goes through the
+    // same path a live one does.
+    Process {
+        id: recordProc
+        command: ["cat", root.logPath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.outputText = "";
+                // The flag that says the user stopped it lives only here,
+                // while the record lives on disk, so it is read back from the
+                // exit code the run left behind.
+                root.userStopped = (root.pendingExitCode === 143 || root.pendingExitCode === 130);
+                const lines = this.text.split("\n");
+                let sawSentinel = false;
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].indexOf(root.exitSentinel) === 0) { sawSentinel = true; root.takeLine(lines[i]); break; }
+                    root.outputText += lines[i] + "\n";
+                }
+                if (!sawSentinel) root.finish(isNaN(root.pendingExitCode) ? -1 : root.pendingExitCode);
+            }
+        }
+    }
+
+    // Clearing the output also lets go of the record, so it does not come
+    // back the next time the page opens.
+    Process {
+        id: clearProc
+        command: ["rm", "-f", root.logPath, root.exitPath, root.pidPath]
     }
 
     // One-shot probe for an AUR helper. Exit 0 = yay or paru is on PATH.
@@ -395,7 +516,10 @@ ContentPage {
                 materialIcon: "delete"
                 mainText: Translation.tr("Clear output")
                 enabled: !root.isRunning
-                onClicked: root.outputText = ""
+                onClicked: {
+                    root.outputText = "";
+                    clearProc.running = true;
+                }
             }
         }
 
