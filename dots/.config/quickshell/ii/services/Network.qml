@@ -27,16 +27,34 @@ Singleton {
     // Saved connection names (SSIDs with profiles)
     property var savedConnectionNames: new Set()
     
-    // Sorted and categorized network lists
-    readonly property list<var> friendlyWifiNetworks: [...wifiNetworks].sort((a, b) => {
-        if (a.active && !b.active)
-            return -1;
-        if (!a.active && b.active)
-            return 1;
-        return b.strength - a.strength;
-    })
+    // Sorted once per scan, not from a binding. Sorting on strength in a
+    // binding rebuilt the list on every scan, and every row with it.
+    property var friendlyWifiNetworks: []
     readonly property list<var> savedNetworks: friendlyWifiNetworks.filter(n => n.isSaved && !n.active)
     readonly property list<var> availableNetworks: friendlyWifiNetworks.filter(n => !n.isSaved && !n.active)
+
+    function reorderNetworks() {
+        const before = root.friendlyWifiNetworks;
+        // Only when the networks or the connected one change. Two networks a
+        // few dBm apart swap on nearly every scan, and each swap cost a full
+        // row rebuild. Signal bars still update live inside each row.
+        const namesNow = wifiNetworks.map(n => n.ssid).sort().join("\u0000");
+        const namesBefore = before.map(n => n.ssid).sort().join("\u0000");
+        const activeNow = (wifiNetworks.find(n => n.active) ?? null);
+        const activeBefore = (before.find(n => n.active) ?? null);
+        if (namesNow === namesBefore && activeNow === activeBefore)
+            return;
+        // A prompt is open, and the password being typed lives in a row.
+        if (before.some(n => n.askingPassword))
+            return;
+        root.friendlyWifiNetworks = [...wifiNetworks].sort((a, b) => {
+            if (a.active && !b.active)
+                return -1;
+            if (!a.active && b.active)
+                return 1;
+            return b.strength - a.strength;
+        });
+    }
     
     property string wifiStatus: "disconnected"
 
@@ -160,11 +178,18 @@ Singleton {
                 }
             }
         }
+        // Only for a network that plausibly wants one. Asking on any failure
+        // prompted for a password when the network was just out of range.
         onExited: (exitCode, exitStatus) => {
-            if (root.wifiConnectTarget) {
-                root.wifiConnectTarget.askingPassword = (exitCode !== 0)
-            }
+            const target = root.wifiConnectTarget;
+            if (target && exitCode !== 0 && !target.askingPassword)
+                target.askingPassword = target.isSecure && !target.isSaved;
             root.wifiConnectTarget = null
+        }
+        // onExited never fires if the command cannot start at all.
+        onRunningChanged: {
+            if (!running && root.wifiConnectTarget)
+                root.wifiConnectTarget = null;
         }
     }
 
@@ -234,11 +259,11 @@ Singleton {
     Process {
         id: rescanProcess
         command: ["nmcli", "dev", "wifi", "list", "--rescan", "yes"]
-        stdout: SplitParser {
-            onRead: {
-                wifiScanning = false;
-                getNetworks.running = true;
-            }
+        // Output unused; getNetworks asks for the fields this service wants.
+        // Reading it per line rebuilt the list once per network in range.
+        onExited: {
+            wifiScanning = false;
+            getNetworks.running = true;
         }
     }
 
@@ -423,12 +448,19 @@ Singleton {
 
                 const rNetworks = root.wifiNetworks;
 
-                const destroyed = rNetworks.filter(rn => !wifiNetworks.find(n => n.frequency === rn.frequency && n.ssid === rn.ssid && n.bssid === rn.bssid));
-                for (const network of destroyed)
+                // Matched by name, since the list above is one entry per name.
+                // Matching on radio and band rebuilt the object whenever the
+                // strongest radio changed, taking the password prompt with it.
+                const stillThere = ssid => wifiNetworks.some(n => n.ssid === ssid);
+                // A network being joined stays until it is done with.
+                const inUse = ap => ap.askingPassword || ap === root.wifiConnectTarget;
+
+                const gone = rNetworks.filter(rn => !stillThere(rn.ssid) && !inUse(rn));
+                for (const network of gone)
                     rNetworks.splice(rNetworks.indexOf(network), 1).forEach(n => n.destroy());
 
                 for (const network of wifiNetworks) {
-                    const match = rNetworks.find(n => n.frequency === network.frequency && n.ssid === network.ssid && n.bssid === network.bssid);
+                    const match = rNetworks.find(n => n.ssid === network.ssid);
                     if (match) {
                         match.lastIpcObject = network;
                     } else {
@@ -437,6 +469,8 @@ Singleton {
                         }));
                     }
                 }
+
+                root.reorderNetworks();
             }
         }
     }
