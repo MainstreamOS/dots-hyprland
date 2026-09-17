@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 
 ContentPage {
@@ -26,6 +27,27 @@ ContentPage {
     readonly property string launcher: Quickshell.shellPath("scripts/update/run-detached.sh")
     // The launcher ends the log with this once the helper has exited.
     readonly property string exitSentinel: "@@MAINSTREAM-UPDATE-EXIT "
+    // The helper's two answers about the running desktop: what this run is
+    // about to replace, judged before it installs anything, and what it did.
+    readonly property string rebootPlanMarker: "@@MAINSTREAM-UPDATE-REBOOT-PLAN "
+    readonly property string rebootMarker: "@@MAINSTREAM-UPDATE-REBOOT "
+    readonly property string rebootCheck: Quickshell.shellPath("scripts/update/reboot-check.sh")
+    // Two different questions, kept apart. What a run started now would do is
+    // predicted from the pending list, or stated by a live run's own plan;
+    // what the finished run did is its verdict. Ranking them against each
+    // other let a replayed record silence the fresh prediction, which is the
+    // answer the person standing at the page actually wants.
+    property bool rebootPredicted: false
+    property bool rebootRequired: false
+    // A finished run that replaced parts of the desktop leaves one thing to
+    // do; the page leads with that until the reboot happens.
+    readonly property bool awaitingReboot: !root.isRunning && root.rebootRequired && root.outputText.length > 0
+    // A record older than this boot belongs to a run whose reboot happened.
+    property bool recordPredatesBoot: false
+    // True while a finished record is being replayed rather than tailed. A
+    // replayed plan says what some earlier run was about to do, which is not
+    // a prediction about anything now.
+    property bool replaying: false
 
     // Whether an AUR helper (yay or paru) is actually installed. The AUR
     // update switch is only shown when one is — Mainstream ships none by
@@ -106,6 +128,10 @@ ContentPage {
         }
         outputText = "";
         userStopped = false;
+        rebootRequired = false;
+        rebootPredicted = false;
+        recordPredatesBoot = false;
+        replaying = false;
         // Snapshot the password and clear the visible field so it
         // doesn't sit on screen for the rest of the run.
         pendingPassword = passwordField.text;
@@ -170,6 +196,45 @@ ContentPage {
         } else {
             root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
         }
+        if (root.rebootRequired)
+            root.outputText += "\n" + Translation.tr("Parts of the running desktop were replaced. Reboot to finish the update; until then some controls may not work.");
+    }
+
+    // "<0|1> [package ...]", from the check script or a marker line. The
+    // package names stay in the record; the page only says yes or no.
+    function readRebootAnswer(text, kind) {
+        const yes = text.trim().split(/\s+/)[0] === "1";
+        if (kind === "verdict") {
+            // A record written before this boot describes a run whose reboot
+            // has already happened.
+            root.rebootRequired = yes && !root.recordPredatesBoot;
+            // That run is over, so it predicts nothing about the next one.
+            root.rebootPredicted = false;
+        } else if (kind === "plan") {
+            // Only a run happening now says anything about what is pending.
+            if (!root.replaying)
+                root.rebootPredicted = yes;
+        } else if (!root.isRunning) {
+            // The on-open prediction never overrides a run in flight, which
+            // knows more than the pending list does.
+            root.rebootPredicted = yes;
+        }
+    }
+
+    // Asked when the page opens: of what is pending, does anything own a
+    // file the running desktop has loaded. checkupdates answers from a
+    // fresh copy of the repositories; without it the last sync stands in.
+    Process {
+        id: predictProc
+        // Held until the probe has said what is on disk. Predicting costs a
+        // repository sync, which is wasted while a run is in flight or a
+        // finished record is about to answer the same question, and the page
+        // is rebuilt on every visit because the settings pages share a loader.
+        running: false
+        command: ["bash", root.rebootCheck, "predict"]
+        stdout: StdioCollector {
+            onStreamFinished: root.readRebootAnswer(this.text.replace(/\n/g, " "), "predict")
+        }
     }
 
     // A chunk of the record, usually one line. The sentinel is the helper's
@@ -177,6 +242,16 @@ ContentPage {
     // than at its start, because the parser can hand it over glued to the
     // blank line the launcher writes before it.
     function takeLine(line) {
+        const plan = line.indexOf(root.rebootPlanMarker);
+        if (plan !== -1) {
+            root.readRebootAnswer(line.substring(plan + root.rebootPlanMarker.length), "plan");
+            return;
+        }
+        const verdict = line.indexOf(root.rebootMarker);
+        if (verdict !== -1) {
+            root.readRebootAnswer(line.substring(verdict + root.rebootMarker.length), "verdict");
+            return;
+        }
         const at = line.indexOf(root.exitSentinel);
         if (at === -1) {
             root.outputText += line + "\n";
@@ -226,9 +301,9 @@ ContentPage {
     // helper finished on its own.
     Process {
         id: stopProc
-        // The pid has to still be the session the launcher recorded: a file
-        // left by a killed run names a number the kernel has since handed to
-        // something else, and signalling its children hits a bystander.
+        // The pid has to still be the session the launcher recorded: a pid
+        // file left by a killed run names a number the kernel has since handed
+        // to something else, and signalling its children hits a bystander.
         command: ["bash", "-c",
             'p=$(cat "$0" 2>/dev/null) || exit 1;'
             + ' case "$p" in ""|*[!0-9]*) exit 1 ;; esac;'
@@ -237,10 +312,14 @@ ContentPage {
             + ' pkill -TERM -P "$p"',
             root.pidPath]
         onExited: (code) => {
-            if (code === 0)
+            if (code === 0) {
                 root.userStopped = true;
-            else
+            } else {
+                // Nothing was signalled, so the run is still going or has
+                // already ended on its own. Say so rather than leaving a
+                // button that looks like it worked.
                 root.showStopFailed();
+            }
         }
     }
 
@@ -250,8 +329,10 @@ ContentPage {
         id: probeProc
         running: true
         command: ["bash", "-c",
-            'if [ -f "$1" ]; then echo "finished $(cat "$1")";'
-            // The pid file outlives a run that was killed or lost to a power
+            'if [ -f "$1" ]; then read up _ < /proc/uptime; s="";'
+            + ' [ "$(stat -c %Y "$0")" -lt "$(( $(date +%s) - ${up%.*} ))" ] && s=" rebooted";'
+            + ' echo "finished $(cat "$1")$s";'
+            // A pid file outlives a run that was killed or lost to a power
             // cut, so it has to name a live process to mean anything. Without
             // this the page latches into a run that can never end, and both
             // buttons that could clear it are disabled while it believes one
@@ -267,10 +348,18 @@ ContentPage {
                     root.outputText = "";
                     root.isRunning = true;
                     tailProc.running = true;
-                } else if (answer.indexOf("finished ") === 0) {
-                    root.pendingExitCode = parseInt(answer.substring("finished ".length), 10);
-                    recordProc.running = true;
+                    return;
                 }
+                if (answer.indexOf("finished ") === 0) {
+                    const rest = answer.substring("finished ".length);
+                    root.recordPredatesBoot = rest.indexOf(" rebooted") !== -1;
+                    root.pendingExitCode = parseInt(rest, 10);
+                    recordProc.running = true;
+                    return;
+                }
+                // Nothing on disk, so the pending list is the only thing that
+                // can answer whether a run started now would end in a reboot.
+                predictProc.running = true;
             }
         }
     }
@@ -284,6 +373,8 @@ ContentPage {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.outputText = "";
+                // What follows describes a run that has already ended.
+                root.replaying = true;
                 // The flag that says the user stopped it lives only here,
                 // while the record lives on disk, so it is read back from the
                 // exit code the run left behind.
@@ -291,10 +382,17 @@ ContentPage {
                 const lines = this.text.split("\n");
                 let sawSentinel = false;
                 for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].indexOf(root.exitSentinel) === 0) { sawSentinel = true; root.takeLine(lines[i]); break; }
-                    root.outputText += lines[i] + "\n";
+                    if (lines[i].indexOf(root.exitSentinel) === 0) sawSentinel = true;
+                    root.takeLine(lines[i]);
+                    if (sawSentinel) break;
                 }
                 if (!sawSentinel) root.finish(isNaN(root.pendingExitCode) ? -1 : root.pendingExitCode);
+                root.replaying = false;
+                // The record said the last run needs no reboot, or its reboot
+                // already happened. Either way nothing has answered what a run
+                // started now would do, so ask.
+                if (!root.rebootRequired)
+                    predictProc.running = true;
             }
         }
     }
@@ -349,6 +447,46 @@ ContentPage {
         title: Translation.tr("System Update")
 
         headerExtra: [
+            // Shown as soon as it is known, which is before the update starts
+            // whenever the pending list can be read, so nobody starts a run
+            // without knowing it ends in a reboot.
+            // Cut like the buttons beside it (height, corner, padding, icon
+            // size) so the row reads as one set; only the tint says it is a
+            // notice rather than something to press.
+            Rectangle {
+                id: rebootChip
+                visible: root.rebootPredicted || root.rebootRequired
+                // The tooltip takes a parent without a hover state as always
+                // hovered, so the chip has to report its own.
+                property bool hovered: chipHover.hovered
+                implicitWidth: rebootChipRow.implicitWidth + 20
+                implicitHeight: 35
+                radius: Appearance.rounding.small
+                color: root.rebootRequired ? Appearance.m3colors.m3errorContainer : Appearance.m3colors.m3tertiaryContainer
+                RowLayout {
+                    id: rebootChipRow
+                    anchors.centerIn: parent
+                    spacing: 5
+                    MaterialSymbol {
+                        text: "restart_alt"
+                        iconSize: Appearance.font.pixelSize.larger
+                        fill: 1
+                        color: root.rebootRequired ? Appearance.m3colors.m3onErrorContainer : Appearance.m3colors.m3onTertiaryContainer
+                    }
+                    StyledText {
+                        text: Translation.tr("Reboot required")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: root.rebootRequired ? Appearance.m3colors.m3onErrorContainer : Appearance.m3colors.m3onTertiaryContainer
+                    }
+                }
+                HoverHandler {
+                    id: chipHover
+                }
+                StyledToolTip {
+                    extraVisibleCondition: rebootChip.visible
+                    text: Translation.tr("This update replaces parts of the running desktop.")
+                }
+            },
             RippleButtonWithIcon {
                 materialIcon: "content_copy"
                 mainText: Translation.tr("Copy")
@@ -411,8 +549,14 @@ ContentPage {
                     textFormat: Text.PlainText
                 }
 
+                // Keep the newest line in view unless the reader has scrolled
+                // up to look at something, and come back to following once
+                // they return to the end. This is not tied to the run being
+                // under way, because the result lines land after it ends.
+                property bool followTail: true
+                onContentYChanged: followTail = atYEnd
                 onContentHeightChanged: {
-                    if (root.isRunning) {
+                    if (followTail) {
                         contentY = Math.max(0, contentHeight - height);
                     }
                 }
@@ -443,10 +587,45 @@ ContentPage {
             }
         }
 
+        // Clear sits beside the reboot button rather than only in the row
+        // below, which this state hides: a verdict the user disagrees with,
+        // or a run they want to try again, would otherwise have no way out
+        // except actually rebooting.
+        RowLayout {
+            visible: root.awaitingReboot
+            Layout.fillWidth: true
+            Layout.topMargin: 8
+            spacing: 8
+
+            Item { Layout.fillWidth: true }
+
+            RippleButtonWithIcon {
+                materialIcon: "delete"
+                mainText: Translation.tr("Clear output")
+                onClicked: {
+                    root.outputText = "";
+                    clearProc.running = true;
+                    root.rebootRequired = false;
+                    root.rebootPredicted = false;
+                    root.recordPredatesBoot = false;
+                }
+            }
+
+            RippleButtonWithIcon {
+                materialIcon: "restart_alt"
+                mainText: Translation.tr("Reboot Now")
+                // The shared path, so windows are snapshotted for the next
+                // login and clients are asked to close first. A bare systemctl
+                // call did neither, and had no fallback when it was refused.
+                onClicked: Session.reboot()
+            }
+        }
+
         // Show-advanced toggle on its own row, left-aligned above the
         // password / Start row. ConfigSwitch is wider than a button so
         // pinning it alongside the password field made the row crowded.
         ConfigRow {
+            visible: !root.awaitingReboot
             ConfigSwitch {
                 id: advancedToggle
                 buttonIcon: "tune"
@@ -460,6 +639,8 @@ ContentPage {
         }
 
         ConfigRow {
+            id: startRow
+            visible: !root.awaitingReboot
             // Password field on the left edge of the row. Captured at
             // submit, then passed to the helper via sudo -S over stdin
             // (see helperProc above). Visible field is cleared as soon
@@ -519,13 +700,16 @@ ContentPage {
                 onClicked: {
                     root.outputText = "";
                     clearProc.running = true;
+                    root.rebootRequired = false;
+                    root.rebootPredicted = false;
+                    root.recordPredatesBoot = false;
                 }
             }
         }
 
         ContentSubsection {
             title: Translation.tr("Advanced")
-            visible: advancedToggle.checked
+            visible: advancedToggle.checked && !root.awaitingReboot
 
             ConfigRow {
                 uniform: true

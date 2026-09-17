@@ -93,7 +93,7 @@ LEGACY_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
 rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
 
 cleanup() {
-    rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
+    rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS" "${REBOOT_SESSION_LIST:-}"
     # A user-stopped update may have killed pacman mid-transaction;
     # without this the next pacman invocation refuses to start until
     # the user manually removes the lock. Only clear it when no package
@@ -186,6 +186,39 @@ $ORIG_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 "$TEMP_SUDOERS"
 
+# When this run began, in the form pacman.log records, so the verdict at the
+# end can pick out exactly what this run installed. The check itself runs as
+# the calling user: it reads that user's own processes, and nothing it needs
+# is root's to give.
+HELPER_STARTED_AT="$(date '+%Y-%m-%dT%H:%M:%S%z')"
+REBOOT_CHECK="$ORIG_HOME/.config/quickshell/ii/scripts/update/reboot-check.sh"
+reboot_check() {  # $1 = mode, rest = args; stdin passes through
+    [[ -r "$REBOOT_CHECK" ]] || { echo 0; return 0; }
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" "$@" 2>/dev/null || echo 0
+}
+# Which packages the running desktop has loaded, recorded BEFORE anything is
+# replaced. Afterwards the question cannot be answered at all: the file the
+# session still holds is gone from the disk and from the package database,
+# which by then lists the new name, and most of what a desktop maps carries
+# its version in the filename.
+REBOOT_SESSION_LIST="$(mktemp)"
+if [[ -r "$REBOOT_CHECK" ]]; then
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" session \
+        > "$REBOOT_SESSION_LIST" 2>/dev/null || true
+    chmod 0644 "$REBOOT_SESSION_LIST" 2>/dev/null || true
+fi
+# The two lines the Settings page reads. The first says what this run is
+# about to replace, before anything is; the second says what it did.
+reboot_marker() {  # $1 = PLAN|"", stdin = the check's output
+    # Read whole first: head on a pipe takes more than its line with it.
+    local all flag reasons
+    all="$(cat)"
+    flag="${all%%$'\n'*}"
+    reasons="$(printf '%s\n' "$all" | tail -n +2 | tr '\n' ' ')"
+    reasons="${reasons% }"
+    printf '@@MAINSTREAM-UPDATE-REBOOT%s %s%s\n' "${1:+-$1}" "${flag:-0}" "${reasons:+ $reasons}"
+}
+
 # ── Parse flags ─────────────────────────────────────────────────────────────
 SKIP_SYSTEM=0
 SKIP_AUR=0
@@ -256,6 +289,22 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo "  $(t "System & [mainstream] packages — pacman -Syu")"
     echo "═══════════════════════════════════════════════════════════"
     PACMAN_LOG=$(mktemp)
+    # Asked before anything changes: which of the packages about to arrive
+    # own something the running desktop has loaded. The answer goes to the
+    # page as a marker and to the person as a sentence, so nobody is surprised
+    # by a reboot at the end of a run they could see coming at the start.
+    # --noconfirm because this shares the helper's stdin with sudo, which has
+    # already drained it: a provider or replacement prompt would read end of
+    # file, take no for an answer and print nothing, so the plan would come
+    # back empty on exactly the large transactions that need one. The database
+    # refresh this does is repeated by the upgrade below, which is a fetch
+    # worth paying for a list of what is actually about to happen rather than
+    # a guess from the last sync.
+    PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm </dev/null 2>/dev/null | reboot_check plan)"
+    printf '%s\n' "$PLAN_OUT" | reboot_marker PLAN
+    if [[ "$(printf '%s\n' "$PLAN_OUT" | head -n1)" == "1" ]]; then
+        echo ">>> $(t "This update replaces parts of the running desktop. A reboot will be needed when it finishes.")"
+    fi
     pacman -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
     PACMAN_RC=${PIPESTATUS[0]}
     if [[ "$PACMAN_RC" -ne 0 ]]; then
@@ -650,6 +699,12 @@ status_for() {
         echo "$(tf "FAILED (rc=%s)" "$rc")"
     fi
 }
+# Judged from what this run actually installed and from what is already
+# replaced beneath the session, whichever step did it.
+VERDICT_OUT="$(reboot_check verdict "$HELPER_STARTED_AT" "$REBOOT_SESSION_LIST")"
+printf '%s\n' "$VERDICT_OUT" | reboot_marker
+REBOOT_NEEDED=0; [[ "$(printf '%s\n' "$VERDICT_OUT" | head -n1)" == "1" ]] && REBOOT_NEEDED=1
+
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  $(t "Summary")"
@@ -666,6 +721,11 @@ else
     printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
 fi
 printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC")"
+if [[ "$REBOOT_NEEDED" -eq 1 ]]; then
+    printf "  %-30s %s\n" "$(t "Reboot:")" "$(t "required")"
+else
+    printf "  %-30s %s\n" "$(t "Reboot:")" "$(t "not needed")"
+fi
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
     printf "  %-30s %s\n" "$(t "[mainstream] repo:")" "$(t "off (untrusted key)")"
     echo ""
