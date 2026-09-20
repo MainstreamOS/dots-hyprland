@@ -18,12 +18,20 @@ ContentPage {
 
     // The update runs in a session of its own and writes here, so this page
     // is only ever a viewer of it: a window that reloads or closes no longer
-    // takes the update with it, and whatever it printed, including how it
-    // ended, is still there to show the next time the page opens.
+    // takes the update with it. How a run ended stays on disk until it has
+    // been seen and the window closed, so a run that finishes while Settings
+    // is shut is still shown once, and one watched to the end is not shown
+    // again on every visit after. A result that needs a reboot stays until
+    // the reboot has happened.
     readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/mainstream"
     readonly property string logPath: stateDir + "/update.log"
     readonly property string exitPath: stateDir + "/update.exit"
     readonly property string pidPath: stateDir + "/update.pid"
+    readonly property string seenPath: stateDir + "/update.seen"
+    // A run that replaced parts of the desktop leaves this behind when its
+    // record goes, so the reminder to reboot outlives the output. It expires
+    // on its own once the machine has been started since it was written.
+    readonly property string rebootMarkPath: stateDir + "/update.reboot"
     readonly property string launcher: Quickshell.shellPath("scripts/update/run-detached.sh")
     // The launcher ends the log with this once the helper has exited.
     readonly property string exitSentinel: "@@MAINSTREAM-UPDATE-EXIT "
@@ -41,7 +49,7 @@ ContentPage {
     property bool rebootRequired: false
     // A finished run that replaced parts of the desktop leaves one thing to
     // do; the page leads with that until the reboot happens.
-    readonly property bool awaitingReboot: !root.isRunning && root.rebootRequired && root.outputText.length > 0
+    readonly property bool awaitingReboot: !root.isRunning && root.rebootRequired
     // A record older than this boot belongs to a run whose reboot happened.
     property bool recordPredatesBoot: false
     // True while a finished record is being replayed rather than tailed. A
@@ -227,6 +235,15 @@ ContentPage {
         }
         if (root.rebootRequired)
             root.outputText += "\n" + Translation.tr("Parts of the running desktop were replaced. Reboot to finish the update; until then some controls may not work.");
+        // Only a run that succeeded is let go of on close; a failure and a
+        // stop stay to be read again. A reboot the run asked for is kept on
+        // its own, so the output can go while the reminder stays.
+        if (exitCode === 0 || exitCode === 100) {
+            if (root.rebootRequired)
+                rebootMarkProc.running = true;
+            seenProc.running = true;
+        }
+        rebootMarkCheck.running = true;
     }
 
     // "<0|1> [package ...]", from the check script or a marker line. The
@@ -441,6 +458,7 @@ ContentPage {
                 // Nothing on disk, so the pending list is the only thing that
                 // can answer whether a run started now would end in a reboot.
                 predictProc.running = true;
+                rebootMarkCheck.running = true;
             }
         }
     }
@@ -487,7 +505,36 @@ ContentPage {
     // back the next time the page opens.
     Process {
         id: clearProc
-        command: ["rm", "-f", root.logPath, root.exitPath, root.pidPath]
+        command: ["rm", "-f", root.logPath, root.exitPath, root.pidPath, root.seenPath, root.rebootMarkPath]
+    }
+
+    Process {
+        id: rebootMarkProc
+        command: ["touch", root.rebootMarkPath]
+    }
+
+    // A marker older than this boot belongs to a reboot that has happened.
+    // A run's own verdict is never overruled here; a marker can only add.
+    Process {
+        id: rebootMarkCheck
+        command: ["bash", "-c",
+            '[ -f "$0" ] || { echo none; exit 0; }; read up _ < /proc/uptime;'
+            + ' if [ "$(stat -c %Y "$0")" -ge "$(( $(date +%s) - ${up%.*} ))" ]; then echo pending;'
+            + ' else rm -f "$0"; echo stale; fi',
+            root.rebootMarkPath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() === "pending" && !root.isRunning)
+                    root.rebootRequired = true;
+            }
+        }
+    }
+
+    // Says the result on disk has been shown. The window reads it when it
+    // closes and lets the record go.
+    Process {
+        id: seenProc
+        command: ["touch", root.seenPath]
     }
 
     // Copy takes the whole record, which the text item may no longer hold.

@@ -25,7 +25,7 @@ dir="$1"; shift
 [[ $# -gt 0 ]] || { echo "run-detached: no command given" >&2; exit 2; }
 mkdir -p "$dir" || exit 2
 log="$dir/update.log"; exitf="$dir/update.exit"; pidf="$dir/update.pid"
-rm -f "$exitf" "$pidf"
+rm -f "$exitf" "$pidf" "$dir/update.seen"
 : > "$log" || exit 2
 
 # Waiting for the whole line is what keeps this from racing the page: the

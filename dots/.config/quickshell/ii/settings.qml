@@ -180,7 +180,15 @@ ApplicationWindow {
     property int currentPage: initialPage
 
     visible: true
-    onClosing: Qt.quit()
+    // A successful run's record is kept only until it has been seen and the
+    // window closed. The Update page marks it seen once it has shown the
+    // result; a run still going, or one that failed, has no mark and stays.
+    onClosing: {
+        Quickshell.execDetached(["bash", "-c",
+            '[ -f "$0/update.seen" ] && rm -f "$0/update.log" "$0/update.exit" "$0/update.seen"',
+            Quickshell.env("HOME") + "/.local/state/mainstream"]);
+        Qt.quit();
+    }
     title: Translation.tr("Mainstream Settings")
 
     // Re-center on the active screen after a monitor scale apply.
