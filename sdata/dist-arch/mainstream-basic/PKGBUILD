@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=21
+pkgrel=22
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -10,6 +10,7 @@ arch=(any)
 license=(None)
 depends=(
   bc
+  qrencode
   coreutils
   cliphist
   curl
