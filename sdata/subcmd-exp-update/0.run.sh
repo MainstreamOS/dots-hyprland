@@ -1086,7 +1086,10 @@ restore_hypr_autoreload() {
 if _hypr_live; then hyprctl keyword misc:disable_autoreload false >/dev/null 2>&1 || true; fi
 if _qs_live; then qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true; fi
 
-trap 'restore_hypr_autoreload; resume_qs_reload' EXIT INT TERM HUP
+# Chained onto the earlier trap rather than replacing it, which left the lock
+# file behind on every normal run and swallowed the failure notice. The
+# exit code is carried across so that notice still says what happened.
+trap '_rc=$?; restore_hypr_autoreload; resume_qs_reload; (exit $_rc); cleanup_on_exit' EXIT INT TERM HUP
 if _hypr_live; then
   hyprctl keyword misc:disable_autoreload true >/dev/null 2>&1 || true
 fi

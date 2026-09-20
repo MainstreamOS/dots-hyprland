@@ -263,6 +263,14 @@ if [[ $DRY_RUN -eq 1 ]]; then
 fi
 
 # ── 5. Auto-stash if dirty (uncommitted + untracked) ───────────────────────
+# What this tool and exp-update keep in the clone is not a local edit. Stashing
+# it carried the previous run's conflict backups, and the applied-tag marker,
+# into a stash nobody is told to look in.
+_exclude="${CLONE_DIR}/.git/info/exclude"
+mkdir -p "$(dirname "$_exclude")" 2>/dev/null || true
+for _p in '.updatems-applied-tag' '.update-backups/' '.update-lock'; do
+    grep -qxF "$_p" "$_exclude" 2>/dev/null || printf '%s\n' "$_p" >> "$_exclude"
+done
 DIRTY=0
 if ! git diff --quiet || ! git diff --cached --quiet \
         || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
@@ -348,10 +356,10 @@ ensure_mainstream_system
 if [[ $RC -eq 0 ]]; then
     echo "$LATEST_TAG" > "$MARKER"
     ok "$(tf "Applied %s. Marker written: %s" "$LATEST_TAG" "$MARKER")"
-    [[ $DIRTY -eq 1 ]] && warn "$(tf "Local edits stashed — restore with: cd '%s' && git stash list" "$CLONE_DIR")"
+    [[ $DIRTY -eq 1 ]] && warn "$(tf "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop" "$CLONE_DIR")"
     exit 0
 else
     warn "$(tf "exp-update exited with rc=%s; marker NOT updated so next run will retry." "$RC")"
-    [[ $DIRTY -eq 1 ]] && warn "$(tf "Local edits stashed — restore with: cd '%s' && git stash list" "$CLONE_DIR")"
+    [[ $DIRTY -eq 1 ]] && warn "$(tf "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop" "$CLONE_DIR")"
     exit "$RC"
 fi
