@@ -75,6 +75,9 @@ if [[ -z "$ORIG_HOME" || ! -d "$ORIG_HOME" ]]; then
     echo "mainstream-update-helper: could not resolve home directory for $ORIG_USER" >&2
     exit 1
 fi
+# Said first, so the page can tell a run that got this far from one sudo
+# turned away, whatever language sudo complained in.
+echo "@@MAINSTREAM-UPDATE-HELPER-START"
 
 # ── Temp NOPASSWD + cleanup trap ────────────────────────────────────────────
 # Filename rules:
@@ -104,7 +107,16 @@ cleanup() {
         rm -f /var/lib/pacman/db.lck 2>/dev/null
     fi
 }
-trap cleanup EXIT INT TERM HUP
+trap cleanup EXIT
+# A stop request ends the step under way too and leaves, instead of letting
+# the trap return into a script that then walks every remaining step with the
+# sudoers rule already gone. 143 is what the page reads as stopped.
+on_stop() {
+    trap - INT TERM HUP
+    pkill -TERM -P $$ 2>/dev/null || true
+    exit 143
+}
+trap on_stop INT TERM HUP
 # The trap cannot run after SIGKILL or an OOM kill, and that is exactly when a
 # NOPASSWD rule must not be left behind. A separate unit outlives this process
 # and sweeps the file the moment it is gone.
@@ -126,6 +138,14 @@ if [[ -r /usr/local/lib/mainstream-tr.sh ]]; then
 else
     t()  { printf '%s' "$1"; }
     tf() { local fmt="$1"; shift; printf -- "$fmt" "$@"; }
+fi
+
+# One run at a time. A second helper would remove the sudoers rule the first
+# is relying on, and two package managers would contend for the database.
+exec 9>/run/lock/mainstream-update.lock
+if ! flock -n 9; then
+    echo ">>> $(t "Another update is already running. Let it finish, then try again.")"
+    exit 3
 fi
 
 # The conflict-adoption path below reads pacman's messages; they are only

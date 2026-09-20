@@ -203,6 +203,16 @@ Singleton {
     }
 
     function openUpdatesPage() {
+        // A Settings window already open takes the page and comes forward.
+        // A second window would sit beside the first, and could start a
+        // second update beside the first one too.
+        const title = Translation.tr("Mainstream Settings");
+        const open = (HyprlandData.windowList || []).find(w => w["class"] === "org.quickshell" && w.title === title);
+        if (open && open.pid > 0) {
+            Quickshell.execDetached(["qs", "ipc", "--pid", String(open.pid), "call", "settings", "showPage", "UpdateConfig.qml"]);
+            Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.focus({window = "address:${open.address}"})`]);
+            return;
+        }
         Quickshell.execDetached({
             command: ["qs", "-p", Directories.settingsAppPath],
             environment: ({ "QS_SETTINGS_PAGE": "UpdateConfig.qml" })

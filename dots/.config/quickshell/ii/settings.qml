@@ -294,6 +294,16 @@ ApplicationWindow {
         recenterTimer.restart()
     }
 
+    // A second launch hands its page to this window rather than opening
+    // another: qs ipc --pid <pid> call settings showPage UpdateConfig.qml
+    IpcHandler {
+        target: "settings"
+        function showPage(name: string): void {
+            const idx = root.pages.findIndex(page => page.component.endsWith(name));
+            if (idx !== -1) root.currentPage = idx;
+        }
+    }
+
     // An update under way is what the person opening Settings most likely
     // wants to see, so it is shown unless a page was asked for by name.
     Process {
@@ -303,10 +313,8 @@ ApplicationWindow {
         // existence alone would then force this page open on every launch
         // for the rest of the machine's life.
         command: ["bash", "-c",
-            'p=$(cat "$0" 2>/dev/null) || exit 1;'
-            + ' case "$p" in ""|*[!0-9]*) exit 1 ;; esac;'
-            + ' kill -0 "$p" 2>/dev/null || exit 1;'
-            + ' [ ! -f "$1" ]',
+            'bash "$0" "$1" >/dev/null 2>&1 && [ ! -f "$2" ]',
+            Quickshell.shellPath("scripts/update/update-live.sh"),
             Quickshell.env("HOME") + "/.local/state/mainstream/update.pid",
             Quickshell.env("HOME") + "/.local/state/mainstream/update.exit"]
         onExited: (exitCode, exitStatus) => {
@@ -491,6 +499,12 @@ ApplicationWindow {
                     Connections {
                         target: Appearance
                         function onThemeRevisionChanged() {
+                            // The Update page is left standing: its colors
+                            // follow Appearance on their own, and rebuilding it
+                            // replays the whole run record and asks for the
+                            // pending list again, on every wallpaper change.
+                            if (root.pages[root.currentPage].component.endsWith("UpdateConfig.qml"))
+                                return;
                             pageLoader.reloadCurrentPage();
                         }
                     }

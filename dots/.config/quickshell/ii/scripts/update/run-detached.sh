@@ -17,7 +17,8 @@
 #   update.log   everything the helper printed, ending in the sentinel line
 #                "@@MAINSTREAM-UPDATE-EXIT <code>" once it has finished
 #   update.exit  the exit code, present only once the run is over
-#   update.pid   the session leader while it runs, for the Stop button
+#   update.pid   the session leader and its start tick while it runs, for
+#                the Stop button and the page's liveness check
 set -u
 
 dir="$1"; shift
@@ -36,7 +37,9 @@ IFS= read -r pw || { echo "run-detached: no password on stdin" >&2; exit 2; }
 # waiting shell. The Stop button signals the child of the recorded pid.
 printf '%s\n' "$pw" | setsid -f bash -c '
     log="$1"; exitf="$2"; pidf="$3"; shift 3
-    echo $$ > "$pidf"
+    # The tick this session started at goes in beside the pid, so the page can
+    # tell the run from whatever later inherits its number.
+    echo "$$ $(sed "s/^[^)]*) //" /proc/$$/stat | awk "{print \$20}")" > "$pidf"
     "$@" >> "$log" 2>&1
     rc=$?
     printf "\n@@MAINSTREAM-UPDATE-EXIT %s\n" "$rc" >> "$log"

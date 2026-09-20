@@ -2269,5 +2269,8 @@
   "Could not repair that account.": "Could not repair that account.",
   "Account created. They can sign in now, and the desktop finishes setting itself up the first time they do.": "Account created. They can sign in now, and the desktop finishes setting itself up the first time they do.",
   "Extra VR Headset Support": "Extra VR Headset Support",
-  "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.": "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR."
+  "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.": "Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.",
+  "Another update is already running. Let it finish, then try again.": "Another update is already running. Let it finish, then try again.",
+  "[DRY-RUN] The dotfiles clone at %s is damaged; would set it aside as %s and clone again.": "[DRY-RUN] The dotfiles clone at %s is damaged; would set it aside as %s and clone again.",
+  "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop": "Local edits stashed. See them with: cd '%s' && git stash show --include-untracked stash@{0}; put them back with: git stash pop"
 }

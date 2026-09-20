@@ -49,6 +49,25 @@ ContentPage {
     // a prediction about anything now.
     property bool replaying: false
 
+    // Lines arrive faster than a wrapped text item can lay them out, and each
+    // assignment lays the whole thing out again, so a burst of a thousand
+    // lines was a thousand layouts. They are collected here and handed over
+    // a few times a second, so a burst costs one.
+    property var pendingLines: []
+    // The text item shows the newest part of a long run. The record on disk
+    // has all of it, and Copy reads that.
+    readonly property int outputKeepChars: 250000
+    property bool outputTrimmed: false
+    // The helper's first line. A run that never printed it was turned away by
+    // sudo, which is how a wrong password is told apart from a failure later,
+    // in whatever language sudo complains.
+    readonly property string startMarker: "@@MAINSTREAM-UPDATE-HELPER-START"
+    property bool helperStarted: false
+    // The launcher reports a failure to start through runningChanged alone,
+    // with no exited to follow; this says whether exited already spoke.
+    property bool launcherExited: false
+    readonly property string liveCheck: Quickshell.shellPath("scripts/update/update-live.sh")
+
     // Whether an AUR helper (yay or paru) is actually installed. The AUR
     // update switch is only shown when one is — Mainstream ships none by
     // default, so for most users the toggle would be a no-op control for a
@@ -132,6 +151,10 @@ ContentPage {
         rebootPredicted = false;
         recordPredatesBoot = false;
         replaying = false;
+        helperStarted = false;
+        launcherExited = false;
+        pendingLines = [];
+        outputTrimmed = false;
         // Snapshot the password and clear the visible field so it
         // doesn't sit on screen for the rest of the run.
         pendingPassword = passwordField.text;
@@ -143,6 +166,7 @@ ContentPage {
     }
 
     function showStopFailed() {
+        root.flushOutput();
         root.outputText += "\n" + Translation.tr("Nothing to stop: that update is no longer running.");
         root.isRunning = false;
         probeProc.running = true;
@@ -163,6 +187,7 @@ ContentPage {
         tailProc.running = false;
         root.isRunning = false;
         root.pendingPassword = "";
+        root.flushOutput();
         // Strip trailing whitespace before appending the completion line, so
         // the auto-scrolled viewport lands on the Summary text rather than on
         // the blank lines the log ends with.
@@ -175,9 +200,11 @@ ContentPage {
             root.outputText += "\n\n" + Translation.tr("The update did not finish. The record above stops where it stopped.");
             return;
         }
-        // sudo exits 1 on auth failure with a specific stderr line;
-        // surface a clearer message than a bare "exit code 1".
-        const authFailed = root.outputText.indexOf("incorrect password") !== -1
+        // sudo exits 1 when the password is wrong, and the helper never gets
+        // to print its first line. Its message is only checked as well, since
+        // it comes out in the session's language.
+        const authFailed = (exitCode === 1 && !root.helperStarted)
+            || root.outputText.indexOf("incorrect password") !== -1
             || root.outputText.indexOf("Sorry, try again") !== -1;
         if (authFailed) {
             root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
@@ -189,7 +216,9 @@ ContentPage {
         // do not have those toolchains are not alarmed by a pass that erred
         // on tools they never touch. 101 is the dotfiles step failing, which
         // leaves the machine on its old release and must not read as success.
-        if (exitCode === 101) {
+        if (exitCode === 3) {
+            root.outputText += "\n\n" + Translation.tr("Another update was already running, so this one did not start.");
+        } else if (exitCode === 101) {
             root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
         } else if (exitCode === 0 || exitCode === 100) {
             root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
@@ -203,7 +232,12 @@ ContentPage {
     // "<0|1> [package ...]", from the check script or a marker line. The
     // package names stay in the record; the page only says yes or no.
     function readRebootAnswer(text, kind) {
-        const yes = text.trim().split(/\s+/)[0] === "1";
+        const first = text.trim().split(/\s+/)[0];
+        // The prediction could not reach the repositories, so it leaves
+        // whatever was known standing rather than claiming no reboot.
+        if (first === "unknown")
+            return;
+        const yes = first === "1";
         if (kind === "verdict") {
             // A record written before this boot describes a run whose reboot
             // has already happened.
@@ -252,14 +286,48 @@ ContentPage {
             root.readRebootAnswer(line.substring(verdict + root.rebootMarker.length), "verdict");
             return;
         }
-        const at = line.indexOf(root.exitSentinel);
-        if (at === -1) {
-            root.outputText += line + "\n";
+        if (line.indexOf(root.startMarker) !== -1) {
+            root.helperStarted = true;
             return;
         }
-        if (at > 0) root.outputText += line.substring(0, at);
+        const at = line.indexOf(root.exitSentinel);
+        if (at === -1) {
+            root.queueOutput(line + "\n");
+            return;
+        }
+        if (at > 0) root.queueOutput(line.substring(0, at));
         const code = parseInt(line.substring(at + root.exitSentinel.length), 10);
         root.finish(isNaN(code) ? -1 : code);
+    }
+
+    function queueOutput(text) {
+        root.pendingLines.push(text);
+        if (!flushTimer.running)
+            flushTimer.start();
+    }
+
+    // One assignment for everything that arrived since the last, and the
+    // text kept to its newest part once a run gets long.
+    function flushOutput() {
+        flushTimer.stop();
+        if (root.pendingLines.length === 0)
+            return;
+        let text = root.outputText + root.pendingLines.join("");
+        root.pendingLines = [];
+        if (text.length > root.outputKeepChars) {
+            const from = text.length - root.outputKeepChars;
+            const cut = text.indexOf("\n", from);
+            text = text.substring(cut === -1 ? from : cut + 1);
+            root.outputTrimmed = true;
+        }
+        root.outputText = text;
+    }
+
+    Timer {
+        id: flushTimer
+        interval: 60
+        repeat: false
+        onTriggered: root.flushOutput()
     }
 
     // Launches the update and nothing more. The helper itself runs under
@@ -275,9 +343,19 @@ ContentPage {
                 write(root.pendingPassword + "\n");
                 root.pendingPassword = "";
                 stdinEnabled = false;
+                return;
+            }
+            // Exited speaks first on a normal end. A stop with nothing said
+            // means the launcher never ran at all, which used to leave the
+            // page believing an update was under way for good.
+            if (!running && root.isRunning && !root.launcherExited && !tailProc.running) {
+                root.isRunning = false;
+                root.pendingPassword = "";
+                root.outputText = Translation.tr("The update could not be started.");
             }
         }
         onExited: (exitCode, exitStatus) => {
+            root.launcherExited = true;
             root.pendingPassword = "";
             if (exitCode !== 0) {
                 root.isRunning = false;
@@ -304,13 +382,15 @@ ContentPage {
         // The pid has to still be the session the launcher recorded: a pid
         // file left by a killed run names a number the kernel has since handed
         // to something else, and signalling its children hits a bystander.
+        // The leader's child is sudo, sudo's child the helper. The helper is
+        // told first, and then whatever step it is on, since the helper only
+        // acts on the signal once that step has ended.
         command: ["bash", "-c",
-            'p=$(cat "$0" 2>/dev/null) || exit 1;'
-            + ' case "$p" in ""|*[!0-9]*) exit 1 ;; esac;'
-            + ' kill -0 "$p" 2>/dev/null || exit 1;'
-            + ' [ "$(cut -d" " -f6 /proc/$p/stat 2>/dev/null)" = "$p" ] || exit 1;'
-            + ' pkill -TERM -P "$p"',
-            root.pidPath]
+            'p=$(bash "$0" "$1") || exit 1;'
+            + ' s=$(pgrep -P "$p" | head -n1); h=""; [ -n "$s" ] && h=$(pgrep -P "$s" | head -n1);'
+            + ' pkill -TERM -P "$p" || exit 1;'
+            + ' [ -n "$h" ] && pkill -TERM -P "$h"; exit 0',
+            root.liveCheck, root.pidPath]
         onExited: (code) => {
             if (code === 0) {
                 root.userStopped = true;
@@ -337,15 +417,16 @@ ContentPage {
             // this the page latches into a run that can never end, and both
             // buttons that could clear it are disabled while it believes one
             // is in progress.
-            + ' elif [ -f "$2" ] && kill -0 "$(cat "$2")" 2>/dev/null; then echo running;'
+            + ' elif bash "$3" "$2" >/dev/null 2>&1; then echo running;'
             + ' elif [ -s "$0" ]; then rm -f "$2"; echo "finished -1";'
             + ' else rm -f "$2"; echo none; fi',
-            root.logPath, root.exitPath, root.pidPath]
+            root.logPath, root.exitPath, root.pidPath, root.liveCheck]
         stdout: StdioCollector {
             onStreamFinished: {
                 const answer = this.text.trim();
                 if (answer === "running") {
                     root.outputText = "";
+                    root.helperStarted = false;
                     root.isRunning = true;
                     tailProc.running = true;
                     return;
@@ -379,6 +460,10 @@ ContentPage {
                 // while the record lives on disk, so it is read back from the
                 // exit code the run left behind.
                 root.userStopped = (root.pendingExitCode === 143 || root.pendingExitCode === 130);
+                root.helperStarted = false;
+                // Each line is read for its markers; the text itself is
+                // queued and reaches the page in one piece at the end,
+                // which is what makes a long record cheap to show.
                 const lines = this.text.split("\n");
                 let sawSentinel = false;
                 for (let i = 0; i < lines.length; i++) {
@@ -387,6 +472,7 @@ ContentPage {
                     if (sawSentinel) break;
                 }
                 if (!sawSentinel) root.finish(isNaN(root.pendingExitCode) ? -1 : root.pendingExitCode);
+                root.flushOutput();
                 root.replaying = false;
                 // The record said the last run needs no reboot, or its reboot
                 // already happened. Either way nothing has answered what a run
@@ -402,6 +488,18 @@ ContentPage {
     Process {
         id: clearProc
         command: ["rm", "-f", root.logPath, root.exitPath, root.pidPath]
+    }
+
+    // Copy takes the whole record, which the text item may no longer hold.
+    Process {
+        id: copyProc
+        command: ["cat", root.logPath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const whole = this.text.split("\n").filter(l => l.indexOf("@@MAINSTREAM-UPDATE") !== 0).join("\n");
+                Quickshell.clipboardText = whole.trim().length > 0 ? whole : root.outputText;
+            }
+        }
     }
 
     // One-shot probe for an AUR helper. Exit 0 = yay or paru is on PATH.
@@ -490,11 +588,18 @@ ContentPage {
             RippleButtonWithIcon {
                 materialIcon: "content_copy"
                 mainText: Translation.tr("Copy")
-                onClicked: {
-                    Quickshell.clipboardText = root.outputText;
-                }
+                onClicked: copyProc.running = true
             }
         ]
+        StyledText {
+            visible: root.outputTrimmed
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("Showing the end of a long run. Copy takes all of it.")
+        }
+
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 200
@@ -578,6 +683,9 @@ ContentPage {
                 materialIcon: "delete"
                 mainText: Translation.tr("Clear output")
                 onClicked: {
+                    root.pendingLines = [];
+                    root.outputTrimmed = false;
+                    root.helperStarted = false;
                     root.outputText = "";
                     clearProc.running = true;
                     root.rebootRequired = false;
@@ -673,6 +781,9 @@ ContentPage {
                 mainText: Translation.tr("Clear output")
                 enabled: !root.isRunning
                 onClicked: {
+                    root.pendingLines = [];
+                    root.outputTrimmed = false;
+                    root.helperStarted = false;
                     root.outputText = "";
                     clearProc.running = true;
                     root.rebootRequired = false;

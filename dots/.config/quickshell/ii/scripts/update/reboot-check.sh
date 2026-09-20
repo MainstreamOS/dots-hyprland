@@ -110,10 +110,18 @@ case "$mode" in
         # current; the fallback reads the last sync this machine did, which is
         # right until the repositories move again.
         if command -v checkupdates >/dev/null 2>&1; then
-            checkupdates 2>/dev/null | awk '{print $1}'
+            # A sync that could not reach the repositories knows nothing, and
+            # saying 0 in that case would promise a reboot-free run it cannot
+            # see. 2 is its way of saying nothing is pending.
+            pending="$(checkupdates 2>/dev/null)"; rc=$?
+            if [[ $rc -eq 1 ]]; then
+                echo unknown
+            else
+                printf '%s\n' "$pending" | awk 'NF {print $1}' | judge | emit
+            fi
         else
-            pacman -Qu 2>/dev/null | grep -v '\[ignored\]' | awk '{print $1}'
-        fi | judge | emit
+            pacman -Qu 2>/dev/null | grep -v '\[ignored\]' | awk '{print $1}' | judge | emit
+        fi
         ;;
     plan)
         judge | emit
