@@ -222,15 +222,24 @@ _gpu_write_file() {
     rm -f "$tmp"
 }
 
-# ── gpu_base_cmdline_tokens <root_spec> [root_subvol] ───────────────────────
+# ── gpu_base_cmdline_tokens <root_spec> [root_subvol] [root_fstype] ──────────
 # Print the ONE canonical base kernel cmdline: Plymouth splash, zswap disabled,
 # rd.udev.log_level=3, subvol normalized (leading slash stripped so /@ -> @).
 # Caller word-splits the output into cmdline_upsert.
+# Called with two arguments it answers as it always has, for a btrfs root on
+# @. A root on another filesystem names it in the third argument and gets no
+# subvolume flag; a btrfs root mounted from the top level passes "/" as the
+# subvolume and gets none either.
 gpu_base_cmdline_tokens() {
-    local root_spec="$1" subvol="${2:-@}"
+    local root_spec="$1" subvol="${2:-@}" fstype="${3:-btrfs}" fs_tokens
     subvol="${subvol#/}"
-    printf '%s rootflags=subvol=%s rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0' \
-        "$root_spec" "$subvol"
+    if [[ "$fstype" == btrfs && -n "$subvol" ]]; then
+        fs_tokens="rootflags=subvol=$subvol rw rootfstype=btrfs"
+    else
+        fs_tokens="rw rootfstype=$fstype"
+    fi
+    printf '%s %s zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0' \
+        "$root_spec" "$fs_tokens"
 }
 
 # ── cmdline_upsert <token>... ───────────────────────────────────────────────

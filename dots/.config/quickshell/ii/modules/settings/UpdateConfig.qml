@@ -75,6 +75,13 @@ ContentPage {
     // with no exited to follow; this says whether exited already spoke.
     property bool launcherExited: false
     readonly property string liveCheck: Quickshell.shellPath("scripts/update/update-live.sh")
+    // A root on Btrfs is what makes the pre-update snapshot possible.
+    property bool snapshotsAvailable: true
+    Process {
+        running: true
+        command: ["sh", "-c", "test -f /etc/snapper/configs/root || [ \"$(findmnt -n -o FSTYPE / 2>/dev/null)\" = btrfs ]"]
+        onExited: (code) => root.snapshotsAvailable = (code === 0)
+    }
 
     // Whether an AUR helper (yay or paru) is actually installed. The AUR
     // update switch is only shown when one is — Mainstream ships none by
@@ -580,7 +587,9 @@ ContentPage {
             NoticeBox {
                 Layout.fillWidth: true
                 materialIcon: "sync"
-                text: Translation.tr("Before anything installs, a snapshot of your entire system is saved automatically — this is your safety net. If something ever goes wrong after updating, the Recovery page will walk you through rolling back to exactly how your system was before the update.")
+                text: root.snapshotsAvailable
+                    ? Translation.tr("Before anything installs, a snapshot of your entire system is saved automatically — this is your safety net. If something ever goes wrong after updating, the Recovery page will walk you through rolling back to exactly how your system was before the update.")
+                    : Translation.tr("This install's root is not on Btrfs, so updates are not snapshotted first. Test what matters to you after each update, and keep a backup of anything you cannot replace.")
             }
         }
 

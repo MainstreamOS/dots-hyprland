@@ -21,6 +21,17 @@ ContentPage {
     // / onExited so it doesn't linger longer than needed.
     property string pendingPassword: ""
 
+    // Snapshots come with a Btrfs root, which the default layout gives every
+    // install; a root the person put on another filesystem has none, and the
+    // page says so rather than promising a rollback that is not there.
+    property bool snapshotsAvailable: true
+    Process {
+        id: snapshotProbe
+        running: true
+        command: ["sh", "-c", "test -f /etc/snapper/configs/root || [ \"$(findmnt -n -o FSTYPE / 2>/dev/null)\" = btrfs ]"]
+        onExited: (code) => root.snapshotsAvailable = (code === 0)
+    }
+
     function startRestore() {
         if (isRunning) return;
         if (passwordField.text.length === 0) {
@@ -137,11 +148,20 @@ ContentPage {
 
         NoticeBox {
             Layout.fillWidth: true
+            visible: root.snapshotsAvailable
             materialIcon: "restore"
             text: Translation.tr("Don't panic. Your pre-update snapshot is waiting for you. Simply reboot your computer to recover.")
         }
 
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: !root.snapshotsAvailable
+            materialIcon: "info"
+            text: Translation.tr("This install's root is not on Btrfs, so there are no snapshots to roll back to. Repair Install below still puts the system's own files right.")
+        }
+
         Rectangle {
+            visible: root.snapshotsAvailable
             Layout.fillWidth: true
             implicitHeight: recoveryColumn.implicitHeight + 24
             radius: Appearance.rounding.normal
@@ -272,6 +292,7 @@ ContentPage {
         }
 
         ConfigRow {
+            visible: root.snapshotsAvailable
             // Inline password field. Submitted via sudo -S stdin in
             // startRestore() \u2014 same UX as the Update panel. Visible
             // field clears the moment the user clicks Restore so the

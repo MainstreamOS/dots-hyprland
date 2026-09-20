@@ -167,6 +167,9 @@ export GPU_SUDO=""
 CMDTMP="$(mktemp -d)"; export KERNEL_CMDLINE="$CMDTMP/cmdline"; : > "$KERNEL_CMDLINE"
 EXP_BASE='root=PARTUUID=abc-123 rootflags=subvol=@ rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0'
 chk_str cmdline-base-tokens "$(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@')" "$EXP_BASE"
+chk_str cmdline-base-ext4 "$(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/' ext4)" 'root=PARTUUID=abc-123 rw rootfstype=ext4 zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0'
+chk_str cmdline-base-btrfs-toplevel "$(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/' btrfs)" 'root=PARTUUID=abc-123 rw rootfstype=btrfs zswap.enabled=0 quiet splash rd.udev.log_level=3 vt.global_cursor_default=0 consoleblank=0 nowatchdog nmi_watchdog=0'
+chk_str cmdline-base-three-args "$(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@' btrfs)" "$EXP_BASE"
 cmdline_upsert $(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@'); CASES=$((CASES + 1))
 chk_str cmdline-seed "$(cat "$KERNEL_CMDLINE")" "$EXP_BASE"
 cmdline_upsert $(gpu_base_cmdline_tokens 'root=PARTUUID=abc-123' '/@'); CASES=$((CASES + 1))
