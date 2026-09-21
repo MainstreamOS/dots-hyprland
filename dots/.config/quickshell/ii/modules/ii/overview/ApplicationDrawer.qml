@@ -226,6 +226,8 @@ Item {
 
     StyledRectangularShadow {
         target: drawerBackground
+        // Nothing to cast a shadow once the surface is gone.
+        visible: Config.options.dock.showBackground
         // Scaled by the surface's own alpha, so a see-through list is not sat
         // on a shadow as heavy as a solid one's.
         color: Appearance.colors.colDockShadow
@@ -235,10 +237,12 @@ Item {
         id: drawerBackground
         anchors.fill: parent
         // The dock's surface, so the two read as one material: whatever color
-        // pick, transparency and roundness the dock was given, this takes.
+        // pick, transparency and roundness the dock was given, this takes,
+        // and it steps away with the dock when the background is switched off.
         radius: Appearance.rounding.dockBody
-        color: Appearance.colors.colDockBackground
-        border.width: 1
+        color: Config.options.dock.showBackground
+            ? Appearance.colors.colDockBackground : "transparent"
+        border.width: Config.options.dock.showBackground ? 1 : 0
         border.color: Appearance.colors.colDockBackgroundBorder
 
         ColumnLayout {
