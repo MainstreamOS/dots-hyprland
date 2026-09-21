@@ -332,6 +332,12 @@ Singleton {
             ? dockRoundMax * 0.875 : dockRoundMax * 0.10
         readonly property real dockTop: (Config.options?.dock.topRadius ?? -1) >= 0
             ? Config.options.dock.topRadius : dockTopStock
+        // The roundness the dock's body actually shows. Floating, that is the
+        // body's own; set down on an edge, the corners facing the edge are
+        // square and the visible pair is the one facing the desktop. Anything
+        // shaped to match the dock wants this rather than either slider.
+        readonly property real dockBody: (Config.options?.dock.cornerStyle ?? "float") !== "float"
+            ? dockTop : dock
     }
 
     font: QtObject {

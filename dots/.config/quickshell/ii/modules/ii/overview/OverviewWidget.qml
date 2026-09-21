@@ -40,8 +40,12 @@ Item {
     property real workspaceImplicitHeight: (monitorData?.transform % 2 === 1) ? 
         ((monitor.width - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale) :
         ((monitor.height - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale)
-    property real largeWorkspaceRadius: Appearance.rounding.large
-    property real smallWorkspaceRadius: Appearance.rounding.verysmall
+    // Nothing in here is rounder than the dock. The workspaces on the grid's
+    // outside edge take its roundness outright; the corners inside the grid,
+    // and the windows drawn within them further down, keep their own smaller
+    // marks until the dock drops below them and then follow it down.
+    property real largeWorkspaceRadius: Appearance.rounding.dockBody
+    property real smallWorkspaceRadius: Math.min(Appearance.rounding.verysmall, largeWorkspaceRadius)
 
     property real workspaceNumberMargin: 80
     property real workspaceNumberSize: 250 * monitor.scale
@@ -100,7 +104,7 @@ Item {
 
         implicitWidth: workspaceColumnLayout.implicitWidth + padding * 2
         implicitHeight: workspaceColumnLayout.implicitHeight + padding * 2
-        radius: root.largeWorkspaceRadius + padding
+        radius: Appearance.rounding.dockBody
         color: Appearance.colors.colBackgroundSurfaceContainer
 
         Column { // Workspaces
@@ -229,7 +233,7 @@ Item {
                     property real yWithinWorkspaceWidget: Math.max((windowData?.at[1] - (monitor?.y ?? 0) - monitorData?.reserved[1]) * root.scale, 0)
 
                     // Radius
-                    property real minRadius: Appearance.rounding.small
+                    property real minRadius: Math.min(Appearance.rounding.small, root.largeWorkspaceRadius)
                     property bool workspaceAtLeft: workspaceColIndex === 0
                     property bool workspaceAtRight: workspaceColIndex === Config.options.overview.columns - 1
                     property bool workspaceAtTop: workspaceRowIndex === 0

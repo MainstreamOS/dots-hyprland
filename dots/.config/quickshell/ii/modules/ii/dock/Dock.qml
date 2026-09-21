@@ -80,8 +80,7 @@ Scope { // Scope
             readonly property real bodyInsetBottom: (dockEdge === "bottom" ? edgeGap : dockVertical ? 0 : Appearance.sizes.elevationMargin) + (dockVertical ? flareBleed : 0)
             readonly property real bodyInsetLeft: (dockEdge === "left" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
             readonly property real bodyInsetRight: (dockEdge === "right" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
-            readonly property real deskRadius: dockHugging
-                ? Appearance.rounding.dockTop : Appearance.rounding.dock
+            readonly property real deskRadius: Appearance.rounding.dockBody
             // Set down on the edge, the corners meeting it are square, whether
             // a curve is drawn beside them or not. Floating, they are the same
             // roundness as the rest of the body.

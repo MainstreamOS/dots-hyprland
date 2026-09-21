@@ -226,15 +226,20 @@ Item {
 
     StyledRectangularShadow {
         target: drawerBackground
+        // Scaled by the surface's own alpha, so a see-through list is not sat
+        // on a shadow as heavy as a solid one's.
+        color: Appearance.colors.colDockShadow
     }
 
     Rectangle {
         id: drawerBackground
         anchors.fill: parent
-        radius: Appearance.rounding.large
-        color: Appearance.colors.colLayer0
+        // The dock's surface, so the two read as one material: whatever color
+        // pick, transparency and roundness the dock was given, this takes.
+        radius: Appearance.rounding.dockBody
+        color: Appearance.colors.colDockBackground
         border.width: 1
-        border.color: Appearance.colors.colLayer0Border
+        border.color: Appearance.colors.colDockBackgroundBorder
 
         ColumnLayout {
             anchors.fill: parent
