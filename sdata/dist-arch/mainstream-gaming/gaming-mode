@@ -126,6 +126,52 @@ if [[ ! -f "$conf" ]]; then
     } > "$conf"
 fi
 
+# 2b. Which screen the session comes up on. Left alone, gamescope-session-plus
+#     asks gamescope for "*,eDP-1", and the wildcard means whichever connector
+#     the driver enumerates first, which on a machine with several screens is
+#     not the one the person is looking at. Settings > Display already knows
+#     which screen is the default one, so that answer is used here.
+#     Written on every run, because the choice can change; a connector named by
+#     hand in any other file of this directory wins and stops this being written
+#     at all.
+output_conf="$conf_dir/55-mainstream-gaming-output.conf"
+gm_hand_set=0
+for gm_f in "$conf_dir"/*.conf; do
+    [[ -f "$gm_f" && "$gm_f" != "$output_conf" ]] || continue
+    if grep -qE '^[[:space:]]*OUTPUT_CONNECTOR=' "$gm_f"; then gm_hand_set=1; break; fi
+done
+if (( gm_hand_set )); then
+    # Somebody set it themselves; leave the screen to them.
+    rm -f "$output_conf"
+else
+    # The default monitor from Settings > Display, which keeps it in the cursor
+    # block of the Hyprland config it writes.
+    gm_out=$(sed -n 's/.*default_monitor[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$HOME/.config/hypr/custom/general.lua" "$HOME/.config/hypr/hyprland/general.lua" 2>/dev/null \
+        | grep -v '^$' | head -n1)
+    # Nothing chosen yet: the screen with the keyboard focus right now is the
+    # closest thing to "the one being looked at".
+    if [[ -z "$gm_out" ]] && command -v hyprctl >/dev/null 2>&1; then
+        gm_out=$(hyprctl monitors -j 2>/dev/null \
+            | python3 -c 'import sys,json
+try: m=json.load(sys.stdin)
+except Exception: raise SystemExit
+print(next((x["name"] for x in m if x.get("focused")), m[0]["name"] if m else ""))' 2>/dev/null)
+    fi
+    if [[ -n "$gm_out" ]]; then
+        mkdir -p "$conf_dir"
+        {
+            echo "# Written by gaming-mode on every launch, from Settings > Display."
+            echo "# To pin a screen yourself, put OUTPUT_CONNECTOR in another file"
+            echo "# of this directory and this one stops being written."
+            echo "# The trailing * keeps the session starting if that screen is gone."
+            echo "OUTPUT_CONNECTOR=$gm_out,*"
+        } > "$output_conf"
+    else
+        rm -f "$output_conf"
+    fi
+fi
+
 # 3. Clear any stale WAYLAND_DISPLAY/DISPLAY the outgoing Hyprland session exported
 #    into the user systemd environment, so the gamescope session (which reuses the
 #    same user manager) doesn't inherit it and try to nest. BACKEND=drm already forces
