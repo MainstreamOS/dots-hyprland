@@ -109,20 +109,25 @@ ContentSection {
                 }
             }
         `, root.xkbLayoutList]
+        // Every line arrives as its own callback, and the catalog runs to some
+        // six hundred of them. Published one line at a time, each one copies
+        // the whole list again and wakes everything reading it, so the list is
+        // gathered here and handed over once below.
+        property var gathered: []
         stdout: SplitParser {
             onRead: data => {
                 const fields = data.trim().split("\t")
                 if (fields[0] === "layout" && fields.length >= 3) {
-                    root.availableLayouts = [...root.availableLayouts, {
+                    layoutCatalogProc.gathered.push({
                         code: fields[1],
                         name: fields.slice(2).join("\t")
-                    }]
+                    })
                 } else if (fields[0] === "variant" && fields.length >= 4) {
-                    root.availableLayouts = [...root.availableLayouts, {
+                    layoutCatalogProc.gathered.push({
                         code: fields[1],
                         variant: fields[2],
                         name: fields.slice(3).join("\t")
-                    }]
+                    })
                 }
             }
         }
@@ -142,10 +147,13 @@ ContentSection {
                 { code: "fr", variant: "bepo", name: Translation.tr("French — Bépo") },
                 { code: "de", variant: "neo", name: Translation.tr("German — Neo 2") }
             ]
+            const gathered = layoutCatalogProc.gathered
             for (const candidate of fallbackVariants) {
-                if (!root.availableLayouts.some(layout => root.layoutId(layout) === root.layoutId(candidate)))
-                    root.availableLayouts = [...root.availableLayouts, candidate]
+                if (!gathered.some(layout => root.layoutId(layout) === root.layoutId(candidate)))
+                    gathered.push(candidate)
             }
+            root.availableLayouts = gathered
+            layoutCatalogProc.gathered = []
             root.catalogLoaded = true
         }
     }

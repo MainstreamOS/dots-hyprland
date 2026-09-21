@@ -125,6 +125,11 @@ Item {
                 clip: true
                 animateAppearance: false
                 model: {
+                    // A closed list has nobody to show, and building one for
+                    // every change to the catalog behind it costs more than
+                    // the list itself does.
+                    if (!layoutPickerPopup.opened)
+                        return []
                     const query = layoutSearchField.text.trim().toLowerCase()
                     if (query.length === 0)
                         return picker.options
