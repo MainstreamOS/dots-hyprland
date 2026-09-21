@@ -685,7 +685,7 @@ ContentPage {
                                 spacing: 1
                                 Layout.fillWidth: true
                                 StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Monocle"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One focused fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }

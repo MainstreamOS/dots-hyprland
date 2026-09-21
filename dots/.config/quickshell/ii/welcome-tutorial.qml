@@ -6266,7 +6266,7 @@ readonly property var drawerApps: root.drawerApps
                                         case "dwindle":   return Translation.tr("Each new window splits the last in half")
                                         case "master":    return Translation.tr("One main window with a side stack")
                                         case "scrolling": return Translation.tr("Horizontally scrollable window columns")
-                                        case "monocle":   return Translation.tr("One focused fullscreen window at a time")
+                                        case "monocle":   return Translation.tr("One fullscreen window at a time")
                                         case "float":     return Translation.tr("All windows float freely on the desktop")
                                         default: return ""
                                         }
