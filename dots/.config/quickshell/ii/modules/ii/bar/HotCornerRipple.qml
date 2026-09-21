@@ -473,7 +473,11 @@ Variants {
                         // error and trigger the self-heal reload.
                         dispatchProc.running = false;
                         dispatchProc.running = true;
-                    } else if (triggerArea.trigger === "default") {
+                    } else if (triggerArea.trigger === "default"
+                            && (Config?.options.overview.enable ?? true)) {
+                        // With the overview switched off there are no workspace
+                        // previews to show, and this mode shows nothing else, so
+                        // opening would put an empty surface over the screen.
                         GlobalStates.overviewWorkspacesOnly = true;
                         GlobalStates.overviewOpen = true;
                     }
