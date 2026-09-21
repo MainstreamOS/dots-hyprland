@@ -28,7 +28,7 @@ if status is-interactive
         alias fastfetch "$HOME/.config/mainstream/mainstream-fetch.sh"
     end
     if test "$TERM" != "linux"
-        alias ls 'eza --icons'
+        alias ls 'eza --icons=auto'
     end
     if test "$TERM" = "xterm-kitty"
         alias ssh 'kitten ssh'
