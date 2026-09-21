@@ -5,7 +5,39 @@ import qs.modules.common
 import qs.modules.common.widgets
 
 ContentPage {
+    id: root
     forceWidth: true
+
+    // Float rounds all four corners alike and Rect only shapes the pair facing
+    // the desktop, so each style is asked for a different pair and only those
+    // are carried out and back in.
+    function stashRoundness(style) {
+        const dock = Config.options.dock;
+        if (style === "float")
+            dock.radiusFloat = dock.radius;
+        else if (style === "rect")
+            dock.topRadiusRect = dock.topRadius;
+        else {
+            dock.radiusNotch = dock.radius;
+            dock.topRadiusNotch = dock.topRadius;
+        }
+    }
+
+    function restoreRoundness(style) {
+        const dock = Config.options.dock;
+        if (style === "float") {
+            if (dock.radiusFloat >= -1)
+                dock.radius = dock.radiusFloat;
+        } else if (style === "rect") {
+            if (dock.topRadiusRect >= -1)
+                dock.topRadius = dock.topRadiusRect;
+        } else {
+            if (dock.radiusNotch >= -1)
+                dock.radius = dock.radiusNotch;
+            if (dock.topRadiusNotch >= -1)
+                dock.topRadius = dock.topRadiusNotch;
+        }
+    }
 
     ContentSection {
         icon: "call_to_action"
@@ -303,7 +335,14 @@ ContentPage {
             title: Translation.tr("Corner style")
             ConfigSelectionArray {
                 currentValue: Config.options.dock.cornerStyle
-                onSelected: newValue => { Config.options.dock.cornerStyle = newValue; }
+                onSelected: newValue => {
+                    const previous = Config.options.dock.cornerStyle;
+                    if (previous === newValue)
+                        return;
+                    root.stashRoundness(previous);
+                    Config.options.dock.cornerStyle = newValue;
+                    root.restoreRoundness(newValue);
+                }
                 // Last, and named the same as the bar's, because it is the same
                 // shape: set down on the edge with a curve leaving each end.
                 // The stored value stays "hug" so a config or a theme written
@@ -344,11 +383,16 @@ ContentPage {
             value: Appearance.rounding.dockTop
             // A radius is whole pixels; a fractional one discards the cached
             // shadow texture and re-triangulates the corner shapes per frame.
+            // Landing on the stop indicator hands the choice back to the corner
+            // style rather than pinning the number it happens to show, which is
+            // the only way back to a roundness that answers to the style.
             onMoved: {
                 const stepped = Math.round(value);
-                if (stepped === Config.options.dock.topRadius)
+                const wanted = stepped === Math.round(Appearance.rounding.dockTopStock)
+                    ? -1 : stepped;
+                if (wanted === Config.options.dock.topRadius)
                     return;
-                Config.options.dock.topRadius = stepped;
+                Config.options.dock.topRadius = wanted;
             }
         }
 
@@ -362,9 +406,11 @@ ContentPage {
             value: Appearance.rounding.dock
             onMoved: {
                 const stepped = Math.round(value);
-                if (stepped === Config.options.dock.radius)
+                const wanted = stepped === Math.round(Appearance.rounding.dockCornerStock)
+                    ? -1 : stepped;
+                if (wanted === Config.options.dock.radius)
                     return;
-                Config.options.dock.radius = stepped;
+                Config.options.dock.radius = wanted;
             }
         }
 

@@ -975,6 +975,16 @@ Singleton {
                 // edge takes its shape from the style instead: hug curves it
                 // outward, rect squares it off.
                 property real topRadius: -1
+                // Each corner style keeps the roundness it was last given, so
+                // moving between them brings back what that style looked like
+                // rather than dragging one shape through all three. Only the
+                // corners a style can actually set are kept for it. Below minus
+                // one means that style has never been left, and whatever the
+                // two above already hold still stands.
+                property real radiusFloat: -2
+                property real radiusNotch: -2
+                property real topRadiusRect: -2
+                property real topRadiusNotch: -2
                 // The buttons at the dock's ends, each away on its own so a
                 // dock can keep the one it uses and drop the other. A button
                 // takes its neighboring separator with it: a divider with
