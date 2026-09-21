@@ -313,11 +313,35 @@ Singleton {
         // stated as a share of it so a mark can never promise a place the
         // track does not have.
         readonly property real dockRoundMax: 40
+        // How far the flare track runs, kept apart from the number above so the
+        // stock shapes stay where they are. The flares are their own pieces
+        // beside the body rather than corners of it, so they are not capped at
+        // half its height the way the body is, and a taller dock needs a longer
+        // sweep to turn as gently as a shorter one. Bounded by the dock's own
+        // body, past which the curve wants more height than the body has and
+        // stops meeting its edge, which reads as the ends coming apart. Set a
+        // little under the body rather than at it: the last part of the sweep
+        // is where the two surfaces have least to overlap on, and it lets go
+        // before the body does.
+        // A fixed track, so the handle keeps its place when the icons resize
+        // the dock underneath it. Double the stock reaches past the tallest
+        // dock the icon slider can build, so nothing is out of reach.
+        readonly property real dockFlareMax: dockRoundMax * 2
+        // What the body can actually hold, which the drawn sweep is held to.
+        // Unlike the track this follows the icons, because it is a fact about
+        // the dock rather than a choice about the control.
+        readonly property real dockFlareFit:
+            (root.sizes.dockHeight - root.sizes.elevationMargin) * 0.96
         // Hugging wants a rounder body than a floating one: the curve that
         // leaves the edge reads as part of it only if the corner above is
         // generous enough to answer it.
+        // Notch is meant to read as the bar's own shape, so its two stocks are
+        // the pair that gets it there rather than shares of the number above:
+        // a long sweep at the ends, and a body turned just enough to meet it.
+        readonly property real dockNotchFlareStock: 52
+        readonly property real dockNotchBodyStock: 32
         readonly property real dockCornerStock: Config.options?.dock.cornerStyle === "hug"
-            ? dockRoundMax : large
+            ? dockNotchFlareStock : large
         readonly property real dock: (Config.options?.dock.radius ?? -1) >= 0
             ? Config.options.dock.radius : dockCornerStock
         // The pair facing the desktop keeps a slight roundness of its own,
@@ -329,7 +353,7 @@ Singleton {
         // continuous curve between the two ends rather than a slab with corners
         // taken off. Every other style keeps the slight roundness it had.
         readonly property real dockTopStock: Config.options?.dock.cornerStyle === "hug"
-            ? dockRoundMax * 0.875 : dockRoundMax * 0.10
+            ? dockNotchBodyStock : dockRoundMax * 0.10
         readonly property real dockTop: (Config.options?.dock.topRadius ?? -1) >= 0
             ? Config.options.dock.topRadius : dockTopStock
         // The roundness the dock's body actually shows. Floating, that is the

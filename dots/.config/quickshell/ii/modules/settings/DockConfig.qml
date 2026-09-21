@@ -402,7 +402,7 @@ ContentPage {
             stopIndicatorValues: [Appearance.rounding.dockCornerStock]
             buttonIcon: "rounded_corner"
             from: 0
-            to: Appearance.rounding.dockRoundMax
+            to: Appearance.rounding.dockFlareMax
             value: Appearance.rounding.dock
             onMoved: {
                 const stepped = Math.round(value);

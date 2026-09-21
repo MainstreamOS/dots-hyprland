@@ -352,7 +352,12 @@ Scope { // Scope
                             }
 
                             component DockFlare: RoundCorner {
-                                implicitSize: Appearance.rounding.dock
+                                // A sweep bigger than the body it grows from
+                                // has nowhere to land and stands above it, so
+                                // it is held to what the body can hold however
+                                // the roundness was arrived at.
+                                implicitSize: Math.min(Appearance.rounding.dock,
+                                    Appearance.rounding.dockFlareFit)
                                 color: dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
                                     : Appearance.colors.colDockBackground
                             }
