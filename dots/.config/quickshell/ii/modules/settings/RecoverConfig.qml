@@ -21,14 +21,13 @@ ContentPage {
     // / onExited so it doesn't linger longer than needed.
     property string pendingPassword: ""
 
-    // Snapshots come with a Btrfs root, which the default layout gives every
-    // install; a root the person put on another filesystem has none, and the
-    // page says so rather than promising a rollback that is not there.
     property bool snapshotsAvailable: true
     Process {
         id: snapshotProbe
         running: true
-        command: ["sh", "-c", "test -f /etc/snapper/configs/root || [ \"$(findmnt -n -o FSTYPE / 2>/dev/null)\" = btrfs ]"]
+        // What the page offers is the boot-menu rollback, which needs the
+        // snapshot service configured for this root, not merely a Btrfs one.
+        command: ["sh", "-c", "test -f /etc/limine-snapper-sync.conf && test -f /etc/snapper/configs/root"]
         onExited: (code) => root.snapshotsAvailable = (code === 0)
     }
 

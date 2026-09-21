@@ -75,11 +75,13 @@ ContentPage {
     // with no exited to follow; this says whether exited already spoke.
     property bool launcherExited: false
     readonly property string liveCheck: Quickshell.shellPath("scripts/update/update-live.sh")
-    // A root on Btrfs is what makes the pre-update snapshot possible.
     property bool snapshotsAvailable: true
     Process {
         running: true
-        command: ["sh", "-c", "test -f /etc/snapper/configs/root || [ \"$(findmnt -n -o FSTYPE / 2>/dev/null)\" = btrfs ]"]
+        // What the page offers is the snapshot taken before an update, which
+        // needs the snapshot service configured for this root, not merely a
+        // Btrfs one.
+        command: ["sh", "-c", "test -f /etc/limine-snapper-sync.conf && test -f /etc/snapper/configs/root"]
         onExited: (code) => root.snapshotsAvailable = (code === 0)
     }
 
