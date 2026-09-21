@@ -12,6 +12,12 @@ import Quickshell.Widgets
 Item {
     id: root
     property bool expanded: false
+    // False when the launcher above is still showing its own search box, which
+    // finds more than app names. Two fields over one list is worse than one.
+    property bool ownSearchField: true
+    // False when the full list is the layout the user chose, so it is the only
+    // thing on screen that scrolls and has to show that it does.
+    property bool collapsible: true
     property string searchText: ""
     property string sortMode: "name" // "name", "recent"
     property string filterCategory: "all" // "all", "favorites"
@@ -262,17 +268,17 @@ Item {
                 }
             }
 
-            // Search bar (only visible when expanded). Hidden when an
-            // external search owner (Overview's top SearchWidget in
-            // scrolloverview-launcher mode) drives root.searchText —
-            // showing both fields would create a two-input clash.
+            // Search bar, for when this list owns the search. While the
+            // launcher above still shows its own box that one drives
+            // root.searchText instead, and two fields would clash.
             TextField {
                 id: searchField
+                readonly property bool shown: root.expanded && root.ownSearchField
                 Layout.fillWidth: true
-                visible: root.expanded
-                Layout.maximumHeight: root.expanded ? implicitHeight : 0
-                opacity: root.expanded ? 1 : 0
-                focus: root.expanded
+                visible: searchField.shown
+                Layout.maximumHeight: searchField.shown ? implicitHeight : 0
+                opacity: searchField.shown ? 1 : 0
+                focus: searchField.shown
 
                 Behavior on opacity {
                     NumberAnimation {
@@ -376,10 +382,13 @@ Item {
                     interactive: false
                     boundsBehavior: Flickable.StopAtBounds
 
-                    // Collapsed grid is interactive:false (scroll wheel expands
-                    // it), so a draggable-looking bar is misleading — hide it.
+                    // A wheel over the collapsed grid expands it rather than
+                    // scrolling, so a bar there would promise the wrong thing.
+                    // A grid that cannot be collapsed only ever scrolls, and
+                    // then it is the one hint that more apps are below.
                     ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AlwaysOff
+                        policy: (root.expanded && !root.collapsible)
+                            ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                     }
 
                     model: ScriptModel {

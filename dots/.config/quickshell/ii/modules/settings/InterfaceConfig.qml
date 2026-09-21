@@ -394,6 +394,15 @@ ContentPage {
                 Config.options.overview.enable = checked;
             }
         }
+        ConfigSwitch {
+            buttonIcon: "apps"
+            text: Translation.tr("Open on all apps when off")
+            tooltipText: Translation.tr("With the overview switched off there are no workspace previews, so the launcher opens on the full list of apps.\nTurn this off to open on the short list and reach the rest yourself.")
+            checked: Config.options.overview.showAllAppsWhenOff
+            onCheckedChanged: {
+                Config.options.overview.showAllAppsWhenOff = checked;
+            }
+        }
         ConfigSpinBox {
             icon: "loupe"
             text: Translation.tr("Size (%)")

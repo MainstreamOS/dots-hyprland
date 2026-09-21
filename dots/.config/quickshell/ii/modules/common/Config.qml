@@ -1222,6 +1222,11 @@ Singleton {
 
             property JsonObject overview: JsonObject {
                 property bool enable: true
+                // With the overview off there are no workspace previews to
+                // show, so the launcher opens straight onto the full app list
+                // rather than the short one with nothing above it. Turn this
+                // off to keep the short list and open the rest by hand.
+                property bool showAllAppsWhenOff: true
                 property real size: 100 // Percent of the largest grid that fits the screen (100 = fill)
                 property real rows: 2
                 property real columns: 5

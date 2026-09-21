@@ -107,6 +107,16 @@ Scope {
         required property ShellScreen modelData
         screen: modelData
         property string searchingText: ""
+        // What the drawer opens as. Without the workspace previews the
+        // short list would sit alone under the search box, so it starts
+        // on the full list instead unless that was turned off.
+        readonly property bool drawerStartsExpanded: !(Config?.options.overview.enable ?? true)
+            && (Config?.options.overview.showAllAppsWhenOff ?? true)
+        // Expanding the full list by hand replaces the launcher's search box
+        // with the list's own app-only one. A list that started expanded never
+        // asked for that, so there the launcher keeps its box and everything
+        // it can find.
+        readonly property bool drawerOwnsSearch: appDrawer.expanded && !panelWindow.drawerStartsExpanded
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: ((Hyprland.focusedMonitor?.id ?? monitor?.id) === monitor?.id)
 
@@ -188,7 +198,7 @@ Scope {
                     searchWidget.disableExpandAnimation();
                     overviewScope.dontAutoCancelSearch = false;
                     // Reset drawer state
-                    appDrawer.expanded = false;
+                    appDrawer.expanded = panelWindow.drawerStartsExpanded;
                     appDrawer.searchText = "";
                     appDrawer.folderPopupVisible = false;
                     appDrawer.openFolder = null;
@@ -199,7 +209,7 @@ Scope {
                         searchWidget.cancelSearch();
                     }
                     // Reset drawer state on open.
-                    appDrawer.expanded = false;
+                    appDrawer.expanded = panelWindow.drawerStartsExpanded;
                     appDrawer.searchText = "";
                     appDrawer.folderPopupVisible = false;
                     appDrawer.openFolder = null;
@@ -421,7 +431,7 @@ Scope {
             onContentYChanged: {
                 // Drag-overshoot past the top while expanded → collapse.
                 // Wheel-based collapse is handled by wheelOverlay below.
-                if (appDrawer.expanded && contentY < -30) {
+                if (appDrawer.expanded && !panelWindow.drawerStartsExpanded && contentY < -30) {
                     appDrawer.expanded = false;
                     appDrawer.searchText = "";
                     Qt.callLater(() => { flickable.contentY = 0; });
@@ -447,7 +457,7 @@ Scope {
 
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
-                        if (appDrawer.expanded) {
+                        if (appDrawer.expanded && !panelWindow.drawerStartsExpanded) {
                             appDrawer.expanded = false;
                             appDrawer.searchText = "";
                             Qt.callLater(() => { flickable.contentY = 0; });
@@ -468,11 +478,14 @@ Scope {
                     }
                 }
                     
-                // Spacer to prevent drawer from overlapping top bar when expanded.
+                // Keeps the full list clear of the top bar when it is the
+                // first thing in the column. With the search box above it that
+                // job is already done, and the gap would only push the box
+                // down out of line with where it sits otherwise.
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: appDrawer.expanded ? 10 : 0
-                    visible: appDrawer.expanded
+                    Layout.preferredHeight: panelWindow.drawerOwnsSearch ? 10 : 0
+                    visible: panelWindow.drawerOwnsSearch
 
                     Behavior on Layout.preferredHeight {
                         NumberAnimation {
@@ -486,13 +499,13 @@ Scope {
                 SearchWidget {
                     id: searchWidget
                     Layout.alignment: Qt.AlignHCenter
-                    // Hidden when the app drawer is expanded (it takes over).
+                    // Hidden when the app drawer has taken the search over.
                     // Also hidden when overview was opened in workspaces-only
                     // mode by the hot corner so the user gets a clean
                     // workspace switcher with no chrome.
-                    visible: !appDrawer.expanded && !GlobalStates.overviewWorkspacesOnly
-                    Layout.maximumHeight: (appDrawer.expanded || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
-                    opacity: (appDrawer.expanded || GlobalStates.overviewWorkspacesOnly) ? 0 : 1
+                    visible: !panelWindow.drawerOwnsSearch && !GlobalStates.overviewWorkspacesOnly
+                    Layout.maximumHeight: (panelWindow.drawerOwnsSearch || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
+                    opacity: (panelWindow.drawerOwnsSearch || GlobalStates.overviewWorkspacesOnly) ? 0 : 1
                     Behavior on opacity {
                         NumberAnimation {
                             duration: Appearance.animation.elementMoveFast.duration
@@ -542,6 +555,8 @@ Scope {
                     
                 ApplicationDrawer {
                     id: appDrawer
+                    ownSearchField: panelWindow.drawerOwnsSearch
+                    collapsible: !panelWindow.drawerStartsExpanded
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: false
                     Layout.preferredWidth: appDrawer.expanded
@@ -552,8 +567,8 @@ Scope {
                     //  - overview was opened in workspaces-only mode by the
                     //    hot corner (no chrome — workspace previews only)
                     visible: panelWindow.searchingText == "" && !GlobalStates.overviewWorkspacesOnly
-                    opacity: ((panelWindow.searchingText != "" && !appDrawer.expanded) || GlobalStates.overviewWorkspacesOnly) ? 0 : 1
-                    Layout.maximumHeight: ((panelWindow.searchingText != "" && !appDrawer.expanded) || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
+                    opacity: ((panelWindow.searchingText != "" && !panelWindow.drawerOwnsSearch) || GlobalStates.overviewWorkspacesOnly) ? 0 : 1
+                    Layout.maximumHeight: ((panelWindow.searchingText != "" && !panelWindow.drawerOwnsSearch) || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -570,7 +585,11 @@ Scope {
                         }
                     }
 
+                    // The search box above is part of the same column, so the
+                    // full list sizes itself against what is left rather than
+                    // against the whole window.
                     availableHeight: flickable.height
+                        - (searchWidget.visible ? searchWidget.implicitHeight + columnLayout.spacing : 0)
                     availableWidth: appDrawer.expanded
                         ? columnLayout.cachedOverviewWidth
                         : Math.min(1200, flickable.width - 40)
@@ -612,6 +631,10 @@ Scope {
                     return;
                 }
 
+                // An open folder card scrolls its own list, and this overlay
+                // covers it, so the event has to be left alone to reach it.
+                if (appDrawer.folderPopupVisible) return;
+
                 const scrollingDown = event.angleDelta.y < 0;
                 const scrollingUp   = event.angleDelta.y > 0;
 
@@ -620,7 +643,7 @@ Scope {
                 // Without this branch, the fallback at the bottom of this
                 // handler scrolls `flickable.contentY`, which moves the whole
                 // overview slightly and never scrolls the actual results.
-                if (panelWindow.searchingText !== "" && !appDrawer.expanded
+                if (panelWindow.searchingText !== "" && !panelWindow.drawerOwnsSearch
                         && searchWidget.appResults && searchWidget.appResults.visible) {
                     const list         = searchWidget.appResults;
                     const threshold    = flickable.mouseScrollDeltaThreshold;
@@ -656,7 +679,12 @@ Scope {
                     return;
                 }
 
-                if (appDrawer.expanded && scrollingUp
+                // Scrolling up off the top of the list goes back to the short
+                // one, unless the full list is what the launcher opens on, in
+                // which case there is no shorter state to go back to and the
+                // scroll falls through to the grid below.
+                if (appDrawer.expanded && !panelWindow.drawerStartsExpanded
+                        && scrollingUp
                         && flickable.scrollTargetY <= 0
                         && appDrawer.isGridAtTop()) {
                     appDrawer.expanded = false;
