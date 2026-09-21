@@ -108,9 +108,15 @@ RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: pickButton.height
             Layout.alignment: Qt.AlignVCenter
-            radius: Appearance.rounding.small
+            // The field beside it is a Material outlined text field, whose
+            // corner Qt paints in C++ at the extra small scale and offers no
+            // property for. Matching it by value is what lets the swatch, the
+            // field and the button read as one control instead of three.
+            radius: 4
             color: root.displayValue
-            border.width: 1
+            // Half a pixel, so the outline reads as a hairline holding the
+            // swatch in rather than a line drawn around it.
+            border.width: 0.5
             border.color: Appearance.m3colors.m3outline
 
             MouseArea {
