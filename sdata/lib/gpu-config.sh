@@ -226,12 +226,12 @@ _gpu_write_file() {
 # Print the ONE canonical base kernel cmdline: Plymouth splash, zswap disabled,
 # rd.udev.log_level=3, subvol normalized (leading slash stripped so /@ -> @).
 # Caller word-splits the output into cmdline_upsert.
-# Called with two arguments it answers as it always has, for a btrfs root on
-# @. A root on another filesystem names it in the third argument and gets no
-# subvolume flag; a btrfs root mounted from the top level passes "/" as the
-# subvolume and gets none either.
+# Two arguments mean a btrfs root on the named subvolume, defaulting to @. A
+# third argument names the filesystem; anything other than btrfs gets no
+# subvolume flag, and an empty subvolume means the root of the filesystem
+# rather than @, so it gets none either.
 gpu_base_cmdline_tokens() {
-    local root_spec="$1" subvol="${2:-@}" fstype="${3:-btrfs}" fs_tokens
+    local root_spec="$1" subvol="${2-@}" fstype="${3:-btrfs}" fs_tokens
     subvol="${subvol#/}"
     if [[ "$fstype" == btrfs && -n "$subvol" ]]; then
         fs_tokens="rootflags=subvol=$subvol rw rootfstype=btrfs"
