@@ -251,7 +251,7 @@ ContentPage {
                 StyledText {
                     id: outputDisplay
                     width: outputFlickable.width
-                    text: root.outputText || Translation.tr("No output yet. Press \"Restore Snapshot\" to begin.")
+                    text: root.outputText || Translation.tr("Enter your password and press \"Restore Snapshot\" to begin.")
                     font.family: Appearance.font.family.monospace
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: root.outputText ? Appearance.colors.colOnLayer0 : Appearance.m3colors.m3outlineVariant
