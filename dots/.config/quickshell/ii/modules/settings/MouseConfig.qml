@@ -465,6 +465,7 @@ ContentPage {
                 rowSpacing: 0
                 MouseArea {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: mouseScrollTradCol.implicitHeight
                     onClicked: { root.naturalScroll = false; root.applyMouseNaturalScroll(0) }
@@ -534,7 +535,7 @@ ContentPage {
                             }
                         }
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignHCenter
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: !root.naturalScroll ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -543,14 +544,16 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
                 }
                  MouseArea {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: mouseScrollNatCol.implicitHeight
                     onClicked: { root.naturalScroll = true; root.applyMouseNaturalScroll(1) }
@@ -620,7 +623,7 @@ ContentPage {
                             }
                         }
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignHCenter
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: root.naturalScroll ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -629,8 +632,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -683,6 +687,7 @@ ContentPage {
                 rowSpacing: 0
                 MouseArea {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: tpScrollTradCol.implicitHeight
                     onClicked: { root.naturalScrollTP = false; root.applyTouchpadInput(0) }
@@ -749,7 +754,7 @@ ContentPage {
                             }
                         }
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignHCenter
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: !root.naturalScrollTP ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -758,14 +763,16 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
                 }
                 MouseArea {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: tpScrollNatCol.implicitHeight
                     onClicked: { root.naturalScrollTP = true; root.applyTouchpadInput(1) }
@@ -832,7 +839,7 @@ ContentPage {
                             }
                         }
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignHCenter
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: root.naturalScrollTP ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -841,8 +848,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }

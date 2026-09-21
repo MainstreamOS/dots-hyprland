@@ -348,6 +348,7 @@ ContentPage {
                 MouseArea {
                     id: dwindleCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: dwindleCol.implicitHeight
                     onClicked: root.applyLayout("dwindle")
@@ -416,7 +417,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: dwindleCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -425,8 +426,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: "Dwindle (default)"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Each new window splits the last in half"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Dwindle (default)"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Each new window splits the last in half"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -436,6 +438,7 @@ ContentPage {
                 MouseArea {
                     id: masterCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: masterCol.implicitHeight
                     onClicked: root.applyLayout("master")
@@ -499,7 +502,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: masterCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -508,8 +511,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: "Master"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("One main window with a side stack"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Master"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One main window with a side stack"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -519,6 +523,7 @@ ContentPage {
                 MouseArea {
                     id: scrollingCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: scrollingCol.implicitHeight
                     onClicked: root.applyLayout("scrolling")
@@ -586,7 +591,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: scrollingCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -595,8 +600,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: "Scrolling"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Horizontally scrollable window columns"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Scrolling"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Horizontally scrollable window columns"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -606,6 +612,7 @@ ContentPage {
                 MouseArea {
                     id: monocleCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: monocleCol.implicitHeight
                     onClicked: root.applyLayout("monocle")
@@ -667,7 +674,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: monocleCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -676,8 +683,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: "Monocle"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("One focused fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Monocle"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One focused fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -687,6 +695,7 @@ ContentPage {
                 MouseArea {
                     id: floatCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: floatCol.implicitHeight
                     onClicked: root.applyLayout("float")
@@ -756,7 +765,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: floatCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -765,8 +774,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: "Float"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("All windows float freely on the desktop"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Float"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("All windows float freely on the desktop"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
@@ -776,6 +786,7 @@ ContentPage {
                 Item {
                     id: titleBarCard
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 1
                     implicitHeight: titleBarCol.implicitHeight
 
                     ColumnLayout {
@@ -1036,7 +1047,7 @@ ContentPage {
                         }
 
                         RowLayout {
-                            spacing: 6; Layout.alignment: Qt.AlignLeft
+                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
                             Rectangle {
                                 width: 16; height: 16; radius: 8; border.width: 2
                                 border.color: perWsCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
@@ -1045,8 +1056,9 @@ ContentPage {
                             }
                             ColumnLayout {
                                 spacing: 1
-                                StyledText { text: Translation.tr("Per Workspace"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { text: Translation.tr("Choose a different layout for each workspace"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+                                Layout.fillWidth: true
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Per Workspace"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Choose a different layout for each workspace"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                             }
                         }
                     }
