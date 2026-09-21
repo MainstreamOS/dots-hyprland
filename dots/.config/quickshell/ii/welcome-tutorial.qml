@@ -424,6 +424,10 @@ ApplicationWindow {
                 spacing: 1
                 Layout.fillWidth: true
                 StyledText {
+                    // Bounded like the line under it: a title in a wider font
+                    // would otherwise run past the row and over the tick.
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
                     text: optRoot.optTitle
                     font.pixelSize: Appearance.font.pixelSize.normal
                     font.weight: Font.Medium
