@@ -307,6 +307,38 @@
       "mechanism": "flagfile",
       "path": "titlebars.opacity",
       "requires": "titleBars"
+    },
+    {
+      "key": "titleBarButtonSize",
+      "group": "shape",
+      "label": "Title bar button size",
+      "type": "int",
+      "default": 15,
+      "min": 6,
+      "max": 18,
+      "mechanism": "flagfile",
+      "path": "titlebars.buttonSize",
+      "requires": "titleBars"
+    },
+    {
+      "key": "titleBarButtonBackground",
+      "group": "shape",
+      "label": "Title bar button background",
+      "type": "str",
+      "default": "",
+      "mechanism": "flagfile",
+      "path": "titlebars.buttonBackground",
+      "requires": "titleBars"
+    },
+    {
+      "key": "titleBarButtonIconColor",
+      "group": "shape",
+      "label": "Title bar button icon color",
+      "type": "str",
+      "default": "",
+      "mechanism": "flagfile",
+      "path": "titlebars.buttonIconColor",
+      "requires": "titleBars"
     }
   ]
 }

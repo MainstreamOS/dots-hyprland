@@ -77,6 +77,39 @@ Singleton {
     property real opacity: 0.5333
     property bool appearanceLoaded: false
 
+    // The buttons keep their own size and colors, apart from the bar's, so a
+    // bar color pick does not drag them along with it. An empty color leaves
+    // the pair the plugin has always drawn.
+    readonly property string buttonSizePath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonSize`
+    readonly property string buttonBackgroundPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonBackground`
+    readonly property string buttonIconColorPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonIconColor`
+
+    // The bar height plugins.lua sets, and the ceiling it puts on a button:
+    // past about three fifths of the bar there is no room left around the icon.
+    // Kept here as well so the slider cannot offer a size the plugin clamps.
+    readonly property real barHeight: 30
+    readonly property real maxButtonSize: Math.floor(barHeight * 0.6)
+    // Half the bar, which sits inside that ceiling with room left around the icon.
+    readonly property real defaultButtonSize: Math.round(barHeight * 0.5)
+
+    property real buttonSize: defaultButtonSize
+    property string buttonBackground: ""
+    property string buttonIconColor: ""
+
+    // The plugin empties its button list before each config reload and the Lua
+    // config fills it again, so the three travel together and one reload
+    // redraws them.
+    function setButtons(newSize, newColor, newIconColor) {
+        root.buttonSize = newSize
+        root.buttonBackground = newColor
+        root.buttonIconColor = newIconColor
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && printf "%s" "$5" > "$4" && hyprctl reload',
+            root.buttonSizePath, String(newSize),
+            root.buttonBackgroundPath, String(newColor),
+            root.buttonIconColorPath, String(newIconColor)])
+    }
+
     // Written together, because they compose into one value the plugin reads:
     // hyprbars takes a single bar_color carrying its own alpha, so a colour
     // saved without its opacity would land at whatever the other file last
@@ -106,8 +139,12 @@ Singleton {
         command: ["bash", "-c",
             '{ cat "$0" 2>/dev/null || printf 1; }; printf "\\n"; ' +
             '{ cat "$1" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$2" 2>/dev/null || printf 0.5333; }; printf "\\n"',
-            root.flagPath, root.colorPath, root.opacityPath]
+            '{ cat "$2" 2>/dev/null || printf 0.5333; }; printf "\\n"; ' +
+            '{ cat "$3" 2>/dev/null || printf ' + root.defaultButtonSize + '; }; printf "\\n"; ' +
+            '{ cat "$4" 2>/dev/null; }; printf "\\n"; ' +
+            '{ cat "$5" 2>/dev/null; }; printf "\\n"',
+            root.flagPath, root.colorPath, root.opacityPath,
+            root.buttonSizePath, root.buttonBackgroundPath, root.buttonIconColorPath]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
@@ -119,6 +156,10 @@ Singleton {
             root.color = (lines[1] ?? "").trim()
             const o = parseFloat((lines[2] ?? "").trim())
             root.opacity = isNaN(o) ? 0.5333 : Math.max(0, Math.min(1, o))
+            const bs = parseFloat((lines[3] ?? "").trim())
+            root.buttonSize = isNaN(bs) ? root.defaultButtonSize : Math.max(6, Math.min(root.maxButtonSize, bs))
+            root.buttonBackground = (lines[4] ?? "").trim()
+            root.buttonIconColor = (lines[5] ?? "").trim()
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true

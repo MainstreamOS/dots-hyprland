@@ -240,7 +240,7 @@ ContentPage {
     function resetWindowSections() {
         const d = root.decoDefaults;
         const pairs = Object.keys(d)
-            .filter(k => k !== "titleBars" && k !== "titleBarColor" && k !== "titleBarOpacity")
+            .filter(k => !k.startsWith("titleBar"))
             .map(k => `${k}=${d[k]}`);
         if (pairs.length === 0) return;
         root.setDecoration(pairs);
@@ -587,14 +587,23 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // runs `hyprctl reload`, and a slider sends a value per pixel.
         property string pendingColor: TitleBars.color
         property real pendingOpacity: TitleBars.opacity
+        property real pendingButtonSize: TitleBars.buttonSize
+        property string pendingButtonBackground: TitleBars.buttonBackground
+        property string pendingButtonIconColor: TitleBars.buttonIconColor
 
         // The stock bar carries no colour of ours, which plugins.lua reads as
         // "leave the key alone", at the plugin's own alpha.
         readonly property real defaultOpacity: 0.5333
+        // What the plugin has always drawn its buttons at, so an untouched
+        // pair is stored as nothing rather than as the numbers it happens to
+        // use today.
+        readonly property real defaultButtonSize: TitleBars.defaultButtonSize
         // Compared with a tolerance because the value makes a round trip
         // through a file as text, and the slider quantises to whole percents.
         readonly property bool appearanceChanged: pendingColor !== ""
             || Math.abs(Number(pendingOpacity) - defaultOpacity) > 0.0001
+            || pendingButtonBackground !== "" || pendingButtonIconColor !== ""
+            || Math.round(pendingButtonSize) !== defaultButtonSize
 
         // Reset back to stock title bar settings in one press: the color file
         // goes empty, so the plugin paints its own stock bar again.
@@ -603,6 +612,12 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             pendingOpacity = defaultOpacity;
             if (TitleBars.color !== "" || Number(TitleBars.opacity) !== defaultOpacity)
                 TitleBars.setAppearance("", defaultOpacity);
+            pendingButtonSize = defaultButtonSize;
+            pendingButtonBackground = "";
+            pendingButtonIconColor = "";
+            if (TitleBars.buttonBackground !== "" || TitleBars.buttonIconColor !== ""
+                || Math.round(TitleBars.buttonSize) !== defaultButtonSize)
+                TitleBars.setButtons(defaultButtonSize, "", "");
         }
 
         ColorField {
@@ -639,6 +654,61 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 titleBarSection.pendingOpacity = stepped;
                 titleBarApplyDebounce.restart();
             }
+        }
+
+        ConfigSlider {
+            text: Translation.tr("Button size")
+            buttonIcon: "radio_button_checked"
+            stopIndicatorValues: [titleBarSection.defaultButtonSize]
+            from: 6
+            to: TitleBars.maxButtonSize
+            value: Math.round(titleBarSection.pendingButtonSize)
+            onMoved: {
+                const stepped = Math.round(value);
+                if (stepped === Math.round(titleBarSection.pendingButtonSize)) return;
+                titleBarSection.pendingButtonSize = stepped;
+                titleBarButtonDebounce.restart();
+            }
+        }
+
+        ColorField {
+            text: Translation.tr("Button background")
+            buttonIcon: "circle"
+            value: titleBarSection.pendingButtonBackground
+            allowEmpty: true
+            fallback: "#49454e"
+            onEdited: newValue => {
+                titleBarSection.pendingButtonBackground = newValue;
+                titleBarButtonDebounce.restart();
+            }
+            StyledToolTip {
+                text: Translation.tr("Left empty, the buttons keep the background they come with.")
+            }
+        }
+
+        ColorField {
+            text: Translation.tr("Button icon color")
+            buttonIcon: "border_color"
+            value: titleBarSection.pendingButtonIconColor
+            allowEmpty: true
+            fallback: "#ffffff"
+            onEdited: newValue => {
+                titleBarSection.pendingButtonIconColor = newValue;
+                titleBarButtonDebounce.restart();
+            }
+            StyledToolTip {
+                text: Translation.tr("Left empty, the icons keep the color they come with.")
+            }
+        }
+
+        // The buttons are rebuilt from the Hyprland config rather than set as
+        // a key, so they answer to their own write and their own reload.
+        Timer {
+            id: titleBarButtonDebounce
+            interval: 400
+            onTriggered: TitleBars.setButtons(titleBarSection.pendingButtonSize,
+                titleBarSection.pendingButtonBackground,
+                titleBarSection.pendingButtonIconColor)
         }
 
         // Applying means reloading the compositor, and a drag sends a value

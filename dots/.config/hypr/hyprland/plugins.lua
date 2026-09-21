@@ -161,6 +161,35 @@ local function titleBarColor()
     return string.format("rgba(%s%02x)", hex, math.floor(on * 255 + 0.5))
 end
 
+-- The buttons carry their own size and colors, kept apart from the bar's so a
+-- bar color pick does not drag them along. An empty or unreadable color leaves
+-- the pair the plugin has always drawn. Six digits are opaque, eight carry
+-- their own alpha, which is how the picker writes a see-through button.
+-- The bar's own height, and the ceiling it puts on a button: past about three
+-- fifths of the bar there is no room left around the icon.
+local TITLE_BAR_HEIGHT = 30
+local TITLE_BAR_BUTTON_MAX = math.floor(TITLE_BAR_HEIGHT * 0.6)
+-- Half the bar, which sits inside that ceiling with room left around the icon.
+local TITLE_BAR_BUTTON_DEFAULT = math.floor(TITLE_BAR_HEIGHT * 0.5 + 0.5)
+
+local function titleBarButton()
+    local size = tonumber(readCustomValue("titlebars.buttonSize") or "") or TITLE_BAR_BUTTON_DEFAULT
+    if size < 6 then size = 6
+    elseif size > TITLE_BAR_BUTTON_MAX then size = TITLE_BAR_BUTTON_MAX end
+    local function colorOf(name, fallback)
+        local hex = readCustomValue(name)
+        if hex then
+            hex = hex:gsub("^#", "")
+            if hex:match("^%x%x%x%x%x%x$") then return "rgb(" .. hex .. ")" end
+            if hex:match("^%x%x%x%x%x%x%x%x$") then return "rgba(" .. hex .. ")" end
+        end
+        return fallback
+    end
+    return size,
+        colorOf("titlebars.buttonBackground", "rgba(49454e55)"),
+        colorOf("titlebars.buttonIconColor", "rgb(ffffff)")
+end
+
 -- The wallpaper the overview draws, saved beside the other runtime flags by
 -- switchwall.sh. Read from there rather than written into this file: this file
 -- is refreshed on update, and a path spliced into it would be replaced by the
@@ -235,7 +264,7 @@ local function applyPluginConfig()
             enabled = tbOn,
             bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
             bar_title_enabled = false,
-            bar_height = tbOn and 30 or 0,
+            bar_height = tbOn and TITLE_BAR_HEIGHT or 0,
             bar_padding = 10,
             bar_button_padding = 5,
             bar_precedence_over_border = true,
@@ -278,21 +307,22 @@ local function applyPluginConfig()
         pcall(function() buttonsAdded = hl.plugin.hyprbars.__ms_buttons == true end)
         if hyprbarsActive() and tbOn and not buttonsAdded then
             pcall(function() hl.plugin.hyprbars.__ms_buttons = true end)
+            local btnSize, btnBg, btnFg = titleBarButton()
             -- Action strings are shell commands run via the legacy `exec`
             -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
             -- subshell, so the Lua expression after `hyprctl dispatch` must
             -- be single-quoted to survive shell parsing intact.
             hl.plugin.hyprbars.add_button({
-                bg_color = "rgba(49454e55)",
-                fg_color = "rgb(ffffff)",
-                size     = 13,
+                bg_color = btnBg,
+                fg_color = btnFg,
+                size     = btnSize,
                 icon     = "󰖭",
                 action   = "hyprctl dispatch 'hl.dsp.window.close()'",
             })
             hl.plugin.hyprbars.add_button({
-                bg_color = "rgba(49454e55)",
-                fg_color = "rgb(ffffff)",
-                size     = 13,
+                bg_color = btnBg,
+                fg_color = btnFg,
+                size     = btnSize,
                 icon     = "󰖯",
                 action   = [[hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "maximized"})']],
             })
@@ -309,9 +339,9 @@ local function applyPluginConfig()
             -- Returns an hl.dsp.window.move dispatcher userdata so the
             -- outer hl.dispatch(...) wrap is satisfied.
             hl.plugin.hyprbars.add_button({
-                bg_color = "rgba(49454e55)",
-                fg_color = "rgb(ffffff)",
-                size     = 13,
+                bg_color = btnBg,
+                fg_color = btnFg,
+                size     = btnSize,
                 icon     = "󰖰",
                 action   = [[hyprctl dispatch '(function() local w = hl.get_active_window(); if w and w.workspace and w.workspace.special then local m = hl.get_active_monitor(); local t = m and m.active_workspace; if t then return hl.dsp.window.move({workspace = tostring(t.id), follow = true}) end end; return hl.dsp.window.move({workspace = "special", follow = false}) end)()']],
             })
