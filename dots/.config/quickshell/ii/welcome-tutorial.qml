@@ -53,10 +53,15 @@ ApplicationWindow {
     // names itself does not spend a line of its own saying so.
     readonly property string cardTitle: {
         switch (root.currentCard) {
+        case 0: return Translation.tr("Welcome! Let's start with the basics");
         case 1: return Translation.tr("Pick your desktop's style");
         case 2: return Translation.tr("Pick how your windows look");
+        case root.installCardIndex: return Translation.tr("Set up your apps");
+        case root.cardCount - 1: return Translation.tr("One last thing");
         }
-        return Translation.tr("Hi there! First things first...");
+        // The tour pages carry their own headline in the card, so the window
+        // only needs to say which part of the welcome this is.
+        return Translation.tr("Getting around");
     }
 
     // Install page (card 2): which apps the user ticked to install in the background.
@@ -617,12 +622,6 @@ ApplicationWindow {
                 width: installFlick.width
                 spacing: 8
 
-                StyledText {
-                    text: Translation.tr("Set up your apps")
-                    font.pixelSize: Appearance.font.pixelSize.huge
-                    font.weight: Font.Medium
-                    color: Appearance.colors.colOnLayer0
-                }
                 StyledText {
                     text: Translation.tr("Pick anything you'd like installed — you can always add these later.")
                     font.pixelSize: Appearance.font.pixelSize.normal
@@ -1360,6 +1359,551 @@ ApplicationWindow {
                     font.pixelSize: Appearance.font.pixelSize.normal
                     color: Appearance.colors.colOnLayer1
                 }
+            }
+        }
+    }
+
+    // A window layout's picture, lifted 1:1 from the cards Settings → Layouts
+    // picks between, so the two show a layout the same way.
+    component LayoutPicture : Rectangle {
+        id: layoutPicture
+        property string layout: "dwindle"
+        property bool selected: true
+        property bool hovered: false
+        // Tighter than the page's other cards: at this size the standard
+        // rounding turns a small card into a pill.
+        radius: Appearance.rounding.verysmall
+        color: layoutPicture.selected
+            ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1)
+            : (layoutPicture.hovered ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer2)
+        border.width: layoutPicture.selected ? 2 : 1
+        border.color: layoutPicture.selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
+
+        // Drawn at the size Settings → Layouts draws it and scaled to fit, so
+        // a small card shows the same picture rather than a squeezed one.
+        Item {
+            width: 200
+            height: 110
+            anchors.centerIn: parent
+            scale: Math.min((layoutPicture.width - 12) / width, (layoutPicture.height - 12) / height)
+
+            // Dwindle
+            Item {
+                visible: layoutPicture.layout === "dwindle"
+                anchors.fill: parent
+                Rectangle {
+                    x: 0; y: 0; width: parent.width * 0.54; height: parent.height
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
+                        Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
+                    }
+                    Column { x: 7; y: 15; spacing: 4
+                        Repeater { model: [38, 28, 40, 24]
+                            Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
+                        }
+                    }
+                    StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
+                        text: "1"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
+                }
+                Rectangle {
+                    x: parent.width * 0.54 + 3; y: 0
+                    width: parent.width * 0.46 - 3; height: parent.height * 0.5 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                    StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
+                        text: "2"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
+                }
+                Rectangle {
+                    x: parent.width * 0.54 + 3; y: parent.height * 0.5 + 2
+                    width: (parent.width * 0.46 - 3) * 0.54; height: parent.height * 0.5 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                    StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
+                        text: "3"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
+                }
+                Rectangle {
+                    x: parent.width * 0.54 + 3 + (parent.width * 0.46 - 3) * 0.54 + 2
+                    y: parent.height * 0.5 + 2
+                    width: (parent.width * 0.46 - 3) * 0.46 - 2; height: parent.height * 0.5 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                    StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
+                        text: "4"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
+                }
+            }
+
+            // Master
+            Item {
+                visible: layoutPicture.layout === "master"
+                anchors.fill: parent
+                Rectangle {
+                    x: 0; y: 0; width: parent.width * 0.57; height: parent.height
+                    radius: 3
+                    color: layoutPicture.layout === "master" ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.08) : Appearance.colors.colLayer3
+                    border.width: 1
+                    border.color: layoutPicture.layout === "master" ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.5) : Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
+                        Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
+                    }
+                    Column { x: 7; y: 15; spacing: 4
+                        Repeater { model: [38, 26, 42, 20, 36]
+                            Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
+                        }
+                    }
+                    StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
+                        text: "M"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.45 }
+                }
+                Rectangle {
+                    x: parent.width * 0.57 + 3; y: 0
+                    width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                }
+                Rectangle {
+                    x: parent.width * 0.57 + 3; y: parent.height / 3 + 1
+                    width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                }
+                Rectangle {
+                    x: parent.width * 0.57 + 3; y: parent.height * 2 / 3 + 2
+                    width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
+                }
+            }
+
+            // Scrolling
+            Item {
+                visible: layoutPicture.layout === "scrolling"
+                anchors.fill: parent
+                clip: true
+                Rectangle {
+                    x: -18; y: 4; width: 24; height: parent.height - 8
+                    radius: 3; opacity: 0.45; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                }
+                Row {
+                    x: 10; y: 0; width: parent.width - 14; height: parent.height; spacing: 4
+                    Repeater {
+                        model: 3
+                        Rectangle {
+                            width: (parent.width - 8) / 3; height: parent.height
+                            radius: 3; color: Appearance.colors.colLayer3
+                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
+                                Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.3 }
+                            }
+                            Column { x: 5; y: 14; spacing: 3
+                                Repeater { model: [20, 14, 22, 12]
+                                    Rectangle { width: modelData; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
+                                }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    x: parent.width - 6; y: 4; width: 20; height: parent.height - 8
+                    radius: 3; opacity: 0.5; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                }
+                MaterialSymbol {
+                    x: -2; anchors.verticalCenter: parent.verticalCenter
+                    text: "chevron_left"; iconSize: 16; z: 3
+                    color: layoutPicture.layout === "scrolling" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext; opacity: 0.75
+                }
+                MaterialSymbol {
+                    anchors.right: parent.right; anchors.rightMargin: -2
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "chevron_right"; iconSize: 16; z: 3
+                    color: layoutPicture.layout === "scrolling" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext; opacity: 0.75
+                }
+            }
+
+            // Monocle
+            Item {
+                visible: layoutPicture.layout === "monocle"
+                anchors.fill: parent
+                Rectangle {
+                    x: 10; y: 8; width: parent.width - 20; height: parent.height - 18
+                    radius: 3; opacity: 0.38; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                }
+                Rectangle {
+                    x: 5; y: 4; width: parent.width - 10; height: parent.height - 10
+                    radius: 3; opacity: 0.65; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                }
+                Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height
+                    radius: 3; color: Appearance.colors.colLayer3
+                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
+                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
+                        Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
+                    }
+                    Column { x: 8; y: 15; spacing: 4
+                        Repeater { model: [55, 38, 60, 28, 50]
+                            Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
+                        }
+                    }
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom; anchors.bottomMargin: 6
+                        spacing: 5
+                        Repeater {
+                            model: 4
+                            Rectangle {
+                                width: index === 0 ? 16 : 6; height: 4; radius: 2
+                                color: index === 0 ? (layoutPicture.layout === "monocle" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext) : Appearance.colors.colSubtext
+                                opacity: index === 0 ? 0.85 : 0.3
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Float — scattered windows at their own
+            // sizes, overlapping rather than tiled.
+            Item {
+                visible: layoutPicture.layout === "float"
+                anchors.fill: parent
+                Repeater {
+                    model: [
+                        { fx: 0.02, fy: 0.10, fw: 0.46, fh: 0.52, n: "1" },
+                        { fx: 0.40, fy: 0.00, fw: 0.40, fh: 0.44, n: "2" },
+                        { fx: 0.22, fy: 0.46, fw: 0.44, fh: 0.50, n: "3" },
+                        { fx: 0.62, fy: 0.38, fw: 0.36, fh: 0.46, n: "4" }
+                    ]
+                    Rectangle {
+                        x: parent.width * modelData.fx
+                        y: parent.height * modelData.fy
+                        width: parent.width * modelData.fw
+                        height: parent.height * modelData.fh
+                        radius: 3
+                        color: Appearance.colors.colLayer3
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+                        Rectangle {
+                            width: parent.width; height: 9; radius: 2
+                            color: Appearance.colors.colLayer2
+                            Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
+                        }
+                        StyledText {
+                            anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
+                            text: modelData.n
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            opacity: 0.4
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // One workspace in the scrolling overview's strip: a whole desktop, with
+    // the wallpaper, the bar and the dock, drawn at full size so it shrinks as
+    // one piece the way the overview shrinks the real screen.
+    component WorkspaceThumb : Item {
+        id: thumb
+        property Item wallpaperSource
+        property int arrangement: 0
+        property bool showWindows: true
+        property string barShape: "float"
+        property string dockShape: "float"
+        clip: true
+
+        ShaderEffectSource {
+            anchors.fill: parent
+            sourceItem: thumb.wallpaperSource
+            hideSource: false
+        }
+
+        // The workspaces either side hold windows of their own, so the strip
+        // reads as several desktops rather than one picture repeated.
+        Repeater {
+            model: thumb.showWindows ? [
+                [[0.06, 0.12, 0.44, 0.68], [0.53, 0.12, 0.41, 0.68]],
+                [[0.14, 0.16, 0.72, 0.62]],
+                [[0.06, 0.12, 0.40, 0.68], [0.49, 0.12, 0.45, 0.32], [0.49, 0.48, 0.45, 0.32]]
+            ][thumb.arrangement % 3] : []
+            Rectangle {
+                required property var modelData
+                x: thumb.width * modelData[0]
+                y: thumb.height * modelData[1]
+                width: thumb.width * modelData[2]
+                height: thumb.height * modelData[3]
+                radius: 6
+                color: Appearance.colors.colLayer3Base
+                Rectangle {
+                    width: parent.width
+                    height: 14
+                    topLeftRadius: 6
+                    topRightRadius: 6
+                    color: Appearance.colors.colLayer2Base
+                }
+            }
+        }
+
+        EdgeMount {
+            edge: Appearance.sizes.barEdge
+            BarPiece { shape: thumb.barShape }
+        }
+        EdgeMount {
+            visible: Config.options.dock.enable
+            edge: Appearance.sizes.dockEdge
+            DockPiece { shape: thumb.dockShape }
+        }
+    }
+
+    // What the top-left corner does, played over the first page's picture of
+    // the desktop: the pointer goes into the corner, the corner answers the
+    // way it is set to, and the desktop comes back. Nothing plays until a
+    // corner setting is changed or asked to play.
+    component HotCornerDemo : Item {
+        id: demo
+        property string trigger: "off"
+        property string layout: "vertical"
+        property Item wallpaperSource
+        property int rows: 2
+        property int columns: 5
+        property string barShape: "float"
+        property string dockShape: "float"
+
+        property real cursorX: 0
+        property real cursorY: 0
+        property real cursorAlpha: 0
+        property real rippleT: 0
+        property real openT: 0
+
+        function play() {
+            timeline.stop();
+            demo.openT = 0;
+            demo.rippleT = 0;
+            demo.cursorAlpha = 0;
+            demo.cursorX = demo.width * 0.56;
+            demo.cursorY = demo.height * 0.6;
+            timeline.start();
+        }
+
+        SequentialAnimation {
+            id: timeline
+            NumberAnimation { target: demo; property: "cursorAlpha"; to: 1; duration: 160 }
+            ParallelAnimation {
+                NumberAnimation { target: demo; property: "cursorX"; to: 2; duration: 650; easing.type: Easing.InOutCubic }
+                NumberAnimation { target: demo; property: "cursorY"; to: 2; duration: 650; easing.type: Easing.InOutCubic }
+            }
+            ParallelAnimation {
+                NumberAnimation { target: demo; property: "rippleT"; from: 0; to: 1; duration: 450; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    target: demo; property: "openT"
+                    to: demo.trigger === "off" ? 0 : 1
+                    duration: demo.trigger === "off" ? 0 : 420
+                    easing.type: Easing.OutCubic
+                }
+            }
+            PauseAnimation { duration: 1700 }
+            ParallelAnimation {
+                NumberAnimation { target: demo; property: "openT"; to: 0; duration: 280; easing.type: Easing.InCubic }
+                NumberAnimation { target: demo; property: "cursorAlpha"; to: 0; duration: 280 }
+            }
+        }
+
+        // ── The default overview, as the corner opens it: the workspace grid
+        // alone at the top of the screen, with no search field, over the
+        // desktop blurred and darkened. The dock is left standing sharp at its
+        // edge, as it is on screen. ──
+        Item {
+            anchors.fill: parent
+            visible: demo.trigger === "default" && demo.openT > 0
+
+            WorkspaceThumb {
+                id: overviewDesktopCopy
+                anchors.fill: parent
+                visible: false
+                wallpaperSource: demo.wallpaperSource
+                showWindows: false
+                barShape: demo.barShape
+                dockShape: demo.dockShape
+            }
+            FastBlur {
+                anchors.fill: parent
+                source: overviewDesktopCopy
+                radius: 64
+                opacity: demo.openT
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: "black"
+                opacity: 0.45 * demo.openT
+            }
+            EdgeMount {
+                visible: Config.options.dock.enable
+                edge: Appearance.sizes.dockEdge
+                DockPiece { shape: demo.dockShape }
+            }
+        }
+        Item {
+            anchors.fill: parent
+            visible: demo.trigger === "default" && demo.openT > 0
+            opacity: demo.openT
+
+            readonly property real tileW: demo.width * 0.9 / Math.max(demo.columns, demo.rows * demo.width / demo.height)
+            readonly property real tileH: tileW * demo.height / demo.width
+            readonly property real spacing: 3
+            readonly property real gridTop: Appearance.sizes.barEdge === "top" ? demo.height * 0.1 : demo.height * 0.03
+
+            Rectangle {
+                id: gridPanel
+                readonly property real pad: 5
+                width: demo.columns * parent.tileW + (demo.columns - 1) * parent.spacing + 2 * pad
+                height: demo.rows * parent.tileH + (demo.rows - 1) * parent.spacing + 2 * pad
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.gridTop - (1 - demo.openT) * 8
+                scale: 0.94 + 0.06 * demo.openT
+                radius: 8
+                color: Appearance.colors.colBackgroundSurfaceContainer
+
+                Grid {
+                    x: gridPanel.pad
+                    y: gridPanel.pad
+                    columns: demo.columns
+                    spacing: gridPanel.parent.spacing
+                    Repeater {
+                        model: demo.rows * demo.columns
+                        Rectangle {
+                            required property int index
+                            width: gridPanel.parent.tileW
+                            height: gridPanel.parent.tileH
+                            radius: 4
+                            color: Appearance.colors.colSurfaceContainerLow
+                            border.width: index === 0 ? 2 : 0
+                            border.color: Appearance.colors.colSecondary
+                            StyledText {
+                                anchors.centerIn: parent
+                                text: index + 1
+                                font.pixelSize: Math.max(8, parent.height * 0.45)
+                                color: ColorUtils.transparentize(Appearance.colors.colOnLayer1, 0.8)
+                            }
+                            // A few workspaces hold windows, as they would.
+                            Rectangle {
+                                visible: index === 0 || index === 2 || index === 3
+                                x: parent.width * 0.1; y: parent.height * 0.14
+                                width: parent.width * (index === 2 ? 0.8 : 0.46); height: parent.height * 0.72
+                                radius: 2
+                                color: Appearance.colors.colLayer3Base
+                            }
+                            Rectangle {
+                                visible: index === 0
+                                x: parent.width * 0.6; y: parent.height * 0.14
+                                width: parent.width * 0.3; height: parent.height * 0.72
+                                radius: 2
+                                color: Appearance.colors.colLayer3Base
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── The scrolling overview: the screen shrinks to half into a strip of
+        // workspaces. Behind it the whole desktop, bar and dock included, is
+        // blurred right out. On screen the bar and the dock stay sharp, but
+        // here they would only compete with the workspaces for attention. ──
+        Item {
+            id: strip
+            anchors.fill: parent
+            visible: demo.trigger === "scrolloverview" && demo.openT > 0
+            readonly property bool vertical: demo.layout !== "horizontal"
+            readonly property real s: 1 - 0.5 * demo.openT
+            readonly property real gap: demo.width * 0.04 * demo.openT
+
+            WorkspaceThumb {
+                id: desktopCopy
+                anchors.fill: parent
+                visible: false
+                wallpaperSource: demo.wallpaperSource
+                showWindows: false
+                barShape: demo.barShape
+                dockShape: demo.dockShape
+            }
+            FastBlur {
+                anchors.fill: parent
+                source: desktopCopy
+                radius: 64
+                opacity: demo.openT
+            }
+
+            Repeater {
+                model: [-1, 0, 1]
+                WorkspaceThumb {
+                    required property int modelData
+                    width: demo.width
+                    height: demo.height
+                    scale: strip.s
+                    x: strip.vertical ? 0 : modelData * (demo.width * strip.s + strip.gap)
+                    y: strip.vertical ? modelData * (demo.height * strip.s + strip.gap) : 0
+                    // The one in the middle is the desktop already on screen, so
+                    // it starts identical to it and simply shrinks.
+                    opacity: modelData === 0 ? 1 : demo.openT
+                    wallpaperSource: demo.wallpaperSource
+                    arrangement: modelData + 1
+                    showWindows: modelData !== 0
+                    barShape: demo.barShape
+                    dockShape: demo.dockShape
+                }
+            }
+        }
+    }
+
+    // The pointer and the corner's ripple, drawn over the demonstration they
+    // belong to so whatever opens never hides them.
+    component HotCornerPointer : Item {
+        id: pointer
+        required property HotCornerDemo demo
+
+        // Where the corner fires.
+        Rectangle {
+            readonly property real size: 130 * pointer.demo.rippleT
+            x: -size / 2
+            y: -size / 2
+            width: size
+            height: size
+            radius: size / 2
+            color: pointer.demo.trigger === "off" ? Appearance.colors.colSubtext : Appearance.colors.colPrimary
+            opacity: (1 - pointer.demo.rippleT) * 0.85 * pointer.demo.cursorAlpha
+        }
+
+        // The pointer, drawn rather than taken from the icon font.
+        Shape {
+            x: pointer.demo.cursorX
+            y: pointer.demo.cursorY
+            width: 13
+            height: 20
+            opacity: pointer.demo.cursorAlpha
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: "white"
+                strokeColor: "black"
+                strokeWidth: 1.2
+                joinStyle: ShapePath.RoundJoin
+                startX: 0; startY: 0
+                PathLine { x: 0; y: 16 }
+                PathLine { x: 4; y: 12.5 }
+                PathLine { x: 7; y: 19 }
+                PathLine { x: 9.5; y: 18 }
+                PathLine { x: 6.5; y: 11.5 }
+                PathLine { x: 11.5; y: 11.5 }
+                PathLine { x: 0; y: 0 }
             }
         }
     }
@@ -7667,6 +8211,12 @@ readonly property var drawerApps: root.drawerApps
             editLayoutProc.running = true
         }
 
+        Process {
+            id: randomWallProc
+            property string scriptPath: `${Directories.scriptPath}/colors/random/set_default_wall.sh`
+            command: ["bash", "-c", FileUtils.trimFileProtocol(randomWallProc.scriptPath)]
+        }
+
         // Re-runs the wallpaper-switch script in --noswitch mode to
         // re-derive theme colors from the current wallpaper when the
         // palette type changes. Mirrors QuickConfig.qml's themeApplyProc
@@ -7681,963 +8231,505 @@ readonly property var drawerApps: root.drawerApps
             themeApplyProc.running = true
         }
 
+        // Picking a folder turns the slideshow on and shows one straight away,
+        // so the button does something visible rather than leaving the desktop
+        // unchanged until the first interval is up. The rotation lives in the
+        // main shell, so it is asked over IPC rather than run from this window.
+        Process {
+            id: slideshowFolderProc
+            property string buf: ""
+            onRunningChanged: if (running) buf = ""
+            stdout: SplitParser { onRead: data => slideshowFolderProc.buf += data }
+            onExited: exitCode => {
+                if (exitCode !== 0) return;
+                const picked = (slideshowFolderProc.buf || "").trim();
+                if (picked.length === 0) return;
+                Config.options.background.slideshow.folder = picked;
+                Config.options.background.slideshow.enable = true;
+                slideshowNextProc.command = ["qs", "-c", "ii", "ipc", "call", "slideshow", "next"];
+                slideshowNextProc.running = false;
+                slideshowNextProc.running = true;
+            }
+        }
+
+        Process { id: slideshowNextProc }
+
         // ── Layout ──────────────────────────────────────────────────────
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 18
-            spacing: 14
+            anchors.margins: 24
+            spacing: 16
 
-            // ── LEFT COLUMN: Language / Bar / Style & Wallpaper ─────────
-            // 5:6 split with the right column (~45% / ~55%). The right
-            // column needs slightly more room for the Window Layout
-            // section's two side-by-side cards; the left column's
-            // content (a combo, position/style pills, and Light/Dark +
-            // wallpaper buttons) fits comfortably in the narrower half.
-            // The inner Window Layout cards still use a 1:1 preferred
-            // width so they stay uniform with each other.
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.preferredWidth: 5
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignTop
-                spacing: 8
-
-                // ── Language ────────────────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: langCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: langCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 8
-
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "language"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Language")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
-                            }
-                        }
-
-                        StyledComboBox {
-                            id: langCombo
-                            Layout.fillWidth: true
-                            textRole: "displayName"
-                            buttonIcon: "language"
-                            model: {
-                                const opts = [{ displayName: Translation.tr("Auto (System)"), value: "auto", icon: "language" }]
-                                for (const l of Translation.allAvailableLanguages) {
-                                    opts.push({ displayName: l, value: l, icon: "language" })
-                                }
-                                return opts
-                            }
-                            currentIndex: {
-                                const idx = model.findIndex(item => item.value === Config.options.language.ui)
-                                return idx !== -1 ? idx : 0
-                            }
-                            onActivated: index => {
-                                Config.options.language.ui = model[index].value
-                            }
-                        }
-                    }
-                }
-
-                // ── Style & Wallpaper ───────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: styleCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: styleCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
-
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "format_paint"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Style, wallpaper, & colors")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
-                            }
-                        }
-
-                        // Light/Dark — compact two-button row. The
-                        // full-fat LightDarkPreferenceButton from welcome.qml
-                        // is ~260px wide and won't fit two-across in this
-                        // column.
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
-                                model: [
-                                    { mode: false, icon: "light_mode", label: Translation.tr("Light") },
-                                    { mode: true,  icon: "dark_mode",  label: Translation.tr("Dark")  }
-                                ]
-                                delegate: RippleButton {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    implicitHeight: 38
-                                    buttonRadius: Appearance.rounding.small
-                                    toggled: Appearance.m3colors.darkmode === modelData.mode
-                                    onClicked: {
-                                        Quickshell.execDetached(["bash", "-c",
-                                            `${Directories.wallpaperSwitchScriptPath} --mode ${modelData.mode ? "dark" : "light"} --noswitch`])
-                                    }
-                                    contentItem: RowLayout {
-                                        anchors.centerIn: parent
-                                        spacing: 6
-                                        MaterialSymbol {
-                                            text: modelData.icon
-                                            iconSize: 18
-                                            color: toggled
-                                                ? Appearance.m3colors.m3onPrimary
-                                                : Appearance.colors.colOnSecondaryContainer
-                                        }
-                                        StyledText {
-                                            text: modelData.label
-                                            color: toggled
-                                                ? Appearance.m3colors.m3onPrimary
-                                                : Appearance.colors.colOnSecondaryContainer
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            RippleButtonWithIcon {
-                                Layout.fillWidth: true
-                                buttonRadius: Appearance.rounding.small
-                                materialIcon: "wallpaper"
-                                onClicked: {
-                                    Quickshell.execDetached([`${Directories.wallpaperSwitchScriptPath}`])
-                                }
-                                // Mirrors welcome.qml's "Choose file"
-                                // button — surfaces the Super+W keybind
-                                // alongside the label so users know they
-                                // can also open the picker via keyboard.
-                                // Trailing fillWidth spacer pushes both
-                                // the label and the chips to the left so
-                                // they sit flush against the icon.
-                                mainContentComponent: Component {
-                                    RowLayout {
-                                        spacing: 10
-                                        StyledText {
-                                            font.pixelSize: Appearance.font.pixelSize.small
-                                            text: Translation.tr("Choose wallpaper")
-                                            color: Appearance.colors.colOnSecondaryContainer
-                                        }
-                                        RowLayout {
-                                            spacing: 3
-                                            KeyboardKey { key: "󰖳" }
-                                            StyledText {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                text: "+"
-                                            }
-                                            KeyboardKey { key: "W" }
-                                        }
-                                        Item { Layout.fillWidth: true }
-                                    }
-                                }
-                                StyledToolTip {
-                                    text: Translation.tr("Pick wallpaper image on your system")
-                                }
-                            }
-                        }
-
-                        // Material colour palette — same options as
-                        // Settings → Quick. Selecting one writes
-                        // Config.options.appearance.palette.type and
-                        // (debounced 150ms) re-derives the theme from
-                        // the current wallpaper with the new palette.
-                        ConfigSelectionArray {
-                            Layout.fillWidth: true
-                            currentValue: Config.options.appearance.palette.type
-                            onSelected: newValue => {
-                                Config.options.appearance.palette.type = newValue
-                                paletteApplyTimer.restart()
-                            }
-
-                            Timer {
-                                id: paletteApplyTimer
-                                interval: 150
-                                repeat: false
-                                onTriggered: card0.applyTheme("--noswitch")
-                            }
-                            options: [
-                                { value: "auto",              displayName: Translation.tr("Auto") },
-                                { value: "scheme-content",    displayName: Translation.tr("Content") },
-                                { value: "scheme-expressive", displayName: Translation.tr("Expressive") },
-                                { value: "scheme-fidelity",   displayName: Translation.tr("Fidelity") },
-                                { value: "scheme-fruit-salad",displayName: Translation.tr("Fruit Salad") },
-                                { value: "scheme-monochrome", displayName: Translation.tr("Monochrome") },
-                                { value: "scheme-neutral",    displayName: Translation.tr("Neutral") },
-                                { value: "scheme-rainbow",    displayName: Translation.tr("Rainbow") },
-                                { value: "scheme-tonal-spot", displayName: Translation.tr("Tonal Spot") }
-                            ]
-                        }
-                    }
-                }
-
-                // ── Bar ─────────────────────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: barCol.implicitHeight + 24
-
-                    ColumnLayout {
-                        id: barCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
-
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "screenshot_monitor"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Bar")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            StyledText {
-                                text: Translation.tr("Bar position")
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.colors.colSubtext
-                            }
-                            ConfigSelectionArray {
-                                Layout.fillWidth: true
-                                currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
-                                onSelected: newValue => {
-                                    Config.options.bar.bottom = (newValue & 1) !== 0
-                                    Config.options.bar.vertical = (newValue & 2) !== 0
-                                }
-                                options: [
-                                    { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: 0 },
-                                    { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2 },
-                                    { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: 1 },
-                                    { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3 }
-                                ]
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            StyledText {
-                                text: Translation.tr("Bar style")
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.colors.colSubtext
-                            }
-                            ConfigSelectionArray {
-                                Layout.fillWidth: true
-                                currentValue: Config.options.bar.cornerStyle
-                                onSelected: newValue => {
-                                    Config.options.bar.cornerStyle = newValue
-                                }
-                                options: [
-                                    { displayName: Translation.tr("Hug"),         icon: "line_curve",     value: 0 },
-                                    { displayName: Translation.tr("Float"),       icon: "page_header",    value: 1 },
-                                    { displayName: Translation.tr("Rect"),        icon: "toolbar",        value: 2 },
-                                    { displayName: Translation.tr("Notch"), icon: "call_to_action", value: 3 }
-                                ]
-                            }
-                        }
-                    }
-                }
-
-                Item { Layout.fillHeight: true }
-            }
-
-            // ── RIGHT COLUMN: Window Layout / Left Hot Corner ───────────
+            // The sections share out whatever height the picture leaves, so
+            // the column ends where the picture does.
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 6
                 Layout.fillHeight: true
-                Layout.alignment: Qt.AlignTop
-                spacing: 8
+                spacing: 0
 
-                // ── Window Layout ───────────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: winLayoutCol.implicitHeight + 24
+                StyleSection {
+                    title: Translation.tr("Language")
+                    symbol: "language"
+                    Layout.fillHeight: false
 
-                    ColumnLayout {
-                        id: winLayoutCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
+                    headerTrailing: StyledComboBox {
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 220
+                        textRole: "displayName"
+                        model: {
+                            const opts = [{ displayName: Translation.tr("Auto (System)"), value: "auto", icon: "language" }]
+                            for (const l of Translation.allAvailableLanguages) {
+                                opts.push({ displayName: l, value: l, icon: "language" })
+                            }
+                            return opts
+                        }
+                        currentIndex: {
+                            const idx = model.findIndex(item => item.value === Config.options.language.ui)
+                            return idx !== -1 ? idx : 0
+                        }
+                        onActivated: index => {
+                            Config.options.language.ui = model[index].value
+                        }
+                    }
+                }
 
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "view_quilt"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Window Layout")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Window Layout")
+                    symbol: "view_quilt"
+                    Layout.fillHeight: false
+
+                    // One picture per layout, the picture itself the button,
+                    // lit the way Settings → Layouts lights the one in use.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        uniformCellSizes: true
+
+                        Repeater {
+                            model: [
+                                { value: "dwindle",   label: Translation.tr("Dwindle") },
+                                { value: "master",    label: Translation.tr("Master") },
+                                { value: "scrolling", label: Translation.tr("Scrolling") },
+                                { value: "monocle",   label: Translation.tr("Monocle") },
+                                { value: "float",     label: Translation.tr("Float") }
+                            ]
+                            delegate: MouseArea {
+                                id: layoutCard
+                                required property var modelData
+                                readonly property bool picked: card0.currentLayout === modelData.value
+                                Layout.fillWidth: true
+                                implicitHeight: layoutCardColumn.implicitHeight
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (!layoutCard.picked)
+                                        card0.applyLayout(modelData.value)
+                                }
+
+                                ColumnLayout {
+                                    id: layoutCardColumn
+                                    width: parent.width
+                                    spacing: 5
+
+                                    LayoutPicture {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 62
+                                        layout: layoutCard.modelData.value
+                                        selected: layoutCard.picked
+                                        hovered: layoutCard.containsMouse
+                                    }
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        elide: Text.ElideRight
+                                        text: layoutCard.modelData.label
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        font.weight: layoutCard.picked ? Font.Medium : Font.Normal
+                                        color: Appearance.colors.colOnLayer1
+                                        opacity: layoutCard.picked ? 1 : 0.75
+                                    }
+                                }
                             }
                         }
+                    }
 
-                        // 50/50 split — left half is the layout picker with
-                        // a live picture preview, right half is the title-bars
-                        // mockup with its toggle below. Both columns put the
-                        // picture on top and the control underneath, matching
-                        // the Settings → Layouts cards. Both halves get the
-                        // same Layout.preferredWidth: without it the combo
-                        // box's "Dwindle (default)" + chevron has a wider
-                        // implicit width than the switch and the fillWidth
-                        // split goes uneven.
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            // Layout picker: picture + dropdown below
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 1
-                                Layout.alignment: Qt.AlignTop
-                                spacing: 6
-
-                                // Picture preview — one mockup per layout,
-                                // toggled visible by currentLayout. These
-                                // mockups are lifted 1:1 from Settings →
-                                // Layouts (LayoutsConfig.qml) so the previews
-                                // look identical to the picker cards there.
-                                // The `sel` flag on each LayoutsConfig
-                                // MouseArea becomes
-                                // `card0.currentLayout === "..."` here.
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    implicitHeight: 130
-                                    radius: Appearance.rounding.normal
-                                    color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1)
-                                    border.width: 2
-                                    border.color: Appearance.colors.colPrimary
-
-                                    // Dwindle
-                                    Item {
-                                        visible: card0.currentLayout === "dwindle"
-                                        anchors { fill: parent; margins: 10 }
-                                        Rectangle {
-                                            x: 0; y: 0; width: parent.width * 0.54; height: parent.height
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
-                                                Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                            }
-                                            Column { x: 7; y: 15; spacing: 4
-                                                Repeater { model: [38, 28, 40, 24]
-                                                    Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
-                                                }
-                                            }
-                                            StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
-                                                text: "1"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.54 + 3; y: 0
-                                            width: parent.width * 0.46 - 3; height: parent.height * 0.5 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                            StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
-                                                text: "2"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.54 + 3; y: parent.height * 0.5 + 2
-                                            width: (parent.width * 0.46 - 3) * 0.54; height: parent.height * 0.5 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                            StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
-                                                text: "3"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.54 + 3 + (parent.width * 0.46 - 3) * 0.54 + 2
-                                            y: parent.height * 0.5 + 2
-                                            width: (parent.width * 0.46 - 3) * 0.46 - 2; height: parent.height * 0.5 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                            StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
-                                                text: "4"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                        }
-                                    }
-
-                                    // Master
-                                    Item {
-                                        visible: card0.currentLayout === "master"
-                                        anchors { fill: parent; margins: 10 }
-                                        Rectangle {
-                                            x: 0; y: 0; width: parent.width * 0.57; height: parent.height
-                                            radius: 3
-                                            color: card0.currentLayout === "master" ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.08) : Appearance.colors.colLayer3
-                                            border.width: 1
-                                            border.color: card0.currentLayout === "master" ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.5) : Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
-                                                Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                            }
-                                            Column { x: 7; y: 15; spacing: 4
-                                                Repeater { model: [38, 26, 42, 20, 36]
-                                                    Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
-                                                }
-                                            }
-                                            StyledText { anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
-                                                text: "M"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext; opacity: 0.45 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.57 + 3; y: 0
-                                            width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.57 + 3; y: parent.height / 3 + 1
-                                            width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.57 + 3; y: parent.height * 2 / 3 + 2
-                                            width: parent.width * 0.43 - 3; height: parent.height / 3 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2 }
-                                        }
-                                    }
-
-                                    // Scrolling
-                                    Item {
-                                        visible: card0.currentLayout === "scrolling"
-                                        anchors { fill: parent; margins: 10 }
-                                        clip: true
-                                        Rectangle {
-                                            x: -18; y: 4; width: 24; height: parent.height - 8
-                                            radius: 3; opacity: 0.45; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                        }
-                                        Row {
-                                            x: 10; y: 0; width: parent.width - 14; height: parent.height; spacing: 4
-                                            Repeater {
-                                                model: 3
-                                                Rectangle {
-                                                    width: (parent.width - 8) / 3; height: parent.height
-                                                    radius: 3; color: Appearance.colors.colLayer3
-                                                    border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                                    Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
-                                                        Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.3 }
-                                                    }
-                                                    Column { x: 5; y: 14; spacing: 3
-                                                        Repeater { model: [20, 14, 22, 12]
-                                                            Rectangle { width: modelData; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Rectangle {
-                                            x: parent.width - 6; y: 4; width: 20; height: parent.height - 8
-                                            radius: 3; opacity: 0.5; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                        }
-                                        MaterialSymbol {
-                                            x: -2; anchors.verticalCenter: parent.verticalCenter
-                                            text: "chevron_left"; iconSize: 16; z: 3
-                                            color: card0.currentLayout === "scrolling" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext; opacity: 0.75
-                                        }
-                                        MaterialSymbol {
-                                            anchors.right: parent.right; anchors.rightMargin: -2
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "chevron_right"; iconSize: 16; z: 3
-                                            color: card0.currentLayout === "scrolling" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext; opacity: 0.75
-                                        }
-                                    }
-
-                                    // Monocle
-                                    Item {
-                                        visible: card0.currentLayout === "monocle"
-                                        anchors { fill: parent; margins: 10 }
-                                        Rectangle {
-                                            x: 10; y: 8; width: parent.width - 20; height: parent.height - 18
-                                            radius: 3; opacity: 0.38; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                        }
-                                        Rectangle {
-                                            x: 5; y: 4; width: parent.width - 10; height: parent.height - 10
-                                            radius: 3; opacity: 0.65; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                        }
-                                        Rectangle {
-                                            x: 0; y: 0; width: parent.width; height: parent.height
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle { width: parent.width; height: 9; radius: 2; color: Appearance.colors.colLayer2
-                                                Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                            }
-                                            Column { x: 8; y: 15; spacing: 4
-                                                Repeater { model: [55, 38, 60, 28, 50]
-                                                    Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
-                                                }
-                                            }
-                                            Row {
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                anchors.bottom: parent.bottom; anchors.bottomMargin: 6
-                                                spacing: 5
-                                                Repeater {
-                                                    model: 4
-                                                    Rectangle {
-                                                        width: index === 0 ? 16 : 6; height: 4; radius: 2
-                                                        color: index === 0 ? (card0.currentLayout === "monocle" ? Appearance.colors.colPrimary : Appearance.colors.colSubtext) : Appearance.colors.colSubtext
-                                                        opacity: index === 0 ? 0.85 : 0.3
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Float — scattered windows at their own
-                                    // sizes, overlapping rather than tiled.
-                                    Item {
-                                        visible: card0.currentLayout === "float"
-                                        anchors { fill: parent; margins: 10 }
-                                        Repeater {
-                                            model: [
-                                                { fx: 0.02, fy: 0.10, fw: 0.46, fh: 0.52, n: "1" },
-                                                { fx: 0.40, fy: 0.00, fw: 0.40, fh: 0.44, n: "2" },
-                                                { fx: 0.22, fy: 0.46, fw: 0.44, fh: 0.50, n: "3" },
-                                                { fx: 0.62, fy: 0.38, fw: 0.36, fh: 0.46, n: "4" }
-                                            ]
-                                            Rectangle {
-                                                x: parent.width * modelData.fx
-                                                y: parent.height * modelData.fy
-                                                width: parent.width * modelData.fw
-                                                height: parent.height * modelData.fh
-                                                radius: 3
-                                                color: Appearance.colors.colLayer3
-                                                border.width: 1
-                                                border.color: Appearance.colors.colOutlineVariant
-                                                Rectangle {
-                                                    width: parent.width; height: 9; radius: 2
-                                                    color: Appearance.colors.colLayer2
-                                                    Rectangle { x: 3; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 4; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                                }
-                                                StyledText {
-                                                    anchors { right: parent.right; bottom: parent.bottom; margins: 4 }
-                                                    text: modelData.n
-                                                    font.pixelSize: Appearance.font.pixelSize.small
-                                                    color: Appearance.colors.colSubtext
-                                                    opacity: 0.4
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                StyledComboBox {
-                                    Layout.fillWidth: true
-                                    textRole: "displayName"
-                                    model: [
-                                        { displayName: Translation.tr("Dwindle (default)"), value: "dwindle",   icon: "view_quilt"     },
-                                        { displayName: Translation.tr("Master"),            value: "master",    icon: "splitscreen_right" },
-                                        { displayName: Translation.tr("Scrolling"),         value: "scrolling", icon: "view_day"       },
-                                        { displayName: Translation.tr("Monocle"),           value: "monocle",   icon: "crop_square"    },
-                                        { displayName: Translation.tr("Float"),             value: "float",     icon: "drag_pan"       }
-                                    ]
-                                    currentIndex: {
-                                        const idx = model.findIndex(item => item.value === card0.currentLayout)
-                                        return idx !== -1 ? idx : 0
-                                    }
-                                    onActivated: index => {
-                                        card0.applyLayout(model[index].value)
-                                    }
-                                }
-
-                                // Per-layout description — the same one-liner
-                                // each LayoutsConfig picker card shows under
-                                // its title/radio row. Swaps with the combo
-                                // selection so the user knows what the
-                                // picture is showing.
-                                StyledText {
-                                    Layout.fillWidth: true
-                                    Layout.leftMargin: 4
-                                    font.pixelSize: Appearance.font.pixelSize.small
-                                    color: Appearance.colors.colSubtext
-                                    wrapMode: Text.WordWrap
-                                    text: {
-                                        switch (card0.currentLayout) {
-                                        case "dwindle":   return Translation.tr("Each new window splits the last in half")
-                                        case "master":    return Translation.tr("One main window with a side stack")
-                                        case "scrolling": return Translation.tr("Horizontally scrollable window columns")
-                                        case "monocle":   return Translation.tr("One fullscreen window at a time")
-                                        case "float":     return Translation.tr("All windows float freely on the desktop")
-                                        default: return ""
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Title Bars: mockup + toggle below. Lifted
-                            // 1:1 from Settings → Layouts (the titleBarCard
-                            // block in LayoutsConfig.qml). The mockup
-                            // includes the same window-control circles,
-                            // menu-indicator dot+bar, and content-line
-                            // Repeaters as the Settings card so the two
-                            // surfaces look identical.
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.preferredWidth: 1
-                                Layout.alignment: Qt.AlignTop
-                                spacing: 6
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    implicitHeight: 130
-                                    radius: Appearance.rounding.normal
-                                    color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
-                                    border.width: TitleBars.enabled ? 2 : 1
-                                    border.color: TitleBars.enabled ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-
-                                    Item {
-                                        anchors { fill: parent; margins: 10 }
-
-                                        // Dwindle-style layout but with prominent title bars
-                                        Rectangle {
-                                            x: 0; y: 0; width: parent.width * 0.54; height: parent.height
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle {
-                                                width: parent.width; height: 14; radius: 2
-                                                color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                                border.width: TitleBars.enabled ? 1 : 0
-                                                border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
-                                                    spacing: 2
-                                                    Rectangle { width: 3; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.5 }
-                                                    Rectangle { width: 20; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                                }
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
-                                                    spacing: 3
-                                                    Repeater { model: 3
-                                                        Rectangle { width: 5; height: 5; radius: 2.5; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                                    }
-                                                }
-                                            }
-                                            Column { x: 7; y: 20; spacing: 4
-                                                Repeater { model: [38, 28, 40, 24]
-                                                    Rectangle { width: modelData; height: 5; radius: 2; color: Appearance.colors.colSubtext; opacity: 0.22 }
-                                                }
-                                            }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.54 + 3; y: 0
-                                            width: parent.width * 0.46 - 3; height: parent.height * 0.5 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle {
-                                                width: parent.width; height: 14; radius: 2
-                                                color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                                border.width: TitleBars.enabled ? 1 : 0
-                                                border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
-                                                    spacing: 2
-                                                    Rectangle { width: 3; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.5 }
-                                                    Rectangle { width: 14; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                                }
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
-                                                    spacing: 3
-                                                    Repeater { model: 3
-                                                        Rectangle { width: 5; height: 5; radius: 2.5; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Rectangle {
-                                            x: parent.width * 0.54 + 3; y: parent.height * 0.5 + 2
-                                            width: parent.width * 0.46 - 3; height: parent.height * 0.5 - 2
-                                            radius: 3; color: Appearance.colors.colLayer3
-                                            border.width: 1; border.color: Appearance.colors.colOutlineVariant
-                                            Rectangle {
-                                                width: parent.width; height: 14; radius: 2
-                                                color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.18) : Appearance.colors.colLayer2
-                                                border.width: TitleBars.enabled ? 1 : 0
-                                                border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.3)
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; left: parent.left; leftMargin: 4 }
-                                                    spacing: 2
-                                                    Rectangle { width: 3; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.5 }
-                                                    Rectangle { width: 14; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
-                                                }
-                                                Row {
-                                                    anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
-                                                    spacing: 3
-                                                    Repeater { model: 3
-                                                        Rectangle { width: 5; height: 5; radius: 2.5; color: Appearance.colors.colSubtext; opacity: 0.4 }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Toggle centered below the card. Driven
-                                // by the TitleBars singleton so this and
-                                // Settings → Interface stay in sync.
-                                ConfigSwitch {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    buttonIcon: "title"
-                                    text: Translation.tr("Title Bars")
-                                    checked: TitleBars.enabled
-                                    animateChanges: TitleBars.enabledLoaded
-                                    onCheckedChanged: TitleBars.setEnabled(checked)
-                                    StyledToolTip {
-                                        text: Translation.tr("Show title bars on windows")
-                                    }
-                                }
-
-                                // Description below the switch — pulls the
-                                // same one-liner the LayoutsConfig switch's
-                                // tooltip uses. Matches the layout-picker
-                                // description on the left so both cards
-                                // hold the same total height.
-                                StyledText {
-                                    Layout.fillWidth: true
-                                    Layout.leftMargin: 4
-                                    font.pixelSize: Appearance.font.pixelSize.small
-                                    color: Appearance.colors.colSubtext
-                                    wrapMode: Text.WordWrap
-                                    text: Translation.tr("Show title bars on windows")
-                                }
+                    // The one line each Settings → Layouts card carries under
+                    // its name, for the layout picked here.
+                    StyledText {
+                        Layout.fillWidth: true
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        wrapMode: Text.WordWrap
+                        text: {
+                            switch (card0.currentLayout) {
+                            case "dwindle":   return Translation.tr("Each new window splits the last in half")
+                            case "master":    return Translation.tr("One main window with a side stack")
+                            case "scrolling": return Translation.tr("Horizontally scrollable window columns")
+                            case "monocle":   return Translation.tr("One fullscreen window at a time")
+                            case "float":     return Translation.tr("All windows float freely on the desktop")
+                            default: return ""
                             }
                         }
                     }
                 }
 
-                // ── Left Hot Corner ─────────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: hotCornerCol.implicitHeight + 24
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
 
-                    ColumnLayout {
-                        id: hotCornerCol
-                        anchors.fill: parent
-                        anchors.margins: 12
+                StyleSection {
+                    title: Translation.tr("Left Hot Corner")
+                    symbol: "ads_click"
+                    Layout.fillHeight: false
+
+                    // What the corner opens sits on the header line: the title
+                    // reads as the question and the choice as its answer. The
+                    // picture beside it plays whatever is picked, and plays it
+                    // again on asking.
+                    headerTrailing: [
+                        RippleButton {
+                            implicitWidth: 30
+                            implicitHeight: 30
+                            buttonRadius: Appearance.rounding.full
+                            colBackground: Appearance.colors.colSecondaryContainer
+                            colBackgroundHover: Appearance.colors.colSecondaryContainerHover
+                            onClicked: hotCornerDemo.play()
+                            contentItem: MaterialSymbol {
+                                anchors.centerIn: parent
+                                horizontalAlignment: Text.AlignHCenter
+                                text: "play_arrow"
+                                iconSize: 18
+                                color: Appearance.colors.colOnSecondaryContainer
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Show me")
+                            }
+                        },
+                        StyledComboBox {
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: 220
+                            textRole: "displayName"
+                            model: [
+                                { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
+                                { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
+                                { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" }
+                            ]
+                            currentIndex: {
+                                const idx = model.findIndex(item => item.value === Config.options.bar.hotCorners.trigger)
+                                return idx !== -1 ? idx : 0
+                            }
+                            onActivated: index => {
+                                Config.options.bar.hotCorners.trigger = model[index].value
+                                hotCornerDemo.play()
+                            }
+                        }
+                    ]
+
+                    // Scrolling-overview layout — Vertical/Horizontal, shown
+                    // only when the corner triggers the scrolling overview.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 8
                         spacing: 4
-
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "ads_click"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Left Hot Corner")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
-                            }
+                        visible: Config.options.bar.hotCorners.trigger === "scrolloverview"
+                        OptionalMaterialSymbol {
+                            icon: "splitscreen"
+                            Layout.alignment: Qt.AlignVCenter
                         }
-
-                        // Trigger overview combo — same layout/padding as
-                        // Settings → Interface. ConfigSwitch-style rows wrap in a
-                        // RippleButton with ~6-8px of internal left padding before
-                        // the icon; a bare RowLayout doesn't, so it needs explicit
-                        // left/right margins to keep the icon aligned.
-                        RowLayout {
+                        StyledText {
                             Layout.fillWidth: true
-                            Layout.leftMargin: 8
-                            Layout.rightMargin: 8
-                            spacing: 4
-                            OptionalMaterialSymbol {
-                                icon: "drag_click"
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                            StyledText {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.leftMargin: 6
-                                text: Translation.tr("Trigger overview")
-                                color: Appearance.colors.colOnSecondaryContainer
-                            }
-                            StyledComboBox {
-                                textRole: "displayName"
-                                Layout.fillWidth: false
-                                Layout.preferredWidth: 220
-                                model: [
-                                    { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
-                                    { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
-                                    { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" }
-                                ]
-                                currentIndex: {
-                                    const idx = model.findIndex(item => item.value === Config.options.bar.hotCorners.trigger)
-                                    return idx !== -1 ? idx : 0
-                                }
-                                onActivated: index => {
-                                    Config.options.bar.hotCorners.trigger = model[index].value
-                                }
-                            }
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.leftMargin: 6
+                            text: Translation.tr("Scrolling Overview Layout")
+                            color: Appearance.colors.colOnSecondaryContainer
                         }
-
-                        // Scrolling-overview layout — Vertical/Horizontal, shown
-                        // only when the corner triggers the scrolling overview.
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: 8
-                            Layout.rightMargin: 8
-                            spacing: 4
-                            visible: Config.options.bar.hotCorners.trigger === "scrolloverview"
-                            OptionalMaterialSymbol {
-                                icon: "splitscreen"
-                                Layout.alignment: Qt.AlignVCenter
+                        StyledComboBox {
+                            textRole: "displayName"
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: 220
+                            model: [
+                                { displayName: Translation.tr("Vertical"),   icon: "view_day",  value: "vertical" },
+                                { displayName: Translation.tr("Horizontal"), icon: "view_week", value: "horizontal" }
+                            ]
+                            currentIndex: {
+                                const idx = model.findIndex(item => item.value === root.scrollOverviewLayout)
+                                return idx !== -1 ? idx : 0
                             }
-                            StyledText {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.leftMargin: 6
-                                text: Translation.tr("Scrolling Overview Layout")
-                                color: Appearance.colors.colOnSecondaryContainer
-                            }
-                            StyledComboBox {
-                                textRole: "displayName"
-                                Layout.fillWidth: false
-                                Layout.preferredWidth: 220
-                                model: [
-                                    { displayName: Translation.tr("Vertical"),   icon: "view_day",  value: "vertical" },
-                                    { displayName: Translation.tr("Horizontal"), icon: "view_week", value: "horizontal" }
-                                ]
-                                currentIndex: {
-                                    const idx = model.findIndex(item => item.value === root.scrollOverviewLayout)
-                                    return idx !== -1 ? idx : 0
-                                }
-                                onActivated: index => {
-                                    root.setScrollOverviewLayout(model[index].value)
-                                }
+                            onActivated: index => {
+                                root.setScrollOverviewLayout(model[index].value)
+                                hotCornerDemo.play()
                             }
                         }
                     }
+
+                    // What the corner does, in words, beside the picture that
+                    // plays it.
+                    StyledText {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        text: ({
+                            off: Translation.tr("Moving the pointer into the top-left corner does nothing"),
+                            default: Translation.tr("Moving the pointer into the top-left corner opens the overview"),
+                            scrolloverview: Translation.tr("Moving the pointer into the top-left corner opens the scrolling overview")
+                        })[Config.options.bar.hotCorners.trigger] ?? ""
+                    }
                 }
 
-                // ── Usage docs ──────────────────────────────────────────
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
                 // Mirrors welcome.qml's Info + Useless-buttons sections
                 // — quick links to the keybind cheatsheet, the project
                 // wiki, the repo, and the sponsor link. Donate is the
                 // same target as welcome.qml's "Funny number" button.
-                Rectangle {
-                    Layout.fillWidth: true
-                    color: Appearance.colors.colLayer1
-                    radius: Appearance.rounding.normal
-                    border.width: 1
-                    border.color: Appearance.colors.colOutlineVariant
-                    implicitHeight: usageCol.implicitHeight + 24
+                StyleSection {
+                    title: Translation.tr("Info")
+                    symbol: "info"
+                    Layout.fillHeight: false
 
-                    ColumnLayout {
-                        id: usageCol
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 10
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 5
 
-                        RowLayout {
-                            spacing: 8
-                            MaterialSymbol { text: "info"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
-                            StyledText {
-                                text: Translation.tr("Info")
-                                font.pixelSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colOnLayer1
-                                font.weight: Font.Medium
+                        RippleButtonWithIcon {
+                            materialIcon: "keyboard_alt"
+                            onClicked: {
+                                Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "cheatsheet", "toggle"])
                             }
-                        }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 5
-
-                            RippleButtonWithIcon {
-                                materialIcon: "keyboard_alt"
-                                onClicked: {
-                                    Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "cheatsheet", "toggle"])
-                                }
-                                mainContentComponent: Component {
+                            mainContentComponent: Component {
+                                RowLayout {
+                                    spacing: 10
+                                    StyledText {
+                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        text: Translation.tr("Keybinds")
+                                        color: Appearance.colors.colOnSecondaryContainer
+                                    }
                                     RowLayout {
-                                        spacing: 10
+                                        spacing: 3
+                                        KeyboardKey { key: "󰖳" }
                                         StyledText {
-                                            font.pixelSize: Appearance.font.pixelSize.small
-                                            text: Translation.tr("Keybinds")
-                                            color: Appearance.colors.colOnSecondaryContainer
+                                            Layout.alignment: Qt.AlignVCenter
+                                            text: "+"
                                         }
-                                        RowLayout {
-                                            spacing: 3
-                                            KeyboardKey { key: "󰖳" }
-                                            StyledText {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                text: "+"
-                                            }
-                                            KeyboardKey { key: "Tab" }
-                                        }
+                                        KeyboardKey { key: "Tab" }
                                     }
                                 }
                             }
-                            RippleButtonWithIcon {
-                                materialIcon: "help"
-                                mainText: Translation.tr("Docs")
-                                onClicked: {
-                                    Qt.openUrlExternally("https://mainstreamos.org/#desktop")
-                                }
+                        }
+                        RippleButtonWithIcon {
+                            materialIcon: "help"
+                            mainText: Translation.tr("Docs")
+                            onClicked: {
+                                Qt.openUrlExternally("https://mainstreamos.org/#desktop")
                             }
-                            RippleButtonWithIcon {
-                                nerdIcon: "󰊤"
-                                mainText: Translation.tr("GitHub")
-                                onClicked: {
-                                    Qt.openUrlExternally("https://github.com/MainstreamOS")
-                                }
+                        }
+                        RippleButtonWithIcon {
+                            nerdIcon: "󰊤"
+                            mainText: Translation.tr("GitHub")
+                            onClicked: {
+                                Qt.openUrlExternally("https://github.com/MainstreamOS")
                             }
-                            RippleButtonWithIcon {
-                                materialIcon: "favorite"
-                                mainText: Translation.tr("Donate")
-                                onClicked: {
-                                    Qt.openUrlExternally("https://github.com/sponsors/MainstreamOS")
+                        }
+                        RippleButtonWithIcon {
+                            materialIcon: "favorite"
+                            mainText: Translation.tr("Donate")
+                            onClicked: {
+                                Qt.openUrlExternally("https://github.com/sponsors/MainstreamOS")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5:6 against the settings, so the links along the bottom of that
+            // column fit on one line beside the keybind's keycaps.
+            StyleSection {
+                title: Translation.tr("Style, wallpaper, & colors")
+                symbol: "format_paint"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 5
+
+                // The desktop as it stands: the wallpaper that is set, with the
+                // bar and the dock in the colors the theme gives them, so each
+                // button under it answers in the picture. The hot corner plays
+                // on it too.
+                BarDockStage {
+                    id: desktopPicture
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    blur: root.layerBlur
+
+                    HotCornerDemo {
+                        id: hotCornerDemo
+                        anchors.fill: parent
+                        trigger: Config.options.bar.hotCorners.trigger
+                        layout: root.scrollOverviewLayout
+                        wallpaperSource: desktopPicture.wallpaper
+                        rows: Config.options.overview.rows
+                        columns: Config.options.overview.columns
+                        barShape: desktopPicture.barShape
+                        dockShape: desktopPicture.dockShape
+                    }
+                    HotCornerPointer {
+                        anchors.fill: parent
+                        demo: hotCornerDemo
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    uniformCellSizes: true
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        centerContent: true
+                        buttonRadius: Appearance.rounding.small
+                        materialIcon: "wallpaper"
+                        mainText: Translation.tr("Wallpaper")
+                        onClicked: {
+                            Quickshell.execDetached([`${Directories.wallpaperSwitchScriptPath}`])
+                        }
+                        StyledToolTip {
+                            text: Translation.tr("Pick wallpaper image on your system")
+                        }
+                    }
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        centerContent: true
+                        buttonRadius: Appearance.rounding.small
+                        materialIcon: "slideshow"
+                        mainText: Translation.tr("Slideshow")
+                        onClicked: {
+                            slideshowFolderProc.command = ["bash", "-c",
+                                'zenity --file-selection --directory --filename="$1/" --title="$2"',
+                                "--", WallpaperSlideshow.folder, Translation.tr("Choose slideshow folder")];
+                            slideshowFolderProc.running = false;
+                            slideshowFolderProc.running = true;
+                        }
+                        StyledToolTip {
+                            text: Translation.tr("Rotate the wallpaper through a folder's images")
+                        }
+                    }
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        enabled: !randomWallProc.running
+                        centerContent: true
+                        buttonRadius: Appearance.rounding.small
+                        materialIcon: "restart_alt"
+                        mainText: randomWallProc.running ? Translation.tr("Wait...") : Translation.tr("Default")
+                        onClicked: {
+                            randomWallProc.scriptPath = `${Directories.scriptPath}/colors/random/set_default_wall.sh`
+                            randomWallProc.running = true
+                        }
+                        StyledToolTip {
+                            text: Translation.tr("Reset to the default theme wallpaper")
+                        }
+                    }
+                }
+
+                RippleButtonWithIcon {
+                    Layout.fillWidth: true
+                    visible: Config.options.policies.weeb === 1
+                    enabled: !randomWallProc.running
+                    centerContent: true
+                    buttonRadius: Appearance.rounding.small
+                    materialIcon: "ifl"
+                    mainText: randomWallProc.running ? Translation.tr("Be patient...") : Translation.tr("Random: osu! seasonal")
+                    onClicked: {
+                        randomWallProc.scriptPath = `${Directories.scriptPath}/colors/random/random_osu_wall.sh`
+                        randomWallProc.running = true
+                    }
+                    StyledToolTip {
+                        text: Translation.tr("Random osu! seasonal background\nImage is saved to ~/Pictures/Wallpapers")
+                    }
+                }
+
+                // Light/Dark — compact two-button row. The
+                // full-fat LightDarkPreferenceButton from welcome.qml
+                // is ~260px wide and won't fit two-across in this
+                // column.
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    uniformCellSizes: true
+                    Repeater {
+                        model: [
+                            { mode: false, icon: "light_mode", label: Translation.tr("Light") },
+                            { mode: true,  icon: "dark_mode",  label: Translation.tr("Dark")  }
+                        ]
+                        delegate: RippleButton {
+                            id: modeButton
+                            required property var modelData
+                            property color colText: toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer2
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            buttonRadius: Appearance.rounding.small
+                            colBackground: Appearance.colors.colLayer2
+                            toggled: Appearance.m3colors.darkmode === modelData.mode
+                            onClicked: {
+                                Quickshell.execDetached(["bash", "-c",
+                                    `${Directories.wallpaperSwitchScriptPath} --mode ${modelData.mode ? "dark" : "light"} --noswitch`])
+                            }
+                            // The layout goes inside a plain Item: as the
+                            // contentItem itself it is stretched to the
+                            // button's width and the icon and label drift
+                            // apart to its two ends.
+                            contentItem: Item {
+                                anchors.centerIn: parent
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    MaterialSymbol {
+                                        text: modeButton.modelData.icon
+                                        iconSize: 18
+                                        color: modeButton.colText
+                                    }
+                                    StyledText {
+                                        text: modeButton.modelData.label
+                                        color: modeButton.colText
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                Item { Layout.fillHeight: true }
+                // Material colour palette — same options as
+                // Settings → Quick. Selecting one writes
+                // Config.options.appearance.palette.type and
+                // (debounced 150ms) re-derives the theme from
+                // the current wallpaper with the new palette.
+                ConfigSelectionArray {
+                    Layout.fillWidth: true
+                    currentValue: Config.options.appearance.palette.type
+                    onSelected: newValue => {
+                        Config.options.appearance.palette.type = newValue
+                        paletteApplyTimer.restart()
+                    }
+
+                    Timer {
+                        id: paletteApplyTimer
+                        interval: 150
+                        repeat: false
+                        onTriggered: card0.applyTheme("--noswitch")
+                    }
+                    options: [
+                        { value: "auto",              displayName: Translation.tr("Auto") },
+                        { value: "scheme-content",    displayName: Translation.tr("Content") },
+                        { value: "scheme-expressive", displayName: Translation.tr("Expressive") },
+                        { value: "scheme-fidelity",   displayName: Translation.tr("Fidelity") },
+                        { value: "scheme-fruit-salad",displayName: Translation.tr("Fruit Salad") },
+                        { value: "scheme-monochrome", displayName: Translation.tr("Monochrome") },
+                        { value: "scheme-neutral",    displayName: Translation.tr("Neutral") },
+                        { value: "scheme-rainbow",    displayName: Translation.tr("Rainbow") },
+                        { value: "scheme-tonal-spot", displayName: Translation.tr("Tonal Spot") }
+                    ]
+                }
             }
         }
     }

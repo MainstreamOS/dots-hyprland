@@ -74,7 +74,17 @@ StyledImage {
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }
 
+    // The start waits a turn of the event loop. sourcePath and the thumbnail
+    // path derived from it are separate properties, and a handler on the first
+    // one runs before the second has caught up, so starting straight away hands
+    // the generator a path that does not belong to the source it was given.
     function refresh() {
+        if (!root.generateThumbnail) return;
+        if (FileUtils.trimFileProtocol(root.sourcePath).length === 0) return;
+        Qt.callLater(root.generateNow);
+    }
+
+    function generateNow() {
         if (!root.generateThumbnail) return;
         if (FileUtils.trimFileProtocol(root.sourcePath).length === 0) return;
         thumbnailGeneration.running = false;
