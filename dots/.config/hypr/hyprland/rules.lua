@@ -269,15 +269,17 @@ hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotC
 -- can land them a hair under it on a dark wallpaper, and a surface should not
 -- lose its blur to settings nobody touched.
 hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
--- The dock is lifted above the overview's dim while the overview is open, so
--- it is the one blurred surface here whose blur edge is ever seen against
--- anything but the wallpaper. Blurring the wallpaper alone punches a bright,
--- stepped outline through the dim, because that edge is decided per pixel with
--- nothing in between. Reading what is actually behind it puts the dim on both
--- sides of the line, and the line has nothing left to show. The dim itself is
--- there to obscure the apps behind the launcher; with xray it would frost the
--- wallpaper and leave every window legible through it.
-hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overviewDim)" }, xray = false})
+-- The dock and the app list sit above the overview's dim while the overview is
+-- open, so they are the blurred surfaces here whose blur edge is ever seen
+-- against anything but the wallpaper. Blurring the wallpaper alone punches a
+-- bright, stepped outline through the dim, because that edge is decided per
+-- pixel with nothing in between. Reading what is actually behind them puts the
+-- dim on both sides of the line, and the line has nothing left to show. The
+-- app list wears the dock's surface besides, so the two have to frost the same
+-- way or they stop reading as one material. The dim itself is there to obscure
+-- the apps behind the launcher; with xray it would frost the wallpaper and
+-- leave every window legible through it.
+hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overview[A-Za-z]*)" }, xray = false})
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})
