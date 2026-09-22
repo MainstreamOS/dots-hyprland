@@ -623,7 +623,7 @@ Singleton {
                 property string thumbnailPath: ""
                 // How one wallpaper transitions to the next: a name from the
                 // TransitionEffects catalog, or "random".
-                property string wallpaperTransition: "fade"
+                property string wallpaperTransition: "ripple"
                 // Frames per second a video wallpaper is drawn at. 0 leaves it
                 // at the file's own rate; a cap trades smoothness for the power
                 // a full-rate video costs on every frame it is on screen.
