@@ -171,18 +171,9 @@ Singleton {
         // The faintest a blurred surface can be set and still be frosted. Under
         // this the compositor drops the blur outright rather than by degrees,
         // so a slider running past it reads as a cliff partway along an
-        // otherwise even track. Every surface named in that rule is on layer 0
-        // and casts the same shadow beneath it, which fades with the body, so
-        // the floor is met by the two together and the answer is one number:
-        // solving a + shadow*a*(1 - a) = blurFloor for a, with a hair over the
-        // top so the end of the track is above the drop rather than on it.
-        readonly property real surfaceOpacityFloor: {
-            const s = colShadow.a
-            const f = root.colors.blurFloor
-            const a = s <= 0 ? f
-                : (1 + s - Math.sqrt((1 + s) * (1 + s) - 4 * s * f)) / (2 * s)
-            return Math.min(1, a + 0.005)
-        }
+        // otherwise even track. A hair over, so the end of the track is above
+        // the drop rather than on it.
+        readonly property real surfaceOpacityFloor: Math.min(1, root.colors.blurFloor + 0.005)
         readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
         // The dock's notch is the strip's shape set down on the far edge, so
         // it starts from the strip's alpha too. Opaque also leaves its sweeps
