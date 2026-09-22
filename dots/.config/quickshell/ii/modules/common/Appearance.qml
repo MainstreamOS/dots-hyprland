@@ -184,7 +184,14 @@ Singleton {
             return Math.min(1, a + 0.005)
         }
         readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
-        property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, layer0StockAlpha)
+        // The dock's notch is the strip's shape set down on the far edge, so
+        // it starts from the strip's alpha too. Opaque also leaves its sweeps
+        // with no blur edge to show: what is blurred behind a surface is
+        // settled per pixel with nothing in between, and that line falls
+        // across the very curves this style is shaped around.
+        readonly property real dockStockAlpha: (Config.options?.dock.cornerStyle ?? "float") === "hug"
+            ? 1 : layer0StockAlpha
+        property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, dockStockAlpha)
         property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
         // The notched dock carries its own alpha on the container rather than on
         // each piece, so the outline goes on opaque there and is let down with
