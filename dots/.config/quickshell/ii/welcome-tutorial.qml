@@ -16,6 +16,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtQuick.Shapes
+import QtQuick.Effects
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
@@ -46,10 +48,18 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 10   // bump as you add more cards
+    readonly property int cardCount: 11   // bump as you add more cards
+    // The window's own title doubles as each page's heading, so a page that
+    // names itself does not spend a line of its own saying so.
+    readonly property string cardTitle: {
+        switch (root.currentCard) {
+        case 1: return Translation.tr("Pick your desktop's style");
+        }
+        return Translation.tr("Hi there! First things first...");
+    }
 
-    // Install page (card 1): which apps the user ticked to install in the background.
-    readonly property int installCardIndex: 1
+    // Install page (card 2): which apps the user ticked to install in the background.
+    readonly property int installCardIndex: 2
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
                                         "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false })
     readonly property int installCount: {
@@ -178,6 +188,7 @@ ApplicationWindow {
         // the weekly notifier uses. Asynchronous and best-effort: until it
         // answers (or if it never does) every row reads as it did before.
         Updates.refreshResolve()
+        layerBlurReader.running = true
     }
 
     // ── Frame ────────────────────────────────────────────────────────────
@@ -206,7 +217,7 @@ ApplicationWindow {
                     leftMargin: 12
                 }
                 color: Appearance.colors.colOnLayer0
-                text: Translation.tr("Hi there! First things first...")
+                text: root.cardTitle
                 font {
                     family: Appearance.font.family.title
                     pixelSize: Appearance.font.pixelSize.title
@@ -270,10 +281,11 @@ ApplicationWindow {
 
                 // Cards are built lazily — only the visited ones are
                 // instantiated, so the welcome paints card 0 immediately
-                // instead of constructing all eight (with their timers and
+                // instead of constructing all eleven (with their timers and
                 // animations) up front. Once shown, a card stays loaded so
                 // navigating back to it is instant.
                 LazyCard { sourceComponent: card0Comp }
+                LazyCard { sourceComponent: cardStyleComp }
                 LazyCard { sourceComponent: cardInstallComp }
                 LazyCard { sourceComponent: card1Comp }
                 LazyCard { sourceComponent: card2Comp }
@@ -287,6 +299,7 @@ ApplicationWindow {
             }
 
             Component { id: card0Comp; Card0Setup {} }
+            Component { id: cardStyleComp; CardStyle {} }
             Component { id: cardInstallComp; Card1Install {} }
             Component { id: card1Comp; Card1BarTour {} }
             Component { id: card2Comp; Card2Workspaces {} }
@@ -373,7 +386,129 @@ ApplicationWindow {
     }
 
 
-    // ---- Install page (card 1) ----
+    // Whether the compositor frosts what sits behind the bar and the dock.
+    // Read again whenever the page turns, since the windows page can turn
+    // blur off.
+    property bool layerBlur: true
+    Process {
+        id: layerBlurReader
+        command: ["python3", `${FileUtils.trimFileProtocol(Directories.config)}/quickshell/ii/scripts/themes/decorations.py`,
+                  "read", `${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/general.lua`,
+                  "--flag-dir", `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const values = JSON.parse(text || "{}");
+                    if (values.blur !== undefined) root.layerBlur = values.blur;
+                } catch (e) {}
+            }
+        }
+    }
+    onCurrentCardChanged: {
+        layerBlurReader.running = false;
+        layerBlurReader.running = true;
+    }
+
+    // ---- Style page (card 1) ----
+    // One pick sets both halves, so a tile reads the bar and speaks for the
+    // pair. Settings can still move each on its own, and the bar carries a
+    // fourth style none of these tiles offers, which lights none of them.
+    readonly property string barDockStyle: {
+        switch (Config.options.bar.cornerStyle) {
+        case 1: return "float";
+        case 2: return "rect";
+        case 3: return "notch";
+        }
+        return "";
+    }
+
+    // Only ever called from a click. Nothing here may run on load: the tour
+    // opens while the first-boot theme pass may still be writing, and a write
+    // from here would land in the middle of it.
+    function applyBarStyle(v) {
+        // A pinned roundness or width outranks whatever a style would draw, so
+        // without this the shapes could all come out the same.
+        Config.options.bar.floatRadius = -1;
+        Config.options.bar.floatWidth = -1;
+        Config.options.bar.notchWidth = -1;
+        Config.options.bar.floatSplit = false;
+        Config.options.bar.cornerStyle = v;
+    }
+
+    function applyDockStyle(v) {
+        Config.options.dock.radius = -1;
+        Config.options.dock.topRadius = -1;
+        // The dock hands each style back the roundness it last had the next
+        // time Settings moves between them, which would undo this later on.
+        Config.options.dock.radiusFloat = -2;
+        Config.options.dock.radiusNotch = -2;
+        Config.options.dock.topRadiusRect = -2;
+        Config.options.dock.topRadiusNotch = -2;
+        Config.options.dock.cornerStyle = v;
+    }
+
+    // The pair a tile stands for. Each half is set through its own call above
+    // so the roundness each one pins is let go of the same way either route in.
+    function applyBarDockStyle(name) {
+        if (name === "rect") {
+            root.applyBarStyle(2);
+            root.applyDockStyle("rect");
+        } else if (name === "notch") {
+            root.applyBarStyle(3);
+            root.applyDockStyle("hug");
+        } else {
+            root.applyBarStyle(1);
+            root.applyDockStyle("float");
+        }
+    }
+
+    // The bar and the dock each keep their own color and transparency, and the
+    // app list draws on the dock's, so one move here reaches all three. The
+    // dock's values stand for the set when reading back.
+    readonly property real styleOpacity: Math.max(Appearance.colors.surfaceOpacityFloor,
+        Config.options.dock.backgroundOpacity < 0
+            ? Appearance.colors.layer0StockAlpha : Config.options.dock.backgroundOpacity)
+    readonly property string styleColor: Appearance.colors.dockPick
+
+    function applyStyleOpacity(v) {
+        Config.options.bar.backgroundOpacity = v;
+        Config.options.dock.backgroundOpacity = v;
+    }
+
+    // Written into the slot for the mode on screen, the way the settings pages
+    // do it, so the other mode keeps whatever it was given.
+    function applyStyleColor(v) {
+        if (Appearance.m3colors.darkmode) {
+            Config.options.bar.backgroundColorDark = v;
+            Config.options.dock.backgroundColorDark = v;
+        } else {
+            Config.options.bar.backgroundColorLight = v;
+            Config.options.dock.backgroundColorLight = v;
+        }
+    }
+
+    // A way home is only worth showing while there is somewhere to go back
+    // from, the same as the settings sections.
+    readonly property bool styleIsCustom: Config.options.bar.backgroundOpacity >= 0
+        || Config.options.dock.backgroundOpacity >= 0
+        || Config.options.bar.backgroundColorDark !== ""
+        || Config.options.bar.backgroundColorLight !== ""
+        || Config.options.dock.backgroundColorDark !== ""
+        || Config.options.dock.backgroundColorLight !== ""
+
+    // Both modes rather than the one on screen. The other mode's slot is still
+    // a color chosen here, and leaving it filled would hand the custom look
+    // straight back the first time the mode flips.
+    function resetStyleAppearance() {
+        Config.options.bar.backgroundOpacity = -1;
+        Config.options.dock.backgroundOpacity = -1;
+        Config.options.bar.backgroundColorDark = "";
+        Config.options.bar.backgroundColorLight = "";
+        Config.options.dock.backgroundColorDark = "";
+        Config.options.dock.backgroundColorLight = "";
+    }
+
+    // ---- Install page (card 2) ----
     // A selectable, checkbox-style option card, styled like the Calamares
     // installmethod cards; toggles an entry in root.installSelections.
     component InstallOption : Rectangle {
@@ -675,6 +810,134 @@ ApplicationWindow {
     // Faint pill background shared by every bar section in card 2 —
     // matches the real shell's BarGroup.qml (colLayer1 with a touch
     // of transparency, soft rounding, no border).
+    // A little screen carrying one piece of the interface, so a tile is about
+    // the bar or about the dock and never about both at once.
+    //
+    // Every measurement is a literal on purpose: the interface's own roundness
+    // tokens answer to whichever style is selected right now, so reading them
+    // would make every picture change together and show one shape many times.
+    component StyleMockup : Item {
+        id: mock
+        property string part: "both"         // "bar" | "dock" | "both"
+        property string styleName: "float"   // "float" | "rect" | "notch"
+
+        readonly property bool showBar: mock.part !== "dock"
+        readonly property bool showDock: mock.part !== "bar"
+
+        readonly property bool isFloat: styleName === "float"
+        readonly property bool isNotch: styleName === "notch"
+
+        readonly property color screenColor: Appearance.m3colors.m3surfaceContainerLowest
+        readonly property color surfaceColor: Appearance.m3colors.m3surfaceContainerHighest
+        readonly property color markColor: ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.45)
+
+        // A screen's own shape, so the picture reads as one rather than as a
+        // letterbox with a strip in it.
+        readonly property int gridW: 224
+        readonly property int gridH: 126
+
+        implicitWidth: gridW
+        implicitHeight: gridH
+
+        Rectangle {
+            id: screen
+            width: mock.gridW
+            height: mock.gridH
+            anchors.centerIn: parent
+            scale: Math.min(mock.width / mock.gridW, mock.height / mock.gridH)
+            radius: 8
+            // No outline of its own: the tile around it is the frame, and a
+            // second one inside it only doubles every edge on the page.
+            color: mock.screenColor
+
+            // ── The bar, along the top ──────────────────────────────────
+            Rectangle {
+                id: barBody
+                visible: mock.showBar
+                readonly property int sideInset: mock.isFloat ? 8 : (mock.isNotch ? 28 : 0)
+                x: sideInset
+                y: mock.isFloat ? 8 : 0
+                width: parent.width - sideInset * 2
+                height: 15
+                color: mock.surfaceColor
+                // Rect reaches the sides, so its top pair is the screen's own
+                // corners. Notch stops short of them and the pieces beside it
+                // make that turn instead, so its top pair is square: rounding
+                // it as well would cut a wedge out of where the two meet.
+                topLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 0 : screen.radius)
+                topRightRadius: topLeftRadius
+                bottomLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 8 : 0)
+                bottomRightRadius: bottomLeftRadius
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 7
+                    Repeater {
+                        model: 3
+                        delegate: Rectangle {
+                            width: 20; height: 4; radius: 2
+                            color: mock.markColor
+                        }
+                    }
+                }
+            }
+
+            // Notch curves back into the edge with a piece at each end.
+            Repeater {
+                model: (mock.showBar && mock.isNotch) ? 2 : 0
+                delegate: RoundCorner {
+                    required property int index
+                    implicitSize: 8
+                    color: mock.surfaceColor
+                    y: 0
+                    x: index === 0 ? barBody.x - implicitSize : barBody.x + barBody.width
+                    corner: index === 0 ? RoundCorner.CornerEnum.TopRight
+                        : RoundCorner.CornerEnum.TopLeft
+                }
+            }
+
+            // ── The dock, along the bottom ──────────────────────────────
+            Rectangle {
+                id: dockBody
+                visible: mock.showDock
+                width: 118
+                height: 18
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height - height - (mock.isFloat ? 9 : 0)
+                color: mock.surfaceColor
+                topLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 8 : 0)
+                topRightRadius: topLeftRadius
+                bottomLeftRadius: mock.isFloat ? 6 : 0
+                bottomRightRadius: bottomLeftRadius
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
+                    Repeater {
+                        model: 5
+                        delegate: Rectangle {
+                            width: 9; height: 9; radius: 2.5
+                            color: mock.markColor
+                        }
+                    }
+                }
+            }
+
+            Repeater {
+                model: (mock.showDock && mock.isNotch) ? 2 : 0
+                delegate: RoundCorner {
+                    required property int index
+                    implicitSize: 8
+                    color: mock.surfaceColor
+                    y: dockBody.y + dockBody.height - implicitSize
+                    x: index === 0 ? dockBody.x - implicitSize : dockBody.x + dockBody.width
+                    corner: index === 0 ? RoundCorner.CornerEnum.BottomRight
+                        : RoundCorner.CornerEnum.BottomLeft
+                }
+            }
+        }
+    }
+
     component PillBg : Rectangle {
         // The bar sets its groups apart by giving each one a filled pill. At a
         // third transparent they washed into the strip and the grouping, which
@@ -967,6 +1230,780 @@ ApplicationWindow {
     // The last page. The links that ask for money sit beside the ones that
     // ask only for time, because both are real ways to help and a reader who
     // cannot give one should not feel they have nothing to offer.
+    // ── Card 1: Style ───────────────────────────────────────────────────
+    // The bar and the dock are chosen apart, each as a row of pictures, with
+    // the colour the two share underneath. Nothing is written until a tile is
+    // pressed, and the lit one is read back from the settings.
+
+    // The grouping the setup card beside this one uses, so the page reads as
+    // part of the same tour rather than as its own thing.
+    component StyleSection : Rectangle {
+        id: section
+        default property alias content: sectionColumn.data
+        // Anything the section wants on its header line rather than under it,
+        // held at the far end. A control that only sometimes applies belongs
+        // here: it can come and go without the group changing height around it.
+        property alias headerTrailing: headerTrailingRow.data
+        property string title
+        property string symbol
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        // Sized to its contents when it is not taking the leftover height, or
+        // it collapses onto whatever sits below it.
+        implicitHeight: sectionColumn.implicitHeight + 24
+        color: Appearance.colors.colLayer1
+        radius: Appearance.rounding.normal
+        border.width: 1
+        border.color: Appearance.colors.colOutlineVariant
+
+        ColumnLayout {
+            id: sectionColumn
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                MaterialSymbol {
+                    text: section.symbol
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer1
+                }
+                StyledText {
+                    text: section.title
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.weight: Font.Medium
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                Item { Layout.fillWidth: true }
+
+                RowLayout {
+                    id: headerTrailingRow
+                    spacing: 6
+                }
+            }
+        }
+    }
+
+    // The radio Settings → Layouts marks its picked card with.
+    component RadioMark : Rectangle {
+        property bool selected: false
+        implicitWidth: 16
+        implicitHeight: 16
+        radius: 8
+        border.width: 2
+        border.color: selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+        color: selected ? Appearance.colors.colPrimary : "transparent"
+        Rectangle {
+            anchors.centerIn: parent
+            width: 6; height: 6; radius: 3
+            visible: parent.selected
+            color: Appearance.colors.colOnPrimary
+        }
+    }
+
+    // One of the style page's three pictures, in the card Settings → Layouts
+    // puts around each of its own: the picture framed, lit when picked, with
+    // a radio and the style's name under it.
+    component StyleTile : MouseArea {
+        id: tile
+        required property string styleName
+        required property string label
+        required property bool selected
+
+        Layout.fillWidth: true
+        Layout.preferredWidth: 1
+        implicitHeight: tileColumn.implicitHeight
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: tile.picked()
+
+        signal picked()
+
+        ColumnLayout {
+            id: tileColumn
+            width: parent.width
+            spacing: 6
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 92
+                radius: Appearance.rounding.normal
+                color: tile.selected
+                    ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1)
+                    : (tile.containsMouse ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer2)
+                border.width: tile.selected ? 2 : 1
+                border.color: tile.selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                StyleMockup {
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    styleName: tile.styleName
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                RadioMark { selected: tile.selected }
+                StyledText {
+                    Layout.fillWidth: true
+                    text: tile.label
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    color: Appearance.colors.colOnLayer1
+                }
+            }
+        }
+    }
+
+    // ── Picture pages ───────────────────────────────────────────────────
+    // A wallpaper drawn in the theme's own tones, for the pictures to fall
+    // back on while the real one has no still to show.
+    component DrawnWallpaper : Item {
+        id: paper
+        LinearGradient {
+            anchors.fill: parent
+            start: Qt.point(0, 0)
+            end: Qt.point(width, height)
+            gradient: Gradient {
+                GradientStop { position: 0; color: Appearance.m3colors.m3secondaryContainer }
+                GradientStop { position: 1; color: Appearance.m3colors.m3primaryContainer }
+            }
+        }
+        Rectangle {
+            width: paper.height * 0.95
+            height: width
+            radius: width / 2
+            x: -width * 0.32
+            y: paper.height * 0.42
+            color: Appearance.m3colors.m3tertiaryContainer
+        }
+        Rectangle {
+            width: paper.width * 0.78
+            height: paper.height * 0.2
+            radius: height / 2
+            x: paper.width * 0.4
+            y: paper.height * 0.12
+            rotation: -30
+            color: Appearance.colors.colPrimary
+            opacity: 0.55
+        }
+        Rectangle {
+            width: paper.height * 0.28
+            height: width
+            radius: width / 2
+            x: paper.width * 0.34
+            y: paper.height * 0.2
+            color: Appearance.m3colors.m3tertiary
+            opacity: 0.6
+        }
+    }
+
+    // The frame a page's picture sits in: the look Settings → Layouts gives a
+    // picked card, around a rounded screen with the wallpaper on it. What a
+    // page puts inside lands on that screen, above the wallpaper.
+    component DesktopFrame : Rectangle {
+        id: frame
+        default property alias content: canvasItem.data
+        property alias canvas: canvasItem
+        property alias wallpaper: paperItem
+
+        radius: Appearance.rounding.normal
+        color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1)
+        border.width: 2
+        border.color: Appearance.colors.colPrimary
+
+        Item {
+            id: canvasItem
+            anchors.fill: parent
+            anchors.margins: frame.border.width
+            layer.enabled: true
+            layer.smooth: true
+            layer.effect: OpacityMask {
+                maskSource: Rectangle {
+                    width: canvasItem.width
+                    height: canvasItem.height
+                    radius: frame.radius - frame.border.width
+                }
+            }
+
+            Item {
+                id: paperItem
+                anchors.fill: parent
+                DrawnWallpaper {
+                    anchors.fill: parent
+                }
+                // The wallpaper actually set, over the drawn one. A video, or
+                // a picture whose thumbnail is still being made, leaves the
+                // drawn one showing.
+                ThumbnailImage {
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectCrop
+                    sourcePath: Config.options.background.wallpaperPath
+                    sourceSize: Images.wallpaperPreviewSourceSize
+                }
+            }
+        }
+    }
+
+    // ── Style card ──────────────────────────────────────────────────────────
+    // Carries a bar or a dock drawn along the top of its own box and turns the
+    // box to the edge the piece belongs on, so each piece is drawn once and
+    // read at any of the four. A new edge is reached by sliding off the old
+    // one and back in at the new, the way a panel moves.
+    component EdgeMount : Item {
+        id: mount
+        required property string edge
+        property string shownEdge: ""
+        property real retract: 0
+
+        readonly property bool sideways: mount.shownEdge === "left" || mount.shownEdge === "right"
+        // Bottom and left are mirrored as well as turned, so the start of the
+        // bar, where its workspaces sit, lands at the left or the top the way
+        // it does on screen.
+        readonly property bool mirrored: mount.shownEdge === "bottom" || mount.shownEdge === "left"
+        readonly property real angle: ({ top: 0, right: 90, bottom: 180, left: 270 })[mount.shownEdge] ?? 0
+
+        width: mount.sideways ? parent.height : parent.width
+        height: mount.sideways ? parent.width : parent.height
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        transform: [
+            Scale {
+                origin.x: mount.width / 2
+                origin.y: mount.height / 2
+                xScale: mount.mirrored ? -1 : 1
+            },
+            Rotation {
+                origin.x: mount.width / 2
+                origin.y: mount.height / 2
+                angle: mount.angle
+            }
+        ]
+
+        Component.onCompleted: mount.shownEdge = mount.edge
+        onEdgeChanged: {
+            if (mount.shownEdge !== "" && mount.edge !== mount.shownEdge)
+                move.restart();
+        }
+        SequentialAnimation {
+            id: move
+            NumberAnimation {
+                target: mount; property: "retract"; to: 1
+                duration: 170
+                easing.type: Easing.InCubic
+            }
+            ScriptAction { script: mount.shownEdge = mount.edge }
+            NumberAnimation {
+                target: mount; property: "retract"; to: 0
+                duration: 280
+                easing.type: Easing.OutCubic
+            }
+        }
+    }
+
+    // The swoops a notched piece curves back into its edge with, one at each
+    // end of it.
+    component NotchSwoops : Item {
+        id: swoops
+        required property Item piece
+        property real edgeY: 0
+        property real size: 10
+        property color color
+        Repeater {
+            model: 2
+            RoundCorner {
+                required property int index
+                implicitSize: swoops.size
+                color: swoops.color
+                y: swoops.edgeY
+                x: index === 0 ? swoops.piece.x - implicitSize : swoops.piece.x + swoops.piece.width
+                corner: index === 0 ? RoundCorner.CornerEnum.TopRight : RoundCorner.CornerEnum.TopLeft
+            }
+        }
+    }
+
+    // The bar along the top of its box, in any of the shapes the style page
+    // offers, filled with the color and see-through the real bar is drawn
+    // with. Plain white when it only stands in for the blur's mask. Moving
+    // between shapes morphs one into the other rather than swapping them.
+    component BarPiece : Item {
+        id: bar
+        property string shape: "float"
+        property real retract: 0
+        property bool maskOnly: false
+        anchors.fill: parent
+
+        readonly property real thick: 20
+        property real gap: bar.shape === "float" ? 8 : 0
+        property real inset: bar.shape === "notch" ? bar.width * 0.14 : (bar.shape === "float" ? 8 : 0)
+        property real edgeRadius: bar.shape === "float" ? 10 : 0
+        property real farRadius: bar.shape === "rect" ? 0 : 10
+        property real swoop: bar.shape === "notch" ? 1 : 0
+        Behavior on gap { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on inset { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on edgeRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on farRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on swoop { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+
+        // How far the piece has slid off its edge while it moves to another.
+        readonly property real slide: bar.retract * (bar.thick + bar.gap + 12)
+        readonly property bool drawn: Config.options.bar.showBackground
+        readonly property color fill: bar.maskOnly ? "white" : Appearance.colors.colBarBackground
+        readonly property color markColor: ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.45)
+
+        Item {
+            id: barBox
+            x: bar.inset
+            y: bar.gap - bar.slide
+            width: bar.width - 2 * bar.inset
+            height: bar.thick
+
+            RectangularShadow {
+                anchors.fill: parent
+                visible: !bar.maskOnly && bar.drawn && Config.options.bar.floatStyleShadow && bar.shape !== "rect"
+                radius: bar.farRadius
+                blur: 8
+                offset: Qt.vector2d(0, 1)
+                color: Appearance.colors.colBarShadow
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: bar.drawn
+                color: bar.fill
+                topLeftRadius: bar.edgeRadius
+                topRightRadius: bar.edgeRadius
+                bottomLeftRadius: bar.farRadius
+                bottomRightRadius: bar.farRadius
+            }
+
+            // Workspaces at the start, the clock in the middle, the tray at
+            // the end, where the real bar keeps them.
+            Row {
+                visible: !bar.maskOnly
+                x: Math.max(10, bar.farRadius)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                Rectangle { width: 16; height: 6; radius: 3; color: Appearance.colors.colPrimary }
+                Repeater {
+                    model: 3
+                    Rectangle { width: 6; height: 6; radius: 3; color: bar.markColor }
+                }
+            }
+            Row {
+                visible: !bar.maskOnly
+                anchors.centerIn: parent
+                spacing: 4
+                Rectangle { width: 20; height: 5; radius: 2.5; color: bar.markColor }
+                Rectangle { width: 12; height: 5; radius: 2.5; color: bar.markColor }
+            }
+            Row {
+                visible: !bar.maskOnly
+                anchors.right: parent.right
+                anchors.rightMargin: Math.max(10, bar.farRadius)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                Repeater {
+                    model: 3
+                    Rectangle { width: 6; height: 6; radius: 3; color: bar.markColor }
+                }
+            }
+        }
+
+        NotchSwoops {
+            piece: barBox
+            edgeY: -bar.slide
+            visible: bar.drawn
+            opacity: bar.swoop
+            color: bar.fill
+        }
+    }
+
+    // The dock along the top of its box, the same way the bar is drawn.
+    component DockPiece : Item {
+        id: dock
+        property string shape: "float"
+        property real retract: 0
+        property bool maskOnly: false
+        anchors.fill: parent
+
+        readonly property real thick: 30
+        readonly property real span: Math.min(dock.width * 0.54, 250)
+        // The notched dock's two curves as the real dock draws them, taken as
+        // shares of its body's height: a long sweep leaving the edge, and a
+        // body turned generously enough to meet it.
+        readonly property real realBodyHeight: Math.max(1, Appearance.sizes.dockHeight - Appearance.sizes.elevationMargin)
+        readonly property real notchFlare: dock.thick
+            * Math.min(Appearance.rounding.dock, Appearance.rounding.dockFlareFit) / dock.realBodyHeight
+        readonly property real notchCorner: dock.thick * Appearance.rounding.dockBody / dock.realBodyHeight
+        property real gap: dock.shape === "float" ? 9 : 0
+        property real edgeRadius: dock.shape === "float" ? 11 : 0
+        property real farRadius: dock.shape === "rect" ? 0 : (dock.shape === "notch" ? dock.notchCorner : 11)
+        property real swoop: dock.shape === "notch" ? 1 : 0
+        Behavior on gap { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on edgeRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on farRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on swoop { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        // Set down on the edge, the body reaches a pixel past it so the outline
+        // it draws along the screen's own edge falls outside the picture.
+        readonly property real edgeTuck: dock.shape === "float" ? 0 : 1
+
+        readonly property real slide: dock.retract * (dock.thick + dock.gap + 12)
+        readonly property bool drawn: Config.options.dock.showBackground
+        readonly property color fill: dock.maskOnly ? "white" : Appearance.colors.colDockBackground
+
+        Item {
+            id: dockBox
+            x: (dock.width - dock.span) / 2
+            y: dock.gap - dock.slide
+            width: dock.span
+            height: dock.thick
+
+            Rectangle {
+                y: -dock.edgeTuck
+                width: parent.width
+                height: parent.height + dock.edgeTuck
+                visible: dock.drawn && opacity > 0
+                opacity: 1 - dock.swoop
+                color: dock.fill
+                topLeftRadius: dock.edgeRadius
+                topRightRadius: dock.edgeRadius
+                bottomLeftRadius: dock.farRadius
+                bottomRightRadius: dock.farRadius
+                border.width: dock.maskOnly ? 0 : 1
+                border.color: Appearance.colors.colDockBackgroundBorder
+            }
+            Row {
+                visible: !dock.maskOnly
+                anchors.centerIn: parent
+                spacing: 7
+                Repeater {
+                    model: [Appearance.colors.colPrimary, Appearance.m3colors.m3tertiary,
+                            Appearance.m3colors.m3secondary, Appearance.m3colors.m3primaryContainer,
+                            Appearance.m3colors.m3tertiaryContainer]
+                    Rectangle {
+                        required property color modelData
+                        width: 16; height: 16; radius: 5
+                        color: modelData
+                    }
+                }
+            }
+        }
+
+        // The notched dock as one outline rather than a body with a curve hung
+        // at each end: the sweep leaving the edge turns straight into the
+        // corner above it, so there is no seam where two pieces meet and no
+        // sliver of either standing proud of the other. The two curves keep
+        // the real dock's sizes and meet where their slopes match.
+        Shape {
+            id: notchOutline
+            // Under the dock's contents, where the body it stands in for sits.
+            z: -1
+            visible: dock.drawn && dock.swoop > 0
+            opacity: dock.swoop
+            preferredRendererType: Shape.CurveRenderer
+
+            readonly property real bx: dockBox.x
+            readonly property real by: dockBox.y
+            readonly property real w: dock.span
+            readonly property real h: dock.thick
+            readonly property real rf: dock.notchFlare
+            readonly property real rb: dock.notchCorner
+            // How far each curve turns before handing over to the other. When
+            // the two together fall short of the height, they turn all the way
+            // and a straight stretch of side makes up the rest.
+            readonly property real turn: Math.acos(Math.max(0, 1 - h / Math.max(1, rf + rb)))
+            readonly property real reachF: rf * Math.sin(turn)
+            readonly property real reachB: rb * Math.sin(turn)
+            readonly property real handover: rf * (1 - Math.cos(turn))
+            readonly property real side: Math.max(0, h - (rf + rb))
+
+            ShapePath {
+                fillColor: dock.fill
+                strokeColor: dock.maskOnly ? "transparent" : Appearance.colors.colDockBackgroundBorder
+                strokeWidth: dock.maskOnly ? 0 : 1
+                joinStyle: ShapePath.RoundJoin
+                // Starts a pixel past the edge so the outline along the screen's
+                // own edge falls outside the picture.
+                startX: notchOutline.bx - notchOutline.reachF
+                startY: notchOutline.by - 1
+                PathLine { x: notchOutline.bx - notchOutline.reachF; y: notchOutline.by }
+                PathArc {
+                    x: notchOutline.bx; y: notchOutline.by + notchOutline.handover
+                    radiusX: notchOutline.rf; radiusY: notchOutline.rf
+                    direction: PathArc.Clockwise
+                }
+                PathLine { x: notchOutline.bx; y: notchOutline.by + notchOutline.handover + notchOutline.side }
+                PathArc {
+                    x: notchOutline.bx + notchOutline.reachB; y: notchOutline.by + notchOutline.h
+                    radiusX: notchOutline.rb; radiusY: notchOutline.rb
+                    direction: PathArc.Counterclockwise
+                }
+                PathLine { x: notchOutline.bx + notchOutline.w - notchOutline.reachB; y: notchOutline.by + notchOutline.h }
+                PathArc {
+                    x: notchOutline.bx + notchOutline.w; y: notchOutline.by + notchOutline.handover + notchOutline.side
+                    radiusX: notchOutline.rb; radiusY: notchOutline.rb
+                    direction: PathArc.Counterclockwise
+                }
+                PathLine { x: notchOutline.bx + notchOutline.w; y: notchOutline.by + notchOutline.handover }
+                PathArc {
+                    x: notchOutline.bx + notchOutline.w + notchOutline.reachF; y: notchOutline.by
+                    radiusX: notchOutline.rf; radiusY: notchOutline.rf
+                    direction: PathArc.Clockwise
+                }
+                PathLine { x: notchOutline.bx + notchOutline.w + notchOutline.reachF; y: notchOutline.by - 1 }
+                PathLine { x: notchOutline.bx - notchOutline.reachF; y: notchOutline.by - 1 }
+            }
+        }
+    }
+
+    // The style page's picture: the bar and the dock where they are, in the
+    // shape, color and see-through they have right now, on the same desktop
+    // the windows page draws. The blur behind them is the wallpaper's, cut to
+    // their outline, the way the compositor frosts a layer.
+    component BarDockStage : DesktopFrame {
+        id: bds
+        property bool blur: true
+
+        readonly property string barShape: ({ 1: "float", 3: "notch" })[Config.options.bar.cornerStyle] ?? "rect"
+        readonly property string dockShape: ({ hug: "notch", rect: "rect" })[Config.options.dock.cornerStyle] ?? "float"
+        readonly property bool dockShown: Config.options.dock.enable
+
+        Item {
+            id: pieceShapes
+            anchors.fill: parent
+            visible: false
+            EdgeMount {
+                edge: Appearance.sizes.barEdge
+                BarPiece { shape: bds.barShape; retract: parent.retract; maskOnly: true }
+            }
+            EdgeMount {
+                visible: bds.dockShown
+                edge: Appearance.sizes.dockEdge
+                DockPiece { shape: bds.dockShape; retract: parent.retract; maskOnly: true }
+            }
+        }
+        FastBlur {
+            id: paperBlur
+            anchors.fill: parent
+            source: bds.wallpaper
+            radius: 48
+            cached: true
+            visible: false
+        }
+        OpacityMask {
+            anchors.fill: parent
+            visible: bds.blur
+            source: paperBlur
+            maskSource: pieceShapes
+        }
+
+        EdgeMount {
+            edge: Appearance.sizes.barEdge
+            BarPiece { shape: bds.barShape; retract: parent.retract }
+        }
+        EdgeMount {
+            visible: bds.dockShown
+            edge: Appearance.sizes.dockEdge
+            DockPiece { shape: bds.dockShape; retract: parent.retract }
+        }
+    }
+
+    component CardStyle : Item {
+        id: cardStyle
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 16
+
+            StyleSection {
+                title: Translation.tr("Preview")
+                symbol: "preview"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+
+                BarDockStage {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    blur: root.layerBlur
+                }
+            }
+
+            // The sections share out whatever height the picture leaves, so
+            // the column ends where the picture does.
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                spacing: 0
+
+                StyleSection {
+                    title: Translation.tr("Bar and Dock shape")
+                    symbol: "screenshot_monitor"
+                    Layout.fillHeight: false
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        uniformCellSizes: true
+
+                        StyleTile {
+                            styleName: "float"; label: Translation.tr("Float")
+                            selected: root.barDockStyle === "float"
+                            onPicked: root.applyBarDockStyle("float")
+                        }
+                        StyleTile {
+                            styleName: "rect"; label: Translation.tr("Rect")
+                            selected: root.barDockStyle === "rect"
+                            onPicked: root.applyBarDockStyle("rect")
+                        }
+                        StyleTile {
+                            styleName: "notch"; label: Translation.tr("Notch")
+                            selected: root.barDockStyle === "notch"
+                            onPicked: root.applyBarDockStyle("notch")
+                        }
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        text: ({
+                            float: Translation.tr("The bar and the dock float clear of the screen's edges"),
+                            rect: Translation.tr("The bar and the dock sit flush with the edges, square cornered"),
+                            notch: Translation.tr("Flush with the edge, curving back into it at either end")
+                        })[root.barDockStyle] ?? Translation.tr("The bar keeps a shape of its own, picked in Settings")
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Transparency and color")
+                    symbol: "palette"
+                    Layout.fillHeight: false
+                    // On the header line rather than below the controls: the title
+                    // already says what it resets, and a row of its own would make
+                    // the group taller the moment anything here is touched.
+                    headerTrailing: [
+                        ConfigResetButton {
+                            visible: root.styleIsCustom
+                            buttonText: Translation.tr("Reset to default")
+                            onClicked: root.resetStyleAppearance()
+                        }
+                    ]
+
+                    ConfigSlider {
+                        Layout.fillWidth: true
+                        textWidth: 124
+                        text: Translation.tr("Transparency")
+                        buttonIcon: "opacity"
+                        stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
+                        // The track stops where the surfaces stop being frosted
+                        // rather than at nothing, the same as the settings page.
+                        from: Appearance.colors.surfaceOpacityFloor
+                        to: 1
+                        value: root.styleOpacity
+                        onMoved: {
+                            if (Math.abs(value - root.styleOpacity) < 0.005)
+                                return;
+                            root.applyStyleOpacity(value);
+                        }
+                    }
+
+                    ColorField {
+                        Layout.fillWidth: true
+                        textWidth: 124
+                        text: Translation.tr("Color")
+                        buttonIcon: "wallpaper"
+                        allowEmpty: true
+                        value: root.styleColor
+                        fallback: String(Appearance.colors.colLayer0)
+                        onEdited: newValue => root.applyStyleColor(newValue)
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Bar and Dock position")
+                    symbol: "swap_horiz"
+                    Layout.fillHeight: false
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        columnSpacing: 12
+                        rowSpacing: 6
+
+                        StyledText {
+                            Layout.preferredWidth: 44
+                            text: Translation.tr("Bar")
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        ConfigSelectionArray {
+                            Layout.fillWidth: true
+                            currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
+                            onSelected: newValue => {
+                                Config.options.bar.bottom = (newValue & 1) !== 0
+                                Config.options.bar.vertical = (newValue & 2) !== 0
+                            }
+                            options: [
+                                { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: 0 },
+                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2 },
+                                { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: 1 },
+                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3 }
+                            ]
+                        }
+
+                        StyledText {
+                            Layout.preferredWidth: 44
+                            text: Translation.tr("Dock")
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        ConfigSelectionArray {
+                            Layout.fillWidth: true
+                            // The edge the dock actually occupies rather than
+                            // the saved one: the resolver already sends it
+                            // away from whichever edge the bar holds.
+                            currentValue: Appearance.sizes.dockEdge
+                            onSelected: newValue => {
+                                if (newValue === Appearance.sizes.barEdge) {
+                                    // Asking for the bar's own edge sends the
+                                    // bar across its axis rather than
+                                    // refusing, so the two never both claim
+                                    // this edge.
+                                    Config.options.bar.bottom = !Config.options.bar.bottom
+                                    Config.options.dock.position = newValue
+                                } else if (!Config.options.dock.enable || newValue !== Appearance.sizes.dockEdge) {
+                                    // Re-picking the edge already shown would
+                                    // overwrite a saved edge the bar is only
+                                    // borrowing.
+                                    Config.options.dock.position = newValue
+                                }
+                                Config.options.dock.enable = true
+                            }
+                            options: [
+                                { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: "top" },
+                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: "left" },
+                                { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: "bottom" },
+                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: "right" }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     component Card8Contribute : Item {
         id: card8
 
