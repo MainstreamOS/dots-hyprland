@@ -13,6 +13,11 @@ Item {
 
     property int implicitSize: 25
     property color color: "#000000"
+    // An outline along the sweep alone. A curve's other two edges are where it
+    // meets the surface beside it and the edge it sits on, and a line drawn
+    // there would read as a seam rather than as an outline.
+    property int outlineWidth: 0
+    property color outlineColor: "transparent"
 
     implicitWidth: implicitSize
     implicitHeight: implicitSize
@@ -25,6 +30,16 @@ Item {
     property bool isBottom: isBottomLeft || isBottomRight
     property bool isLeft: isTopLeft || isBottomLeft
     property bool isRight: isTopRight || isBottomRight
+    // Where the sweep starts, shared by the fill and the outline over it so the
+    // two can never describe different curves.
+    readonly property int arcStartAngle: {
+        switch (root.corner) {
+        case RoundCorner.CornerEnum.TopLeft: return 180;
+        case RoundCorner.CornerEnum.TopRight: return -90;
+        case RoundCorner.CornerEnum.BottomLeft: return 90;
+        }
+        return 0;
+    }
 
     Shape {
         id: shape
@@ -62,17 +77,28 @@ Item {
                 centerY: root.implicitSize - shapePath.startY
                 radiusX: root.implicitSize
                 radiusY: root.implicitSize
-                startAngle: switch (root.corner) {
-                    case RoundCorner.CornerEnum.TopLeft: return 180;
-                    case RoundCorner.CornerEnum.TopRight: return -90;
-                    case RoundCorner.CornerEnum.BottomLeft: return 90;
-                    case RoundCorner.CornerEnum.BottomRight: return 0;
-                }
+                startAngle: root.arcStartAngle
                 sweepAngle: 90
             }
             PathLine {
                 x: shapePath.startX
                 y: shapePath.startY
+            }
+        }
+
+        ShapePath {
+            strokeWidth: root.outlineWidth
+            strokeColor: root.outlineColor
+            fillColor: "transparent"
+            capStyle: ShapePath.FlatCap
+            PathAngleArc {
+                moveToStart: true
+                centerX: root.implicitSize - shapePath.startX
+                centerY: root.implicitSize - shapePath.startY
+                radiusX: root.implicitSize
+                radiusY: root.implicitSize
+                startAngle: root.arcStartAngle + 8
+                sweepAngle: 74
             }
         }
     }

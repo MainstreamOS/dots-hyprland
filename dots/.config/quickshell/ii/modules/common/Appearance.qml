@@ -186,6 +186,10 @@ Singleton {
         readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
         property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, layer0StockAlpha)
         property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
+        // The notched dock carries its own alpha on the container rather than on
+        // each piece, so the outline goes on opaque there and is let down with
+        // everything else, instead of being faded twice.
+        readonly property color colDockBackgroundBorderOpaque: Qt.rgba(colDockBackgroundBorder.r, colDockBackgroundBorder.g, colDockBackgroundBorder.b, 1)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
         readonly property string dockBadgePick: modePick(Config.options?.dock.badgeColorDark, Config.options?.dock.badgeColorLight)
         readonly property string dockBadgeTextPick: modePick(Config.options?.dock.badgeTextColorDark, Config.options?.dock.badgeTextColorLight)

@@ -67,6 +67,11 @@ Scope { // Scope
             readonly property bool notchSeamFix: dockFlares && Config.options.dock.showBackground
                 && Appearance.colors.colDockBackground.a < 1
             readonly property real flareBleed: notchSeamFix ? Appearance.rounding.dock : 0
+            // How far each curve laps over the body. One covers the hairline a
+            // fractional scale can leave between them; the body's outline is a
+            // pixel of its own, so the lap has to clear that too or a stub of it
+            // is left standing at the join.
+            readonly property int flareLap: 1 + (Config.options.dock.showBackground ? 1 : 0)
             // The screen gap sits on the edge side, the shadow's breathing room
             // on the center side. Hugging leaves no gap on the edge side: the
             // concave corners have nothing to curve into if the dock floats
@@ -335,6 +340,10 @@ Scope { // Scope
                             Loader {
                                 active: dockRoot.dockFlares && Config.options.dock.showBackground
                                 anchors.fill: dockVisualBackground
+                                // Over the body rather than under it, so the body's
+                                // outline along the sides it shares with these is
+                                // covered by them and only its top is left showing.
+                                z: 1
                                 // Between the shadow and the body: above the shadow,
                                 // which is cast for a surface that stops at the body
                                 // and would otherwise lay a gradient down the join,
@@ -360,6 +369,10 @@ Scope { // Scope
                                     Appearance.rounding.dockFlareFit)
                                 color: dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
                                     : Appearance.colors.colDockBackground
+                                outlineWidth: Config.options.dock.showBackground ? 1 : 0
+                                outlineColor: dockRoot.notchSeamFix
+                                    ? Appearance.colors.colDockBackgroundBorderOpaque
+                                    : Appearance.colors.colDockBackgroundBorder
                             }
 
                             // The curves at the two ends of a horizontal dock.
@@ -368,7 +381,7 @@ Scope { // Scope
                                 Item {
                                     DockFlare {
                                         anchors.right: parent.left
-                                        anchors.rightMargin: -1
+                                        anchors.rightMargin: -dockRoot.flareLap
                                         anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
                                         anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
                                         corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopRight
@@ -376,7 +389,7 @@ Scope { // Scope
                                     }
                                     DockFlare {
                                         anchors.left: parent.right
-                                        anchors.leftMargin: -1
+                                        anchors.leftMargin: -dockRoot.flareLap
                                         anchors.top: dockRoot.dockEdge === "top" ? parent.top : undefined
                                         anchors.bottom: dockRoot.dockEdge === "bottom" ? parent.bottom : undefined
                                         corner: dockRoot.dockEdge === "top" ? RoundCorner.CornerEnum.TopLeft
@@ -391,7 +404,7 @@ Scope { // Scope
                                 Item {
                                     DockFlare {
                                         anchors.bottom: parent.top
-                                        anchors.bottomMargin: -1
+                                        anchors.bottomMargin: -dockRoot.flareLap
                                         anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
                                         anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
                                         corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.BottomLeft
@@ -399,7 +412,7 @@ Scope { // Scope
                                     }
                                     DockFlare {
                                         anchors.top: parent.bottom
-                                        anchors.topMargin: -1
+                                        anchors.topMargin: -dockRoot.flareLap
                                         anchors.left: dockRoot.dockEdge === "left" ? parent.left : undefined
                                         anchors.right: dockRoot.dockEdge === "right" ? parent.right : undefined
                                         corner: dockRoot.dockEdge === "left" ? RoundCorner.CornerEnum.TopLeft
@@ -419,12 +432,14 @@ Scope { // Scope
                                 color: !Config.options.dock.showBackground ? "transparent"
                                     : dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
                                     : Appearance.colors.colDockBackground
-                                // The outward curves are drawn as their own pieces
-                                // and carry no outline, so a border on the body
-                                // would run a seam down the join. Hugging means one
-                                // continuous surface or none.
-                                border.width: Config.options.dock.showBackground && !dockRoot.dockFlares ? 1 : 0
-                                border.color: Appearance.colors.colDockBackgroundBorder
+                                // The outward curves take the outline on along
+                                // their sweep and are drawn over the sides they
+                                // share with the body, so what is left of this one
+                                // is the top, which is the only part on show.
+                                border.width: Config.options.dock.showBackground ? 1 : 0
+                                border.color: dockRoot.notchSeamFix
+                                    ? Appearance.colors.colDockBackgroundBorderOpaque
+                                    : Appearance.colors.colDockBackgroundBorder
                                 // The pair facing the screen edge answers to the
                                 // edge roundness; the pair facing the desktop to
                                 // the other. A corner that curves outward is drawn
