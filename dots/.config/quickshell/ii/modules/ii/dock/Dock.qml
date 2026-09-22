@@ -334,6 +334,7 @@ Scope { // Scope
                             anchors.rightMargin: dockRoot.dockVertical ? 0 : -dockRoot.flareBleed
                             opacity: dockRoot.notchSeamFix ? Appearance.colors.colDockBackground.a : 1
                             layer.enabled: dockRoot.notchSeamFix
+                            layer.smooth: true
 
                             // The outward curves, drawn beside the surface the way
                             // the bar draws the ones under its own hug corners.
