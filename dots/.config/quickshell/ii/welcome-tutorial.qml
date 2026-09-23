@@ -48,18 +48,19 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 11   // bump as you add more cards
+    readonly property int cardCount: 12   // bump as you add more cards
     // The window's own title doubles as each page's heading, so a page that
     // names itself does not spend a line of its own saying so.
     readonly property string cardTitle: {
         switch (root.currentCard) {
         case 1: return Translation.tr("Pick your desktop's style");
+        case 2: return Translation.tr("Pick how your windows look");
         }
         return Translation.tr("Hi there! First things first...");
     }
 
     // Install page (card 2): which apps the user ticked to install in the background.
-    readonly property int installCardIndex: 2
+    readonly property int installCardIndex: 3
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
                                         "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false })
     readonly property int installCount: {
@@ -286,6 +287,7 @@ ApplicationWindow {
                 // navigating back to it is instant.
                 LazyCard { sourceComponent: card0Comp }
                 LazyCard { sourceComponent: cardStyleComp }
+                LazyCard { sourceComponent: cardWindowsComp }
                 LazyCard { sourceComponent: cardInstallComp }
                 LazyCard { sourceComponent: card1Comp }
                 LazyCard { sourceComponent: card2Comp }
@@ -300,6 +302,7 @@ ApplicationWindow {
 
             Component { id: card0Comp; Card0Setup {} }
             Component { id: cardStyleComp; CardStyle {} }
+            Component { id: cardWindowsComp; CardWindows {} }
             Component { id: cardInstallComp; Card1Install {} }
             Component { id: card1Comp; Card1BarTour {} }
             Component { id: card2Comp; Card2Workspaces {} }
@@ -1811,6 +1814,996 @@ ApplicationWindow {
             visible: bds.dockShown
             edge: Appearance.sizes.dockEdge
             DockPiece { shape: bds.dockShape; retract: parent.retract }
+        }
+    }
+
+    // ── Windows card ────────────────────────────────────────────────────────
+    // A window in the windows card's picture, built from the same flat pieces
+    // Settings → Layouts draws its layout pictures with, so a window looks the
+    // same wherever the tour or the settings show one.
+    component DemoWindow : Item {
+        id: dw
+        required property var host
+        required property int number
+        property bool focused: false
+
+        readonly property real cornerRadius: dw.host.shownRadius
+
+        // Focus moving from one window to the next plays the way the
+        // compositor plays it: the see-through and the dim follow the fade
+        // curve, the border color follows the border curve.
+        property real surfaceOpacity: dw.focused ? dw.host.activeOpacity : dw.host.shownInactiveOpacity
+        Behavior on surfaceOpacity {
+            NumberAnimation {
+                duration: dw.host.ms("fadeIn")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: dw.host.curve("fadeIn")
+            }
+        }
+        property real dimAmount: dw.focused ? 0 : dw.host.dimStrength
+        Behavior on dimAmount {
+            NumberAnimation {
+                duration: dw.host.ms("fadeIn")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: dw.host.curve("fadeIn")
+            }
+        }
+        property color frameColor: dw.focused ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+        Behavior on frameColor {
+            ColorAnimation {
+                duration: dw.host.ms("border")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: dw.host.curve("border")
+            }
+        }
+
+        Rectangle {
+            id: surface
+            anchors.fill: parent
+            radius: dw.cornerRadius
+            // The opaque tones the shell's layer colors are solved from: the
+            // layer colors carry the shell's own transparency, and a window
+            // here should be see-through only by the window settings.
+            color: Appearance.colors.colLayer3Base
+            opacity: dw.surfaceOpacity
+
+            Rectangle {
+                id: strip
+                visible: dw.host.titleBars
+                anchors { top: parent.top; left: parent.left; right: parent.right }
+                height: 16
+                topLeftRadius: surface.radius
+                topRightRadius: surface.radius
+                color: Appearance.colors.colLayer2Base
+
+                Rectangle {
+                    x: Math.max(7, surface.radius * 0.6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 5; height: 5; radius: 2.5
+                    color: Appearance.colors.colSubtext
+                    opacity: 0.35
+                }
+                Row {
+                    anchors {
+                        right: parent.right
+                        rightMargin: Math.max(7, surface.radius * 0.6)
+                        verticalCenter: parent.verticalCenter
+                    }
+                    spacing: 4
+                    Repeater {
+                        model: 3
+                        Rectangle {
+                            width: 5; height: 5; radius: 2.5
+                            color: Appearance.colors.colSubtext
+                            opacity: 0.35
+                        }
+                    }
+                }
+            }
+
+            Column {
+                x: Math.max(11, surface.radius * 0.7)
+                y: (dw.host.titleBars ? strip.height : 0) + Math.max(11, surface.radius * 0.7)
+                spacing: 5
+                Repeater {
+                    model: [0.62, 0.44, 0.68, 0.34, 0.54]
+                    Rectangle {
+                        required property real modelData
+                        width: (dw.width - 24) * modelData
+                        height: 5; radius: 2
+                        color: Appearance.colors.colSubtext
+                        opacity: 0.22
+                    }
+                }
+            }
+
+            StyledText {
+                anchors {
+                    right: parent.right
+                    bottom: parent.bottom
+                    margins: Math.max(7, surface.radius * 0.5)
+                }
+                text: dw.number
+                font.pixelSize: Appearance.font.pixelSize.small
+                color: Appearance.colors.colSubtext
+                opacity: 0.4
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: surface.radius
+                color: "black"
+                opacity: dw.dimAmount
+            }
+        }
+
+        // Apart from the surface, so it keeps its strength when the surface
+        // is see-through.
+        Rectangle {
+            anchors.fill: parent
+            visible: dw.host.shownBorder > 0
+            radius: dw.cornerRadius
+            color: "transparent"
+            border.width: dw.host.shownBorder
+            border.color: dw.frameColor
+        }
+    }
+
+    // A window's outline in the picture's masks: where the blur shows through
+    // it, and where the shadows are kept out from under it.
+    component WindowTwin : Rectangle {
+        required property DemoWindow modelData
+        x: modelData.x
+        y: modelData.y
+        width: modelData.width
+        height: modelData.height
+        scale: modelData.scale
+        opacity: modelData.opacity
+        visible: modelData.visible
+        radius: modelData.cornerRadius
+        color: "white"
+    }
+
+    component WindowShadow : RectangularShadow {
+        required property DemoWindow modelData
+        x: modelData.x
+        y: modelData.y
+        width: modelData.width
+        height: modelData.height
+        scale: modelData.scale
+        opacity: modelData.opacity
+        visible: modelData.visible
+        radius: modelData.cornerRadius
+    }
+
+    // A window's shadow as the compositor casts it: kept out from under the
+    // window itself, and falling on whatever lies beside it. Each one sits
+    // just below its own window, so a window drawn later shades the ones
+    // drawn before it.
+    component CastShadow : Item {
+        id: cast
+        required property DemoWindow window
+        property real blurSize: 12
+        property vector2d offsetBy: Qt.vector2d(0, 1)
+        property color shadowColor: "black"
+        anchors.fill: parent
+
+        Item {
+            id: castSource
+            anchors.fill: parent
+            visible: false
+            WindowShadow {
+                modelData: cast.window
+                blur: cast.blurSize
+                offset: cast.offsetBy
+                color: cast.shadowColor
+            }
+        }
+        Item {
+            id: castHole
+            anchors.fill: parent
+            visible: false
+            WindowTwin { modelData: cast.window }
+        }
+        OpacityMask {
+            anchors.fill: parent
+            source: castSource
+            maskSource: castHole
+            invert: true
+        }
+    }
+
+    // The windows card's picture: three windows on the desktop. A third one
+    // opens beside the second and closes again on a loop, moving to the
+    // curves and timings of the animation profile the desktop is running.
+    component WindowStage : DesktopFrame {
+        id: stage
+
+        property real rounding: 10
+        property bool roundCorners: true
+        property int borderSize: 4
+        property bool borders: true
+        property bool shadows: true
+        property int shadowRange: 20
+        property color shadowColor: Qt.rgba(0, 0, 0, 0.125)
+        property var shadowOffset: [0, 2]
+        property bool titleBars: true
+        property bool blur: true
+        property real activeOpacity: 1
+        property real inactiveOpacity: 1
+        property real dimStrength: 0
+        property int gapsIn: 4
+        property int gapsOut: 5
+        property bool animations: true
+        property var motion: ({})
+        property bool live: false
+
+        // Sizes true to a real screen read as nothing at this scale, so each
+        // one is shown larger than life by the same factor, the shadow's
+        // strength included.
+        readonly property real lifeScale: 0.6
+        readonly property color shownShadowColor: Qt.rgba(stage.shadowColor.r, stage.shadowColor.g,
+            stage.shadowColor.b, Math.min(0.55, stage.shadowColor.a * 3))
+
+        // Blur only shows through something see-through, and a window that is
+        // solid, or only faintly see-through, leaves too little of it to see.
+        // Flipping the switch, or resting the pointer on it, lets the unfocused
+        // windows go see-through enough for the difference to read, and hands
+        // them back afterwards.
+        property bool blurPeek: false
+        property bool blurHover: false
+        readonly property bool showingBlur: stage.blurPeek || stage.blurHover
+        readonly property real shownInactiveOpacity: stage.showingBlur
+            ? Math.min(stage.inactiveOpacity, 0.72) : stage.inactiveOpacity
+        function peekBlur() {
+            stage.blurPeek = true;
+            blurPeekTimer.restart();
+        }
+        Timer {
+            id: blurPeekTimer
+            interval: 2600
+            onTriggered: stage.blurPeek = false
+        }
+
+        // A shadow this small, on dark windows, barely reads, and tiled windows
+        // leave it no wallpaper to fall on. Flipping the switch lifts the
+        // focused window out for a moment instead, floating over its neighbor
+        // the way a window pulled out of tiling does, so its shadow falls on
+        // both, then sets it back and lets the loop go on.
+        property bool shadowPeek: false
+        property real liftT: stage.shadowPeek ? 1 : 0
+        Behavior on liftT { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+        function peekShadow() {
+            stage.resetScene();
+            stage.shadowPeek = true;
+            shadowPeekTimer.restart();
+        }
+        Timer {
+            id: shadowPeekTimer
+            interval: 2600
+            onTriggered: {
+                stage.shadowPeek = false;
+                stage.replay(700);
+            }
+        }
+        readonly property real shownRadius: stage.roundCorners ? stage.rounding * stage.lifeScale : 0
+        readonly property real shownBorder: stage.borders ? Math.max(1, Math.round(stage.borderSize * stage.lifeScale)) : 0
+        readonly property real gapOut: Math.max(8, stage.gapsOut * stage.lifeScale)
+        readonly property real gapIn: Math.max(5, stage.gapsIn * stage.lifeScale)
+
+        // Dwindle's first two splits: side by side across the wide screen,
+        // then one above the other in the tall column that leaves.
+        readonly property real areaW: stage.canvas.width - 2 * stage.gapOut
+        readonly property real areaH: stage.canvas.height - 2 * stage.gapOut
+        readonly property real leftW: (stage.areaW - stage.gapIn) / 2
+        readonly property real rightX: stage.gapOut + stage.leftW + stage.gapIn
+        readonly property real rightW: stage.areaW - stage.leftW - stage.gapIn
+        readonly property real halfH: (stage.areaH - stage.gapIn) / 2
+
+        property real splitT: 0
+        property real w2Scale: 1
+        property real w2Shift: 0
+        property real w2Alpha: 0
+        property int focusIdx: 1
+        property bool thirdOpen: false
+
+        function leaf(name) {
+            return stage.motion[name] ?? { enabled: true, speed: 3, curve: [0.05, 0.7, 0.1, 1], kind: "popin", from: 0.8 };
+        }
+        function ms(name) {
+            const l = stage.leaf(name);
+            return stage.animations && l.enabled ? Math.round(l.speed * 100) : 0;
+        }
+        function curve(name) {
+            return stage.leaf(name).curve.concat([1, 1]);
+        }
+        function popFrom(name) {
+            const l = stage.leaf(name);
+            return l.kind === "popin" ? l.from : 1;
+        }
+        function slideFrom(name) {
+            return stage.leaf(name).kind === "slide" ? stage.canvas.width - stage.rightX + 4 : 0;
+        }
+
+        function openThird() {
+            closeAnim.stop();
+            stage.thirdOpen = true;
+            stage.focusIdx = 2;
+            openAnim.restart();
+        }
+        function closeThird() {
+            openAnim.stop();
+            stage.thirdOpen = false;
+            stage.focusIdx = 1;
+            closeAnim.restart();
+        }
+        function resetScene() {
+            openAnim.stop();
+            closeAnim.stop();
+            cycle.stop();
+            stage.thirdOpen = false;
+            stage.focusIdx = 1;
+            stage.splitT = 0;
+            stage.w2Alpha = 0;
+            stage.w2Scale = 1;
+            stage.w2Shift = 0;
+        }
+        // Back to two windows at once, with the loop picking up after `delay`.
+        function replay(delay) {
+            stage.resetScene();
+            if (!stage.live) return;
+            cycle.interval = delay;
+            cycle.start();
+        }
+
+        onLiveChanged: stage.replay(700)
+        onMotionChanged: stage.replay(300)
+        onAnimationsChanged: stage.replay(300)
+
+        Timer {
+            id: cycle
+            onTriggered: {
+                if (stage.thirdOpen) stage.closeThird();
+                else stage.openThird();
+                cycle.interval = stage.thirdOpen ? 2600 : 1700;
+                cycle.start();
+            }
+        }
+
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation {
+                target: stage; property: "splitT"; to: 1
+                duration: stage.ms("windowsMove")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsMove")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Scale"
+                from: stage.popFrom("windowsIn"); to: 1
+                duration: stage.ms("windowsIn")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsIn")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Shift"
+                from: stage.slideFrom("windowsIn"); to: 0
+                duration: stage.ms("windowsIn")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsIn")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Alpha"
+                from: 0; to: 1
+                duration: stage.ms("fadeIn")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("fadeIn")
+            }
+        }
+
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation {
+                target: stage; property: "splitT"; to: 0
+                duration: stage.ms("windowsMove")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsMove")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Scale"
+                from: 1; to: stage.popFrom("windowsOut")
+                duration: stage.ms("windowsOut")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsOut")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Shift"
+                from: 0; to: stage.slideFrom("windowsOut")
+                duration: stage.ms("windowsOut")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("windowsOut")
+            }
+            NumberAnimation {
+                target: stage; property: "w2Alpha"
+                from: 1; to: 0
+                duration: stage.ms("fadeOut")
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: stage.curve("fadeOut")
+            }
+        }
+
+        Item {
+            id: shapes
+            anchors.fill: parent
+            visible: false
+            Repeater {
+                model: [w0, w1, w2]
+                WindowTwin {}
+            }
+        }
+
+        FastBlur {
+            id: backdropBlur
+            anchors.fill: parent
+            source: stage.wallpaper
+            radius: 64
+            cached: true
+            visible: false
+        }
+        OpacityMask {
+            anchors.fill: parent
+            visible: stage.blur
+            source: backdropBlur
+            maskSource: shapes
+        }
+
+        CastShadow {
+            window: w0
+            visible: stage.shadows
+            blurSize: stage.shadowRange * stage.lifeScale
+            offsetBy: Qt.vector2d(stage.shadowOffset[0] * stage.lifeScale, stage.shadowOffset[1] * stage.lifeScale)
+            shadowColor: stage.shownShadowColor
+        }
+        DemoWindow {
+            id: w0
+            host: stage
+            number: 1
+            x: stage.gapOut
+            y: stage.gapOut
+            width: stage.leftW
+            height: stage.areaH
+            focused: stage.focusIdx === 0
+        }
+        CastShadow {
+            window: w1
+            visible: stage.shadows
+            blurSize: stage.shadowRange * stage.lifeScale * (1 + 2.5 * stage.liftT)
+            offsetBy: Qt.vector2d(stage.shadowOffset[0] * stage.lifeScale,
+                                  stage.shadowOffset[1] * stage.lifeScale + 16 * stage.liftT)
+            shadowColor: Qt.rgba(stage.shownShadowColor.r, stage.shownShadowColor.g, stage.shownShadowColor.b,
+                                 Math.min(0.9, stage.shownShadowColor.a + 0.5 * stage.liftT))
+        }
+        DemoWindow {
+            id: w1
+            host: stage
+            number: 2
+            x: stage.rightX - stage.rightW * 0.3 * stage.liftT
+            y: stage.gapOut
+            width: stage.rightW
+            height: stage.areaH + (stage.halfH - stage.areaH) * stage.splitT
+            focused: stage.focusIdx === 1
+            scale: 1 - 0.2 * stage.liftT
+        }
+        CastShadow {
+            window: w2
+            visible: stage.shadows
+            blurSize: stage.shadowRange * stage.lifeScale
+            offsetBy: Qt.vector2d(stage.shadowOffset[0] * stage.lifeScale, stage.shadowOffset[1] * stage.lifeScale)
+            shadowColor: stage.shownShadowColor
+        }
+        DemoWindow {
+            id: w2
+            host: stage
+            number: 3
+            x: stage.rightX + stage.w2Shift
+            y: stage.gapOut + stage.halfH + stage.gapIn
+            width: stage.rightW
+            height: stage.halfH
+            scale: stage.w2Scale
+            opacity: stage.w2Alpha
+            visible: stage.w2Alpha > 0.001
+            focused: stage.focusIdx === 2
+        }
+    }
+
+    component CardWindows : Item {
+        id: cardWindows
+
+        readonly property string generalConf: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/general.lua`
+        readonly property string decorationsPy: `${FileUtils.trimFileProtocol(Directories.config)}/quickshell/ii/scripts/themes/decorations.py`
+        readonly property string flagDir: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
+        readonly property string animationsDir: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/hyprland/animations`
+
+        property bool decoReady: false
+        property bool animationsEnabled: true
+        property bool blurEnabled: true
+        property bool shadowsEnabled: true
+        property bool bordersEnabled: true
+        property bool roundCornersEnabled: true
+        property int roundingValue: 10
+        property int borderSizeValue: 4
+        property real activeOpacityValue: 1.0
+        property real inactiveOpacityValue: 1.0
+        property bool dimInactiveEnabled: true
+        property real dimStrengthValue: 0.05
+        property int gapsInValue: 4
+        property int gapsOutValue: 5
+        property int shadowRangeValue: 20
+        property string shadowColorValue: "rgba(00000020)"
+        property var shadowOffsetValue: [0, 2]
+        property string animationProfileValue: "expressive"
+        property int previousCornerStyle: Config.options.bar.cornerStyle
+        property var decoDefaults: ({})
+        property var motion: ({})
+
+        function defaultMark(key) {
+            const value = cardWindows.decoDefaults[key]
+            return value === undefined ? [] : [value]
+        }
+
+        function colorOf(rgba) {
+            const m = String(rgba).match(/^rgba\(([0-9a-fA-F]{8})\)$/);
+            if (!m) return Qt.rgba(0, 0, 0, 0.125);
+            const channel = i => parseInt(m[1].slice(i, i + 2), 16) / 255;
+            return Qt.rgba(channel(0), channel(2), channel(4), channel(6));
+        }
+
+        function setDecoration(pairs) {
+            Quickshell.execDetached(["python3", cardWindows.decorationsPy, "set", cardWindows.generalConf,
+                                     "--flag-dir", cardWindows.flagDir, ...pairs])
+        }
+
+        // A dragged slider would otherwise write on every frame.
+        property var pendingDecoration: ({})
+        function queueDecoration(key, value) {
+            if (!cardWindows.decoReady) return;
+            cardWindows.pendingDecoration[key] = value;
+            decoFlush.restart();
+        }
+        Timer {
+            id: decoFlush
+            interval: 200
+            onTriggered: {
+                const pairs = Object.keys(cardWindows.pendingDecoration).map(k => `${k}=${cardWindows.pendingDecoration[k]}`);
+                cardWindows.pendingDecoration = ({});
+                if (pairs.length > 0) cardWindows.setDecoration(pairs);
+            }
+        }
+
+        function applyDecoValues(values) {
+            if (values.animations !== undefined) cardWindows.animationsEnabled = values.animations
+            if (values.blur !== undefined) cardWindows.blurEnabled = values.blur
+            if (values.shadow !== undefined) cardWindows.shadowsEnabled = values.shadow
+            if (values.borderSize !== undefined) cardWindows.bordersEnabled = values.borderSize > 0
+            if (values.borderSize !== undefined && values.borderSize > 0) cardWindows.borderSizeValue = values.borderSize
+            if (values.rounding !== undefined) cardWindows.roundCornersEnabled = values.rounding > 0
+            if (values.rounding !== undefined && values.rounding > 0) cardWindows.roundingValue = values.rounding
+            if (values.activeOpacity !== undefined) cardWindows.activeOpacityValue = values.activeOpacity
+            if (values.inactiveOpacity !== undefined) cardWindows.inactiveOpacityValue = values.inactiveOpacity
+            if (values.dimInactive !== undefined) cardWindows.dimInactiveEnabled = values.dimInactive
+            if (values.dimStrength !== undefined) cardWindows.dimStrengthValue = values.dimStrength
+            if (values.gapsIn !== undefined) cardWindows.gapsInValue = values.gapsIn
+            if (values.gapsOut !== undefined) cardWindows.gapsOutValue = values.gapsOut
+            if (values.shadowRange !== undefined) cardWindows.shadowRangeValue = values.shadowRange
+            if (values.shadowColor !== undefined) cardWindows.shadowColorValue = values.shadowColor
+            if (values.shadowOffset !== undefined) cardWindows.shadowOffsetValue = values.shadowOffset
+            if (values.animationProfile !== undefined) cardWindows.animationProfileValue = values.animationProfile
+        }
+
+        Process {
+            id: decoDefaultsReader
+            command: ["python3", cardWindows.decorationsPy, "defaults", cardWindows.generalConf]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    try { cardWindows.decoDefaults = JSON.parse(text || "{}") }
+                    catch (e) { cardWindows.decoDefaults = ({}) }
+                }
+            }
+        }
+
+        Process {
+            id: decoReader
+            command: ["python3", cardWindows.decorationsPy, "read", cardWindows.generalConf,
+                      "--flag-dir", cardWindows.flagDir]
+            property string buf: ""
+            onRunningChanged: if (running) buf = ""
+            stdout: SplitParser { onRead: data => decoReader.buf += data }
+            onExited: {
+                let values = ({})
+                try { values = JSON.parse(decoReader.buf || "{}") } catch (e) { values = ({}) }
+                cardWindows.applyDecoValues(values)
+                cardWindows.decoReady = true
+            }
+        }
+
+        // The shipped profiles keep their translated names and their order,
+        // and anything else in the profile directory follows, named by its file.
+        readonly property var shippedAnimationProfiles: [
+            { displayName: Translation.tr("Expressive"), value: "expressive", icon: "animation" },
+            { displayName: Translation.tr("Snappy"), value: "snappy", icon: "bolt" },
+            { displayName: Translation.tr("Smooth"), value: "smooth", icon: "waves" },
+            { displayName: Translation.tr("Bouncy"), value: "bouncy", icon: "sports_basketball" },
+            { displayName: Translation.tr("Minimal"), value: "minimal", icon: "blur_on" },
+        ]
+        property var extraAnimationProfiles: []
+        readonly property var animationProfiles: shippedAnimationProfiles.concat(extraAnimationProfiles)
+
+        Process {
+            id: animationProfilesScan
+            command: ["bash", "-c", `ls '${cardWindows.animationsDir}'/*.lua 2>/dev/null`]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    const shipped = new Set(cardWindows.shippedAnimationProfiles.map(p => p.value));
+                    cardWindows.extraAnimationProfiles = text.split("\n")
+                        .map(line => line.trim().split("/").pop().replace(/\.lua$/, ""))
+                        .filter(name => /^[\w-]+$/.test(name) && !shipped.has(name))
+                        .sort()
+                        .map(name => ({
+                            displayName: name.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                            value: name,
+                            icon: "tune"
+                        }));
+                }
+            }
+        }
+
+        Component.onCompleted: {
+            decoDefaultsReader.running = true
+            decoReader.running = true
+            animationProfilesScan.running = true
+        }
+
+        // The picture moves to the profile's own file rather than to an
+        // imitation of it, so it plays the curves and timings the desktop
+        // plays, a hand-written profile included.
+        FileView {
+            id: profileFile
+            path: `${cardWindows.animationsDir}/${cardWindows.animationProfileValue}.lua`
+            onLoaded: cardWindows.motion = cardWindows.parseProfile(profileFile.text())
+            onLoadFailed: cardWindows.motion = cardWindows.parseProfile("")
+        }
+
+        function parseProfile(text) {
+            const curves = { linear: [0, 0, 1, 1], default: [0, 0.75, 0.15, 1] };
+            const curveRe = /hl\.curve\(\s*"([^"]+)"\s*,\s*\{[^}]*?points\s*=\s*\{\s*\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}\s*,\s*\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}/g;
+            let m;
+            while ((m = curveRe.exec(text)) !== null)
+                curves[m[1]] = [m[2], m[3], m[4], m[5]].map(Number);
+
+            const leaves = {};
+            const animRe = /hl\.animation\(\s*\{([\s\S]*?)\}\s*\)/g;
+            while ((m = animRe.exec(text)) !== null) {
+                const body = m[1];
+                const field = key => {
+                    const f = body.match(new RegExp(`\\b${key}\\s*=\\s*"?([^",\\n}]+)"?`));
+                    return f ? f[1].trim() : undefined;
+                };
+                const name = field("leaf");
+                if (name)
+                    leaves[name] = { enabled: field("enabled"), speed: field("speed"),
+                                     bezier: field("bezier"), style: field("style") };
+            }
+
+            // A leaf the profile leaves out takes its parent's settings, the
+            // way the compositor fills it in.
+            const parents = { windowsIn: "windows", windowsOut: "windows", windowsMove: "windows",
+                              fadeIn: "fade", fadeOut: "fade", windows: "global", fade: "global", border: "global" };
+            const resolve = name => {
+                let n = name;
+                while (n && !leaves[n]) n = parents[n];
+                const l = leaves[n] ?? {};
+                const style = String(l.style ?? "");
+                const pop = style.match(/popin\s*(\d+)%/);
+                return {
+                    enabled: l.enabled !== "false",
+                    speed: Number(l.speed) || 3,
+                    curve: curves[l.bezier] ?? curves.default,
+                    kind: style.startsWith("slide") ? "slide" : "popin",
+                    from: pop ? Number(pop[1]) / 100 : 0.8
+                };
+            };
+            const out = {};
+            for (const name of ["windowsIn", "windowsOut", "windowsMove", "fadeIn", "fadeOut", "border"])
+                out[name] = resolve(name);
+            return out;
+        }
+
+        readonly property string motionBlurb: {
+            if (!cardWindows.animationsEnabled)
+                return Translation.tr("Windows appear and leave without moving");
+            switch (cardWindows.animationProfileValue) {
+            case "expressive": return Translation.tr("Quick to arrive, gentle to settle");
+            case "snappy": return Translation.tr("Quick and decisive, nothing lingers");
+            case "smooth": return Translation.tr("Long, even glides that slide rather than pop");
+            case "bouncy": return Translation.tr("Lands a little past its mark and springs back");
+            case "minimal": return Translation.tr("Nothing moves, windows simply fade in");
+            }
+            return Translation.tr("A profile of your own, played from its file");
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 16
+
+            StyleSection {
+                title: Translation.tr("Preview")
+                symbol: "preview"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+
+                headerTrailing: [
+                    // Says what the picture is doing while it demonstrates a
+                    // switch rather than showing the desktop as it is.
+                    StyledText {
+                        text: windowStage.shadowPeek
+                            ? Translation.tr("Showing shadows under a floating window")
+                            : Translation.tr("Showing blur through a see-through window")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        opacity: (windowStage.showingBlur || windowStage.shadowPeek) ? 1 : 0
+                        visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                    },
+                    RippleButton {
+                        implicitWidth: 30
+                        implicitHeight: 30
+                        buttonRadius: Appearance.rounding.full
+                        colBackground: Appearance.colors.colSecondaryContainer
+                        colBackgroundHover: Appearance.colors.colSecondaryContainerHover
+                        onClicked: windowStage.replay(120)
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "replay"
+                            iconSize: 18
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
+                        StyledToolTip {
+                            text: Translation.tr("Play it again")
+                        }
+                    }
+                ]
+
+                WindowStage {
+                    id: windowStage
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    rounding: cardWindows.roundingValue
+                    roundCorners: cardWindows.roundCornersEnabled
+                    borderSize: cardWindows.borderSizeValue
+                    borders: cardWindows.bordersEnabled
+                    shadows: cardWindows.shadowsEnabled
+                    shadowRange: cardWindows.shadowRangeValue
+                    shadowColor: cardWindows.colorOf(cardWindows.shadowColorValue)
+                    shadowOffset: cardWindows.shadowOffsetValue
+                    titleBars: TitleBars.enabled
+                    blur: cardWindows.blurEnabled
+                    activeOpacity: cardWindows.activeOpacityValue
+                    inactiveOpacity: cardWindows.inactiveOpacityValue
+                    dimStrength: cardWindows.dimInactiveEnabled ? cardWindows.dimStrengthValue : 0
+                    gapsIn: cardWindows.gapsInValue
+                    gapsOut: cardWindows.gapsOutValue
+                    animations: cardWindows.animationsEnabled
+                    motion: cardWindows.motion
+                    live: cardWindows.visible && cardWindows.decoReady
+                }
+            }
+
+            // The sections share out whatever height the picture leaves, so
+            // the column ends where the picture does.
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                spacing: 0
+
+                StyleSection {
+                    title: Translation.tr("Window shape")
+                    symbol: "rounded_corner"
+                    Layout.fillHeight: false
+
+                    ConfigSlider {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Corner roundness")
+                        stopIndicatorValues: cardWindows.defaultMark("rounding")
+                        buttonIcon: "rounded_corner"
+                        usePercentTooltip: false
+                        enabled: cardWindows.roundCornersEnabled
+                        opacity: cardWindows.roundCornersEnabled ? 1 : 0.5
+                        from: 1
+                        to: 24
+                        value: cardWindows.roundingValue
+                        onMoved: {
+                            const stepped = Math.round(value);
+                            if (stepped === cardWindows.roundingValue) return;
+                            cardWindows.roundingValue = stepped;
+                            cardWindows.queueDecoration("rounding", stepped);
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Window transparency")
+                    symbol: "opacity"
+                    Layout.fillHeight: false
+
+                    ConfigSlider {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Unfocused windows")
+                        stopIndicatorValues: cardWindows.defaultMark("inactiveOpacity")
+                        buttonIcon: "filter_none"
+                        from: 0.7
+                        to: 1.0
+                        value: cardWindows.inactiveOpacityValue
+                        onMoved: {
+                            if (Math.abs(value - cardWindows.inactiveOpacityValue) < 0.005) return;
+                            cardWindows.inactiveOpacityValue = value;
+                            cardWindows.queueDecoration("inactiveOpacity", value.toFixed(2));
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Window animations")
+                    symbol: "auto_awesome_motion"
+                    Layout.fillHeight: false
+
+                    headerTrailing: StyledComboBox {
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 190
+                        enabled: cardWindows.animationsEnabled
+                        opacity: cardWindows.animationsEnabled ? 1 : 0.5
+                        textRole: "displayName"
+                        model: cardWindows.animationProfiles
+                        currentIndex: cardWindows.animationProfiles.findIndex(p => p.value === cardWindows.animationProfileValue)
+                        onActivated: index => {
+                            const chosen = cardWindows.animationProfiles[index].value;
+                            if (chosen === cardWindows.animationProfileValue) return;
+                            cardWindows.animationProfileValue = chosen;
+                            cardWindows.setDecoration([`animationProfile=${chosen}`]);
+                        }
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 26
+                        elide: Text.ElideRight
+                        text: cardWindows.motionBlurb
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
+                    title: Translation.tr("Window decorations")
+                    symbol: "auto_awesome"
+                    Layout.fillHeight: false
+
+                    ConfigRow {
+                        Layout.fillWidth: true
+                        uniform: true
+                        ConfigSwitch {
+                            buttonIcon: "animation"
+                            text: Translation.tr("Animations")
+                            checked: cardWindows.animationsEnabled
+                            animateChanges: cardWindows.decoReady
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                cardWindows.animationsEnabled = checked;
+                                cardWindows.setDecoration(["animations=" + checked]);
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Window open/close and workspace transition effects")
+                            }
+                        }
+                        ConfigSwitch {
+                            buttonIcon: "blur_on"
+                            text: Translation.tr("Blur")
+                            checked: cardWindows.blurEnabled
+                            animateChanges: cardWindows.decoReady
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                cardWindows.blurEnabled = checked;
+                                cardWindows.setDecoration(["blur=" + checked]);
+                                windowStage.peekBlur();
+                            }
+                            onHoveredChanged: windowStage.blurHover = hovered
+                            StyledToolTip {
+                                text: Translation.tr("Background blur behind transparent windows and layers")
+                            }
+                        }
+                    }
+                    ConfigRow {
+                        Layout.fillWidth: true
+                        uniform: true
+                        ConfigSwitch {
+                            buttonIcon: "ev_shadow"
+                            text: Translation.tr("Shadows")
+                            checked: cardWindows.shadowsEnabled
+                            animateChanges: cardWindows.decoReady
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                cardWindows.shadowsEnabled = checked;
+                                cardWindows.setDecoration(["shadow=" + checked]);
+                                windowStage.peekShadow();
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Drop shadows underneath windows")
+                            }
+                        }
+                        ConfigSwitch {
+                            buttonIcon: "border_style"
+                            text: Translation.tr("Borders")
+                            checked: cardWindows.bordersEnabled
+                            animateChanges: cardWindows.decoReady
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                cardWindows.bordersEnabled = checked;
+                                cardWindows.setDecoration([`borderSize=${checked ? cardWindows.borderSizeValue : 0}`,
+                                                           `resizeOnBorder=${checked}`]);
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Colored borders around active and inactive windows")
+                            }
+                        }
+                    }
+                    ConfigRow {
+                        Layout.fillWidth: true
+                        uniform: true
+                        ConfigSwitch {
+                            buttonIcon: "rounded_corner"
+                            text: Translation.tr("Rounded Corners")
+                            checked: cardWindows.roundCornersEnabled
+                            animateChanges: cardWindows.decoReady
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                cardWindows.roundCornersEnabled = checked;
+                                cardWindows.setDecoration([`rounding=${checked ? cardWindows.roundingValue : 0}`]);
+                                // The bar's own corners follow the window rounding.
+                                if (!checked) {
+                                    cardWindows.previousCornerStyle = Config.options.bar.cornerStyle;
+                                    Config.options.bar.cornerStyle = 2;
+                                } else {
+                                    Config.options.bar.cornerStyle = cardWindows.previousCornerStyle;
+                                }
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Rounded corners on windows and the bar")
+                            }
+                        }
+                        ConfigSwitch {
+                            buttonIcon: "title"
+                            text: Translation.tr("Title Bars")
+                            checked: TitleBars.enabled
+                            animateChanges: TitleBars.enabledLoaded
+                            onCheckedChanged: {
+                                if (!cardWindows.decoReady) return;
+                                TitleBars.setEnabled(checked);
+                            }
+                            StyledToolTip {
+                                text: Translation.tr("Show title bars on windows")
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
