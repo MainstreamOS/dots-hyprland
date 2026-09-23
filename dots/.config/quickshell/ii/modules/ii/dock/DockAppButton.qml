@@ -31,9 +31,13 @@ DockButton {
     // the marks on by not having been excluded.
     readonly property bool showsMarks: !isFolder
         && (Config.options.dock.indicatorStyle === "dashes"
-            || Config.options.dock.indicatorStyle === "dots")
+            || Config.options.dock.indicatorStyle === "dots"
+            || Config.options.dock.indicatorStyle === "dashes-badge"
+            || Config.options.dock.indicatorStyle === "dots-badge")
     readonly property bool showsBadge: !isFolder
-        && Config.options.dock.indicatorStyle === "badge"
+        && (Config.options.dock.indicatorStyle === "badge"
+            || Config.options.dock.indicatorStyle === "dashes-badge"
+            || Config.options.dock.indicatorStyle === "dots-badge")
         && windowCount >= 2
 
     // appToplevel.appId is already the canonical resolved id (e.g.
@@ -521,7 +525,8 @@ DockButton {
                         // Dashes stretch along the dock while few and tighten
                         // to dots past three; the dots style stays a dot at
                         // any count.
-                        readonly property bool asDash: Config.options.dock.indicatorStyle !== "dots"
+                        readonly property bool asDash: (Config.options.dock.indicatorStyle === "dashes"
+                                || Config.options.dock.indicatorStyle === "dashes-badge")
                             && root.windowCount <= 3
                         radius: Appearance.rounding.full
                         implicitWidth: dockRoot.dockVertical ? root.countDotHeight

@@ -127,7 +127,9 @@ ContentPage {
                     { displayName: Translation.tr("None"), icon: "block", value: "none" },
                     { displayName: Translation.tr("Dashes"), icon: "remove", value: "dashes" },
                     { displayName: Translation.tr("Dots"), icon: "more_horiz", value: "dots" },
-                    { displayName: Translation.tr("Count badge"), icon: "counter_2", value: "badge" }
+                    { displayName: Translation.tr("Count badge"), icon: "counter_2", value: "badge" },
+                    { displayName: Translation.tr("Dashes and badges"), icon: "line_end_circle", value: "dashes-badge" },
+                    { displayName: Translation.tr("Dots and badges"), icon: "pending", value: "dots-badge" }
                 ]
                 currentIndex: {
                     const idx = model.findIndex(item => item.value === Config.options.dock.indicatorStyle);
@@ -490,7 +492,7 @@ ContentPage {
         }
 
         ColorField {
-            visible: Config.options.dock.indicatorStyle === "badge"
+            visible: ["badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
             text: Translation.tr("Badge text")
             allowEmpty: true
             buttonIcon: "format_color_text"
@@ -503,7 +505,7 @@ ContentPage {
         }
 
         ColorField {
-            visible: Config.options.dock.indicatorStyle === "badge"
+            visible: ["badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
             text: Translation.tr("Badge background")
             allowEmpty: true
             buttonIcon: "counter_2"
