@@ -131,7 +131,8 @@ mac_wl_packages() {
 # a kernel that is not running.
 mac_kernel_is_stock() {
     command -v pacman >/dev/null 2>&1 || return 0
-    [ -n "$(pacman -Qq linux 2>/dev/null)" ]
+    # By name: linux-t2 provides linux, and pacman -Q answers with a provider.
+    [ "$(pacman -Qq linux 2>/dev/null)" = linux ]
 }
 
 # Whether the kernel this system runs drives the T2. The MacBook edition ships
