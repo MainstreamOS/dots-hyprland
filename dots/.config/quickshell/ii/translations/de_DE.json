@@ -2312,5 +2312,6 @@
   "Play": "Play",
   "Work": "Work",
   "Sound when done": "Sound when done",
-  "Play a sound when the update finishes, so you can step away while it runs": "Play a sound when the update finishes, so you can step away while it runs"
+  "Play a sound when the update finishes, so you can step away while it runs": "Play a sound when the update finishes, so you can step away while it runs",
+  "Current workspace": "Current workspace"
 }

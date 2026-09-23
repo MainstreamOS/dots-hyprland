@@ -282,15 +282,29 @@ Item {
                                         id: wsButton
                                         required property int index
                                         readonly property int workspaceValue: moveToWorkspaceBlock.workspaceBase + index + 1
+                                        // The workspace on screen stands out, so bringing the
+                                        // app over to where you are is one obvious click.
+                                        readonly property bool isCurrent: wsButton.workspaceValue === moveToWorkspaceBlock.activeWorkspaceId
                                         implicitWidth: 28
                                         implicitHeight: 28
                                         buttonRadius: Appearance.rounding.small
+                                        colBackground: wsButton.isCurrent ? Appearance.colors.colSecondaryContainer
+                                            : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+                                        colBackgroundHover: wsButton.isCurrent ? Appearance.colors.colSecondaryContainerHover
+                                            : Appearance.colors.colLayer1Hover
+                                        colRipple: wsButton.isCurrent ? Appearance.colors.colSecondaryContainerActive
+                                            : Appearance.colors.colLayer1Active
                                         contentItem: StyledText {
                                             anchors.centerIn: parent
                                             text: String(wsButton.workspaceValue)
                                             font.pixelSize: Appearance.font.pixelSize.small
+                                            font.variableAxes: wsButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
                                             horizontalAlignment: Text.AlignHCenter
-                                            color: Appearance.m3colors.m3onSurface
+                                            color: wsButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
+                                        }
+                                        StyledToolTip {
+                                            extraVisibleCondition: wsButton.isCurrent
+                                            text: Translation.tr("Current workspace")
                                         }
                                         onClicked: {
                                             // 0.55 Lua dispatch; follow = false keeps "silent" semantics.
