@@ -89,6 +89,12 @@ Singleton {
                 property bool inhibit: false
             }
 
+            // Names given to workspaces from the bar, keyed by workspace id.
+            // A workspace with no entry shows its window titles as usual.
+            property JsonObject workspaces: JsonObject {
+                property var names: ({})
+            }
+
             property JsonObject overlay: JsonObject {
                 property list<string> open: ["crosshair", "recorder", "volumeMixer", "resources"]
                 property JsonObject crosshair: JsonObject {
