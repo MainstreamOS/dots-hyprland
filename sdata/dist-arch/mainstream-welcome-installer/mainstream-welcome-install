@@ -131,11 +131,23 @@ wait_for_pacman_lock() {
 }
 
 pac() {
+  # The ISO leaves a package out of its bundled repo when the live image
+  # already has it installed, so until the online repo takes over, no repo lists
+  # it and pacman -S would call it not found. Installed is all --needed asks.
+  local t targets=()
+  for t in "$@"; do
+    if [[ "$(pacman -Qq "$t" 2>/dev/null)" == "$t" ]] && ! pacman -Sp "$t" </dev/null >/dev/null 2>&1; then
+      log "$t is installed and no repo lists it yet; leaving it as it is"
+      continue
+    fi
+    targets+=("$t")
+  done
+  (( ${#targets[@]} > 0 )) || return 0
   # Wait on [mainstream] only for targets it has to provide; the rest resolve now.
-  pacman -Sp "$@" >/dev/null 2>&1 || wait_for_repo
+  pacman -Sp "${targets[@]}" >/dev/null 2>&1 || wait_for_repo
   wait_for_pacman_lock || { log "could not get the pacman lock"; return 1; }
-  log "run: pacman -S --needed --noconfirm $*"
-  pacman -S --needed --noconfirm "$@"
+  log "run: pacman -S --needed --noconfirm ${targets[*]}"
+  pacman -S --needed --noconfirm "${targets[@]}"
 }
 
 flat() {  # flathub ref
