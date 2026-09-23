@@ -28,6 +28,67 @@ ContentPage {
     property real scrollOverviewWorkspaceScale: 0.5  // 0.0–1.0 — overview shrink factor
     property string scrollOverviewLayout: "vertical" // "vertical" | "horizontal" — overview scroll axis
 
+    // Settings one monitor keeps apart from the ones above, saved one line per
+    // monitor in hypr/custom/scrolloverview.monitors ("DP-1 layout=vertical
+    // scale=0.40"), which plugins.lua hands to the plugin on every reload. A
+    // monitor with no line, or a value missing from its line, follows the rest.
+    readonly property string scrollOverviewMonitorsFile: `${root.customDir}/scrolloverview.monitors`
+    property var scrollOverviewMonitors: ({})
+    // The connected monitors, plus any unplugged one that still has settings
+    // saved, so those can be seen and cleared.
+    readonly property var scrollOverviewMonitorNames: {
+        const names = Quickshell.screens.map(s => s.name);
+        for (const name in root.scrollOverviewMonitors)
+            if (!names.includes(name)) names.push(name);
+        return names;
+    }
+
+    function parseScrollOverviewMonitors(text) {
+        const all = {};
+        for (const line of text.split("\n")) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length < 2 || !/^[A-Za-z0-9._-]+$/.test(parts[0])) continue;
+            const entry = {};
+            for (const part of parts.slice(1)) {
+                const m = part.match(/^([a-z_]+)=(.+)$/);
+                if (!m) continue;
+                if (m[1] === "layout" && (m[2] === "vertical" || m[2] === "horizontal")) entry.layout = m[2];
+                else if (m[1] === "workspace_gap" && /^\d+$/.test(m[2])) entry.workspace_gap = parseInt(m[2]);
+                else if (m[1] === "scale" && /^\d+(?:\.\d+)?$/.test(m[2])) entry.scale = parseFloat(m[2]);
+            }
+            if (Object.keys(entry).length > 0) all[parts[0]] = entry;
+        }
+        return all;
+    }
+
+    // The plugin forgets its per-monitor settings on every reload and takes them
+    // again from plugins.lua, so a reload is what applies the file.
+    function writeScrollOverviewMonitors(all) {
+        root.scrollOverviewMonitors = all;
+        const text = Object.keys(all).sort().map(name => [name].concat(Object.keys(all[name]).sort()
+            .map(key => `${key}=${key === "scale" ? Number(all[name][key]).toFixed(2) : all[name][key]}`)).join(" ")).join("\n");
+        Quickshell.execDetached(["bash", "-c", 'printf "%s" "$1" > "$0" && hyprctl reload',
+            root.scrollOverviewMonitorsFile, text.length > 0 ? text + "\n" : ""]);
+    }
+
+    // A null value drops that one setting, so the monitor follows the rest again.
+    function setScrollOverviewMonitorKey(output, key, value) {
+        if (!/^[A-Za-z0-9._-]+$/.test(output)) return;
+        const all = JSON.parse(JSON.stringify(root.scrollOverviewMonitors));
+        const entry = all[output] ?? {};
+        if (value === null) delete entry[key];
+        else entry[key] = value;
+        if (Object.keys(entry).length > 0) all[output] = entry;
+        else delete all[output];
+        root.writeScrollOverviewMonitors(all);
+    }
+
+    function clearScrollOverviewMonitor(output) {
+        const all = JSON.parse(JSON.stringify(root.scrollOverviewMonitors));
+        delete all[output];
+        root.writeScrollOverviewMonitors(all);
+    }
+
     function runPy(py, args) {
         Quickshell.execDetached(["python3", "-c", py, ...args])
     }
@@ -82,6 +143,7 @@ ContentPage {
         lockTimeoutReader.running = true
         scrollOverviewConfReader.running = true
         scrollOverviewStateReader.running = true
+        scrollOverviewMonitorsReader.running = true
     }
 
     // When a theme apply finishes, the shared state file flips back to "idle"
@@ -95,7 +157,18 @@ ContentPage {
             scrollOverviewConfReader.running = true
             scrollOverviewStateReader.running = false
             scrollOverviewStateReader.running = true
+            scrollOverviewMonitorsReader.running = false
+            scrollOverviewMonitorsReader.running = true
         }
+    }
+
+    Process {
+        id: scrollOverviewMonitorsReader
+        command: ["cat", root.scrollOverviewMonitorsFile]
+        property string buf: ""
+        onRunningChanged: if (running) buf = ""
+        stdout: SplitParser { onRead: data => scrollOverviewMonitorsReader.buf += data + "\n" }
+        onExited: root.scrollOverviewMonitors = root.parseScrollOverviewMonitors(scrollOverviewMonitorsReader.buf)
     }
 
     Process {
@@ -380,6 +453,120 @@ ContentPage {
         }
 
         } // end of Scrolling Overview ContentSubsection
+
+        // A monitor can keep its own layout, gap and scale. Only offered with
+        // more than one monitor, or while an unplugged one still has settings.
+        ContentSubsection {
+            visible: Config.options.bar.hotCorners.trigger === "scrolloverview" && root.scrollOverviewEnabled
+                && root.scrollOverviewMonitorNames.length > 1
+            title: Translation.tr("Each monitor")
+
+            Repeater {
+                model: root.scrollOverviewMonitorNames
+                delegate: ColumnLayout {
+                    id: monitorBlock
+                    required property string modelData
+                    readonly property var entry: root.scrollOverviewMonitors[modelData] ?? ({})
+                    readonly property var screen: Quickshell.screens.find(s => s.name === modelData) ?? null
+                    readonly property int effectiveGap: entry.workspace_gap ?? root.scrollOverviewWorkspaceGap
+                    // The plugin keeps a monitor's scale between 10% and 90%, and
+                    // turns down a monitor's settings outright past that.
+                    readonly property int effectiveScalePercent: Math.max(10, Math.min(90,
+                        Math.round((entry.scale ?? root.scrollOverviewWorkspaceScale) * 100)))
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 8
+                        Layout.rightMargin: 8
+                        Layout.topMargin: 6
+                        spacing: 8
+                        OptionalMaterialSymbol {
+                            icon: "monitor"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        StyledText {
+                            Layout.alignment: Qt.AlignVCenter
+                            text: monitorBlock.modelData
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            elide: Text.ElideRight
+                            text: monitorBlock.screen ? (monitorBlock.screen.model ?? "") : Translation.tr("Not connected")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                        }
+                        DialogButton {
+                            visible: Object.keys(monitorBlock.entry).length > 0
+                            buttonText: Translation.tr("Match the others")
+                            onClicked: root.clearScrollOverviewMonitor(monitorBlock.modelData)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 8
+                        Layout.rightMargin: 8
+                        OptionalMaterialSymbol {
+                            icon: "splitscreen"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.leftMargin: 6
+                            text: Translation.tr("Layout")
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
+                        ConfigSelectionArray {
+                            Layout.fillWidth: false
+                            Layout.alignment: Qt.AlignVCenter
+                            currentValue: monitorBlock.entry.layout ?? ""
+                            onSelected: newValue => root.setScrollOverviewMonitorKey(monitorBlock.modelData, "layout", newValue === "" ? null : newValue)
+                            options: [
+                                { displayName: Translation.tr("Same as above"), icon: "link",      value: "" },
+                                { displayName: Translation.tr("Vertical"),      icon: "view_day",  value: "vertical" },
+                                { displayName: Translation.tr("Horizontal"),    icon: "view_week", value: "horizontal" },
+                            ]
+                        }
+                    }
+
+                    ConfigRow {
+                        uniform: true
+                        ConfigSpinBox {
+                            Layout.fillWidth: true
+                            icon: "space_bar"
+                            text: Translation.tr("Workspace gap")
+                            value: monitorBlock.effectiveGap
+                            from: 0
+                            to: 500
+                            stepSize: 10
+                            onValueChanged: {
+                                if (value === monitorBlock.effectiveGap) return;
+                                root.setScrollOverviewMonitorKey(monitorBlock.modelData, "workspace_gap", value);
+                            }
+                        }
+                        ConfigSpinBox {
+                            Layout.fillWidth: true
+                            icon: "aspect_ratio"
+                            text: Translation.tr("Workspace scale")
+                            suffix: "%"
+                            value: monitorBlock.effectiveScalePercent
+                            from: 10
+                            to: 90
+                            stepSize: 5
+                            onValueChanged: {
+                                if (value === monitorBlock.effectiveScalePercent) return;
+                                root.setScrollOverviewMonitorKey(monitorBlock.modelData, "scale", value / 100);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     ContentSection {

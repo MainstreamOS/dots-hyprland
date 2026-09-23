@@ -220,6 +220,37 @@ local function overviewLayout()
     return nil
 end
 
+-- Settings a monitor keeps apart from the rest, one line each in
+-- custom/scrolloverview.monitors ("DP-1 layout=vertical scale=0.40"). The plugin
+-- forgets them on every reload, so they are handed over again each time. Only a
+-- plugin with per-monitor settings has configure(), and a bad line is skipped
+-- rather than stopping the others.
+local function applyOverviewMonitors()
+    local api = hl.plugin and hl.plugin.scrolloverview
+    if not (api and api.configure) then return end
+    local f = io.open(HOME .. "/.config/hypr/custom/scrolloverview.monitors", "r")
+    if not f then return end
+    for line in f:lines() do
+        local output, rest = line:match("^%s*([%w%._%-]+)%s+(.-)%s*$")
+        if output then
+            local cfg = { output = output }
+            local any = false
+            for key, value in rest:gmatch("([%a_]+)=(%S+)") do
+                local n = tonumber(value)
+                if key == "layout" and (value == "vertical" or value == "horizontal") then
+                    cfg.layout = value; any = true
+                elseif key == "workspace_gap" and n and n >= 0 and n <= 500 then
+                    cfg.workspace_gap = math.floor(n); any = true
+                elseif key == "scale" and n and n >= 0.1 and n <= 0.9 then
+                    cfg.scale = n; any = true
+                end
+            end
+            if any then pcall(api.configure, cfg) end
+        end
+    end
+    f:close()
+end
+
 local function applyPluginConfig()
     -- scrolloverview block — probe one key first. During a hyprbars toggle
     -- the file watcher + handlePluginLoads chain transiently re-parses
@@ -252,6 +283,7 @@ local function applyPluginConfig()
                 scrolloverview = overviewCfg,
             },
         })
+        applyOverviewMonitors()
     end
 
     -- hyprbars config + buttons — also probed before apply.

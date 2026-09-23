@@ -2315,5 +2315,8 @@
   "Play a sound when the update finishes, so you can step away while it runs": "Play a sound when the update finishes, so you can step away while it runs",
   "Current workspace": "Current workspace",
   "Show buttons only on hover": "Show buttons only on hover",
-  "The window buttons appear when the pointer is over the title bar": "The window buttons appear when the pointer is over the title bar"
+  "The window buttons appear when the pointer is over the title bar": "The window buttons appear when the pointer is over the title bar",
+  "Each monitor": "Each monitor",
+  "Match the others": "Match the others",
+  "Same as above": "Same as above"
 }
