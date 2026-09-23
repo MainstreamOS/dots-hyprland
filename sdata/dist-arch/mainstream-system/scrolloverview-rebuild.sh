@@ -393,6 +393,8 @@ if [[ -z "$SUCCESS_REF" ]]; then
 fi
 
 BUILT_SO="$SRC_DIR/scrolloverview.so"
+# The Makefile builds with -g; Hyprland never reads the debug info.
+strip --strip-debug "$BUILT_SO" 2>/dev/null || true
 
 # Persist the working ref for next time. Resolve to a full SHA so it's
 # reproducible even if the original ref was a moving branch like main.
