@@ -11,7 +11,7 @@ replaces=('illogical-impulse-quickshell-git')
 _pkgname=quickshell
 pkgname="$_prefix-$_pkgname-git"
 pkgver=0.3.1.r1
-pkgrel=1
+pkgrel=2
 pkgdesc="$_pkgname-git pinned commit and extra deps for $_prefix"
 arch=(x86_64 aarch64)
 url='https://git.outfoxxed.me/quickshell/quickshell'
@@ -83,4 +83,10 @@ package() {
   cd "$_pkgname"
   DESTDIR="$pkgdir" cmake --install build
   install -Dm644 "LICENSE" -t "$pkgdir/usr/share/licenses/$_pkgname"
+  local _qtver _qtminor _qtnext
+  _qtver=$(pacman -Q qt6-base | awk '{print $2}')
+  _qtminor=${_qtver%%-*}
+  _qtminor=${_qtminor%.*}
+  _qtnext="${_qtminor%%.*}.$(( ${_qtminor#*.} + 1 ))"
+  depends+=("qt6-base>=${_qtminor}" "qt6-base<${_qtnext}")
 }
