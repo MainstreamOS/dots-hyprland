@@ -620,6 +620,20 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 TitleBars.setButtons(defaultButtonSize, "", "");
         }
 
+        ConfigSwitch {
+            buttonIcon: "ads_click"
+            text: Translation.tr("Show buttons only on hover")
+            checked: TitleBars.buttonsOnHover
+            animateChanges: TitleBars.appearanceLoaded
+            onCheckedChanged: {
+                if (!TitleBars.appearanceLoaded) return;
+                TitleBars.setButtonsOnHover(checked);
+            }
+            StyledToolTip {
+                text: Translation.tr("The window buttons appear when the pointer is over the title bar")
+            }
+        }
+
         ColorField {
             text: Translation.tr("Color")
             buttonIcon: "format_color_fill"

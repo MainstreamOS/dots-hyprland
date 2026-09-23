@@ -274,6 +274,11 @@ local function applyPluginConfig()
         if barColor then
             hyprbarsCfg.bar_color = barColor
         end
+        -- Only a plugin built with buttons_on_hover knows the key, so an older
+        -- build is not handed a setting it would report as unknown.
+        if keyAvailable("plugin:hyprbars:buttons_on_hover") then
+            hyprbarsCfg.buttons_on_hover = readCustomValue("titlebars.buttonsOnHover") == "1"
+        end
         hl.config({
             plugin = {
                 hyprbars = hyprbarsCfg,

@@ -110,6 +110,19 @@ Singleton {
             root.buttonIconColorPath, String(newIconColor)])
     }
 
+    // The buttons can stay hidden until the pointer is over the bar, saved
+    // beside the other title bar values and applied on the same reload.
+    readonly property string buttonsOnHoverPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonsOnHover`
+    property bool buttonsOnHover: false
+
+    function setButtonsOnHover(value) {
+        if (value === root.buttonsOnHover) return
+        root.buttonsOnHover = value
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && hyprctl reload',
+            root.buttonsOnHoverPath, value ? "1" : "0"])
+    }
+
     // Written together, because they compose into one value the plugin reads:
     // hyprbars takes a single bar_color carrying its own alpha, so a colour
     // saved without its opacity would land at whatever the other file last
@@ -142,9 +155,11 @@ Singleton {
             '{ cat "$2" 2>/dev/null || printf 0.5333; }; printf "\\n"; ' +
             '{ cat "$3" 2>/dev/null || printf ' + root.defaultButtonSize + '; }; printf "\\n"; ' +
             '{ cat "$4" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$5" 2>/dev/null; }; printf "\\n"',
+            '{ cat "$5" 2>/dev/null; }; printf "\\n"; ' +
+            '{ cat "$6" 2>/dev/null || printf 0; }; printf "\\n"',
             root.flagPath, root.colorPath, root.opacityPath,
-            root.buttonSizePath, root.buttonBackgroundPath, root.buttonIconColorPath]
+            root.buttonSizePath, root.buttonBackgroundPath, root.buttonIconColorPath,
+            root.buttonsOnHoverPath]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
@@ -160,6 +175,7 @@ Singleton {
             root.buttonSize = isNaN(bs) ? root.defaultButtonSize : Math.max(6, Math.min(root.maxButtonSize, bs))
             root.buttonBackground = (lines[4] ?? "").trim()
             root.buttonIconColor = (lines[5] ?? "").trim()
+            root.buttonsOnHover = (lines[6] ?? "").trim() === "1"
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true
