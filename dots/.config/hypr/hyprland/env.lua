@@ -2,6 +2,11 @@ local home_dir = os.getenv("HOME")
 
 -- Wayland
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
+-- GTK 4.24 hangs a background-effect object on every window but only fills in
+-- a blur region when the app asks for backdrop blur itself, and Hyprland reads
+-- an empty region as "never blur this window". Without the protocol, GTK 4
+-- windows are blurred by the same rules as every other window.
+hl.env("GDK_WAYLAND_DISABLE", "ext_background_effect_manager_v1")
 
 -- Applications
 -- Deduplicate, keeping the first occurrence. This file runs again on every
