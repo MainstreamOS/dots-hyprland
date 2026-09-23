@@ -915,21 +915,8 @@ ContentPage {
                     }
                 }
             }
-            // AUR switch lives last, and only when a helper is installed —
-            // Mainstream ships none, so for most users this control would
-            // toggle a step that can't run.
             ConfigRow {
                 uniform: true
-                ConfigSwitch {
-                    visible: root.aurHelperPresent
-                    buttonIcon: "block"
-                    text: Translation.tr("Disable AUR (yay/paru)")
-                    checked: root.flagSkipAur
-                    onCheckedChanged: root.flagSkipAur = checked
-                    StyledToolTip {
-                        text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
-                    }
-                }
                 ConfigSwitch {
                     buttonIcon: "science"
                     text: Translation.tr("Edge updates")
@@ -937,6 +924,31 @@ ContentPage {
                     onCheckedChanged: root.flagEdge = checked
                     StyledToolTip {
                         text: Translation.tr("Follow the newest pushed work instead of the newest release. Fixes reach you before they are released, and so does anything still being worked on. Turning it off puts you back on the latest release.")
+                    }
+                }
+                ConfigSwitch {
+                    buttonIcon: "notifications_active"
+                    text: Translation.tr("Sound when done")
+                    checked: Config.options.sounds.update
+                    onCheckedChanged: Config.options.sounds.update = checked
+                    StyledToolTip {
+                        text: Translation.tr("Play a sound when the update finishes, so you can step away while it runs")
+                    }
+                }
+            }
+            // AUR switch lives last, and only when a helper is installed —
+            // Mainstream ships none, so for most users this control would
+            // toggle a step that can't run.
+            ConfigRow {
+                uniform: true
+                visible: root.aurHelperPresent
+                ConfigSwitch {
+                    buttonIcon: "block"
+                    text: Translation.tr("Disable AUR (yay/paru)")
+                    checked: root.flagSkipAur
+                    onCheckedChanged: root.flagSkipAur = checked
+                    StyledToolTip {
+                        text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
                     }
                 }
             }

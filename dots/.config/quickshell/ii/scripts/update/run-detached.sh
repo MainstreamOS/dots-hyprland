@@ -23,6 +23,7 @@ set -u
 
 dir="$1"; shift
 [[ $# -gt 0 ]] || { echo "run-detached: no command given" >&2; exit 2; }
+sound="$(dirname "$(readlink -f "$0")")/finished-sound.sh"
 mkdir -p "$dir" || exit 2
 log="$dir/update.log"; exitf="$dir/update.exit"; pidf="$dir/update.pid"
 rm -f "$exitf" "$pidf" "$dir/update.seen"
@@ -36,7 +37,7 @@ IFS= read -r pw || { echo "run-detached: no password on stdin" >&2; exit 2; }
 # pipe carrying the password and a TERM aimed at it is not deferred by a
 # waiting shell. The Stop button signals the child of the recorded pid.
 printf '%s\n' "$pw" | setsid -f bash -c '
-    log="$1"; exitf="$2"; pidf="$3"; shift 3
+    log="$1"; exitf="$2"; pidf="$3"; sound="$4"; shift 4
     # The tick this session started at goes in beside the pid, so the page can
     # tell the run from whatever later inherits its number.
     echo "$$ $(sed "s/^[^)]*) //" /proc/$$/stat | awk "{print \$20}")" > "$pidf"
@@ -45,6 +46,8 @@ printf '%s\n' "$pw" | setsid -f bash -c '
     printf "\n@@MAINSTREAM-UPDATE-EXIT %s\n" "$rc" >> "$log"
     echo "$rc" > "$exitf"
     rm -f "$pidf"
-' bash "$log" "$exitf" "$pidf" "$@"
+    # Once the result is on disk, so the page never waits on the sound.
+    [[ -x "$sound" ]] && "$sound" "$rc"
+' bash "$log" "$exitf" "$pidf" "$sound" "$@"
 unset pw
 exit 0

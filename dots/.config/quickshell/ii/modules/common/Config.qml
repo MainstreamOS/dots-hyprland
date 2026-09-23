@@ -1385,6 +1385,7 @@ Singleton {
                 property bool battery: true
                 property bool pomodoro: true
                 property bool timer: true
+                property bool update: false
                 property string theme: "freedesktop"
             }
 
