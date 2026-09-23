@@ -56,7 +56,7 @@ ApplicationWindow {
         case 0: return Translation.tr("Welcome! Let's start with the basics");
         case 1: return Translation.tr("Pick your desktop's style");
         case 2: return Translation.tr("Pick how your windows look");
-        case root.installCardIndex: return Translation.tr("Set up your apps");
+        case root.installCardIndex: return Translation.tr("Get set up for what you do");
         case root.cardCount - 1: return Translation.tr("One last thing");
         }
         // The tour pages carry their own headline in the card, so the window
@@ -614,294 +614,347 @@ ApplicationWindow {
         Config.options.dock.backgroundColorLight = "";
     }
 
-    // ---- Install page (card 2) ----
-    // A selectable, checkbox-style option card, styled like the Calamares
-    // installmethod cards; toggles an entry in root.installSelections.
-    component InstallOption : Rectangle {
-        id: optRoot
-        property string optKey
-        property string optTitle
-        property string optDesc
-        // An icon theme name, or a file path for an app the theme has no icon for.
-        property string optIcon
-        // Already installed and current: nothing to do, so the row reports state
-        // instead of offering an install that would be a no-op.
-        readonly property bool locked: root.installLocked(optKey)
-        readonly property string status: root.installStatus(optKey)
-        readonly property bool selected: !locked && (root.installSelections[optKey] === true)
+    // ---- Apps page ----
+    // One app to pick, lit and ticked when picked the way the other pages'
+    // picture cards are, and dimmed with a badge when there is nothing left to
+    // install. The short line fits the tile, and the full one waits in a
+    // tooltip for anyone who rests on it.
+    component InstallTile : MouseArea {
+        id: tile
+        required property var app
+        readonly property bool locked: root.installLocked(tile.app.key)
+        readonly property string status: root.installStatus(tile.app.key)
+        readonly property bool selected: !tile.locked && root.installSelections[tile.app.key] === true
+
         Layout.fillWidth: true
-        // Follows the text rather than a fixed 74: a narrower tile, or a
-        // translation that runs longer than the English, wraps to another line
-        // and would otherwise spill out of the card.
-        Layout.preferredHeight: Math.max(74, optContent.implicitHeight + 24)
-        radius: Appearance.rounding.normal
-        opacity: locked ? 0.6 : 1
-        color: selected
-            ? ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.85)
-            : Appearance.colors.colLayer1
-        border.width: selected ? 2 : 1
-        border.color: selected ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
-        Behavior on border.color { ColorAnimation { duration: 150 } }
-        Behavior on color { ColorAnimation { duration: 150 } }
-        Behavior on opacity { NumberAnimation { duration: 150 } }
+        Layout.fillHeight: true
+        Layout.preferredWidth: 1
+        hoverEnabled: true
+        cursorShape: tile.locked ? Qt.ArrowCursor : Qt.PointingHandCursor
+        onClicked: if (!tile.locked) root.toggleInstall(tile.app.key)
 
-        MouseArea {
-            anchors.fill: parent
-            enabled: !optRoot.locked
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.toggleInstall(optRoot.optKey)
+        // Held a moment before the tooltip opens, so sweeping across the grid
+        // does not flash one over every tile on the way.
+        property bool dwelled: false
+        onContainsMouseChanged: if (!containsMouse) dwelled = false
+        Timer {
+            interval: 600
+            running: tile.containsMouse && !tile.dwelled
+            onTriggered: tile.dwelled = true
         }
-        RowLayout {
+
+        Item {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 12
-            AppIcon {
-                source: optRoot.optIcon
-                fallback: "application-x-executable"
-                implicitSize: 32
+            opacity: tile.locked ? 0.6 : 1
+
+            Rectangle {
+                anchors.fill: parent
+                radius: Appearance.rounding.small
+                color: tile.selected
+                    ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1)
+                    : (tile.containsMouse && !tile.locked ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer2)
+                border.width: tile.selected ? 2 : 1
+                border.color: tile.selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
             }
-            ColumnLayout {
-                id: optContent
-                spacing: 1
-                Layout.fillWidth: true
-                StyledText {
-                    // Bounded like the line under it: a title in a wider font
-                    // would otherwise run past the row and over the tick.
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    text: optRoot.optTitle
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    font.weight: Font.Medium
-                    color: Appearance.colors.colOnLayer0
-                }
-                StyledText {
-                    // The version check replaces the sales pitch once it has
-                    // something more useful to say about this row.
-                    text: optRoot.status.length > 0 ? optRoot.status : optRoot.optDesc
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: optRoot.status.length > 0 && !optRoot.locked
-                        ? Appearance.m3colors.m3primary
-                        : Appearance.colors.colSubtext
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-            }
+
+            // Only on a picked tile. A lit tile already reads as picked, and an
+            // empty circle on every other one was noise.
             MaterialSymbol {
-                text: optRoot.locked ? "check_circle"
-                    : (optRoot.selected ? "check_circle" : "radio_button_unchecked")
-                fill: (optRoot.selected || optRoot.locked) ? 1 : 0
-                iconSize: 24
-                color: optRoot.selected ? Appearance.m3colors.m3primary
-                    : (optRoot.locked ? Appearance.colors.colSubtext : Appearance.colors.colOutlineVariant)
+                anchors { top: parent.top; right: parent.right; margins: 6 }
+                visible: tile.selected
+                text: "check_circle"
+                fill: 1
+                iconSize: 18
+                color: Appearance.colors.colPrimary
+            }
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: parent.width - 16
+                spacing: 4
+
+                AppIcon {
+                    Layout.alignment: Qt.AlignHCenter
+                    source: tile.app.icon
+                    fallback: "application-x-executable"
+                    implicitSize: 32
+                }
+                StyledText {
+                    id: tileName
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    text: tile.app.name
+                    font.pixelSize: Appearance.font.pixelSize.smallie
+                    font.variableAxes: Appearance.font.variableAxes.title
+                    color: Appearance.colors.colOnLayer1
+                }
+                // The version check, once it has something to say, stands in
+                // for the line about the app.
+                Rectangle {
+                    id: statusPill
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.maximumWidth: parent.width
+                    visible: tile.status.length > 0
+                    implicitWidth: statusText.implicitWidth + 14
+                    implicitHeight: statusText.implicitHeight + 4
+                    radius: height / 2
+                    color: tile.locked ? Appearance.colors.colLayer3 : Appearance.colors.colPrimaryContainer
+                    StyledText {
+                        id: statusText
+                        anchors.centerIn: parent
+                        width: Math.min(implicitWidth, statusPill.width - 14)
+                        elide: Text.ElideRight
+                        text: tile.status
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: tile.locked ? Appearance.colors.colSubtext : Appearance.colors.colOnPrimaryContainer
+                    }
+                }
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: tile.status.length === 0
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    // The tile's height is set by the grid, so a name that
+                    // takes two lines leaves room for only one here.
+                    maximumLineCount: tileName.lineCount > 1 ? 1 : 2
+                    elide: Text.ElideRight
+                    text: tile.app.blurb
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                }
             }
         }
-    }
 
-    component InstallCategory : StyledText {
-        font.pixelSize: Appearance.font.pixelSize.large
-        font.weight: Font.Medium
-        color: Appearance.colors.colOnLayer0
-        Layout.topMargin: 2
+        StyledToolTip {
+            extraVisibleCondition: tile.dwelled
+            maximumTextWidth: 280
+            text: tile.app.desc
+        }
     }
 
     component Card1Install : Item {
         id: installCard
-        // Six categories outgrow the fixed window, so the list scrolls, and a
-        // pill over the bottom edge says so until the end is reached.
-        StyledFlickable {
-            id: installFlick
-            anchors.fill: parent
-            anchors.margins: 28
-            clip: true
-            contentWidth: width
-            contentHeight: installColumn.implicitHeight
-            ColumnLayout {
-                id: installColumn
-                width: installFlick.width
-                spacing: 8
 
-                StyledText {
-                    text: Translation.tr("Pick anything you'd like installed — you can always add these later.")
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    color: Appearance.colors.colSubtext
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
+        // Every app on the page, in the three rows it is shown in. A pair marked
+        // either is one choice between two, which toggleInstall keeps to.
+        readonly property var groups: [
+            { title: Translation.tr("Play"), items: [
+                { either: true, apps: [
+                    { key: "gaming", icon: "steam", name: Translation.tr("Desktop Gaming"),
+                      blurb: Translation.tr("Steam and Proton"),
+                      desc: Translation.tr("Steam, Proton and GPU drivers — play on your desktop.") },
+                    { key: "gamescope", icon: "steamdeck-gaming-return", name: Translation.tr("Desktop + Big Picture"),
+                      blurb: Translation.tr("Adds a console mode"),
+                      desc: Translation.tr("Everything in Desktop Gaming, plus a console style session on Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.") }
+                ] },
+                { apps: [
+                    { key: "sunshine", icon: root.imageDir + "/sunshine.svg", name: Translation.tr("Sunshine"),
+                      blurb: Translation.tr("Stream this PC's games"),
+                      desc: Translation.tr("Stream this PC's games to your other devices.") }
+                ] },
+                { apps: [
+                    { key: "moonlight", icon: "com.moonlight_stream.Moonlight", name: Translation.tr("Moonlight"),
+                      blurb: Translation.tr("Play another PC's games"),
+                      desc: Translation.tr("Play games streamed from another PC.") }
+                ] },
+                { apps: [
+                    { key: "vr", icon: "steamvr", name: Translation.tr("Extra VR Headset Support"),
+                      blurb: Translation.tr("Quest, Pico and Vive Focus"),
+                      desc: Translation.tr("Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.") }
+                ] }
+            ] },
+            { title: Translation.tr("Create"), items: [
+                { either: true, apps: [
+                    { key: "resolve", icon: "davinci-resolve", name: Translation.tr("DaVinci Resolve"),
+                      blurb: Translation.tr("Free, large download"),
+                      desc: Translation.tr("Free edition. Large download.") },
+                    { key: "resolve-studio", icon: "davinci-resolve", name: Translation.tr("DaVinci Resolve Studio"),
+                      blurb: Translation.tr("Paid, needs a license"),
+                      desc: Translation.tr("Paid edition (needs your license). Large download.") }
+                ] },
+                { apps: [
+                    { key: "obs", icon: "com.obsproject.Studio", name: Translation.tr("OBS Studio"),
+                      blurb: Translation.tr("Record and stream"),
+                      desc: Translation.tr("mainstream-obs — record and stream.") }
+                ] },
+                { apps: [
+                    { key: "blender", icon: "blender", name: Translation.tr("Blender"),
+                      blurb: Translation.tr("3D and animation"),
+                      desc: Translation.tr("3D modeling, animation and video editing.") }
+                ] },
+                { apps: [
+                    { key: "gimp", icon: "gimp", name: Translation.tr("GIMP"),
+                      blurb: Translation.tr("Photo editing"),
+                      desc: Translation.tr("Photo editing and retouching.") }
+                ] },
+                { apps: [
+                    { key: "krita", icon: "org.kde.krita", name: Translation.tr("Krita"),
+                      blurb: Translation.tr("Digital painting"),
+                      desc: Translation.tr("Digital painting and illustration.") }
+                ] }
+            ] },
+            { title: Translation.tr("Work"), items: [
+                { apps: [
+                    { key: "libreoffice", icon: "libreoffice-startcenter", name: Translation.tr("LibreOffice"),
+                      blurb: Translation.tr("Opens Office files"),
+                      desc: Translation.tr("Writer, Calc and Impress. Opens Word, Excel and PowerPoint files.") }
+                ] },
+                { apps: [
+                    { key: "onlyoffice", icon: "org.onlyoffice.desktopeditors", name: Translation.tr("OnlyOffice"),
+                      blurb: Translation.tr("A Microsoft Office look"),
+                      desc: Translation.tr("Editors with a familiar Microsoft Office look. Installs from Flathub.") }
+                ] }
+            ] }
+        ]
+        readonly property var picks: {
+            const out = [];
+            for (const g of installCard.groups)
+                for (const item of g.items)
+                    for (const a of item.apps)
+                        if (root.installSelections[a.key] === true && !root.installLocked(a.key)) out.push(a);
+            return out;
+        }
+
+        // Every tile is the same width, set by the fullest row, so the rows
+        // line up as one grid and a short row simply ends early.
+        readonly property real slotSpacing: 8
+        readonly property real orGap: orMeasure.implicitWidth + 16
+        readonly property real tileWidth: {
+            const room = installCard.width - 48;
+            let w = room;
+            for (const g of installCard.groups) {
+                let tiles = 0, gaps = (g.items.length - 1) * installCard.slotSpacing;
+                for (const item of g.items) {
+                    tiles += item.apps.length;
+                    if (item.either) gaps += installCard.orGap;
                 }
+                w = Math.min(w, (room - gaps) / tiles);
+            }
+            return Math.floor(w);
+        }
+        StyledText {
+            id: orMeasure
+            visible: false
+            text: Translation.tr("or")
+            font.pixelSize: Appearance.font.pixelSize.smaller
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 12
+
+            Repeater {
+                model: installCard.groups
+                delegate: ColumnLayout {
+                    id: groupRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredHeight: 1
+                    spacing: 6
+
+                    StyledText {
+                        Layout.leftMargin: 2
+                        text: groupRow.modelData.title
+                        font.pixelSize: Appearance.font.pixelSize.smallie
+                        color: Appearance.colors.colSubtext
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: installCard.slotSpacing
+
+                        Repeater {
+                            model: groupRow.modelData.items
+                            delegate: Item {
+                                id: slot
+                                required property var modelData
+                                Layout.fillHeight: true
+                                Layout.preferredWidth: slot.modelData.apps.length * installCard.tileWidth
+                                    + (slot.modelData.either ? installCard.orGap : 0)
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: slot.modelData.either ? installCard.orGap : 0
+                                    Repeater {
+                                        model: slot.modelData.apps
+                                        delegate: InstallTile {
+                                            required property var modelData
+                                            app: modelData
+                                        }
+                                    }
+                                }
+                                // Sits in the gap between the two, which are
+                                // one choice: picking either clears the other.
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    visible: slot.modelData.either === true
+                                    text: Translation.tr("or")
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    color: Appearance.colors.colSubtext
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+
+            // Where the picks collect, on one line under the grid: what the
+            // page is for until something is picked, then what is coming and
+            // that nobody has to wait for it.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: Appearance.colors.colOutlineVariant
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.minimumHeight: 28
+                spacing: 10
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: noteRow.implicitHeight + 18
-                    radius: Appearance.rounding.normal
-                    color: ColorUtils.transparentize(Appearance.m3colors.m3primary, 0.9)
-                    RowLayout {
-                        id: noteRow
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 10
-                        MaterialSymbol { text: "info"; iconSize: 22; color: Appearance.m3colors.m3primary; Layout.alignment: Qt.AlignTop }
-                        StyledText {
-                            text: Translation.tr("These install in the background — feel free to keep going through the tour. You'll get a notification when each one finishes.")
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: Appearance.colors.colOnLayer0
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
+                    visible: installCard.picks.length > 0
+                    implicitWidth: Math.max(implicitHeight, countText.implicitWidth + 12)
+                    implicitHeight: 22
+                    radius: height / 2
+                    color: Appearance.colors.colPrimary
+                    StyledText {
+                        id: countText
+                        anchors.centerIn: parent
+                        text: installCard.picks.length
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colOnPrimary
+                    }
+                }
+                Row {
+                    visible: installCard.picks.length > 0
+                    spacing: 6
+                    Repeater {
+                        model: installCard.picks
+                        delegate: AppIcon {
+                            required property var modelData
+                            source: modelData.icon
+                            fallback: "application-x-executable"
+                            implicitSize: 22
                         }
                     }
                 }
-
-                InstallCategory { text: Translation.tr("Gaming") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "gaming"; optIcon: "steam"
-                        optTitle: Translation.tr("Desktop Gaming")
-                        optDesc: Translation.tr("Steam, Proton and GPU drivers — play on your desktop.")
-                    }
-                    InstallOption {
-                        optKey: "gamescope"; optIcon: "steamdeck-gaming-return"
-                        optTitle: Translation.tr("Desktop + Big Picture")
-                        optDesc: Translation.tr("Everything in Desktop Gaming, plus a console style session on Super <font face='JetBrains Mono NF'>(󰖳)</font> + G.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("Video Editing") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "resolve"; optIcon: "davinci-resolve"
-                        optTitle: Translation.tr("DaVinci Resolve")
-                        optDesc: Translation.tr("Free edition. Large download.")
-                    }
-                    InstallOption {
-                        optKey: "resolve-studio"; optIcon: "davinci-resolve"
-                        optTitle: Translation.tr("DaVinci Resolve Studio")
-                        optDesc: Translation.tr("Paid edition (needs your license). Large download.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("Content Creation") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "obs"; optIcon: "com.obsproject.Studio"
-                        optTitle: Translation.tr("OBS Studio")
-                        optDesc: Translation.tr("mainstream-obs — record and stream.")
-                    }
-                    InstallOption {
-                        optKey: "blender"; optIcon: "blender"
-                        optTitle: Translation.tr("Blender")
-                        optDesc: Translation.tr("3D modeling, animation and video editing.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("Office") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "libreoffice"; optIcon: "libreoffice-startcenter"
-                        optTitle: Translation.tr("LibreOffice")
-                        optDesc: Translation.tr("Writer, Calc and Impress. Opens Word, Excel and PowerPoint files.")
-                    }
-                    InstallOption {
-                        optKey: "onlyoffice"; optIcon: "org.onlyoffice.desktopeditors"
-                        optTitle: Translation.tr("OnlyOffice")
-                        optDesc: Translation.tr("Editors with a familiar Microsoft Office look. Installs from Flathub.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("Image Editing") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "gimp"; optIcon: "gimp"
-                        optTitle: Translation.tr("GIMP")
-                        optDesc: Translation.tr("Photo editing and retouching.")
-                    }
-                    InstallOption {
-                        optKey: "krita"; optIcon: "org.kde.krita"
-                        optTitle: Translation.tr("Krita")
-                        optDesc: Translation.tr("Digital painting and illustration.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("Game Streaming") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "sunshine"; optIcon: root.imageDir + "/sunshine.svg"
-                        optTitle: Translation.tr("Sunshine")
-                        optDesc: Translation.tr("Stream this PC's games to your other devices.")
-                    }
-                    InstallOption {
-                        optKey: "moonlight"; optIcon: "com.moonlight_stream.Moonlight"
-                        optTitle: Translation.tr("Moonlight")
-                        optDesc: Translation.tr("Play games streamed from another PC.")
-                    }
-                }
-
-                InstallCategory { text: Translation.tr("VR Headsets") }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    InstallOption {
-                        optKey: "vr"; optIcon: "steamvr"
-                        optTitle: Translation.tr("Extra VR Headset Support")
-                        optDesc: Translation.tr("Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.")
-                    }
-                }
-            }
-        }
-        ScrollEdgeFade {
-            target: installFlick
-            color: Appearance.m3colors.m3surfaceContainerLow
-        }
-        RippleButton {
-            id: moreBelow
-            readonly property bool atEnd: installFlick.contentHeight <= installFlick.height || installFlick.atYEnd
-            anchors { bottom: installFlick.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: 10 }
-            z: 100
-            opacity: atEnd ? 0 : 1
-            scale: atEnd ? 0.7 : 1
-            visible: opacity > 0
-            Behavior on opacity { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-            Behavior on scale { animation: Appearance.animation.elementResize.numberAnimation.createObject(this) }
-            implicitWidth: moreBelowRow.implicitWidth + 12 * 2
-            implicitHeight: moreBelowRow.implicitHeight + 5 * 2
-            colBackground: Appearance.colors.colSecondary
-            colBackgroundHover: Appearance.colors.colSecondaryHover
-            colRipple: Appearance.colors.colSecondaryActive
-            buttonRadius: Appearance.rounding.full
-            downAction: () => {
-                pageDown.to = Math.min(installFlick.contentY + installFlick.height * 0.8, installFlick.contentHeight - installFlick.height);
-                pageDown.restart();
-            }
-            NumberAnimation {
-                id: pageDown
-                target: installFlick
-                property: "contentY"
-                duration: 300
-                easing.type: Easing.OutCubic
-            }
-            contentItem: Row {
-                id: moreBelowRow
-                spacing: 4
-                MaterialSymbol {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "keyboard_arrow_down"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnSecondary
-                }
                 StyledText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Translation.tr("More apps below")
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: installCard.picks.length > 0
+                        ? Translation.tr("These install in the background — feel free to keep going through the tour. You'll get a notification when each one finishes.")
+                        : Translation.tr("Pick anything you'd like installed — you can always add these later.")
                     font.pixelSize: Appearance.font.pixelSize.smallie
-                    color: Appearance.colors.colOnSecondary
+                    color: Appearance.colors.colSubtext
                 }
             }
         }
