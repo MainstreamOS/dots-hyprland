@@ -6,7 +6,6 @@ pywayland
 psutil
 kde-material-you-colors
 materialyoucolor
-libsass
 material-color-utilities
 setproctitle
 click
@@ -15,6 +14,6 @@ pycairo
 pygobject
 tqdm
 numpy
-opencv-contrib-python
+opencv-contrib-python-headless
 google-auth
 requests

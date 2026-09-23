@@ -22,8 +22,6 @@ idna==3.11
     # via requests
 kde-material-you-colors==1.10.1
     # via -r requirements.in
-libsass==0.23.0
-    # via -r requirements.in
 loguru==0.7.3
     # via -r requirements.in
 material-color-utilities==0.2.1
@@ -37,8 +35,8 @@ numpy==2.2.2
     #   -r requirements.in
     #   kde-material-you-colors
     #   material-color-utilities
-    #   opencv-contrib-python
-opencv-contrib-python==4.12.0.88
+    #   opencv-contrib-python-headless
+opencv-contrib-python-headless==4.12.0.88
     # via -r requirements.in
 packaging==24.2
     # via
