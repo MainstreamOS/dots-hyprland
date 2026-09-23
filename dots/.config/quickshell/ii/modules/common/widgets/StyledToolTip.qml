@@ -8,6 +8,7 @@ ToolTip {
     id: root
     property bool extraVisibleCondition: true
     property bool alternativeVisibleCondition: false
+    property real maximumTextWidth: 0
 
     readonly property bool internalVisibleCondition: (extraVisibleCondition && (parent.hovered === undefined || parent?.hovered)) || alternativeVisibleCondition
     verticalPadding: 5
@@ -27,6 +28,7 @@ ToolTip {
         id: contentItem
         font: root.font
         text: root.text
+        maximumTextWidth: root.maximumTextWidth
         shown: root.internalVisibleCondition
         horizontalPadding: root.horizontalPadding
         verticalPadding: root.verticalPadding
