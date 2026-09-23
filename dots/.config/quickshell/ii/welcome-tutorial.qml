@@ -64,13 +64,35 @@ ApplicationWindow {
         return Translation.tr("Getting around");
     }
 
+    // The footer shows the walkthrough as three parts, since twelve steps
+    // read as a long way to go to someone new. The ranges come from the apps
+    // page and the page count, so a tour page added later lands in Tour.
+    readonly property var sections: [
+        { label: Translation.tr("Setup"),  first: 0, count: root.installCardIndex + 1 },
+        { label: Translation.tr("Tour"),   first: root.installCardIndex + 1, count: root.cardCount - root.installCardIndex - 2 },
+        { label: Translation.tr("Finish"), first: root.cardCount - 1, count: 1 }
+    ]
+    readonly property int currentSection: currentCard <= installCardIndex ? 0 : (currentCard < cardCount - 1 ? 1 : 2)
+    // Pages seen rather than the page shown, so a part jumped over still looks
+    // unfinished and going back never empties one.
+    property var visitedCards: [true]
+    function sectionSeen(section) {
+        var n = 0;
+        for (var i = section.first; i < section.first + section.count; i++) if (visitedCards[i]) n++;
+        return n;
+    }
+    // Every way of turning the page goes through here, so moving past the
+    // apps page starts what was ticked there whether it was Next or a jump.
+    function goToCard(index) {
+        if (index === currentCard || index < 0 || index >= cardCount) return;
+        if (currentCard <= installCardIndex && index > installCardIndex) runInstalls();
+        currentCard = index;
+    }
+
     // Install page (card 2): which apps the user ticked to install in the background.
     readonly property int installCardIndex: 3
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
                                         "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false })
-    readonly property int installCount: {
-        var n = 0; for (var k in installSelections) if (installSelections[k]) n++; return n;
-    }
     function toggleInstall(key) {
         if (installLocked(key)) return;
         var s = Object.assign({}, installSelections); s[key] = !s[key];
@@ -79,6 +101,12 @@ ApplicationWindow {
         if (s[key] && (key === "gaming" || key === "gamescope"))
             s[key === "gaming" ? "gamescope" : "gaming"] = false;
         installSelections = s;
+        // Whatever ends up unticked, by hand or by picking its partner,
+        // forgets that it was sent, so ticking it again retries it after a
+        // dismissed password prompt.
+        var l = Object.assign({}, launchedInstalls), forgot = false;
+        for (var k in l) if (!s[k]) { delete l[k]; forgot = true; }
+        if (forgot) launchedInstalls = l;
     }
 
     // Which install row, if any, the installed Resolve package occupies. Prefix
@@ -101,12 +129,28 @@ ApplicationWindow {
             return Translation.tr("Update to %1").arg(Updates.resolveLatest);
         return Translation.tr("Installed");
     }
-    function runInstalls() {
-        if (installCount === 0) return;
+    // What has already gone to the installer, so moving past the apps page
+    // again does not ask for the password twice for the same apps.
+    property var launchedInstalls: ({})
+    function pendingInstalls() {
         var opts = [];
-        for (var k in installSelections) if (installSelections[k] && !installLocked(k)) opts.push(k);
+        for (var k in installSelections)
+            if (installSelections[k] && !installLocked(k) && !launchedInstalls[k]) opts.push(k);
+        return opts;
+    }
+    function runInstalls() {
+        var opts = pendingInstalls();
         if (opts.length === 0) return;
-        Quickshell.execDetached(["sh", "-c", "pkexec /usr/bin/mainstream-welcome-install \"$@\"; :", "sh"].concat(opts));
+        var launched = Object.assign({}, launchedInstalls);
+        for (var i = 0; i < opts.length; i++) launched[opts[i]] = true;
+        launchedInstalls = launched;
+        // The installer runs on after this window closes and is not safe to run
+        // twice at once: two runs fight over the package database, and one
+        // finishing removes the sudo grant the other's Resolve build still
+        // needs. A later batch waits its turn behind the lock instead.
+        Quickshell.execDetached(["sh", "-c",
+            "flock \"${XDG_RUNTIME_DIR:-/tmp}/mainstream-welcome-install.lock\" pkexec /usr/bin/mainstream-welcome-install \"$@\"; :",
+            "sh"].concat(opts));
     }
 
     // Shared asset dir for the cards' screenshots/icons.
@@ -319,22 +363,21 @@ ApplicationWindow {
             Component { id: card8Comp; Card8Contribute {} }
         }
 
-        // Footer
-        RowLayout {
+        // Footer. Back and Next hold the two ends and the three parts sit in
+        // the middle of the whole width, so they stay put when Next grows to
+        // fit "Install / Next".
+        Item {
             Layout.fillWidth: true
-            spacing: 12
+            implicitHeight: 38
 
             RippleButton {
-                // Keep the slot in the layout so the page indicator
-                // stays centred — `visible: false` would have RowLayout
-                // exclude it entirely and pull the indicator left. Use
-                // opacity + enabled instead.
-                opacity: root.currentCard > 0 ? 1 : 0
-                enabled: root.currentCard > 0
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.currentCard > 0
                 buttonRadius: Appearance.rounding.normal
                 implicitWidth: 110
                 implicitHeight: 38
-                onClicked: root.currentCard--
+                onClicked: root.goToCard(root.currentCard - 1)
                 contentItem: StyledText {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
@@ -343,41 +386,93 @@ ApplicationWindow {
                     color: Appearance.colors.colOnLayer0
                 }
             }
-            Item { Layout.fillWidth: true }
 
-            // Page indicator dots
-            RowLayout {
+            // Each part fills as its pages are seen, and any part other than
+            // the open one takes you to its first page.
+            Row {
+                anchors.centerIn: parent
                 spacing: 8
+
                 Repeater {
-                    model: root.cardCount
-                    delegate: Rectangle {
+                    model: root.sections
+                    delegate: MouseArea {
+                        id: sectionTab
+                        required property var modelData
                         required property int index
-                        readonly property bool active: index === root.currentCard
-                        implicitWidth: active ? 28 : 10
-                        implicitHeight: 10
-                        radius: 5
-                        color: active
-                            ? Appearance.m3colors.m3primary
-                            : Appearance.colors.colOutlineVariant
-                        Behavior on implicitWidth { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-                        Behavior on color        { ColorAnimation  { duration: 220 } }
+                        readonly property bool current: index === root.currentSection
+                        readonly property real fill: root.sectionSeen(modelData) / modelData.count
+                        readonly property bool finished: fill >= 1 && !current
+                        width: 136
+                        height: 38
+                        enabled: !current
+                        hoverEnabled: true
+                        cursorShape: current ? Qt.ArrowCursor : Qt.PointingHandCursor
+                        onClicked: root.goToCard(modelData.first)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Appearance.rounding.small
+                            color: sectionTab.containsMouse ? Appearance.colors.colLayer1Hover : "transparent"
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+
+                        Column {
+                            id: sectionColumn
+                            anchors.centerIn: parent
+                            width: parent.width - 16
+                            spacing: 6
+
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 3
+                                MaterialSymbol {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: sectionTab.finished
+                                    text: "check"
+                                    iconSize: 14
+                                    color: Appearance.m3colors.m3primary
+                                }
+                                StyledText {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Math.min(implicitWidth, sectionColumn.width - (sectionTab.finished ? 17 : 0))
+                                    elide: Text.ElideRight
+                                    text: sectionTab.modelData.label
+                                    font.pixelSize: Appearance.font.pixelSize.smallie
+                                    font.variableAxes: sectionTab.current ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
+                                    color: sectionTab.current ? Appearance.m3colors.m3primary : Appearance.colors.colSubtext
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 4
+                                radius: 2
+                                color: Appearance.m3colors.m3secondaryContainer
+                                Rectangle {
+                                    width: parent.width * sectionTab.fill
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: Appearance.m3colors.m3primary
+                                    Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            Item { Layout.fillWidth: true }
-
             RippleButton {
                 id: nextBtn
-                readonly property bool installMode: root.currentCard === root.installCardIndex && root.installCount > 0
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                readonly property bool installMode: root.currentCard === root.installCardIndex && root.pendingInstalls().length > 0
                 buttonRadius: Appearance.rounding.normal
                 implicitWidth: installMode ? 152 : 110
                 implicitHeight: 38
                 colBackground: Appearance.m3colors.m3primary
                 colBackgroundHover: Appearance.m3colors.m3primary
                 onClicked: {
-                    if (nextBtn.installMode) root.runInstalls()
-                    if (root.currentCard < root.cardCount - 1) root.currentCard++
+                    if (root.currentCard < root.cardCount - 1) root.goToCard(root.currentCard + 1)
                     else root.close()
                 }
                 contentItem: StyledText {
@@ -415,6 +510,9 @@ ApplicationWindow {
     onCurrentCardChanged: {
         layerBlurReader.running = false;
         layerBlurReader.running = true;
+        if (!visitedCards[currentCard]) {
+            var v = visitedCards.slice(); v[currentCard] = true; visitedCards = v;
+        }
     }
 
     // ---- Style page (card 1) ----

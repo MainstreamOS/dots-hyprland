@@ -2291,5 +2291,8 @@
   "Could not remove %s": "Could not remove %s",
   "Name workspace %1": "Name workspace %1",
   "Shown instead of window titles until you clear it": "Shown instead of window titles until you clear it",
-  "Go to workspace": "Go to workspace"
+  "Go to workspace": "Go to workspace",
+  "Setup": "Setup",
+  "Tour": "Tour",
+  "Finish": "Finish"
 }
