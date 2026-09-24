@@ -83,6 +83,15 @@ _migrate() {
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block mainstream-printer-setup.service 2>/dev/null || true
     fi
+    # Encrypted installs built the LUKS key file into the UKI on the
+    # unencrypted EFI partition. Started now so the key it holds stops opening
+    # anything as soon as this update lands, and its timer enabled so a run
+    # that could not finish tries again after the next boot without holding
+    # the boot up. Machines without a key file skip it.
+    systemctl preset mainstream-luks-keyfile.timer 2>/dev/null || true
+    if [ -d /run/systemd/system ]; then
+        systemctl start --no-block mainstream-luks-keyfile.service 2>/dev/null || true
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true

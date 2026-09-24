@@ -1,0 +1,16 @@
+[Unit]
+# Once per boot, since every failure the script reports while the key file is
+# still there is one it retries at the next boot, and the package update
+# starts the service right away itself. A rebuild that fails after the key
+# file is shredded is not retried, but any image it leaves with the key still
+# in it carries one that opens nothing, and the next kernel update replaces it.
+# A minute in, so a boot image rebuild does not compete with the desktop
+# coming up.
+Description=Trigger the LUKS key file removal off the boot-critical path
+
+[Timer]
+OnBootSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,594 @@
+#!/usr/bin/env bash
+# Takes the LUKS key file out of the boot image on encrypted installs, and out
+# of the LUKS headers that accept it.
+#
+# The installer enrolls /crypto_keyfile.bin in every encrypted partition and
+# lists it in mkinitcpio's FILES, on the assumption that the boot image lives on
+# the encrypted disk. Here the image is a UKI on the EFI system partition, which
+# is not encrypted, so anyone holding the disk could lift the key and open the
+# root volume without the passphrase. Nothing on the system uses the key:
+# crypttab is written before the key file exists, so every entry says none, and
+# the root unlocks from the passphrase through rd.luks.name.
+#
+# Dropping it from FILES does not undo that, because the partition can hold
+# older copies of the image as well. So the key's slot comes out of every device
+# that accepts it, and once a slot has come out, the file itself is shredded. A
+# device that crypttab opens with the key, or that the key is the only way
+# into, keeps it. So does a machine whose boot is set up to unlock with the
+# key, which would otherwise be left waiting for a passphrase nobody expects to
+# type. A key file that no slot came out for opens nothing attached, so it
+# gives nothing away here, and it may be the only key to a disk that is not
+# plugged in, so it stays.
+#
+# MAINSTREAM_LUKS_ROOT, MAINSTREAM_LUKS_DEVICES and MAINSTREAM_LUKS_REBUILD
+# point it at a scratch tree, a list of LUKS image files and another rebuild
+# command, so the same path can be run without root.
+
+set -uo pipefail
+umask 077
+# cryptsetup's output is parsed for slot numbers, and the system locale would
+# translate it.
+export LC_ALL=C
+
+ROOT=${MAINSTREAM_LUKS_ROOT:-}
+KEY_IN_IMAGE=/crypto_keyfile.bin
+KEYFILE=$ROOT$KEY_IN_IMAGE
+CONF=$ROOT/etc/mkinitcpio.conf
+CRYPTTAB=$ROOT/etc/crypttab
+STATE_DIR=$ROOT/var/lib/mainstream
+STAMP=$STATE_DIR/luks-keyfile-fixed
+# Outlives the run, so that a run finishing what an earlier one started still
+# knows the key file had a slot to give up.
+REMOVED=$STATE_DIR/luks-keyfile-slot-removed
+LOCK=$ROOT/var/lib/pacman/db.lck
+ESP=""
+PREFIX=""
+WAITED=0
+
+log() { echo "[luks-keyfile-fix] $*"; }
+fail() { log "ERROR: $*"; exit 1; }
+
+# The unit starts only while the key file is there, and the file goes only
+# once the boot image needs no rebuild or may be rebuilt, so the one failure
+# left without a retry is a rebuild after the shred.
+retry() {
+    if [[ -e $KEYFILE ]]; then
+        echo "trying again at the next boot."
+    else
+        echo "an image that still carries the key carries one that opens nothing now, and the next kernel update replaces it."
+    fi
+}
+
+# The unit stops only this script, and bash runs the trap once the command
+# under way returns, so a shutdown lets a UKI or LUKS header write finish.
+# Were the script to die outright, systemd would kill that write with it.
+trap 'fail "stopped before the work was done; $(retry)"' TERM
+
+# 0 when mkinitcpio's array $1 holds $2. Read the way mkinitcpio reads it,
+# drop-ins included, so an array split over several lines or extended
+# elsewhere is judged by what it ends up holding.
+conf_lists() {
+    (
+        set +u
+        FILES=()
+        HOOKS=()
+        # shellcheck source=/dev/null
+        . "$CONF" >/dev/null 2>&1
+        for f in "$CONF.d"/*.conf; do
+            # shellcheck source=/dev/null
+            [[ -r $f ]] && . "$f" >/dev/null 2>&1
+        done
+        set -f
+        arr="$1[*]"
+        for f in ${!arr}; do
+            [[ $f == "$2" ]] && exit 0
+        done
+        exit 1
+    )
+}
+
+remove_from_files() {
+    local tmp
+    tmp=$(mktemp "$CONF.XXXXXX") || return 1
+    if sed -E '/^[[:space:]]*FILES\+?=\(/{
+            :a
+            s#[[:space:]]["'\'']?/crypto_keyfile\.bin["'\'']?([[:space:]]|\))#\1#
+            ta
+            s#\(["'\'']?/crypto_keyfile\.bin["'\'']?([[:space:]]+|(\)))#(\2#
+            ta
+        }' "$CONF" >"$tmp" &&
+        chmod --reference="$CONF" "$tmp" && sync -- "$tmp" &&
+        mv -f -- "$tmp" "$CONF"; then
+        return 0
+    fi
+    rm -f -- "$tmp"
+    return 1
+}
+
+# The files limine-mkinitcpio takes its settings from, in the order it reads
+# them.
+limine_confs() {
+    local f
+    for f in "$ROOT"/usr/share/limine-entry-tool.d/*.conf "$ROOT/etc/limine-entry-tool.conf" \
+        "$ROOT"/etc/limine-entry-tool.d/*.conf "$ROOT/etc/default/limine"; do
+        [[ -f $f ]] && printf '%s\n' "$f"
+    done
+    return 0
+}
+
+# A setting as limine-mkinitcpio sees it, the last file read winning.
+limine_setting() {
+    local key=$1 f line val=""
+    while IFS= read -r f; do
+        while IFS= read -r line || [[ -n $line ]]; do
+            [[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+            [[ ${BASH_REMATCH[1]} == "$key" ]] || continue
+            val=${BASH_REMATCH[2]}
+            val=${val%\"}
+            val=${val#\"}
+        done <"$f"
+    done < <(limine_confs)
+    printf '%s' "$val"
+}
+
+# The file systems findmnt lists on a path, which is what limine-mkinitcpio
+# judges the partition by. A configured path is only a directory until the
+# partition is mounted on it, and an image written there would never reach
+# the firmware.
+mount_types() {
+    [[ -d $1 ]] && findmnt -no FSTYPE -M "$1" 2>/dev/null
+}
+
+# limine-mkinitcpio builds UKIs only on UEFI with ENABLE_UKI set. Asked before
+# the EFI system partition is looked for, so that a machine booted some other
+# way is not taken for one whose partition failed to mount.
+builds_ukis() {
+    [[ -d $ROOT/sys/firmware/efi && $(limine_setting ENABLE_UKI) == yes ]]
+}
+
+# Sets ESP the way limine-mkinitcpio finds it. Returns 1 when it is not
+# mounted, and 2 when it is reached only through an automount. findmnt lists
+# the autofs mount first and then the vfat one mounted over it, and
+# limine-mkinitcpio reads the first line of a configured path, or the whole
+# list when it looks for the partition itself, so it refuses the partition
+# either way and the boot image could not be rebuilt.
+find_esp() {
+    local p types auto=""
+    p=$(limine_setting ESP_PATH)
+    if [[ -n ${p// /} ]]; then
+        ESP=$ROOT$p
+        types=$(mount_types "$ESP")
+        case ${types%%$'\n'*} in
+            vfat) return 0 ;;
+            autofs) return 2 ;;
+        esac
+        return 1
+    fi
+    for p in /efi /boot /boot/efi /limine; do
+        types=$(mount_types "$ROOT$p")
+        if [[ $types == vfat ]]; then
+            ESP=$ROOT$p
+            return 0
+        fi
+        [[ -z $auto && ${types%%$'\n'*} == autofs ]] && auto=$ROOT$p
+    done
+    [[ -n $auto ]] || return 1
+    ESP=$auto
+    return 2
+}
+
+# limine-mkinitcpio names its UKIs after CUSTOM_UKI_NAME, or the machine ID
+# when that is unset or invalid.
+uses_ukis() {
+    PREFIX=$(limine_setting CUSTOM_UKI_NAME)
+    [[ $PREFIX =~ ^[a-z0-9]+$ ]] || PREFIX=$(cat -- "$ROOT/etc/machine-id" 2>/dev/null)
+    [[ -n $PREFIX ]] || return 1
+    compgen -G "$ESP/EFI/Linux/${PREFIX}_*.efi" >/dev/null
+}
+
+# The images limine-mkinitcpio produces, one per installed kernel and named
+# after its package, which pkgbase records: linux, or linux-t2 on a MacBook
+# with the T2 kernel.
+built_images() {
+    local f name fallback
+    fallback=$(limine_setting MKINITCPIO_FALLBACK)
+    for f in "$ROOT"/usr/lib/modules/*/pkgbase; do
+        [[ -f $f ]] || continue
+        read -r name <"$f" || [[ -n $name ]] || continue
+        name=${name// /}
+        [[ -n $name ]] || continue
+        echo "$ESP/EFI/Linux/${PREFIX}_$name.efi"
+        [[ $fallback == yes || $fallback == "$name" ]] && echo "$ESP/EFI/Linux/${PREFIX}_$name-fallback.efi"
+    done | sort -u
+}
+
+# 0 when the image holds the key file, 1 when it does not, 2 when it cannot
+# be read.
+image_carries_key() {
+    local listing
+    listing=$(lsinitcpio "$1" 2>/dev/null) || return 2
+    grep -qxE '(\./)?crypto_keyfile\.bin' <<<"$listing" && return 0
+    return 1
+}
+
+# 0 when every image limine-mkinitcpio produces is there and leaves the key
+# out, so that a run finding them that way has nothing to rebuild.
+images_clean() {
+    local img n=0
+    while IFS= read -r img; do
+        [[ -f $img ]] || return 1
+        image_carries_key "$img"
+        [[ $? == 1 ]] || return 1
+        n=$((n + 1))
+    done < <(built_images)
+    (( n > 0 ))
+}
+
+# lsblk takes FSTYPE from the udev database, which can come back empty, and an
+# empty list would pass for "the key opens nothing" and get the key shredded
+# while it still opens the root.
+luks_devices() {
+    local list src types
+    if [[ -n ${MAINSTREAM_LUKS_DEVICES:-} ]]; then
+        read -ra list <<<"$MAINSTREAM_LUKS_DEVICES"
+        printf '%s\n' "${list[@]}"
+        return 0
+    fi
+    list=$(lsblk -rpno PATH,FSTYPE 2>/dev/null | awk '$2 == "crypto_LUKS" { print $1 }' | sort -u)
+    if [[ -z $list ]]; then
+        src=$(findmnt -nvo SOURCE / 2>/dev/null)
+        [[ -n $src ]] && types=$(lsblk -snro TYPE "$src" 2>/dev/null) &&
+            grep -qx crypt <<<"$types" && return 1
+        return 0
+    fi
+    echo "$list"
+}
+
+# Prints the slot a key file opens on a device. Returns 1 when it opens none,
+# and 2 when cryptsetup could not tell, which callers must not take as a no.
+# Tokens are ruled out because cryptsetup tries any that need no PIN before
+# the key file: a TPM2 enrollment would answer with its own slot.
+opened_slot() {
+    local out
+    out=$(cryptsetup open --test-passphrase -v --disable-external-tokens --token-type none \
+        --key-file "$2" "$1" 2>/dev/null </dev/null)
+    case $? in
+        0) ;;
+        2) return 1 ;;
+        *) return 2 ;;
+    esac
+    out=$(sed -n 's/^Key slot \([0-9]*\) unlocked\.$/\1/p' <<<"$out")
+    [[ -n $out ]] || return 2
+    echo "$out"
+}
+
+# Prints how many slots other than $2 open device $1 with a passphrase or a
+# key file. An unbound LUKS2 slot opens nothing, which is how cryptsetup
+# decides a slot is the last one, so it does not count. Nor does a slot a
+# token holds, such as a TPM2, FIDO2 or PKCS#11 enrollment or a clevis pin:
+# its secret lives in a chip, a security key, a smart card or a server, and a
+# firmware update or a lost key would leave no way in. A token of a type not
+# known here is taken the same way: counting its slot when nobody can type
+# its secret could take out the last key a person holds, while leaving it out
+# only keeps the key file. The two that stand for something typed in, the
+# recovery key systemd-cryptenroll prints and the kernel keyring token, which
+# only caches a passphrase, leave their slots counted. The token plugins stay
+# unloaded: systemd's, once one has described its token, send the rest of the
+# dump to stderr, the token's own Keyslot lines among it.
+other_keys() {
+    local dump
+    dump=$(cryptsetup luksDump --disable-external-tokens "$1" 2>/dev/null </dev/null) || return 1
+    awk -v skip="$2" '
+        /^[^[:space:]]/ { sec = $0 }
+        /^Key Slot [0-9]+: ENABLED$/ { slot[$3 + 0] = 1 }
+        sec == "Keyslots:" && /^  [0-9]+: luks2$/ { slot[$1 + 0] = 1 }
+        sec == "Tokens:" && /^  [0-9]+: / { type = $2 }
+        sec == "Tokens:" && /^[[:space:]]+Keyslot:/ &&
+            type !~ /^(systemd-recovery|luks2-keyring)$/ { held[$2 + 0] = 1 }
+        END {
+            for (s in slot)
+                if (s != skip + 0 && !(s in held)) n++
+            print n + 0
+        }' <<<"$dump"
+}
+
+# 0 when the crypttab $1 opens the device with the key file, or, given no
+# device, when any entry does; 2 when the device's UUID cannot be read. A
+# device it names by UUID is matched on the LUKS UUID, and other tags are
+# resolved to the device they point at.
+crypttab_uses_key() {
+    local tab=$1 dev=${2:-} real="" uuid="" name src key rest
+    [[ -r $tab ]] || return 1
+    if [[ -n $dev ]]; then
+        real=$(readlink -f -- "$dev")
+        uuid=$(cryptsetup luksUUID "$dev" 2>/dev/null </dev/null) || return 2
+    fi
+    while read -r name src key rest; do
+        [[ -z $name || $name == \#* || $key != "$KEY_IN_IMAGE" ]] && continue
+        [[ -n $dev ]] || return 0
+        src=${src//\"/}
+        if [[ $src == UUID=* ]]; then
+            src=${src#UUID=}
+            [[ ${src,,} == "${uuid,,}" ]] && return 0
+            continue
+        fi
+        if [[ $src == *=* ]]; then
+            src=$(findfs "$src" 2>/dev/null) || continue
+        fi
+        [[ $(readlink -f -- "$src") == "$real" ]] && return 0
+    done <"$tab"
+    return 1
+}
+
+# Prints what has the boot unlock with the key file, if anything does. The
+# busybox encrypt hook opens the root with /crypto_keyfile.bin whenever the
+# image carries one, and crypttab.initramfs, rd.luks.key=, luks.key= and
+# cryptkey= name a key for the boot to use. The command line is looked for
+# where mkinitcpio and limine-mkinitcpio take it from, and in the running one
+# as well, which a boot entry edited by hand can set without any of them.
+boot_unlocks_with_key() {
+    local f lines arg='((rd\.)?luks\.key|cryptkey)='
+    if conf_lists HOOKS encrypt; then
+        echo "HOOKS has the encrypt hook, which opens the root with it at boot"
+        return 0
+    fi
+    if crypttab_uses_key "$CRYPTTAB.initramfs"; then
+        echo "$CRYPTTAB.initramfs opens a device with it at boot"
+        return 0
+    fi
+    for f in "$ROOT/etc/kernel/cmdline" "$ROOT/usr/lib/kernel/cmdline" \
+        "$ROOT"/etc/cmdline.d/*.conf "$ROOT/proc/cmdline"; do
+        [[ -f $f ]] || continue
+        lines=$(grep -v '^[[:space:]]*#' -- "$f")
+        if grep -qE "(^|[[:space:]\"])$arg" <<<"$lines"; then
+            echo "the kernel command line in $f names a key for the boot to unlock with"
+            return 0
+        fi
+    done
+    while IFS= read -r f; do
+        if grep -qE "^[[:space:]]*KERNEL_CMDLINE[^=]*=(.*[[:space:]\"])?$arg" -- "$f"; then
+            echo "KERNEL_CMDLINE in $f names a key for the boot to unlock with"
+            return 0
+        fi
+    done < <(limine_confs)
+    return 1
+}
+
+# Returns 0 once the key file opens the device no more, 1 when the device keeps
+# it on purpose, and 2 on an error. luksRemoveKey is used because luksKillSlot
+# wants a key to a slot other than the one it removes, and the key file is
+# the only key there is here. luksRemoveKey itself would wipe a last slot
+# without asking when nobody is at a terminal, so the count comes first.
+retire_key() {
+    local dev=$1 slot prev="" n
+    while :; do
+        slot=$(opened_slot "$dev" "$KEYFILE")
+        case $? in
+            1) return 0 ;;
+            2) log "ERROR: could not test the key file on $dev."; return 2 ;;
+        esac
+        if [[ $slot == "$prev" ]]; then
+            log "ERROR: slot $slot of $dev still opens with the key file after it was removed."
+            return 2
+        fi
+        crypttab_uses_key "$CRYPTTAB" "$dev"
+        case $? in
+            0) log "Keeping the key file on $dev: /etc/crypttab opens it with the key file."; return 1 ;;
+            2) log "ERROR: could not read the UUID of $dev to look it up in /etc/crypttab."; return 2 ;;
+        esac
+        if ! n=$(other_keys "$dev" "$slot"); then
+            log "ERROR: could not read the key slots of $dev."
+            return 2
+        fi
+        if (( n == 0 )); then
+            log "Keeping the key file on $dev: no passphrase or other key file opens it."
+            return 1
+        fi
+        log "Removing the key file's slot $slot from $dev."
+        if ! cryptsetup luksRemoveKey --key-file "$KEYFILE" "$dev" </dev/null; then
+            log "ERROR: could not remove the key file's slot from $dev."
+            return 2
+        fi
+        if ! touch -- "$REMOVED"; then
+            log "ERROR: could not record in $STATE_DIR that the key file's slot came out of $dev."
+            return 2
+        fi
+        prev=$slot
+    done
+}
+
+# Started from the package's install script, so the transaction that started
+# it may still be running, and its own hook may be about to rebuild the same
+# image. Returns 0 once the lock is free, 1 when the wait runs out, and 2 when
+# a package manager that died left the lock behind. libalpm keeps the lock
+# file open for as long as it holds the lock, so one that no process has open
+# is such a leftover. It stays until someone removes it, and waiting on it
+# would only make every run give up half an hour later. fuser exits 1 when
+# nothing has the file open and when the file has just gone, which a second
+# look tells apart, but also on a usage error, which is what it makes of --,
+# so the path, always absolute, goes in bare. WAITED is set once a package
+# manager that held the lock has been waited on.
+wait_for_pacman() {
+    local i
+    WAITED=0
+    for (( i = 0; i < 360; i++ )); do
+        [[ -e $LOCK ]] || return 0
+        fuser -s "$LOCK" 2>/dev/null
+        if [[ $? == 1 ]]; then
+            [[ -e $LOCK ]] || return 0
+            return 2
+        fi
+        (( i == 0 )) && log "Waiting for the package manager to finish."
+        WAITED=1
+        sleep 5
+    done
+    return 1
+}
+
+# Held against shutdown and sleep, since a UKI cut off halfway through its
+# write leaves that kernel with no boot entry that works.
+rebuild() {
+    local cmd
+    if [[ -n ${MAINSTREAM_LUKS_REBUILD:-} ]]; then
+        cmd=(bash -c "$MAINSTREAM_LUKS_REBUILD")
+    elif command -v limine-mkinitcpio >/dev/null 2>&1; then
+        # limine.conf pins each image's checksum, and limine-mkinitcpio is
+        # what refreshes it. After a bare mkinitcpio -P, Limine refuses the
+        # entry.
+        cmd=(limine-mkinitcpio)
+    else
+        # /usr/bin by name, past the wrapper limine-mkinitcpio-hook puts in
+        # /usr/local/bin, which stops to ask a question nobody is there to
+        # answer.
+        cmd=(/usr/bin/mkinitcpio -P)
+    fi
+    systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" \
+        --why="Rebuilding the boot image" "${cmd[@]}"
+}
+
+# limine-mkinitcpio reports success even when the build for a kernel failed,
+# so the images themselves are what decides. One named after a kernel that is
+# no longer installed is never rebuilt, so it is only reported.
+check_images() {
+    local images=() img rc=0
+    local -A built=()
+    mapfile -t images < <(built_images)
+    if (( ${#images[@]} == 0 )); then
+        log "ERROR: no installed kernel was found to check the boot image of."
+        return 1
+    fi
+    for img in "${images[@]}"; do
+        built[$img]=1
+        if [[ ! -f $img ]]; then
+            log "ERROR: $img was not built."
+            rc=1
+            continue
+        fi
+        image_carries_key "$img"
+        case $? in
+            0) log "ERROR: $img still carries the key file."; rc=1 ;;
+            2) log "ERROR: $img could not be read to check it."; rc=1 ;;
+        esac
+    done
+    for img in "$ESP/EFI/Linux/${PREFIX}_"*.efi; do
+        [[ -f $img ]] || continue
+        [[ -n ${built[$img]:-} ]] && continue
+        image_carries_key "$img" &&
+            log "$img belongs to no installed kernel, so it is not rebuilt, and it still carries the key file."
+    done
+    return $rc
+}
+
+finish() {
+    log "$1"
+    touch -- "$STAMP" || exit 1
+    exit 0
+}
+
+[[ -d $STATE_DIR ]] || mkdir -p -m 755 -- "$STATE_DIR" || exit 1
+exec 9<"$STATE_DIR" || exit 1
+flock -n 9 || { log "Already running."; exit 0; }
+# A transaction still in its hooks can be halfway through replacing the images
+# and settings the checks below read, and a stamp written from what it left
+# half done would stand for good. One that died never finishes, and the key
+# slots and FILES do not wait on it: only the boot image is built from the
+# packages it left half unpacked.
+stale=0
+wait_for_pacman
+case $? in
+    1) fail "the package manager is still busy; trying again at the next boot." ;;
+    2)
+        stale=1
+        log "No process holds $LOCK, so a package manager stopped partway through its work. Going ahead with the key slots; the boot image is left alone until that work is finished."
+        ;;
+esac
+[[ -e $STAMP ]] && exit 0
+
+[[ -e $KEYFILE ]] || finish "There is no LUKS key file; nothing to do."
+# Where the image stays on the encrypted disk, as with GRUB and an encrypted
+# /boot, the key belongs in it and spares a second passphrase.
+builds_ukis || finish "This machine does not boot a UKI from the EFI system partition; nothing to do."
+find_esp
+case $? in
+    1) fail "the EFI system partition is not mounted; trying again at the next boot." ;;
+    2) fail "the EFI system partition at $ESP is mounted through an automount, which limine-mkinitcpio refuses to build the boot image on; trying again at the next boot." ;;
+esac
+uses_ukis || finish "This machine does not boot a UKI from the EFI system partition; nothing to do."
+if how=$(boot_unlocks_with_key); then
+    finish "Keeping $KEY_IN_IMAGE: $how."
+fi
+
+# What the image holds says nothing about the headers: a run cut short after
+# FILES was rewritten, and a kernel update after it, leave clean images while
+# the key still opens the root. So every run goes through the devices, and the
+# work is done only once no device opens with the key but those that keep it
+# on purpose.
+if conf_lists FILES "$KEY_IN_IMAGE"; then
+    remove_from_files || fail "could not rewrite $CONF."
+    conf_lists FILES "$KEY_IN_IMAGE" &&
+        fail "$KEY_IN_IMAGE is still in FILES after rewriting $CONF; it has to come out by hand."
+    log "Removed $KEY_IN_IMAGE from FILES in $CONF."
+fi
+
+devices=$(luks_devices) || fail "lsblk lists no LUKS device although / is encrypted; trying again at the next boot."
+kept=()
+failed=0
+# A device that cannot be read or changed must not keep the key on the others,
+# the root among them.
+while IFS= read -r dev; do
+    [[ -n $dev ]] || continue
+    retire_key "$dev"
+    case $? in
+        1) kept+=("$dev") ;;
+        2) failed=1 ;;
+    esac
+done <<<"$devices"
+(( failed )) &&
+    fail "the key file's slots were not all removed. No device lost its last slot; trying again at the next boot."
+
+# Asked before the key file can go, since whether the image can be rebuilt
+# decides that. A package manager waited on here took the lock and let it go
+# again, which tells as much as finding no lock at all, so a lock found stale
+# earlier no longer holds the rebuild back.
+wait_for_pacman
+case $? in
+    0) (( WAITED )) && stale=0 ;;
+    1) fail "the package manager is still busy; $(retry)" ;;
+    2) stale=1 ;;
+esac
+# mkinitcpio still writes an image from a kernel, mkinitcpio or systemd left
+# half unpacked, and with one UKI per kernel that image would replace the one
+# that just booted. The slots that were to come out are out by now, so
+# leaving the image to the next run costs little.
+clean=0
+images_clean && clean=1
+defer=0
+(( stale && ! clean )) && defer=1
+
+# A device crypttab opens with the key but that is not attached right now was
+# never tested, so any entry naming the key keeps the file as well.
+if (( ${#kept[@]} > 0 )); then
+    log "Keeping $KEY_IN_IMAGE, which still opens ${kept[*]}."
+elif crypttab_uses_key "$CRYPTTAB"; then
+    log "Keeping $KEY_IN_IMAGE, which /etc/crypttab names for a device that is not attached."
+elif [[ ! -e $REMOVED ]]; then
+    log "Keeping $KEY_IN_IMAGE, which opens no attached LUKS device and had no key slot taken out."
+elif (( defer )); then
+    # The unit starts only while the key file is there, so shredding it now
+    # would leave the rebuild put off here to the next kernel update. REMOVED
+    # still says a slot came out when the run that rebuilds the image gets
+    # here.
+    log "Keeping $KEY_IN_IMAGE, which opens no LUKS device now, until the boot image is rebuilt."
+else
+    shred -u -- "$KEYFILE" || fail "could not shred $KEYFILE; trying again at the next boot."
+    log "Shredded $KEY_IN_IMAGE, which opens no LUKS device now."
+fi
+
+if (( ! clean )); then
+    (( defer )) &&
+        fail "the boot image is not rebuilt from packages a package manager left half installed; $(retry)"
+    log "Rebuilding the boot image without the key file."
+    rebuild || fail "the boot image rebuild failed; $(retry)"
+    check_images || fail "the boot image still needs rebuilding; $(retry)"
+fi
+finish "The boot image no longer carries the LUKS key file."

@@ -1,0 +1,19 @@
+[Unit]
+Description=Take the LUKS key file out of the unencrypted boot image
+# Triggered by mainstream-luks-keyfile.timer, NOT WantedBy=multi-user.target.
+# A oneshot wanted by multi-user.target makes multi-user.target wait for it,
+# and this one can wait on the package manager and rebuild the boot image.
+# That would hold back power-profiles-daemon (After=multi-user.target), which
+# the quickshell bar activates at startup and waits on before it can paint.
+ConditionPathExists=/crypto_keyfile.bin
+ConditionPathExists=!/var/lib/mainstream/luks-keyfile-fixed
+After=cryptsetup.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/luks-keyfile-fix
+# A reboot right after the update stops only the script, which lets the UKI
+# or LUKS header write under way finish before it exits, so no kernel is left
+# with half an image. TimeoutStopSec is the time that write is given.
+KillMode=mixed
+TimeoutStopSec=5min

@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=11
+pkgrel=12
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(any)
 license=(None)
@@ -45,10 +45,13 @@ source=(
   10-mainstream-auto-queue.conf
   49-mainstream-printing.rules
   96-cups-testpage-pdf.hook
+  luks-keyfile-fix
+  mainstream-luks-keyfile.service
+  mainstream-luks-keyfile.timer
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 package() {
@@ -85,4 +88,10 @@ package() {
       "$pkgdir/usr/share/polkit-1/rules.d/49-mainstream-printing.rules"
   install -Dm644 "$srcdir/96-cups-testpage-pdf.hook" \
       "$pkgdir/usr/share/libalpm/hooks/96-cups-testpage-pdf.hook"
+
+  install -Dm755 "$srcdir/luks-keyfile-fix"              "$pkgdir/usr/lib/mainstream/luks-keyfile-fix"
+  install -Dm644 "$srcdir/mainstream-luks-keyfile.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-luks-keyfile.service"
+  install -Dm644 "$srcdir/mainstream-luks-keyfile.timer" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-luks-keyfile.timer"
 }
