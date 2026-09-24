@@ -74,7 +74,10 @@ Scope {
             Rectangle {
                 anchors.fill: parent
                 color: Appearance.colors.colLayer0Base
-                opacity: 0.90
+                // What shows through a near-white layer reads as less than the
+                // same share through a near-black one, so light mode lets a
+                // little more of the frosted windows through to look as open.
+                opacity: Appearance.m3colors.darkmode ? 0.90 : 0.85
             }
         }
     }

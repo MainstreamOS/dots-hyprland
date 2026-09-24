@@ -27,10 +27,12 @@ Singleton {
         rescaleSize: 10
     }
     property real wallpaperVibrancy: (wallColorQuant.colors[0]?.hslSaturation + wallColorQuant.colors[0]?.hslLightness) / 2
+    // The same for both modes: a light surface that can never be seen through
+    // reads as harsh beside a dark one that always can.
     property real autoBackgroundTransparency: { // y = 0.5768x^2 - 0.759x + 0.2896
         let x = wallpaperVibrancy
         let y = 0.5768 * (x * x) - 0.759 * (x) + 0.2896
-        return Math.max(0, Math.min(0.22, y)) - 0.12 * (m3colors.darkmode ? 0 : 1)
+        return Math.max(0, Math.min(0.22, y))
     }
     property real autoContentTransparency: 0.9
     property real backgroundTransparency: Config?.options.appearance.transparency.enable ? Config?.options.appearance.transparency.automatic ? autoBackgroundTransparency : Config?.options.appearance.transparency.backgroundTransparency : 0
