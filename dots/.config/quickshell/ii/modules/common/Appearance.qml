@@ -445,9 +445,9 @@ Singleton {
         // one number rather than two that merely happen to agree.
         readonly property real layer0StockAlpha: colLayer0.a
         readonly property string barBackgroundPick: modePick(Config.options?.bar.backgroundColorDark, Config.options?.bar.backgroundColorLight)
-        // A notch reads as part of the screen edge rather than something laid
-        // over it, so it starts opaque instead of at the strip's usual alpha.
-        readonly property real barStockAlpha: root.sizes.barIsNotch ? 1 : layer0StockAlpha
+        // Every style starts from the same see-through, so picking a shape on
+        // the style page never changes how solid the bar looks with it.
+        readonly property real barStockAlpha: layer0StockAlpha
         property color colBarBackground: surfaceColor(barBackgroundPick, colLayer0, Config.options?.bar.backgroundOpacity, barStockAlpha)
         // The float style's outline wears the strip's own alpha: a hairline
         // that kept full strength while the strip went see-through read as a
@@ -481,13 +481,8 @@ Singleton {
         // the drop rather than on it.
         readonly property real surfaceOpacityFloor: Math.min(1, root.colors.blurFloor + 0.005)
         readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
-        // The dock's notch is the strip's shape set down on the far edge, so
-        // it starts from the strip's alpha too. Opaque also leaves its sweeps
-        // with no blur edge to show: what is blurred behind a surface is
-        // settled per pixel with nothing in between, and that line falls
-        // across the very curves this style is shaped around.
-        readonly property real dockStockAlpha: (Config.options?.dock.cornerStyle ?? "float") === "hug"
-            ? 1 : layer0StockAlpha
+        // The dock's notch starts from the strip's alpha like every other style.
+        readonly property real dockStockAlpha: layer0StockAlpha
         property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, dockStockAlpha)
         property color colDockBackgroundBorder: ColorUtils.applyAlpha(
             ColorUtils.mix(root.dockContent.colOutlineVariant, colDockBackground, 0.4), colDockBackground.a)
