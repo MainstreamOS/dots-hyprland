@@ -539,5 +539,149 @@ classify fermi 390xx;   chk cls-installed-390 NVIDIA_DRIVER_FAMILY nvidia-390xx
 classify maxwell bogus; chk cls-installed-bogus NVIDIA_DRIVER_FAMILY nvidia-580xx
 FIX_INSTALLED_BRANCH=""
 
+# ── resume=: only the swap in use, only beside a plain root ─────────────────
+# Hibernation writes all of memory to the swap, so a plain swap beside an
+# encrypted root leaves the keys on disk in the clear, and resume=PARTUUID=
+# cannot name an encrypted swap. The real _gpu_swap_partuuid runs here (the
+# re-source above restored it); only the system probes are fixtured, except
+# fstab, which the real findmnt reads from a fixture file.
+RTMP="$(mktemp -d)"; export KERNEL_CMDLINE="$RTMP/cmdline" FSTAB_FILE="$RTMP/fstab" NO_HIBERNATE_DROPIN="$RTMP/no-hibernate.conf"
+HAS_INTEL=false HAS_AMD=false HAS_NVIDIA=false IS_HYBRID=false NVIDIA_GEN=none NVIDIA_PCI_DEC=0
+_gpu_esp_mib() { echo 0; }
+FIX_SWAPS=""; FIX_ROOT=""; FIX_BLOCK=""
+declare -A FIX_STACK=(
+    [/dev/nvme0n1p2]='part btrfs\ndisk '
+    [/dev/mapper/root]='crypt btrfs\npart crypto_LUKS\ndisk '
+    [/dev/nvme0n1p3]='part swap\ndisk '
+    [/dev/sdz2]='part swap\ndisk '
+    [/dev/sdz3]='part swap\ndisk '
+    [/dev/dm-1]='crypt swap\npart crypto_LUKS\ndisk '
+    [/dev/dm-2]='crypt swap\npart \ndisk '
+    [/dev/dm-3]='lvm swap\npart LVM2_member\ndisk '
+)
+declare -A FIX_PARTUUID=(
+    [/dev/nvme0n1p3]=aaaa-1111 [/dev/sdz2]=bbbb-2222 [/dev/sdz3]=cccc-3333
+    [/dev/nvme0n1p2]=root-0000
+)
+_gpu_proc_swaps()   { printf 'Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n'; [[ -z "$FIX_SWAPS" ]] || printf '%b\n' "$FIX_SWAPS"; }
+_gpu_root_source()  { printf '%s\n' "$FIX_ROOT"; }
+_gpu_dev_stack()    { [[ -z "${FIX_STACK[$1]:-}" ]] || printf '%b\n' "${FIX_STACK[$1]}"; }
+_gpu_dev_partuuid() { printf '%s\n' "${FIX_PARTUUID[$1]:-}"; }
+_gpu_is_block()     { [[ " $FIX_BLOCK " == *" $1 "* ]]; }
+ZRAM='/dev/zram0\tpartition\t8388604\t0\t100'
+active() { printf '%s\tpartition\t8388604\t0\t-2' "$1"; }
+
+# Runs the autoconfig on a given command line (default: one without resume=),
+# keeping what it says on stderr in RERR and the line it leaves in RCL.
+RBASE='root=PARTUUID=root-0000 rw quiet'
+resume_run() {
+    printf '%s\n' "${1:-$RBASE}" > "$KERNEL_CMDLINE"
+    RERR="$(gpu_apply_autoconfig 2>&1 >/dev/null)"; CASES=$((CASES + 1))
+    RCL="$(cat "$KERNEL_CMDLINE")"
+}
+resume_tok() { grep -oE '(^| )resume=[^ ]*' <<<"$RCL" | tr -d ' ' | paste -sd' ' -; }
+
+# Plain root, plain swap partition turned on: resume= names that partition.
+FIX_ROOT=/dev/nvme0n1p2; FIX_SWAPS="$ZRAM\n$(active /dev/nvme0n1p3)"; : > "$FSTAB_FILE"
+resume_run
+chk_str resume-plain "$(resume_tok)" "resume=PARTUUID=aaaa-1111"
+chk_str resume-plain-quiet "$RERR" ""
+# The same, where the install already turned hibernation off: it stays off.
+printf '[Sleep]\nAllowHibernation=no\n' > "$NO_HIBERNATE_DROPIN"; resume_run
+chk_str resume-install-said-no "$RCL" "$RBASE"
+chk_str resume-install-said-no-quiet "$RERR" ""
+rm -f "$NO_HIBERNATE_DROPIN"
+
+# Encrypted root beside a plain swap. Hibernating would write the
+# memory holding the root's key to that partition unencrypted.
+FIX_ROOT=/dev/mapper/root; resume_run
+chk_str resume-luks-root "$(resume_tok)" ""
+chk_str resume-luks-root-line "$RCL" "$RBASE"
+chk_str resume-luks-root-says "$( [[ "$RERR" == *"/dev/nvme0n1p3: the root is encrypted and this swap is not"* ]] && echo yes || echo no )" "yes"
+chk_str resume-luks-root-one-line "$(grep -c . <<<"$RERR")" "1"
+
+# Plain root, encrypted swap: LUKS or a plain dm-crypt mapping alike.
+FIX_ROOT=/dev/nvme0n1p2; FIX_SWAPS="$ZRAM\n$(active /dev/dm-1)"; resume_run
+chk_str resume-luks-swap "$(resume_tok)" ""
+chk_str resume-luks-swap-says "$( [[ "$RERR" == *"/dev/dm-1: it is encrypted"* ]] && echo yes || echo no )" "yes"
+FIX_SWAPS="$(active /dev/dm-2)"; resume_run
+chk_str resume-dmcrypt-swap "$(resume_tok)" ""
+chk_str resume-dmcrypt-swap-says "$( [[ "$RERR" == *"/dev/dm-2: it is encrypted"* ]] && echo yes || echo no )" "yes"
+
+# An encrypted swap named in fstab but not open: a /dev/mapper path with no
+# device node is still judged, and still is not a target.
+FIX_SWAPS=""; printf '/dev/mapper/cswap none swap defaults 0 0\n' > "$FSTAB_FILE"; resume_run
+chk_str resume-mapper-closed "$(resume_tok)" ""
+chk_str resume-mapper-closed-says "$( [[ "$RERR" == *"/dev/mapper/cswap"* ]] && echo yes || echo no )" "yes"
+: > "$FSTAB_FILE"
+
+# A swap on LVM has no partition to name.
+FIX_SWAPS="$(active /dev/dm-3)"; resume_run
+chk_str resume-lvm-swap "$(resume_tok)" ""
+chk_str resume-lvm-swap-says "$( [[ "$RERR" == *"not a plain partition"* ]] && echo yes || echo no )" "yes"
+
+# zram only, or a swap file only: nothing to resume from, and nothing to say.
+FIX_SWAPS="$ZRAM"; resume_run
+chk_str resume-zram-only "$RCL" "$RBASE"
+chk_str resume-zram-only-quiet "$RERR" ""
+FIX_SWAPS='/swapfile\tfile\t8388604\t0\t-2'; printf '/swapfile none swap defaults 0 0\n' > "$FSTAB_FILE"; FIX_BLOCK=""
+resume_run
+chk_str resume-swapfile-only "$RCL" "$RBASE"
+chk_str resume-swapfile-only-quiet "$RERR" ""
+# A swap file in use beside a partition fstab names but that is not on: the
+# image goes to the file, so the partition is not the one to resume from.
+printf '/swapfile none swap defaults 0 0\n/dev/sdz3 none swap defaults 0 0\n' > "$FSTAB_FILE"; FIX_BLOCK="/dev/sdz3"
+resume_run
+chk_str resume-swapfile-beside-idle-part "$RCL" "$RBASE"
+chk_str resume-swapfile-beside-idle-part-quiet "$RERR" ""
+FIX_BLOCK=""
+# zram set up through fstab rather than zram-generator is still only memory.
+FIX_SWAPS="$ZRAM"; printf '/dev/zram0 none swap defaults,discard,pri=100,x-systemd.makefs 0 0\n' > "$FSTAB_FILE"; FIX_BLOCK="/dev/zram0"
+resume_run
+chk_str resume-zram-fstab "$RCL" "$RBASE"
+chk_str resume-zram-fstab-quiet "$RERR" ""
+FIX_BLOCK=""
+: > "$FSTAB_FILE"
+
+# A resume= already on the line is the owner's own setup and stays as it is,
+# resume_offset= with it.
+FIX_SWAPS="$(active /dev/nvme0n1p3)"; OWN="$RBASE resume=UUID=0f0f-mine resume_offset=533760"
+resume_run "$OWN"
+chk_str resume-existing-kept "$RCL" "$OWN"
+chk_str resume-existing-quiet "$RERR" ""
+# Even one only in the line the writer would seed from, as on a machine with
+# no /etc/kernel/cmdline yet (the seed is stubbed inside the subshell only).
+rm -f "$KERNEL_CMDLINE"
+RERR="$(_gpu_cmdline_current() { printf '%s\n' "$OWN"; }; gpu_apply_autoconfig 2>&1 >/dev/null)"; CASES=$((CASES + 1))
+chk_str resume-existing-seed "$( [[ -f "$KERNEL_CMDLINE" ]] && echo written || echo untouched )" "untouched"
+
+# Two swap partitions, only one turned on: the one in use, not the first on
+# the disks, which may be another system's.
+FIX_SWAPS="$ZRAM\n$(active /dev/sdz3)"
+printf '/dev/sdz2 none swap defaults 0 0\n/dev/sdz3 none swap defaults 0 0\n' > "$FSTAB_FILE"; FIX_BLOCK="/dev/sdz2 /dev/sdz3"
+resume_run
+chk_str resume-active-one "$(resume_tok)" "resume=PARTUUID=cccc-3333"
+# None turned on: fstab decides, and a noauto line keeps its swap off.
+FIX_SWAPS="$ZRAM"
+printf '/dev/sdz2 none swap noauto 0 0\n/swapfile none swap defaults 0 0\n/dev/sdz3 none swap defaults 0 0\n' > "$FSTAB_FILE"
+resume_run
+chk_str resume-fstab-noauto "$(resume_tok)" "resume=PARTUUID=cccc-3333"
+: > "$FSTAB_FILE"; FIX_BLOCK=""
+
+# A root lsblk cannot place is never assumed plain.
+FIX_ROOT="rpool/ROOT/arch"; FIX_SWAPS="$(active /dev/nvme0n1p3)"; resume_run
+chk_str resume-root-unknown "$(resume_tok)" ""
+chk_str resume-root-unknown-says "$( [[ "$RERR" == *"could not be determined"* ]] && echo yes || echo no )" "yes"
+
+# The ISO install decides hibernation itself and overrides the probe with a
+# no-op: the library then adds nothing and says nothing, even on a layout it
+# would otherwise pick.
+FIX_ROOT=/dev/nvme0n1p2; FIX_SWAPS="$(active /dev/nvme0n1p3)"
+_gpu_swap_partuuid() { :; }
+resume_run
+chk_str resume-override-off "$RCL" "$RBASE"
+chk_str resume-override-quiet "$RERR" ""
+rm -rf "$RTMP"; unset FSTAB_FILE
+
 if [[ $FAILS -eq 0 ]]; then echo "gpu_detect: all $CASES cases PASS"; exit 0
 else echo "gpu_detect: $FAILS assertion(s) FAILED across $CASES cases"; exit 1; fi

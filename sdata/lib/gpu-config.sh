@@ -213,6 +213,8 @@ gpu_classify_nvidia_driver() {
 #   KERNEL_CMDLINE  default /etc/kernel/cmdline   (point at a temp file in tests)
 #   MKINITCPIO_CONF default /etc/mkinitcpio.conf
 #   MODPROBE_DIR    default /etc/modprobe.d
+#   FSTAB_FILE      default /etc/fstab            (read only, for the resume= swap)
+#   NO_HIBERNATE_DROPIN default /etc/systemd/sleep.conf.d/50-mainstream-no-hibernate.conf (read only)
 # Write stdin to a file at its canonical path, honoring GPU_SUDO + creating dirs.
 _gpu_write_file() {
     local dest="$1" mode="${2:-644}" tmp
@@ -247,15 +249,21 @@ gpu_base_cmdline_tokens() {
 # line). Seeds from the existing file, else /boot/limine.conf's cmdline:, else
 # /proc/cmdline (stripping BOOT_IMAGE=/initrd=). limine regenerates limine.conf
 # from /etc/kernel/cmdline, so this never writes limine.conf directly.
+# _gpu_cmdline_current is that seed on its own, so a caller deciding whether a
+# key is already set reads the same line this writer would build on.
+_gpu_cmdline_current() {
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}"
+    if [[ -f "$kc" ]]; then
+        cat "$kc"
+    elif [[ -f /boot/limine.conf ]]; then
+        awk -F': *' 'tolower($1) ~ /(kernel_)?cmdline$/ {print $2; exit}' /boot/limine.conf 2>/dev/null || true
+    elif [[ -r /proc/cmdline ]]; then
+        sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g' /proc/cmdline
+    fi
+}
 cmdline_upsert() {
     local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" current=""
-    if [[ -f "$kc" ]]; then
-        current="$(cat "$kc")"
-    elif [[ -f /boot/limine.conf ]]; then
-        current="$(awk -F': *' 'tolower($1) ~ /(kernel_)?cmdline$/ {print $2; exit}' /boot/limine.conf 2>/dev/null || true)"
-    elif [[ -r /proc/cmdline ]]; then
-        current="$(sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g' /proc/cmdline)"
-    fi
+    current="$(_gpu_cmdline_current)"
     local -a toks=(); local t
     for t in $current; do toks+=("$t"); done
     local new key i found
@@ -604,17 +612,118 @@ flush_failures() {
     } | _gpu_write_file "$path"
 }
 
+# ── resume= target ──────────────────────────────────────────────────────────
+# Probes (overridable for testing).
+_gpu_proc_swaps()   { cat /proc/swaps 2>/dev/null || true; }
+# Tags come back as device paths, and one that matches no device as an empty line.
+_gpu_fstab_swaps()  { findmnt --fstab -F "${FSTAB_FILE:-/etc/fstab}" -n -e -t swap -O nonoauto -o SOURCE 2>/dev/null || true; }
+_gpu_root_source()  { findmnt -n -v -o SOURCE / 2>/dev/null || true; }
+# TYPE and FSTYPE of a device and of everything it sits on, the device first.
+_gpu_dev_stack()    { lsblk -s -n -r -o TYPE,FSTYPE "$1" 2>/dev/null || true; }
+_gpu_dev_partuuid() { lsblk -d -n -o PARTUUID "$1" 2>/dev/null || true; }
+_gpu_is_block()     { [[ -b "$1" ]]; }
+
+# The swap a hibernation image would go to: the first one turned on right now,
+# else the first one /etc/fstab turns on at boot. Any other swap partition on
+# any disk is none of this system's business: it may be another system's, with
+# that system's hibernation image in it. zram lives in memory and a swap file
+# has no partition to name, so a system with only those gets nothing.
+_gpu_resume_swap_dev() {
+    local name type rest in_use=0
+    while read -r name type rest; do
+        [[ "$name" != /dev/zram* ]] || continue
+        if [[ "$type" == partition ]]; then
+            printf '%s\n' "$name"
+            return 0
+        fi
+        in_use=1
+    done < <(_gpu_proc_swaps | tail -n +2)
+    # A swap file in use is where the image would go, so a partition fstab
+    # names but that is not on is not the one to resume from.
+    [[ $in_use -eq 0 ]] || return 0
+    while IFS= read -r name; do
+        [[ "$name" != /dev/zram* ]] || continue
+        # An encrypted swap that is not open has a /dev/mapper path and no
+        # device node, and still has to be judged rather than passed over.
+        if [[ "$name" == /dev/mapper/* ]] || { [[ -n "$name" ]] && _gpu_is_block "$name"; }; then
+            printf '%s\n' "$name"
+            return 0
+        fi
+    done < <(_gpu_fstab_swaps)
+    return 0
+}
+
+# How a device sits on the disks: encrypted when it or anything beneath it is a
+# dm-crypt mapping or a LUKS container, part for a plain partition, other for
+# anything else plain (LVM, RAID, a whole disk), and nothing when lsblk cannot
+# place it. A /dev/mapper path is never part, since no PARTUUID names a mapping.
+_gpu_dev_class() {
+    local type fstype own=""
+    while read -r type fstype; do
+        [[ -n "$type" ]] || continue
+        if [[ "$type" == crypt || "$fstype" == crypto_LUKS ]]; then
+            printf 'encrypted\n'
+            return 0
+        fi
+        [[ -n "$own" ]] || own="$type"
+    done < <(_gpu_dev_stack "$1")
+    [[ -n "$own" ]] || return 0
+    if [[ "$own" == part && "$1" != /dev/mapper/* ]]; then
+        printf 'part\n'
+    else
+        printf 'other\n'
+    fi
+}
+
+# The PARTUUID to resume from, or nothing. Hibernation writes all of memory,
+# encryption keys included, to the swap, so beside an encrypted root a plain
+# swap would leave those keys on disk in the clear. An encrypted swap is no
+# target either: resume=PARTUUID= would point the kernel at the container, not
+# at the swap inside it. So a partition is named only when neither is
+# encrypted, and the reason is said whenever a swap in use is passed over.
+# The ISO install decides hibernation itself and overrides this with a no-op,
+# which turns the whole resume step off.
 _gpu_swap_partuuid() {
-    blkid -t TYPE=swap -o export 2>/dev/null | awk -F= '/^PARTUUID=/{print $2; exit}' || true
+    local dev root root_class="" partuuid="" why=""
+    # Hibernation the install turned off on purpose stays off: that happens
+    # beside an encrypted root or swap, and a resume= would send every boot
+    # looking for an image in a swap the install keeps off.
+    [[ ! -e "${NO_HIBERNATE_DROPIN:-/etc/systemd/sleep.conf.d/50-mainstream-no-hibernate.conf}" ]] || return 0
+    dev="$(_gpu_resume_swap_dev)"
+    [[ -n "$dev" ]] || return 0
+    case "$(_gpu_dev_class "$dev")" in
+        encrypted) why="it is encrypted, and resume=PARTUUID= can only name a plain partition" ;;
+        part) ;;
+        other) why="it is not a plain partition resume=PARTUUID= can name" ;;
+        *) why="it could not be inspected" ;;
+    esac
+    if [[ -z "$why" ]]; then
+        root="$(_gpu_root_source)"
+        [[ -z "$root" ]] || root_class="$(_gpu_dev_class "$root")"
+        case "$root_class" in
+            encrypted) why="the root is encrypted and this swap is not, so hibernating would write memory, encryption keys included, to disk unencrypted" ;;
+            part|other) ;;
+            *) why="whether the root is encrypted could not be determined" ;;
+        esac
+    fi
+    if [[ -z "$why" ]]; then
+        read -r partuuid < <(_gpu_dev_partuuid "$dev") || true
+        [[ -n "$partuuid" ]] || why="it has no PARTUUID"
+    fi
+    if [[ -n "$why" ]]; then
+        printf 'Hibernation is not set up for swap %s: %s.\n' "$dev" "$why" >&2
+        return 0
+    fi
+    printf '%s\n' "$partuuid"
 }
 
 # ── gpu_apply_autoconfig ────────────────────────────────────────────────────
 # System-level GPU config from gpu_detect's results: per-vendor MODULES,
 # modprobe.d, NVIDIA early-KMS + services, the GPU kernel cmdline flags, and
-# resume= for hibernation. Mirrors dots setup_gpu_autoconfig. Does NOT rebuild
-# the initramfs or write the base cmdline -- the caller owns those. NVIDIA is
-# deliberately NOT early-loaded (early-loading breaks hibernation); KMS is kept
-# by nvidia_drm.modeset=1.
+# resume= for hibernation where it is safe (see _gpu_swap_partuuid). Mirrors
+# dots setup_gpu_autoconfig. Does NOT rebuild the initramfs or write the base
+# cmdline -- the caller owns those. NVIDIA is deliberately NOT early-loaded
+# (early-loading breaks hibernation); KMS is kept by nvidia_drm.modeset=1.
 #
 # Small-ESP guard: explicit MODULES entries make the initramfs/UKI carry the
 # full GPU module + firmware set (explicit modules bypass autodetect, so e.g.
@@ -679,12 +788,12 @@ gpu_apply_autoconfig() {
             mkinitcpio_add_modules amdgpu
         fi
     fi
-    # resume= for hibernation if a swap partition exists and none is set yet.
-    local swap_partuuid; swap_partuuid="$(_gpu_swap_partuuid)"
-    if [[ -n "$swap_partuuid" ]]; then
-        local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" cur=""
-        [[ -f "$kc" ]] && cur="$(cat "$kc")" || true
-        if ! grep -Eq '(^|[[:space:]])resume=' <<<"$cur"; then
+    # resume= for hibernation, only when the command line names none yet: one
+    # already there is the owner's own setup, and ./setup runs on machines
+    # that were hibernating before it arrived.
+    if ! grep -Eq '(^|[[:space:]])resume=' <<<"$(_gpu_cmdline_current)"; then
+        local swap_partuuid; swap_partuuid="$(_gpu_swap_partuuid)"
+        if [[ -n "$swap_partuuid" ]]; then
             cmdline_args+=("resume=PARTUUID=$swap_partuuid")
         fi
     fi
