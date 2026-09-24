@@ -2322,5 +2322,7 @@
   "Dashes and badges": "Dashes and badges",
   "Dots and badges": "Dots and badges",
   "Button highlight": "Button highlight",
-  "The circle behind a button while the pointer is over it": "The circle behind a button while the pointer is over it"
+  "The circle behind a button while the pointer is over it": "The circle behind a button while the pointer is over it",
+  "Scroll to maximize and minimize": "Scroll to maximize and minimize",
+  "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.": "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize."
 }

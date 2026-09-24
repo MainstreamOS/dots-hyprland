@@ -170,6 +170,21 @@ Singleton {
             root.buttonsOnHoverPath, value ? "1" : "0"])
     }
 
+    // Scrolling on a title bar steps its window between minimized, normal,
+    // maximized and fullscreen. On unless switched off, so an absent file
+    // reads as on. Saved beside the other title bar values and applied on
+    // the same reload.
+    readonly property string scrollActionsPath: `${root.customDir}/titlebars.scrollActions`
+    property bool scrollActions: true
+
+    function setScrollActions(value) {
+        if (value === root.scrollActions) return
+        root.scrollActions = value
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && hyprctl reload',
+            root.scrollActionsPath, value ? "1" : "0"])
+    }
+
     // Written together, because they compose into one value the plugin reads:
     // hyprbars takes a single bar_color carrying its own alpha, so a colour
     // saved without its opacity would land at whatever the other file last
@@ -239,7 +254,8 @@ Singleton {
             root.slotPath("titlebars.buttonIconColor", true), "",
             root.slotPath("titlebars.buttonIconColor", false), "",
             root.slotPath("titlebars.buttonHighlight", true), "",
-            root.slotPath("titlebars.buttonHighlight", false), ""]
+            root.slotPath("titlebars.buttonHighlight", false), "",
+            root.scrollActionsPath, "1"]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
@@ -263,6 +279,7 @@ Singleton {
             root.buttonIconColorLight = lines[10] ?? ""
             root.buttonHighlightDark = lines[11] ?? ""
             root.buttonHighlightLight = lines[12] ?? ""
+            root.scrollActions = (lines[13] ?? "") !== "0"
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true

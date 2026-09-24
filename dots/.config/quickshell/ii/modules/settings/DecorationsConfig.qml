@@ -259,6 +259,8 @@ ContentPage {
         if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
         swTitleBars.checked = Qt.binding(() => TitleBars.enabled);
         titleBarSection.resetAppearance();
+        TitleBars.setScrollActions(true);
+        swTitleBarScroll.checked = Qt.binding(() => TitleBars.scrollActions);
         activeBorderLane.rearm();
         inactiveBorderLane.rearm();
         const gradientStock = [
@@ -682,6 +684,21 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             }
             StyledToolTip {
                 text: Translation.tr("The window buttons appear when the pointer is over the title bar")
+            }
+        }
+
+        ConfigSwitch {
+            id: swTitleBarScroll
+            buttonIcon: "unfold_more"
+            text: Translation.tr("Scroll to maximize and minimize")
+            checked: TitleBars.scrollActions
+            animateChanges: TitleBars.appearanceLoaded
+            onCheckedChanged: {
+                if (!TitleBars.appearanceLoaded) return;
+                TitleBars.setScrollActions(checked);
+            }
+            StyledToolTip {
+                text: Translation.tr("Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.")
             }
         }
 

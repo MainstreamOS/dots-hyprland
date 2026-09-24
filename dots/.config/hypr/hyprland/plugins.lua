@@ -221,6 +221,82 @@ local function titleBarButton(mode)
     return size, colorOf("buttonBackground"), colorOf("buttonIconColor"), colorOf("buttonHighlight")
 end
 
+-- Minimizing puts a window on the scratchpad, the special workspace that opens
+-- over the desktop, without following it there.
+local SCRATCHPAD = "special:special"
+
+local function toScratchpad()
+    return hl.dsp.window.move({ workspace = "special", follow = false })
+end
+
+-- Restoring brings a minimized window back to the workspace on screen and
+-- follows it, so it reappears where the user is looking. Global because the
+-- title bar reaches this config only through `hyprctl dispatch`, which sees
+-- globals and not this file's locals, and the minimize button and the scroll
+-- gestures have to move a window the same way.
+function MainstreamTitleBarMinimize()
+    local w = hl.get_active_window()
+    if w and w.workspace and w.workspace.special then
+        local m = hl.get_active_monitor()
+        local t = m and m.active_workspace
+        if t then
+            return hl.dsp.window.move({ workspace = tostring(t.id), follow = true })
+        end
+    end
+    return toScratchpad()
+end
+
+-- Scrolling on a title bar steps its window one rung along minimized, normal,
+-- maximized and fullscreen: up climbs and down descends. The plugin focuses the
+-- window under the pointer before running the command, so the active window is
+-- the one scrolled on. A step past either end is a dispatcher that does
+-- nothing, which hl.dispatch accepts without a complaint. A fullscreen window
+-- has no title bar, so down from fullscreen only comes from the command run by
+-- hand, and it lands one rung lower like any other step. Minimized means the
+-- scratchpad alone: a window a rule or the user put on a named special
+-- workspace climbs and descends like any other, down to the scratchpad, where
+-- the minimize button would bring it back to the desktop instead.
+local FULLSCREEN_NONE, FULLSCREEN_MAXIMIZED = 0, 1
+
+function MainstreamTitleBarStep(direction)
+    local w = hl.get_active_window()
+    if not w or (direction ~= "up" and direction ~= "down") then
+        return hl.dsp.no_op()
+    end
+    local up = direction == "up"
+    if w.workspace and w.workspace.name == SCRATCHPAD then
+        if up then return MainstreamTitleBarMinimize() end
+        return hl.dsp.no_op()
+    end
+    local mode = w.fullscreen or FULLSCREEN_NONE
+    if up then
+        if mode == FULLSCREEN_NONE then
+            return hl.dsp.window.fullscreen({ mode = "maximized", action = "set" })
+        elseif mode == FULLSCREEN_MAXIMIZED then
+            return hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" })
+        end
+        return hl.dsp.no_op()
+    end
+    if mode == FULLSCREEN_NONE then
+        return toScratchpad()
+    elseif mode == FULLSCREEN_MAXIMIZED then
+        return hl.dsp.window.fullscreen({ mode = "maximized", action = "unset" })
+    end
+    return hl.dsp.window.fullscreen({ mode = "maximized", action = "set" })
+end
+
+-- What the title bar's buttons and gestures run. Each is a shell command, and
+-- `hyprctl dispatch X` runs `return hl.dispatch(X)` in this config, so X is a
+-- Lua dispatcher, single-quoted so the shell leaves its parentheses and double
+-- quotes alone. A middle-click closes the way the close button does, which
+-- lets an app ask about unsaved work first, and a double-click maximizes and
+-- restores the way the maximize button does.
+local TITLE_BAR_CLOSE = [[hyprctl dispatch 'hl.dsp.window.close()']]
+local TITLE_BAR_MAXIMIZE = [[hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "maximized"})']]
+local TITLE_BAR_MINIMIZE = [[hyprctl dispatch 'MainstreamTitleBarMinimize()']]
+local TITLE_BAR_SCROLL_UP = [[hyprctl dispatch 'MainstreamTitleBarStep("up")']]
+local TITLE_BAR_SCROLL_DOWN = [[hyprctl dispatch 'MainstreamTitleBarStep("down")']]
+
 -- The wallpaper the overview draws, saved beside the other runtime flags by
 -- switchwall.sh. Read from there rather than written into this file: this file
 -- is refreshed on update, and a path spliced into it would be replaced by the
@@ -339,6 +415,21 @@ local function applyPluginConfig()
         if keyAvailable("plugin:hyprbars:buttons_on_hover") then
             hyprbarsCfg.buttons_on_hover = readCustomValue("titlebars.buttonsOnHover") == "1"
         end
+        if keyAvailable("plugin:hyprbars:on_double_click") then
+            hyprbarsCfg.on_double_click = TITLE_BAR_MAXIMIZE
+        end
+        if keyAvailable("plugin:hyprbars:on_middle_click") then
+            hyprbarsCfg.on_middle_click = TITLE_BAR_CLOSE
+        end
+        -- Double-click and middle-click are always on. The scroll gestures
+        -- have a switch in Settings, saved beside the other title bar values
+        -- ("1"/"0", absent = on), and an empty command is the plugin's own
+        -- "do nothing".
+        if keyAvailable("plugin:hyprbars:on_scroll_up") and keyAvailable("plugin:hyprbars:on_scroll_down") then
+            local scroll = readCustomValue("titlebars.scrollActions") ~= "0"
+            hyprbarsCfg.on_scroll_up = scroll and TITLE_BAR_SCROLL_UP or ""
+            hyprbarsCfg.on_scroll_down = scroll and TITLE_BAR_SCROLL_DOWN or ""
+        end
         hl.config({
             plugin = {
                 hyprbars = hyprbarsCfg,
@@ -350,15 +441,11 @@ local function applyPluginConfig()
         -- via addLuaFunction(). Each call appends one button; the closure
         -- inside the plugin's globals tracks them.
         --
-        -- Button actions are SHELL commands run via the legacy `exec`
-        -- dispatcher (barDeco.cpp:277). In Lua mode `hyprctl dispatch X`
-        -- wraps X as `return hl.dispatch(X)` — so X must be a valid Lua
-        -- dispatcher callable, not a hyprlang token like "killactive".
-        -- See HyprCtl.cpp:1108. The dispatchers come from
+        -- Button actions are shell commands the plugin runs through the
+        -- `exec` dispatcher, written the way the TITLE_BAR_* commands above
+        -- describe. The dispatchers come from
         -- src/config/lua/bindings/LuaBindingsDispatchers.cpp's `hl.dsp` tree.
         --
-        -- movetoworkspacesilent has no direct equivalent in hl.dsp; only
-        -- two buttons until upstream adds it (or a Lua-side wrapper).
         -- add_button appends and the plugin cannot be asked what it already
         -- holds, so re-running this file adds a second set of the same buttons.
         -- The mark goes on the plugin's own table, which is what makes its life
@@ -377,17 +464,13 @@ local function applyPluginConfig()
             -- color, and an older build is not handed a field it does not
             -- know. A nil leaves the field out of each table below.
             if not keyAvailable("plugin:hyprbars:buttons_pop_in") then btnHover = nil end
-            -- Action strings are shell commands run via the legacy `exec`
-            -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
-            -- subshell, so the Lua expression after `hyprctl dispatch` must
-            -- be single-quoted to survive shell parsing intact.
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
                 fg_color = btnFg,
                 hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖭",
-                action   = "hyprctl dispatch 'hl.dsp.window.close()'",
+                action   = TITLE_BAR_CLOSE,
             })
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
@@ -395,27 +478,15 @@ local function applyPluginConfig()
                 hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖯",
-                action   = [[hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "maximized"})']],
+                action   = TITLE_BAR_MAXIMIZE,
             })
-            -- Toggle between special and the currently focused workspace.
-            --
-            -- IIFE inspects the active window's workspace via the Lua API:
-            --   * On a special workspace (.workspace.special == true) →
-            --     pull back to the active monitor's currently-visible
-            --     workspace WITH focus follow, so the user sees the window
-            --     reappear where they're looking.
-            --   * On a regular workspace → send to special silently
-            --     (follow=false, same effect as legacy
-            --     `movetoworkspacesilent special`).
-            -- Returns an hl.dsp.window.move dispatcher userdata so the
-            -- outer hl.dispatch(...) wrap is satisfied.
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
                 fg_color = btnFg,
                 hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖰",
-                action   = [[hyprctl dispatch '(function() local w = hl.get_active_window(); if w and w.workspace and w.workspace.special then local m = hl.get_active_monitor(); local t = m and m.active_workspace; if t then return hl.dsp.window.move({workspace = tostring(t.id), follow = true}) end end; return hl.dsp.window.move({workspace = "special", follow = false}) end)()']],
+                action   = TITLE_BAR_MINIMIZE,
             })
         end
     end
