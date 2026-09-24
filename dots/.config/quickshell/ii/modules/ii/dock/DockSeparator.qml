@@ -17,5 +17,5 @@ Rectangle {
     Layout.fillWidth: dockRoot.dockVertical
     implicitWidth: dockRoot.dockVertical ? 0 : 1
     implicitHeight: dockRoot.dockVertical ? 1 : 0
-    color: Appearance.colors.colOutlineVariant
+    color: Appearance.dockContent.colOutlineVariant
 }

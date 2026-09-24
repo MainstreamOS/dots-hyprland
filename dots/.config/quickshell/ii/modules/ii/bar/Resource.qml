@@ -29,7 +29,8 @@ Item {
             lineWidth: Appearance.rounding.unsharpen
             value: percentage
             implicitSize: 20
-            colPrimary: root.warning ? Appearance.colors.colError : Appearance.colors.colOnSecondaryContainer
+            colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnSecondaryContainer
+            colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
             accountForLightBleeding: !root.warning
             enableAnimation: false
 
@@ -44,7 +45,7 @@ Item {
                     fill: 1
                     text: iconName
                     iconSize: Appearance.font.pixelSize.normal
-                    color: Appearance.m3colors.m3onSecondaryContainer
+                    color: Appearance.barContent.m3onSecondaryContainer
                 }
             }
         }
@@ -63,7 +64,7 @@ Item {
             StyledText {
                 id: percentageText
                 anchors.centerIn: parent
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
                 text: `${Math.round(percentage * 100).toString()}`
             }

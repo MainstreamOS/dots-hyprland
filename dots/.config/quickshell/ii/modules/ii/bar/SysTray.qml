@@ -91,16 +91,18 @@ Item {
             background.implicitWidth: 24
             background.implicitHeight: 24
             background.anchors.centerIn: this
-            colBackgroundToggled: Appearance.colors.colSecondaryContainer
-            colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-            colRippleToggled: Appearance.colors.colSecondaryContainerActive
+            colBackgroundHover: Appearance.barContent.colLayer1Hover
+            colRipple: Appearance.barContent.colLayer1Active
+            colBackgroundToggled: Appearance.barContent.colSecondaryContainer
+            colBackgroundToggledHover: Appearance.barContent.colSecondaryContainerHover
+            colRippleToggled: Appearance.barContent.colSecondaryContainerActive
 
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 iconSize: Appearance.font.pixelSize.larger
                 text: "expand_more"
                 horizontalAlignment: Text.AlignHCenter
-                color: root.trayOverflowOpen ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer2
+                color: root.trayOverflowOpen ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer2
                 rotation: (root.trayOverflowOpen ? 180 : 0) - (90 * root.vertical) + (180 * root.invertSide)
                 Behavior on rotation {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -125,6 +127,7 @@ Item {
                         delegate: SysTrayItem {
                             required property SystemTrayItem modelData
                             item: modelData
+                            backdrop: Appearance.m3colors.m3surfaceContainer
                             Layout.fillHeight: !root.vertical
                             Layout.fillWidth: root.vertical
                             onMenuClosed: root.releaseFocus();
@@ -155,7 +158,7 @@ Item {
         StyledText {
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             font.pixelSize: Appearance.font.pixelSize.larger
-            color: Appearance.colors.colSubtext
+            color: Appearance.barContent.colSubtext
             text: "•"
             visible: root.showSeparator && SystemTray.items.values.length > 0
         }

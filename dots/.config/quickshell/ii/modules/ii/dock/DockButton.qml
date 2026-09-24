@@ -21,6 +21,8 @@ RippleButton {
     implicitWidth: dockRoot.dockVertical ? dockButtonSize + leftInset + rightInset : dockButtonSize
     implicitHeight: dockRoot.dockVertical ? dockButtonSize : dockButtonSize + topInset + bottomInset
     buttonRadius: Appearance.rounding.normal
+    colBackgroundHover: Appearance.dockContent.colLayer1Hover
+    colRipple: Appearance.dockContent.colLayer1Active
 
     background.implicitHeight: dockButtonSize
     background.implicitWidth: dockButtonSize

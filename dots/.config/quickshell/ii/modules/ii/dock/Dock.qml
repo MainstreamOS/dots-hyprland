@@ -505,6 +505,11 @@ Scope { // Scope
                                     clickedWidth: baseWidth
                                     clickedHeight: baseHeight + 20
                                     buttonRadius: Appearance.rounding.normal
+                                    colBackgroundHover: Appearance.dockContent.colLayer1Hover
+                                    colBackgroundActive: Appearance.dockContent.colLayer1Active
+                                    colBackgroundToggled: Appearance.dockContent.colPrimary
+                                    colBackgroundToggledHover: Appearance.dockContent.colPrimaryHover
+                                    colBackgroundToggledActive: Appearance.dockContent.colPrimaryActive
                                     toggled: root.pinned
                                     onClicked: root.pinned = !root.pinned
                                     contentItem: MaterialSymbol {
@@ -518,7 +523,7 @@ Scope { // Scope
                                         // the rounding was meant to prevent.
                                         iconSize: Math.round(Appearance.font.pixelSize.larger
                                             * dockRoot.fittedIconSize / Appearance.sizes.dockIconStock)
-                                        color: root.pinned ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer0
+                                        color: root.pinned ? Appearance.dockContent.m3onPrimary : Appearance.dockContent.colOnLayer0
                                     }
                                 }
                             }
@@ -542,7 +547,7 @@ Scope { // Scope
                                     horizontalAlignment: Text.AlignHCenter
                                     font.pixelSize: Math.min(parent.width, parent.height) / 2
                                     text: "apps"
-                                    color: Appearance.colors.colOnLayer0
+                                    color: Appearance.dockContent.colOnLayer0
                                 }
                             }
                         }

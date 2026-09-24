@@ -10,6 +10,8 @@ import QtQuick
  */
 MouseArea {
     id: root
+    // Handed the strip's tones when this sits bare on it rather than in a group.
+    property Appearance.SurfaceContent tones: Appearance.barContent
 
     // Red and yellow are fixed rather than themed: on a cool palette the theme's
     // own error colour lands as a washed-out pink, and "install this promptly"
@@ -19,8 +21,8 @@ MouseArea {
     readonly property var dotColors: ({
         "red": "#ed4646",
         "yellow": "#fdd835",
-        "blue": Appearance.m3colors.m3primary,
-        "white": Appearance.colors.colOnLayer1
+        "blue": root.tones.m3primary,
+        "white": root.tones.colOnLayer1
     })
 
     // CustomIcon is a plain Item and carries no implicit size of its own. The
@@ -55,7 +57,7 @@ MouseArea {
         height: 16
         source: "mainstream-symbolic.svg"
         colorize: true
-        color: Appearance.colors.colOnLayer1
+        color: root.tones.colOnLayer1
 
         Rectangle {
             anchors {
@@ -69,7 +71,7 @@ MouseArea {
             implicitWidth: 6
             implicitHeight: 6
             radius: height / 2
-            color: root.dotColors[ReleaseUpdates.severity] ?? Appearance.colors.colOnLayer1
+            color: root.dotColors[ReleaseUpdates.severity] ?? root.tones.colOnLayer1
         }
     }
 

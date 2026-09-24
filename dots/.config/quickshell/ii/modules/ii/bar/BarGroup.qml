@@ -29,33 +29,26 @@ Item {
             leftMargin: root.vertical ? 4 : 0
             rightMargin: root.vertical ? 4 : 0
         }
-        readonly property color baseColor:
-            Config.options?.bar.borderless ? "transparent" : Appearance.colors.colBarWidget
-        color: root.glowing
-            ? ColorUtils.transparentize(Appearance.colors.colPrimary, 0.82)
-            : baseColor
+        // Not eased: the pill can turn with its content, and a pill fading
+        // while the icons on it switch at once passes through a moment where
+        // neither reads. The drag-over glow is laid over it and eases alone.
+        color: Config.options?.bar.borderless ? "transparent" : Appearance.colBarPill
         radius: Appearance.rounding.barWidget
-        border.color: root.glowing ? Appearance.colors.colPrimary : "transparent"
-        border.width: root.glowing ? 1.5 : 0
-        Behavior on color {
-            ColorAnimation {
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Appearance.animation.elementMoveFast.type
-                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-            }
-        }
-        Behavior on border.color {
-            ColorAnimation {
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Appearance.animation.elementMoveFast.type
-                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-            }
-        }
-        Behavior on border.width {
-            NumberAnimation {
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Appearance.animation.elementMoveFast.type
-                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: ColorUtils.transparentize(Appearance.barContent.colPrimary, 0.82)
+            border.color: Appearance.barContent.colPrimary
+            border.width: 1.5
+            opacity: root.glowing ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Appearance.animation.elementMoveFast.duration
+                    easing.type: Appearance.animation.elementMoveFast.type
+                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                }
             }
         }
     }

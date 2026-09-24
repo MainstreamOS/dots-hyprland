@@ -244,6 +244,10 @@ jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/nul
 # was saved wearing stock and reads as stock, the same as one naming no color.
 JQ_FILTER+=' | .bar = ({backgroundOpacity: -1, widgetOpacity: -1, widgetRadius: -1, floatRadius: -1, floatWidth: -1, notchWidth: -1, floatSplit: false, widgetColorDark: "", widgetColorLight: "", backgroundColorDark: "", backgroundColorLight: "", floatStyleShadow: true} + (.bar // {}))'
 JQ_FILTER+=' | .dock = ({showBackground: true, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1, iconSize: -1, indicatorStyle: "dashes", hoverEffect: "magnify", hoverMagnify: -1, glowMagnify: -1, glowColorDark: "", glowColorLight: "", glowIntensity: -1, showOverviewButton: true, showPinButton: true} + (.dock // {}))'
+# Whether the bar and dock icons answer to what they sit on goes with the
+# colors that decide it, and a theme saved before the switch existed was
+# saved with it on.
+JQ_FILTER+=' | .appearance = ({autoIconContrast: true} + (.appearance // {}))'
 # Which edge the dock sits on belongs to the theme, but only when the theme has
 # an opinion. A snapshot taken before the setting existed names no edge, and an
 # absent key is the worst of both: the adapter keeps showing the dock where it

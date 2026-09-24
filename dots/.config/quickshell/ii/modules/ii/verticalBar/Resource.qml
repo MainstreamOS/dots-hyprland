@@ -18,7 +18,8 @@ Item {
         anchors.centerIn: parent
         value: percentage
         enableAnimation: false
-        colPrimary: root.warning ? Appearance.colors.colError : Appearance.colors.colOnSecondaryContainer
+        colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnSecondaryContainer
+        colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
         accountForLightBleeding: !root.warning
 
         MaterialSymbol {
@@ -26,7 +27,7 @@ Item {
             fill: 1
             text: root.iconName
             iconSize: 13
-            color: Appearance.colors.colOnSecondaryContainer
+            color: Appearance.barContent.colOnSecondaryContainer
         }
     }
 

@@ -19,21 +19,21 @@ Item {
         StyledText {
             font.pixelSize: Appearance.font.pixelSize.large
             font.features: { "tnum": 1 }
-            color: Appearance.colors.colOnLayer1
+            color: Appearance.barContent.colOnLayer1
             text: DateTime.time
         }
 
         StyledText {
             visible: root.showDate
             font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.colors.colOnLayer1
+            color: Appearance.barContent.colOnLayer1
             text: "•"
         }
 
         StyledText {
             visible: root.showDate
             font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.colors.colOnLayer1
+            color: Appearance.barContent.colOnLayer1
             text: DateTime.longDate
         }
     }

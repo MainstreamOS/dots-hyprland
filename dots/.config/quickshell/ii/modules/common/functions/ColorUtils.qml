@@ -137,6 +137,87 @@ Singleton {
     }
 
     /**
+     * Relative luminance as WCAG defines it, from 0 for black to 1 for white.
+     *
+     * @param {string} color - The color (any Qt.color-compatible string). Alpha is ignored.
+     * @returns {number} The luminance (0-1).
+     */
+    function relativeLuminance(color) {
+        const c = Qt.color(color);
+        const linear = v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b);
+    }
+
+    /**
+     * WCAG contrast ratio between two opaque colors, from 1 (none) to 21.
+     *
+     * @param {string} color1 - The first color.
+     * @param {string} color2 - The second color.
+     * @returns {number} The contrast ratio.
+     */
+    function contrastRatio(color1, color2) {
+        const l1 = relativeLuminance(color1);
+        const l2 = relativeLuminance(color2);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+
+    /**
+     * Paints a color over an opaque one, the way the compositor blends them.
+     *
+     * @param {string} top - The color laid on top; its alpha is how much of it shows.
+     * @param {string} bottom - The opaque color underneath.
+     * @returns {Qt.rgba} The opaque result.
+     */
+    function composite(top, bottom) {
+        const t = Qt.color(top);
+        const b = Qt.color(bottom);
+        return Qt.rgba(t.r * t.a + b.r * (1 - t.a), t.g * t.a + b.g * (1 - t.a), t.b * t.a + b.b * (1 - t.a), 1);
+    }
+
+    /**
+     * The least mix of one color toward another that stands a given contrast
+     * off an opaque backdrop. Alpha is mixed along with the rest, so a
+     * see-through color firms up only as far as it has to.
+     *
+     * @param {string} color - The color to start from; its alpha is how much of it shows.
+     * @param {string} toward - The color to move toward.
+     * @param {string} backdrop - The opaque color both are drawn over.
+     * @param {number} ratio - The contrast ratio to reach.
+     * @returns {Qt.rgba} The color exactly as given when it already stands that far off, `toward` as given when even that falls short, otherwise the mix.
+     */
+    function mixForContrast(color, toward, backdrop, ratio) {
+        // A hair under the mark, so a color that sits on it and misses only
+        // by rounding is left where it is.
+        const reaches = c => contrastRatio(composite(c, backdrop), backdrop) >= ratio - 0.01;
+        if (reaches(color))
+            return color;
+        if (!reaches(toward))
+            return toward;
+        let low = 0;
+        let high = 1;
+        for (let i = 0; i < 8; i++) {
+            const p = (low + high) / 2;
+            if (reaches(mix(toward, color, p)))
+                high = p;
+            else
+                low = p;
+        }
+        return mix(toward, color, high);
+    }
+
+    /**
+     * The same hue, saturation and alpha at the opposite lightness (using HSL),
+     * so light content turns into dark content that keeps its accent.
+     *
+     * @param {string} color - The color (any Qt.color-compatible string).
+     * @returns {Qt.rgba} The mirrored color.
+     */
+    function mirrorLightness(color) {
+        const c = Qt.color(color);
+        return Qt.hsla(c.hslHue, c.hslSaturation, 1 - c.hslLightness, c.a);
+    }
+
+    /**
      * Clamps a value to the inclusive range [0, 1].
      *
      * @param {number} x - The value to clamp.

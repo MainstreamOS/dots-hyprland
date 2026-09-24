@@ -6,7 +6,7 @@ import qs.modules.common.widgets
 Loader {
     id: root
     property bool vertical: false
-    property color color: Appearance.colors.colOnSurfaceVariant
+    property color color: Appearance.barContent.colOnSurfaceVariant
     active: HyprlandXkb.layoutCodes.length > 1
     visible: active
 

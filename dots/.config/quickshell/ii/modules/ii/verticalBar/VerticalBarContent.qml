@@ -170,6 +170,8 @@ Item { // Bar content region
     component BarModule: Loader {
         required property string moduleName
         property bool entryEnabled: true
+        // A module in a group with no pill sits bare on the strip.
+        property bool onStrip: false
         Layout.alignment: Qt.AlignHCenter
         // The button used to be inset from the top by half the room left over
         // beside it, so the gap above matched the gaps either side. Sitting
@@ -211,6 +213,7 @@ Item { // Bar content region
                         required property var modelData
                         moduleName: modelData.id
                         entryEnabled: modelData.enabled
+                        onStrip: true
                     }
                 }
             }
@@ -238,7 +241,8 @@ Item { // Bar content region
         id: comp_sidebarButton
         Bar.LeftSidebarButton {
             Layout.alignment: Qt.AlignHCenter
-            colBackground: barTopSectionMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+            tones: (parent?.onStrip ?? false) ? Appearance.barStripContent : Appearance.barContent
+            colBackground: barTopSectionMouseArea.hovered ? tones.colLayer1Hover : ColorUtils.transparentize(tones.colLayer1Hover, 1)
         }
     }
 
@@ -315,12 +319,12 @@ Item { // Bar content region
                 implicitHeight: 32
                 buttonRadius: Appearance.rounding.full
                 toggled: volumeBarPopup.shown
-                colBackground: barBottomSectionMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
-                colBackgroundHover: Appearance.colors.colLayer1Hover
-                colRipple: Appearance.colors.colLayer1Active
-                colBackgroundToggled: Appearance.colors.colSecondaryContainer
-                colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-                colRippleToggled: Appearance.colors.colSecondaryContainerActive
+                colBackground: barBottomSectionMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
+                colBackgroundHover: Appearance.barContent.colLayer1Hover
+                colRipple: Appearance.barContent.colLayer1Active
+                colBackgroundToggled: Appearance.barContent.colSecondaryContainer
+                colBackgroundToggledHover: Appearance.barContent.colSecondaryContainerHover
+                colRippleToggled: Appearance.barContent.colSecondaryContainerActive
                 onClicked: volumeBarPopup.shown = !volumeBarPopup.shown
 
                 contentItem: MaterialSymbol {
@@ -333,7 +337,7 @@ Item { // Bar content region
                         return "volume_up";
                     }
                     iconSize: Appearance.font.pixelSize.larger
-                    color: volumeIconButton.toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer0
+                    color: volumeIconButton.toggled ? Appearance.barContent.m3onSecondaryContainer : Appearance.barContent.colOnLayer0
                 }
             }
 
@@ -354,14 +358,14 @@ Item { // Bar content region
             implicitWidth: indicatorsColumnLayout.implicitWidth + 6 * 2
 
             buttonRadius: Appearance.rounding.full
-            colBackground: barBottomSectionMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
-            colBackgroundHover: Appearance.colors.colLayer1Hover
-            colRipple: Appearance.colors.colLayer1Active
-            colBackgroundToggled: Appearance.colors.colSecondaryContainer
-            colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-            colRippleToggled: Appearance.colors.colSecondaryContainerActive
+            colBackground: barBottomSectionMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
+            colBackgroundHover: Appearance.barContent.colLayer1Hover
+            colRipple: Appearance.barContent.colLayer1Active
+            colBackgroundToggled: Appearance.barContent.colSecondaryContainer
+            colBackgroundToggledHover: Appearance.barContent.colSecondaryContainerHover
+            colRippleToggled: Appearance.barContent.colSecondaryContainerActive
             toggled: GlobalStates.sidebarRightOpen
-            property color colText: toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer0
+            property color colText: toggled ? Appearance.barContent.m3onSecondaryContainer : Appearance.barContent.colOnLayer0
 
             Behavior on colText {
                 animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)

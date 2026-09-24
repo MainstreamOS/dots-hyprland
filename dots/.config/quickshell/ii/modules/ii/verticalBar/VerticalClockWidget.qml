@@ -35,7 +35,7 @@ Item {
                             // Smaller "am"/"pm" text
                             return Appearance.font.pixelSize.large;
                     }
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.barContent.colOnLayer1
                     text: modelData.padStart(2, "0")
                 }
             }
@@ -43,7 +43,7 @@ Item {
         StyledText {
             anchors.horizontalCenter: parent.horizontalCenter
             font.pixelSize: Appearance.font.pixelSize.smallest
-            color: Appearance.colors.colOnLayer1
+            color: Appearance.barContent.colOnLayer1
             text: DateTime.shortDate
         }
     }

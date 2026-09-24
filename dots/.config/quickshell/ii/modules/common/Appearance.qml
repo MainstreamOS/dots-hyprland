@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.modules.common.functions
 pragma Singleton
 pragma ComponentBehavior: Bound
@@ -34,6 +35,305 @@ Singleton {
     property real autoContentTransparency: 0.9
     property real backgroundTransparency: Config?.options.appearance.transparency.enable ? Config?.options.appearance.transparency.automatic ? autoBackgroundTransparency : Config?.options.appearance.transparency.backgroundTransparency : 0
     property real contentTransparency: Config?.options.appearance.transparency.automatic ? autoContentTransparency : Config?.options.appearance.transparency.contentTransparency
+
+    // What the bar and the dock are laid over, read along each screen edge
+    // rather than across the whole picture: a bright sky over a dark
+    // landscape averages out dark, and the sky is what a see-through strip
+    // across the top actually shows. The average stands in until it is read.
+    property var wallpaperEdges: ({})
+    readonly property color wallpaperAverage: wallColorQuant.colors[0] ?? m3colors.m3background
+    function wallpaperEdge(edge) {
+        const read = wallpaperEdges[edge]
+        return read !== undefined ? read : wallpaperAverage
+    }
+    readonly property string wallpaperFile: FileUtils.trimFileProtocol(wallColorQuant.wallpaperIsVideo
+        ? Config.options.background.thumbnailPath : wallColorQuant.wallpaperPath)
+    onWallpaperFileChanged: wallEdgeDebounce.restart()
+    Timer {
+        id: wallEdgeDebounce
+        interval: 300
+        onTriggered: {
+            if (root.wallpaperFile === "") {
+                root.wallpaperEdges = ({})
+                return
+            }
+            wallEdgeSampler.exec({ command: ["magick", "-define", "jpeg:size=256x144", root.wallpaperFile,
+                "-delete", "1--1", "-thumbnail", "64x36!",
+                "(", "-clone", "0", "-gravity", "north", "-crop", "64x3+0+0", "+repage", "-scale", "1x1!", ")",
+                "(", "-clone", "0", "-gravity", "south", "-crop", "64x3+0+0", "+repage", "-scale", "1x1!", ")",
+                "(", "-clone", "0", "-gravity", "west", "-crop", "4x36+0+0", "+repage", "-scale", "1x1!", ")",
+                "(", "-clone", "0", "-gravity", "east", "-crop", "4x36+0+0", "+repage", "-scale", "1x1!", ")",
+                "-delete", "0", "-format", "%[hex:p{0,0}]\\n", "info:"] })
+        }
+    }
+    Process {
+        id: wallEdgeSampler
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const hex = text.trim().split("\n").map(line => line.trim().slice(0, 6))
+                // Kept until the new picture is read, so a change of wallpaper
+                // does not pass through the average on its way and turn the
+                // icons twice.
+                root.wallpaperEdges = hex.length === 4 && hex.every(h => /^[0-9a-fA-F]{6}$/.test(h))
+                    ? { top: "#" + hex[0], bottom: "#" + hex[1], left: "#" + hex[2], right: "#" + hex[3] }
+                    : ({})
+            }
+        }
+    }
+
+    // Which way the content on a surface is drawn. The surface is judged as it
+    // actually shows, see-through parts and all, and as it would show either
+    // way, since some of it turns with the content. The palette's tones are
+    // kept while they read, and otherwise unless the opposite ones read
+    // clearly better against every part.
+    readonly property bool autoIconContrast: Config.options?.appearance.autoIconContrast ?? true
+    function worstContrast(ink, places) {
+        return Math.min(...places.map(bg => ColorUtils.contrastRatio(ink, bg)))
+    }
+    function contentFlipped(places, turnedPlaces) {
+        if (!autoIconContrast)
+            return false
+        const own = worstContrast(m3colors.m3onSurface, places)
+        return own < 4.5 && worstContrast(ColorUtils.mirrorLightness(m3colors.m3onSurface), turnedPlaces) > own * 1.25
+    }
+    // A color someone picked in a middle tone leaves both of the palette's
+    // inks short, and there the inks are carried to white or black anyway, so
+    // the side whose far end reads better is the one to take.
+    function extremeFlipped(places) {
+        if (!autoIconContrast)
+            return false
+        const own = worstContrast(m3colors.darkmode ? "white" : "black", places)
+        return own < 4.5 && worstContrast(m3colors.darkmode ? "black" : "white", places) > own
+    }
+    function laidOver(surface, edge, shown) {
+        return shown ? ColorUtils.composite(surface, wallpaperEdge(edge)) : wallpaperEdge(edge)
+    }
+    readonly property color barBackdrop: laidOver(colors.colBarBackground, sizes.barEdge, Config.options?.bar.showBackground)
+    readonly property color dockBackdrop: laidOver(colors.colDockBackground, sizes.dockEdge,
+        Config.options?.dock.showBackground)
+    // The same edges under the strip and the dock as they come. The palette's
+    // inks were chosen to stand off these, so a surface the user has colored
+    // is held to what they show here, and the stock one is left exactly as is.
+    readonly property color barStockBackdrop: laidOver(ColorUtils.applyAlpha(colors.colLayer0, colors.barStockAlpha),
+        sizes.barEdge, Config.options?.bar.showBackground)
+    readonly property color dockStockBackdrop: laidOver(ColorUtils.applyAlpha(colors.colLayer0, colors.dockStockAlpha),
+        sizes.dockEdge, Config.options?.dock.showBackground)
+    // The bar and the dock read as one set, so while the dock is there it
+    // decides which way the content on both is drawn: the bar's strip and the
+    // groups in the palette's own color follow it. A group someone picked a
+    // color for is a surface of its own and is judged by itself, so a pill
+    // set light on a dark strip gets dark icons however dark the strip is.
+    // Line-separated groups have no pill, and sit on the strip like the rest.
+    readonly property bool dockLeads: Config.options?.dock.enable ?? true
+    // Only while the dock's side still reads on the bar about as well as the
+    // other side would: a dock set near black beside a stock light bar would
+    // otherwise hand the bar light icons it could not show.
+    function followsDock(places) {
+        if (!dockLeads)
+            return false
+        const dockSide = worstContrast(dockContent.darkmode ? "white" : "black", places)
+        const otherSide = worstContrast(dockContent.darkmode ? "black" : "white", places)
+        return dockSide >= 3 && dockSide * 1.5 >= otherSide
+    }
+    function barPillPlaces(strip, pill, turned) {
+        if (Config.options?.bar.borderless)
+            return [strip]
+        return [ColorUtils.composite(turned ? ColorUtils.mirrorLightness(pill) : pill, strip)]
+    }
+    // Only a palette pill given an opacity of its own turns: the stock one is
+    // a faint tint that turning would only lose against the strip.
+    readonly property bool barPillTurns: colors.barWidgetPick === "" && (Config.options?.bar.widgetOpacity ?? -1) >= 0
+    readonly property var barPillAsIs: barPillPlaces(barBackdrop, colors.colBarWidget, false)
+    // And only when its content does not read on it as it is and turning it
+    // helps. A see-through pill turned for nothing sinks into the strip it
+    // was drawn to stand from.
+    readonly property bool barPillTurned: {
+        if (!barPillTurns || !barContent.flipped)
+            return false
+        const ink = ColorUtils.mirrorLightness(m3colors.m3onSurface)
+        const asIs = worstContrast(ink, barPillAsIs)
+        return asIs < 4.5 && worstContrast(ink, barPillPlaces(barBackdrop, colors.colBarWidget, true)) > asIs
+    }
+    // The groups the dock's side would be drawn on: turned, when they can turn
+    // and the dock's content is turned.
+    readonly property var barPillForDock: barPillPlaces(barBackdrop, colors.colBarWidget, barPillTurns && dockContent.flipped)
+    readonly property color barStockPill: ColorUtils.applyAlpha(colors.colLayer1, colors.barWidgetStockAlpha)
+    readonly property var barStockPillPlaces: barPillPlaces(barStockBackdrop, barStockPill, false)
+    // The widget groups as drawn.
+    readonly property color colBarPill: barPillTurned ? ColorUtils.mirrorLightness(colors.colBarWidget) : colors.colBarWidget
+    readonly property SurfaceContent barContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: root.barPillPlaces(root.barBackdrop, root.colors.colBarWidget, root.barPillTurned)
+        stockBackdrops: root.barStockPillPlaces
+        adaptive: root.autoIconContrast
+        flipped: root.colors.barWidgetPick !== "" && !Config.options?.bar.borderless
+            ? root.contentFlipped(root.barPillAsIs, root.barPillAsIs) || root.extremeFlipped(root.barPillAsIs)
+            : root.followsDock(root.barPillForDock) ? root.dockContent.flipped
+            : root.contentFlipped(root.barPillAsIs, root.barPillPlaces(root.barBackdrop, root.colors.colBarWidget, root.barPillTurns))
+        // Judged on this surface's own stock places, which are what its stock
+        // tokens are measured against, whatever the dock decided.
+        stockFlipped: root.contentFlipped(root.barStockPillPlaces, root.barStockPillPlaces)
+    }
+    readonly property SurfaceContent barStripContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.barBackdrop]
+        stockBackdrops: [root.barStockBackdrop]
+        adaptive: root.autoIconContrast
+        flipped: root.followsDock(backdrops) ? root.dockContent.flipped : root.contentFlipped(backdrops, backdrops)
+        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
+    }
+    readonly property SurfaceContent dockContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.dockBackdrop]
+        stockBackdrops: [root.dockStockBackdrop]
+        adaptive: root.autoIconContrast
+        flipped: root.contentFlipped(backdrops, backdrops)
+        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
+    }
+
+    // The colors content is drawn in on a surface that can be turned the other
+    // way, under the names colors and m3colors already give them, so a widget
+    // moves onto one by changing a prefix. Turned, every tone keeps its hue
+    // and takes the opposite lightness, so the accent comes across with it
+    // rather than falling back to gray.
+    component SurfaceContent: QtObject {
+        property var m3
+        property var palette
+        // Off, every token is the palette's own, untouched by the surface.
+        property bool adaptive: true
+        property bool flipped: false
+        // The opaque colors the content is laid on, the one most of it sits
+        // on first, and the same places on the stock surfaces, index for
+        // index, with which way the content would be drawn there.
+        property var backdrops: ["black"]
+        property var stockBackdrops: ["black"]
+        property bool stockFlipped: false
+        readonly property real textContrast: 4.5
+        readonly property real markContrast: 3
+        // Whether the content reads as it does in dark mode, for the places
+        // that choose between two tokens by mode.
+        readonly property bool darkmode: m3.darkmode !== flipped
+        function tone(c) { return flipped ? ColorUtils.mirrorLightness(c) : c }
+        function standing(c, backdrop) { return ColorUtils.contrastRatio(ColorUtils.composite(c, backdrop), backdrop) }
+        function onStock(c) { return stockFlipped ? ColorUtils.mirrorLightness(c) : c }
+        // One of the palette's own colors, from where it starts, carried toward
+        // another until it stands off each place (the first, or every one) as
+        // far as the stock surface shows it there, up to `most`. The palette
+        // dims against its own surface, and a lightened or darkened one can
+        // swallow what it dimmed; on the stock surface nothing has to move.
+        function held(c, start, toward, most, everywhere) {
+            if (!adaptive)
+                return c
+            let out = start
+            for (let i = 0; i < (everywhere ? backdrops.length : 1); ++i)
+                out = ColorUtils.mixForContrast(out, toward, backdrops[i], Math.min(most, standing(onStock(c), stockBackdrops[i])))
+            return out
+        }
+        // The palette places its faint marks and fills a set way from its own
+        // surface toward the ink. Turning them the way the ink turns only holds
+        // on the palette's own surfaces: on a mid-tone one a separator mirrored
+        // from light to dark ends up on the far side of the surface from icons
+        // mirrored from dark to light. So each keeps the share of the way from
+        // surface to ink it has on the stock surface, measured in lightness,
+        // and is set that far across the surface as it is now.
+        function across(c, full, paletteFull) {
+            if (!adaptive)
+                return c
+            if (flipped === stockFlipped && Qt.colorEqual(backdrops[0], stockBackdrops[0]))
+                return tone(c)
+            const from = Qt.color(stockBackdrops[0]).hslLightness
+            const span = Qt.color(onStock(paletteFull)).hslLightness - from
+            // A share far outside the span means surface and ink sit too close
+            // to measure it by, so the mark stays where the palette put it.
+            const share = Math.abs(span) < 0.01 ? 1 : (Qt.color(onStock(c)).hslLightness - from) / span
+            if (share < -1 || share > 2)
+                return tone(c)
+            const here = Qt.color(backdrops[0]).hslLightness
+            const start = Qt.color(tone(c))
+            const lightness = ColorUtils.clamp01(here + share * (Qt.color(full).hslLightness - here))
+            // Kept as colorful as it was rather than as saturated: the same HSL
+            // saturation at a middle lightness is several times the color, and
+            // a pale tint moved there would turn vivid.
+            const room = l => 1 - Math.abs(2 * l - 1)
+            const chroma = start.hslSaturation * room(start.hslLightness)
+            return Qt.hsla(start.hslHue, room(lightness) > 0 ? Math.min(1, chroma / room(lightness)) : 0, lightness, start.a)
+        }
+        // Text drawn on one of the fills rather than on the surface, held
+        // against that fill up to text contrast, or to what the pair has on
+        // the stock surface where that is less. A middle-toned fill can leave
+        // the text's own side short, and then it crosses to the side that reads.
+        function onFill(c, fill, paletteFill) {
+            const start = across(c, m3onSurface, m3.m3onSurface)
+            if (!adaptive)
+                return start
+            const under = ColorUtils.composite(fill, backdrops[0])
+            const need = Math.min(textContrast, ColorUtils.contrastRatio(onStock(c), onStock(paletteFill)))
+            const lighter = ColorUtils.relativeLuminance(start) > ColorUtils.relativeLuminance(under)
+            const own = lighter ? "white" : "black"
+            const other = lighter ? "black" : "white"
+            const ownReach = ColorUtils.contrastRatio(own, under)
+            const toward = ownReach >= need || ownReach >= ColorUtils.contrastRatio(other, under) ? own : other
+            return ColorUtils.mixForContrast(start, toward, under, need)
+        }
+        // Text and icons, wherever the content sits.
+        function ink(c) { return held(c, tone(c), darkmode ? "white" : "black", textContrast, true) }
+        // The accent only has to stand out as a mark.
+        function accent(c) { return held(c, tone(c), darkmode ? "white" : "black", markContrast, false) }
+        // A dimmed ink moves toward the ink it was dimmed from and stops at
+        // four fifths of that ink's contrast, so it still reads as the fainter.
+        function dim(c, full, paletteFull) {
+            return held(c, across(c, full, paletteFull), full,
+                Math.min(markContrast, standing(full, backdrops[0]) / 1.25), false)
+        }
+        // A see-through wash of one of these colors, made less see-through the
+        // same way when the surface would swallow it.
+        function faded(c, opacity) {
+            const wash = ColorUtils.transparentize(c, 1 - opacity)
+            if (!adaptive)
+                return wash
+            const stock = stockFlipped === flipped ? wash : ColorUtils.mirrorLightness(wash)
+            return ColorUtils.mixForContrast(wash, c, backdrops[0], Math.min(markContrast,
+                standing(c, backdrops[0]) / 1.25, standing(stock, stockBackdrops[0])))
+        }
+        readonly property color colOnLayer0: ink(palette.colOnLayer0)
+        readonly property color colOnLayer1: ink(palette.colOnLayer1)
+        readonly property color colOnLayer1Inactive: dim(palette.colOnLayer1Inactive, colOnLayer1, palette.colOnLayer1)
+        readonly property color colOnLayer2: ink(palette.colOnLayer2)
+        readonly property color colOnSurfaceVariant: ink(palette.colOnSurfaceVariant)
+        readonly property color colSubtext: dim(palette.colSubtext, colOnLayer0, palette.colOnLayer0)
+        readonly property color colPrimary: accent(palette.colPrimary)
+        // Rebuilt the palette's way once the accent has had to move, so a
+        // hovered or pressed accent does not fall back to the faint one.
+        readonly property color colPrimaryHover: Qt.colorEqual(colPrimary, tone(palette.colPrimary))
+            ? tone(palette.colPrimaryHover) : ColorUtils.mix(colPrimary, colLayer1Hover, 0.87)
+        readonly property color colPrimaryActive: Qt.colorEqual(colPrimary, tone(palette.colPrimary))
+            ? tone(palette.colPrimaryActive) : ColorUtils.mix(colPrimary, colLayer1Active, 0.7)
+        readonly property color colOnPrimary: tone(palette.colOnPrimary)
+        readonly property color colTertiary: tone(palette.colTertiary)
+        readonly property color colError: tone(palette.colError)
+        readonly property color colSecondaryContainer: across(palette.colSecondaryContainer, m3onSurface, m3.m3onSurface)
+        readonly property color colSecondaryContainerHover: across(palette.colSecondaryContainerHover, m3onSurface, m3.m3onSurface)
+        readonly property color colSecondaryContainerActive: across(palette.colSecondaryContainerActive, m3onSurface, m3.m3onSurface)
+        readonly property color colOnSecondaryContainer: onFill(palette.colOnSecondaryContainer, colSecondaryContainer, palette.colSecondaryContainer)
+        readonly property color colLayer0: across(palette.colLayer0, colOnLayer0, palette.colOnLayer0)
+        readonly property color colLayer0Border: dim(palette.colLayer0Border, colOnLayer0, palette.colOnLayer0)
+        readonly property color colLayer1: across(palette.colLayer1, colOnLayer1, palette.colOnLayer1)
+        readonly property color colLayer1Hover: across(palette.colLayer1Hover, colOnLayer1, palette.colOnLayer1)
+        readonly property color colLayer1Active: across(palette.colLayer1Active, colOnLayer1, palette.colOnLayer1)
+        readonly property color colOutlineVariant: dim(palette.colOutlineVariant, colOnLayer0, palette.colOnLayer0)
+        readonly property color m3onSurface: ink(m3.m3onSurface)
+        readonly property color m3onSurfaceVariant: ink(m3.m3onSurfaceVariant)
+        // The palette's subtext is this very color, so the two are held as one.
+        readonly property color m3outline: colSubtext
+        readonly property color m3primary: accent(m3.m3primary)
+        readonly property color m3onPrimary: tone(m3.m3onPrimary)
+        readonly property color m3secondaryContainer: across(m3.m3secondaryContainer, m3onSurface, m3.m3onSurface)
+        readonly property color m3onSecondaryContainer: onFill(m3.m3onSecondaryContainer, m3secondaryContainer, m3.m3secondaryContainer)
+        readonly property color m3error: tone(m3.m3error)
+    }
 
     m3colors: QtObject {
         property bool darkmode: true
@@ -160,7 +460,11 @@ Singleton {
         // The halo's stock is the palette's lightest tone, so it reads as
         // light cast by the icon rather than a sticker laid behind it.
         property color colDockGlow: dockGlowPick !== "" ? dockGlowPick : m3colors.m3primaryFixed
-        property color colBarBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colBarBackground.a)
+        // The outline is the palette's own recipe, the outline tone laid over
+        // the surface, made with the surface as drawn: a picked color gets an
+        // edge in its own hue, and the outline tone follows the content's side.
+        property color colBarBackgroundBorder: ColorUtils.applyAlpha(
+            ColorUtils.mix(root.barStripContent.colOutlineVariant, colBarBackground, 0.4), colBarBackground.a)
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
         property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
@@ -183,7 +487,8 @@ Singleton {
         readonly property real dockStockAlpha: (Config.options?.dock.cornerStyle ?? "float") === "hug"
             ? 1 : layer0StockAlpha
         property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, dockStockAlpha)
-        property color colDockBackgroundBorder: ColorUtils.applyAlpha(colLayer0Border, colDockBackground.a)
+        property color colDockBackgroundBorder: ColorUtils.applyAlpha(
+            ColorUtils.mix(root.dockContent.colOutlineVariant, colDockBackground, 0.4), colDockBackground.a)
         // The notched dock carries its own alpha on the container rather than on
         // each piece, so the outline goes on opaque there and is let down with
         // everything else, instead of being faded twice.

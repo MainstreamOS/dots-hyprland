@@ -171,7 +171,7 @@ ButtonMouseArea {
             id: occupiedIndicatorsBg
             anchors.fill: parent
             contentLayer: StyledRectangle.ContentLayer.Group
-            color: ColorUtils.transparentize(Appearance.m3colors.m3secondaryContainer, 0.4)
+            color: ColorUtils.transparentize(Appearance.barContent.m3secondaryContainer, 0.4)
             visible: false
         }
 
@@ -253,7 +253,7 @@ ButtonMouseArea {
                 hover: root.containsMouse
                 press: root.containsPress
                 drag: true // There are too many layers so we need to force this to be a lil more opaque
-                contentColor: Appearance.colors.colPrimary
+                contentColor: Appearance.barContent.colPrimary
             }
         }
 
@@ -271,8 +271,8 @@ ButtonMouseArea {
         Colorizer {
             z: 5
             anchors.fill: numbersGrid
-            colorizationColor: Appearance.colors.colOnPrimary
-            sourceColor: Appearance.colors.colOnSecondaryContainer
+            colorizationColor: Appearance.barContent.colOnPrimary
+            sourceColor: Appearance.barContent.colOnSecondaryContainer
 
             source: activeIndicator
             maskEnabled: true
@@ -293,7 +293,7 @@ ButtonMouseArea {
                     id: wsApp
                     property var biggestWindow: wsModel.biggestWindow[index]
                     property var mainAppIconSource: Quickshell.iconPath(AppSearch.guessIcon(biggestWindow?.class), "image-missing")
-                    readonly property color contentColor: (wsModel.occupied[index] && wsModel.getWorkspaceIdAt(index) !== wsModel.fakeWorkspace) ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1Inactive
+                    readonly property color contentColor: (wsModel.occupied[index] && wsModel.getWorkspaceIdAt(index) !== wsModel.fakeWorkspace) ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer1Inactive
                     property real cornerMargin: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons && wsApp.biggestWindow) ? (root.workspaceButtonWidth - root.workspaceIconSize) / 2 : root.workspaceIconMarginShrinked
                     Behavior on cornerMargin {
                         animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
@@ -329,7 +329,7 @@ ButtonMouseArea {
                                 sourceComponent: Colorizer {
                                     implicitWidth: appIcon.implicitWidth
                                     implicitHeight: appIcon.implicitHeight
-                                    colorizationColor: Appearance.m3colors.darkmode ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
+                                    colorizationColor: Appearance.barContent.darkmode ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnPrimary
                                     colorization: Config.options.bar.workspaces.monochromeIcons ? 0.8 : 0.5
                                     brightness: 0
                                     source: appIcon
@@ -415,7 +415,7 @@ ButtonMouseArea {
                     return base;
                 return root.workspaceButtonWidth;
             }
-            color: Appearance.colors.colPrimary
+            color: Appearance.barContent.colPrimary
 
             implicitWidth: root.vertical ? undirectionalWidth : undirectionalLength
             implicitHeight: root.vertical ? undirectionalLength : undirectionalWidth
@@ -476,7 +476,7 @@ ButtonMouseArea {
         id: wsNum
         property bool hasBiggestWindow: !!wsModel.biggestWindow[index]
         property int wsId: wsModel.getWorkspaceIdAt(index)
-        property color contentColor: (wsModel.occupied[wsNum.index] && wsId !== wsModel.fakeWorkspace) ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1Inactive
+        property color contentColor: (wsModel.occupied[wsNum.index] && wsId !== wsModel.fakeWorkspace) ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer1Inactive
 
         // Drag-to-scroll: slots left of centre show a left chevron, slots to
         // the right show a right chevron; the middle slot(s) keep the dot.
@@ -555,7 +555,7 @@ ButtonMouseArea {
 
             contentLayer: StyledRectangle.ContentLayer.Group
             radius: indicatorThickness / 2
-            color: Appearance.colors.colPrimary
+            color: Appearance.barContent.colPrimary
 
             x: root.vertical ? null : indicatorPosition
             y: root.vertical ? indicatorPosition : null

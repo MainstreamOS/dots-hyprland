@@ -2253,7 +2253,7 @@ ApplicationWindow {
         readonly property real slide: bar.retract * (bar.thick + bar.gap + 12)
         readonly property bool drawn: Config.options.bar.showBackground
         readonly property color fill: bar.maskOnly ? "white" : Appearance.colors.colBarBackground
-        readonly property color markColor: ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.45)
+        readonly property color markColor: ColorUtils.transparentize(Appearance.barStripContent.colOnLayer0, 0.45)
 
         Item {
             id: barBox
@@ -2287,7 +2287,7 @@ ApplicationWindow {
                 x: Math.max(10, bar.farRadius)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
-                Rectangle { width: 16; height: 6; radius: 3; color: Appearance.colors.colPrimary }
+                Rectangle { width: 16; height: 6; radius: 3; color: Appearance.barStripContent.colPrimary }
                 Repeater {
                     model: 3
                     Rectangle { width: 6; height: 6; radius: 3; color: bar.markColor }

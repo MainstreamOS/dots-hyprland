@@ -10,6 +10,8 @@ RippleButton {
 
     implicitHeight: Math.max(content.implicitHeight, 26, content.implicitHeight)
     implicitWidth: implicitHeight
+    colBackgroundHover: Appearance.barContent.colLayer1Hover
+    colRipple: Appearance.barContent.colLayer1Active
     contentItem: content
 
 }

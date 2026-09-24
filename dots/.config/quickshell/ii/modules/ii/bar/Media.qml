@@ -69,8 +69,9 @@ Item {
             value: LocalSend.receiveSessionActive ? LocalSend.receiveProgressFraction
                 : activePlayer?.position / activePlayer?.length
             implicitSize: 20
-            colPrimary: LocalSend.receiveActive ? Appearance.colors.colPrimary
-                : Appearance.colors.colOnSecondaryContainer
+            colPrimary: LocalSend.receiveActive ? Appearance.barContent.colPrimary
+                : Appearance.barContent.colOnSecondaryContainer
+            colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
             enableAnimation: false
 
             Item {
@@ -84,8 +85,8 @@ Item {
                     text: LocalSend.receiveActive ? "download"
                         : activePlayer?.isPlaying ? "pause" : "music_note"
                     iconSize: Appearance.font.pixelSize.normal
-                    color: LocalSend.receiveActive ? Appearance.colors.colPrimary
-                        : Appearance.m3colors.m3onSecondaryContainer
+                    color: LocalSend.receiveActive ? Appearance.barContent.colPrimary
+                        : Appearance.barContent.m3onSecondaryContainer
                 }
             }
         }
@@ -98,7 +99,7 @@ Item {
             Layout.rightMargin: rowLayout.spacing
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight // Truncates the text on the right
-            color: Appearance.colors.colOnLayer1
+            color: Appearance.barContent.colOnLayer1
             text: `${cleanedTitle}${activePlayer?.trackArtist ? ' • ' + activePlayer.trackArtist : ''}`
         }
 

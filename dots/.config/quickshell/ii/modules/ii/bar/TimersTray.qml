@@ -51,7 +51,7 @@ BarGroup {
             MaterialSymbol {
                 text: "search_activity"
                 iconSize: Appearance.font.pixelSize.large
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
             StyledText {
@@ -59,7 +59,7 @@ BarGroup {
                     const t = TimerService.pomodoroSecondsLeft
                     return Math.floor(t/60).toString().padStart(2,'0') + ":" + (t%60).toString().padStart(2,'0')
                 }
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
                 // Tabular figures: every digit shares one width, so a ticking
                 // time doesn't resize the pill.
@@ -76,7 +76,7 @@ BarGroup {
             MaterialSymbol {
                 text: "timer"
                 iconSize: Appearance.font.pixelSize.large
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
             StyledText {
@@ -87,7 +87,7 @@ BarGroup {
                     (sec%60).toString().padStart(2,'0') + "." +
                     (t%100).toString().padStart(2,'0')
                 }
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
@@ -102,7 +102,7 @@ BarGroup {
             MaterialSymbol {
                 text: "hourglass_top"
                 iconSize: Appearance.font.pixelSize.large
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
             StyledText {
@@ -110,7 +110,7 @@ BarGroup {
                     const t = TimerService.countdownSecondsLeft
                     return Math.floor(t/60).toString().padStart(2,'0') + ":" + (t%60).toString().padStart(2,'0')
                 }
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter

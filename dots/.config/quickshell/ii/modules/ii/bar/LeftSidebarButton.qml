@@ -6,6 +6,8 @@ import qs.modules.common.widgets
 
 RippleButton {
     id: root
+    // Handed the strip's tones when this sits bare on it rather than in a group.
+    property Appearance.SurfaceContent tones: Appearance.barContent
 
     property bool showPing: false
 
@@ -18,11 +20,11 @@ RippleButton {
     implicitWidth: distroIcon.width + buttonPadding * 2
     implicitHeight: distroIcon.height + buttonPadding * 2
     buttonRadius: Appearance.rounding.full
-    colBackgroundHover: Appearance.colors.colLayer1Hover
-    colRipple: Appearance.colors.colLayer1Active
-    colBackgroundToggled: Appearance.colors.colSecondaryContainer
-    colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-    colRippleToggled: Appearance.colors.colSecondaryContainerActive
+    colBackgroundHover: root.tones.colLayer1Hover
+    colRipple: root.tones.colLayer1Active
+    colBackgroundToggled: root.tones.colSecondaryContainer
+    colBackgroundToggledHover: root.tones.colSecondaryContainerHover
+    colRippleToggled: root.tones.colSecondaryContainerActive
     toggled: GlobalStates.sidebarLeftOpen
 
     onPressed: {
@@ -59,7 +61,7 @@ RippleButton {
         height: 19.5
         source: Config.options.bar.topLeftIcon == 'distro' ? SystemInfo.distroIcon : `${Config.options.bar.topLeftIcon}-symbolic`
         colorize: true
-        color: Appearance.colors.colOnLayer0
+        color: root.tones.colOnLayer0
 
         Rectangle {
             opacity: root.showPing ? 1 : 0
@@ -73,7 +75,7 @@ RippleButton {
             implicitWidth: 8
             implicitHeight: 8
             radius: Appearance.rounding.full
-            color: Appearance.colors.colTertiary
+            color: root.tones.colTertiary
 
             Behavior on opacity {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)

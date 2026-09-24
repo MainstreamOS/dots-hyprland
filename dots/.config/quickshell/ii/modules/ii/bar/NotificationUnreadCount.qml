@@ -20,7 +20,7 @@ MaterialSymbol {
             topMargin: root.showUnreadCount ? 0 : 3
         }
         radius: Appearance.rounding.full
-        color: Appearance.colors.colOnLayer0
+        color: Appearance.barContent.colOnLayer0
         z: 1
 
         implicitHeight: root.showUnreadCount ? Math.max(notificationCounterText.implicitWidth, notificationCounterText.implicitHeight) : 8
@@ -31,7 +31,7 @@ MaterialSymbol {
             visible: root.showUnreadCount
             anchors.centerIn: parent
             font.pixelSize: Appearance.font.pixelSize.smallest
-            color: Appearance.colors.colLayer0
+            color: Appearance.barContent.colLayer0
             text: Notifications.unread
         }
     }

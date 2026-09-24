@@ -404,7 +404,7 @@ ContentPage {
             allowEmpty: true
             buttonIcon: "location_chip"
             value: Appearance.colors.barWidgetPick
-            fallback: String(Appearance.colors.colLayer1)
+            fallback: String(Appearance.colBarPill)
             onEdited: newValue => {
                 if (Appearance.m3colors.darkmode) Config.options.bar.widgetColorDark = newValue
                 else Config.options.bar.widgetColorLight = newValue

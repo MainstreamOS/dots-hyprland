@@ -9,6 +9,8 @@ import Quickshell.Hyprland
 
 Item {
     id: root
+    // Handed the strip's tones when this sits bare on it rather than in a group.
+    property Appearance.SurfaceContent tones: Appearance.barContent
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
     readonly property Toplevel activeWindow: ToplevelManager.activeToplevel
 
@@ -85,7 +87,7 @@ Item {
         StyledText {
             Layout.fillWidth: true
             font.pixelSize: Appearance.font.pixelSize.smaller
-            color: Appearance.colors.colSubtext
+            color: root.tones.colSubtext
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? Translation.tr("Workspace %1").arg(root.shownWorkspaceId) :
                 root.focusingThisMonitor && root.activeWindow?.activated && root.biggestWindow ? 
@@ -97,7 +99,7 @@ Item {
         StyledText {
             Layout.fillWidth: true
             font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.colors.colOnLayer0
+            color: root.tones.colOnLayer0
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? root.workspaceName :
                 root.focusingThisMonitor && root.activeWindow?.activated && root.biggestWindow ? 
