@@ -590,34 +590,85 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         property real pendingButtonSize: TitleBars.buttonSize
         property string pendingButtonBackground: TitleBars.buttonBackground
         property string pendingButtonIconColor: TitleBars.buttonIconColor
+        property string pendingButtonHighlight: TitleBars.buttonHighlight
+        // The mode the values above belong to.
+        property bool pendingDark: TitleBars.dark
 
-        // The stock bar carries no colour of ours, which plugins.lua reads as
-        // "leave the key alone", at the plugin's own alpha.
-        readonly property real defaultOpacity: 0.5333
+        // The opacity the stock bar comes at in the mode being edited.
+        readonly property real defaultOpacity: pendingDark ? TitleBars.defaultOpacityDark : TitleBars.defaultOpacityLight
         // What the plugin has always drawn its buttons at, so an untouched
         // pair is stored as nothing rather than as the numbers it happens to
         // use today.
         readonly property real defaultButtonSize: TitleBars.defaultButtonSize
         // Compared with a tolerance because the value makes a round trip
         // through a file as text, and the slider quantises to whole percents.
+        // The mode that is not on screen counts too, since the reset clears
+        // both.
         readonly property bool appearanceChanged: pendingColor !== ""
             || Math.abs(Number(pendingOpacity) - defaultOpacity) > 0.0001
             || pendingButtonBackground !== "" || pendingButtonIconColor !== ""
+            || pendingButtonHighlight !== ""
             || Math.round(pendingButtonSize) !== defaultButtonSize
+            || TitleBars.anyModeValueSet
 
-        // Reset back to stock title bar settings in one press: the color file
-        // goes empty, so the plugin paints its own stock bar again.
+        // An edit holds every value here as it is now, with the mode it belongs
+        // to. The debounce can still be running when the mode flips, and its
+        // write has to carry this mode's colors into this mode's files rather
+        // than a mix of both.
+        function holdForEdit() {
+            pendingColor = pendingColor;
+            pendingOpacity = pendingOpacity;
+            pendingButtonSize = pendingButtonSize;
+            pendingButtonBackground = pendingButtonBackground;
+            pendingButtonIconColor = pendingButtonIconColor;
+            pendingButtonHighlight = pendingButtonHighlight;
+            pendingDark = pendingDark;
+        }
+
+        // Back on the service's values, and following them again, so a mode
+        // flip or a theme apply after an edit still reaches the pickers.
+        function followService() {
+            pendingColor = Qt.binding(() => TitleBars.color);
+            pendingOpacity = Qt.binding(() => TitleBars.opacity);
+            pendingButtonSize = Qt.binding(() => TitleBars.buttonSize);
+            pendingButtonBackground = Qt.binding(() => TitleBars.buttonBackground);
+            pendingButtonIconColor = Qt.binding(() => TitleBars.buttonIconColor);
+            pendingButtonHighlight = Qt.binding(() => TitleBars.buttonHighlight);
+            pendingDark = Qt.binding(() => TitleBars.dark);
+        }
+
+        // Reset back to stock title bar settings in one press, both modes at
+        // once: every color and opacity file goes empty, so each mode's stock
+        // bar returns.
         function resetAppearance() {
-            pendingColor = "";
-            pendingOpacity = defaultOpacity;
-            if (TitleBars.color !== "" || Number(TitleBars.opacity) !== defaultOpacity)
-                TitleBars.setAppearance("", defaultOpacity);
-            pendingButtonSize = defaultButtonSize;
-            pendingButtonBackground = "";
-            pendingButtonIconColor = "";
-            if (TitleBars.buttonBackground !== "" || TitleBars.buttonIconColor !== ""
-                || Math.round(TitleBars.buttonSize) !== defaultButtonSize)
-                TitleBars.setButtons(defaultButtonSize, "", "");
+            titleBarApplyDebounce.stop();
+            titleBarButtonDebounce.stop();
+            TitleBars.resetAppearance();
+            followService();
+        }
+
+        // Once nothing is left waiting, since a value still held for the other
+        // write would otherwise be dropped in favor of the saved one.
+        function settle() {
+            if (!titleBarApplyDebounce.running && !titleBarButtonDebounce.running)
+                followService();
+        }
+
+        Connections {
+            target: TitleBars
+            function onDarkChanged() {
+                // An edit still waiting is written to the mode it was made in
+                // before the pickers move over to the new one.
+                if (titleBarApplyDebounce.running) {
+                    titleBarApplyDebounce.stop();
+                    titleBarApplyDebounce.triggered();
+                }
+                if (titleBarButtonDebounce.running) {
+                    titleBarButtonDebounce.stop();
+                    titleBarButtonDebounce.triggered();
+                }
+                titleBarSection.followService();
+            }
         }
 
         ConfigSwitch {
@@ -639,13 +690,14 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             buttonIcon: "format_color_fill"
             value: titleBarSection.pendingColor
             // An absent color is this field's stock state, so clearing it must
-            // be allowed; the stand-in is the plugin's own default bar color.
+            // be allowed; the stand-in is the stock bar color for the mode.
             allowEmpty: true
-            fallback: "#333333"
+            fallback: TitleBars.defaultColor
             onEdited: newValue => {
                 // The picker commits on every pointer move so the swatch is
                 // its own preview, and applying reloads the compositor, so
                 // the colour waits on the same debounce the slider uses.
+                titleBarSection.holdForEdit();
                 titleBarSection.pendingColor = newValue;
                 titleBarApplyDebounce.restart();
             }
@@ -658,13 +710,14 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             id: titleBarOpacitySlider
             text: Translation.tr("Opacity")
             buttonIcon: "opacity"
-            stopIndicatorValues: [53]
+            stopIndicatorValues: [Math.round(titleBarSection.defaultOpacity * 100)]
             from: 0
             to: 100
             value: Math.round(titleBarSection.pendingOpacity * 100)
             onMoved: {
                 const stepped = Math.round(value) / 100;
                 if (stepped === titleBarSection.pendingOpacity) return;
+                titleBarSection.holdForEdit();
                 titleBarSection.pendingOpacity = stepped;
                 titleBarApplyDebounce.restart();
             }
@@ -674,12 +727,13 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             text: Translation.tr("Button size")
             buttonIcon: "radio_button_checked"
             stopIndicatorValues: [titleBarSection.defaultButtonSize]
-            from: 6
+            from: TitleBars.minButtonSize
             to: TitleBars.maxButtonSize
             value: Math.round(titleBarSection.pendingButtonSize)
             onMoved: {
                 const stepped = Math.round(value);
                 if (stepped === Math.round(titleBarSection.pendingButtonSize)) return;
+                titleBarSection.holdForEdit();
                 titleBarSection.pendingButtonSize = stepped;
                 titleBarButtonDebounce.restart();
             }
@@ -690,8 +744,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             buttonIcon: "circle"
             value: titleBarSection.pendingButtonBackground
             allowEmpty: true
-            fallback: "#49454e"
+            fallback: TitleBars.defaultButtonBackground
             onEdited: newValue => {
+                titleBarSection.holdForEdit();
                 titleBarSection.pendingButtonBackground = newValue;
                 titleBarButtonDebounce.restart();
             }
@@ -705,8 +760,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             buttonIcon: "border_color"
             value: titleBarSection.pendingButtonIconColor
             allowEmpty: true
-            fallback: "#ffffff"
+            fallback: TitleBars.defaultButtonIconColor
             onEdited: newValue => {
+                titleBarSection.holdForEdit();
                 titleBarSection.pendingButtonIconColor = newValue;
                 titleBarButtonDebounce.restart();
             }
@@ -715,14 +771,44 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             }
         }
 
+        ColorField {
+            text: Translation.tr("Button highlight")
+            buttonIcon: "highlight_mouse_cursor"
+            value: titleBarSection.pendingButtonHighlight
+            allowEmpty: true
+            fallback: TitleBars.defaultButtonHighlight
+            onEdited: newValue => {
+                titleBarSection.holdForEdit();
+                titleBarSection.pendingButtonHighlight = newValue;
+                titleBarButtonDebounce.restart();
+            }
+            StyledToolTip {
+                text: Translation.tr("The circle behind a button while the pointer is over it")
+            }
+        }
+
+        SubtleNoticeBox {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            text: Translation.tr("Dark mode and light mode each keep their own colors.")
+        }
+
         // The buttons are rebuilt from the Hyprland config rather than set as
         // a key, so they answer to their own write and their own reload.
         Timer {
             id: titleBarButtonDebounce
             interval: 400
-            onTriggered: TitleBars.setButtons(titleBarSection.pendingButtonSize,
-                titleBarSection.pendingButtonBackground,
-                titleBarSection.pendingButtonIconColor)
+            onTriggered: {
+                TitleBars.setButtons(titleBarSection.pendingButtonSize,
+                    titleBarSection.pendingButtonBackground,
+                    titleBarSection.pendingButtonIconColor,
+                    titleBarSection.pendingButtonHighlight,
+                    titleBarSection.pendingDark);
+                titleBarSection.settle();
+            }
         }
 
         // Applying means reloading the compositor, and a drag sends a value
@@ -730,8 +816,12 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         Timer {
             id: titleBarApplyDebounce
             interval: 400
-            onTriggered: TitleBars.setAppearance(titleBarSection.pendingColor,
-                titleBarSection.pendingOpacity)
+            onTriggered: {
+                TitleBars.setAppearance(titleBarSection.pendingColor,
+                    titleBarSection.pendingOpacity,
+                    titleBarSection.pendingDark);
+                titleBarSection.settle();
+            }
         }
 
         // Nothing to put back while the bars are already stock, and a control

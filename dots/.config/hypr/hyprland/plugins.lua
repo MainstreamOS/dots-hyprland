@@ -136,58 +136,89 @@ local function readCustomValue(name)
     return v
 end
 
--- hyprbars takes a single bar_color carrying its own alpha, so the colour and
--- the opacity are composed here rather than set as two keys.
---
--- Returns nil only when NEITHER file holds anything usable, and the caller
--- then leaves the key alone: a machine that has never touched the settings
--- keeps whatever the plugin chooses for itself. A saved opacity without a
--- color composes over the plugin's own stock gray (333333, shipped at 88
--- alpha), so the opacity slider bites without a color pick and its first
--- nudge is continuous with the untouched look.
-local function titleBarColor()
-    local hex = readCustomValue("titlebars.color")
+-- Light or dark, as switchwall.sh last settled it. Nothing here can ask
+-- gsettings, so the script leaves the answer beside the other values. Before
+-- it has ever run the desktop is dark, which is how it starts out.
+local function colorMode()
+    local v = readCustomValue("colormode")
+    if v and v:match("^%s*light%s*$") then return "light" end
+    return "dark"
+end
+
+-- Dark mode and light mode each keep their own title bar colors: the dark set
+-- under the plain names, the light set under the same names ending in Light.
+-- An empty or unreadable file is that mode's stock value below. The button
+-- size is one value for both modes.
+local TITLE_BAR_DEFAULTS = {
+    dark = {
+        color = "333333",
+        opacity = 0.5333,
+        buttonBackground = "rgba(49454e55)",
+        buttonIconColor = "rgb(ffffff)",
+        buttonHighlight = "rgba(6c667599)",
+    },
+    -- The dark set turned over: a chip a shade off the bar, near-black icons
+    -- and a hover a clear step further, the same distances in lightness as
+    -- the dark set keeps from its bar.
+    light = {
+        color = "f3f3f3",
+        opacity = 0.3,
+        buttonBackground = "rgba(d8d3dd55)",
+        buttonIconColor = "rgb(1d1b20)",
+        buttonHighlight = "rgba(b5afbc99)",
+    },
+}
+
+local function titleBarSlot(name, mode)
+    if mode == "light" then return name .. "Light" end
+    return name
+end
+
+-- hyprbars takes a single bar_color carrying its own alpha, so the color and
+-- the opacity are composed here rather than set as two keys. Always a value:
+-- the plugin has one stock bar for both modes, and a dark bar on a light
+-- desktop is what leaving the key to it would give.
+local function titleBarColor(mode)
+    local hex = readCustomValue(titleBarSlot("titlebars.color", mode))
     if hex then
         hex = hex:gsub("^#", "")
         if not hex:match("^%x%x%x%x%x%x$") then hex = nil end
     end
-    local o = readCustomValue("titlebars.opacity")
-    if not hex then
-        if not o then return nil end
-        hex = "333333"
-    end
-    local on = tonumber(o or "0.5333") or 0.5333
+    hex = hex or TITLE_BAR_DEFAULTS[mode].color
+    local on = tonumber(readCustomValue(titleBarSlot("titlebars.opacity", mode)) or "")
+        or TITLE_BAR_DEFAULTS[mode].opacity
     if on < 0 then on = 0 elseif on > 1 then on = 1 end
     return string.format("rgba(%s%02x)", hex, math.floor(on * 255 + 0.5))
 end
 
 -- The buttons carry their own size and colors, kept apart from the bar's so a
--- bar color pick does not drag them along. An empty or unreadable color leaves
--- the pair the plugin has always drawn. Six digits are opaque, eight carry
--- their own alpha, which is how the picker writes a see-through button.
+-- bar color pick does not drag them along. Six digits are opaque, eight carry
+-- their own alpha as RRGGBBAA, which is how a see-through button is written.
 -- The bar's own height, and the ceiling it puts on a button: past about three
--- fifths of the bar there is no room left around the icon.
+-- fifths of the bar there is no room left around the icon. Below about two
+-- fifths the icon, drawn at 0.62 of the button, is too small to read and the
+-- button too small to hit, so that is the floor.
 local TITLE_BAR_HEIGHT = 30
+local TITLE_BAR_BUTTON_MIN = math.ceil(TITLE_BAR_HEIGHT * 0.4)
 local TITLE_BAR_BUTTON_MAX = math.floor(TITLE_BAR_HEIGHT * 0.6)
 -- Half the bar, which sits inside that ceiling with room left around the icon.
 local TITLE_BAR_BUTTON_DEFAULT = math.floor(TITLE_BAR_HEIGHT * 0.5 + 0.5)
 
-local function titleBarButton()
+local function titleBarButton(mode)
     local size = tonumber(readCustomValue("titlebars.buttonSize") or "") or TITLE_BAR_BUTTON_DEFAULT
-    if size < 6 then size = 6
+    if size < TITLE_BAR_BUTTON_MIN then size = TITLE_BAR_BUTTON_MIN
     elseif size > TITLE_BAR_BUTTON_MAX then size = TITLE_BAR_BUTTON_MAX end
-    local function colorOf(name, fallback)
-        local hex = readCustomValue(name)
+    local defaults = TITLE_BAR_DEFAULTS[mode]
+    local function colorOf(name)
+        local hex = readCustomValue(titleBarSlot("titlebars." .. name, mode))
         if hex then
             hex = hex:gsub("^#", "")
             if hex:match("^%x%x%x%x%x%x$") then return "rgb(" .. hex .. ")" end
             if hex:match("^%x%x%x%x%x%x%x%x$") then return "rgba(" .. hex .. ")" end
         end
-        return fallback
+        return defaults[name]
     end
-    return size,
-        colorOf("titlebars.buttonBackground", "rgba(49454e55)"),
-        colorOf("titlebars.buttonIconColor", "rgb(ffffff)")
+    return size, colorOf("buttonBackground"), colorOf("buttonIconColor"), colorOf("buttonHighlight")
 end
 
 -- The wallpaper the overview draws, saved beside the other runtime flags by
@@ -289,9 +320,9 @@ local function applyPluginConfig()
     -- hyprbars config + buttons — also probed before apply.
     if hyprbarsActive() and keyAvailable("plugin:hyprbars:bar_height") then
         local tbOn = titleBarsEnabled()
-        -- Built first so the colour can be left out entirely. Setting the key
-        -- to nil would not do that: assigning nil to a table field is how you
-        -- remove it, and the field was never there to remove.
+        local mode = colorMode()
+        -- Built first so a key that only a newer build knows can be added
+        -- below, and left out entirely for an older one.
         local hyprbarsCfg = {
             enabled = tbOn,
             bar_text_font = "Google Sans Flex Medium, Rubik, Geist, AR One Sans, Reddit Sans, Inter, Roboto, Ubuntu, Noto Sans, sans-serif",
@@ -301,11 +332,8 @@ local function applyPluginConfig()
             bar_button_padding = 5,
             bar_precedence_over_border = true,
             bar_part_of_window = true,
+            bar_color = titleBarColor(mode),
         }
-        local barColor = titleBarColor()
-        if barColor then
-            hyprbarsCfg.bar_color = barColor
-        end
         -- Only a plugin built with buttons_on_hover knows the key, so an older
         -- build is not handed a setting it would report as unknown.
         if keyAvailable("plugin:hyprbars:buttons_on_hover") then
@@ -344,7 +372,11 @@ local function applyPluginConfig()
         pcall(function() buttonsAdded = hl.plugin.hyprbars.__ms_buttons == true end)
         if hyprbarsActive() and tbOn and not buttonsAdded then
             pcall(function() hl.plugin.hyprbars.__ms_buttons = true end)
-            local btnSize, btnBg, btnFg = titleBarButton()
+            local btnSize, btnBg, btnFg, btnHover = titleBarButton(mode)
+            -- Only a plugin built with buttons_pop_in draws its own hover
+            -- color, and an older build is not handed a field it does not
+            -- know. A nil leaves the field out of each table below.
+            if not keyAvailable("plugin:hyprbars:buttons_pop_in") then btnHover = nil end
             -- Action strings are shell commands run via the legacy `exec`
             -- dispatcher (barDeco.cpp:277). Bare `()` in shell triggers a
             -- subshell, so the Lua expression after `hyprctl dispatch` must
@@ -352,6 +384,7 @@ local function applyPluginConfig()
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
                 fg_color = btnFg,
+                hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖭",
                 action   = "hyprctl dispatch 'hl.dsp.window.close()'",
@@ -359,6 +392,7 @@ local function applyPluginConfig()
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
                 fg_color = btnFg,
+                hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖯",
                 action   = [[hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "maximized"})']],
@@ -378,6 +412,7 @@ local function applyPluginConfig()
             hl.plugin.hyprbars.add_button({
                 bg_color = btnBg,
                 fg_color = btnFg,
+                hover_color = btnHover,
                 size     = btnSize,
                 icon     = "󰖰",
                 action   = [[hyprctl dispatch '(function() local w = hl.get_active_window(); if w and w.workspace and w.workspace.special then local m = hl.get_active_monitor(); local t = m and m.active_workspace; if t then return hl.dsp.window.move({workspace = tostring(t.id), follow = true}) end end; return hl.dsp.window.move({workspace = "special", follow = false}) end)()']],

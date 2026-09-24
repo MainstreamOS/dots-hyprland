@@ -30,10 +30,39 @@ pre_process() {
             gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3' ;;
         esac
     fi
+    set_colormode "$mode_flag"
 
     if [ ! -d "$CACHE_DIR"/user/generated ]; then
         mkdir -p "$CACHE_DIR"/user/generated
     fi
+}
+
+# The title bars keep their own colors for each mode, and plugins.lua chooses
+# between them on every Hyprland reload. It cannot ask gsettings, so the mode is
+# left beside the other runtime flags. Renamed into place because a reload can
+# read it at any moment. A run that leaves the mode as it was has nothing new to
+# show, so only a change marks the run as owing a reload; post_process makes
+# that reload on the usual path.
+set_colormode() {
+    local mode="$1"
+    [[ "$mode" == "dark" || "$mode" == "light" ]] || return 0
+    local target="$XDG_CONFIG_HOME/hypr/custom/colormode"
+    [[ "$(cat "$target" 2>/dev/null)" == "$mode" ]] && return 0
+    mkdir -p "${target%/*}" 2>/dev/null
+    local tmpfile
+    tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || return 0
+    if printf '%s' "$mode" > "$tmpfile" && mv -f "$tmpfile" "$target"; then
+        colormode_changed=1
+    else
+        rm -f "$tmpfile"
+    fi
+}
+
+# For a run that changed the mode but will not reach the reload post_process
+# makes, so the title bars still follow it.
+reload_for_colormode() {
+    [[ -n "${colormode_changed:-}" ]] || return 0
+    hyprctl reload >/dev/null 2>&1 9>&- &
 }
 
 set_sddm_background() {
@@ -356,7 +385,7 @@ set_scrolloverview_wallpaper() {
     # path written into that file would be replaced by the stock one the next
     # time it was.
     local target="$XDG_CONFIG_HOME/hypr/custom/overview.wallpaper"
-    [[ -z "$path" ]] && return
+    [[ -z "$path" ]] && { reload_for_colormode; return; }
     mkdir -p "$(dirname "$target")"
 
     # The plugin uploads its wallpaper twice (sharp + pre-blurred), so hand it a
@@ -402,11 +431,12 @@ set_scrolloverview_wallpaper() {
     # One line, written whole. Placed beside the target and renamed, because a
     # reload can be reading it at any moment and half a path reads as none.
     local tmpfile
-    tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || return
+    tmpfile="$(mktemp "$target.XXXXXX" 2>/dev/null)" || { reload_for_colormode; return; }
     if printf '%s\n' "$plugin_path" > "$tmpfile" && [ -s "$tmpfile" ]; then
         mv -f "$tmpfile" "$target"
     else
         rm -f "$tmpfile"
+        reload_for_colormode
         return
     fi
 
@@ -416,7 +446,9 @@ set_scrolloverview_wallpaper() {
     local lua_path="$plugin_path"
     lua_path="${lua_path//\\/\\\\}"
     lua_path="${lua_path//\"/\\\"}"
-    if [[ "$push_mode" == "eval" ]]; then
+    # A run that changed the mode reloads all the same: the title bars only
+    # take up the other mode's colors on a reload.
+    if [[ "$push_mode" == "eval" && -z "${colormode_changed:-}" ]]; then
         hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
     else
         hyprctl reload >/dev/null 2>&1 &
@@ -676,6 +708,7 @@ switch() {
         enable_apps_shell=$(jq -r '.appearance.wallpaperTheming.enableAppsAndShell' "$SHELL_CONFIG_FILE")
         if [ "$enable_apps_shell" == "false" ]; then
             echo "App and shell theming disabled, skipping matugen and color generation"
+            reload_for_colormode
             return
         fi
     fi
@@ -760,6 +793,7 @@ switch() {
         rm -f "$generated_colors_tmp"
         echo "[switchwall] matugen failed (exit $matugen_status); keeping the previous colors." >&2
         deactivate
+        reload_for_colormode
         return 1
     fi
     if [[ $generated_colors_status -eq 0 ]] \
@@ -779,6 +813,7 @@ switch() {
         rm -f "$generated_colors_tmp"
         echo "[switchwall] Failed to generate material_colors.scss; keeping the previous colors." >&2
         deactivate
+        reload_for_colormode
         return 1
     fi
     deactivate

@@ -60,59 +60,106 @@ Singleton {
             `printf '%s' '${value ? "1" : "0"}' > '${root.flagPath}' && hyprctl reload`])
     }
 
-    // How the bar is painted. Both persist beside the on/off flag and are read
-    // by general.lua on the same reload.
+    // How the bar is painted, saved beside the on/off flag and read by
+    // plugins.lua on the same reload.
     //
-    // An empty color means the plugin keeps the one it chooses for itself: a
-    // theme written before these existed carries neither key, and inventing a
-    // color for it would repaint every bar on the machine off the back of an
-    // update.
-    readonly property string colorPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.color`
-    readonly property string opacityPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.opacity`
+    // Dark mode and light mode each keep their own colors: the dark set under
+    // the plain names and the light set under the same names ending in Light.
+    // plugins.lua picks the set from custom/colormode, which switchwall.sh
+    // writes as it settles the mode. An empty color or opacity is that mode's
+    // stock one. The button size is one value for both modes.
+    readonly property string customDir: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom`
+    function slotPath(name, dark) {
+        return `${root.customDir}/${name}${dark ? "" : "Light"}`
+    }
 
-    property string color: ""
+    // The mode on screen, whose set the properties below show and edits land in.
+    readonly property bool dark: Appearance.m3colors.darkmode
+
+    property string colorDark: ""
+    property string colorLight: ""
+    readonly property string color: root.dark ? root.colorDark : root.colorLight
     // The plugin's untouched bar ships at 88 alpha over its stock gray, so
-    // this default keeps the opacity slider continuous with that look until
-    // the user moves it.
-    property real opacity: 0.5333
+    // the dark default keeps the opacity slider continuous with that look
+    // until the user moves it.
+    readonly property real defaultOpacityDark: 0.5333
+    readonly property real defaultOpacityLight: 0.3
+    property real opacityDark: root.defaultOpacityDark
+    property real opacityLight: root.defaultOpacityLight
+    readonly property real opacity: root.dark ? root.opacityDark : root.opacityLight
     property bool appearanceLoaded: false
 
     // The buttons keep their own size and colors, apart from the bar's, so a
-    // bar color pick does not drag them along with it. An empty color leaves
-    // the pair the plugin has always drawn.
-    readonly property string buttonSizePath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonSize`
-    readonly property string buttonBackgroundPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonBackground`
-    readonly property string buttonIconColorPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonIconColor`
+    // bar color pick does not drag them along with it. The highlight is the
+    // circle behind a button while the pointer is over it.
+    readonly property string buttonSizePath: `${root.customDir}/titlebars.buttonSize`
 
     // The bar height plugins.lua sets, and the ceiling it puts on a button:
     // past about three fifths of the bar there is no room left around the icon.
+    // Below about two fifths the icon, drawn at 0.62 of the button, is too
+    // small to read and the button too small to hit, so that is the floor.
     // Kept here as well so the slider cannot offer a size the plugin clamps.
     readonly property real barHeight: 30
+    readonly property real minButtonSize: Math.ceil(barHeight * 0.4)
     readonly property real maxButtonSize: Math.floor(barHeight * 0.6)
     // Half the bar, which sits inside that ceiling with room left around the icon.
     readonly property real defaultButtonSize: Math.round(barHeight * 0.5)
 
     property real buttonSize: defaultButtonSize
-    property string buttonBackground: ""
-    property string buttonIconColor: ""
+    property string buttonBackgroundDark: ""
+    property string buttonBackgroundLight: ""
+    property string buttonIconColorDark: ""
+    property string buttonIconColorLight: ""
+    property string buttonHighlightDark: ""
+    property string buttonHighlightLight: ""
+    readonly property string buttonBackground: root.dark ? root.buttonBackgroundDark : root.buttonBackgroundLight
+    readonly property string buttonIconColor: root.dark ? root.buttonIconColorDark : root.buttonIconColorLight
+    readonly property string buttonHighlight: root.dark ? root.buttonHighlightDark : root.buttonHighlightLight
+
+    // What plugins.lua draws for an empty color in the mode on screen, as the
+    // pickers show it. The swatch has no alpha to show, so a see-through stock
+    // color appears here as its opaque self.
+    readonly property string defaultColor: root.dark ? "#333333" : "#f3f3f3"
+    readonly property string defaultButtonBackground: root.dark ? "#49454e" : "#d8d3dd"
+    readonly property string defaultButtonIconColor: root.dark ? "#ffffff" : "#1d1b20"
+    readonly property string defaultButtonHighlight: root.dark ? "#6c6675" : "#b5afbc"
+
+    // Whether either mode holds a color or opacity of its own, so a reset can
+    // be offered for the mode that is not on screen as well.
+    readonly property bool anyModeValueSet: [root.colorDark, root.colorLight,
+        root.buttonBackgroundDark, root.buttonBackgroundLight,
+        root.buttonIconColorDark, root.buttonIconColorLight,
+        root.buttonHighlightDark, root.buttonHighlightLight].some(c => c !== "")
+        || Math.abs(root.opacityDark - root.defaultOpacityDark) > 0.0001
+        || Math.abs(root.opacityLight - root.defaultOpacityLight) > 0.0001
 
     // The plugin empties its button list before each config reload and the Lua
-    // config fills it again, so the three travel together and one reload
-    // redraws them.
-    function setButtons(newSize, newColor, newIconColor) {
+    // config fills it again, so the size and one mode's colors travel together
+    // and one reload redraws them. The mode is the caller's to name, because
+    // an edit waiting on a debounce belongs to the mode it was made in.
+    function setButtons(newSize, newColor, newIconColor, newHighlight, dark) {
+        const d = dark === undefined ? root.dark : dark
         root.buttonSize = newSize
-        root.buttonBackground = newColor
-        root.buttonIconColor = newIconColor
+        if (d) {
+            root.buttonBackgroundDark = newColor
+            root.buttonIconColorDark = newIconColor
+            root.buttonHighlightDark = newHighlight
+        } else {
+            root.buttonBackgroundLight = newColor
+            root.buttonIconColorLight = newIconColor
+            root.buttonHighlightLight = newHighlight
+        }
         Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && printf "%s" "$5" > "$4" && hyprctl reload',
+            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && printf "%s" "$5" > "$4" && printf "%s" "$7" > "$6" && hyprctl reload',
             root.buttonSizePath, String(newSize),
-            root.buttonBackgroundPath, String(newColor),
-            root.buttonIconColorPath, String(newIconColor)])
+            root.slotPath("titlebars.buttonBackground", d), String(newColor),
+            root.slotPath("titlebars.buttonIconColor", d), String(newIconColor),
+            root.slotPath("titlebars.buttonHighlight", d), String(newHighlight)])
     }
 
     // The buttons can stay hidden until the pointer is over the bar, saved
     // beside the other title bar values and applied on the same reload.
-    readonly property string buttonsOnHoverPath: `${FileUtils.trimFileProtocol(Directories.config)}/hypr/custom/titlebars.buttonsOnHover`
+    readonly property string buttonsOnHoverPath: `${root.customDir}/titlebars.buttonsOnHover`
     property bool buttonsOnHover: false
 
     function setButtonsOnHover(value) {
@@ -130,52 +177,92 @@ Singleton {
     //
     // The values travel as arguments rather than inside the script, so a colour
     // string stays a colour string whatever it contains.
-    function setAppearance(newColor, newOpacity) {
-        root.color = newColor
-        root.opacity = newOpacity
+    function setAppearance(newColor, newOpacity, dark) {
+        const d = dark === undefined ? root.dark : dark
+        if (d) {
+            root.colorDark = newColor
+            root.opacityDark = newOpacity
+        } else {
+            root.colorLight = newColor
+            root.opacityLight = newOpacity
+        }
         Quickshell.execDetached(["bash", "-c",
             'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && hyprctl reload',
-            root.colorPath, String(newColor),
-            root.opacityPath, String(newOpacity)])
+            root.slotPath("titlebars.color", d), String(newColor),
+            root.slotPath("titlebars.opacity", d), String(newOpacity)])
+    }
+
+    // Everything back to how the title bars come, both modes at once, under a
+    // single reload.
+    function resetAppearance() {
+        root.colorDark = ""
+        root.colorLight = ""
+        root.opacityDark = root.defaultOpacityDark
+        root.opacityLight = root.defaultOpacityLight
+        root.buttonSize = root.defaultButtonSize
+        root.buttonBackgroundDark = ""
+        root.buttonBackgroundLight = ""
+        root.buttonIconColorDark = ""
+        root.buttonIconColorLight = ""
+        root.buttonHighlightDark = ""
+        root.buttonHighlightLight = ""
+        const emptied = []
+        for (const name of ["titlebars.color", "titlebars.opacity", "titlebars.buttonBackground",
+                "titlebars.buttonIconColor", "titlebars.buttonHighlight"])
+            emptied.push(root.slotPath(name, true), root.slotPath(name, false))
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && shift && for f in "$@"; do : > "$f" || exit; done && hyprctl reload',
+            root.buttonSizePath, String(root.defaultButtonSize)].concat(emptied))
     }
 
     Process {
         id: readerProc
-        // All three read in one pass, newline separated, so the service never
-        // shows an on/off state from one moment beside a colour from another.
-        // A missing file makes `cat` fail, and the fallback on each line is the
-        // value that means "as it was".
-        // The newline after each field is written here rather than by the
-        // fallback, because `echo` brings one of its own and `printf` does not:
-        // a missing file would otherwise end a field with two and push
-        // everything after it down a line.
+        // Read in one pass, one line per file, so the service never shows an
+        // on/off state from one moment beside a color from another. A missing
+        // file gives the value that means "as it was". Each value is cut to its
+        // first line and given exactly one newline here, so a file that ends in
+        // a newline of its own cannot push the fields after it down a line.
         command: ["bash", "-c",
-            '{ cat "$0" 2>/dev/null || printf 1; }; printf "\\n"; ' +
-            '{ cat "$1" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$2" 2>/dev/null || printf 0.5333; }; printf "\\n"; ' +
-            '{ cat "$3" 2>/dev/null || printf ' + root.defaultButtonSize + '; }; printf "\\n"; ' +
-            '{ cat "$4" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$5" 2>/dev/null; }; printf "\\n"; ' +
-            '{ cat "$6" 2>/dev/null || printf 0; }; printf "\\n"',
-            root.flagPath, root.colorPath, root.opacityPath,
-            root.buttonSizePath, root.buttonBackgroundPath, root.buttonIconColorPath,
-            root.buttonsOnHoverPath]
+            'while [ $# -gt 1 ]; do ' +
+            'if v="$(head -n1 -- "$1" 2>/dev/null)"; then printf "%s\\n" "$v"; else printf "%s\\n" "$2"; fi; ' +
+            'shift 2; done',
+            "titlebars",
+            root.flagPath, "1",
+            root.slotPath("titlebars.opacity", true), "",
+            root.slotPath("titlebars.opacity", false), "",
+            root.buttonSizePath, String(root.defaultButtonSize),
+            root.buttonsOnHoverPath, "0",
+            root.slotPath("titlebars.color", true), "",
+            root.slotPath("titlebars.color", false), "",
+            root.slotPath("titlebars.buttonBackground", true), "",
+            root.slotPath("titlebars.buttonBackground", false), "",
+            root.slotPath("titlebars.buttonIconColor", true), "",
+            root.slotPath("titlebars.buttonIconColor", false), "",
+            root.slotPath("titlebars.buttonHighlight", true), "",
+            root.slotPath("titlebars.buttonHighlight", false), ""]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
         onExited: {
             // One line each: the parser has already split on the newlines the
-            // separators put between them.
-            const lines = readerProc.buf.split("\n")
-            root.enabled = (lines[0] ?? "").trim() !== "0"
-            root.color = (lines[1] ?? "").trim()
-            const o = parseFloat((lines[2] ?? "").trim())
-            root.opacity = isNaN(o) ? 0.5333 : Math.max(0, Math.min(1, o))
-            const bs = parseFloat((lines[3] ?? "").trim())
-            root.buttonSize = isNaN(bs) ? root.defaultButtonSize : Math.max(6, Math.min(root.maxButtonSize, bs))
-            root.buttonBackground = (lines[4] ?? "").trim()
-            root.buttonIconColor = (lines[5] ?? "").trim()
-            root.buttonsOnHover = (lines[6] ?? "").trim() === "1"
+            // loop put between them.
+            const lines = readerProc.buf.split("\n").map(l => l.trim())
+            root.enabled = (lines[0] ?? "") !== "0"
+            const od = parseFloat(lines[1] ?? "")
+            root.opacityDark = isNaN(od) ? root.defaultOpacityDark : Math.max(0, Math.min(1, od))
+            const ol = parseFloat(lines[2] ?? "")
+            root.opacityLight = isNaN(ol) ? root.defaultOpacityLight : Math.max(0, Math.min(1, ol))
+            const bs = parseFloat(lines[3] ?? "")
+            root.buttonSize = isNaN(bs) ? root.defaultButtonSize : Math.max(root.minButtonSize, Math.min(root.maxButtonSize, bs))
+            root.buttonsOnHover = (lines[4] ?? "") === "1"
+            root.colorDark = lines[5] ?? ""
+            root.colorLight = lines[6] ?? ""
+            root.buttonBackgroundDark = lines[7] ?? ""
+            root.buttonBackgroundLight = lines[8] ?? ""
+            root.buttonIconColorDark = lines[9] ?? ""
+            root.buttonIconColorLight = lines[10] ?? ""
+            root.buttonHighlightDark = lines[11] ?? ""
+            root.buttonHighlightLight = lines[12] ?? ""
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true
