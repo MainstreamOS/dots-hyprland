@@ -574,6 +574,117 @@ ApplicationWindow {
             root.applyBarStyle(1);
             root.applyDockStyle("float");
         }
+        root.fitWindowsToHug(name === "hug");
+    }
+
+    // ---- Window corners under Hug ----
+    // The Hug bar and dock carry the screen's rounding round where they meet
+    // the desktop, and a window sits inside that curve by the outer gap. A
+    // window corner of the screen's radius less that gap, drawn as a circle
+    // (rounding power 2) rather than the stock squircle, reads as running
+    // alongside it; taking the border off as well looks tighter than the bar.
+    // Picking Hug writes that once as the user's own saved setting, the way
+    // the windows page writes one, so Settings goes on moving it freely.
+    // What the corners were before is kept for this session, so that leaving
+    // Hug for another tile puts them back, but only where each still holds what
+    // Hug set: anything changed since, here or in Settings, is the user's.
+    property var hugFit: null // { before, set } while a fit is in place
+    property bool hugFitWanted: false
+    property bool hugFitBusy: false
+    property bool hugFitAgain: false
+    readonly property var hugFitKeys: ["rounding", "roundingPower"]
+    // What the compositor draws for a key general.lua never names, which is
+    // what the screen showed before Hug wrote it, and so what leaving Hug puts
+    // back.
+    readonly property var hugFitBuiltIn: ({ rounding: 0, roundingPower: 2 })
+    // The rounding the latest Hug fit switched on from off, or -1. Kept after
+    // leaving Hug switches it off again, so the windows page can tell Hug's
+    // radius apart from one the user chose for Rounded Corners.
+    property int hugFitRoundingOn: -1
+    // The windows page reads its values once, so it is told when they move.
+    signal decorationsRewritten()
+
+    function decorationsCommand(verb, extra) {
+        const config = FileUtils.trimFileProtocol(Directories.config);
+        return ["python3", `${config}/quickshell/ii/scripts/themes/decorations.py`, verb,
+                `${config}/hypr/hyprland/general.lua`, "--flag-dir", `${config}/hypr/custom`].concat(extra ?? []);
+    }
+
+    // One pick at a time: a tile clicked while the last one is still reading
+    // or writing is taken up once it has finished, as the latest pick.
+    function fitWindowsToHug(wanted) {
+        root.hugFitWanted = wanted;
+        if (root.hugFitBusy) {
+            root.hugFitAgain = true;
+            return;
+        }
+        if (!wanted && root.hugFit === null) return;
+        root.hugFitBusy = true;
+        hugFitReader.running = true;
+    }
+
+    // What to write for the latest pick, given the settings as they are now.
+    function hugFitChanges(now) {
+        const fitted = root.hugFit;
+        const shown = k => now[k] ?? root.hugFitBuiltIn[k];
+        if (!root.hugFitWanted) {
+            root.hugFit = null;
+            if (fitted === null) return [];
+            return root.hugFitKeys
+                .filter(k => shown(k) === fitted.set[k] && fitted.before[k] !== fitted.set[k])
+                .map(k => `${k}=${fitted.before[k]}`);
+        }
+        // Without the gap there is nothing to measure from, and with no room
+        // left for a curve the windows keep the corners they have rather than
+        // a bar style switching their rounding off.
+        if (typeof now.gapsOut !== "number") return [];
+        const radius = Math.max(0, Appearance.rounding.screenRounding - now.gapsOut);
+        if (radius === 0) return [];
+        const set = { rounding: radius, roundingPower: 2 };
+        // Hug picked again while its fit is still in place: what came before
+        // that fit is still what leaving Hug puts back.
+        const before = {};
+        for (const k of root.hugFitKeys)
+            before[k] = (fitted !== null && shown(k) === fitted.set[k]) ? fitted.before[k] : shown(k);
+        root.hugFit = { before: before, set: set };
+        root.hugFitRoundingOn = before.rounding > 0 ? -1 : set.rounding;
+        return root.hugFitKeys.filter(k => shown(k) !== set[k]).map(k => `${k}=${set[k]}`);
+    }
+
+    function hugFitDone() {
+        root.hugFitBusy = false;
+        if (!root.hugFitAgain) return;
+        root.hugFitAgain = false;
+        root.fitWindowsToHug(root.hugFitWanted);
+    }
+
+    // Read at the moment of the pick, so the fit follows the gap and the border
+    // the windows have now.
+    Process {
+        id: hugFitReader
+        command: root.decorationsCommand("read")
+        stdout: StdioCollector { id: hugFitRead }
+        onExited: (exitCode, exitStatus) => {
+            let now = null;
+            try { now = JSON.parse(hugFitRead.text); } catch (e) {}
+            const pairs = (exitCode === 0 && now) ? root.hugFitChanges(now) : [];
+            if (pairs.length === 0) {
+                root.hugFitDone();
+                return;
+            }
+            hugFitWriter.command = root.decorationsCommand("set", pairs);
+            hugFitWriter.running = true;
+        }
+    }
+
+    // The same set call the windows page makes, which saves the file and hands
+    // the values to the compositor together.
+    Process {
+        id: hugFitWriter
+        onExited: (exitCode, exitStatus) => {
+            root.decorationsRewritten();
+            root.hugFitDone();
+        }
     }
 
     // The bar and the dock each keep their own color and transparency, and the
@@ -3166,6 +3277,7 @@ ApplicationWindow {
         property bool bordersEnabled: true
         property bool roundCornersEnabled: true
         property int roundingValue: 10
+        property int roundingWhileOff: 10
         property int borderSizeValue: 4
         property real activeOpacityValue: 1.0
         property real inactiveOpacityValue: 1.0
@@ -3254,10 +3366,39 @@ ApplicationWindow {
             onRunningChanged: if (running) buf = ""
             stdout: SplitParser { onRead: data => decoReader.buf += data }
             onExited: {
+                if (cardWindows.readAgain) {
+                    cardWindows.readAgain = false
+                    decoReader.running = true
+                    return
+                }
                 let values = ({})
                 try { values = JSON.parse(decoReader.buf || "{}") } catch (e) { values = ({}) }
+                // The radius Rounded Corners turns back on to is the user's,
+                // not the one Hug switched on and leaving Hug switched off.
+                const hugOn = root.hugFitRoundingOn
+                if (!cardWindows.roundCornersEnabled && values.rounding === hugOn)
+                    cardWindows.roundingWhileOff = cardWindows.roundingValue
                 cardWindows.applyDecoValues(values)
+                if (values.rounding === 0 && cardWindows.roundingValue === hugOn)
+                    cardWindows.roundingValue = cardWindows.roundingWhileOff
+                // A switch that has been clicked no longer follows its value
+                // (see ConfigSwitch), and the style page can change this one.
+                roundCornersSwitch.checked = Qt.binding(() => cardWindows.roundCornersEnabled)
                 cardWindows.decoReady = true
+            }
+        }
+
+        // The Hug tile on the style page can change the corners after this page
+        // has read them. The page reads again with decoReady off meanwhile, so
+        // the switches take the new values without writing them straight back,
+        // and a read already under way when the write landed is not trusted.
+        property bool readAgain: false
+        Connections {
+            target: root
+            function onDecorationsRewritten() {
+                cardWindows.decoReady = false
+                if (decoReader.running) cardWindows.readAgain = true
+                else decoReader.running = true
             }
         }
 
@@ -3604,6 +3745,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         uniform: true
                         ConfigSwitch {
+                            id: roundCornersSwitch
                             buttonIcon: "rounded_corner"
                             text: Translation.tr("Rounded Corners")
                             checked: cardWindows.roundCornersEnabled

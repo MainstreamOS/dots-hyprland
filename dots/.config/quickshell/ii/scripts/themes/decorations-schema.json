@@ -63,6 +63,18 @@
       }
     },
     {
+      "key": "roundingPower",
+      "group": "shape",
+      "label": "Corner curve",
+      "type": "float",
+      "default": 4.0,
+      "min": 1.0,
+      "max": 10.0,
+      "step": 0.1,
+      "hypr": "decoration:rounding_power",
+      "restoreFill": false
+    },
+    {
       "key": "borderSize",
       "group": "shape",
       "label": "Border thickness",

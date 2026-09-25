@@ -29,7 +29,11 @@ it fills every key the snapshot doesn't name from the schema defaults, because
 a setting absent from a snapshot did not exist when the theme was saved, and
 stock is what the machine showed then. Leaving those keys alone instead meant
 applying an older theme kept whatever the previous theme had put in the newer
-keys, and the older theme no longer looked like its save. Snapshots from
+keys, and the older theme no longer looked like its save. A row marked
+"restoreFill": false is left as it is when the snapshot lacks it. The corner
+curve is one: picking the Hug style sets it so window corners follow the
+bar's, and a theme saved before the curve was a setting never chose one, so
+applying it keeps the curve the user last picked. Snapshots from
 before two keys were renamed still say borders / roundCorners; a false there
 restores as its modern spelling's zero, and a true is the default the
 completion supplies anyway. restore --push also sends that completed set to
@@ -505,7 +509,7 @@ def main(argv):
             values = json.load(fh)
         schema = load_schema()
         full = {row["key"]: row["default"] for row in schema["keys"]
-                if "default" in row}
+                if "default" in row and row.get("restoreFill", True)}
         known = {row["key"] for row in schema["keys"]}
         # Snapshots from before the border/corner keys were split still carry
         # the old bools (borders, roundCorners). Map each through the schema's

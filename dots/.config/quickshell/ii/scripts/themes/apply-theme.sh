@@ -379,6 +379,8 @@ fi
 # restore rather than write: keys the snapshot doesn't name go to their stock
 # values, because they didn't exist as settings when the theme was saved —
 # leaving them alone kept the previous theme's look bleeding into this one.
+# The corner curve is the exception (restoreFill in the schema): a snapshot
+# without it keeps the live curve, which the Hug style may have set.
 # --push hands the same completed set to the compositor from inside the one
 # interpreter, so the change shows before the reload at the end gets there.
 if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
