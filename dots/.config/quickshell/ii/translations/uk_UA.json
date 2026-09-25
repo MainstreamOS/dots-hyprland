@@ -1915,7 +1915,7 @@
   "Input method ready.": "Input method ready.",
   "Could not set the input method.": "Could not set the input method.",
   "Reset title bar settings": "Reset title bar settings",
-  "The color and opacity go back to how the title bars come": "The color and opacity go back to how the title bars come",
+  "The colors, opacity and window buttons go back to how the title bars come": "The colors, opacity and window buttons go back to how the title bars come",
   "Plan | %1 through your Claude subscription. No API key needed": "Plan | %1 through your Claude subscription. No API key needed",
   "Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed": "Plan | Anthropic's Claude through your Pro/Max subscription. Sign in from the sidebar, no API key needed",
   "Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku.": "Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku.",
@@ -2324,5 +2324,7 @@
   "Button highlight": "Button highlight",
   "The circle behind a button while the pointer is over it": "The circle behind a button while the pointer is over it",
   "Scroll to maximize and minimize": "Scroll to maximize and minimize",
-  "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.": "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize."
+  "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.": "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.",
+  "Window buttons": "Window buttons",
+  "The close, maximize and minimize buttons on each title bar": "The close, maximize and minimize buttons on each title bar"
 }

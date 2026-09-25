@@ -2579,6 +2579,7 @@ ApplicationWindow {
                     opacity: 0.35
                 }
                 Row {
+                    visible: dw.host.titleBarButtons
                     anchors {
                         right: parent.right
                         rightMargin: Math.max(7, surface.radius * 0.6)
@@ -2723,6 +2724,7 @@ ApplicationWindow {
         property color shadowColor: Qt.rgba(0, 0, 0, 0.125)
         property var shadowOffset: [0, 2]
         property bool titleBars: true
+        property bool titleBarButtons: true
         property bool blur: true
         property real activeOpacity: 1
         property real inactiveOpacity: 1
@@ -3283,6 +3285,7 @@ ApplicationWindow {
                     shadowColor: cardWindows.colorOf(cardWindows.shadowColorValue)
                     shadowOffset: cardWindows.shadowOffsetValue
                     titleBars: TitleBars.enabled
+                    titleBarButtons: TitleBars.buttonsEnabled
                     blur: cardWindows.blurEnabled
                     activeOpacity: cardWindows.activeOpacityValue
                     inactiveOpacity: cardWindows.inactiveOpacityValue

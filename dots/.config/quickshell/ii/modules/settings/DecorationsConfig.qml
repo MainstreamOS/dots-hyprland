@@ -605,13 +605,15 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         // Compared with a tolerance because the value makes a round trip
         // through a file as text, and the slider quantises to whole percents.
         // The mode that is not on screen counts too, since the reset clears
-        // both.
+        // both, and so do buttons switched off, since the reset brings them
+        // back.
         readonly property bool appearanceChanged: pendingColor !== ""
             || Math.abs(Number(pendingOpacity) - defaultOpacity) > 0.0001
             || pendingButtonBackground !== "" || pendingButtonIconColor !== ""
             || pendingButtonHighlight !== ""
             || Math.round(pendingButtonSize) !== defaultButtonSize
             || TitleBars.anyModeValueSet
+            || !TitleBars.buttonsEnabled
 
         // An edit holds every value here as it is now, with the mode it belongs
         // to. The debounce can still be running when the mode flips, and its
@@ -646,6 +648,9 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             titleBarApplyDebounce.stop();
             titleBarButtonDebounce.stop();
             TitleBars.resetAppearance();
+            // A clicked switch has lost its `checked:` binding (see
+            // ConfigSwitch), so the buttons coming back would not show on it.
+            swTitleBarButtons.checked = Qt.binding(() => TitleBars.buttonsEnabled);
             followService();
         }
 
@@ -673,7 +678,25 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
             }
         }
 
+        // With the buttons off, every row below that only concerns them goes
+        // too: there is nothing on screen left for it to change.
         ConfigSwitch {
+            id: swTitleBarButtons
+            buttonIcon: "disabled_by_default"
+            text: Translation.tr("Window buttons")
+            checked: TitleBars.buttonsEnabled
+            animateChanges: TitleBars.appearanceLoaded
+            onCheckedChanged: {
+                if (!TitleBars.appearanceLoaded) return;
+                TitleBars.setButtonsEnabled(checked);
+            }
+            StyledToolTip {
+                text: Translation.tr("The close, maximize and minimize buttons on each title bar")
+            }
+        }
+
+        ConfigSwitch {
+            visible: TitleBars.buttonsEnabled
             buttonIcon: "ads_click"
             text: Translation.tr("Show buttons only on hover")
             checked: TitleBars.buttonsOnHover
@@ -741,6 +764,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
 
         ConfigSlider {
+            visible: TitleBars.buttonsEnabled
             text: Translation.tr("Button size")
             buttonIcon: "radio_button_checked"
             stopIndicatorValues: [titleBarSection.defaultButtonSize]
@@ -757,6 +781,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
 
         ColorField {
+            visible: TitleBars.buttonsEnabled
             text: Translation.tr("Button background")
             buttonIcon: "circle"
             value: titleBarSection.pendingButtonBackground
@@ -773,6 +798,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
 
         ColorField {
+            visible: TitleBars.buttonsEnabled
             text: Translation.tr("Button icon color")
             buttonIcon: "border_color"
             value: titleBarSection.pendingButtonIconColor
@@ -789,6 +815,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         }
 
         ColorField {
+            visible: TitleBars.buttonsEnabled
             text: Translation.tr("Button highlight")
             buttonIcon: "highlight_mouse_cursor"
             value: titleBarSection.pendingButtonHighlight
@@ -853,7 +880,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 mainText: Translation.tr("Reset title bar settings")
                 onClicked: titleBarSection.resetAppearance()
                 StyledToolTip {
-                    text: Translation.tr("The color and opacity go back to how the title bars come")
+                    text: Translation.tr("The colors, opacity and window buttons go back to how the title bars come")
                 }
             }
         }

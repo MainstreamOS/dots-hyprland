@@ -332,6 +332,16 @@
       "requires": "titleBars"
     },
     {
+      "key": "titleBarButtons",
+      "group": "shape",
+      "label": "Title bar buttons",
+      "type": "bool",
+      "default": true,
+      "mechanism": "flagfile",
+      "path": "titlebars.buttons",
+      "requires": "titleBars"
+    },
+    {
       "key": "titleBarButtonSize",
       "group": "shape",
       "label": "Title bar button size",

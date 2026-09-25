@@ -447,17 +447,25 @@ local function applyPluginConfig()
         -- src/config/lua/bindings/LuaBindingsDispatchers.cpp's `hl.dsp` tree.
         --
         -- add_button appends and the plugin cannot be asked what it already
-        -- holds, so re-running this file adds a second set of the same buttons.
-        -- The mark goes on the plugin's own table, which is what makes its life
-        -- match the buttons': a config reload leaves both in place, and an
-        -- unload and load of the plugin clears both together.
+        -- holds, so running this twice in one Lua state adds a second set of
+        -- the same buttons. The mark goes on the plugin's own table, which is
+        -- what makes its life match the buttons': a config reload empties the
+        -- plugin's list and then starts a new Lua state, which takes the mark
+        -- with it, and loading or unloading the plugin ends in a reload too.
+        -- So the mark only stops a second set while one Lua state is running.
         --
         -- A table that will not take the mark reads as unmarked every time, so
         -- the buttons are added again rather than skipped. Two of each is
         -- untidy; none at all leaves a window with no way to close it.
         local buttonsAdded = false
         pcall(function() buttonsAdded = hl.plugin.hyprbars.__ms_buttons == true end)
-        if hyprbarsActive() and tbOn and not buttonsAdded then
+        -- The buttons have a switch of their own in Settings, saved beside
+        -- the other title bar values ("1"/"0", absent = on). The plugin
+        -- empties its list before every reload, so adding none here is what
+        -- takes them off the bars. Double-click, middle-click and the scroll
+        -- steps set above belong to the bar, not to a button, so they stay.
+        local buttonsOn = readCustomValue("titlebars.buttons") ~= "0"
+        if hyprbarsActive() and tbOn and buttonsOn and not buttonsAdded then
             pcall(function() hl.plugin.hyprbars.__ms_buttons = true end)
             local btnSize, btnBg, btnFg, btnHover = titleBarButton(mode)
             -- Only a plugin built with buttons_pop_in draws its own hover

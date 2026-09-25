@@ -822,6 +822,7 @@ ContentPage {
                                             Rectangle { width: 20; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
                                         }
                                         Row {
+                                            visible: TitleBars.buttonsEnabled
                                             anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
                                             spacing: 3
                                             Repeater { model: 3
@@ -852,6 +853,7 @@ ContentPage {
                                             Rectangle { width: 14; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
                                         }
                                         Row {
+                                            visible: TitleBars.buttonsEnabled
                                             anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
                                             spacing: 3
                                             Repeater { model: 3
@@ -877,6 +879,7 @@ ContentPage {
                                             Rectangle { width: 14; height: 3; radius: 1.5; color: Appearance.colors.colSubtext; opacity: 0.35 }
                                         }
                                         Row {
+                                            visible: TitleBars.buttonsEnabled
                                             anchors { verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 4 }
                                             spacing: 3
                                             Repeater { model: 3

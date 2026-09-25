@@ -170,6 +170,22 @@ Singleton {
             root.buttonsOnHoverPath, value ? "1" : "0"])
     }
 
+    // The close, maximize and minimize buttons can be left off the bars
+    // altogether. On unless switched off, so an absent file reads as on.
+    // plugins.lua adds none while this says "0", and the plugin empties its
+    // list before each reload, so one reload takes them away or brings them
+    // back.
+    readonly property string buttonsEnabledPath: `${root.customDir}/titlebars.buttons`
+    property bool buttonsEnabled: true
+
+    function setButtonsEnabled(value) {
+        if (value === root.buttonsEnabled) return
+        root.buttonsEnabled = value
+        Quickshell.execDetached(["bash", "-c",
+            'printf "%s" "$1" > "$0" && hyprctl reload',
+            root.buttonsEnabledPath, value ? "1" : "0"])
+    }
+
     // Scrolling on a title bar steps its window between minimized, normal,
     // maximized and fullscreen. On unless switched off, so an absent file
     // reads as on. Saved beside the other title bar values and applied on
@@ -208,12 +224,13 @@ Singleton {
     }
 
     // Everything back to how the title bars come, both modes at once, under a
-    // single reload.
+    // single reload. The buttons come with the bars, so they return too.
     function resetAppearance() {
         root.colorDark = ""
         root.colorLight = ""
         root.opacityDark = root.defaultOpacityDark
         root.opacityLight = root.defaultOpacityLight
+        root.buttonsEnabled = true
         root.buttonSize = root.defaultButtonSize
         root.buttonBackgroundDark = ""
         root.buttonBackgroundLight = ""
@@ -226,8 +243,9 @@ Singleton {
                 "titlebars.buttonIconColor", "titlebars.buttonHighlight"])
             emptied.push(root.slotPath(name, true), root.slotPath(name, false))
         Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && shift && for f in "$@"; do : > "$f" || exit; done && hyprctl reload',
-            root.buttonSizePath, String(root.defaultButtonSize)].concat(emptied))
+            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && shift 3 && for f in "$@"; do : > "$f" || exit; done && hyprctl reload',
+            root.buttonSizePath, String(root.defaultButtonSize),
+            root.buttonsEnabledPath, "1"].concat(emptied))
     }
 
     Process {
@@ -255,7 +273,8 @@ Singleton {
             root.slotPath("titlebars.buttonIconColor", false), "",
             root.slotPath("titlebars.buttonHighlight", true), "",
             root.slotPath("titlebars.buttonHighlight", false), "",
-            root.scrollActionsPath, "1"]
+            root.scrollActionsPath, "1",
+            root.buttonsEnabledPath, "1"]
         property string buf: ""
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => readerProc.buf += data + "\n" }
@@ -280,6 +299,7 @@ Singleton {
             root.buttonHighlightDark = lines[11] ?? ""
             root.buttonHighlightLight = lines[12] ?? ""
             root.scrollActions = (lines[13] ?? "") !== "0"
+            root.buttonsEnabled = (lines[14] ?? "") !== "0"
             // First read complete — Switches can start animating from here.
             root.enabledLoaded = true
             root.appearanceLoaded = true
