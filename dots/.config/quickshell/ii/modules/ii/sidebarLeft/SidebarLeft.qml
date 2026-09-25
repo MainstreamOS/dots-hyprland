@@ -139,14 +139,15 @@ Scope { // Scope
             Rectangle {
                 id: sidebarLeftBackground
                 anchors.top: parent.top
+                anchors.topMargin: Appearance.sizes.hyprlandGapsOut
                 // Held against whichever edge the panel opens from, so the
                 // card keeps its screen gap there and the width animation
-                // below grows inward rather than off the display.
-                anchors.left: panelWindow.onRight ? undefined : parent.left
-                anchors.right: panelWindow.onRight ? parent.right : undefined
-                anchors.topMargin: Appearance.sizes.hyprlandGapsOut
-                anchors.leftMargin: Appearance.sizes.hyprlandGapsOut
-                anchors.rightMargin: Appearance.sizes.hyprlandGapsOut
+                // below grows inward rather than off the display. Placed by x
+                // rather than by trading a left anchor for a right one: while
+                // the trade is under way both hold, which stretches the card
+                // to the whole window and leaves it that wide.
+                x: panelWindow.onRight ? parent.width - width - Appearance.sizes.hyprlandGapsOut
+                    : Appearance.sizes.hyprlandGapsOut
                 width: panelWindow.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
                 height: parent.height - Appearance.sizes.hyprlandGapsOut * 2
                 color: Appearance.colors.colLayer0
