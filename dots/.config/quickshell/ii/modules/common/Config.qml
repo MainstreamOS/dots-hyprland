@@ -1019,7 +1019,7 @@ Singleton {
                 property string position: "bottom"
                 property bool monochromeIcons: false
                 // "magnify" | "glow" | "off"
-                property string hoverEffect: "magnify"
+                property string hoverEffect: "glow"
                 // Percent grown on hover, one key per effect so each keeps its
                 // own setting; -1 takes the effect's own stock.
                 property real hoverMagnify: -1

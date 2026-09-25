@@ -1434,7 +1434,7 @@ Singleton {
         // effects swaps back to what each had. The clamp still stands
         // between a hand-edited value and the track.
         readonly property real dockHoverMagnifyMax: Config.options?.dock.hoverEffect === "glow" ? 100 : 200
-        readonly property real dockHoverMagnifyStock: Config.options?.dock.hoverEffect === "glow" ? 25 : 135
+        readonly property real dockHoverMagnifyStock: Config.options?.dock.hoverEffect === "glow" ? 25 : 100
         readonly property real dockHoverMagnifyKey: Config.options?.dock.hoverEffect === "glow"
             ? (Config.options?.dock.glowMagnify ?? -1) : (Config.options?.dock.hoverMagnify ?? -1)
         readonly property real dockHoverMagnify: dockHoverMagnifyKey >= 0
