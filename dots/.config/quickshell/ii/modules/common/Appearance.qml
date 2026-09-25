@@ -83,12 +83,16 @@ Singleton {
         }
     }
 
+    // Set while a palette is written in one color at a time. The judging
+    // below is costly, and a palette caught halfway is never drawn, so it
+    // waits for the last color rather than running again for each one.
+    property bool paletteSettling: false
     // Which way the content on a surface is drawn. The surface is judged as it
     // actually shows, see-through parts and all, and as it would show either
     // way, since some of it turns with the content. The palette's tones are
     // kept while they read, and otherwise unless the opposite ones read
     // clearly better against every part.
-    readonly property bool autoIconContrast: Config.options?.appearance.autoIconContrast ?? true
+    readonly property bool autoIconContrast: !paletteSettling && (Config.options?.appearance.autoIconContrast ?? true)
     function worstContrast(ink, places) {
         return Math.min(...places.map(bg => ColorUtils.contrastRatio(ink, bg)))
     }
@@ -127,15 +131,20 @@ Singleton {
     // set light on a dark strip gets dark icons however dark the strip is.
     // Line-separated groups have no pill, and sit on the strip like the rest.
     readonly property bool dockLeads: Config.options?.dock.enable ?? true
+    // Whether content on one side, carried to white or to black, reads on
+    // every one of the places about as well as the other side would.
+    function sideReads(white, places, need) {
+        const side = worstContrast(white ? "white" : "black", places)
+        const other = worstContrast(white ? "black" : "white", places)
+        return side >= (need ?? 3) && side * 1.5 >= other
+    }
     // Only while the dock's side still reads on the bar about as well as the
     // other side would: a dock set near black beside a stock light bar would
-    // otherwise hand the bar light icons it could not show.
-    function followsDock(places) {
-        if (!dockLeads)
-            return false
-        const dockSide = worstContrast(dockContent.darkmode ? "white" : "black", places)
-        const otherSide = worstContrast(dockContent.darkmode ? "black" : "white", places)
-        return dockSide >= 3 && dockSide * 1.5 >= otherSide
+    // otherwise hand the bar light icons it could not show. A surface that is
+    // read rather than glanced at asks for the contrast its text needs. The
+    // dock is the one at rest unless another is given.
+    function followsDock(places, need, dock) {
+        return dockLeads && sideReads((dock ?? dockContent).darkmode, places, need)
     }
     function barPillPlaces(strip, pill, turned) {
         if (Config.options?.bar.borderless)
@@ -156,6 +165,58 @@ Singleton {
         const asIs = worstContrast(ink, barPillAsIs)
         return asIs < 4.5 && worstContrast(ink, barPillPlaces(barBackdrop, colors.colBarWidget, true)) > asIs
     }
+    readonly property bool barPickedFlipped: contentFlipped(barPillAsIs, barPillAsIs) || extremeFlipped(barPillAsIs)
+    // The palette's groups as the dock's side would find them: turned, when
+    // they can turn and that side is turned.
+    function barPillsFor(white) {
+        return barPillPlaces(barBackdrop, colors.colBarWidget, barPillTurns && white !== m3colors.darkmode)
+    }
+    // Whether the whole bar can be drawn on one side: the strip and the
+    // palette's groups by following the dock there, a group someone colored
+    // by its own verdict, since that one never follows.
+    function barShows(white) {
+        if (!sideReads(white, [barBackdrop]))
+            return false
+        if (Config.options?.bar.borderless)
+            return true
+        return colors.barWidgetPick !== "" ? barPickedFlipped === (white !== m3colors.darkmode)
+            : sideReads(white, barPillsFor(white))
+    }
+    // Whether a part of the bar that follows the dock onto one side would
+    // read less well once carried to the other.
+    function barGivesUp(from) {
+        const loses = places => worstContrast(from ? "black" : "white", places(!from))
+            < worstContrast(from ? "white" : "black", places(from))
+        const strip = () => [barBackdrop]
+        if (sideReads(from, strip()) && loses(strip))
+            return true
+        if (Config.options?.bar.borderless || colors.barWidgetPick !== "")
+            return false
+        return sideReads(from, barPillsFor(from)) && loses(barPillsFor)
+    }
+    // The dock's side as its own edge of the picture sets it. The bar lies
+    // along another edge, and near the point where the dock turns the two can
+    // differ just enough to turn the dock alone. So when the bar cannot be
+    // drawn on the dock's side, the dock goes with the bar wherever the bar's
+    // side stands off the dock as a mark: the dock carries icons and marks,
+    // where the bar carries text it cannot be asked to give up. For the same
+    // reason it does not go where the part of the bar following it would
+    // read less well than it does where it stands. A bar and dock left as
+    // they come, with nothing picked, no opacity set and both surfaces shown,
+    // are the surfaces the palette's tones were chosen for, so there the dock
+    // keeps its own side.
+    readonly property bool dockOwnFlipped: contentFlipped([dockBackdrop], [dockBackdrop])
+    readonly property bool barDockStock: colors.barBackgroundPick === "" && colors.barWidgetPick === ""
+        && colors.dockPick === "" && (Config.options?.bar.backgroundOpacity ?? -1) < 0
+        && (Config.options?.bar.widgetOpacity ?? -1) < 0 && (Config.options?.dock.backgroundOpacity ?? -1) < 0
+        && (Config.options?.bar.showBackground ?? true) && (Config.options?.dock.showBackground ?? true)
+    readonly property bool dockJoinsBar: {
+        if (!dockLeads || !autoIconContrast || barDockStock)
+            return false
+        const own = m3colors.darkmode !== dockOwnFlipped
+        return !barShows(own) && barShows(!own) && !barGivesUp(own)
+            && worstContrast(own ? "black" : "white", [dockBackdrop]) >= 3
+    }
     // The groups the dock's side would be drawn on: turned, when they can turn
     // and the dock's content is turned.
     readonly property var barPillForDock: barPillPlaces(barBackdrop, colors.colBarWidget, barPillTurns && dockContent.flipped)
@@ -170,7 +231,7 @@ Singleton {
         stockBackdrops: root.barStockPillPlaces
         adaptive: root.autoIconContrast
         flipped: root.colors.barWidgetPick !== "" && !Config.options?.bar.borderless
-            ? root.contentFlipped(root.barPillAsIs, root.barPillAsIs) || root.extremeFlipped(root.barPillAsIs)
+            ? root.barPickedFlipped
             : root.followsDock(root.barPillForDock) ? root.dockContent.flipped
             : root.contentFlipped(root.barPillAsIs, root.barPillPlaces(root.barBackdrop, root.colors.colBarWidget, root.barPillTurns))
         // Judged on this surface's own stock places, which are what its stock
@@ -192,7 +253,120 @@ Singleton {
         backdrops: [root.dockBackdrop]
         stockBackdrops: [root.dockStockBackdrop]
         adaptive: root.autoIconContrast
+        flipped: root.dockJoinsBar ? !root.dockOwnFlipped : root.dockOwnFlipped
+        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
+    }
+
+    // The dim is laid over its window's faint clear color, and both over
+    // whatever the dim frosts. The launcher and the dock raised above the
+    // dim both lie on it.
+    function dimOver(dim, picture) {
+        return ColorUtils.composite(ColorUtils.applyAlpha(dim, colors.launcherDimOpacity),
+            ColorUtils.composite(colors.colLauncherDimWindow, picture))
+    }
+    // A surface laid over the dim, and the dim over the picture it frosts.
+    // The launcher sits in the middle of the screen, so there the picture is
+    // read as a whole rather than along an edge. A surface's shadow is drawn
+    // under all of it, not only around it, so a see-through surface shows it
+    // too.
+    function laidOverDim(surface, shadow, dim, shown, picture) {
+        const under = dimOver(dim, picture ?? wallpaperAverage)
+        return shown ? ColorUtils.composite(surface, ColorUtils.composite(shadow, under)) : under
+    }
+    // The dock's surface and shadow as they come, for the places the dock's
+    // surface is laid over the dim.
+    readonly property color dockStockSurface: ColorUtils.applyAlpha(colors.colLayer0, colors.dockStockAlpha)
+    readonly property color dockStockShadow: ColorUtils.applyAlpha(colors.colShadow, colors.colShadow.a * colors.dockStockAlpha)
+    // The dock is raised above the dim while the launcher is open, so there
+    // it lies on the dim where the dim frosts the dock's own edge. The
+    // launcher keeps its panels clear of the dock's band, so nothing of it
+    // lies under the dock.
+    readonly property color dockOverLauncherBackdrop: laidOverDim(colors.colDockBackground, colors.colDockShadow,
+        colors.colLauncherDim, Config.options?.dock.showBackground, wallpaperEdge(sizes.dockEdge))
+    readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockStockShadow,
+        colors.colLayer0Base, Config.options?.dock.showBackground, wallpaperEdge(sizes.dockEdge))
+    // The dock as it is drawn while the launcher is open. The bar stays under
+    // the dim and keeps following the dock at rest, so this one is judged by
+    // itself alone.
+    readonly property SurfaceContent dockOverLauncherContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.dockOverLauncherBackdrop]
+        stockBackdrops: [root.dockOverLauncherStockBackdrop]
+        adaptive: root.autoIconContrast
         flipped: root.contentFlipped(backdrops, backdrops)
+        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
+    }
+    readonly property color launcherBackdrop: laidOverDim(colors.colLauncherPanel, colors.colLauncherShadow,
+        colors.colLauncherDim, true)
+    readonly property color drawerBackdrop: laidOverDim(colors.colDockBackground, colors.colDockShadow,
+        colors.colLauncherDim, Config.options?.dock.showBackground)
+    readonly property color launcherStockBackdrop: laidOverDim(ColorUtils.applyAlpha(m3colors.m3surfaceContainer, colors.layer0StockAlpha),
+        colors.colShadow, colors.colLayer0Base, true)
+    readonly property color drawerStockBackdrop: laidOverDim(dockStockSurface, dockStockShadow,
+        colors.colLayer0Base, Config.options?.dock.showBackground)
+    // The hairline around the dock's surface is its outline mixed into the
+    // surface's own color at the surface's alpha, so it stands off the
+    // surface only as far as the outline is from that color. Over the dim
+    // the outline is placed against a surface the dim shows through, where
+    // it can land on that color and take the line with it. There it is
+    // carried the way the line already stands from the surface until it
+    // stands off as far as the stock one does on the stock surface, up to
+    // what a mark needs. Where that way cannot get so far and the other
+    // can, it crosses to the other side of the surface; where neither can,
+    // it goes to whichever end stands further. Both lie on the dim over the
+    // given picture, with the dock's shadow under them.
+    function borderStanding(outline, surface, under) {
+        return ColorUtils.contrastRatio(ColorUtils.composite(colors.surfaceBorder(outline, surface), under),
+            ColorUtils.composite(surface, under))
+    }
+    function dockBorderOverDim(content, picture) {
+        const outline = content.colOutlineVariant
+        if (!content.adaptive || !Config.options?.dock.showBackground)
+            return colors.dockBorder(outline)
+        const surface = colors.colDockBackground
+        const under = ColorUtils.composite(colors.colDockShadow, dimOver(colors.colLauncherDim, picture))
+        const stockUnder = ColorUtils.composite(dockStockShadow, dimOver(colors.colLayer0Base, picture))
+        const need = Math.min(content.markContrast,
+            borderStanding(content.onStock(colors.colOutlineVariant), dockStockSurface, stockUnder))
+        const stands = o => borderStanding(o, surface, under)
+        const reaches = o => stands(o) >= need - 0.01
+        if (reaches(outline))
+            return colors.dockBorder(outline)
+        const line = ColorUtils.composite(colors.surfaceBorder(outline, surface), under)
+        const away = ColorUtils.relativeLuminance(line) > ColorUtils.relativeLuminance(ColorUtils.composite(surface, under))
+            ? "white" : "black"
+        const back = away === "white" ? "black" : "white"
+        const toward = reaches(away) || (!reaches(back) && stands(away) >= stands(back)) ? away : back
+        return colors.dockBorder(ColorUtils.mixUntil(outline, toward, reaches))
+    }
+    // The app list wears the dock's surface, but over the dim rather than
+    // the screen's edge, so what reads on the dock need not read on it, and
+    // its content is judged where it is. It and the panels take the side of
+    // the dock as it is drawn over the dim while their text still reads on
+    // it, so the launcher does not turn one way while the dock beside it
+    // turns the other. A side that only carries marks is not enough here:
+    // this is where names are read.
+    readonly property LauncherSurfaceContent launcherContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.launcherBackdrop]
+        stockBackdrops: [root.launcherStockBackdrop]
+        adaptive: root.autoIconContrast
+        holdsFills: true
+        flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
+            ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
+        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
+    }
+    readonly property LauncherSurfaceContent drawerContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.drawerBackdrop]
+        stockBackdrops: [root.drawerStockBackdrop]
+        adaptive: root.autoIconContrast
+        holdsFills: true
+        flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
+            ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
         stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
 
@@ -213,6 +387,12 @@ Singleton {
         property var backdrops: ["black"]
         property var stockBackdrops: ["black"]
         property bool stockFlipped: false
+        // Whether a fill keeps at least the edge it has on the stock surface.
+        // In the launcher a fill is what shows where the keyboard is and
+        // which row is picked, so one that fades into the surface loses the
+        // place. On the strip and the dock the fills are hover washes under
+        // the pointer, which already shows the place.
+        property bool holdsFills: false
         readonly property real textContrast: 4.5
         readonly property real markContrast: 3
         // Whether the content reads as it does in dark mode, for the places
@@ -263,22 +443,96 @@ Singleton {
             const chroma = start.hslSaturation * room(start.hslLightness)
             return Qt.hsla(start.hslHue, room(lightness) > 0 ? Math.min(1, chroma / room(lightness)) : 0, lightness, start.a)
         }
+        // A fill content is set on, placed as a mark is. Placed by lightness
+        // alone its share can land on the surface itself, so where fills are
+        // held it is then carried toward the ink until it stands off the
+        // surface as the palette's fill does on the stock one, however far
+        // that is: it is what shows which row is picked, and text held on it
+        // crosses sides where it has to.
+        function fill(c, full, paletteFull) {
+            const placed = across(c, full, paletteFull)
+            return holdsFills ? standOff(c, placed, full, backdrops[0], stockBackdrops[0]) : placed
+        }
+        // A pressed fill is held the same way by contrast alone. The palette
+        // sets it off by lightness, which contrast counts, so that already
+        // keeps it plainly apart; carried on until its hue shows as well, it
+        // crosses the middle away from the hover fill a press ripples over,
+        // and text across the two is left no side to read on.
+        function flash(c, full, paletteFull) {
+            const placed = across(c, full, paletteFull)
+            return holdsFills ? heldOff(c, placed, full, backdrops[0], stockBackdrops[0]) : placed
+        }
+        // One of the palette's fills, from where it starts, carried toward
+        // another color until it stands off what it is laid on with the
+        // contrast the palette's own has on the same place on the stock
+        // surface, up to `most` where one is given.
+        function heldOff(c, start, toward, under, stockUnder, most) {
+            if (!adaptive)
+                return c
+            return ColorUtils.mixForContrast(start, toward, under, Math.min(most ?? Infinity, standing(onStock(c), stockUnder)))
+        }
+        // The same, and then on until the two look as far apart as they do
+        // there. The palette sets some fills off its surface by hue more than
+        // by lightness, a pale blue row on a pale gray panel, which contrast
+        // does not count, and a fill placed on a white or black surface loses
+        // its hue and with it the only edge it had.
+        function standOff(c, start, toward, under, stockUnder) {
+            if (!adaptive)
+                return c
+            return ColorUtils.mixForDistance(heldOff(c, start, toward, under, stockUnder), toward, under,
+                ColorUtils.deltaE(ColorUtils.composite(onStock(c), stockUnder), stockUnder))
+        }
+        // A fill as it is seen over an opaque color. One given as a list is
+        // several laid bottom first, as a ripple spreads over a hover wash.
+        function laid(f, under) {
+            return (Array.isArray(f) ? f : [f]).reduce((out, layer) => ColorUtils.composite(layer, out), under)
+        }
+        // The contrast the palette gives this color on one of its fills, laid
+        // on the stock surface.
+        function stockOn(c, paletteFill) {
+            const stock = Array.isArray(paletteFill) ? paletteFill.map(layer => onStock(layer)) : onStock(paletteFill)
+            return ColorUtils.contrastRatio(onStock(c), laid(stock, stockBackdrops[0]))
+        }
         // Text drawn on one of the fills rather than on the surface, held
         // against that fill up to text contrast, or to what the pair has on
         // the stock surface where that is less. A middle-toned fill can leave
-        // the text's own side short, and then it crosses to the side that reads.
-        function onFill(c, fill, paletteFill) {
-            const start = across(c, m3onSurface, m3.m3onSurface)
+        // the text's own side short, and then it crosses to the side that
+        // reads. Where a `reach` past text contrast is given, the text goes on
+        // toward it along the side it took, as far as the stock pair allows;
+        // the side is still the one the text needs.
+        // The stock pair is measured with the fill laid on the stock surface,
+        // since a see-through fill is only ever seen that way.
+        function onFill(c, fillColor, paletteFill, reach) {
+            return onFills(c, [fillColor], [paletteFill], reach)
+        }
+        // The same for text that lies across several fills at once. It is
+        // held on one side of all of them: its own while that reads on every
+        // one, or else the side that reads best on the worst of them, so where
+        // two fills sit either side of the middle it reads on both about as
+        // well as any one color can.
+        function onFills(c, fills, paletteFills, reach) {
+            return heldOn(across(c, m3onSurface, m3.m3onSurface), c, fills, paletteFills, textContrast, reach)
+        }
+        function heldOn(start, c, fills, paletteFills, need, reach) {
             if (!adaptive)
                 return start
-            const under = ColorUtils.composite(fill, backdrops[0])
-            const need = Math.min(textContrast, ColorUtils.contrastRatio(onStock(c), onStock(paletteFill)))
-            const lighter = ColorUtils.relativeLuminance(start) > ColorUtils.relativeLuminance(under)
+            const unders = fills.map(f => laid(f, backdrops[0]))
+            const pairs = paletteFills.map(f => stockOn(c, f))
+            const needs = pairs.map(pair => Math.min(need, pair))
+            const lighter = ColorUtils.relativeLuminance(start) > ColorUtils.relativeLuminance(unders[0])
             const own = lighter ? "white" : "black"
             const other = lighter ? "black" : "white"
-            const ownReach = ColorUtils.contrastRatio(own, under)
-            const toward = ownReach >= need || ownReach >= ColorUtils.contrastRatio(other, under) ? own : other
-            return ColorUtils.mixForContrast(start, toward, under, need)
+            const stands = side => Math.min(...unders.map((u, i) => ColorUtils.contrastRatio(side, u) / needs[i]))
+            const toward = stands(own) >= 1 || stands(own) >= stands(other) ? own : other
+            const holds = pairs.map(pair => Math.min(Math.max(need, reach ?? 0), pair))
+            // Carried toward that side for one fill, it can pass back over
+            // another it already stood off, so each is held again after the
+            // rest.
+            let out = start
+            for (let pass = 0; pass < fills.length; ++pass)
+                for (let i = 0; i < fills.length; ++i)
+                    out = ColorUtils.mixForContrast(out, toward, unders[i], holds[i])
+            return out
         }
         // Text and icons, wherever the content sits.
         function ink(c) { return held(c, tone(c), darkmode ? "white" : "black", textContrast, true) }
@@ -286,19 +540,29 @@ Singleton {
         function accent(c) { return held(c, tone(c), darkmode ? "white" : "black", markContrast, false) }
         // A dimmed ink moves toward the ink it was dimmed from and stops at
         // four fifths of that ink's contrast, so it still reads as the fainter.
-        function dim(c, full, paletteFull) {
-            return held(c, across(c, full, paletteFull), full,
-                Math.min(markContrast, standing(full, backdrops[0]) / 1.25), false)
+        // One drawn around a fill, as a tile's outline is, is held the same
+        // way against that fill, given with the palette's own for it, since
+        // the outline is what marks where the fill ends.
+        function dim(c, full, paletteFull, fillColor, paletteFill) {
+            const start = across(c, full, paletteFull)
+            if (fillColor === undefined)
+                return held(c, start, full, Math.min(markContrast, standing(full, backdrops[0]) / 1.25), false)
+            const under = laid(fillColor, backdrops[0])
+            return heldOff(c, start, full, under, laid(onStock(paletteFill), stockBackdrops[0]),
+                Math.min(markContrast, standing(full, under) / 1.25))
         }
         // A see-through wash of one of these colors, made less see-through the
-        // same way when the surface would swallow it.
-        function faded(c, opacity) {
+        // same way when what it lies on would swallow it: the surface, or the
+        // fill given with the palette's own for it.
+        function faded(c, opacity, fillColor, paletteFill) {
             const wash = ColorUtils.transparentize(c, 1 - opacity)
             if (!adaptive)
                 return wash
+            const under = fillColor === undefined ? backdrops[0] : laid(fillColor, backdrops[0])
+            const stockUnder = paletteFill === undefined ? stockBackdrops[0] : laid(onStock(paletteFill), stockBackdrops[0])
             const stock = stockFlipped === flipped ? wash : ColorUtils.mirrorLightness(wash)
-            return ColorUtils.mixForContrast(wash, c, backdrops[0], Math.min(markContrast,
-                standing(c, backdrops[0]) / 1.25, standing(stock, stockBackdrops[0])))
+            return ColorUtils.mixForContrast(wash, c, under, Math.min(markContrast,
+                standing(c, under) / 1.25, standing(stock, stockUnder)))
         }
         readonly property color colOnLayer0: ink(palette.colOnLayer0)
         readonly property color colOnLayer1: ink(palette.colOnLayer1)
@@ -316,25 +580,230 @@ Singleton {
         readonly property color colOnPrimary: tone(palette.colOnPrimary)
         readonly property color colTertiary: tone(palette.colTertiary)
         readonly property color colError: tone(palette.colError)
-        readonly property color colSecondaryContainer: across(palette.colSecondaryContainer, m3onSurface, m3.m3onSurface)
-        readonly property color colSecondaryContainerHover: across(palette.colSecondaryContainerHover, m3onSurface, m3.m3onSurface)
-        readonly property color colSecondaryContainerActive: across(palette.colSecondaryContainerActive, m3onSurface, m3.m3onSurface)
+        readonly property color colSecondaryContainer: fill(palette.colSecondaryContainer, m3onSurface, m3.m3onSurface)
+        readonly property color colSecondaryContainerHover: fill(palette.colSecondaryContainerHover, m3onSurface, m3.m3onSurface)
+        readonly property color colSecondaryContainerActive: flash(palette.colSecondaryContainerActive, m3onSurface, m3.m3onSurface)
         readonly property color colOnSecondaryContainer: onFill(palette.colOnSecondaryContainer, colSecondaryContainer, palette.colSecondaryContainer)
         readonly property color colLayer0: across(palette.colLayer0, colOnLayer0, palette.colOnLayer0)
-        readonly property color colLayer0Border: dim(palette.colLayer0Border, colOnLayer0, palette.colOnLayer0)
-        readonly property color colLayer1: across(palette.colLayer1, colOnLayer1, palette.colOnLayer1)
-        readonly property color colLayer1Hover: across(palette.colLayer1Hover, colOnLayer1, palette.colOnLayer1)
-        readonly property color colLayer1Active: across(palette.colLayer1Active, colOnLayer1, palette.colOnLayer1)
+        // The surface's outline drawn around a folder's tile, so the tile is
+        // what it has to stand off.
+        readonly property color colLayer0BorderOnLayer1: dim(palette.colLayer0Border, colOnLayer0, palette.colOnLayer0,
+            colLayer1, palette.colLayer1)
+        readonly property color colLayer1: fill(palette.colLayer1, colOnLayer1, palette.colOnLayer1)
+        readonly property color colLayer1Hover: fill(palette.colLayer1Hover, colOnLayer1, palette.colOnLayer1)
+        readonly property color colLayer1Active: flash(palette.colLayer1Active, colOnLayer1, palette.colOnLayer1)
         readonly property color colOutlineVariant: dim(palette.colOutlineVariant, colOnLayer0, palette.colOnLayer0)
         readonly property color m3onSurface: ink(m3.m3onSurface)
+        readonly property color m3primary: accent(m3.m3primary)
+        readonly property color m3onPrimary: tone(m3.m3onPrimary)
+        readonly property color m3secondaryContainer: fill(m3.m3secondaryContainer, m3onSurface, m3.m3onSurface)
+        readonly property color m3onSecondaryContainer: onFill(m3.m3onSecondaryContainer, m3secondaryContainer, m3.m3secondaryContainer)
+        readonly property color m3error: tone(m3.m3error)
+    }
+    // The rest of what the launcher and the app list draw: their rows,
+    // tiles, fields and buttons, at rest and as they are picked, pressed
+    // and typed into. Only those two carry it, so a new wallpaper or a step
+    // of a slider does not work it out again for the bar and the dock,
+    // which never draw it.
+    component LauncherSurfaceContent: SurfaceContent {
+        // A pointer press spreads the pressed fill as a ripple over the
+        // resting one, so it has to show on that fill, and pressed text lies
+        // across both. The pressed fill is placed against the surface, so it
+        // can land on the resting fill, or be carried toward the ink across
+        // the side the resting text reads on, which leaves no one color
+        // reading on both. The ripple is then set off the resting fill as far
+        // as the palette's pressed fill stands off its resting one on the
+        // stock surface, toward the text, the palette's way, or away from it:
+        // of the two that keep the text reading and reach that far, the one
+        // that leaves the pressed row further off what it is laid on, since
+        // the ripple fills the row as it spreads. Where neither does, the text
+        // comes first. What the resting fill is laid on is given with the same
+        // place on the stock surface.
+        function ripple(c, pressed, rest, paletteRest, restText, paletteText, under, stockUnder) {
+            if (!holdsFills || !adaptive)
+                return pressed
+            const here = laid(rest, under)
+            const stockRest = laid(onStock(paletteRest), stockUnder)
+            const light = ColorUtils.relativeLuminance(restText) > ColorUtils.relativeLuminance(here)
+            const need = Math.min(textContrast, ColorUtils.contrastRatio(onStock(paletteText), laid(onStock(c), stockRest)))
+            const shows = standing(onStock(c), stockRest)
+            const holds = f => ColorUtils.contrastRatio(light ? "white" : "black", laid(f, here)) >= need - 0.01
+                && standing(f, here) >= shows - 0.01
+            if (holds(pressed))
+                return pressed
+            const toward = ColorUtils.mixForContrast(rest, light ? "white" : "black", here, shows)
+            const away = ColorUtils.mixForContrast(rest, light ? "black" : "white", here, shows)
+            return holds(toward) && (!holds(away) || standing(toward, under) >= standing(away, under)) ? toward : away
+        }
+        // A see-through fill with text on it, carried toward another color
+        // until the side the text is on reads on it as well as the text does
+        // on the palette's own fill on the stock surface. Such a fill shows
+        // the surface through it, and one far lighter or darker than the
+        // palette's can take away the edge the text needs.
+        function heldUnder(fillColor, toward, c, paletteFill) {
+            if (!adaptive)
+                return fillColor
+            const side = ColorUtils.relativeLuminance(tone(c)) > ColorUtils.relativeLuminance(laid(fillColor, backdrops[0])) ? "white" : "black"
+            const need = Math.min(textContrast, stockOn(c, paletteFill))
+            return ColorUtils.mixUntil(fillColor, toward, f => ColorUtils.contrastRatio(side, laid(f, backdrops[0])) >= need - 0.01)
+        }
+        // A hover fill that takes the place of a resting one, set off it as
+        // far as the palette's own pair stands apart on the stock surface, or
+        // the pointer on it does not show. It is carried away from the side
+        // the text on it is drawn in, which only helps the text; where that
+        // end is not far enough, toward the text's side, as long as the text
+        // still reads there and the button still stands off the surface as a
+        // mark, or as far as the palette's hover does where that is less.
+        // One already set off the resting fill can still sit too close to the
+        // surface, and is then carried off the surface until it stands as a
+        // mark as well, where the text on it still reads.
+        function apartFrom(fillColor, rest, c, paletteFill, paletteRest) {
+            if (!holdsFills || !adaptive)
+                return fillColor
+            const restHere = laid(rest, backdrops[0])
+            const shows = ColorUtils.contrastRatio(laid(onStock(paletteFill), stockBackdrops[0]),
+                laid(onStock(paletteRest), stockBackdrops[0]))
+            const apart = f => ColorUtils.contrastRatio(laid(f, backdrops[0]), restHere) >= shows - 0.01
+            const light = ColorUtils.relativeLuminance(tone(c)) > ColorUtils.relativeLuminance(laid(fillColor, backdrops[0]))
+            const need = Math.min(textContrast, stockOn(c, paletteFill))
+            const reads = f => ColorUtils.contrastRatio(light ? "white" : "black", laid(f, backdrops[0])) >= need - 0.01
+            const standsOff = Math.min(markContrast, standing(onStock(paletteFill), stockBackdrops[0]))
+            const stands = f => standing(f, backdrops[0]) >= standsOff - 0.01
+            if (apart(fillColor)) {
+                if (stands(fillColor))
+                    return fillColor
+                const off = ColorUtils.relativeLuminance(laid(fillColor, backdrops[0]))
+                    > ColorUtils.relativeLuminance(backdrops[0]) ? "white" : "black"
+                const firmer = ColorUtils.mixUntil(fillColor, off, f => stands(f) && apart(f))
+                return stands(firmer) && apart(firmer) && reads(firmer) ? firmer : fillColor
+            }
+            const away = ColorUtils.mixUntil(fillColor, light ? "black" : "white", apart)
+            const toward = ColorUtils.mixUntil(fillColor, light ? "white" : "black", apart)
+            return !apart(away) && apart(toward) && reads(toward) && stands(toward) ? toward : away
+        }
+        // A mark drawn on one of the fills rather than on the surface, held
+        // as text on a fill is, up to what a mark needs.
+        function markOnFill(c, fillColor, paletteFill) {
+            return heldOn(accent(c), c, [fillColor], [paletteFill], markContrast)
+        }
+        // The subtext where it is read rather than glanced at, as a result's
+        // type or an empty list's message is, held as text is, up to what the
+        // palette gives it on the stock surface.
+        readonly property color colSubtextRead: held(palette.colSubtext,
+            across(palette.colSubtext, colOnLayer0, palette.colOnLayer0), colOnLayer0, textContrast, false)
+        // The accent where it is read as letters rather than seen as a mark,
+        // as the launcher's match highlight is.
+        readonly property color colPrimaryInk: ink(palette.colPrimary)
+        // A toggled button's accent under the pointer, and the icon on it,
+        // which lies on the accent and on that. The hover wash is a little
+        // see-through, so it is held where the surface shows through it, and
+        // then set off the accent it takes the place of. The icon starts
+        // from its own tone rather than a place across the surface, since it
+        // is read against the accent.
+        readonly property color colPrimaryToggleHover: apartFrom(
+            heldUnder(colPrimaryHover, colPrimary, palette.colOnPrimary, palette.colPrimaryHover),
+            colPrimary, palette.colOnPrimary, palette.colPrimaryHover, palette.colPrimary)
+        readonly property color colOnPrimaryToggle: heldOn(colOnPrimary, palette.colOnPrimary,
+            [colPrimary, colPrimaryToggleHover], [palette.colPrimary, palette.colPrimaryHover], textContrast)
+        readonly property color colPrimaryContainer: fill(palette.colPrimaryContainer, m3onSurface, m3.m3onSurface)
+        readonly property color colPrimaryContainerActive: flash(palette.colPrimaryContainerActive, m3onSurface, m3.m3onSurface)
+        readonly property color colOnPrimaryContainer: onFill(palette.colOnPrimaryContainer, colPrimaryContainer, palette.colPrimaryContainer)
+        // What a pointer press spreads over the picked row, and the row's
+        // text, which lies on both while the ripple spreads.
+        readonly property color colPrimaryContainerRipple: ripple(palette.colPrimaryContainerActive, colPrimaryContainerActive,
+            colPrimaryContainer, palette.colPrimaryContainer, colOnPrimaryContainer, palette.colOnPrimaryContainer,
+            backdrops[0], stockBackdrops[0])
+        readonly property color colOnPrimaryContainerActive: onFills(palette.colOnPrimaryContainer,
+            [[colPrimaryContainer, colPrimaryContainerRipple], colPrimaryContainer],
+            [[palette.colPrimaryContainer, palette.colPrimaryContainerActive], palette.colPrimaryContainer])
+        // Pressed from the keyboard with the pointer elsewhere, only the
+        // pressed fill is painted.
+        readonly property color colOnPrimaryContainerPressed: onFill(palette.colOnPrimaryContainer, colPrimaryContainerActive, palette.colPrimaryContainerActive)
+        // A row pressed without being picked, as a touch presses it, keeps
+        // its resting text and match letters, held on the ripple's color
+        // painted under it.
+        readonly property color m3onSurfaceOnRipple: onFill(m3.m3onSurface, colPrimaryContainerRipple, palette.colPrimaryContainerActive)
+        readonly property color colSubtextOnRipple: onFill(palette.colSubtext, colPrimaryContainerRipple, palette.colPrimaryContainerActive)
+        readonly property color colPrimaryInkOnRipple: heldOn(colPrimaryInk, palette.colPrimary,
+            [colPrimaryContainerRipple], [palette.colPrimaryContainerActive], textContrast)
+        // Pressed from the keyboard while the focus sits on one of its
+        // actions, the row is not picked either, and paints the pressed fill.
+        readonly property color m3onSurfacePressed: onFill(m3.m3onSurface, colPrimaryContainerActive, palette.colPrimaryContainerActive)
+        readonly property color colSubtextPressed: onFill(palette.colSubtext, colPrimaryContainerActive, palette.colPrimaryContainerActive)
+        readonly property color colPrimaryInkPressed: heldOn(colPrimaryInk, palette.colPrimary,
+            [colPrimaryContainerActive], [palette.colPrimaryContainerActive], textContrast)
+        // The accent laid on the picked row, as the copied entry's check is,
+        // and the check drawn on it, which crosses with it where it crosses.
+        // A press paints fills set apart from the resting one, and no one
+        // accent need stand off all of them, so each press holds its own on
+        // the fills it paints, as the row's text does.
+        readonly property color colPrimaryOnContainer: markOnFill(palette.colPrimary, colPrimaryContainer, palette.colPrimaryContainer)
+        readonly property color colOnPrimaryOnContainer: onFill(palette.colOnPrimary, colPrimaryOnContainer, palette.colPrimary)
+        readonly property color colPrimaryOnContainerPressed: markOnFill(palette.colPrimary, colPrimaryContainerActive, palette.colPrimaryContainerActive)
+        readonly property color colOnPrimaryOnContainerPressed: onFill(palette.colOnPrimary, colPrimaryOnContainerPressed, palette.colPrimary)
+        // A pointer press spreads the ripple over the hover fill, and one
+        // that does not hover the row paints the ripple's color under it.
+        readonly property color colPrimaryOnContainerActive: heldOn(accent(palette.colPrimary), palette.colPrimary,
+            [colPrimaryContainer, [colPrimaryContainer, colPrimaryContainerRipple], colPrimaryContainerRipple],
+            [palette.colPrimaryContainer, [palette.colPrimaryContainer, palette.colPrimaryContainerActive],
+                palette.colPrimaryContainerActive], markContrast)
+        readonly property color colOnPrimaryOnContainerActive: onFill(palette.colOnPrimary, colPrimaryOnContainerActive, palette.colPrimary)
+        readonly property color colSecondary: accent(palette.colSecondary)
+        // An action button's washes are laid on the picked row rather than
+        // the surface, so the row is what they have to stand off, the press
+        // by contrast alone as a pressed fill is.
+        readonly property color pickedRow: ColorUtils.composite(colPrimaryContainer, backdrops[0])
+        readonly property color stockPickedRow: ColorUtils.composite(onStock(palette.colPrimaryContainer), stockBackdrops[0])
+        readonly property color colActionHover: holdsFills ? standOff(palette.colSecondaryContainerHover, colSecondaryContainerHover,
+            m3onSurface, pickedRow, stockPickedRow) : colSecondaryContainerHover
+        readonly property color colActionActive: holdsFills ? heldOff(palette.colSecondaryContainerActive, colSecondaryContainerActive,
+            m3onSurface, pickedRow, stockPickedRow) : colSecondaryContainerActive
+        // A picked row's text where an action button on it lays its hover
+        // wash under the text rather than the row's own fill, and its press
+        // spreads as a ripple over that wash.
+        readonly property color colOnActionHover: onFill(palette.colOnPrimaryContainer, colActionHover, palette.colSecondaryContainerHover)
+        readonly property color colActionRipple: ripple(palette.colSecondaryContainerActive, colActionActive, colActionHover,
+            palette.colSecondaryContainerHover, colOnActionHover, palette.colOnPrimaryContainer, pickedRow, stockPickedRow)
+        readonly property color colOnActionActive: onFills(palette.colOnPrimaryContainer,
+            [[colActionHover, colActionRipple], colActionHover],
+            [[palette.colSecondaryContainerHover, palette.colSecondaryContainerActive], palette.colSecondaryContainerHover])
+        // Layer 0 text on a hovered, pressed or drop-target tile, which is
+        // laid with these fills rather than left on the surface.
+        readonly property color colOnLayer0Hover: onFill(palette.colOnLayer0, colSecondaryContainer, palette.colSecondaryContainer)
+        readonly property color colOnLayer0Active: onFill(palette.colOnLayer0, colSecondaryContainerActive, palette.colSecondaryContainerActive)
+        readonly property color colOnLayer0Drop: onFill(palette.colOnLayer0, ColorUtils.transparentize(colPrimary, 0.5),
+            ColorUtils.transparentize(palette.colPrimary, 0.5))
+        readonly property color colLayer0Border: dim(palette.colLayer0Border, colOnLayer0, palette.colOnLayer0)
+        // A toolbar icon under the pointer sits on the hover wash, and a press
+        // spreads the pressed wash over that as a ripple.
+        readonly property color colOnSurfaceVariantHover: onFills(palette.colOnSurfaceVariant,
+            [colLayer1Hover, [colLayer1Hover, colLayer1Active]], [palette.colLayer1Hover, [palette.colLayer1Hover, palette.colLayer1Active]])
+        readonly property color colOnSurfaceVariantHigh: onFill(palette.colOnSurfaceVariant, colSurfaceContainerHigh, palette.colSurfaceContainerHigh)
+        // What is typed into a field, and the hint before it, sit on the
+        // field's own fill rather than on the surface around it. Where the
+        // field allows it, the typed text goes a quarter past what the hint
+        // needs, as an ink stands off its dimmed tone, so a query typed in
+        // does not pass for the hint; the hint itself is not held back.
+        readonly property real hintContrast: Math.min(textContrast, stockOn(palette.colSubtext, palette.colLayer1))
+        readonly property color colOnLayer1Field: onFill(palette.colOnLayer1, colLayer1, palette.colLayer1, 1.25 * hintContrast)
+        readonly property color colSubtextField: onFill(palette.colSubtext, colLayer1, palette.colLayer1)
+        readonly property color m3onSurfaceField: onFill(m3.m3onSurface, colLayer1, palette.colLayer1, 1.25 * hintContrast)
+        // The hint's color is the palette's subtext under its m3 name.
+        readonly property color m3outlineField: colSubtextField
+        // The caret blinks on the field's fill as well, and the focus ring
+        // runs along its edge, so both are held there as marks.
+        readonly property color colPrimaryOnField: markOnFill(palette.colPrimary, colLayer1, palette.colLayer1)
+        readonly property color colLayer2Hover: fill(palette.colLayer2Hover, colOnLayer2, palette.colOnLayer2)
+        readonly property color colSurfaceContainerLow: fill(palette.colSurfaceContainerLow, m3onSurface, m3.m3onSurface)
+        // The focused workspace's outline is drawn over the edge of its tile,
+        // so the tile is what it has to stand off.
+        readonly property color colSecondaryOnTile: markOnFill(palette.colSecondary, colSurfaceContainerLow, palette.colSurfaceContainerLow)
+        // Its number, a faint wash of the ink, lies on the tile as well.
+        readonly property color colTileNumber: faded(colOnLayer1, 0.2, colSurfaceContainerLow, palette.colSurfaceContainerLow)
+        readonly property color colSurfaceContainerHigh: fill(palette.colSurfaceContainerHigh, m3onSurface, m3.m3onSurface)
         readonly property color m3onSurfaceVariant: ink(m3.m3onSurfaceVariant)
         // The palette's subtext is this very color, so the two are held as one.
         readonly property color m3outline: colSubtext
-        readonly property color m3primary: accent(m3.m3primary)
-        readonly property color m3onPrimary: tone(m3.m3onPrimary)
-        readonly property color m3secondaryContainer: across(m3.m3secondaryContainer, m3onSurface, m3.m3onSurface)
-        readonly property color m3onSecondaryContainer: onFill(m3.m3onSecondaryContainer, m3secondaryContainer, m3.m3secondaryContainer)
-        readonly property color m3error: tone(m3.m3error)
     }
 
     m3colors: QtObject {
@@ -484,12 +953,19 @@ Singleton {
         // The dock's notch starts from the strip's alpha like every other style.
         readonly property real dockStockAlpha: layer0StockAlpha
         property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, dockStockAlpha)
-        property color colDockBackgroundBorder: ColorUtils.applyAlpha(
-            ColorUtils.mix(root.dockContent.colOutlineVariant, colDockBackground, 0.4), colDockBackground.a)
-        // The notched dock carries its own alpha on the container rather than on
-        // each piece, so the outline goes on opaque there and is let down with
-        // everything else, instead of being faded twice.
-        readonly property color colDockBackgroundBorderOpaque: Qt.rgba(colDockBackgroundBorder.r, colDockBackgroundBorder.g, colDockBackgroundBorder.b, 1)
+        // The dock's surface is also drawn over the launcher's dim, as the
+        // dock raised above it and as the app list, and each takes its
+        // outline from the content drawn there.
+        function surfaceBorder(outline, surface) {
+            return ColorUtils.applyAlpha(ColorUtils.mix(outline, surface, 0.4), surface.a)
+        }
+        function dockBorder(outline) {
+            return surfaceBorder(outline, colDockBackground)
+        }
+        property color colDockBackgroundBorder: dockBorder(root.dockContent.colOutlineVariant)
+        property color colDockOverLauncherBorder: root.dockBorderOverDim(root.dockOverLauncherContent,
+            root.wallpaperEdge(root.sizes.dockEdge))
+        property color colDrawerBorder: root.dockBorderOverDim(root.drawerContent, root.wallpaperAverage)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
         readonly property string dockBadgePick: modePick(Config.options?.dock.badgeColorDark, Config.options?.dock.badgeColorLight)
         readonly property string dockBadgeTextPick: modePick(Config.options?.dock.badgeTextColorDark, Config.options?.dock.badgeTextColorLight)
@@ -498,6 +974,37 @@ Singleton {
         // behind it is set.
         property color colDockBadge: dockBadgePick !== "" ? dockBadgePick : colPrimary
         property color colDockBadgeText: dockBadgeTextPick !== "" ? dockBadgeTextPick : m3colors.m3onPrimary
+        // The launcher's panels take the dock's pick and transparency, as the
+        // app list does by wearing the dock's surface outright, so a style
+        // set on the style page reaches everything the launcher draws. Left
+        // unpicked, they keep the palette's own container.
+        // The panels and the dim take it only while their content is judged
+        // against what it is drawn on: otherwise their text keeps the
+        // palette's tones, which were chosen for the palette's own surface,
+        // and a pick made for the dock can bury them where names are read.
+        readonly property string launcherPick: root.autoIconContrast ? dockPick : ""
+        readonly property real launcherOpacity: root.autoIconContrast ? (Config.options?.dock.backgroundOpacity ?? -1) : -1
+        property color colLauncherPanel: surfaceColor(launcherPick, m3colors.m3surfaceContainer, launcherOpacity, layer0StockAlpha)
+        // Drawn under the whole panel, so a see-through one shows it as a
+        // gray slab. It keeps its full strength under the stock panel and
+        // anything more solid, and fades with a fainter one, as the dock's
+        // does with the dock.
+        property color colLauncherShadow: ColorUtils.applyAlpha(colShadow, colShadow.a
+            * (layer0StockAlpha > 0 ? Math.min(1, colLauncherPanel.a / layer0StockAlpha) : 1))
+        // What shows through a near-white layer reads as less than the same
+        // share through a near-black one, so light mode lets a little more of
+        // the frosted windows through to look as open.
+        readonly property real launcherDimOpacity: m3colors.darkmode ? 0.90 : 0.85
+        // A fifth of the way to the pick reads plainly in its hue, and it is
+        // about as far as the dim can go before a white pick in dark mode
+        // leaves the palette's text under 7:1 on it. Past that the dim stops
+        // reading as the mode's backdrop and starts reading as the pick's.
+        readonly property real launcherDimTint: 0.2
+        property color colLauncherDim: launcherPick !== "" ? ColorUtils.mix(launcherPick, colLayer0Base, launcherDimTint) : colLayer0Base
+        // The dim's window is cleared to a faint black under the dim, and the
+        // launcher is laid over that as well, so the window and the backdrop
+        // its content is judged against both take it from here.
+        readonly property color colLauncherDimWindow: Qt.rgba(0, 0, 0, 0.01)
         // Layer 1
         property color colLayer1Base: m3colors.m3surfaceContainerLow
         property color colLayer1: ColorUtils.solveOverlayColor(colLayer0Base, colLayer1Base, 1 - root.contentTransparency);

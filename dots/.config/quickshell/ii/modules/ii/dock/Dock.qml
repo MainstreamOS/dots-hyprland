@@ -1,6 +1,7 @@
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Controls
@@ -97,6 +98,54 @@ Scope { // Scope
                 : dockEdge === "left" ? Edges.Right : Edges.Left
 
             property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || GlobalStates.overviewOpen || revealGrace.running
+
+            // The dock is raised above the launcher's dim while the launcher
+            // is open, and there it takes the colors that read over the dim.
+            // Only on the screen the dim is shown on: a dock on another screen
+            // keeps its own.
+            readonly property DockContent content: DockContent {
+                dimmed: GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "")
+            }
+            // The content colors as this dock draws them. A button's fill
+            // already eases to a new color on the curve the dim fades on, so
+            // the buttons take theirs the moment the dim starts and ease with
+            // it; the rest pass across on the same curve, and all of it lands
+            // with the dim.
+            component DockContent: QtObject {
+                property bool dimmed: false
+                property real over: dimmed ? 1 : 0
+                Behavior on over {
+                    NumberAnimation {
+                        duration: Appearance.animation.elementMoveFast.duration
+                        easing.type: Appearance.animation.elementMoveFast.type
+                        easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                    }
+                }
+                readonly property var rest: Appearance.dockContent
+                readonly property var overDim: Appearance.dockOverLauncherContent
+                readonly property var settled: dimmed ? overDim : rest
+                function blend(atRest, onDim) {
+                    return over <= 0 ? atRest : over >= 1 ? onDim : ColorUtils.mix(onDim, atRest, over)
+                }
+                readonly property color colOnLayer0: blend(rest.colOnLayer0, overDim.colOnLayer0)
+                readonly property color m3onPrimary: blend(rest.m3onPrimary, overDim.m3onPrimary)
+                readonly property color colPrimary: blend(rest.colPrimary, overDim.colPrimary)
+                readonly property color colOutlineVariant: blend(rest.colOutlineVariant, overDim.colOutlineVariant)
+                readonly property color colLayer1: blend(rest.colLayer1, overDim.colLayer1)
+                // A folder's outline runs around its tile, so the tile is what
+                // it has to stand off.
+                readonly property color colLayer0BorderOnLayer1: blend(rest.colLayer0BorderOnLayer1, overDim.colLayer0BorderOnLayer1)
+                // The window marks of an app that is not the focused one.
+                readonly property color colMarkFaint: blend(rest.faded(rest.colOnLayer0, 0.6),
+                    overDim.faded(overDim.colOnLayer0, 0.6))
+                readonly property color colBorder: blend(Appearance.colors.colDockBackgroundBorder,
+                    Appearance.colors.colDockOverLauncherBorder)
+                // The notched dock carries its own alpha on the container rather
+                // than on each piece, so the outline goes on opaque there and is
+                // let down with everything else, which keeps it from being faded
+                // twice.
+                readonly property color colBorderOpaque: Qt.rgba(colBorder.r, colBorder.g, colBorder.b, 1)
+            }
 
             anchors {
                 top: dockRoot.dockEdge !== "bottom"
@@ -372,8 +421,8 @@ Scope { // Scope
                                     : Appearance.colors.colDockBackground
                                 outlineWidth: Config.options.dock.showBackground ? 1 : 0
                                 outlineColor: dockRoot.notchSeamFix
-                                    ? Appearance.colors.colDockBackgroundBorderOpaque
-                                    : Appearance.colors.colDockBackgroundBorder
+                                    ? dockRoot.content.colBorderOpaque
+                                    : dockRoot.content.colBorder
                             }
 
                             // The curves at the two ends of a horizontal dock.
@@ -439,8 +488,8 @@ Scope { // Scope
                                 // is the top, which is the only part on show.
                                 border.width: Config.options.dock.showBackground ? 1 : 0
                                 border.color: dockRoot.notchSeamFix
-                                    ? Appearance.colors.colDockBackgroundBorderOpaque
-                                    : Appearance.colors.colDockBackgroundBorder
+                                    ? dockRoot.content.colBorderOpaque
+                                    : dockRoot.content.colBorder
                                 // The pair facing the screen edge answers to the
                                 // edge roundness; the pair facing the desktop to
                                 // the other. A corner that curves outward is drawn
@@ -505,11 +554,11 @@ Scope { // Scope
                                     clickedWidth: baseWidth
                                     clickedHeight: baseHeight + 20
                                     buttonRadius: Appearance.rounding.normal
-                                    colBackgroundHover: Appearance.dockContent.colLayer1Hover
-                                    colBackgroundActive: Appearance.dockContent.colLayer1Active
-                                    colBackgroundToggled: Appearance.dockContent.colPrimary
-                                    colBackgroundToggledHover: Appearance.dockContent.colPrimaryHover
-                                    colBackgroundToggledActive: Appearance.dockContent.colPrimaryActive
+                                    colBackgroundHover: dockRoot.content.settled.colLayer1Hover
+                                    colBackgroundActive: dockRoot.content.settled.colLayer1Active
+                                    colBackgroundToggled: dockRoot.content.settled.colPrimary
+                                    colBackgroundToggledHover: dockRoot.content.settled.colPrimaryHover
+                                    colBackgroundToggledActive: dockRoot.content.settled.colPrimaryActive
                                     toggled: root.pinned
                                     onClicked: root.pinned = !root.pinned
                                     contentItem: MaterialSymbol {
@@ -523,7 +572,7 @@ Scope { // Scope
                                         // the rounding was meant to prevent.
                                         iconSize: Math.round(Appearance.font.pixelSize.larger
                                             * dockRoot.fittedIconSize / Appearance.sizes.dockIconStock)
-                                        color: root.pinned ? Appearance.dockContent.m3onPrimary : Appearance.dockContent.colOnLayer0
+                                        color: root.pinned ? dockRoot.content.m3onPrimary : dockRoot.content.colOnLayer0
                                     }
                                 }
                             }
@@ -547,7 +596,7 @@ Scope { // Scope
                                     horizontalAlignment: Text.AlignHCenter
                                     font.pixelSize: Math.min(parent.width, parent.height) / 2
                                     text: "apps"
-                                    color: Appearance.dockContent.colOnLayer0
+                                    color: dockRoot.content.colOnLayer0
                                 }
                             }
                         }

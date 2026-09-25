@@ -32,7 +32,7 @@ Item {
     property real scale: (Config.options.overview.size / 100)
                          * Math.min(0.9 / Math.max(1, Config.options.overview.columns),
                                     0.9 / Math.max(1, Config.options.overview.rows))
-    property color activeBorderColor: Appearance.colors.colSecondary
+    property color activeBorderColor: Appearance.launcherContent.colSecondaryOnTile
 
     property real workspaceImplicitWidth: (monitorData?.transform % 2 === 1) ? 
         ((monitor.height - monitorData?.reserved[0] - monitorData?.reserved[2]) * root.scale / monitor.scale) :
@@ -95,6 +95,7 @@ Item {
 
     StyledRectangularShadow {
         target: overviewBackground
+        color: Appearance.colors.colLauncherShadow
     }
     Rectangle { // Background
         id: overviewBackground
@@ -105,7 +106,7 @@ Item {
         implicitWidth: workspaceColumnLayout.implicitWidth + padding * 2
         implicitHeight: workspaceColumnLayout.implicitHeight + padding * 2
         radius: Appearance.rounding.dockBody
-        color: Appearance.colors.colBackgroundSurfaceContainer
+        color: Appearance.colors.colLauncherPanel
 
         Column { // Workspaces
             id: workspaceColumnLayout
@@ -128,9 +129,9 @@ Item {
                             required property int index
                             property int colIndex: index
                             property int workspaceValue: root.workspaceGroup * root.workspacesShown + getWsInCell(row.index, colIndex)
-                            property color defaultWorkspaceColor: Appearance.colors.colSurfaceContainerLow
-                            property color hoveredWorkspaceColor: ColorUtils.mix(defaultWorkspaceColor, Appearance.colors.colLayer1Hover, 0.1)
-                            property color hoveredBorderColor: Appearance.colors.colLayer2Hover
+                            property color defaultWorkspaceColor: Appearance.launcherContent.colSurfaceContainerLow
+                            property color hoveredWorkspaceColor: ColorUtils.mix(defaultWorkspaceColor, Appearance.launcherContent.colLayer1Hover, 0.1)
+                            property color hoveredBorderColor: Appearance.launcherContent.colLayer2Hover
                             property bool hoveredWhileDragging: false
                             property bool appDragHovered: root.appDragHoverWorkspace === workspaceValue
 
@@ -156,7 +157,7 @@ Item {
                                     weight: Font.DemiBold
                                     family: Appearance.font.family.expressive
                                 }
-                                color: ColorUtils.transparentize(Appearance.colors.colOnLayer1, 0.8)
+                                color: Appearance.launcherContent.colTileNumber
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }

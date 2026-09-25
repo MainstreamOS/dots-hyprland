@@ -243,7 +243,7 @@ Item {
         color: Config.options.dock.showBackground
             ? Appearance.colors.colDockBackground : "transparent"
         border.width: Config.options.dock.showBackground ? 1 : 0
-        border.color: Appearance.colors.colDockBackgroundBorder
+        border.color: Appearance.colors.colDrawerBorder
 
         ColumnLayout {
             anchors.fill: parent
@@ -258,14 +258,14 @@ Item {
                 MaterialSymbol {
                     text: "apps"
                     iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.dockContent.colOnLayer0
+                    color: Appearance.drawerContent.colOnLayer0
                 }
 
                 StyledText {
                     text: root.expanded ? Translation.tr("All Applications") : Translation.tr("Applications")
                     font.pixelSize: Appearance.font.pixelSize.larger
                     font.weight: Font.Medium
-                    color: Appearance.dockContent.colOnLayer0
+                    color: Appearance.drawerContent.colOnLayer0
                 }
 
                 Item { Layout.fillWidth: true }
@@ -273,7 +273,7 @@ Item {
                 MaterialSymbol {
                     text: root.expanded ? "expand_less" : "expand_more"
                     iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.dockContent.colSubtext
+                    color: Appearance.drawerContent.colSubtext
                 }
             }
 
@@ -305,7 +305,7 @@ Item {
                 }
 
                 placeholderText: Translation.tr("Search applications...")
-                placeholderTextColor: Appearance.dockContent.m3outline
+                placeholderTextColor: Appearance.drawerContent.m3outlineField
                 padding: 10
 
                 font {
@@ -313,15 +313,15 @@ Item {
                     pixelSize: Appearance.font.pixelSize.small
                 }
 
-                color: Appearance.dockContent.m3onSurface
-                selectedTextColor: Appearance.dockContent.m3onSecondaryContainer
-                selectionColor: Appearance.dockContent.colSecondaryContainer
+                color: Appearance.drawerContent.m3onSurfaceField
+                selectedTextColor: Appearance.drawerContent.m3onSecondaryContainer
+                selectionColor: Appearance.drawerContent.colSecondaryContainer
 
                 background: Rectangle {
                     radius: Appearance.rounding.small
-                    color: Appearance.dockContent.colLayer1
+                    color: Appearance.drawerContent.colLayer1
                     border.width: 1
-                    border.color: searchField.activeFocus ? Appearance.dockContent.colPrimary : Appearance.dockContent.colOutlineVariant
+                    border.color: searchField.activeFocus ? Appearance.drawerContent.colPrimaryOnField : Appearance.drawerContent.colOutlineVariant
 
                     Behavior on border.color {
                         ColorAnimation {
@@ -332,7 +332,7 @@ Item {
 
                 cursorDelegate: Rectangle {
                     width: 1
-                    color: Appearance.dockContent.colPrimary
+                    color: Appearance.drawerContent.colPrimaryOnField
                     radius: 1
                     visible: searchField.activeFocus
                 }
@@ -348,7 +348,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "close"
                     iconSize: Appearance.font.pixelSize.normal
-                    color: Appearance.dockContent.colSubtext
+                    color: Appearance.drawerContent.m3outlineField
                     visible: searchField.text.length > 0
 
                     MouseArea {
@@ -410,7 +410,7 @@ Item {
                         visible: appGrid.count === 0 && root.searchText.length > 0
                         text: Translation.tr("No applications found")
                         font.pixelSize: Appearance.font.pixelSize.normal
-                        color: Appearance.dockContent.colSubtext
+                        color: Appearance.drawerContent.colSubtextRead
                     }
 
                     delegate: RippleButton {
@@ -425,15 +425,29 @@ Item {
                         buttonRadius: Appearance.rounding.normal
                         colBackground: {
                             if (isDragTarget)
-                                return ColorUtils.transparentize(Appearance.dockContent.colPrimary, 0.5);
+                                return ColorUtils.transparentize(Appearance.drawerContent.colPrimary, 0.5);
                             if (appButton.down || appButton.keyboardDown)
-                                return Appearance.dockContent.colSecondaryContainerActive;
+                                return Appearance.drawerContent.colSecondaryContainerActive;
                             if (appButton.hovered || appButton.focus)
-                                return Appearance.dockContent.colSecondaryContainer;
-                            return ColorUtils.transparentize(Appearance.dockContent.colSecondaryContainer, 1);
+                                return Appearance.drawerContent.colSecondaryContainer;
+                            return ColorUtils.transparentize(Appearance.drawerContent.colSecondaryContainer, 1);
                         }
-                        colBackgroundHover: Appearance.dockContent.colSecondaryContainer
-                        colRipple: Appearance.dockContent.colSecondaryContainerActive
+                        colBackgroundHover: Appearance.drawerContent.colSecondaryContainer
+                        colRipple: Appearance.drawerContent.colSecondaryContainerActive
+                        // The name is held against whichever of those fills is
+                        // painted under it, and the button paints the hover fill
+                        // over any other while the pointer is on the tile.
+                        property color colName: {
+                            if (appButton.hovered)
+                                return Appearance.drawerContent.colOnLayer0Hover;
+                            if (isDragTarget)
+                                return Appearance.drawerContent.colOnLayer0Drop;
+                            if (appButton.down || appButton.keyboardDown)
+                                return Appearance.drawerContent.colOnLayer0Active;
+                            if (appButton.focus)
+                                return Appearance.drawerContent.colOnLayer0Hover;
+                            return Appearance.drawerContent.colOnLayer0;
+                        }
 
                         PointingHandInteraction {}
 
@@ -474,9 +488,9 @@ Item {
                                 Layout.preferredWidth: root.iconSize
                                 Layout.preferredHeight: root.iconSize
                                 radius: Appearance.rounding.normal
-                                color: Appearance.dockContent.colLayer1
+                                color: Appearance.drawerContent.colLayer1
                                 border.width: 1
-                                border.color: Appearance.dockContent.colLayer0Border
+                                border.color: Appearance.drawerContent.colLayer0BorderOnLayer1
 
                                 Grid {
                                     anchors.centerIn: parent
@@ -500,7 +514,7 @@ Item {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: modelData.name
                                 font.pixelSize: Appearance.font.pixelSize.smaller
-                                color: Appearance.dockContent.colOnLayer0
+                                color: appButton.colName
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 wrapMode: Text.WordWrap
@@ -532,7 +546,7 @@ Item {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: modelData.name
                                 font.pixelSize: Appearance.font.pixelSize.smaller
-                                color: Appearance.dockContent.colOnLayer0
+                                color: appButton.colName
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 wrapMode: Text.WordWrap
@@ -546,7 +560,7 @@ Item {
                             radius: Appearance.rounding.normal
                             color: "transparent"
                             border.width: 2
-                            border.color: Appearance.dockContent.colPrimary
+                            border.color: Appearance.drawerContent.colPrimary
                             visible: appButton.isDragTarget
                         }
 

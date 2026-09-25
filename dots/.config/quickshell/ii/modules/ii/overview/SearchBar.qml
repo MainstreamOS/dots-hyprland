@@ -36,6 +36,8 @@ RowLayout {
         id: searchIcon
         Layout.alignment: Qt.AlignVCenter
         iconSize: Appearance.font.pixelSize.huge
+        color: Appearance.launcherContent.colSecondaryContainer
+        colSymbol: Appearance.launcherContent.colOnSecondaryContainer
         shape: switch(root.searchPrefixType) {
             case SearchBar.SearchPrefixType.Action: return MaterialShape.Shape.Pill;
             case SearchBar.SearchPrefixType.App: return MaterialShape.Shape.Clover4Leaf;
@@ -65,6 +67,11 @@ RowLayout {
         implicitHeight: 40
         focus: GlobalStates.overviewOpen
         font.pixelSize: Appearance.font.pixelSize.small
+        colBackground: Appearance.launcherContent.colLayer1
+        color: Appearance.launcherContent.colOnLayer1Field
+        placeholderTextColor: Appearance.launcherContent.colSubtextField
+        selectedTextColor: Appearance.launcherContent.colOnSecondaryContainer
+        selectionColor: Appearance.launcherContent.colSecondaryContainer
         placeholderText: Translation.tr("Search, calculate or run")
         implicitWidth: root.searchingText == "" ? Appearance.sizes.searchWidthCollapsed : Appearance.sizes.searchWidth
 
@@ -104,6 +111,9 @@ RowLayout {
     IconToolbarButton {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
+        colBackgroundHover: Appearance.launcherContent.colLayer1Hover
+        colRipple: Appearance.launcherContent.colLayer1Active
+        colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
         onClicked: {
             GlobalStates.overviewOpen = false;
             lensDelayTimer.start();
@@ -133,7 +143,8 @@ RowLayout {
             text: Translation.tr("Recognize music")
         }
 
-        colText: toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSurfaceVariant
+        colText: toggled ? Appearance.launcherContent.colOnPrimaryToggle
+            : hovered ? Appearance.launcherContent.colOnSurfaceVariantHigh : Appearance.launcherContent.colOnSurfaceVariant
         background: MaterialShape {
             RotationAnimation on rotation {
                 running: songRecButton.toggled
@@ -152,9 +163,9 @@ RowLayout {
             }
             color: {
                 if (songRecButton.toggled) {
-                    return songRecButton.hovered ? Appearance.colors.colPrimaryHover : Appearance.colors.colPrimary
+                    return songRecButton.hovered ? Appearance.launcherContent.colPrimaryToggleHover : Appearance.launcherContent.colPrimary
                 } else {
-                    return songRecButton.hovered ? Appearance.colors.colSurfaceContainerHigh : ColorUtils.transparentize(Appearance.colors.colSurfaceContainerHigh)
+                    return songRecButton.hovered ? Appearance.launcherContent.colSurfaceContainerHigh : ColorUtils.transparentize(Appearance.launcherContent.colSurfaceContainerHigh)
                 }
             }
             Behavior on color {
@@ -167,6 +178,9 @@ RowLayout {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
         Layout.rightMargin: 4
+        colBackgroundHover: Appearance.launcherContent.colLayer1Hover
+        colRipple: Appearance.launcherContent.colLayer1Active
+        colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
         onClicked: {
             GlobalStates.overviewOpen = false;
             GlobalStates.sessionOpen = true;

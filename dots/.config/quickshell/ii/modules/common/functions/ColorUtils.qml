@@ -188,7 +188,37 @@ Singleton {
     function mixForContrast(color, toward, backdrop, ratio) {
         // A hair under the mark, so a color that sits on it and misses only
         // by rounding is left where it is.
-        const reaches = c => contrastRatio(composite(c, backdrop), backdrop) >= ratio - 0.01;
+        return mixUntil(color, toward, c => contrastRatio(composite(c, backdrop), backdrop) >= ratio - 0.01);
+    }
+
+    /**
+     * The same for how far apart the two look rather than their contrast, so
+     * a color set off its backdrop by hue alone counts for as much as it
+     * shows. Contrast ratio sees only luminance, and a pale blue on a pale
+     * gray of the same luminance stands no distance off it at all.
+     *
+     * @param {string} color - The color to start from; its alpha is how much of it shows.
+     * @param {string} toward - The color to move toward.
+     * @param {string} backdrop - The opaque color both are drawn over.
+     * @param {number} distance - The delta E to reach.
+     * @returns {Qt.rgba} The color exactly as given when it already stands that far off, `toward` as given when even that falls short, otherwise the mix.
+     */
+    function mixForDistance(color, toward, backdrop, distance) {
+        // A hair under the mark as well, far less than an eye can tell.
+        return mixUntil(color, toward, c => deltaE(composite(c, backdrop), backdrop) >= distance - 0.05);
+    }
+
+    /**
+     * The least mix of one color toward another that passes a test, found by
+     * halving: to a 256th of the way, which is under one step of an 8-bit
+     * channel.
+     *
+     * @param {string} color - The color to start from.
+     * @param {string} toward - The color to move toward.
+     * @param {function} reaches - Whether a color is far enough.
+     * @returns {Qt.rgba} The color exactly as given when it passes, `toward` as given when even that fails, otherwise the mix.
+     */
+    function mixUntil(color, toward, reaches) {
         if (reaches(color))
             return color;
         if (!reaches(toward))
@@ -203,6 +233,38 @@ Singleton {
                 low = p;
         }
         return mix(toward, color, high);
+    }
+
+    /**
+     * A color in CIE L*a*b*, where equal steps look about equally far apart,
+     * whether the step is in lightness or in hue.
+     *
+     * @param {string} color - The color (any Qt.color-compatible string). Alpha is ignored.
+     * @returns {Array<number>} L*, a* and b* under the sRGB (D65) white.
+     */
+    function lab(color) {
+        const c = Qt.color(color);
+        const linear = v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        const r = linear(c.r), g = linear(c.g), b = linear(c.b);
+        const f = t => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+        const x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+        const y = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+        const z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+        return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+    }
+
+    /**
+     * How far apart two opaque colors look (CIE76 delta E). About 2.3 is the
+     * least most people can tell apart side by side.
+     *
+     * @param {string} color1 - The first color.
+     * @param {string} color2 - The second color.
+     * @returns {number} The distance, from 0 for the same color.
+     */
+    function deltaE(color1, color2) {
+        const a = lab(color1);
+        const b = lab(color2);
+        return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     }
 
     /**

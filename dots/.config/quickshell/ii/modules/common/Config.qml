@@ -396,11 +396,15 @@ Singleton {
 
             property JsonObject appearance: JsonObject {
                 property bool extraBackgroundTint: true
-                // Whether the bar and dock icons answer to what they are drawn
-                // on: turned light or dark and firmed up when a color or a
-                // transparency would lose them. Off, they keep the palette's
-                // own tones whatever the surface. Nothing on screen sets it; it
-                // is here for a setup the judgment gets wrong.
+                // Whether the content on the bar, the dock and the launcher
+                // answers to what it is drawn on: turned light or dark and
+                // firmed up when a color or a transparency would lose it. The
+                // launcher is part of it because it wears the dock's style,
+                // so its text is laid on the same colors. Off, all of it
+                // keeps the palette's own tones whatever the surface, and the
+                // launcher's panels and dim keep the palette's own surface
+                // too, the one those tones were chosen for. Nothing on screen
+                // sets it; it is here for a setup the judgment gets wrong.
                 property bool autoIconContrast: true
                 // Lives here rather than in the Hyprland config so a saved
                 // theme carries it. Palette mode holds role names, which are

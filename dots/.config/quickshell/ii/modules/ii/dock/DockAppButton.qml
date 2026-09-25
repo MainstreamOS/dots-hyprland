@@ -392,9 +392,9 @@ DockButton {
                     implicitWidth: root.iconSize
                     implicitHeight: root.iconSize
                     radius: Appearance.rounding.small
-                    color: Appearance.dockContent.colLayer1
+                    color: dockRoot.content.colLayer1
                     border.width: 1
-                    border.color: Appearance.dockContent.colLayer0Border
+                    border.color: dockRoot.content.colLayer0BorderOnLayer1
 
                     Grid {
                         anchors.centerIn: parent
@@ -533,7 +533,7 @@ DockButton {
                             : asDash ? root.countDotWidth : root.countDotHeight
                         implicitHeight: !dockRoot.dockVertical ? root.countDotHeight
                             : asDash ? root.countDotWidth : root.countDotHeight
-                        color: appIsActive ? Appearance.dockContent.colPrimary : Appearance.dockContent.faded(Appearance.dockContent.colOnLayer0, 0.6)
+                        color: appIsActive ? dockRoot.content.colPrimary : dockRoot.content.colMarkFaint
                     }
                 }
             }

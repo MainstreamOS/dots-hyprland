@@ -21,16 +21,28 @@ Singleton {
 
     function applyColors(fileContent) {
         const json = JSON.parse(fileContent)
-        for (const key in json) {
-            if (json.hasOwnProperty(key)) {
-                // Convert snake_case to CamelCase
-                const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
-                const m3Key = `m3${camelCaseKey}`
-                Appearance.m3colors[m3Key] = json[key]
+        // Every color here lands on its own, and what is judged from the
+        // palette as a whole would otherwise be worked out again after each.
+        // It is held from the first color that changes, since holding it
+        // costs a full pass of its own, and the same palette read again
+        // changes nothing. It is let go before the revision moves, since what
+        // rebuilds on that reads the finished palette.
+        try {
+            for (const key in json) {
+                if (json.hasOwnProperty(key)) {
+                    // Convert snake_case to CamelCase
+                    const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
+                    const m3Key = `m3${camelCaseKey}`
+                    if (String(Appearance.m3colors[m3Key]) !== String(json[key]).toLowerCase())
+                        Appearance.paletteSettling = true
+                    Appearance.m3colors[m3Key] = json[key]
+                }
             }
+
+            Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
+        } finally {
+            Appearance.paletteSettling = false
         }
-        
-        Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
         Appearance.themeRevision += 1
     }
 

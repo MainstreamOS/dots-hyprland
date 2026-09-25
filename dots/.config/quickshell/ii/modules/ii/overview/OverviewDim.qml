@@ -17,6 +17,14 @@ Scope {
         screen: modelData
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(dimWindow.screen)
         property bool monitorIsFocused: ((Hyprland.focusedMonitor?.id ?? monitor?.id) === monitor?.id)
+        // The surface grows before it fades in, so a slow configure from a
+        // busy compositor lands as a late fade rather than a pop partway.
+        // The dock is raised above the dim and takes its colors from this
+        // very answer, so the two fade together.
+        readonly property bool dimShown: GlobalStates.overviewOpen && dimWindow.monitorIsFocused && dimWindow.width > 1
+        readonly property string screenName: modelData?.name ?? ""
+        onDimShownChanged: GlobalStates.setLauncherDim(dimWindow.screenName, dimWindow.dimShown)
+        Component.onDestruction: GlobalStates.setLauncherDim(dimWindow.screenName, false)
 
         WlrLayershell.namespace: "quickshell:overviewDim"
         // Use Overlay layer (not Top) so the dim stays visible during fullscreen
@@ -24,7 +32,7 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         exclusionMode: ExclusionMode.Ignore
-        color: Qt.rgba(0, 0, 0, 0.01)
+        color: Appearance.colors.colLauncherDimWindow
         // Surface lifecycle — see Overview.qml for the full reasoning. The dim
         // layer is click-through by design (empty mask), so keeping it visible
         // permanently has no input-side effect; contentFade.opacity already
@@ -59,9 +67,7 @@ Scope {
         Item {
             id: contentFade
             anchors.fill: parent
-            // The surface grows before it fades in, so a slow configure from a
-            // busy compositor lands as a late fade rather than a pop partway.
-            opacity: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused && dimWindow.width > 1) ? 1 : 0
+            opacity: dimWindow.dimShown ? 1 : 0
             onOpacityChanged: if (opacity === 0) shrinkHold.restart()
             Behavior on opacity {
                 NumberAnimation {
@@ -73,11 +79,8 @@ Scope {
 
             Rectangle {
                 anchors.fill: parent
-                color: Appearance.colors.colLayer0Base
-                // What shows through a near-white layer reads as less than the
-                // same share through a near-black one, so light mode lets a
-                // little more of the frosted windows through to look as open.
-                opacity: Appearance.m3colors.darkmode ? 0.90 : 0.85
+                color: Appearance.colors.colLauncherDim
+                opacity: Appearance.colors.launcherDimOpacity
             }
         }
     }

@@ -37,6 +37,16 @@ Singleton {
     property bool oskOpen: false
     property bool overlayOpen: false
     property bool overviewOpen: false
+    // The screens the launcher's dim is shown on, by name, as the dim sets
+    // them when it starts to fade in or out. It covers the focused screen
+    // alone, and only once its surface spans that screen, which can land a
+    // configure after the launcher opens. What is drawn over the dim reads
+    // this rather than the launcher being open, so it changes with the dim.
+    property list<string> launcherDimScreens: []
+    function setLauncherDim(screenName, shown) {
+        const others = root.launcherDimScreens.filter(name => name !== screenName);
+        root.launcherDimScreens = shown ? others.concat([screenName]) : others;
+    }
     // True while the scrolloverview Hyprland plugin's overview is open (synced
     // from its scrolloverview>>open/close IPC events below). The hot corner's
     // "already open, don't re-fire" guards check this so a focus-grab-synthesized

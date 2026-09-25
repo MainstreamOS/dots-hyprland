@@ -103,6 +103,7 @@ Item { // Wrapper
 
     StyledRectangularShadow {
         target: searchWidgetContent
+        color: Appearance.colors.colLauncherShadow
     }
     Rectangle { // Background
         id: searchWidgetContent
@@ -115,7 +116,7 @@ Item { // Wrapper
         implicitWidth: columnLayout.implicitWidth
         implicitHeight: columnLayout.implicitHeight
         radius: searchBar.height / 2 + searchBar.verticalPadding
-        color: Appearance.colors.colBackgroundSurfaceContainer
+        color: Appearance.colors.colLauncherPanel
 
         Behavior on implicitHeight {
             id: searchHeightBehavior
@@ -159,7 +160,7 @@ Item { // Wrapper
                 visible: root.showResults
                 Layout.fillWidth: true
                 height: 1
-                color: Appearance.colors.colOutlineVariant
+                color: Appearance.launcherContent.colOutlineVariant
             }
 
             ListView { // App results
