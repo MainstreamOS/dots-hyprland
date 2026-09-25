@@ -982,8 +982,12 @@ Singleton {
                 // rounds all four corners alike; hug sits flush on the edge,
                 // where the two corners touching it can curve outward into it
                 // instead of away, so the dock reads as part of the edge
-                // rather than a slab resting near it.
-                property string cornerStyle: "float" // "float" | "hug" | "rect"
+                // rather than a slab resting near it. Settings calls hug
+                // "Notch", the shape the bar's notch has, and keeps the name
+                // "Hug" for span: a strip the whole length of the edge, drawn
+                // the way the Hug bar is, which only sits on the edge facing
+                // the bar. Any other value is drawn as rect.
+                property string cornerStyle: "float" // "float" | "hug" | "rect" | "span"
                 // The corners facing the desktop can answer to themselves;
                 // below zero they follow the radius above. The pair on the
                 // edge takes its shape from the style instead: hug curves it
@@ -991,10 +995,11 @@ Singleton {
                 property real topRadius: -1
                 // Each corner style keeps the roundness it was last given, so
                 // moving between them brings back what that style looked like
-                // rather than dragging one shape through all three. Only the
-                // corners a style can actually set are kept for it. Below minus
-                // one means that style has never been left, and whatever the
-                // two above already hold still stands.
+                // rather than dragging one shape through all of them. Only the
+                // corners a style can actually set are kept for it, and span
+                // sets none: the only curves it has are the screen's rounding.
+                // Below minus one means that style has never been left, and
+                // whatever the two above already hold still stands.
                 property real radiusFloat: -2
                 property real radiusNotch: -2
                 property real topRadiusRect: -2
@@ -1019,7 +1024,9 @@ Singleton {
                 property string badgeTextColorLight: ""
                 // "bottom" | "top" | "left" | "right". The dock yields if the
                 // bar is moved onto this edge; asking for the bar's edge from
-                // the dock's own setting moves the bar across instead.
+                // the dock's own setting moves the bar across instead. Styled
+                // span, the dock takes the edge facing the bar while the bar
+                // is up, and moves with it.
                 property string position: "bottom"
                 property bool monochromeIcons: false
                 // "magnify" | "glow" | "off"

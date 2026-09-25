@@ -370,10 +370,11 @@ ContentPage {
                         const i = model.findIndex(o => o.value === v);
                         return i !== -1 ? i : 0;
                     }
+                    // Through the shared rule, which carries a Hug dock across
+                    // to face the bar wherever it goes.
                     onActivated: index => {
                         const v = model[index].value;
-                        Config.options.bar.bottom = (v & 1) !== 0;
-                        Config.options.bar.vertical = (v & 2) !== 0;
+                        Appearance.sizes.placeBar((v & 1) !== 0, (v & 2) !== 0);
                     }
                     model: [
                         {

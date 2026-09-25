@@ -7,6 +7,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell.Io
 import Quickshell
 import Quickshell.Widgets
@@ -54,12 +55,29 @@ Scope { // Scope
             readonly property string dockEdge: Appearance.sizes.dockEdge
             // Which corners face the screen and which face the desktop, and
             // whether the pair on the edge curves outward into it.
-            // Both hug and rect set the dock down on the edge; what differs is
-            // the pair of corners that touches it, curving outward or squared
-            // off. The pair facing the desktop keeps its own roundness either
-            // way.
+            // Every style but float sets the dock down on the edge. Between the
+            // notch ("hug") and rect what differs is the pair of corners that
+            // touches it, curving outward or squared off, and the pair facing
+            // the desktop keeps its own roundness either way. The Hug strip
+            // ("span") reaches both ends of the edge and has no such pair.
             readonly property bool dockHugging: Config.options.dock.cornerStyle !== "float"
             readonly property bool dockFlares: Config.options.dock.cornerStyle === "hug"
+            // The Hug strip is drawn the way the Hug bar draws its own: flush
+            // and square along the whole edge, with the screen's rounding
+            // carried round each end where the strip meets the desktop.
+            readonly property bool dockSpans: Appearance.sizes.dockSpans
+            readonly property real spanCorner: Appearance.rounding.dockSpanCorner
+            // Those curves reach further from the strip than the room the
+            // other styles keep beside their body, so the part that slides is
+            // made thicker by the difference, and hidden, they leave the
+            // screen with the rest of it.
+            readonly property real spanOverhang: dockSpans
+                ? Math.max(0, spanCorner - Appearance.sizes.elevationMargin) : 0
+            // The strip's outline overlaps its fill, which only shows through
+            // a see-through surface, and there the two are painted opaque and
+            // faded together the way the notch's pieces are.
+            readonly property bool spanSeamFix: dockSpans && Config.options.dock.showBackground
+                && Appearance.colors.colDockBackground.a < 1
             // Only the notch draws pieces beside the body, so only it needs the
             // group flattened before the surface is faded, and only it needs the
             // room outside the body that those pieces occupy.
@@ -78,14 +96,20 @@ Scope { // Scope
             // concave corners have nothing to curve into if the dock floats
             // away from it.
             readonly property real edgeGap: dockHugging ? 0 : Appearance.sizes.hyprlandGapsOut
+            // The room between the body and the desktop-facing side of the
+            // part that slides, which the Hug strip's curves hang in.
+            readonly property real deskInset: Appearance.sizes.elevationMargin + spanOverhang
+            // The Hug strip runs a pixel past both ends of the window, so the
+            // screen's own sides never show an edge of it.
+            readonly property real endInset: dockSpans ? -1 : flareBleed
             // Where the body sits inside its group, said once for the body and
             // for the shade that follows it, the two no longer sharing an
             // anchor. The group's bleed only exists on the sides the curves
             // hang from, so it is only given back there.
-            readonly property real bodyInsetTop: (dockEdge === "top" ? edgeGap : dockVertical ? 0 : Appearance.sizes.elevationMargin) + (dockVertical ? flareBleed : 0)
-            readonly property real bodyInsetBottom: (dockEdge === "bottom" ? edgeGap : dockVertical ? 0 : Appearance.sizes.elevationMargin) + (dockVertical ? flareBleed : 0)
-            readonly property real bodyInsetLeft: (dockEdge === "left" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
-            readonly property real bodyInsetRight: (dockEdge === "right" ? edgeGap : dockVertical ? Appearance.sizes.elevationMargin : 0) + (dockVertical ? 0 : flareBleed)
+            readonly property real bodyInsetTop: (dockEdge === "top" ? edgeGap : dockVertical ? 0 : deskInset) + (dockVertical ? endInset : 0)
+            readonly property real bodyInsetBottom: (dockEdge === "bottom" ? edgeGap : dockVertical ? 0 : deskInset) + (dockVertical ? endInset : 0)
+            readonly property real bodyInsetLeft: (dockEdge === "left" ? edgeGap : dockVertical ? deskInset : 0) + (dockVertical ? 0 : endInset)
+            readonly property real bodyInsetRight: (dockEdge === "right" ? edgeGap : dockVertical ? deskInset : 0) + (dockVertical ? 0 : endInset)
             readonly property real deskRadius: Appearance.rounding.dockBody
             // Set down on the edge, the corners meeting it are square, whether
             // a curve is drawn beside them or not. Floating, they are the same
@@ -196,10 +220,11 @@ Scope { // Scope
                 return Math.max(Appearance.sizes.dockIconMin, Math.min(Appearance.sizes.dockIconSize, room));
             }
 
-            // The dock's visible thickness plus its screen gap; the extra 60
-            // beyond it is headroom on the center-facing side so magnified
-            // icons can overflow without window clipping.
-            readonly property real dockExtent: Appearance.sizes.dockExtentFor(dockRoot.fittedIconSize)
+            // The dock's visible thickness plus its screen gap, and for the Hug
+            // strip the reach of its curves; the headroom below is added on
+            // the center-facing side so magnified icons can overflow without
+            // window clipping.
+            readonly property real dockExtent: Appearance.sizes.dockExtentFor(dockRoot.fittedIconSize) + dockRoot.spanOverhang
 
             // Reached in one step rather than crossed over several frames. This
             // is half of the window's own thickness, and the other half moves at
@@ -239,7 +264,78 @@ Scope { // Scope
             color: "transparent"
 
             mask: Region {
-                item: dockMouseArea
+                item: dockRoot.dockSpans ? spanStripMask : dockMouseArea
+                Region { item: dockRoot.dockSpans ? spanIconBand : null }
+                Region { item: dockRoot.dockSpans && Config.options.dock.hoverToReveal ? spanRevealSliver : null }
+            }
+
+            // How far along the edge the icons reach, with the room every
+            // other style keeps at either end of them.
+            readonly property real spanIconLength: (dockVertical ? dockHoverRegion.implicitHeight : dockHoverRegion.implicitWidth)
+                + Appearance.sizes.elevationMargin * 2
+            // Without its surface the Hug strip is only its icons, so it takes
+            // the pointer only as far along the edge as they reach, the way
+            // every other style does, rather than across an edge that shows
+            // nothing.
+            readonly property real spanInputLength: Config.options.dock.showBackground ? -1 : spanIconLength
+            // Where a run this long starts, centered in that much room and
+            // rounded the way anchors round a centered item, so what takes the
+            // pointer lines up to the pixel with the icons and with the other
+            // styles, whose part that slides is centered by anchors.
+            function spanCentered(room, length) {
+                const half = size => Math.trunc(size) % 2 ? (size + 1) / 2 : size / 2;
+                return half(room) - half(length);
+            }
+            // The Hug strip takes the pointer on the strip itself. The room the
+            // other styles keep around their body would run the whole length
+            // of the screen here and take clicks meant for the windows beside
+            // it, so that room is kept only beside the icons, below. Bound to
+            // the part that slides rather than placed inside it, since a
+            // region follows only its own item's geometry.
+            Item {
+                id: spanStripMask
+                readonly property real along: dockRoot.spanInputLength >= 0 ? dockRoot.spanInputLength
+                    : dockRoot.dockVertical ? dockMouseArea.height : dockMouseArea.width
+                x: dockMouseArea.x + (dockRoot.dockVertical
+                    ? (dockRoot.dockEdge === "right" ? dockRoot.deskInset : 0)
+                    : dockRoot.spanCentered(dockMouseArea.width, along))
+                y: dockMouseArea.y + (dockRoot.dockVertical
+                    ? dockRoot.spanCentered(dockMouseArea.height, along)
+                    : (dockRoot.dockEdge === "bottom" ? dockRoot.deskInset : 0))
+                width: dockRoot.dockVertical ? dockMouseArea.width - dockRoot.deskInset : along
+                height: dockRoot.dockVertical ? along : dockMouseArea.height - dockRoot.deskInset
+            }
+            // The room every other style keeps on the desktop side of its body,
+            // here only alongside the icons, so the pointer leaves the dock,
+            // and a magnified icon stops taking clicks, as far out as on any
+            // other style.
+            Item {
+                id: spanIconBand
+                readonly property real reach: Appearance.sizes.elevationMargin
+                x: dockMouseArea.x + (dockRoot.dockVertical
+                    ? (dockRoot.dockEdge === "right" ? dockRoot.deskInset - reach : dockMouseArea.width - dockRoot.deskInset)
+                    : dockRoot.spanCentered(dockMouseArea.width, dockRoot.spanIconLength))
+                y: dockMouseArea.y + (dockRoot.dockVertical
+                    ? dockRoot.spanCentered(dockMouseArea.height, dockRoot.spanIconLength)
+                    : (dockRoot.dockEdge === "bottom" ? dockRoot.deskInset - reach : dockMouseArea.height - dockRoot.deskInset))
+                width: dockRoot.dockVertical ? reach : dockRoot.spanIconLength
+                height: dockRoot.dockVertical ? dockRoot.spanIconLength : reach
+            }
+            // Hidden, the strip has left the screen, and this is the sliver
+            // along the edge the pointer brings it back from. It stays while
+            // the strip slides in, so the pointer holding it open is never
+            // left outside the window on the way.
+            Item {
+                id: spanRevealSliver
+                readonly property real reach: Config.options.dock.hoverRegionHeight
+                readonly property real along: dockRoot.spanInputLength >= 0 ? dockRoot.spanInputLength
+                    : dockRoot.dockVertical ? parent.height : parent.width
+                x: dockRoot.dockVertical ? (dockRoot.dockEdge === "right" ? parent.width - reach : 0)
+                    : dockRoot.spanCentered(parent.width, along)
+                y: dockRoot.dockVertical ? dockRoot.spanCentered(parent.height, along)
+                    : (dockRoot.dockEdge === "bottom" ? parent.height - reach : 0)
+                width: dockRoot.dockVertical ? reach : along
+                height: dockRoot.dockVertical ? along : reach
             }
 
             MouseArea {
@@ -311,8 +407,10 @@ Scope { // Scope
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                 }
 
-                width: dockRoot.dockVertical ? dockRoot.dockExtent : implicitWidth
-                height: dockRoot.dockVertical ? implicitHeight : dockRoot.dockExtent
+                // The Hug strip runs the whole edge, so the part that slides
+                // does too, and hovering anywhere along it keeps the dock up.
+                width: dockRoot.dockVertical ? dockRoot.dockExtent : dockRoot.dockSpans ? parent.width : implicitWidth
+                height: dockRoot.dockVertical ? (dockRoot.dockSpans ? parent.height : implicitHeight) : dockRoot.dockExtent
                 implicitWidth: dockRoot.dockVertical ? dockRoot.dockExtent : dockHoverRegion.implicitWidth + Appearance.sizes.elevationMargin * 2
                 implicitHeight: dockRoot.dockVertical ? dockHoverRegion.implicitHeight + Appearance.sizes.elevationMargin * 2 : dockRoot.dockExtent
                 hoverEnabled: true
@@ -346,16 +444,19 @@ Scope { // Scope
 
                         implicitWidth: dockRow.implicitWidth + 5 * 2
                         implicitHeight: dockRow.implicitHeight + 5 * 2
-                        width: dockRoot.dockVertical ? parent.width - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut : implicitWidth
-                        height: dockRoot.dockVertical ? implicitHeight : parent.height - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut
+                        width: dockRoot.dockVertical ? parent.width - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut
+                            : dockRoot.dockSpans ? parent.width : implicitWidth
+                        height: dockRoot.dockVertical ? (dockRoot.dockSpans ? parent.height : implicitHeight)
+                            : parent.height - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut
 
                         // The shade stays out of the group. It is meant to be seen
                         // through, and its colour already carries the surface's alpha,
                         // so fading it again with the group would square that. It
                         // anchors to the group with the body's own insets, the body no
-                        // longer being a sibling of this loader.
+                        // longer being a sibling of this loader. The Hug strip casts
+                        // none, lying flat along its edge the way the Hug bar does.
                         Loader {
-                            active: Config.options.dock.showBackground
+                            active: Config.options.dock.showBackground && !dockRoot.dockSpans
                             anchors.fill: dockSurface
                             anchors.topMargin: dockRoot.bodyInsetTop
                             anchors.bottomMargin: dockRoot.bodyInsetBottom
@@ -471,6 +572,115 @@ Scope { // Scope
                                 }
                             }
 
+                            // The Hug strip, reaching out past the body by the
+                            // curves at its two ends.
+                            Loader {
+                                active: dockRoot.dockSpans && Config.options.dock.showBackground
+                                anchors.fill: dockVisualBackground
+                                anchors.topMargin: dockRoot.dockEdge === "bottom" ? -dockRoot.spanCorner : 0
+                                anchors.bottomMargin: dockRoot.dockEdge === "top" ? -dockRoot.spanCorner : 0
+                                anchors.leftMargin: dockRoot.dockEdge === "right" ? -dockRoot.spanCorner : 0
+                                anchors.rightMargin: dockRoot.dockEdge === "left" ? -dockRoot.spanCorner : 0
+                                sourceComponent: DockSpanSurface {}
+                            }
+
+                            // The strip and both curves are one outline rather than
+                            // pieces laid beside each other the way the Hug bar lays
+                            // them, so there is no join for a fractional display scale
+                            // to open into a hairline. Worked out along the edge (u)
+                            // and out from it (v), then turned to the edge it is on.
+                            component DockSpanSurface: Shape {
+                                id: spanShape
+                                readonly property string edge: dockRoot.dockEdge
+                                readonly property real r: dockRoot.spanCorner
+                                readonly property real along: dockRoot.dockVertical ? height : width
+                                readonly property real out: dockRoot.dockVertical ? width : height
+                                readonly property real strip: out - r
+                                // Where the screen's sides fall. Only the fill runs on
+                                // past them; the curves leave from the sides themselves,
+                                // where the Hug bar's corners leave from.
+                                readonly property real side: -dockRoot.endInset
+                                // The outline is drawn half its width inside the
+                                // surface, so the whole line lies on the strip the
+                                // way a rectangle's border does.
+                                readonly property real inset: 0.5
+                                // Mirroring the plane for the edges that lie across
+                                // the other way reverses which way a curve turns.
+                                readonly property int turn: (edge === "bottom" || edge === "left")
+                                    ? PathArc.Counterclockwise : PathArc.Clockwise
+                                function px(u, v) {
+                                    return edge === "left" ? v : edge === "right" ? width - v : u;
+                                }
+                                function py(u, v) {
+                                    return edge === "top" ? v : edge === "bottom" ? height - v : u;
+                                }
+                                preferredRendererType: Shape.CurveRenderer
+                                opacity: dockRoot.spanSeamFix ? Appearance.colors.colDockBackground.a : 1
+                                layer.enabled: dockRoot.spanSeamFix
+                                layer.smooth: true
+
+                                ShapePath {
+                                    strokeWidth: -1
+                                    strokeColor: "transparent"
+                                    fillColor: dockRoot.spanSeamFix ? Appearance.colors.colDockBackgroundOpaque
+                                        : Appearance.colors.colDockBackground
+                                    pathHints: ShapePath.PathSolid | ShapePath.PathNonIntersecting
+                                    startX: spanShape.px(0, 0)
+                                    startY: spanShape.py(0, 0)
+                                    PathLine { x: spanShape.px(0, spanShape.out); y: spanShape.py(0, spanShape.out) }
+                                    PathLine { x: spanShape.px(spanShape.side, spanShape.out); y: spanShape.py(spanShape.side, spanShape.out) }
+                                    PathArc {
+                                        x: spanShape.px(spanShape.side + spanShape.r, spanShape.strip)
+                                        y: spanShape.py(spanShape.side + spanShape.r, spanShape.strip)
+                                        radiusX: spanShape.r
+                                        radiusY: spanShape.r
+                                        direction: spanShape.turn
+                                    }
+                                    PathLine {
+                                        x: spanShape.px(spanShape.along - spanShape.side - spanShape.r, spanShape.strip)
+                                        y: spanShape.py(spanShape.along - spanShape.side - spanShape.r, spanShape.strip)
+                                    }
+                                    PathArc {
+                                        x: spanShape.px(spanShape.along - spanShape.side, spanShape.out)
+                                        y: spanShape.py(spanShape.along - spanShape.side, spanShape.out)
+                                        radiusX: spanShape.r
+                                        radiusY: spanShape.r
+                                        direction: spanShape.turn
+                                    }
+                                    PathLine { x: spanShape.px(spanShape.along, spanShape.out); y: spanShape.py(spanShape.along, spanShape.out) }
+                                    PathLine { x: spanShape.px(spanShape.along, 0); y: spanShape.py(spanShape.along, 0) }
+                                    PathLine { x: spanShape.px(0, 0); y: spanShape.py(0, 0) }
+                                }
+
+                                ShapePath {
+                                    strokeWidth: 1
+                                    strokeColor: dockRoot.spanSeamFix ? dockRoot.content.colBorderOpaque
+                                        : dockRoot.content.colBorder
+                                    fillColor: "transparent"
+                                    capStyle: ShapePath.FlatCap
+                                    startX: spanShape.px(spanShape.side - spanShape.inset, spanShape.out)
+                                    startY: spanShape.py(spanShape.side - spanShape.inset, spanShape.out)
+                                    PathArc {
+                                        x: spanShape.px(spanShape.side + spanShape.r, spanShape.strip - spanShape.inset)
+                                        y: spanShape.py(spanShape.side + spanShape.r, spanShape.strip - spanShape.inset)
+                                        radiusX: spanShape.r + spanShape.inset
+                                        radiusY: spanShape.r + spanShape.inset
+                                        direction: spanShape.turn
+                                    }
+                                    PathLine {
+                                        x: spanShape.px(spanShape.along - spanShape.side - spanShape.r, spanShape.strip - spanShape.inset)
+                                        y: spanShape.py(spanShape.along - spanShape.side - spanShape.r, spanShape.strip - spanShape.inset)
+                                    }
+                                    PathArc {
+                                        x: spanShape.px(spanShape.along - spanShape.side + spanShape.inset, spanShape.out)
+                                        y: spanShape.py(spanShape.along - spanShape.side + spanShape.inset, spanShape.out)
+                                        radiusX: spanShape.r + spanShape.inset
+                                        radiusY: spanShape.r + spanShape.inset
+                                        direction: spanShape.turn
+                                    }
+                                }
+                            }
+
                             Rectangle { // The real rectangle that is visible
                                 id: dockVisualBackground
                                 property real margin: Appearance.sizes.elevationMargin
@@ -479,14 +689,16 @@ Scope { // Scope
                                 anchors.bottomMargin: dockRoot.bodyInsetBottom
                                 anchors.leftMargin: dockRoot.bodyInsetLeft
                                 anchors.rightMargin: dockRoot.bodyInsetRight
-                                color: !Config.options.dock.showBackground ? "transparent"
+                                // The Hug strip draws its own surface and outline,
+                                // and this is left only as where the strip lies.
+                                color: !Config.options.dock.showBackground || dockRoot.dockSpans ? "transparent"
                                     : dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
                                     : Appearance.colors.colDockBackground
                                 // The outward curves take the outline on along
                                 // their sweep and are drawn over the sides they
                                 // share with the body, so what is left of this one
                                 // is the top, which is the only part on show.
-                                border.width: Config.options.dock.showBackground ? 1 : 0
+                                border.width: Config.options.dock.showBackground && !dockRoot.dockSpans ? 1 : 0
                                 border.color: dockRoot.notchSeamFix
                                     ? dockRoot.content.colBorderOpaque
                                     : dockRoot.content.colBorder
@@ -517,6 +729,13 @@ Scope { // Scope
                             rows: dockRoot.dockVertical ? -1 : 1
                             columnSpacing: 3
                             rowSpacing: 3
+                            // The row keeps to the room the other styles have,
+                            // clear of the Hug strip's curves, so the icons sit
+                            // where they would on any other dock.
+                            anchors.topMargin: dockRoot.dockEdge === "bottom" ? dockRoot.spanOverhang : 0
+                            anchors.bottomMargin: dockRoot.dockEdge === "top" ? dockRoot.spanOverhang : 0
+                            anchors.leftMargin: dockRoot.dockEdge === "right" ? dockRoot.spanOverhang : 0
+                            anchors.rightMargin: dockRoot.dockEdge === "left" ? dockRoot.spanOverhang : 0
                             states: [
                                 State {
                                     name: "horizontal"

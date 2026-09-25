@@ -11,6 +11,30 @@ Singleton {
     id: root
     property bool hdrActive: false
     property bool barOpen: true
+    // The dock's edge rule lives in Appearance, which cannot reach this file,
+    // and the Hug dock is free of the bar's edge while the bar is put away.
+    // Settings and the Welcome app keep a GlobalStates of their own whose bar
+    // is never put away, so only the shell may speak for it: shell.qml turns
+    // this on. It hands the rule the bar's state first hand, and leaves it in
+    // the runtime file the other processes read.
+    property bool _publishBarOpen: false
+    Binding {
+        when: root._publishBarOpen
+        target: Appearance.sizes
+        property: "barShown"
+        value: root.barOpen
+    }
+    FileView {
+        id: barStateFile
+        path: Appearance.barStatePath
+        preload: false
+    }
+    function _writeBarOpen() {
+        if (root._publishBarOpen)
+            barStateFile.setText(root.barOpen ? "shown" : "hidden");
+    }
+    onBarOpenChanged: root._writeBarOpen()
+    on_PublishBarOpenChanged: root._writeBarOpen()
     // The narrowest a floating strip can be set to without its widgets running
     // together, as a percentage, published by the bar itself because only it
     // knows how wide the widgets on show actually are. With more than one

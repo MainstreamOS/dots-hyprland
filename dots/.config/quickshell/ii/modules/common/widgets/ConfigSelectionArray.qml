@@ -48,6 +48,11 @@ Flow {
             buttonIcon: modelData.icon || ""
             buttonText: modelData.displayName
             toggled: root.currentValue == modelData.value
+            // An option can be shown without being on offer. Dimmed by its own
+            // flag rather than by whether it is enabled, so a row a page has
+            // already dimmed as a whole is not dimmed twice.
+            enabled: modelData.enabled ?? true
+            opacity: (modelData.enabled ?? true) ? 1 : 0.5
             onClicked: {
                 root.selected(modelData.value);
             }

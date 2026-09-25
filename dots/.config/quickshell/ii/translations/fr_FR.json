@@ -2330,5 +2330,6 @@
   "Scroll to maximize and minimize": "Scroll to maximize and minimize",
   "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.": "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.",
   "Window buttons": "Window buttons",
-  "The close, maximize and minimize buttons on each title bar": "The close, maximize and minimize buttons on each title bar"
+  "The close, maximize and minimize buttons on each title bar": "The close, maximize and minimize buttons on each title bar",
+  "The bar and the dock run end to end along opposite edges": "The bar and the dock run end to end along opposite edges"
 }

@@ -88,10 +88,9 @@ ContentPage {
 
                 ConfigSelectionArray {
                     currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
-                    onSelected: newValue => {
-                        Config.options.bar.bottom = (newValue & 1) !== 0;
-                        Config.options.bar.vertical = (newValue & 2) !== 0;
-                    }
+                    // Through the shared rule, which carries a Hug dock across
+                    // to face the bar wherever it goes.
+                    onSelected: newValue => Appearance.sizes.placeBar((newValue & 1) !== 0, (newValue & 2) !== 0)
                     options: [
                         {
                             displayName: Translation.tr("Top"),

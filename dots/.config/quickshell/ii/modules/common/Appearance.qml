@@ -277,13 +277,18 @@ Singleton {
     // surface is laid over the dim.
     readonly property color dockStockSurface: ColorUtils.applyAlpha(colors.colLayer0, colors.dockStockAlpha)
     readonly property color dockStockShadow: ColorUtils.applyAlpha(colors.colShadow, colors.colShadow.a * colors.dockStockAlpha)
+    // The Hug dock lies flat along its edge the way the Hug bar does and
+    // casts no shadow, so none is counted under it. The app list keeps its
+    // own whatever the dock does: it floats in the middle of the screen.
+    readonly property color dockOwnShadow: sizes.dockSpans ? "transparent" : colors.colDockShadow
+    readonly property color dockOwnStockShadow: sizes.dockSpans ? "transparent" : dockStockShadow
     // The dock is raised above the dim while the launcher is open, so there
     // it lies on the dim where the dim frosts the dock's own edge. The
     // launcher keeps its panels clear of the dock's band, so nothing of it
     // lies under the dock.
-    readonly property color dockOverLauncherBackdrop: laidOverDim(colors.colDockBackground, colors.colDockShadow,
+    readonly property color dockOverLauncherBackdrop: laidOverDim(colors.colDockBackground, dockOwnShadow,
         colors.colLauncherDim, Config.options?.dock.showBackground, wallpaperEdge(sizes.dockEdge))
-    readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockStockShadow,
+    readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockOwnStockShadow,
         colors.colLayer0Base, Config.options?.dock.showBackground, wallpaperEdge(sizes.dockEdge))
     // The dock as it is drawn while the launcher is open. The bar stays under
     // the dim and keeps following the dock at rest, so this one is judged by
@@ -315,18 +320,18 @@ Singleton {
     // what a mark needs. Where that way cannot get so far and the other
     // can, it crosses to the other side of the surface; where neither can,
     // it goes to whichever end stands further. Both lie on the dim over the
-    // given picture, with the dock's shadow under them.
+    // given picture, with the given shadows under them.
     function borderStanding(outline, surface, under) {
         return ColorUtils.contrastRatio(ColorUtils.composite(colors.surfaceBorder(outline, surface), under),
             ColorUtils.composite(surface, under))
     }
-    function dockBorderOverDim(content, picture) {
+    function dockBorderOverDim(content, picture, shadow, stockShadow) {
         const outline = content.colOutlineVariant
         if (!content.adaptive || !Config.options?.dock.showBackground)
             return colors.dockBorder(outline)
         const surface = colors.colDockBackground
-        const under = ColorUtils.composite(colors.colDockShadow, dimOver(colors.colLauncherDim, picture))
-        const stockUnder = ColorUtils.composite(dockStockShadow, dimOver(colors.colLayer0Base, picture))
+        const under = ColorUtils.composite(shadow, dimOver(colors.colLauncherDim, picture))
+        const stockUnder = ColorUtils.composite(stockShadow, dimOver(colors.colLayer0Base, picture))
         const need = Math.min(content.markContrast,
             borderStanding(content.onStock(colors.colOutlineVariant), dockStockSurface, stockUnder))
         const stands = o => borderStanding(o, surface, under)
@@ -950,7 +955,9 @@ Singleton {
         // the drop rather than on it.
         readonly property real surfaceOpacityFloor: Math.min(1, root.colors.blurFloor + 0.005)
         readonly property string dockPick: modePick(Config.options?.dock.backgroundColorDark, Config.options?.dock.backgroundColorLight)
-        // The dock's notch starts from the strip's alpha like every other style.
+        // Every dock style, the notch and the Hug strip included, starts from
+        // the strip's alpha, so picking a shape never changes how solid the
+        // dock looks with it.
         readonly property real dockStockAlpha: layer0StockAlpha
         property color colDockBackground: surfaceColor(dockPick, colLayer0, Config.options?.dock.backgroundOpacity, dockStockAlpha)
         // The dock's surface is also drawn over the launcher's dim, as the
@@ -964,8 +971,9 @@ Singleton {
         }
         property color colDockBackgroundBorder: dockBorder(root.dockContent.colOutlineVariant)
         property color colDockOverLauncherBorder: root.dockBorderOverDim(root.dockOverLauncherContent,
-            root.wallpaperEdge(root.sizes.dockEdge))
-        property color colDrawerBorder: root.dockBorderOverDim(root.drawerContent, root.wallpaperAverage)
+            root.wallpaperEdge(root.sizes.dockEdge), root.dockOwnShadow, root.dockOwnStockShadow)
+        property color colDrawerBorder: root.dockBorderOverDim(root.drawerContent, root.wallpaperAverage,
+            colDockShadow, root.dockStockShadow)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
         readonly property string dockBadgePick: modePick(Config.options?.dock.badgeColorDark, Config.options?.dock.badgeColorLight)
         readonly property string dockBadgeTextPick: modePick(Config.options?.dock.badgeTextColorDark, Config.options?.dock.badgeTextColorLight)
@@ -1171,8 +1179,15 @@ Singleton {
         // body's own; set down on an edge, the corners facing the edge are
         // square and the visible pair is the one facing the desktop. Anything
         // shaped to match the dock wants this rather than either slider.
-        readonly property real dockBody: (Config.options?.dock.cornerStyle ?? "float") !== "float"
-            ? dockTop : dock
+        // The Hug strip has no corner of its own: the only curve it shows is
+        // the screen's rounding, carried round where each end meets the
+        // desktop, so that is what matches it.
+        // That curve goes square with the bar's own: a Rect bar, which is what
+        // turning Rounded Corners off makes of it, leaves both strips square,
+        // and the curves come back with the bar's.
+        readonly property real dockSpanCorner: Config.options?.bar.cornerStyle === 2 ? 0 : screenRounding
+        readonly property real dockBody: root.sizes.dockSpans ? dockSpanCorner
+            : (Config.options?.dock.cornerStyle ?? "float") !== "float" ? dockTop : dock
     }
 
     font: QtObject {
@@ -1348,6 +1363,24 @@ Singleton {
         }
     }
 
+    // Whether the shell's bar is up, as the shell last left it in a runtime
+    // file. Settings and the Welcome app are processes of their own and never
+    // see the bar put away, so this is how the dock's edge rule below reaches
+    // the same answer in them as on screen. With no word from the shell the
+    // bar is taken to be up. The shell itself answers first hand instead (see
+    // GlobalStates), so a toggle is never undone by a write still landing.
+    readonly property string barStatePath: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/quickshell-bar.state`
+    property bool barShownOnFile: true
+    FileView {
+        id: barStateView
+        path: root.barStatePath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.barShownOnFile = barStateView.text().trim() !== "hidden"
+        onLoadFailed: root.barShownOnFile = true
+    }
+
     sizes: QtObject {
         property real baseBarHeight: 40
         // A floating strip spans the whole screen unless it is told otherwise,
@@ -1375,16 +1408,80 @@ Singleton {
         // configured edge is flipped off the bar's — shared by the dock, the
         // overview's clearance and the settings picker so they can never
         // disagree.
-        property string barEdge: Config.options.bar.vertical
-            ? (Config.options.bar.bottom ? "right" : "left")
-            : (Config.options.bar.bottom ? "bottom" : "top")
+        property string barEdge: root.sizes.barEdgeFor(Config.options.bar.bottom, Config.options.bar.vertical)
+        function barEdgeFor(bottom, vertical) {
+            return vertical ? (bottom ? "right" : "left") : (bottom ? "bottom" : "top");
+        }
+        function oppositeEdge(edge) {
+            return ({ top: "bottom", bottom: "top", left: "right", right: "left" })[edge] ?? "bottom";
+        }
+        // The Hug dock runs the whole length of its edge, so it fits only
+        // along the edge facing the bar: on either side of the bar it would
+        // run across the bar's ends. With the bar put away there is nothing
+        // to cross, and any edge will do. Every process goes by the shell's
+        // word on whether its bar is up (barShownOnFile above).
+        readonly property bool dockSpans: Config.options?.dock.cornerStyle === "span"
+        property bool barShown: root.barShownOnFile
         property string dockEdge: {
             const flip = { top: "bottom", bottom: "top", left: "right", right: "left" };
             // config.json is hand-editable and every consumer picks its edge by
             // negation, so an unrecognised value would anchor the dock to all
             // four edges at once instead of falling back to one.
             const want = flip[Config.options.dock.position] ? Config.options.dock.position : "bottom";
+            if (root.sizes.dockSpans)
+                return root.sizes.barShown ? flip[root.sizes.barEdge] : want;
             return want === root.sizes.barEdge ? flip[want] : want;
+        }
+        // Whether the dock may be set on an edge in the style it has now.
+        function dockEdgeAllowed(edge) {
+            return !root.sizes.dockSpans || !root.sizes.barShown
+                || edge === root.sizes.oppositeEdge(root.sizes.barEdge);
+        }
+        // Every page that moves the bar or the dock, or changes the dock's
+        // style, does it through these three, so the Hug dock is carried
+        // across with the bar however the bar was moved. The saved edge is
+        // kept as the one on screen, so the next style starts from it rather
+        // than from wherever the dock was before it hugged.
+        function placeBar(bottom, vertical) {
+            // A Hug dock facing the bar keeps facing it even while the bar is
+            // put away. Left behind, it would share the bar's new edge and be
+            // sent across the screen each time the bar came and went. One set
+            // on another edge while the bar was away keeps that edge.
+            const follows = root.sizes.dockSpans
+                && root.sizes.dockEdge === root.sizes.oppositeEdge(root.sizes.barEdge);
+            Config.options.bar.bottom = bottom;
+            Config.options.bar.vertical = vertical;
+            if (follows)
+                Config.options.dock.position = root.sizes.oppositeEdge(root.sizes.barEdgeFor(bottom, vertical));
+        }
+        function placeDock(edge) {
+            if (!root.sizes.dockEdgeAllowed(edge))
+                return;
+            if (edge === root.sizes.barEdge) {
+                // The bar's own edge is on offer like any other, and asking for
+                // it sends the bar across to the far side of its axis rather
+                // than refusing. The bar moves first, so the two are never both
+                // claiming this edge and the dock is not briefly flipped away
+                // from what was just asked.
+                Config.options.bar.bottom = !Config.options.bar.bottom;
+                Config.options.dock.position = edge;
+            } else if (!Config.options.dock.enable || edge !== root.sizes.dockEdge) {
+                // Re-picking the edge already shown is a no-op, and writing it
+                // would overwrite a saved edge the bar is only borrowing: the
+                // dock would stay put once the bar moved away.
+                Config.options.dock.position = edge;
+            }
+            Config.options.dock.enable = true;
+        }
+        function setDockStyle(style) {
+            const onScreen = root.sizes.dockEdge;
+            const previous = Config.options.dock.cornerStyle;
+            Config.options.dock.cornerStyle = style;
+            if (style === "span")
+                Config.options.dock.position = root.sizes.barShown
+                    ? root.sizes.oppositeEdge(root.sizes.barEdge) : onScreen;
+            else if (previous === "span")
+                Config.options.dock.position = onScreen;
         }
         // Which edge each sidebar opens from. A vertical bar gathers every
         // control onto one side of the screen, so the panels it opens belong
@@ -1405,12 +1502,15 @@ Singleton {
         // the icons is measured from it, so a dock left alone looks the same as
         // it always did and everything grows together once it is changed.
         property real dockIconStock: 40
+        // The size a dock left alone shows. The Hug dock runs end to end like
+        // a taskbar, so it starts smaller and stays a slim strip.
+        readonly property real dockIconDefault: root.sizes.dockSpans ? 27 : root.sizes.dockIconStock
         // The size asked for. A dock shows this or the largest size its own
         // screen can run edge to edge, whichever is smaller, so this stays
         // exactly what was asked for and the slider and the file keep one
         // meaning on every screen.
         property real dockIconSize: (Config.options?.dock.iconSize ?? -1) >= 0
-            ? Config.options.dock.iconSize : root.sizes.dockIconStock
+            ? Config.options.dock.iconSize : root.sizes.dockIconDefault
         // The bottom of the settings track. A screen too short even for this
         // has nothing left to give up, so it truncates rather than drawing
         // icons no slider could have asked for.

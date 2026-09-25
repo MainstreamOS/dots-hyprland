@@ -72,6 +72,8 @@ ShellRoot {
         WallpaperSlideshow._rotationEnabled = true
         // The touchpad watcher runs from the main shell only, see _watchEnabled.
         TouchpadAutoDisable._watchEnabled = true
+        // Only the shell's bar is ever put away, see _publishBarOpen.
+        GlobalStates._publishBarOpen = true
     }
 
 

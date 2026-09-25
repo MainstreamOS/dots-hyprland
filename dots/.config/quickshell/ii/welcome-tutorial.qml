@@ -523,11 +523,11 @@ ApplicationWindow {
     // ---- Style page (card 1) ----
     // One pick sets both halves, so a tile reads the bar and speaks for the
     // pair. Settings can still move each on its own, and the bar carries a
-    // fourth style none of these tiles offers, which lights none of them.
+    // fourth style, Rect, which none of these tiles offers and none lights.
     readonly property string barDockStyle: {
         switch (Config.options.bar.cornerStyle) {
+        case 0: return "hug";
         case 1: return "float";
-        case 2: return "rect";
         case 3: return "notch";
         }
         return "";
@@ -555,15 +555,18 @@ ApplicationWindow {
         Config.options.dock.radiusNotch = -2;
         Config.options.dock.topRadiusRect = -2;
         Config.options.dock.topRadiusNotch = -2;
-        Config.options.dock.cornerStyle = v;
+        // Through the rule the Dock page uses, which sets a Hug dock down on
+        // the edge facing the bar, the only edge it can run the length of.
+        Appearance.sizes.setDockStyle(v);
     }
 
     // The pair a tile stands for. Each half is set through its own call above
     // so the roundness each one pins is let go of the same way either route in.
+    // The Hug dock is stored as "span", since "hug" names the notch.
     function applyBarDockStyle(name) {
-        if (name === "rect") {
-            root.applyBarStyle(2);
-            root.applyDockStyle("rect");
+        if (name === "hug") {
+            root.applyBarStyle(0);
+            root.applyDockStyle("span");
         } else if (name === "notch") {
             root.applyBarStyle(3);
             root.applyDockStyle("hug");
@@ -977,13 +980,14 @@ ApplicationWindow {
     component StyleMockup : Item {
         id: mock
         property string part: "both"         // "bar" | "dock" | "both"
-        property string styleName: "float"   // "float" | "rect" | "notch"
+        property string styleName: "float"   // "float" | "hug" | "notch"
 
         readonly property bool showBar: mock.part !== "dock"
         readonly property bool showDock: mock.part !== "bar"
 
         readonly property bool isFloat: styleName === "float"
         readonly property bool isNotch: styleName === "notch"
+        readonly property bool isHug: styleName === "hug"
 
         readonly property color screenColor: Appearance.m3colors.m3surfaceContainerLowest
         readonly property color surfaceColor: Appearance.m3colors.m3surfaceContainerHighest
@@ -1018,7 +1022,7 @@ ApplicationWindow {
                 width: parent.width - sideInset * 2
                 height: 15
                 color: mock.surfaceColor
-                // Rect reaches the sides, so its top pair is the screen's own
+                // Hug reaches the sides, so its top pair is the screen's own
                 // corners. Notch stops short of them and the pieces beside it
                 // make that turn instead, so its top pair is square: rounding
                 // it as well would cut a wedge out of where the two meet.
@@ -1054,18 +1058,35 @@ ApplicationWindow {
                 }
             }
 
+            // Hug rounds the desktop's corners under it with the screen's own
+            // radius, one at each end, the way the Hug bar does on screen.
+            Repeater {
+                model: (mock.showBar && mock.isHug) ? 2 : 0
+                delegate: RoundCorner {
+                    required property int index
+                    implicitSize: screen.radius
+                    color: mock.surfaceColor
+                    y: barBody.y + barBody.height
+                    x: index === 0 ? 0 : screen.width - implicitSize
+                    corner: index === 0 ? RoundCorner.CornerEnum.TopLeft
+                        : RoundCorner.CornerEnum.TopRight
+                }
+            }
+
             // ── The dock, along the bottom ──────────────────────────────
             Rectangle {
                 id: dockBody
                 visible: mock.showDock
-                width: 118
+                width: mock.isHug ? parent.width : 118
                 height: 18
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: parent.height - height - (mock.isFloat ? 9 : 0)
                 color: mock.surfaceColor
                 topLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 8 : 0)
                 topRightRadius: topLeftRadius
-                bottomLeftRadius: mock.isFloat ? 6 : 0
+                // Hug runs the whole edge, so its bottom pair is the screen's
+                // own corners, as the bar's top pair is.
+                bottomLeftRadius: mock.isFloat ? 6 : (mock.isHug ? screen.radius : 0)
                 bottomRightRadius: bottomLeftRadius
 
                 Row {
@@ -1091,6 +1112,19 @@ ApplicationWindow {
                     x: index === 0 ? dockBody.x - implicitSize : dockBody.x + dockBody.width
                     corner: index === 0 ? RoundCorner.CornerEnum.BottomRight
                         : RoundCorner.CornerEnum.BottomLeft
+                }
+            }
+
+            Repeater {
+                model: (mock.showDock && mock.isHug) ? 2 : 0
+                delegate: RoundCorner {
+                    required property int index
+                    implicitSize: screen.radius
+                    color: mock.surfaceColor
+                    y: dockBody.y - implicitSize
+                    x: index === 0 ? 0 : screen.width - implicitSize
+                    corner: index === 0 ? RoundCorner.CornerEnum.BottomLeft
+                        : RoundCorner.CornerEnum.BottomRight
                 }
             }
         }
@@ -2243,19 +2277,24 @@ ApplicationWindow {
         anchors.fill: parent
 
         readonly property real thick: 20
+        // The Hug bar's two curves as the real bar draws them: the screen's
+        // rounding, taken as a share of the bar's height.
+        readonly property real hugRadius: bar.thick * Appearance.rounding.screenRounding / Appearance.sizes.baseBarHeight
         property real gap: bar.shape === "float" ? 8 : 0
         property real inset: bar.shape === "notch" ? bar.width * 0.14 : (bar.shape === "float" ? 8 : 0)
         property real edgeRadius: bar.shape === "float" ? 10 : 0
-        property real farRadius: bar.shape === "rect" ? 0 : 10
+        property real farRadius: (bar.shape === "rect" || bar.shape === "hug") ? 0 : 10
         property real swoop: bar.shape === "notch" ? 1 : 0
+        property real hug: bar.shape === "hug" ? 1 : 0
         Behavior on gap { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on inset { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on edgeRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on farRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on swoop { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on hug { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
 
         // How far the piece has slid off its edge while it moves to another.
-        readonly property real slide: bar.retract * (bar.thick + bar.gap + 12)
+        readonly property real slide: bar.retract * (bar.thick + bar.gap + bar.hugRadius * bar.hug + 12)
         readonly property bool drawn: Config.options.bar.showBackground
         readonly property color fill: bar.maskOnly ? "white" : Appearance.colors.colBarBackground
         readonly property color markColor: ColorUtils.transparentize(Appearance.barStripContent.colOnLayer0, 0.45)
@@ -2269,7 +2308,10 @@ ApplicationWindow {
 
             RectangularShadow {
                 anchors.fill: parent
-                visible: !bar.maskOnly && bar.drawn && Config.options.bar.floatStyleShadow && bar.shape !== "rect"
+                // Float and Notch cast one, as on screen, and the strips that
+                // run the whole edge do not.
+                visible: !bar.maskOnly && bar.drawn && Config.options.bar.floatStyleShadow
+                    && (bar.shape === "float" || bar.shape === "notch")
                 radius: bar.farRadius
                 blur: 8
                 offset: Qt.vector2d(0, 1)
@@ -2325,6 +2367,22 @@ ApplicationWindow {
             opacity: bar.swoop
             color: bar.fill
         }
+
+        // Hug rounds the desktop's corners where each end of the bar meets
+        // it. They grow out of the bar's ends rather than fading in, so moving
+        // to or from Hug reads as the same bar changing shape.
+        Repeater {
+            model: 2
+            RoundCorner {
+                required property int index
+                implicitSize: Math.round(bar.hugRadius * bar.hug)
+                visible: bar.drawn && implicitSize > 0
+                color: bar.fill
+                y: barBox.y + barBox.height
+                x: index === 0 ? barBox.x : barBox.x + barBox.width - implicitSize
+                corner: index === 0 ? RoundCorner.CornerEnum.TopLeft : RoundCorner.CornerEnum.TopRight
+            }
+        }
     }
 
     // The dock along the top of its box, the same way the bar is drawn.
@@ -2336,7 +2394,10 @@ ApplicationWindow {
         anchors.fill: parent
 
         readonly property real thick: 30
-        readonly property real span: Math.min(dock.width * 0.54, 250)
+        // Hug stretches the body out to both ends of its edge, and the rest
+        // keep it to the middle.
+        readonly property real restSpan: Math.min(dock.width * 0.54, 250)
+        readonly property real span: dock.restSpan + (dock.width - dock.restSpan) * dock.hug
         // The notched dock's two curves as the real dock draws them, taken as
         // shares of its body's height: a long sweep leaving the edge, and a
         // body turned generously enough to meet it.
@@ -2344,19 +2405,25 @@ ApplicationWindow {
         readonly property real notchFlare: dock.thick
             * Math.min(Appearance.rounding.dock, Appearance.rounding.dockFlareFit) / dock.realBodyHeight
         readonly property real notchCorner: dock.thick * Appearance.rounding.dockBody / dock.realBodyHeight
+        // The Hug dock's two curves are the screen's rounding, the same share
+        // of its body as the Hug bar's are of the bar.
+        readonly property real hugRadius: dock.thick * Appearance.rounding.dockSpanCorner / dock.realBodyHeight
         property real gap: dock.shape === "float" ? 9 : 0
         property real edgeRadius: dock.shape === "float" ? 11 : 0
-        property real farRadius: dock.shape === "rect" ? 0 : (dock.shape === "notch" ? dock.notchCorner : 11)
+        property real farRadius: (dock.shape === "rect" || dock.shape === "hug") ? 0
+            : (dock.shape === "notch" ? dock.notchCorner : 11)
         property real swoop: dock.shape === "notch" ? 1 : 0
+        property real hug: dock.shape === "hug" ? 1 : 0
         Behavior on gap { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on edgeRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on farRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         Behavior on swoop { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on hug { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
         // Set down on the edge, the body reaches a pixel past it so the outline
         // it draws along the screen's own edge falls outside the picture.
         readonly property real edgeTuck: dock.shape === "float" ? 0 : 1
 
-        readonly property real slide: dock.retract * (dock.thick + dock.gap + 12)
+        readonly property real slide: dock.retract * (dock.thick + dock.gap + dock.hugRadius * dock.hug + 12)
         readonly property bool drawn: Config.options.dock.showBackground
         readonly property color fill: dock.maskOnly ? "white" : Appearance.colors.colDockBackground
 
@@ -2372,7 +2439,7 @@ ApplicationWindow {
                 width: parent.width
                 height: parent.height + dock.edgeTuck
                 visible: dock.drawn && opacity > 0
-                opacity: 1 - dock.swoop
+                opacity: Math.max(0, 1 - dock.swoop - dock.hug)
                 color: dock.fill
                 topLeftRadius: dock.edgeRadius
                 topRightRadius: dock.edgeRadius
@@ -2463,6 +2530,69 @@ ApplicationWindow {
                 PathLine { x: notchOutline.bx - notchOutline.reachF; y: notchOutline.by - 1 }
             }
         }
+
+        // The Hug dock the way the real one is drawn: the strip and the curve
+        // at each end as one outline, lined only along the side facing the
+        // desktop and round both curves. The strip's ends and the edge it
+        // lies on are the screen's own and carry no line.
+        Shape {
+            id: hugOutline
+            z: -1
+            visible: dock.drawn && dock.hug > 0
+            opacity: dock.hug
+            preferredRendererType: Shape.CurveRenderer
+
+            readonly property real bx: dockBox.x
+            readonly property real by: dockBox.y
+            readonly property real w: dock.span
+            readonly property real h: dock.thick
+            readonly property real r: dock.hugRadius * dock.hug
+
+            ShapePath {
+                fillColor: dock.fill
+                strokeWidth: -1
+                strokeColor: "transparent"
+                // A pixel past the ends and the edge, so no seam of the
+                // background shows along the screen's own sides.
+                startX: hugOutline.bx - 1
+                startY: hugOutline.by - 1
+                PathLine { x: hugOutline.bx - 1; y: hugOutline.by + hugOutline.h + hugOutline.r }
+                PathLine { x: hugOutline.bx; y: hugOutline.by + hugOutline.h + hugOutline.r }
+                PathArc {
+                    x: hugOutline.bx + hugOutline.r; y: hugOutline.by + hugOutline.h
+                    radiusX: hugOutline.r; radiusY: hugOutline.r
+                    direction: PathArc.Clockwise
+                }
+                PathLine { x: hugOutline.bx + hugOutline.w - hugOutline.r; y: hugOutline.by + hugOutline.h }
+                PathArc {
+                    x: hugOutline.bx + hugOutline.w; y: hugOutline.by + hugOutline.h + hugOutline.r
+                    radiusX: hugOutline.r; radiusY: hugOutline.r
+                    direction: PathArc.Clockwise
+                }
+                PathLine { x: hugOutline.bx + hugOutline.w + 1; y: hugOutline.by + hugOutline.h + hugOutline.r }
+                PathLine { x: hugOutline.bx + hugOutline.w + 1; y: hugOutline.by - 1 }
+                PathLine { x: hugOutline.bx - 1; y: hugOutline.by - 1 }
+            }
+            ShapePath {
+                fillColor: "transparent"
+                strokeColor: dock.maskOnly ? "transparent" : Appearance.colors.colDockBackgroundBorder
+                strokeWidth: dock.maskOnly ? 0 : 1
+                capStyle: ShapePath.FlatCap
+                startX: hugOutline.bx
+                startY: hugOutline.by + hugOutline.h + hugOutline.r
+                PathArc {
+                    x: hugOutline.bx + hugOutline.r; y: hugOutline.by + hugOutline.h
+                    radiusX: hugOutline.r; radiusY: hugOutline.r
+                    direction: PathArc.Clockwise
+                }
+                PathLine { x: hugOutline.bx + hugOutline.w - hugOutline.r; y: hugOutline.by + hugOutline.h }
+                PathArc {
+                    x: hugOutline.bx + hugOutline.w; y: hugOutline.by + hugOutline.h + hugOutline.r
+                    radiusX: hugOutline.r; radiusY: hugOutline.r
+                    direction: PathArc.Clockwise
+                }
+            }
+        }
     }
 
     // The style page's picture: the bar and the dock where they are, in the
@@ -2473,8 +2603,11 @@ ApplicationWindow {
         id: bds
         property bool blur: true
 
-        readonly property string barShape: ({ 1: "float", 3: "notch" })[Config.options.bar.cornerStyle] ?? "rect"
-        readonly property string dockShape: ({ hug: "notch", rect: "rect" })[Config.options.dock.cornerStyle] ?? "float"
+        // Named the way Settings names them, so the dock's stored "hug" is the
+        // notch and its "span" is Hug. Anything else is drawn as rect, as the
+        // bar and the dock themselves draw it.
+        readonly property string barShape: ({ 0: "hug", 1: "float", 3: "notch" })[Config.options.bar.cornerStyle] ?? "rect"
+        readonly property string dockShape: ({ float: "float", hug: "notch", span: "hug" })[Config.options.dock.cornerStyle] ?? "rect"
         readonly property bool dockShown: Config.options.dock.enable
 
         Item {
@@ -3555,14 +3688,14 @@ ApplicationWindow {
                             onPicked: root.applyBarDockStyle("float")
                         }
                         StyleTile {
-                            styleName: "rect"; label: Translation.tr("Rect")
-                            selected: root.barDockStyle === "rect"
-                            onPicked: root.applyBarDockStyle("rect")
-                        }
-                        StyleTile {
                             styleName: "notch"; label: Translation.tr("Notch")
                             selected: root.barDockStyle === "notch"
                             onPicked: root.applyBarDockStyle("notch")
+                        }
+                        StyleTile {
+                            styleName: "hug"; label: Translation.tr("Hug")
+                            selected: root.barDockStyle === "hug"
+                            onPicked: root.applyBarDockStyle("hug")
                         }
                     }
 
@@ -3574,7 +3707,7 @@ ApplicationWindow {
                         color: Appearance.colors.colSubtext
                         text: ({
                             float: Translation.tr("The bar and the dock float clear of the screen's edges"),
-                            rect: Translation.tr("The bar and the dock sit flush with the edges, square cornered"),
+                            hug: Translation.tr("The bar and the dock run end to end along opposite edges"),
                             notch: Translation.tr("Flush with the edge, curving back into it at either end")
                         })[root.barDockStyle] ?? Translation.tr("The bar keeps a shape of its own, picked in Settings")
                     }
@@ -3648,10 +3781,9 @@ ApplicationWindow {
                         ConfigSelectionArray {
                             Layout.fillWidth: true
                             currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
-                            onSelected: newValue => {
-                                Config.options.bar.bottom = (newValue & 1) !== 0
-                                Config.options.bar.vertical = (newValue & 2) !== 0
-                            }
+                            // Through the shared rule, which carries a Hug
+                            // dock across to face the bar wherever it goes.
+                            onSelected: newValue => Appearance.sizes.placeBar((newValue & 1) !== 0, (newValue & 2) !== 0)
                             options: [
                                 { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: 0 },
                                 { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2 },
@@ -3671,28 +3803,19 @@ ApplicationWindow {
                             // the saved one: the resolver already sends it
                             // away from whichever edge the bar holds.
                             currentValue: Appearance.sizes.dockEdge
-                            onSelected: newValue => {
-                                if (newValue === Appearance.sizes.barEdge) {
-                                    // Asking for the bar's own edge sends the
-                                    // bar across its axis rather than
-                                    // refusing, so the two never both claim
-                                    // this edge.
-                                    Config.options.bar.bottom = !Config.options.bar.bottom
-                                    Config.options.dock.position = newValue
-                                } else if (!Config.options.dock.enable || newValue !== Appearance.sizes.dockEdge) {
-                                    // Re-picking the edge already shown would
-                                    // overwrite a saved edge the bar is only
-                                    // borrowing.
-                                    Config.options.dock.position = newValue
-                                }
-                                Config.options.dock.enable = true
-                            }
+                            // The same placement the Dock page makes: the
+                            // bar's own edge sends the bar across, and a Hug
+                            // dock stays on the edge facing the bar.
+                            onSelected: newValue => Appearance.sizes.placeDock(newValue)
+                            // The edges a Hug dock cannot take stay in the row,
+                            // dimmed the way this page dims what does not apply,
+                            // so the row keeps its shape as the style changes.
                             options: [
                                 { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: "top" },
                                 { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: "left" },
                                 { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: "bottom" },
                                 { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: "right" }
-                            ]
+                            ].map(option => Object.assign({ enabled: Appearance.sizes.dockEdgeAllowed(option.value) }, option))
                         }
                     }
                 }
