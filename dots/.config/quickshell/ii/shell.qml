@@ -70,6 +70,8 @@ ShellRoot {
         LauncherBlur.load()
         // Same story for the wallpaper rotation — see _rotationEnabled.
         WallpaperSlideshow._rotationEnabled = true
+        // The touchpad watcher runs from the main shell only, see _watchEnabled.
+        TouchpadAutoDisable._watchEnabled = true
     }
 
 

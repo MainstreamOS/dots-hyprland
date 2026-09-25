@@ -19,6 +19,9 @@ ContentPage {
     property bool naturalScrollTP: true
     property bool touchpadEnabled: true
     property string touchpadDeviceName: ""
+    property bool touchpadInternal: false
+    property bool disableWhileTyping: true
+    property bool disableWithMouse: false
     property real sensitivity:     0.0
 
     // 2 cards * 150px + 16px gap
@@ -28,12 +31,16 @@ ContentPage {
         Quickshell.env("HOME") + "/.config/hypr/custom/env.lua"
     readonly property string hyprGeneralConf:
         Quickshell.env("HOME") + "/.config/hypr/hyprland/general.lua"
+    // Read by the main shell's TouchpadAutoDisable, which does the switching.
+    readonly property string disableWithMouseFlag:
+        Quickshell.env("HOME") + "/.config/hypr/custom/touchpad.disableWithMouse"
 
     Component.onCompleted: {
         mouseProc.running     = false; mouseProc.running     = true
         tpProc.running        = false; tpProc.running        = true
         tpNameProc.running    = false; tpNameProc.running    = true
         tpEnabledProc.running = false; tpEnabledProc.running = true
+        tpDwtProc.running     = false; tpDwtProc.running     = true
         root.applyGestures()
     }
 
@@ -181,19 +188,46 @@ ContentPage {
         }
     }
 
-    // Touchpads are listed with pointer devices by hyprctl. Keep the actual
-    // libinput name so the per-device enabled setting can be updated.
+    // The touchpad under the name Hyprland gives it, so the per-device enabled
+    // setting can be updated. A built-in one comes first: udev's integration
+    // flag picks it out, so a game controller's or a drawing tablet's touch
+    // surface is not taken for it, and only it gets the typing and external
+    // mouse switches, which are about a laptop's own touchpad. Without one, a
+    // device named like a touchpad still gets the on/off row.
     Process {
         id: tpNameProc
-        command: ["bash", "-c",
-            "hyprctl devices -j | python3 -c \"import sys, json; d = json.load(sys.stdin); n = [m['name'] for m in d.get('mice', []) if 'touchpad' in m['name'].lower()]; print(n[0] if n else '')\""
-        ]
+        command: ["python3", Quickshell.shellPath("scripts/hypr/touchpad_auto_disable.py"), "touchpads"]
         stdout: SplitParser {
             onRead: data => {
-                const name = data.trim()
-                if (name) root.touchpadDeviceName = name
+                const tab = data.indexOf("\t")
+                if (tab < 0) return
+                const name = data.slice(tab + 1).trim()
+                if (!name) return
+                if (!root.touchpadDeviceName) root.touchpadDeviceName = name
+                if (data.slice(0, tab) === "internal") root.touchpadInternal = true
             }
         }
+    }
+
+    // Read through the script that writes it, so the page and Hyprland agree
+    // on which line counts. With no line the setting is Hyprland's default, on.
+    Process {
+        id: tpDwtProc
+        command: ["python3", Quickshell.shellPath("scripts/hypr/touchpad_option.py"),
+            root.envConf, "disable_while_typing"]
+        stdout: SplitParser {
+            onRead: data => {
+                const value = data.trim()
+                if (value) root.disableWhileTyping = value !== "false" && value !== "0"
+            }
+        }
+    }
+
+    FileView {
+        id: disableWithMouseFile
+        path: root.disableWithMouseFlag
+        printErrors: false
+        onLoaded: root.disableWithMouse = disableWithMouseFile.text().trim() === "1"
     }
 
     // If no saved device setting exists, touchpadEnabled remains true.
@@ -350,6 +384,27 @@ ContentPage {
             "python3", Quickshell.shellPath("scripts/hypr/managed_block.py"),
             root.envConf, "touchpad-enable", stmt
         ])
+    }
+
+    // A boolean under input.touchpad, applied now and kept in env.lua's
+    // touchpad table. The writer adds the line when the table has none, as
+    // it does on installs from before the setting was offered.
+    function applyTouchpadOption(key, value) {
+        if (!root.ready) return
+        const luaVal = value ? "true" : "false"
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            'hl.config({ input = { touchpad = { ' + key + ' = ' + luaVal + ' } } })'
+        ])
+        Quickshell.execDetached([
+            "python3", Quickshell.shellPath("scripts/hypr/touchpad_option.py"),
+            root.envConf, key, luaVal
+        ])
+    }
+
+    function applyDisableWithMouse(value) {
+        Quickshell.execDetached(["bash", "-c", 'printf "%s" "$1" > "$0"',
+            root.disableWithMouseFlag, value ? "1" : "0"])
     }
 
     // ── General ───────────────────────────────────────────────────────────────
@@ -674,6 +729,38 @@ ContentPage {
                     const enabled = model[index].value
                     root.touchpadEnabled = enabled
                     root.applyTouchpadEnabled(enabled)
+                }
+            }
+        }
+
+        ConfigRow {
+            visible: root.touchpadInternal
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "keyboard"
+                text: Translation.tr("Disable While Typing")
+                tooltipText: Translation.tr("Ignores the touchpad for a moment after each key press, so a resting palm can't move the pointer")
+                checked: root.disableWhileTyping
+                onCheckedChanged: {
+                    if (checked === root.disableWhileTyping) return
+                    root.disableWhileTyping = checked
+                    root.applyTouchpadOption("disable_while_typing", checked)
+                }
+            }
+        }
+
+        ConfigRow {
+            visible: root.touchpadInternal
+            ConfigSwitch {
+                Layout.fillWidth: true
+                buttonIcon: "mouse"
+                text: Translation.tr("Disable While Using an External Mouse")
+                tooltipText: Translation.tr("Turns the touchpad off once a USB or Bluetooth mouse is used, and back to the setting above when the mouse is disconnected")
+                checked: root.disableWithMouse
+                onCheckedChanged: {
+                    if (checked === root.disableWithMouse) return
+                    root.disableWithMouse = checked
+                    root.applyDisableWithMouse(checked)
                 }
             }
         }

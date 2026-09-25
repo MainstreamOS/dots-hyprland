@@ -240,9 +240,9 @@ hl.config({
         off_window_axis_events = 2,
 
         touchpad = {
-            -- natural_scroll lives in custom/env.lua (Settings → Mouse writes
-            -- it there); a duplicate here would win on every hyprctl reload.
-            disable_while_typing = true,
+            -- natural_scroll and disable_while_typing live in custom/env.lua
+            -- (Settings → Mouse writes them there); a duplicate here would win
+            -- on every hyprctl reload.
             clickfinger_behavior = true,
             scroll_factor = 0.7
         }
