@@ -439,9 +439,6 @@ function setup_gamescope(){
   case "$OS_GROUP_ID" in
     arch)
       x sudo pacman -S --needed --noconfirm gamescope python-evdev jq seatd
-      # The 32-bit halves of GameMode and MangoHud, for 32-bit games. Best-effort:
-      # they need the multilib repository, and a host without it must not abort here.
-      try sudo pacman -S --needed --noconfirm lib32-gamemode lib32-mangohud
       ;;
     fedora)
       x sudo dnf install -y gamescope python3-evdev jq seatd
