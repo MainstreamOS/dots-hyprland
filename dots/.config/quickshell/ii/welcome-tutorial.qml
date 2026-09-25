@@ -225,6 +225,11 @@ ApplicationWindow {
     property string firstRunFileContent: "This file is just here to confirm you've been greeted :>"
     property bool showNextStartup: false
 
+    // Closing hides the window straight away, and the process goes once a page
+    // has finished what it started, such as a theme apply or a new wallpaper.
+    onClosing: quitWhenIdle.request()
+    QuitWhenIdle { id: quitWhenIdle }
+
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         // No file work here: the marker is already written by the

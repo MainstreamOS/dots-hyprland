@@ -301,6 +301,10 @@ Singleton {
         }
     }
 
+    // A window running as its own process waits for this before it quits, or
+    // the change that started the countdown below would never reach the file.
+    readonly property bool writePending: fileWriteTimer.running
+
     Timer {
         id: fileWriteTimer
         interval: root.readWriteDelay

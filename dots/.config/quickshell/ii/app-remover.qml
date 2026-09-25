@@ -227,6 +227,13 @@ ApplicationWindow {
         listProc.running = true
     }
 
+    // Closing hides the window straight away, and the process goes once a
+    // removal under way has finished. One still waiting at the password prompt
+    // is left to that prompt: the removal was already confirmed here, and
+    // canceling the prompt ends it just the same.
+    onClosing: quitWhenIdle.request()
+    QuitWhenIdle { id: quitWhenIdle }
+
     // ── Layout ─────────────────────────────────────────────────────
     // Mirrors the settings app's chrome: m3background window, content on
     // a rounded m3surfaceContainerLow pane, section-style header, rows
