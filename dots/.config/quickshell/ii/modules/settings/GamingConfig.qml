@@ -104,44 +104,26 @@ ContentPage {
         }
     }
 
-    // The helper's exit and its last words arrive separately; the outcome
-    // is read once both are in.
-    property int applyExit: -1
-    property bool applyErrDone: false
-
     Process {
         id: applyProc
-        stderr: StdioCollector {
-            id: applyErr
-            onStreamFinished: {
-                root.applyErrDone = true;
-                root.applyFinished();
-            }
-        }
-        onExited: (code) => {
-            root.applyExit = code;
-            root.applyFinished();
-        }
+        stderr: StdioCollector { id: applyErr }
+        onExited: (code) => root.applyFinished(code)
     }
 
     function apply(args) {
         root.lastError = "";
-        root.applyExit = -1;
-        root.applyErrDone = false;
         root.applying = true;
         applyProc.command = ["pkexec", "/usr/local/bin/gaming-tuning"].concat(args);
         applyProc.running = true;
     }
 
-    function applyFinished() {
-        if (root.applyExit < 0 || !root.applyErrDone)
-            return;
+    function applyFinished(code) {
         root.applying = false;
-        if (root.applyExit === 126) {
+        if (code === 126) {
             root.lastError = Translation.tr("The change was not made: authentication was cancelled.");
-        } else if (root.applyExit === 127) {
+        } else if (code === 127) {
             root.lastError = Translation.tr("The change was not made: the gaming stack is not fully installed.");
-        } else if (root.applyExit !== 0) {
+        } else if (code !== 0) {
             const lines = applyErr.text.trim().split("\n").filter(l => l.length > 0);
             root.lastError = lines.length > 0
                 ? lines[lines.length - 1].replace(/^gaming-tuning: /, "")

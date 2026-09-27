@@ -1,2 +1,4 @@
 module qs.modules.settings.services
 WeatherSection 1.0 WeatherSection.qml
+BarStyleChoices 1.0 BarStyleChoices.qml
+DockStyleChoices 1.0 DockStyleChoices.qml

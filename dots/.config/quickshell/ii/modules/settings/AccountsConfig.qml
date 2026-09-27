@@ -83,24 +83,18 @@ ContentPage {
         // the list can never describe accounts by different rules than the
         // ones that made them.
         command: ["/usr/local/bin/user-manager", "list"]
-        property string buf: ""
-        property string err: ""
-        onRunningChanged: { if (running) { buf = ""; err = "" } }
-        stdout: StdioCollector { onStreamFinished: accountListProc.buf += this.text }
-        stderr: StdioCollector { onStreamFinished: accountListProc.err += this.text }
+        stdout: StdioCollector { id: listOut }
+        stderr: StdioCollector { id: listErr }
         onExited: (code) => {
             if (code !== 0) {
-                root.showStatus(Translation.tr("Could not load accounts: ") + err.trim(), true)
-                buf = ""; err = ""
+                root.showStatus(Translation.tr("Could not load accounts: ") + listErr.text.trim(), true)
                 return
             }
             let parsed = []
-            try { parsed = JSON.parse(buf) } catch (e) {
+            try { parsed = JSON.parse(listOut.text) } catch (e) {
                 root.showStatus(Translation.tr("Could not read the account list."), true)
-                buf = ""; err = ""
                 return
             }
-            buf = ""; err = ""
             parsed = parsed.map(a => Object.assign({}, a, { isCurrent: a.name === root.currentUser }))
             parsed.sort((a, b) => a.isCurrent ? -1 : (b.isCurrent ? 1 : a.name.localeCompare(b.name)))
             root.accounts = parsed
@@ -144,14 +138,12 @@ ContentPage {
         Process {
             id: actionProc
             property string pendingPassword: ""
-            property string err: ""
-            stderr: StdioCollector { onStreamFinished: actionProc.err = this.text }
+            stderr: StdioCollector { id: actionErr }
             // A password handed over as an argument is readable in ps by
             // anyone on the machine for as long as the command runs, so it
             // goes down stdin instead. stdinEnabled must be on before running
             // flips, or the write lands after the helper has already read.
             onRunningChanged: {
-                if (running) err = ""
                 if (running && pendingPassword.length > 0) {
                     write(pendingPassword + "\n")
                     pendingPassword = ""
@@ -167,7 +159,7 @@ ContentPage {
                     root.refresh()
                     item.expanded = false
                 } else {
-                    root.showStatus(root.helperReason(actionProc.err,
+                    root.showStatus(root.helperReason(actionErr.text,
                         Translation.tr("Something went wrong. Please try again.")), true)
                 }
             }
@@ -194,10 +186,9 @@ ContentPage {
             // line can say when a picture is smaller than the login screen will
             // draw it instead of letting the result be a surprise at logout.
             property string buf: ""
-            property string err: ""
-            onRunningChanged: if (running) { buf = ""; err = "" }
+            onRunningChanged: if (running) buf = ""
             stdout: SplitParser { onRead: data => imageApplyProc.buf += data }
-            stderr: StdioCollector { onStreamFinished: imageApplyProc.err = this.text }
+            stderr: StdioCollector { id: imageApplyErr }
             onExited: (code) => {
                 if (code === 0) {
                     const edge = parseInt(imageApplyProc.buf.trim(), 10)
@@ -208,7 +199,7 @@ ContentPage {
                     faceImage.source = ""
                     faceImage.source = "file:///var/lib/AccountsService/icons/" + account.name
                 } else {
-                    root.showStatus(root.helperReason(imageApplyProc.err,
+                    root.showStatus(root.helperReason(imageApplyErr.text,
                         Translation.tr("Could not update the login image.")), true)
                 }
             }
@@ -943,12 +934,10 @@ ContentPage {
 
     Process {
         id: adminProc
-        property string err: ""
-        onRunningChanged: if (running) err = ""
-        stderr: StdioCollector { onStreamFinished: adminProc.err = this.text }
+        stderr: StdioCollector { id: adminErr }
         onExited: (code) => {
             if (code !== 0)
-                root.showStatus(root.helperReason(adminProc.err,
+                root.showStatus(root.helperReason(adminErr.text,
                     Translation.tr("Could not change who administers this computer.")), true)
             accountListProc.running = true
         }
@@ -957,13 +946,11 @@ ContentPage {
     Process {
         id: repairProc
         property string target: ""
-        property string err: ""
-        onRunningChanged: if (running) err = ""
-        stderr: StdioCollector { onStreamFinished: repairProc.err = this.text }
+        stderr: StdioCollector { id: repairErr }
         onExited: (code) => {
             root.showStatus(code === 0
                 ? Translation.tr("Account repaired. The desktop finishes setting itself up the next time they sign in.")
-                : root.helperReason(repairProc.err, Translation.tr("Could not repair that account.")), code !== 0)
+                : root.helperReason(repairErr.text, Translation.tr("Could not repair that account.")), code !== 0)
             accountListProc.running = true
         }
     }
@@ -972,15 +959,11 @@ ContentPage {
         id: createAccountProc
         property string pendingPassword: ""
         property string pendingUser: ""
-        property string err: ""
-        stderr: StdioCollector { onStreamFinished: createAccountProc.err = this.text }
+        stderr: StdioCollector { id: createErr }
         // stdinEnabled has to be on before running goes true, or the write
         // lands after the helper has already read. Closing the stream is what
         // lets the helper's read return instead of blocking.
         onRunningChanged: {
-            // Cleared as the run starts, or a run that fails without saying
-            // anything reports the previous failure's reason.
-            if (running) err = ""
             if (running && pendingPassword.length > 0) {
                 write(pendingPassword + "\n")
                 pendingPassword = ""
@@ -993,7 +976,7 @@ ContentPage {
                 root.showStatus(Translation.tr("Account created. They can sign in now, and the desktop finishes setting itself up the first time they do."), false)
                 postCreateRefreshTimer.start()
             } else {
-                root.showStatus(root.helperReason(createAccountProc.err,
+                root.showStatus(root.helperReason(createErr.text,
                     Translation.tr("Could not create the account. That login name may already be taken, or it contained invalid characters.")), true)
                 root.refresh()
             }

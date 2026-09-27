@@ -51,6 +51,8 @@ Singleton {
     property string releaseManifestPath: FileUtils.trimFileProtocol(`${Directories.cache}/updates/release-manifest.json`)
     property string releaseNotifyStatePath: FileUtils.trimFileProtocol(`${Directories.state}/user/release-notify-state.json`)
     property string settingsAppPath: FileUtils.trimFileProtocol(`${Directories.config}/quickshell/ii/settings.qml`)
+    // Where the detached update writes its log, exit code and pid; read by the Update page and by Settings on close.
+    property string updateStateDir: Quickshell.env("HOME") + "/.local/state/mainstream"
     property string generatedMaterialThemePath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/colors.json`)
     property string generatedWallpaperCategoryPath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/wallpaper/category.txt`)
     property string cliphistDecode: FileUtils.trimFileProtocol(`/tmp/quickshell/media/cliphist`)

@@ -12,6 +12,26 @@ ContentPage {
     id: root
     forceWidth: true
 
+    component CardCaption: RowLayout {
+        id: caption
+        property bool selected
+        property string title
+        property string subtitle
+        spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
+        Rectangle {
+            width: 16; height: 16; radius: 8; border.width: 2
+            border.color: caption.selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+            color: caption.selected ? Appearance.colors.colPrimary : "transparent"
+            Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: caption.selected }
+        }
+        ColumnLayout {
+            spacing: 1
+            Layout.fillWidth: true
+            StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: caption.title; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+            StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: caption.subtitle; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+        }
+    }
+
     property string currentLayout: "dwindle"
     // Both arrays grow and shrink together in blocks of ten via the +/-
     // controls under the matrix; length is always a multiple of ten.
@@ -416,21 +436,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: dwindleCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: dwindleCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: dwindleCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Dwindle (default)"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Each new window splits the last in half"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: dwindleCard.sel; title: "Dwindle (default)"; subtitle: Translation.tr("Each new window splits the last in half") }
                     }
                 }
 
@@ -501,21 +507,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: masterCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: masterCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: masterCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Master"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One main window with a side stack"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: masterCard.sel; title: "Master"; subtitle: Translation.tr("One main window with a side stack") }
                     }
                 }
 
@@ -590,21 +582,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: scrollingCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: scrollingCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: scrollingCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Scrolling"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Horizontally scrollable window columns"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: scrollingCard.sel; title: "Scrolling"; subtitle: Translation.tr("Horizontally scrollable window columns") }
                     }
                 }
 
@@ -673,21 +651,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: monocleCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: monocleCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: monocleCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Monocle"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("One fullscreen window at a time"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: monocleCard.sel; title: "Monocle"; subtitle: Translation.tr("One fullscreen window at a time") }
                     }
                 }
 
@@ -764,21 +728,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: floatCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: floatCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: floatCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Float"; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("All windows float freely on the desktop"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: floatCard.sel; title: "Float"; subtitle: Translation.tr("All windows float freely on the desktop") }
                     }
                 }
 
@@ -1049,21 +999,7 @@ ContentPage {
                             }
                         }
 
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignLeft
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: perWsCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: perWsCard.sel ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: perWsCard.sel }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Per Workspace"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; wrapMode: Text.Wrap; text: Translation.tr("Choose a different layout for each workspace"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: perWsCard.sel; title: Translation.tr("Per Workspace"); subtitle: Translation.tr("Choose a different layout for each workspace") }
                     }
                 }
             } // Per Workspace row

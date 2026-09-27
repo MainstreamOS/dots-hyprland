@@ -23,7 +23,7 @@ ContentPage {
     // is shut is still shown once, and one watched to the end is not shown
     // again on every visit after. A result that needs a reboot stays until
     // the reboot has happened.
-    readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/mainstream"
+    readonly property string stateDir: Directories.updateStateDir
     readonly property string logPath: stateDir + "/update.log"
     readonly property string exitPath: stateDir + "/update.exit"
     readonly property string pidPath: stateDir + "/update.pid"
@@ -156,22 +156,31 @@ ContentPage {
         return lines.join("\n");
     }
 
+    function resetRunState() {
+        outputText = "";
+        pendingLines = [];
+        outputTrimmed = false;
+        helperStarted = false;
+        rebootRequired = false;
+        rebootPredicted = false;
+        recordPredatesBoot = false;
+        userStopped = false;
+        replaying = false;
+        launcherExited = false;
+    }
+
+    function clearOutput() {
+        resetRunState();
+        clearProc.running = true;
+    }
+
     function startUpdate() {
         if (isRunning) return;
         if (passwordField.text.length === 0) {
             outputText = Translation.tr("Enter your password to start the update.");
             return;
         }
-        outputText = "";
-        userStopped = false;
-        rebootRequired = false;
-        rebootPredicted = false;
-        recordPredatesBoot = false;
-        replaying = false;
-        helperStarted = false;
-        launcherExited = false;
-        pendingLines = [];
-        outputTrimmed = false;
+        resetRunState();
         // Snapshot the password and clear the visible field so it
         // doesn't sit on screen for the rest of the run.
         pendingPassword = passwordField.text;
@@ -740,16 +749,7 @@ ContentPage {
             RippleButtonWithIcon {
                 materialIcon: "delete"
                 mainText: Translation.tr("Clear output")
-                onClicked: {
-                    root.pendingLines = [];
-                    root.outputTrimmed = false;
-                    root.helperStarted = false;
-                    root.outputText = "";
-                    clearProc.running = true;
-                    root.rebootRequired = false;
-                    root.rebootPredicted = false;
-                    root.recordPredatesBoot = false;
-                }
+                onClicked: root.clearOutput()
             }
 
             RippleButtonWithIcon {
@@ -838,16 +838,7 @@ ContentPage {
                 materialIcon: "delete"
                 mainText: Translation.tr("Clear output")
                 enabled: !root.isRunning
-                onClicked: {
-                    root.pendingLines = [];
-                    root.outputTrimmed = false;
-                    root.helperStarted = false;
-                    root.outputText = "";
-                    clearProc.running = true;
-                    root.rebootRequired = false;
-                    root.rebootPredicted = false;
-                    root.recordPredatesBoot = false;
-                }
+                onClicked: root.clearOutput()
             }
         }
 

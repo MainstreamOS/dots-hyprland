@@ -12,6 +12,26 @@ ContentPage {
     id: root
     forceWidth: true
 
+    component CardCaption: RowLayout {
+        id: caption
+        property bool selected
+        property string title
+        property string subtitle
+        spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
+        Rectangle {
+            width: 16; height: 16; radius: 8; border.width: 2
+            border.color: caption.selected ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+            color: caption.selected ? Appearance.colors.colPrimary : "transparent"
+            Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: caption.selected }
+        }
+        ColumnLayout {
+            spacing: 1
+            Layout.fillWidth: true
+            StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: caption.title; font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
+            StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: caption.subtitle; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
+        }
+    }
+
     property bool ready:           false
     property bool leftHanded:      false
     property bool accelEnabled:    true
@@ -542,21 +562,7 @@ ContentPage {
                                 }
                             }
                         }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: !root.naturalScroll ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: !root.naturalScroll ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: !root.naturalScroll }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: !root.naturalScroll; title: Translation.tr("Traditional"); subtitle: Translation.tr("Scrolling moves the view") }
                     }
                 }
                  MouseArea {
@@ -630,21 +636,7 @@ ContentPage {
                                 }
                             }
                         }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: root.naturalScroll ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: root.naturalScroll ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: root.naturalScroll }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: root.naturalScroll; title: Translation.tr("Natural"); subtitle: Translation.tr("Scrolling moves the content") }
                     }
                 }
             }
@@ -793,21 +785,7 @@ ContentPage {
                                 }
                             }
                         }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: !root.naturalScrollTP ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: !root.naturalScrollTP ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: !root.naturalScrollTP }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Traditional"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the view"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: !root.naturalScrollTP; title: Translation.tr("Traditional"); subtitle: Translation.tr("Scrolling moves the view") }
                     }
                 }
                 MouseArea {
@@ -878,21 +856,7 @@ ContentPage {
                                 }
                             }
                         }
-                        RowLayout {
-                            spacing: 6; Layout.fillWidth: true; Layout.alignment: Qt.AlignHCenter
-                            Rectangle {
-                                width: 16; height: 16; radius: 8; border.width: 2
-                                border.color: root.naturalScrollTP ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
-                                color: root.naturalScrollTP ? Appearance.colors.colPrimary : "transparent"
-                                Rectangle { anchors.centerIn: parent; width: 6; height: 6; radius: 3; color: Appearance.colors.colOnPrimary; visible: root.naturalScrollTP }
-                            }
-                            ColumnLayout {
-                                spacing: 1
-                                Layout.fillWidth: true
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Natural"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colOnLayer1 }
-                                StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; text: Translation.tr("Scrolling moves the content"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
-                            }
-                        }
+                        CardCaption { selected: root.naturalScrollTP; title: Translation.tr("Natural"); subtitle: Translation.tr("Scrolling moves the content") }
                     }
                 }
             }

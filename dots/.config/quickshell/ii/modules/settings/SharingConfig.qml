@@ -143,25 +143,14 @@ ContentPage {
                 spacing: 0
             }
 
-            RippleButton {
-                buttonRadius: Appearance.rounding.full
-                implicitWidth: 34
-                implicitHeight: 34
+            RowIconButton {
+                iconName: copyRow.justCopied ? "check" : "content_copy"
+                tip: Translation.tr("Copy")
                 enabled: copyRow.value.length > 0
                 onClicked: {
                     Quickshell.clipboardText = copyRow.value;
                     copyRow.justCopied = true;
                     copiedTimer.restart();
-                }
-                contentItem: MaterialSymbol {
-                    anchors.centerIn: parent
-                    horizontalAlignment: Text.AlignHCenter
-                    text: copyRow.justCopied ? "check" : "content_copy"
-                    iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.colors.colSubtext
-                }
-                StyledToolTip {
-                    text: Translation.tr("Copy")
                 }
                 Timer {
                     id: copiedTimer
@@ -189,6 +178,14 @@ ContentPage {
         StyledToolTip {
             text: iconButton.tip
         }
+    }
+
+    component NoticeAction: RippleButtonWithIcon {
+        Layout.fillWidth: false
+        buttonRadius: Appearance.rounding.small
+        colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
+        colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+        colRipple: Appearance.colors.colPrimaryContainerActive
     }
 
     // ── Sharing ───────────────────────────────────────────────────────────────
@@ -350,16 +347,11 @@ ContentPage {
             Item {
                 Layout.fillWidth: true
             }
-            RippleButtonWithIcon {
-                Layout.fillWidth: false
-                buttonRadius: Appearance.rounding.small
+            NoticeAction {
                 materialIcon: "lock_open"
                 mainText: Translation.tr("Unlock")
                 enabled: !FileSharing.keyringPending
                 onClicked: FileSharing.readPassword()
-                colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
-                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
-                colRipple: Appearance.colors.colPrimaryContainerActive
             }
         }
 
@@ -374,18 +366,13 @@ ContentPage {
             Item {
                 Layout.fillWidth: true
             }
-            RippleButtonWithIcon {
-                Layout.fillWidth: false
-                buttonRadius: Appearance.rounding.small
+            NoticeAction {
                 materialIcon: "person_add"
                 mainText: Translation.tr("Set Up My Account")
                 // A password an earlier try saved is given again, so the
                 // keyring has to be read first.
                 enabled: !FileSharing.busy && !FileSharing.keyringPending
                 onClicked: FileSharing.setUpAccount()
-                colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
-                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
-                colRipple: Appearance.colors.colPrimaryContainerActive
             }
         }
 
@@ -417,16 +404,11 @@ ContentPage {
             Item {
                 Layout.fillWidth: true
             }
-            RippleButtonWithIcon {
-                Layout.fillWidth: false
-                buttonRadius: Appearance.rounding.small
+            NoticeAction {
                 materialIcon: "add_link"
                 mainText: Translation.tr("Share on This Network")
                 enabled: !FileSharing.busy && FileSharing.firewall
                 onClicked: FileSharing.trustCurrent()
-                colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
-                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
-                colRipple: Appearance.colors.colPrimaryContainerActive
             }
         }
 

@@ -53,6 +53,38 @@ Rectangle {
         onLoaded: item.open()
     }
 
+    component QrShareButton: Item {
+        id: qrButton
+        signal clicked
+        implicitWidth: 36
+        implicitHeight: 36
+        Rectangle {
+            anchors.fill: parent
+            radius: 18
+            color: qrMouse.containsMouse ? Appearance.colors.colLayer3Hover : Appearance.colors.colLayer3
+            Behavior on color {
+                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+            }
+        }
+        MaterialSymbol {
+            anchors.centerIn: parent
+            text: "qr_code_2"
+            iconSize: 20
+            color: Appearance.colors.colOnLayer3
+        }
+        MouseArea {
+            id: qrMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: qrButton.clicked()
+        }
+        StyledToolTip {
+            extraVisibleCondition: qrMouse.containsMouse
+            text: Translation.tr("Share with a QR code")
+        }
+    }
+
     Behavior on color {
         animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
     }
@@ -370,40 +402,9 @@ Rectangle {
             }
 
             // Share button (for saved networks, not active/connecting)
-            Item {
+            QrShareButton {
                 visible: (root.wifiNetwork?.isSaved ?? false) && !root.isActive && !root.isConnecting && !root.isAskingPassword
-                implicitWidth: 36
-                implicitHeight: 36
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 18
-                    color: shareMouseArea.containsMouse ? Appearance.colors.colLayer3Hover : Appearance.colors.colLayer3
-
-                    Behavior on color {
-                        animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-                    }
-                }
-
-                MaterialSymbol {
-                    anchors.centerIn: parent
-                    text: "qr_code_2"
-                    iconSize: 20
-                    color: Appearance.colors.colOnLayer3
-                }
-
-                MouseArea {
-                    id: shareMouseArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: shareLoader.active = true
-                }
-
-                StyledToolTip {
-                    extraVisibleCondition: shareMouseArea.containsMouse
-                    text: Translation.tr("Share with a QR code")
-                }
+                onClicked: shareLoader.active = true
             }
         }
 
@@ -553,40 +554,8 @@ Rectangle {
                 }
 
                 // Share button
-                Item {
-                    implicitWidth: 36
-                    implicitHeight: 36
-                    property bool hovered: expandedShareMouse.containsMouse
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 18
-                        color: expandedShareMouse.containsMouse ? Appearance.colors.colLayer3Hover : Appearance.colors.colLayer3
-
-                        Behavior on color {
-                            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-                        }
-                    }
-
-                    MaterialSymbol {
-                        anchors.centerIn: parent
-                        text: "qr_code_2"
-                        iconSize: 20
-                        color: Appearance.colors.colOnLayer3
-                    }
-
-                    MouseArea {
-                        id: expandedShareMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: shareLoader.active = true
-                    }
-
-                    StyledToolTip {
-                        extraVisibleCondition: expandedShareMouse.containsMouse
-                        text: Translation.tr("Share with a QR code")
-                    }
+                QrShareButton {
+                    onClicked: shareLoader.active = true
                 }
             }
         }
