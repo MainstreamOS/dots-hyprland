@@ -341,10 +341,10 @@ ContentPage {
                 // written before the rename still selects it, and the Hug strip
                 // is stored as "span".
                 options: [
-                    { displayName: Translation.tr("Hug"), icon: "line_curve", value: "span" },
                     { displayName: Translation.tr("Float"), icon: "page_header", value: "float" },
-                    { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" },
-                    { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "hug" }
+                    { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "hug" },
+                    { displayName: Translation.tr("Hug"), icon: "line_curve", value: "span" },
+                    { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" }
                 ]
             }
         }

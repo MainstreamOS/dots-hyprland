@@ -408,29 +408,29 @@ ContentPage {
                     Layout.fillWidth: true
                     currentIndex: {
                         const i = model.findIndex(o => o.value === Config.options.bar.cornerStyle);
-                        return i !== -1 ? i : 1;
+                        return i !== -1 ? i : 0;
                     }
                     onActivated: index => { Config.options.bar.cornerStyle = model[index].value; }
                     model: [
-                        {
-                            displayName: Translation.tr("Hug"),
-                            icon: "line_curve",
-                            value: 0
-                        },
                         {
                             displayName: Translation.tr("Float"),
                             icon: "page_header",
                             value: 1
                         },
                         {
-                            displayName: Translation.tr("Rect"),
-                            icon: "toolbar",
-                            value: 2
-                        },
-                        {
                             displayName: Translation.tr("Notch"),
                             icon: "call_to_action",
                             value: 3
+                        },
+                        {
+                            displayName: Translation.tr("Hug"),
+                            icon: "line_curve",
+                            value: 0
+                        },
+                        {
+                            displayName: Translation.tr("Rect"),
+                            icon: "toolbar",
+                            value: 2
                         }
                     ]
                 }
