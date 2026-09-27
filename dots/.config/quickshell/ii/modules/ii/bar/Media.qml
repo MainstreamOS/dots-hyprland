@@ -101,6 +101,7 @@ Item {
             elide: Text.ElideRight // Truncates the text on the right
             color: Appearance.barContent.colOnLayer1
             text: `${cleanedTitle}${activePlayer?.trackArtist ? ' • ' + activePlayer.trackArtist : ''}`
+            textFormat: Text.PlainText
         }
 
     }

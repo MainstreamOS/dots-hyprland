@@ -84,12 +84,14 @@ Rectangle {
                 font.pixelSize: Looks.font.pixelSize.large
                 elide: Text.ElideRight
                 text: StringUtils.cleanMusicTitle(root.activePlayer?.trackTitle) || Translation.tr("Unknown Title")
+                textFormat: Text.PlainText
             }
 
             WText {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
                 text: root.activePlayer?.trackArtist || Translation.tr("Unknown Artist")
+                textFormat: Text.PlainText
             }
         }
 

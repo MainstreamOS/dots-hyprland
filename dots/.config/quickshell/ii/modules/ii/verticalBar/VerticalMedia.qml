@@ -94,6 +94,7 @@ MouseArea {
             StyledText {
                 color: Appearance.barContent.colOnSurfaceVariant
                 text: `${cleanedTitle}${activePlayer?.trackArtist ? '\n' + activePlayer.trackArtist : ''}`
+                textFormat: Text.PlainText
             }
         }
     }

@@ -282,6 +282,7 @@ Item { // Player instance
                             elide: Text.ElideNone
                             animateChange: true
                             text: StringUtils.cleanMusicTitle(root.player?.trackTitle) || "Untitled"
+                            textFormat: Text.PlainText
 
                             // Reset visual position immediately when track changes
                             onTextChanged: {
@@ -296,6 +297,7 @@ Item { // Player instance
                             font: trackTitleMain.font
                             color: trackTitleMain.color
                             text: trackTitleMain.text
+                            textFormat: Text.PlainText
                             elide: Text.ElideNone
                         }
                     }
@@ -309,6 +311,7 @@ Item { // Player instance
                     color: blendedColors.colSubtext
                     elide: Text.ElideRight
                     text: root.player?.trackArtist
+                    textFormat: Text.PlainText
                     animateChange: true
                     animationDistanceX: 6
                     animationDistanceY: 0
