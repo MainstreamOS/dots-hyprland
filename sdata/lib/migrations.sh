@@ -36,3 +36,18 @@ migrate_custom_general_plugin_block() {
         echo "Could not move $target aside; plugins may be configured twice until it is" >&2
     fi
 }
+
+# The update that brings the Decorations carry in is run by the exp-update from
+# before it, which read its own script before the pull. That runner sources
+# this file after the pull and before it copies anything, which makes this the
+# one place the pass can reach it; decorations-carry.sh says how. The install
+# path has no handle_file_conflict, and a current exp-update has the pass
+# already, so neither is touched.
+if declare -F handle_file_conflict >/dev/null 2>&1 \
+   && ! declare -F deco_carry_begin >/dev/null 2>&1 \
+   && [[ -r "${REPO_ROOT:-}/sdata/lib/decorations-carry.sh" ]]; then
+  # shellcheck source=/dev/null
+  if source "${REPO_ROOT}/sdata/lib/decorations-carry.sh"; then
+    deco_carry_wrap_older_runner || true
+  fi
+fi

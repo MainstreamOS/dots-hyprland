@@ -358,6 +358,12 @@ handle_file_conflict() {
   else
     echo -e "\n${STY_YELLOW}Conflict detected:${STY_RST} $home_file"
     echo "Repository version differs from your local version."
+    # The Decorations pass after the copy writes the user's own values back
+    # into these whatever is picked, so a replace is not a reset for them, and
+    # someone picking one to get stock decorations back has to know that.
+    if [[ -n "$DECO_CARRY_DIR" ]] && [[ "$home_file" == "${DECO_USER_FILES[0]}" || "$home_file" == "${DECO_USER_FILES[1]}" ]]; then
+      echo "Values you changed in Settings > Decorations stay in this file whichever you choose."
+    fi
     echo
     echo "Choose an action:"
     echo "1) Replace local file with repository version"
@@ -385,6 +391,10 @@ handle_file_conflict() {
       fi
     done
   fi
+
+  # The user's copy as it is when the choice lands, which is what the
+  # Decorations pass puts back if the choice replaces it.
+  deco_carry_snapshot "$home_file"
 
   case $choice in
   1|replace)
@@ -432,6 +442,8 @@ handle_file_conflict() {
       log_warning "Failed to read input. Skipping file."
       return
     fi
+
+    deco_carry_snapshot "$home_file"
 
     case $subchoice in
     r)
@@ -657,17 +669,22 @@ build_packages() {
     # Create temp build directory to avoid polluting the repo
     local build_tmp_dir
     build_tmp_dir=$(mktemp -d "/tmp/pkgbuild-${pkg_name}-XXXXXX")
+    # Known to the exit handler too, so a run stopped mid-build does not leave
+    # it in /tmp, which is held in memory.
+    _pkg_build_tmp="$build_tmp_dir"
     
     # Copy package files to temp directory (using /. to include hidden files)
     cp -r "$pkg_dir"/. "$build_tmp_dir/" || {
       log_error "Failed to copy package files to temp directory"
       rm -rf "$build_tmp_dir"
+      _pkg_build_tmp=""
       continue
     }
 
     cd "$build_tmp_dir" || {
       log_error "Failed to change to temp build directory: $build_tmp_dir"
       rm -rf "$build_tmp_dir"
+      _pkg_build_tmp=""
       continue
     }
 
@@ -681,6 +698,7 @@ build_packages() {
     # Clean up temp build directory
     cd "$REPO_ROOT" || log_die "Failed to return to repository directory"
     rm -rf "$build_tmp_dir"
+    _pkg_build_tmp=""
     log_info "Cleaned up temp build directory"
     
     # Also clean any old build artifacts in the original package directory
@@ -775,12 +793,34 @@ has_new_commits() {
   fi
 }
 
+# Keeps the values a user changed in Settings > Decorations when a release
+# replaces general.lua. Without the library the update runs as it would
+# without the pass, so the calls below stay safe either way.
+if [[ -r "${REPO_ROOT}/sdata/lib/decorations-carry.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/sdata/lib/decorations-carry.sh"
+fi
+if ! declare -F deco_carry_finish >/dev/null; then
+  DECO_CARRY_DIR=""
+  deco_carry_begin() { :; }
+  deco_carry_snapshot() { :; }
+  deco_carry_finish() { :; }
+fi
+
+_pkg_build_tmp=""
+
 # Cleanup function for signal handling
 cleanup_on_exit() {
   local exit_code=$?
   
   # Remove lock file
   rm -f "${REPO_ROOT}/.update-lock" 2>/dev/null || true
+  if [[ -n "${DECO_CARRY_DIR:-}" ]]; then
+    rm -rf "$DECO_CARRY_DIR" 2>/dev/null || true
+  fi
+  if [[ -n "${_pkg_build_tmp:-}" ]]; then
+    rm -rf "$_pkg_build_tmp" 2>/dev/null || true
+  fi
   
   if [[ $exit_code -ne 0 ]] && [[ "$DRY_RUN" != true ]]; then
     echo
@@ -792,7 +832,14 @@ cleanup_on_exit() {
 
 # Set up signal handling and lock file
 if [[ "${SOURCE_ONLY:-false}" != true ]]; then
-trap cleanup_on_exit EXIT INT TERM
+trap cleanup_on_exit EXIT
+# A signal has to end the run. A handler that returns only stops the command
+# it landed on, and the update carries on from the next one: a pull that was
+# stopped reads as a failed pull and the files are copied anyway, and a Stop
+# during the copy goes on replacing files after the notice said it stopped.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 # Check for concurrent runs
 if [[ -f "${REPO_ROOT}/.update-lock" ]]; then
@@ -1089,7 +1136,15 @@ if _qs_live; then qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
 # Chained onto the earlier trap rather than replacing it, which left the lock
 # file behind on every normal run and swallowed the failure notice. The
 # exit code is carried across so that notice still says what happened.
-trap '_rc=$?; restore_hypr_autoreload; resume_qs_reload; (exit $_rc); cleanup_on_exit' EXIT INT TERM HUP
+#
+# errexit is off in here, since handing on a failing code with it on ends the
+# handler right there, before the lock is removed. A second signal is caught
+# and dropped so it cannot cut the handler short either; it still stops the
+# command it lands on. The Decorations pass comes first, so a run stopped after
+# general.lua was replaced still puts the user's values back. It runs while
+# autoreload is still held, so its write does not set off a reload of a tree
+# the copy left half done.
+trap '_rc=$?; set +e; trap : INT TERM HUP; deco_carry_finish; restore_hypr_autoreload; resume_qs_reload; (exit $_rc); cleanup_on_exit' EXIT
 if _hypr_live; then
   hyprctl keyword misc:disable_autoreload true >/dev/null 2>&1 || true
 fi
@@ -1117,6 +1172,8 @@ if [[ "$process_files" == true ]]; then
   files_updated=0
   files_created=0
   
+  deco_carry_begin || true
+
   # Count total files for progress indication (optional)
   total_files=0
   if [[ "$VERBOSE" == false ]] && command -v tput &>/dev/null 2>&1; then
@@ -1213,6 +1270,9 @@ if [[ "$process_files" == true ]]; then
   if [[ "$VERBOSE" == false ]] && command -v tput &>/dev/null 2>&1 && [[ $total_files -gt 0 ]]; then
     printf "\r%*s\r" "80" "" >&2
   fi
+
+  # Before the reload below, so Hyprland reads the settings once, already right.
+  deco_carry_finish || true
 
   echo
   log_info "File processing summary:"

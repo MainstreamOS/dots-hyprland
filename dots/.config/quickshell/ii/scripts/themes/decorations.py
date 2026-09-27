@@ -15,6 +15,7 @@ means or where it lives.
     decorations.py sync     <general.lua> [--flag-dir DIR] [--keys a,b,...]
     decorations.py push-defaults <general.lua> [--keys a,b,...]
     decorations.py push     <values.json> [--no-reload]
+    decorations.py carry    <general.lua> <yours.lua> <new.lua> <previous.lua>...
 
 Where a setting lives is derived from its hyprctl keyword rather than stated
 twice: decoration:blur:size is the field `size`, inside `blur`, inside
@@ -307,7 +308,12 @@ def write(general_path, values, flag_dir=None, schema=None):
         return _write_locked(general_path, values, flag_dir, schema)
 
 
-def _write_locked(general_path, values, flag_dir=None, schema=None):
+def _write_locked(general_path, values, flag_dir=None, schema=None, done=None):
+    # `done` collects the keys that were actually placed. A key can be skipped
+    # (no block to put it in, a profile name that fails the check), and a
+    # caller that reports what it changed must not name those.
+    if done is None:
+        done = []
     schema = schema or load_schema()
     try:
         with open(general_path) as fh:
@@ -333,6 +339,7 @@ def _write_locked(general_path, values, flag_dir=None, schema=None):
                     with open(os.path.join(flag_dir, row["path"]), "w") as fh:
                         fh.write(text_value)
                     written += 1
+                    done.append(row["key"])
                 except OSError:
                     pass
             continue
@@ -344,6 +351,7 @@ def _write_locked(general_path, values, flag_dir=None, schema=None):
                     with open(fp, "w") as fh:
                         fh.write(str(value) + "\n")
                     written += 1
+                    done.append(row["key"])
                 except OSError:
                     pass
             continue
@@ -363,6 +371,7 @@ def _write_locked(general_path, values, flag_dir=None, schema=None):
         else:
             text = text[:span[0]] + rendered + text[span[1]:]
         written += 1
+        done.append(row["key"])
     # Beside the target and renamed over it: general.lua is sourced by the
     # Hyprland config and a reload can be reading it at any moment. The name is
     # unique per writer — a shared one meant two writers held the same inode,
@@ -439,6 +448,104 @@ def push(values, schema=None, allow_reload=True, keys=None):
         # No compositor to talk to: the file write already happened and is
         # what a later start reads, so this is a no-op rather than a failure.
         pass
+
+
+def _same(a, b, kind):
+    """Equal as the file would spell them, so 4 and 4.0 are one value."""
+    try:
+        return _format(a, kind) == _format(b, kind)
+    except (TypeError, ValueError, IndexError, KeyError):
+        return a == b
+
+
+def carry(general_path, yours_path, new_path, previous_paths, schema=None):
+    """Put the user's own settings back into a general.lua an update replaced.
+
+    An update hands over the new release's general.lua whole, which is right
+    for every setting the user never touched and wrong for every one they did.
+    A value in their copy that differs from what the previous release shipped
+    is their own; one that matches it is only the old default, and the new
+    release's value belongs in its place. When the updater cannot tell which
+    release the machine came from it names several, and a value is the user's
+    only when none of them shipped it: an old default kept over a new one is
+    the mistake to avoid, and a choice missed that way only leaves the new
+    release's value, as any replaced file does. A setting a release left to
+    the compositor counts as that release's schema default, read from the
+    decorations-schema.json beside its general.lua, since a theme apply wrote
+    exactly that value into the file and it is no more the user's choice than
+    a shipped line is.
+
+    Only what the update itself put in the file is replaced. A setting whose
+    value is no longer the new release's was changed after the copy, from the
+    settings page or a theme, and that is the newer choice. Only keys this
+    schema still knows are read, so a setting a release removed goes with it.
+    Flag files are not part of this: they sit in custom/, which updates never
+    replace. A value the file already holds is not written again, so a second
+    pass changes nothing and reports nothing.
+
+    Returns the schema rows it wrote, which is what the caller reports.
+    """
+    schema = schema or load_schema()
+    if not os.path.isfile(new_path):
+        return []
+    lua_keys = [row["key"] for row in schema["keys"] if row.get("hypr")]
+    releases = []
+    for path in previous_paths:
+        if not os.path.isfile(path):
+            continue
+        shipped = read(path, schema=schema)
+        # A file that holds none of these settings is no release to compare
+        # with: measuring against the schema alone would mistake every default
+        # the new release changed for a choice the user made.
+        if not any(key in shipped for key in lua_keys):
+            continue
+        try:
+            was_default = {row["key"]: row["default"]
+                           for row in load_schema(os.path.join(
+                               os.path.dirname(path),
+                               "decorations-schema.json"))["keys"]
+                           if "default" in row}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            # A release from before the schema existed, or a copy that does
+            # not parse: this schema's defaults are the nearest guess.
+            was_default = {}
+        releases.append((shipped, was_default))
+    if not releases:
+        return []
+    yours = read(yours_path, schema=schema)
+    new = read(new_path, schema=schema)
+
+    def choose():
+        now = read(general_path, schema=schema)
+        kept = {}
+        for row in schema["keys"]:
+            key, kind = row["key"], row["type"]
+            if row.get("mechanism") == "flagfile" or key not in yours:
+                continue
+            mine = yours[key]
+            if any(_same(mine, shipped.get(key, was_default.get(key, row.get("default"))), kind)
+                   for shipped, was_default in releases):
+                continue
+            if key in now:
+                if _same(mine, now[key], kind):
+                    continue
+                if not _same(now[key], new.get(key, row.get("default")), kind):
+                    continue
+            kept[key] = mine
+        return kept
+
+    # Nothing to put back leaves the user's folder exactly as the update left
+    # it, lock file included.
+    if not choose():
+        return []
+    done = []
+    # Decided again under the lock the settings page writes under, so a change
+    # it makes cannot land between the look and the write.
+    with _locked(general_path):
+        kept = choose()
+        if kept:
+            _write_locked(general_path, kept, schema=schema, done=done)
+    return [row for row in schema["keys"] if row["key"] in done]
 
 
 def coerce(schema, pairs):
@@ -557,6 +664,23 @@ def main(argv):
         except Exception:
             return 0
         push(values, allow_reload="--no-reload" not in rest)
+        return 0
+    if verb == "carry":
+        # `carry <general.lua> <yours.lua> <new.lua> <previous.lua>...` is the
+        # updater's pass once it has settled general.lua: the user's copy from
+        # just before, the release going in, and each release the machine may
+        # have come from, with that release's decorations-schema.json beside
+        # it when it had one. File only: the updater reloads the compositor
+        # once everything is in place. Prints the label of each setting it
+        # kept, one per line, as the settings page names them, and nothing
+        # when it kept nothing.
+        if len(rest) < 3:
+            print("carry needs your copy, the new release's general.lua and "
+                  "at least one earlier release's", file=sys.stderr)
+            return 2
+        kept = carry(general, rest[0], rest[1], rest[2:])
+        for row in kept:
+            print(row.get("label") or row["key"])
         return 0
     if verb in ("sync", "push-defaults"):
         # `sync <general.lua> [--keys a,b]` puts the compositor back to what
