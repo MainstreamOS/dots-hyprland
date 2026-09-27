@@ -163,21 +163,11 @@ else
     say "$(t "Refreshing /etc/skel from the dotfiles...")"
     # shellcheck source=/dev/null
     source "$REPO_DIR/sdata/lib/provision-user.sh"
-    SKEL_EXCLUDES=()
-    for _ex in "${PROVISION_SKEL_EXCLUDES[@]+"${PROVISION_SKEL_EXCLUDES[@]}"}"; do
-        SKEL_EXCLUDES+=( --exclude="$_ex" )
-    done
-    if [[ ${#SKEL_EXCLUDES[@]} -eq 0 ]]; then
-        # An empty list would mirror the dotfiles over skel with deletions and
-        # nothing held back, taking the pre-baked virtualenv and the plugin
-        # binaries with it. A library that loads without its list is not one to
-        # act on.
+    if provision_refresh_skel "$REPO_DIR/dots"; then
+        ok "$(t "/etc/skel now matches this release.")"
+    elif [[ $? -eq 2 ]]; then
         warn "$(t "The provisioning library carries no exclusion list; leaving /etc/skel alone.")"
         RC=1
-    elif rsync -a --delete "${SKEL_EXCLUDES[@]}" \
-        "$REPO_DIR/dots/" /etc/skel/ >/dev/null 2>&1; then
-        chown -R root:root /etc/skel 2>/dev/null || true
-        ok "$(t "/etc/skel now matches this release.")"
     else
         warn "$(t "Could not refresh /etc/skel; a new account would be set up from an older desktop.")"
         RC=1

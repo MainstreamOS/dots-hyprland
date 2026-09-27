@@ -815,9 +815,6 @@ cleanup_on_exit() {
   
   # Remove lock file
   rm -f "${REPO_ROOT}/.update-lock" 2>/dev/null || true
-  if [[ -n "${DECO_CARRY_DIR:-}" ]]; then
-    rm -rf "$DECO_CARRY_DIR" 2>/dev/null || true
-  fi
   if [[ -n "${_pkg_build_tmp:-}" ]]; then
     rm -rf "$_pkg_build_tmp" 2>/dev/null || true
   fi

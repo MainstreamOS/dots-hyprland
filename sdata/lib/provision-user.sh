@@ -71,6 +71,17 @@ provision_home_of() {  # $1 = user
     getent passwd "$1" | cut -d: -f6
 }
 
+# The home a step may write under, or nothing. Asked again by every step that
+# writes under it rather than trusted from the one that looked first: an empty
+# answer aims the step at the filesystem root, and provision_dotfiles would
+# then mirror a tree over it with deletions on.
+_pu_home() {  # $1 = user
+    local h
+    h="$(provision_home_of "$1")"
+    [[ -n "$h" && -d "$h" && "$h" != "/" ]] || return 1
+    printf '%s\n' "$h"
+}
+
 # The per-machine parts of a home: built rather than copied. The virtualenv
 # records absolute paths, the plugin binaries carry a build stamp good for one
 # compositor version, and the greeted marker decides whether the welcome
@@ -89,6 +100,18 @@ PROVISION_SKEL_EXCLUDES=(
     '/.local/state/quickshell/.venv/'
     '/.local/state/quickshell/user/first_run.txt'
 )
+
+# skel is what the next account is seeded from. An empty exclusion list would
+# mirror the tree over it with deletions and nothing held back, taking the
+# pre-baked virtualenv and the plugin binaries with it, so that returns 2
+# without touching skel.
+provision_refresh_skel() {  # $1 = dotfiles tree
+    local ex args=()
+    for ex in "${PROVISION_SKEL_EXCLUDES[@]+"${PROVISION_SKEL_EXCLUDES[@]}"}"; do args+=( --exclude="$ex" ); done
+    (( ${#args[@]} )) || return 2
+    rsync -a --delete "${args[@]}" "$1/" /etc/skel/ >/dev/null 2>&1 || return 1
+    chown -R root:root /etc/skel 2>/dev/null || true
+}
 
 # The clone of the release this machine is actually running. updatems keeps it
 # current, and it is the same tree the installer lays down, so it answers
@@ -175,11 +198,7 @@ provision_has_logged_in() {  # $1 = user
 
 provision_dotfiles() {  # $1 = user  $2 = "fresh" when the account was just created
     local u="$1" fresh="${2:-}" home src ex args=()
-    home="$(provision_home_of "$u")"
-    # Checked in every step that writes under it rather than trusted from the
-    # one that looked first: an empty answer aims this at the filesystem root,
-    # and this step would then mirror a tree over it with deletions on.
-    [[ -n "$home" && -d "$home" && "$home" != "/" ]] || { _pu_warn "no home for $u"; return 1; }
+    home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     if [[ "$fresh" != fresh && "${PROVISION_FORCE_DOTFILES:-0}" != 1 ]] \
        && provision_has_logged_in "$u"; then
         _pu_log "$u has been logged into; leaving its settings alone"
@@ -212,8 +231,7 @@ provision_dotfiles() {  # $1 = user  $2 = "fresh" when the account was just crea
 
     # skel is what the next account is seeded from, so bring it along rather
     # than leaving the next user to land in the same place.
-    if rsync -a --delete "${args[@]}" "$src/" /etc/skel/ >/dev/null 2>&1; then
-        chown -R root:root /etc/skel 2>/dev/null || true
+    if provision_refresh_skel "$src"; then
         _pu_log "/etc/skel refreshed to match"
     else
         _pu_warn "could not refresh /etc/skel"
@@ -259,8 +277,7 @@ provision_groups() {  # $1 = user
 # console script, which is why this cannot be anchored to the shebang.
 provision_venv() {  # $1 = user
     local u="$1" home venv target_ver baked_ver
-    home="$(provision_home_of "$u")"
-    [[ -n "$home" && -d "$home" && "$home" != "/" ]] || { _pu_warn "no home for $u"; return 1; }
+    home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     venv="$home/.local/state/quickshell/.venv"
     [[ -d "$venv" ]] || return 0
 
@@ -295,8 +312,7 @@ provision_venv() {  # $1 = user
 # before it will do anything at all.
 provision_first_run() {  # $1 = user
     local u="$1" home
-    home="$(provision_home_of "$u")"
-    [[ -n "$home" && -d "$home" && "$home" != "/" ]] || { _pu_warn "no home for $u"; return 1; }
+    home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     # Only an account that has never logged in gets the marker. Re-arming it on
     # an established home makes the next login run first-login setup again,
     # which ends by deleting the dotfiles directory it thinks it created, and
@@ -321,8 +337,7 @@ provision_first_run() {  # $1 = user
 # title bars is a far better outcome than an account nobody can log in to.
 provision_plugins() {  # $1 = user
     local u="$1" home want dir so stamp src found unit
-    home="$(provision_home_of "$u")"
-    [[ -n "$home" && -d "$home" && "$home" != "/" ]] || { _pu_warn "no home for $u"; return 1; }
+    home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     dir="$home/.local/share/hyprland/plugins"
     [[ -d "$dir" ]] || { _pu_log "no plugin directory, nothing to check"; return 0; }
 
@@ -383,8 +398,7 @@ provision_plugins() {  # $1 = user
 
 provision_desktop() {  # $1 = user
     local u="$1" home
-    home="$(provision_home_of "$u")"
-    [[ -n "$home" && -d "$home" && "$home" != "/" ]] || { _pu_warn "no home for $u"; return 1; }
+    home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     # Everything below is declared here because this file is sourced into
     # other scripts: a name left global would reach into whatever sourced it.
     local _cjk_ime="${PROVISION_CJK_IME:-}" _kb=""

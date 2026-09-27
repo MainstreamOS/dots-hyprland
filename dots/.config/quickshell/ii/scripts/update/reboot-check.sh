@@ -5,7 +5,9 @@
 #                                       loaded, one per line
 #   reboot-check.sh predict             pending updates, from checkupdates when
 #                                       it is installed, else the last sync
-#   reboot-check.sh plan < names        package names on stdin, one per line
+#   reboot-check.sh plan [F] < names    package names on stdin, one per line,
+#                                       judged against the session list in F
+#                                       when it holds one
 #   reboot-check.sh verdict SINCE [F]   what pacman.log says was installed since
 #                                       SINCE (its own timestamp format), judged
 #                                       against the session list in F
@@ -124,7 +126,8 @@ case "$mode" in
         fi
         ;;
     plan)
-        judge | emit
+        # The list the caller took before anything changed, when it holds one.
+        if [[ -s "${1:-}" ]]; then judge "$1"; else judge; fi | emit
         ;;
     verdict)
         since="${1:-}"; session_file="${2:-}"
@@ -142,7 +145,7 @@ case "$mode" in
         } | emit
         ;;
     *)
-        echo "usage: reboot-check.sh session | predict | plan < names | verdict SINCE [session-file]" >&2
+        echo "usage: reboot-check.sh session | predict | plan [session-file] < names | verdict SINCE [session-file]" >&2
         exit 2
         ;;
 esac

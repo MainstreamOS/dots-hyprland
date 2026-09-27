@@ -30,6 +30,11 @@ DECO_CARRY_DIR=""
 DECO_GESTURES_PENDING=""
 DECO_USER_FILES=("${HOME}/.config/hypr/hyprland/general.lua" "${HOME}/.config/hypr/hyprland/animations/active" "${HOME}/.config/hypr/hyprland.lua")
 
+# Whatever sourced this may have no log_info of its own.
+_deco_say() {
+  if declare -F log_info >/dev/null 2>&1; then log_info "$*"; else echo "$*"; fi
+}
+
 # Where a tree keeps its dotfiles: under dots/, or at the top in the oldest layout.
 _deco_carry_prefix() {
   local rev="$1" p
@@ -149,7 +154,7 @@ deco_carry_finish() {
       local gestures_rc=0
       "${run[@]}" "$gestures" apply --general "${DECO_USER_FILES[0]}" >/dev/null 2>&1 || gestures_rc=$?
       if (( gestures_rc == 0 )); then
-        if declare -F log_info >/dev/null 2>&1; then log_info "Kept your touchpad gestures"; else echo "Kept your touchpad gestures"; fi
+        _deco_say "Kept your touchpad gestures"
       fi
     fi
   fi
@@ -179,7 +184,7 @@ deco_carry_finish() {
   DECO_CARRY_DIR=""
   if [[ -n "$layouts" ]]; then
     layouts="${layouts//$'\n'/, }"
-    if declare -F log_info >/dev/null 2>&1; then log_info "Kept your Layouts settings: ${layouts}"; else echo "Kept your Layouts settings: ${layouts}"; fi
+    _deco_say "Kept your Layouts settings: ${layouts}"
   fi
   [[ -n "$out" ]] || return 0
   mapfile -t labels <<<"$out"
@@ -189,11 +194,7 @@ deco_carry_finish() {
   shown="${labels[0]}"
   for (( i = 1; i < ${#labels[@]} && i < limit; i++ )); do shown+=", ${labels[i]}"; done
   if (( ${#labels[@]} > limit )); then shown+=" and $(( ${#labels[@]} - limit )) more"; fi
-  if declare -F log_info >/dev/null 2>&1; then
-    log_info "Kept your Decorations settings: ${shown}"
-  else
-    echo "Kept your Decorations settings: ${shown}"
-  fi
+  _deco_say "Kept your Decorations settings: ${shown}"
   return 0
 }
 
