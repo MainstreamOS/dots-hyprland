@@ -120,8 +120,12 @@ local function reachableRoom(monitor)
     local width = monitor.width / scale
     local height = monitor.height / scale
 
-    local border = tonumber(hl.get_config("general:border_size")) or 0
-    local titleBar = tonumber(hl.get_config("plugin:hyprbars:bar_height")) or 0
+    -- An option that does not exist, such as the title bar's while its plugin
+    -- is not loaded, comes back as nil and an error message. Passed on whole,
+    -- tonumber would take that message as its base and throw, so only the
+    -- value is kept.
+    local border = tonumber((hl.get_config("general:border_size"))) or 0
+    local titleBar = tonumber((hl.get_config("plugin:hyprbars:bar_height"))) or 0
     local gapsOut = hl.get_config("general:gaps_out") or {}
     local left = monitor.x + (reserved.left or 0) + (gapsOut.left or 0) + border
     local top = monitor.y + (reserved.top or 0) + (gapsOut.top or 0) + border + titleBar
