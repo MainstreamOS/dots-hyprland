@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# Thin gate for session/session.py snapshot. Stable path for Session.qml's
-# synchronous pre-power-action snapshotProc and the Gaming Mode session
-# switch. Routine capture is the watcher's job (watch.sh); this is the
-# authoritative final write on the paths that know a session is ending.
+# Gracefully shuts down all current windows using Hyprland's controls.
+# This allows for the user to save work versus a pkill.
 set -uo pipefail
 
-CONFIG="$HOME/.config/illogical-impulse/config.json"
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/sessions"
-log() { mkdir -p "$LOG_DIR"; printf '[%s] %s\n' "$(date -Iseconds)" "$*" >> "$LOG_DIR/session.log"; }
+# Capture the addresses of all windows that exist right now.
+windows=$(hyprctl clients -j | jq -r '.[].address')
 
-if [[ -f "$CONFIG" ]] && command -v jq >/dev/null 2>&1; then
-    enabled=$(jq -r '.session.restoreEnabled // false' "$CONFIG" 2>/dev/null)
-    if [[ "$enabled" != "true" ]]; then
-        log "snapshot: disabled — skipping"
-        exit 0
-    fi
-fi
+# Gracefully request that every captured window close.
+while read -r address; do
+    [ -n "$address" ] || continue
 
-if ! command -v python3 >/dev/null 2>&1; then
-    log "snapshot: python3 missing — aborting"
-    exit 1
-fi
+    hyprctl dispatch 'hl.dsp.window.close({ window = "address:'"$address"'" })'
+done <<< "$windows"
 
-exec python3 "$DIR/session.py" snapshot "$@"
+# Wait until every captured window has disappeared.
+while read -r address; do
+    [ -n "$address" ] || continue
+
+    while hyprctl clients -j |
+        jq -e --arg address "$address" \
+        'any(.[]; .address == $address)' >/dev/null
+    do
+        sleep 0.1
+    done
+done <<< "$windows"
