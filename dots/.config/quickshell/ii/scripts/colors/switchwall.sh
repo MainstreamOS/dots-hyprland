@@ -725,11 +725,6 @@ switch() {
 
     source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
     mkdir -p "$STATE_DIR"/user/generated
-    generated_colors_tmp=$(mktemp "$STATE_DIR"/user/generated/material_colors.scss.XXXXXX)
-    # The stylesheet is written to one side and moved into place only once it
-    # has been checked, so a run that ends anywhere in between leaves the
-    # half-written copy behind to accumulate.
-    trap 'rm -f "$generated_colors_tmp"' EXIT INT TERM HUP
     # These two read the same wallpaper and neither reads anything the other
     # writes, so running one after the other only made the wait longer.
     # The colour the editor theme is set from stays matugen's alone: the two
@@ -754,11 +749,20 @@ switch() {
         scss_cache_key="${scss_cache_key:0:32}"
         [[ -n "$scss_cache_key" ]] && scss_cache_file="$CACHE_DIR/user/generated/palette-scss/$scss_cache_key.scss"
     fi
+    # Nothing is written for the stylesheet until it is ready to be checked and
+    # moved into place. matugen is most of the wait, and a run can be killed
+    # outright during it (the Quick settings page is rebuilt as soon as the new
+    # colors land, and takes the run it started down with it), which leaves no
+    # chance to clean up a file held across it.
+    generated_colors_fd=""
+    generated_colors_pid=""
     if [[ -n "$scss_cache_file" && -s "$scss_cache_file" ]]; then
-        cp -f "$scss_cache_file" "$generated_colors_tmp" 2>/dev/null
-        generated_colors_pid=""
-    else
-        python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" > "$generated_colors_tmp" &
+        # Held open from here, so another run pruning the store before this
+        # one reads it cannot take it away.
+        { exec {generated_colors_fd}<"$scss_cache_file"; } 2>/dev/null
+    fi
+    if [[ -z "$generated_colors_fd" ]]; then
+        exec {generated_colors_fd}< <(python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" </dev/null)
         generated_colors_pid=$!
     fi
 
@@ -781,6 +785,11 @@ switch() {
             && printf '%s\n' "$palette_img" > "$STATE_DIR/user/generated/wallpaper/path.txt" 2>/dev/null
     fi
 
+    # Read in full first, so the file below exists only for as long as writing,
+    # checking and moving it takes, however long the generator runs past
+    # matugen. The x keeps the trailing newlines a command substitution drops.
+    generated_colors="$(cat <&"$generated_colors_fd"; printf x)"
+    exec {generated_colors_fd}<&-
     generated_colors_status=0
     [[ -n "$generated_colors_pid" ]] && { wait "$generated_colors_pid"; generated_colors_status=$?; }
     # A failed matugen leaves the previous colors.json in place, and every check
@@ -790,12 +799,19 @@ switch() {
         # A stored colour matugen won't take is dropped, so the next run reads
         # the picture again instead of being handed the same refusal.
         [[ -n "${palette_hex:-}" && -n "${palette_key:-}" ]] && cache_drop "$SRCCOLOR_CACHE" "$palette_key"
-        rm -f "$generated_colors_tmp"
         echo "[switchwall] matugen failed (exit $matugen_status); keeping the previous colors." >&2
         deactivate
         reload_for_colormode
         return 1
     fi
+    # A run killed outright leaves its copy behind and nothing else would ever
+    # remove it. Only copies old enough that no run still going could own one.
+    find "$STATE_DIR"/user/generated -maxdepth 1 -type f -name 'material_colors.scss.??????' -mmin +10 -delete 2>/dev/null
+    generated_colors_tmp=$(mktemp "$STATE_DIR"/user/generated/material_colors.scss.XXXXXX)
+    # Moved into place only once it has been checked, so a run that ends in
+    # between would otherwise leave the half-written copy behind.
+    trap 'rm -f "$generated_colors_tmp"' EXIT INT TERM HUP
+    printf '%s' "${generated_colors%x}" > "$generated_colors_tmp"
     if [[ $generated_colors_status -eq 0 ]] \
         && grep -Eq '^\$onBackground: #[[:xdigit:]]{6};$' "$generated_colors_tmp"; then
         # Kept only once it has passed the same check the live copy has to pass,
@@ -809,6 +825,9 @@ switch() {
                 | tail -n "+$((PALETTE_CACHE_KEEP + 1))" | xargs -r rm -f 2>/dev/null
         fi
         mv "$generated_colors_tmp" "$STATE_DIR"/user/generated/material_colors.scss
+        # Nothing is left to clean up, so a signal from here on ends the run
+        # instead of being absorbed by the trap.
+        trap - EXIT INT TERM HUP
     else
         rm -f "$generated_colors_tmp"
         echo "[switchwall] Failed to generate material_colors.scss; keeping the previous colors." >&2
