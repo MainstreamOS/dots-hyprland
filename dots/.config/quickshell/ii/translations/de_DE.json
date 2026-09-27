@@ -2351,5 +2351,10 @@
   "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.": "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.",
   "Use Main Wallpaper": "Use Main Wallpaper",
   "This screen only": "Nur dieser Bildschirm",
-  "Only this screen changes. Your colors stay with the main wallpaper.": "Nur dieser Bildschirm ändert sich. Deine Farben bleiben beim Haupthintergrundbild."
+  "Only this screen changes. Your colors stay with the main wallpaper.": "Nur dieser Bildschirm ändert sich. Deine Farben bleiben beim Haupthintergrundbild.",
+  "Network speed": "Netzwerkgeschwindigkeit",
+  "Signal:": "Signal:",
+  "IP address:": "IP-Adresse:",
+  "Download:": "Download:",
+  "Upload:": "Upload:"
 }

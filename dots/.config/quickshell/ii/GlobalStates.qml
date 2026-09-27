@@ -44,6 +44,10 @@ Singleton {
     property bool crosshairOpen: false
     property bool sidebarLeftOpen: false
     property bool sidebarRightOpen: false
+    // Asks the right sidebar to open on its Wi-Fi list. A flag the sidebar
+    // takes down rather than a signal: kept unloaded, its contents only exist
+    // once it opens, and a signal sent before then would be lost.
+    property bool sidebarRightWifiRequested: false
     property bool mediaControlsOpen: false
     property bool mediaTransferActive: false
     // The bar's media widget, set by whichever one opens the popup, so the
@@ -199,6 +203,17 @@ Singleton {
             GlobalStates.mediaReceiveActive = true;
             GlobalStates.mediaControlsOpen = true;
         }
+    }
+
+    // The bar's network widget. It puts an open sidebar away, the way the
+    // bar's other ways into the sidebar do, rather than reaching past it.
+    function toggleWifiList() {
+        if (GlobalStates.sidebarRightOpen) {
+            GlobalStates.sidebarRightOpen = false;
+            return;
+        }
+        GlobalStates.sidebarRightOpen = true;
+        GlobalStates.sidebarRightWifiRequested = true;
     }
 
     onMediaControlsOpenChanged: {

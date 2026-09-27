@@ -27,6 +27,7 @@ Item { // Bar content region
         case "activeWindow": return comp_activeWindow;
         case "activeWindowPill": return comp_activeWindowPill;
         case "resources": return comp_resources;
+        case "network": return comp_network;
         case "media": return comp_media;
         case "workspaces": return comp_workspaces;
         case "clock": return comp_clock;
@@ -55,6 +56,7 @@ Item { // Bar content region
         case "activeWindow": return root.useShortenedForm === 0;
         case "activeWindowPill": return root.useShortenedForm === 0;
         case "media": return root.useShortenedForm < 2;
+        case "network": return root.useShortenedForm < 2;
         case "utilButtons": return Config.options.bar.verbose && root.useShortenedForm === 0;
         case "battery": return root.useShortenedForm < 2 && Battery.available;
         case "volume": return root.useShortenedForm === 0;
@@ -370,6 +372,11 @@ Item { // Bar content region
             alwaysShowAllResources: root.useShortenedForm === 2
                 || !(parent?.yieldsToGroupMate ?? false)
         }
+    }
+
+    Component {
+        id: comp_network
+        NetworkSpeed {}
     }
 
     Component {

@@ -17,6 +17,7 @@ Item {
         { id: "activeWindow",  name: Translation.tr("Window title"),      icon: "select_window" },
         { id: "activeWindowPill", name: Translation.tr("Window title (pill)"), icon: "select_window" },
         { id: "resources",     name: Translation.tr("System resources"),  icon: "monitor_heart" },
+        { id: "network",       name: Translation.tr("Network speed"),     icon: "network_check" },
         { id: "media",         name: Translation.tr("Media"),             icon: "music_note" },
         { id: "workspaces",    name: Translation.tr("Workspaces"),        icon: "workspaces" },
         { id: "clock",         name: Translation.tr("Clock & date"),      icon: "schedule" },
@@ -147,10 +148,14 @@ Item {
         const placed = root.placedIds();
         return root.moduleCatalog.filter(m => placed.indexOf(m.id) === -1 && !root.widgetHiddenHere(m.id));
     }
+    // A widget goes where the default layout keeps it, so one added to a bar
+    // saved before it existed lands in the same place as on a new install.
     function addWidget(id) {
-        let g = root.groupsOf("center");
+        const section = root.sectionIds.find(s => (Config.defaultBarLayout[s] ?? [])
+            .some(group => (group.widgets ?? []).some(w => w.id === id))) ?? "center";
+        let g = root.groupsOf(section);
         g.push({ widgets: [{ id: id, enabled: true }] });
-        root.commit("center", g);
+        root.commit(section, g);
     }
     function resetDefaults() {
         root.sectionIds.forEach(s => root.commit(s, JSON.parse(JSON.stringify(Config.defaultBarLayout[s]))));

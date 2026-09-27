@@ -26,6 +26,7 @@ Singleton {
     readonly property var defaultBarLayout: ({
         "left": [
             { "widgets": [ {"id": "resources", "enabled": false} ] },
+            { "widgets": [ {"id": "network", "enabled": false} ] },
             { "widgets": [ {"id": "workspaces", "enabled": true} ] },
             { "widgets": [ {"id": "tray", "enabled": true} ] },
             { "widgets": [ {"id": "activeWindowPill", "enabled": false}, {"id": "activeWindow", "enabled": false} ] },
@@ -766,8 +767,9 @@ Singleton {
                 // a pill (combined); separate groups are separate pills. In the
                 // center, the middle group is kept screen-centered. Recognized
                 // ids: sidebarButton, activeWindow, activeWindowPill,
-                // resources, media, workspaces, clock, utilButtons, battery,
-                // indicators, volume, tray, timers, weather, releaseUpdates.
+                // resources, network, media, workspaces, clock, utilButtons,
+                // battery, indicators, volume, tray, timers, weather,
+                // releaseUpdates.
                 property JsonObject layout: JsonObject {
                     property list<var> left: root.defaultBarLayout.left
                     property list<var> center: root.defaultBarLayout.center

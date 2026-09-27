@@ -113,6 +113,7 @@ Item { // Bar content region
         switch (name) {
         case "sidebarButton": return comp_sidebarButton;
         case "resources": return comp_resources;
+        case "network": return comp_network;
         case "media": return comp_media;
         case "workspaces": return comp_workspaces;
         case "clock": return comp_clock;
@@ -132,7 +133,7 @@ Item { // Bar content region
     // and sits centred — stretching them makes a widget that draws its own
     // background, such as the status indicators, look far wider than it is.
     function moduleFillWidth(name) {
-        return name === "resources" || name === "media"
+        return name === "resources" || name === "network" || name === "media"
             || name === "clock" || name === "battery" || name === "tray";
     }
 
@@ -249,6 +250,14 @@ Item { // Bar content region
     Component {
         id: comp_resources
         Resources {
+            Layout.fillWidth: true
+            Layout.fillHeight: false
+        }
+    }
+
+    Component {
+        id: comp_network
+        NetworkSpeed {
             Layout.fillWidth: true
             Layout.fillHeight: false
         }
