@@ -205,17 +205,61 @@ cmd_rename() {  # $1 = user  $2 = new full name
     log "full name updated for $u"
 }
 
+# Folder sharing keeps per-account state where userdel does not look: the
+# Samba password, the usershare files the account wrote, its entry on the
+# usershare directory's ACL and the Sharing page's marker. Left behind, an
+# account later given the same name would sign in with the old password, and
+# one given the same uid would own the old shares, a kept home among them.
+SAMBA_CONF=/etc/samba/smb.conf
+USERSHARE_DIR=/var/lib/samba/usershares
+SHARING_USERS_DIR=/var/lib/mainstream/sharing/users
+
+# Runs after userdel, so a delete that fails (the account is still logged in)
+# leaves sharing as it was. Nothing here is fatal: the account is already gone.
+_sharing_cleanup() {  # $1 = user  $2 = the uid it had
+    local u="$1" uid="$2" out acl
+    # Without a config there are no Samba accounts to remove, and pdbedit run
+    # as root would create an empty password database just to look.
+    if [[ -f "$SAMBA_CONF" ]] && command -v pdbedit >/dev/null 2>&1; then
+        # pdbedit warns that the Unix account is gone and removes the entry
+        # anyway. An account that never set sharing up has none to remove.
+        if out="$(pdbedit -s "$SAMBA_CONF" -x -u "$u" 2>&1)"; then
+            log "removed the sharing password for $u"
+        elif [[ "$out" != *"does not exist in the passdb"* ]]; then
+            log "WARN: could not remove the sharing password for $u: ${out##*$'\n'}"
+        fi
+    fi
+    if [[ -d "$USERSHARE_DIR" && ! -L "$USERSHARE_DIR" ]]; then
+        # Everyone in sambashare can write here, so a file's name says nothing
+        # about whose share it is: only its owner does. A link could point
+        # anywhere, and nothing below the top level is a share.
+        find "$USERSHARE_DIR" -mindepth 1 -maxdepth 1 -type f -uid "$uid" -delete \
+            || log "WARN: could not remove every folder $u shared"
+        # By number, since the name stopped resolving when userdel ran. Read
+        # whole rather than piped into grep -q, which pipefail can turn into a
+        # miss when getfacl is cut off mid-write.
+        acl="$(getfacl -cnp "$USERSHARE_DIR" 2>/dev/null || true)"
+        if grep -q "^user:$uid:" <<<"$acl"; then
+            setfacl -x "u:$uid" "$USERSHARE_DIR" \
+                || log "WARN: could not take $u off the usershare directory's access list"
+        fi
+    fi
+    rm -f -- "$SHARING_USERS_DIR/$u" || log "WARN: could not remove the sharing marker for $u"
+}
+
 cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
-    local u="${1:-}" mode="${2:-keep-home}"
+    local u="${1:-}" mode="${2:-keep-home}" uid
     require_human_user "$u"
     [[ "$u" == "$(id -un "${PKEXEC_UID:-0}" 2>/dev/null)" ]] && die "refusing to delete the account asking"
     last_admin "$u" && die "$u is the only administrator; promote someone else first"
+    uid="$(id -u "$u")"
     case "$mode" in
         remove-home) userdel -r "$u" || die "could not delete $u" ;;
         keep-home)   userdel "$u"    || die "could not delete $u" ;;
         *) die "expected keep-home or remove-home, got: $mode" ;;
     esac
     log "$u deleted ($mode)"
+    _sharing_cleanup "$u" "$uid"
 }
 
 cmd_set_avatar() {  # $1 = user  $2 = source image

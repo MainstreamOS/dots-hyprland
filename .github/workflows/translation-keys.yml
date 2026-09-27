@@ -7,12 +7,16 @@ on:
       - "sdata/lib/tr-keys.py"
       - "sdata/update/**"
       - "dots/.config/quickshell/ii/translations/en_US.json"
+      - "dots/.config/quickshell/ii/translations/tools/translation-manager.py"
+      - "dots/.local/share/nautilus-python/extensions/**"
   pull_request:
     paths:
       - "sdata/lib/tr.sh"
       - "sdata/lib/tr-keys.py"
       - "sdata/update/**"
       - "dots/.config/quickshell/ii/translations/en_US.json"
+      - "dots/.config/quickshell/ii/translations/tools/translation-manager.py"
+      - "dots/.local/share/nautilus-python/extensions/**"
 
 jobs:
   keys:
@@ -25,3 +29,9 @@ jobs:
             sdata/update/mainstream-update-helper \
             sdata/update/updatems \
             sdata/update/updatems-system
+      - name: Every string the Files extension shows has its key in en_US.json
+        run: |
+          python3 dots/.config/quickshell/ii/translations/tools/translation-manager.py \
+            --translations-dir dots/.config/quickshell/ii/translations \
+            --source-dir dots/.config/quickshell \
+            --check-extensions

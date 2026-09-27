@@ -112,3 +112,6 @@ xdg-mime default org.gnome.Nautilus.desktop inode/directory
 xdg-user-dirs-update
 
 install_dir "dots/.local/share/icons" "${XDG_DATA_HOME}"/icons
+# The Files items for sharing a folder on the network. Copied without
+# deletions, since extensions a user added themselves live in the same folder.
+install_dir "dots/.local/share/nautilus-python" "${XDG_DATA_HOME}"/nautilus-python

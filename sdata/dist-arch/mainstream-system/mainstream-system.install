@@ -124,19 +124,40 @@ _mdns_arrived() {
     fi
 }
 
+# Run on the install or update that brings folder sharing, and not after it.
+#
+# Settings > Sharing starts Samba from a NetworkManager dispatcher hook, and
+# NetworkManager can only start its dispatcher when that is enabled. The
+# installer enables it, but an Arch install that ran ./setup may not have.
+# Through the preset, so an administrator's own preset still decides, and
+# only once, so a machine whose owner turns the dispatcher off later keeps it
+# off. A machine that does not use NetworkManager is left as it is.
+_sharing_arrived() {
+    if systemctl -q is-enabled NetworkManager.service 2>/dev/null; then
+        systemctl preset NetworkManager-dispatcher.service 2>/dev/null || true
+    fi
+}
+
 post_install() {
     _migrate
     _mdns_arrived
+    _sharing_arrived
 }
 
 post_upgrade() {
     _migrate
     if [ "$(vercmp "$2" 1.0-14)" -lt 0 ]; then
         _mdns_arrived
+        _sharing_arrived
     fi
 }
 
 post_remove() {
     # Without the fix installed, SDDM goes back to its stock login-screen command.
     rm -f /etc/sddm.conf.d/zz-mainstream-vmwgfx.conf
+    # The home zone Settings > Sharing wrote names this package's ipsets, and
+    # firewalld would fail to load it once they are gone.
+    if grep -qF 'Written by Settings > Sharing' /etc/firewalld/zones/MainstreamHome.xml 2>/dev/null; then
+        rm -f /etc/firewalld/zones/MainstreamHome.xml
+    fi
 }

@@ -80,6 +80,7 @@ Parameter description:
 - `--language`, `-l`: Specify the language code to process
 - `--extract-only`, `-e`: Only extract translatable texts
 - `--show-temp`: Show the content of the temporary extraction file
+- `--check-extensions`: Only check that the Files extension's strings are keys in `en_US.json` (or `--language`), exiting nonzero when one is missing
 
 ### Translation Cleaner (`translation-cleaner.py`)
 
@@ -164,6 +165,16 @@ Translation.tr("Say \"Hello\"")
 // With parameter placeholders
 Translation.tr("Hello, %1!").arg(name)
 ```
+
+The Files extension in the dots tree's `.local/share/nautilus-python/extensions/` reads the same translation files, so its strings count as used too: the text of `tr("...")` calls, and the strings held in module-level names ending in `_TEXT`, alone or as a dict's values, which reach `tr()` through a variable. On an installed shell only `mainstream-share.py` is read, from `~/.local/share/nautilus-python/extensions/`.
+
+```python
+tr("Share on Network...")
+TRY_AGAIN_TEXT = "Try again from the Sharing page in Settings."
+ERROR_TEXT = {"not-owner": "You can only share folders that belong to you."}
+```
+
+`./translation-manager.py --check-extensions` lists those strings that have no key in `en_US.json` and exits nonzero, without writing anything.
 
 ## Example Output
 

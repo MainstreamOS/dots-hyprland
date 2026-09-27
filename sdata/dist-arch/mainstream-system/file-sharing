@@ -1,0 +1,989 @@
+#!/usr/bin/env bash
+# file-sharing: the privileged half of Settings > Sharing
+# (modules/settings/SharingConfig.qml). Installed at
+# /usr/lib/mainstream/file-sharing and run only through pkexec, which matches
+# the polkit action org.mainstreamos.file-sharing.
+#
+#   enable <connection uuid>        first-time setup; sharing password on stdin
+#   account                         set up the calling account; password on stdin
+#   password                        change the caller's sharing password; on stdin
+#   trust <connection uuid> on|off  share, or stop sharing, on one network
+#   disable                         stop sharing; config, shares and passwords stay
+#   rename <name>                   rename the computer
+#
+# The account acted on is always the one pkexec names in PKEXEC_UID, never an
+# argument, and a password only ever arrives on stdin, so neither a command
+# line nor the log can hold one.
+#
+# Exit codes, which the page turns into its messages:
+#   1  anything else, with a one-line reason on stderr
+#   2  bad usage or argument
+#   3  /etc/samba/smb.conf is somebody's own, so it was left alone
+#   4  samba or wsdd could not be installed
+#   5  the connection is missing or cannot be trusted
+#   6  the Samba account step failed
+
+# No set -e: every step maps its own failure to one of the codes above, and a
+# stray status from a tool (nmcli alone uses 1 to 10) must never reach the
+# page looking like one of them.
+set -uo pipefail
+umask 022
+PATH=/usr/bin
+export PATH LC_ALL=C
+
+SAMBA_ETC=/etc/samba
+SMB_CONF=$SAMBA_ETC/smb.conf
+TEMPLATE=/usr/share/mainstream/samba/smb.conf
+MARKER='# Managed by Mainstream Settings > Sharing'
+SAMBA_LIB=/var/lib/samba
+USERSHARE_DIR=$SAMBA_LIB/usershares
+MAINSTREAM_LIB=/var/lib/mainstream
+STATE_DIR=$MAINSTREAM_LIB/sharing
+USERS_DIR=$STATE_DIR/users
+TRUSTED_DIR=$STATE_DIR/trusted
+STATE_FILE=$STATE_DIR/state
+TMPFILES_CONF=/usr/lib/tmpfiles.d/mainstream-sharing.conf
+SYSUSERS_CONF=/usr/lib/sysusers.d/mainstream-sharing.conf
+ZONE=MainstreamHome
+ZONES_LIB=/usr/lib/firewalld/zones
+ZONES_ETC=/etc/firewalld/zones
+GROUP=sambashare
+PACKAGES=(samba wsdd)
+SERVICES=(smb.service wsdd.service)
+WSDD_ENV=/run/mainstream/sharing/wsdd.env
+IPSEC_GUARD=/usr/lib/mainstream/sharing-ipsec.nft
+IPSEC_TABLE=mainstream_sharing
+INSTALL_UNIT=mainstream-file-sharing-install.service
+PACMAN_LOCK=/var/lib/pacman/db.lck
+LOCK=/run/lock/mainstream-file-sharing.lock
+LOG=/var/log/mainstream/file-sharing.log
+
+CALLER=""
+CONN=""
+PASSWORD=""
+
+# Messages can quote an argument that failed validation, so control
+# characters are masked: one message stays one line.
+log() {
+    local msg=$*
+    printf '%s %s\n' "$(date '+%F %T')" "${msg//[[:cntrl:]]/?}" >>"$LOG" 2>/dev/null || true
+}
+
+# The page reads the exit code and this one line; the log keeps the rest.
+die() {  # $1 = exit code, then the reason
+    local code=$1 msg
+    shift
+    msg=$*
+    log "failed ($code): $msg"
+    printf 'file-sharing: %s\n' "${msg//[[:cntrl:]]/?}" >&2
+    exit "$code"
+}
+
+valid_uuid()     { [[ $1 =~ ^[0-9a-fA-F-]{36}$ ]]; }
+valid_hostname() { [[ $1 =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
+# useradd's rule, the same one user-manager checks.
+valid_user()     { [[ $1 =~ ^[a-z_][a-z0-9_-]{0,30}\$?$ ]]; }
+
+# smbpasswd reads one password per line, so a line break inside one would
+# silently set a different password; other control characters cannot be typed
+# on the computer that signs in. Letters beyond ASCII pass as UTF-8.
+valid_password() {
+    (( ${#1} >= 8 && ${#1} <= 128 )) && [[ $1 != *[[:cntrl:]]* ]]
+}
+
+refuse_symlinks() {  # $@ = paths that must be real files or directories
+    local p
+    for p in "$@"; do
+        [[ -L $p ]] && die 1 "refusing to work through the symlink $p"
+    done
+    return 0
+}
+
+# Sets CALLER to the account pkexec ran this for. With "person", the verb acts
+# on that account, which then has to be a login account: root and service
+# accounts have no business holding a Samba password.
+resolve_caller() {  # $1 = "person" or nothing
+    local uid=${PKEXEC_UID:-} entry name
+    [[ $uid =~ ^[0-9]{1,10}$ ]] || die 2 "run this through pkexec, which names the caller"
+    uid=$((10#$uid))
+    entry=$(getent passwd "$uid") || die 2 "no account has the uid $uid"
+    name=${entry%%:*}
+    valid_user "$name" || die 2 "not a usable account name: $name"
+    if [[ ${1:-} == person ]] && (( uid < 1000 || uid >= 65534 )); then
+        die 2 "sharing is set up for login accounts only"
+    fi
+    CALLER=$name
+}
+
+# Sets CONN to the connection in the form NetworkManager lists it.
+require_connection() {  # $1 = uuid
+    valid_uuid "$1" || die 2 "not a connection id: $1"
+    CONN=$(nmcli -g UUID connection show 2>/dev/null | grep -ixF -m1 -- "$1") || CONN=""
+    [[ -n $CONN ]] || die 5 "no saved network has the id $1"
+}
+
+# Only a network that keeps strangers out can be a home network: wired, or
+# Wi-Fi that takes a password to join. Open and OWE Wi-Fi let anyone nearby
+# on (OWE encrypts, but asks nobody for anything), `none` is WEP or nothing,
+# and a hotspot or ad-hoc profile has this computer serving the network
+# rather than joining one. The profile also has to belong to the whole
+# system: NetworkManager lets an account change a profile kept for it alone
+# without a password, which would let it point a trusted profile at any
+# network, and only an administrator can change a system one.
+eligible() {  # $1 = uuid
+    local type mode key perms
+    perms=$(nmcli -g connection.permissions connection show uuid "$1" 2>/dev/null) || return 1
+    [[ -z $perms ]] || return 1
+    type=$(nmcli -g connection.type connection show uuid "$1" 2>/dev/null) || return 1
+    case $type in
+        802-3-ethernet) return 0 ;;
+        802-11-wireless) ;;
+        *) return 1 ;;
+    esac
+    mode=$(nmcli -g 802-11-wireless.mode connection show uuid "$1" 2>/dev/null) || return 1
+    case $mode in ''|infrastructure) ;; *) return 1 ;; esac
+    key=$(nmcli -g 802-11-wireless-security.key-mgmt connection show uuid "$1" 2>/dev/null) || key=""
+    case $key in ''|none|owe) return 1 ;; esac
+    return 0
+}
+
+zone_of() {  # $1 = uuid
+    nmcli -g connection.zone connection show uuid "$1" 2>/dev/null
+}
+
+# Trusting moves a network into MainstreamHome, and taking the trust back puts
+# it in the default zone. A zone somebody picked for the network by hand would
+# be lost on the way, and it may well be a stricter one than either, so such a
+# network is left alone.
+require_trustable() {  # $1 = uuid
+    local zone
+    eligible "$1" || die 5 "$1 is not a network sharing can be turned on for"
+    zone=$(zone_of "$1") || die 5 "could not read the firewall zone of $1"
+    [[ -z $zone || $zone == "$ZONE" ]] || die 5 "$1 has its own firewall zone ($zone), so it was left alone"
+}
+
+# NetworkManager lets anyone in an active session put a profile of their own
+# in any zone, with no password, so the zone alone does not make a network a
+# home network. It counts only while this helper's record of the trust is
+# there, which takes an administrator's password to write, the profile is
+# still in MainstreamHome, and it still passes the checks trust made.
+is_home() {  # $1 = uuid
+    local rec
+    valid_uuid "$1" || return 1
+    rec=$TRUSTED_DIR/${1,,}
+    [[ -f $rec && ! -L $rec ]] || return 1
+    [[ $(zone_of "$1") == "$ZONE" ]] || return 1
+    eligible "$1"
+}
+
+# The interfaces a connection is up on, one per line; nothing when it is saved
+# but not connected.
+connection_devices() {  # $1 = uuid
+    nmcli -g GENERAL.DEVICES connection show uuid "$1" 2>/dev/null | tr ',' '\n' | sed '/^$/d'
+}
+
+home_active() {
+    local u uuids=()
+    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
+    for u in "${uuids[@]}"; do
+        is_home "$u" && return 0
+    done
+    return 1
+}
+
+# NetworkManager owns the firewalld binding of every interface it manages,
+# and a zone change on an active connection takes effect at once
+# (nm-settings-nmcli(5)), so the profile is changed through nmcli and nothing
+# else. `nmcli device reapply` would also push any other edit waiting on the
+# profile, and a bare `firewall-cmd --change-interface` moves the interface
+# behind NetworkManager's back. firewalld is only asked to confirm. Should it
+# still disagree once NetworkManager's asynchronous call has had time, the
+# runtime binding is set to what the profile now says, so NetworkManager
+# registering the interface again later lands in the same place.
+set_zone() {  # $1 = uuid, $2 = zone, or '' for the default one
+    local devs=() dev now="" i
+    nmcli connection modify uuid "$1" connection.zone "$2" >>"$LOG" 2>&1 \
+        || die 1 "NetworkManager would not change the zone of $1"
+    log "zone of $1 set to '${2:-default}'"
+    mapfile -t devs < <(connection_devices "$1")
+    if (( ${#devs[@]} == 0 )); then
+        log "$1 is not up on any device; its zone applies when it connects"
+        return 0
+    fi
+    firewall_running || return 0
+    for dev in "${devs[@]}"; do
+        for (( i = 0; i < 10; i++ )); do
+            now=$(firewall-cmd --get-zone-of-interface="$dev" 2>/dev/null) || now=""
+            if [[ -n $2 && $now == "$2" ]] || [[ -z $2 && $now != "$ZONE" ]]; then
+                continue 2
+            fi
+            sleep 0.3
+        done
+        log "firewalld still has $dev in '${now:-no zone}'; setting it directly"
+        if [[ -n $2 ]]; then
+            firewall-cmd --zone="$2" --change-interface="$dev" >>"$LOG" 2>&1
+        else
+            firewall-cmd --zone="$ZONE" --remove-interface="$dev" >>"$LOG" 2>&1
+        fi || die 1 "the firewall would not move $dev"
+    done
+    return 0
+}
+
+has_zone() {
+    firewall-cmd --get-zones 2>/dev/null | tr ' ' '\n' | grep -qxF -- "$ZONE"
+}
+
+# firewall-cmd keeps retrying for about ten seconds when firewalld is not on
+# the bus at all, so systemd is asked first.
+firewall_running() {
+    case $(systemctl show -P ActiveState firewalld.service 2>/dev/null) in
+        active|reloading) ;;
+        *) return 1 ;;
+    esac
+    firewall-cmd --state >/dev/null 2>&1
+}
+
+# The zone a network is in when nobody picked one for it. Only a name made of
+# the characters firewalld allows in a zone file's name becomes a path.
+default_zone() {
+    local z
+    if firewall_running; then
+        z=$(firewall-cmd --get-default-zone 2>/dev/null) || return 1
+    else
+        z=$(firewall-offline-cmd --get-default-zone 2>/dev/null | tail -n1) || return 1
+    fi
+    [[ $z =~ ^[A-Za-z0-9_-]{1,32}$ ]] || return 1
+    printf '%s\n' "$z"
+}
+
+check_firewall_config() {
+    if firewall_running; then
+        firewall-cmd --check-config >>"$LOG" 2>&1
+    else
+        firewall-offline-cmd --check-config >>"$LOG" 2>&1
+    fi
+}
+
+# Writes to $4 the default zone $1 (named $2) as MainstreamHome: the short
+# name changed, any interface or source bound to it left behind so nothing
+# lands in both zones, and the SMB rules of the packaged zone added. Exits 10
+# after writing, and 0 without writing when $3, the zone file firewalld uses
+# now, already holds the same. Prints one line for the log.
+build_home_zone() {  # $1 = base zone file, $2 = its name, $3 = current MainstreamHome file, $4 = output
+    python3 -I - "$1" "$2" "$ZONES_LIB/$ZONE.xml" "$3" "$4" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+base_file, base_name, packaged_file, current_file, out_file = sys.argv[1:6]
+
+
+def normalized(el):
+    copy = ET.Element(el.tag, dict(sorted(el.attrib.items())))
+    copy.text = (el.text or "").strip() or None
+    for child in el:
+        copy.append(normalized(child))
+    return copy
+
+
+def key(el):
+    return ET.tostring(normalized(el), encoding="unicode")
+
+
+# firewalld ignores the order of a zone's elements.
+def contents(zone):
+    return sorted(zone.attrib.items()), sorted(key(c) for c in zone)
+
+
+def load(path):
+    try:
+        zone = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as e:
+        sys.exit(f"{path}: {e}")
+    if zone.tag != "zone":
+        sys.exit(f"{path} is not a zone")
+    return zone
+
+
+base = load(base_file)
+packaged = load(packaged_file)
+rules = [
+    r for r in packaged
+    if r.tag == "rule"
+    and any((s.get("ipset") or "").startswith("mainstream-lan") for s in r.iter("source"))
+]
+if not rules:
+    sys.exit(f"{packaged_file} has no sharing rules")
+
+home = ET.Element("zone", base.attrib)
+short = ET.SubElement(home, "short")
+short.text = "Mainstream Home"
+for child in base:
+    if child.tag not in ("short", "interface", "source"):
+        home.append(normalized(child))
+present = {key(c) for c in home}
+home.extend(normalized(r) for r in rules if key(r) not in present)
+
+note = "the same as" if contents(home) == contents(packaged) else "different from"
+print(f"{home.find('short').text} built from {base_name} is {note} the packaged one")
+try:
+    current = contents(ET.parse(current_file).getroot())
+except (OSError, ET.ParseError):
+    current = None
+if contents(home) == current:
+    sys.exit(0)
+home.insert(0, ET.Comment(
+    " Written by Settings > Sharing: the default zone plus SMB (445/tcp) from local"
+    " addresses. While this note is here, it is written again whenever sharing is"
+    " turned on for a network, so change the default zone rather than this one,"
+    " and narrow who may connect in the mainstream-lan4 and mainstream-lan6 ipsets."
+    " Once firewalld saves a change to this zone, the note is gone and Settings"
+    " leaves the file alone. "
+))
+ET.indent(home, space="  ")
+ET.ElementTree(home).write(out_file, encoding="utf-8", xml_declaration=True)
+sys.exit(10)
+PY
+}
+
+# Trusting a network must change only sharing on it, so MainstreamHome has to
+# be whatever this computer allows on any other network, plus SMB. The
+# packaged zone is MainstreamWorkstation as shipped, which is not what the
+# default zone holds once somebody edits it in firewall-config or picks
+# another default. So the zone is built from the default zone each time
+# sharing is turned on for a network, and goes into /etc/firewalld/zones,
+# which firewalld prefers to the packaged copy, when it differs from the one
+# in use. A later change to the default zone reaches MainstreamHome the next
+# time that happens. A copy in /etc without the note this writes is one an
+# administrator changed, since firewalld saves zones without comments, and
+# rebuilding it would undo whatever they narrowed. Returns 0 when it wrote a
+# new zone.
+write_home_zone() {
+    local base src current out tmp prev="" rc=0
+    local etc=$ZONES_ETC/$ZONE.xml lib=$ZONES_LIB/$ZONE.xml
+    if [[ ! -f $lib ]]; then
+        log "$lib is missing; leaving $ZONE as it is"
+        return 1
+    fi
+    if [[ -f $etc ]] && ! grep -qF 'Written by Settings > Sharing' "$etc"; then
+        log "$etc was changed outside Settings > Sharing; leaving $ZONE as it is"
+        return 1
+    fi
+    if ! base=$(default_zone); then
+        log "could not read the default firewall zone; leaving $ZONE as it is"
+        return 1
+    fi
+    if [[ $base == "$ZONE" ]]; then
+        log "$ZONE is the default zone itself; leaving it as it is"
+        return 1
+    fi
+    if [[ -f $ZONES_ETC/$base.xml ]]; then
+        src=$ZONES_ETC/$base.xml
+    elif [[ -f $ZONES_LIB/$base.xml ]]; then
+        src=$ZONES_LIB/$base.xml
+    else
+        log "no file holds the $base zone; leaving $ZONE as it is"
+        return 1
+    fi
+    current=$lib
+    [[ -f $etc ]] && current=$etc
+    mkdir -p "$ZONES_ETC" && tmp=$(mktemp "$ZONES_ETC/.$ZONE.xml.XXXXXX") || {
+        log "could not write to $ZONES_ETC; leaving $ZONE as it is"
+        return 1
+    }
+    out=$(build_home_zone "$src" "$base" "$current" "$tmp" 2>&1) || rc=$?
+    [[ -z $out ]] || log "${out//$'\n'/ | }"
+    if (( rc != 10 )); then
+        rm -f "$tmp"
+        (( rc == 0 )) || log "could not build $ZONE from $src; leaving it as it is"
+        return 1
+    fi
+    if [[ -f $etc ]]; then
+        prev=$(mktemp "$ZONES_ETC/.$ZONE.xml.prev.XXXXXX") || prev=""
+        [[ -z $prev ]] || cp -p "$etc" "$prev" || { rm -f "$prev"; prev=""; }
+    fi
+    if ! { chmod 0644 "$tmp" && mv -f "$tmp" "$etc"; }; then
+        rm -f "$tmp" "$prev"
+        log "could not write $etc; leaving $ZONE as it is"
+        return 1
+    fi
+    # firewalld skips a zone it cannot load, and every network in it would
+    # lose its firewall zone at the next reload.
+    if ! check_firewall_config; then
+        if [[ -n $prev ]]; then mv -f "$prev" "$etc"; else rm -f "$etc"; fi
+        log "the firewall rejected the $ZONE built from $base; it keeps the one it had"
+        return 1
+    fi
+    rm -f "$prev"
+    log "wrote $etc from the $base zone"
+    return 0
+}
+
+# firewalld reads zone files when it starts or reloads, so it has to reload
+# for a zone written just now, and on the first run after the package arrived
+# it does not know MainstreamHome at all and would refuse NetworkManager's
+# request to put an interface in it.
+ensure_zone_loaded() {
+    local written=1
+    write_home_zone && written=0
+    firewall_running || die 1 "the firewall is not running, so sharing stays off"
+    if (( written == 0 )); then
+        log "reloading the firewall for the new $ZONE"
+    elif has_zone; then
+        return 0
+    else
+        log "firewalld does not know $ZONE yet; reloading it"
+    fi
+    firewall-cmd --reload >>"$LOG" 2>&1 || die 1 "the firewall could not be reloaded"
+    has_zone || die 1 "the firewall did not load the $ZONE zone"
+}
+
+# Asked by name and compared, because pacman -Q also answers for a package
+# that only provides the name.
+missing_packages() {
+    local p
+    for p in "${PACKAGES[@]}"; do
+        [[ $(pacman -Qq "$p" 2>/dev/null) == "$p" ]] || printf '%s\n' "$p"
+    done
+}
+
+# An enable that was cut off leaves its install running in its own unit, and
+# a second pacman would only find the database locked. A rerun waits for the
+# first to finish and carries on from whatever it left.
+wait_for_install_unit() {
+    local waited=0
+    while :; do
+        case $(systemctl show -P ActiveState "$INSTALL_UNIT" 2>/dev/null) in
+            active|activating|deactivating|reloading|refreshing) ;;
+            *) return 0 ;;
+        esac
+        (( waited == 0 )) && log "an earlier install is still running; waiting for it"
+        (( waited >= 1800 )) && return 1
+        sleep 3
+        waited=$((waited + 3))
+    done
+}
+
+# The package databases are still being fetched in the first minute after a
+# fresh install, and until they arrive pacman cannot say what to download.
+# That window is waited out, as mainstream-welcome-install does, but the
+# databases are never refreshed from here: installing from databases newer
+# than the last full update is a partial upgrade. Only a lookup waits. Once
+# the packages are listed, a plan pacman cannot make fails the same way on
+# every try, so it is asked once more, in case a refresh was rewriting a
+# database, and its reason goes to the log. Returns 1 when the databases
+# never listed the packages, 2 when pacman cannot plan the install.
+wait_for_databases() {  # $@ = packages
+    local waited=0 err=""
+    until pacman -Si "$@" </dev/null >/dev/null 2>&1; do
+        (( waited == 0 )) && log "the package databases do not list $* yet; waiting"
+        (( waited >= 120 )) && return 1
+        sleep 3
+        waited=$((waited + 3))
+    done
+    err=$(pacman -Sp "$@" </dev/null 2>&1 >/dev/null) && return 0
+    sleep 3
+    err=$(pacman -Sp "$@" </dev/null 2>&1 >/dev/null) && return 0
+    log "pacman cannot plan the install: ${err//$'\n'/ | }"
+    return 2
+}
+
+# From mainstream-welcome-install: someone who just flipped a switch has no
+# next tick to retry on, so another package manager is waited for, and a lock
+# that no pacman holds is debris from a killed transaction that would
+# otherwise block every install on this machine.
+wait_for_pacman_lock() {
+    local waited=0
+    while [[ -e $PACMAN_LOCK ]]; do
+        if ! pgrep -x pacman >/dev/null 2>&1; then
+            log "the pacman lock is stale (no pacman running); removing it"
+            rm -f "$PACMAN_LOCK"
+            return 0
+        fi
+        (( waited == 0 )) && log "the package database is locked; waiting for it"
+        (( waited >= 600 )) && return 1
+        sleep 3
+        waited=$((waited + 3))
+    done
+    return 0
+}
+
+# pacman runs as a transient service of its own, not as a child of this
+# script. Nothing that happens to this script, whether a signal, a closed
+# window or a logout, can stop a transaction halfway: the service belongs to
+# the service manager and runs to the end, and its output goes straight to
+# the log. There is no -y, since installing from refreshed databases without
+# upgrading everything else is a partial upgrade; a stale database fails
+# with 4 and the page asks for an update first. For the same reason a package
+# already installed is left out rather than passed to --needed, which would
+# still upgrade it alone if the databases list it newer.
+install_packages() {
+    local targets=() rc=0
+    mapfile -t targets < <(missing_packages)
+    (( ${#targets[@]} )) || return 0
+    wait_for_install_unit || die 4 "an earlier install of the sharing service never finished"
+    mapfile -t targets < <(missing_packages)
+    (( ${#targets[@]} )) || return 0
+    wait_for_databases "${targets[@]}" || rc=$?
+    case $rc in
+        0) ;;
+        2) die 4 "pacman could not resolve ${targets[*]}; the system needs an update first" ;;
+        *) die 4 "the package databases do not list ${targets[*]}" ;;
+    esac
+    wait_for_pacman_lock || die 4 "another package manager held the database for too long"
+    log "installing ${targets[*]} in $INSTALL_UNIT"
+    systemd-run --wait --collect --quiet --unit="$INSTALL_UNIT" \
+        --property="StandardOutput=append:$LOG" --property="StandardError=append:$LOG" \
+        -- /usr/bin/pacman -S --needed --noconfirm "${targets[@]}" </dev/null >>"$LOG" 2>&1 || rc=$?
+    mapfile -t targets < <(missing_packages)
+    (( ${#targets[@]} == 0 )) || die 4 "pacman exited with $rc and ${targets[*]} is still missing"
+    log "installed"
+}
+
+# managed, foreign or none. A file this helper did not write, or one reached
+# through a symlink, is somebody's own Samba setup and is never touched.
+config_kind() {
+    local first=""
+    if [[ -L $SAMBA_ETC || -L $SMB_CONF ]]; then echo foreign; return; fi
+    if [[ ! -e $SMB_CONF ]]; then echo none; return; fi
+    if [[ ! -f $SMB_CONF ]]; then echo foreign; return; fi
+    IFS= read -r first <"$SMB_CONF"
+    if [[ $first == "$MARKER" ]]; then echo managed; else echo foreign; fi
+}
+
+# NetBIOS names stop at 15 characters. NetBIOS itself is off, but Samba still
+# derives a name from the host name and warns when it does not fit.
+netbios_name() {  # $1 = host name
+    local n=${1%%.*}
+    n=${n//[!A-Za-z0-9-]/-}
+    n=${n:0:15}
+    while [[ $n == *- ]]; do n=${n%-}; done
+    while [[ $n == -* ]]; do n=${n#-}; done
+    [[ -n $n ]] || n=MAINSTREAM
+    printf '%s\n' "${n^^}"
+}
+
+# Written whole and renamed into place, so the page, Samba and the network
+# hook never read half a file, and a symlink at the path is replaced rather
+# than followed.
+write_file() {  # $1 = path, $2 = contents
+    local tmp
+    tmp=$(mktemp "${1%/*}/.${1##*/}.XXXXXX") || die 1 "could not write $1"
+    if ! { printf '%s' "$2" >"$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$1"; }; then
+        rm -f "$tmp"
+        die 1 "could not write $1"
+    fi
+}
+
+ensure_state_dirs() {
+    refuse_symlinks "$MAINSTREAM_LIB" "$STATE_DIR" "$USERS_DIR" "$TRUSTED_DIR"
+    mkdir -p "$USERS_DIR" "$TRUSTED_DIR" || die 1 "could not create the folders in $STATE_DIR"
+    chmod 0755 "$STATE_DIR" "$USERS_DIR" "$TRUSTED_DIR" || die 1 "could not set the mode of $STATE_DIR"
+}
+
+# The records is_home reads, one empty file per trusted profile, named after
+# its uuid. Readable by everyone, so the page shows the same trust.
+record_trust() {  # $1 = uuid
+    ensure_state_dirs
+    write_file "$TRUSTED_DIR/${1,,}" ''
+    log "recorded the trust of $1"
+}
+
+forget_trust() {  # $1 = uuid, or nothing for every record
+    refuse_symlinks "$MAINSTREAM_LIB" "$STATE_DIR" "$TRUSTED_DIR"
+    [[ -d $TRUSTED_DIR ]] || return 0
+    if [[ -n ${1:-} ]]; then
+        rm -f -- "$TRUSTED_DIR/${1,,}"
+    else
+        find "$TRUSTED_DIR" -mindepth 1 -maxdepth 1 ! -type d -delete
+    fi
+}
+
+# A record outlives a profile that is deleted, and NetworkManager lets a new
+# profile take any uuid it is given, so only records of profiles that still
+# exist are kept. An empty list is far more likely a NetworkManager that has
+# not loaded its profiles yet than one with none left.
+prune_trust() {
+    local list f
+    [[ -d $TRUSTED_DIR ]] || return 0
+    refuse_symlinks "$MAINSTREAM_LIB" "$STATE_DIR" "$TRUSTED_DIR"
+    list=$(nmcli -g UUID connection show 2>/dev/null) || return 0
+    [[ -n $list ]] || return 0
+    for f in "$TRUSTED_DIR"/*; do
+        [[ -e $f || -L $f ]] || continue
+        grep -qixF -- "${f##*/}" <<<"$list" && continue
+        rm -f -- "$f"
+        log "forgot the trust of ${f##*/}, whose profile is gone"
+    done
+}
+
+read_state() {
+    local s=""
+    [[ -f $STATE_FILE && ! -L $STATE_FILE ]] && IFS= read -r s <"$STATE_FILE"
+    case $s in on|off) printf '%s\n' "$s" ;; *) printf 'unset\n' ;; esac
+}
+
+write_state() {  # $1 = on|off
+    ensure_state_dirs
+    write_file "$STATE_FILE" "$1"$'\n'
+    log "state is now $1"
+}
+
+install_config() {
+    local nb content
+    [[ -f $TEMPLATE ]] || die 1 "the Samba template is missing from $TEMPLATE"
+    mkdir -p "$SAMBA_ETC" || die 1 "could not create $SAMBA_ETC"
+    nb=$(netbios_name "$(uname -n)")
+    content=$(sed "s/@NETBIOS@/$nb/" "$TEMPLATE") || die 1 "could not read $TEMPLATE"
+    [[ -n $content ]] || die 1 "the Samba template is empty"
+    write_file "$SMB_CONF" "$content"$'\n'
+    log "wrote $SMB_CONF with netbios name $nb"
+}
+
+set_netbios() {  # $1 = NetBIOS name
+    local content
+    if grep -qE '^[[:space:]]*netbios name[[:space:]]*=' "$SMB_CONF"; then
+        content=$(sed -E "s/^([[:space:]]*netbios name[[:space:]]*=).*/\1 $1/" "$SMB_CONF")
+    else
+        content=$(sed "/^\[global\]/a\\   netbios name = $1" "$SMB_CONF")
+    fi || die 1 "could not read $SMB_CONF"
+    write_file "$SMB_CONF" "$content"$'\n'
+    log "netbios name is now $1"
+}
+
+check_config() {
+    testparm -s "$SMB_CONF" >>"$LOG" 2>&1 || die 1 "testparm rejected $SMB_CONF"
+}
+
+ensure_group() {
+    getent group "$GROUP" >/dev/null 2>&1 && return 0
+    systemd-sysusers "$SYSUSERS_CONF" >>"$LOG" 2>&1
+    getent group "$GROUP" >/dev/null 2>&1 || die 6 "the $GROUP group does not exist"
+}
+
+# tmpfiles owns the directory and puts its mode back at every boot; it runs
+# here as well for a machine that has not booted since the package arrived.
+ensure_usershare_dir() {
+    refuse_symlinks "$SAMBA_LIB" "$USERSHARE_DIR"
+    systemd-tmpfiles --create "$TMPFILES_CONF" >>"$LOG" 2>&1 \
+        || log "systemd-tmpfiles reported a problem with $TMPFILES_CONF"
+    refuse_symlinks "$USERSHARE_DIR"
+    [[ -d $USERSHARE_DIR ]] || die 1 "$USERSHARE_DIR is missing"
+}
+
+# smbpasswd -s reads the new password twice from stdin, and printf is a shell
+# builtin, so the password never shows up in any process's arguments. -a
+# changes the password of an account that already exists, and also recovers
+# one whose Samba entry went missing.
+set_samba_password() {
+    printf '%s\n%s\n' "$PASSWORD" "$PASSWORD" | smbpasswd -s -a "$CALLER" >>"$LOG" 2>&1
+}
+
+setup_account() {
+    ensure_group
+    ensure_usershare_dir
+    usermod -aG "$GROUP" "$CALLER" >>"$LOG" 2>&1 || die 6 "could not add $CALLER to $GROUP"
+    # The group only reaches sessions started after this. The ACL entry gives
+    # the session that asked the same right now, so nobody has to log out
+    # before sharing a folder.
+    setfacl -m "u:$CALLER:rwx" "$USERSHARE_DIR" >>"$LOG" 2>&1 \
+        || die 6 "could not let $CALLER write to $USERSHARE_DIR"
+    set_samba_password || die 6 "smbpasswd could not set the sharing password of $CALLER"
+    smbpasswd -e "$CALLER" >>"$LOG" 2>&1 || die 6 "smbpasswd could not enable $CALLER"
+    ensure_state_dirs
+    write_file "$USERS_DIR/$CALLER" ''
+    log "account $CALLER is set up"
+}
+
+# One line on stdin. A writer that closes stdin without a final newline still
+# counts; one that never writes is given up on after half a minute.
+read_password() {
+    local pw="" rc=0
+    IFS= read -r -t 30 pw || rc=$?
+    (( rc > 128 )) && die 2 "no password arrived on stdin"
+    (( rc == 0 )) || [[ -n $pw ]] || die 2 "no password arrived on stdin"
+    valid_password "$pw" || die 2 "the password must be 8 to 128 characters, with no control characters"
+    PASSWORD=$pw
+}
+
+# wsdd answers on every interface unless it is given some with -i, which would
+# show this computer to Windows on a network that is up next to a trusted one.
+# So it runs only with the interfaces of the trusted networks that are up,
+# written to $WSDD_ENV, which the drop-in wsdd.service.d/mainstream-sharing.conf
+# reads. The network hook (50-mainstream-sharing) keeps the same functions.
+#
+# The interfaces of the trusted networks that are up, one per line.
+home_devices() {  # $1 = a connection to leave out, or nothing
+    local u d uuids=() devs=()
+    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
+    for u in "${uuids[@]}"; do
+        [[ -n $u && $u != "${1:-}" ]] && is_home "$u" || continue
+        mapfile -t devs < <(connection_devices "$u")
+        for d in "${devs[@]}"; do
+            [[ $d =~ ^[A-Za-z0-9_.-]{1,15}$ ]] && printf '%s\n' "$d"
+        done
+    done | sort -u
+}
+
+# Returns 0 when the list changed, so a running wsdd has to restart to follow
+# it. With no interface the file goes, and wsdd must not run.
+write_wsdd_env() {  # $1 = a connection to leave out, or nothing
+    local devs=() d params="" want="" have=""
+    mapfile -t devs < <(home_devices "${1:-}")
+    for d in "${devs[@]}"; do params+="${params:+ }-i $d"; done
+    [[ -n $params ]] && want="WSDD_PARAMS=\"$params\""
+    [[ -f $WSDD_ENV ]] && have=$(<"$WSDD_ENV")
+    [[ $want == "$have" ]] && return 1
+    if [[ -z $want ]]; then
+        rm -f "$WSDD_ENV"
+    else
+        mkdir -p "${WSDD_ENV%/*}" || die 1 "could not create ${WSDD_ENV%/*}"
+        write_file "$WSDD_ENV" "$want"$'\n'
+    fi
+    log "wsdd interfaces: ${params:-none}"
+    return 0
+}
+
+# The drop-in only works while systemd has loaded it and the unit passes
+# WSDD_PARAMS to wsdd. Without both, wsdd would answer everywhere, so it
+# stays stopped.
+wsdd_confined() {
+    local cmd files re='\$\{?WSDD_PARAMS([^A-Za-z0-9_]|$)'
+    cmd=$(systemctl show -P ExecStart wsdd.service 2>/dev/null) || return 1
+    files=$(systemctl show -P EnvironmentFiles wsdd.service 2>/dev/null) || return 1
+    [[ $cmd =~ $re && $files == *"$WSDD_ENV"* ]]
+}
+
+sync_wsdd() {  # $1 = start, or try to only restart one that is running
+    local changed=1
+    if ! wsdd_confined; then
+        log "wsdd.service would not read the interfaces from $WSDD_ENV; leaving wsdd stopped"
+        systemctl stop wsdd.service >>"$LOG" 2>&1
+        return 0
+    fi
+    write_wsdd_env && changed=0
+    if [[ ! -s $WSDD_ENV ]]; then
+        log "no trusted network is up on an interface wsdd can take; leaving wsdd stopped"
+        systemctl stop wsdd.service >>"$LOG" 2>&1
+    elif (( changed == 0 )); then
+        if [[ $1 == start ]]; then
+            systemctl restart wsdd.service
+        else
+            systemctl try-restart wsdd.service
+        fi >>"$LOG" 2>&1 || die 1 "the sharing service did not start"
+        log "wsdd.service follows the new interfaces"
+    elif [[ $1 == start ]]; then
+        systemctl start wsdd.service >>"$LOG" 2>&1 || die 1 "the sharing service did not start"
+        log "started wsdd.service"
+    fi
+}
+
+# A VPN made of IPsec policies alone, with no interface of its own (libreswan,
+# or strongswan set up by hand), hands its decrypted traffic in on the
+# interface it travels over. On a trusted network that lands in MainstreamHome,
+# where the private addresses of an office behind the VPN count as local. The
+# table in $IPSEC_GUARD drops SMB that arrived through IPsec. firewalld only
+# ever replaces its own tables, so its reloads leave this one in place.
+guard_ipsec() {
+    nft -f "$IPSEC_GUARD" >>"$LOG" 2>&1
+}
+
+unguard_ipsec() {
+    nft list table inet "$IPSEC_TABLE" >/dev/null 2>&1 || return 0
+    nft delete table inet "$IPSEC_TABLE" >>"$LOG" 2>&1 || log "could not remove the $IPSEC_TABLE table"
+}
+
+# Samba that somebody set up with their own smb.conf is theirs to run, so the
+# services are only started and stopped for the configuration made here.
+# Samba listens on every interface and lets in every private address; only
+# the firewall keeps it to trusted networks, so without one it stays off.
+start_services() {
+    [[ $(config_kind) == managed ]] || { log "$SMB_CONF is not ours; not starting Samba"; return 0; }
+    firewall_running || die 1 "the firewall is not running, so sharing stays off"
+    guard_ipsec || die 1 "SMB over IPsec VPNs could not be blocked, so sharing stays off"
+    systemctl start smb.service >>"$LOG" 2>&1 || die 1 "the sharing service did not start"
+    log "started smb.service"
+    sync_wsdd start
+}
+
+stop_services() {
+    if [[ $(config_kind) == managed ]]; then
+        systemctl stop "${SERVICES[@]}" >>"$LOG" 2>&1 || log "stopping ${SERVICES[*]} reported a problem"
+        rm -f "$WSDD_ENV"
+    else
+        log "$SMB_CONF is not ours; not stopping Samba"
+    fi
+    unguard_ipsec
+}
+
+# Setup takes a while and must not die with the window that asked for it.
+# pkexec is a child of the Settings window, and closing that window or logging
+# out stops everything in its cgroup; a scope of its own takes this run out
+# of there. It happens before anything is read, so the password is still
+# waiting on stdin for the process in the scope.
+enter_own_scope() {  # $@ = the arguments to run again with
+    [[ -z ${FILE_SHARING_SCOPED:-} && -d /run/systemd/system ]] || return 0
+    command -v systemd-run >/dev/null 2>&1 || return 0
+    export FILE_SHARING_SCOPED=1
+    exec systemd-run --scope --quiet --collect -- "$0" "$@"
+}
+
+cmd_enable() {  # $1 = uuid
+    (( $# == 1 )) || die 2 "usage: enable <connection uuid>"
+    resolve_caller person
+    require_connection "$1"
+    require_trustable "$CONN"
+    [[ $(config_kind) != foreign ]] || die 3 "$SMB_CONF is not managed by Mainstream, so it was left alone"
+    # Checked before the download, which would only be wasted.
+    firewall_running || die 1 "the firewall is not running, so sharing stays off"
+    read_password
+    log "enable: $CALLER on $CONN"
+
+    install_packages
+    case $(config_kind) in
+        foreign) die 3 "$SMB_CONF is not managed by Mainstream, so it was left alone" ;;
+        none)    install_config ;;
+    esac
+    check_config
+    setup_account
+
+    ensure_zone_loaded
+    set_zone "$CONN" "$ZONE"
+    record_trust "$CONN"
+    write_state on
+    # A home network that is not up yet is left to the network hook, which
+    # starts the services when it connects.
+    if home_active; then
+        start_services
+    else
+        log "no home network is up; the services start when one connects"
+    fi
+    log "enable: done"
+}
+
+cmd_account() {
+    (( $# == 0 )) || die 2 "usage: account"
+    resolve_caller person
+    case $(read_state) in
+        on|off) ;;
+        *) die 1 "sharing has not been set up on this computer yet" ;;
+    esac
+    case $(config_kind) in
+        managed) ;;
+        foreign) die 3 "$SMB_CONF is not managed by Mainstream, so it was left alone" ;;
+        *)       die 1 "$SMB_CONF is missing" ;;
+    esac
+    command -v smbpasswd >/dev/null 2>&1 || die 1 "samba is not installed"
+    read_password
+    log "account: $CALLER"
+    setup_account
+}
+
+cmd_password() {
+    (( $# == 0 )) || die 2 "usage: password"
+    resolve_caller person
+    [[ -f $USERS_DIR/$CALLER ]] || die 1 "$CALLER has not been set up for sharing"
+    read_password
+    set_samba_password || die 6 "smbpasswd could not change the sharing password of $CALLER"
+    log "password: changed for $CALLER"
+}
+
+cmd_trust() {  # $1 = uuid, $2 = on|off
+    (( $# == 2 )) || die 2 "usage: trust <connection uuid> on|off"
+    case $2 in on|off) ;; *) die 2 "trust takes on or off, not $2" ;; esac
+    resolve_caller
+    require_connection "$1"
+    if [[ $2 == on ]]; then
+        require_trustable "$CONN"
+        firewall_running || die 1 "the firewall is not running, so sharing stays off"
+        ensure_zone_loaded
+        set_zone "$CONN" "$ZONE"
+        record_trust "$CONN"
+        if [[ $(read_state) == on ]] && home_active; then
+            start_services
+        fi
+    else
+        # The record goes first, so nothing counts the network as trusted
+        # even if moving it out of the zone fails. A zone somebody set by
+        # hand is theirs, not a trust this page gave.
+        forget_trust "$CONN"
+        if [[ $(zone_of "$CONN") == "$ZONE" ]]; then
+            set_zone "$CONN" ""
+        fi
+        if ! home_active; then
+            stop_services
+        elif [[ $(config_kind) == managed ]]; then
+            sync_wsdd try
+        fi
+    fi
+    log "trust: $CONN $2"
+}
+
+cmd_disable() {
+    (( $# == 0 )) || die 2 "usage: disable"
+    resolve_caller
+    local u uuids=()
+    # Off first, so the network hook finds nothing to start from here on, and
+    # a failure partway through leaves it that way. The hook waits for the
+    # lock this holds, but only briefly, so the services are stopped once more
+    # at the end in case one that stopped waiting started them in between.
+    write_state off
+    stop_services
+    forget_trust
+    mapfile -t uuids < <(nmcli -g UUID connection show 2>/dev/null)
+    for u in "${uuids[@]}"; do
+        [[ -n $u && $(zone_of "$u") == "$ZONE" ]] || continue
+        set_zone "$u" ""
+    done
+    stop_services
+    log "disable: done"
+}
+
+cmd_rename() {  # $1 = new host name
+    (( $# == 1 )) || die 2 "usage: rename <name>"
+    valid_hostname "$1" || die 2 "not a valid computer name: $1"
+    resolve_caller
+    hostnamectl set-hostname "$1" >>"$LOG" 2>&1 || die 1 "hostnamectl could not rename the computer"
+    log "rename: now $1"
+    # Avahi keeps the name it found when it started. It gets the new one
+    # first, since Samba announces itself to Macs under whatever name Avahi
+    # has when smbd starts.
+    if systemctl -q is-active avahi-daemon.service 2>/dev/null; then
+        timeout 5 avahi-set-host-name "$1" >>"$LOG" 2>&1 || log "Avahi kept its old name"
+    fi
+    if [[ $(config_kind) == managed ]]; then
+        set_netbios "$(netbios_name "$1")"
+        systemctl try-restart smb.service >>"$LOG" 2>&1 || log "restarting smb.service reported a problem"
+    fi
+    # wsdd also announces the name it found when it started.
+    systemctl try-restart wsdd.service >>"$LOG" 2>&1 || log "restarting wsdd.service reported a problem"
+}
+
+main() {
+    local verb=${1:-}
+    (( $# )) && shift
+    if [[ $verb == enable ]]; then
+        enter_own_scope "$verb" "$@"
+        # The window that asked may be gone by the time this finishes; a write
+        # to its closed pipe or a hangup from its terminal must not end the run.
+        trap '' PIPE HUP
+    fi
+    mkdir -p "${LOG%/*}" 2>/dev/null
+    log "invoked: $verb $* (by uid ${PKEXEC_UID:-none})"
+    # One change at a time, or two runs would interleave their writes to
+    # smb.conf, the state file and the network zones. The network hook takes
+    # the same lock. The wait covers an enable that is still downloading.
+    case $verb in
+        enable|account|password|trust|disable|rename) ;;
+        *) die 2 "usage: file-sharing enable|account|password|trust|disable|rename" ;;
+    esac
+    { exec 9>"$LOCK" && flock -w 900 9; } 2>/dev/null || die 1 "another sharing change is still running"
+    prune_trust
+    "cmd_$verb" "$@"
+    exit 0
+}
+
+# Sourced by the tests, which call the functions above with the privileged
+# commands stubbed out.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

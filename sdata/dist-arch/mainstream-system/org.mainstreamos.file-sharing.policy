@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+    polkit action for Settings > Sharing. Turning sharing on installs
+    packages, opens a port on the networks the user picks and gives the
+    account a Samba password, so it always takes an administrator's password.
+    auth_admin_keep lets the few steps of one setup share a single prompt;
+    inactive and remote sessions get nothing, and no rules file grants this
+    without a password.
+-->
+<policyconfig>
+  <vendor>Mainstream OS</vendor>
+  <vendor_url>https://mainstreamos.org</vendor_url>
+
+  <action id="org.mainstreamos.file-sharing">
+    <description>Share folders on the network</description>
+    <message>Authentication is required to change sharing settings</message>
+    <icon_name>folder-remote</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/mainstream/file-sharing</annotate>
+  </action>
+</policyconfig>

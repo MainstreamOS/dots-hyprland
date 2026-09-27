@@ -1,0 +1,17 @@
+# Loaded by Settings > Sharing before it starts Samba, and removed when sharing
+# stops. An IPsec VPN with no interface of its own hands its decrypted traffic
+# in on the interface it travels over, which on a trusted network is in the
+# MainstreamHome zone, so an office behind the VPN would reach SMB there as a
+# local address. A drop in any input chain is final, whatever firewalld's own
+# chains accept, and firewalld never touches this table.
+#
+# Declaring the table before deleting it lets the file load whether or not the
+# table is there already, and replaces it whole.
+table inet mainstream_sharing
+delete table inet mainstream_sharing
+table inet mainstream_sharing {
+	chain input {
+		type filter hook input priority filter; policy accept;
+		meta ipsec exists tcp dport 445 drop
+	}
+}

@@ -143,6 +143,12 @@ ApplicationWindow {
         },
         {
             group: 4,
+            name: Translation.tr("Sharing"),
+            icon: "folder_shared",
+            component: "modules/settings/SharingConfig.qml"
+        },
+        {
+            group: 4,
             name: Translation.tr("Manage"),
             icon: "apps",
             component: "modules/settings/ManageAppsConfig.qml"
@@ -306,6 +312,11 @@ ApplicationWindow {
         ThemeLibrary.load()
         Config.readWriteDelay = 0 // Settings app always only sets one var at a time so delay isn't needed
         recenterTimer.restart()
+        // Files opens the Sharing page naming the folder that should be
+        // shared once sharing is set up.
+        const sharingFolder = Quickshell.env("QS_SHARING_FOLDER")
+        if (sharingFolder)
+            FileSharing.requestFolder(sharingFolder)
     }
 
     // A second launch hands its page to this window rather than opening
@@ -315,6 +326,21 @@ ApplicationWindow {
         function showPage(name: string): void {
             const idx = root.pages.findIndex(page => page.component.endsWith(name));
             if (idx !== -1) root.currentPage = idx;
+        }
+        // What QS_SHARING_FOLDER does for a new window, for one already open:
+        // qs ipc -p <this file> call settings shareFolder <absolute path>
+        // It exits nonzero when no Settings window is running. The window is
+        // brought forward here, since the caller has no address for it. It
+        // stays void: Files takes any output as an older Settings without
+        // this function and opens a new window instead.
+        function shareFolder(path: string): void {
+            FileSharing.requestFolder(path);
+            const idx = root.pages.findIndex(page => page.component.endsWith("SharingConfig.qml"));
+            if (idx !== -1) root.currentPage = idx;
+            const titleRegex = (root.title || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (titleRegex)
+                Quickshell.execDetached(["hyprctl", "dispatch",
+                    `hl.dsp.focus({ window = [[title:^${titleRegex}$]] })`]);
         }
     }
 

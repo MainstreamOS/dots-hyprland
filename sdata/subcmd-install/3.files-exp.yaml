@@ -66,6 +66,9 @@ patterns:
   - from: "dots/.local/share/applications"
     to: "$XDG_DATA_HOME/applications"
     mode: "soft"
+  - from: "dots/.local/share/nautilus-python"
+    to: "$XDG_DATA_HOME/nautilus-python"
+    mode: "soft"
   # Fontconfig (default - fontsets handled separately if FONTSET_DIR_NAME is set)
   - from: "dots/.config/fontconfig"
     to: "$XDG_CONFIG_HOME/fontconfig"

@@ -1,0 +1,7 @@
+# Samba only reads shares from a root-owned directory with the sticky bit set:
+# members of sambashare can add shares there, and each can remove only their own.
+d /var/lib/samba/usershares 1770 root sambashare -
+# What Settings > Sharing has set up; the page reads it without asking for a password.
+d /var/lib/mainstream/sharing 0755 root root -
+d /var/lib/mainstream/sharing/users 0755 root root -
+d /var/lib/mainstream/sharing/trusted 0755 root root -

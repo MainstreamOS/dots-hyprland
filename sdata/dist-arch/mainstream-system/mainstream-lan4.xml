@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ipset type="hash:net">
+  <short>Mainstream local IPv4</short>
+  <description>Private and link-local IPv4 ranges. Folder sharing accepts connections from these only.</description>
+  <entry>10.0.0.0/8</entry>
+  <entry>172.16.0.0/12</entry>
+  <entry>192.168.0.0/16</entry>
+  <entry>169.254.0.0/16</entry>
+</ipset>

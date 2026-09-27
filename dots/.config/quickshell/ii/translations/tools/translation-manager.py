@@ -6,6 +6,7 @@ Used to update and extract translatable texts, manage JSON translation file key 
 """
 
 import os
+import ast
 import json
 import re
 import sys
@@ -83,8 +84,56 @@ class TranslationManager:
                 except (UnicodeDecodeError, IOError) as e:
                     print(f"Warning: Cannot read file {file_path}: {e}")
                     
+        translatable_texts |= self.extract_extension_texts()
         return translatable_texts
     
+    def extension_files(self) -> List[Path]:
+        """Files (Nautilus) extensions that look their strings up in these translation files"""
+        # The dots tree mirrors the home folder, so in the repo the extensions
+        # sit beside the .config that holds the source tree. An installed
+        # shell's .config is the home folder's own (or XDG_CONFIG_HOME), and
+        # the extensions folder there may hold ones the user added, so only
+        # ours is read.
+        source_dir = self.source_dir.absolute()
+        config_dir = next((p for p in (source_dir, *source_dir.parents)
+                           if p.name == '.config'), None)
+        if config_dir is not None and config_dir.parent.resolve() != Path.home().resolve():
+            return sorted((config_dir.parent / '.local/share/nautilus-python/extensions').glob('*.py'))
+        data_home = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+        installed = data_home / 'nautilus-python/extensions/mainstream-share.py'
+        return [installed] if installed.is_file() else []
+
+    def extract_extension_texts(self) -> Set[str]:
+        """Extract translatable texts from the Files extensions"""
+        texts = set()
+        for file_path in self.extension_files():
+            try:
+                tree = ast.parse(file_path.read_text(encoding='utf-8'), filename=str(file_path))
+            except (UnicodeDecodeError, IOError, SyntaxError) as e:
+                print(f"Warning: Cannot read file {file_path}: {e}")
+                continue
+
+            # tr("text") literals, plus the English held in module-level names
+            # ending in _TEXT, as a string or as a dict's values, which reach
+            # tr() through a variable such as tr(ERROR_TEXT.get(code)).
+            nodes = [node.args[0] for node in ast.walk(tree)
+                     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                     and node.func.id == 'tr' and node.args]
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    targets = node.targets
+                elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                    targets = [node.target]
+                else:
+                    continue
+                if any(isinstance(t, ast.Name) and t.id.endswith('_TEXT') for t in targets):
+                    nodes.extend(node.value.values if isinstance(node.value, ast.Dict) else [node.value])
+
+            texts.update(node.value for node in nodes
+                         if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                         and node.value.strip())
+        return texts
+
     def create_temp_translation_file(self, texts: Set[str]) -> str:
         """Create temporary JSON file containing extracted texts"""
         temp_data = {}
@@ -226,6 +275,8 @@ def main():
                        help="Show temporary extracted file content")
     parser.add_argument("-y", "--yes", action="store_true",
                        help="Skip all confirmation prompts (auto-confirm)")
+    parser.add_argument("--check-extensions", action="store_true",
+                       help="Only check that the Files extensions' texts are keys in en_US.json (or --language), without writing")
     
     args = parser.parse_args()
     
@@ -243,6 +294,15 @@ def main():
     
     # Create manager
     manager = TranslationManager(translations_dir, source_dir, yes_mode=args.yes)
+    
+    if args.check_extensions:
+        # Exits nonzero on a missing key so CI can run it
+        lang = args.language or "en_US"
+        missing = sorted(manager.extract_extension_texts() - set(manager.load_translation_file(lang)))
+        for text in missing:
+            print(f"Missing from {lang}.json: \"{text}\"")
+        print(f"Checked {len(manager.extension_files())} Files extension file(s), {len(missing)} missing key(s)")
+        sys.exit(1 if missing else 0)
     
     try:
         # Extract translatable texts

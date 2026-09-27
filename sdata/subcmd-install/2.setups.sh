@@ -31,8 +31,10 @@ function setup_user_group(){
   # Match the archiso/Calamares default group set so both install paths grant
   # the user the same device access (render for GPU compute, audio, storage, lp,
   # optical, …). Only add groups that exist so a missing one can't fail the whole
-  # usermod call.
-  local _want=(wheel network audio video input power storage lp optical render i2c)
+  # usermod call. sambashare comes from mainstream-system, which install-deps
+  # installs before this runs; when it has not, the Sharing page's own setup
+  # adds the group later.
+  local _want=(wheel network audio video input power storage lp optical render i2c sambashare)
   [[ "$OS_GROUP_ID" == "fedora" ]] && _want=(wheel network audio video input power render)
   local _add=() _g
   for _g in "${_want[@]}"; do getent group "$_g" >/dev/null 2>&1 && _add+=("$_g"); done

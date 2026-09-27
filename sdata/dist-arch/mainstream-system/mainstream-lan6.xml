@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ipset type="hash:net">
+  <short>Mainstream local IPv6</short>
+  <description>Link-local and unique local IPv6 ranges. Folder sharing accepts connections from these only.</description>
+  <option name="family" value="inet6"/>
+  <entry>fe80::/10</entry>
+  <entry>fc00::/7</entry>
+</ipset>

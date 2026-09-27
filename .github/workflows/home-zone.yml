@@ -1,0 +1,23 @@
+name: Home firewall zone matches Workstation
+
+on:
+  push:
+    paths:
+      - "sdata/firewalld/**"
+      - "sdata/dist-arch/mainstream-system/MainstreamHome.xml"
+      - "sdata/dist-arch/mainstream-system/mainstream-lan*.xml"
+      - "sdata/dist-arch/mainstream-system/smb.conf"
+  pull_request:
+    paths:
+      - "sdata/firewalld/**"
+      - "sdata/dist-arch/mainstream-system/MainstreamHome.xml"
+      - "sdata/dist-arch/mainstream-system/mainstream-lan*.xml"
+      - "sdata/dist-arch/mainstream-system/smb.conf"
+
+jobs:
+  zones:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: MainstreamHome is MainstreamWorkstation plus the sharing rules
+        run: python3 sdata/firewalld/check-home-zone.py

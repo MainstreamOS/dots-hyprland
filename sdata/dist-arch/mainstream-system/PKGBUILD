@@ -55,11 +55,23 @@ source=(
   vmwgfx-greeter-setup
   mainstream-vmwgfx-greeter.service
   mainstream-mdns.conf
+  file-sharing
+  org.mainstreamos.file-sharing.policy
+  sharing.sysusers
+  sharing.tmpfiles
+  smb.conf
+  MainstreamHome.xml
+  mainstream-lan4.xml
+  mainstream-lan6.xml
+  50-mainstream-sharing
+  wsdd-sharing.conf
+  sharing-ipsec.nft
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP
 )
 
 build() {
@@ -116,4 +128,19 @@ package() {
 
   install -Dm644 "$srcdir/mainstream-mdns.conf" \
       "$pkgdir/usr/lib/systemd/resolved.conf.d/mainstream-mdns.conf"
+
+  install -Dm755 "$srcdir/file-sharing"                  "$pkgdir/usr/lib/mainstream/file-sharing"
+  install -Dm644 "$srcdir/org.mainstreamos.file-sharing.policy" \
+      "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.file-sharing.policy"
+  install -Dm644 "$srcdir/sharing.sysusers"              "$pkgdir/usr/lib/sysusers.d/mainstream-sharing.conf"
+  install -Dm644 "$srcdir/sharing.tmpfiles"              "$pkgdir/usr/lib/tmpfiles.d/mainstream-sharing.conf"
+  install -Dm644 "$srcdir/smb.conf"                      "$pkgdir/usr/share/mainstream/samba/smb.conf"
+  install -Dm644 "$srcdir/MainstreamHome.xml"            "$pkgdir/usr/lib/firewalld/zones/MainstreamHome.xml"
+  install -Dm644 "$srcdir/mainstream-lan4.xml"           "$pkgdir/usr/lib/firewalld/ipsets/mainstream-lan4.xml"
+  install -Dm644 "$srcdir/mainstream-lan6.xml"           "$pkgdir/usr/lib/firewalld/ipsets/mainstream-lan6.xml"
+  install -Dm755 "$srcdir/50-mainstream-sharing" \
+      "$pkgdir/usr/lib/NetworkManager/dispatcher.d/50-mainstream-sharing"
+  install -Dm644 "$srcdir/wsdd-sharing.conf" \
+      "$pkgdir/usr/lib/systemd/system/wsdd.service.d/mainstream-sharing.conf"
+  install -Dm644 "$srcdir/sharing-ipsec.nft"             "$pkgdir/usr/lib/mainstream/sharing-ipsec.nft"
 }

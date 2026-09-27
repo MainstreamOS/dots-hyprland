@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The zone Settings > Sharing puts a trusted home network in: MainstreamWorkstation
+  plus SMB (445/tcp) from local addresses only. The ipsets are sources of the rules,
+  never of the zone, so a VPN with an interface of its own stays out of it even when
+  its addresses are private. An IPsec VPN without one hands its traffic in on the
+  trusted network's interface; /usr/lib/mainstream/sharing-ipsec.nft drops SMB that
+  arrives that way. Narrow who may connect in the mainstream-lan4 and mainstream-lan6
+  ipsets.
+  sdata/firewalld/check-home-zone.py fails when this differs from
+  MainstreamWorkstation in anything else. Turning sharing on for a network builds
+  /etc/firewalld/zones/MainstreamHome.xml from this computer's default zone and the
+  rules here whenever that differs, and firewalld prefers the one in /etc. A copy
+  there that was changed by hand is left alone.
+-->
+<zone>
+  <short>Mainstream Home</short>
+  <description>Unsolicited incoming network packets are rejected from port 1 to 1024, except for select network services. Incoming packets that are related to outgoing network connections are accepted. Outgoing network connections are allowed.</description>
+  <service name="dhcpv6-client"/>
+  <service name="ssh"/>
+  <service name="samba-client"/>
+  <service name="mdns"/>
+  <service name="ipp-client"/>
+  <port protocol="udp" port="1025-65535"/>
+  <port protocol="tcp" port="1025-65535"/>
+  <forward/>
+  <rule family="ipv4">
+    <source ipset="mainstream-lan4"/>
+    <port port="445" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv6">
+    <source ipset="mainstream-lan6"/>
+    <port port="445" protocol="tcp"/>
+    <accept/>
+  </rule>
+</zone>
