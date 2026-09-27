@@ -10,6 +10,23 @@ Item {
     id: root
     property alias currentIndex: tabBar.currentIndex
     required property var tabButtonList
+    // The width the strip may take. When every label will not fit in it the
+    // tabs drop their labels and name themselves in a tooltip instead, which
+    // is decided from the labels as this font and language actually draw
+    // them. Below zero leaves the strip as wide as its labels need.
+    property real availableWidth: -1
+    readonly property real labeledWidth: {
+        const tabs = contentItem.children;
+        let total = 0;
+        let count = 0;
+        for (let i = 0; i < tabs.length; i++) {
+            if (tabs[i].labeledWidth === undefined) continue;
+            total += tabs[i].labeledWidth;
+            count++;
+        }
+        return total + Math.max(0, count - 1) * contentItem.spacing;
+    }
+    readonly property bool compact: root.availableWidth >= 0 && root.labeledWidth > root.availableWidth
 
     function incrementCurrentIndex() {
         tabBar.incrementCurrentIndex();
@@ -26,13 +43,20 @@ Item {
     implicitHeight: 40
 
     property Component delegate: ToolbarTabButton {
+        id: tabButton
         required property int index
         required property var modelData
         current: index == root.currentIndex
         text: modelData.name
         materialSymbol: modelData.icon
+        showLabel: !root.compact
         onClicked: {
             root.setCurrentIndex(index);
+        }
+
+        StyledToolTip {
+            text: tabButton.text
+            extraVisibleCondition: root.compact
         }
     }
 

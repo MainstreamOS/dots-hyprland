@@ -10,6 +10,10 @@ RippleButton {
     id: root
     required property string materialSymbol
     required property bool current
+    property bool showLabel: true
+    // The room this tab takes with its label, known even while the label is
+    // hidden, so a crowded strip can tell when every label would fit again.
+    readonly property real labeledWidth: icon.implicitWidth + contentRow.spacing + label.implicitWidth + horizontalPadding * 2
     horizontalPadding: 10
 
     implicitHeight: 40
@@ -33,6 +37,7 @@ RippleButton {
         }
         StyledText {
             id: label
+            visible: root.showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root.text
         }

@@ -16,10 +16,22 @@ Singleton {
     id: root
     property list<real> points: []
 
+    // Visualizers that come and go with what is on screen, such as the one
+    // on the sidebar's media page, count themselves in here while they are
+    // shown. They only want bars while the music is actually playing.
+    property int viewers: 0
+    function addViewer() {
+        root.viewers += 1;
+    }
+    function removeViewer() {
+        root.viewers = Math.max(0, root.viewers - 1);
+    }
+
     Process {
         id: cavaProc
-        running: Config.options.background.widgets.visualizer.enable
-            && MprisController.activePlayer !== null
+        running: (Config.options.background.widgets.visualizer.enable
+            && MprisController.activePlayer !== null)
+            || (root.viewers > 0 && (MprisController.activePlayer?.isPlaying ?? false))
         onRunningChanged: {
             if (!cavaProc.running) root.points = [];
         }

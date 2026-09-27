@@ -11,10 +11,7 @@ RippleButton {
 
     property bool showPing: false
 
-    property bool aiChatEnabled: Config.options.policies.ai !== 0
-    property bool translatorEnabled: Config.options.sidebar.translator.enable
-    property bool animeEnabled: Config.options.policies.weeb !== 0
-    visible: aiChatEnabled || translatorEnabled || animeEnabled
+    visible: SidebarLeftTabs.hasPages
 
     property real buttonPadding: 5
     implicitWidth: distroIcon.width + buttonPadding * 2

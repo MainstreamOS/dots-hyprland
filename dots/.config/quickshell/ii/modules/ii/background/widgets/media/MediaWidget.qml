@@ -868,6 +868,30 @@ AbstractBackgroundWidget {
                         RowLayout { 
                             spacing: 2 // There were buttons here but I removed them.
 
+                            // This size is made for lyrics, but they still
+                            // only show once asked for, as in the 1x3 size.
+                            RippleButton {
+                                implicitWidth: root.buttonSize
+                                implicitHeight: root.buttonSize
+                                buttonRadius: Appearance.rounding?.full ?? 999
+                                colBackground: root.showLyrics
+                                    ? Appearance.colors.colPrimary
+                                    : "transparent"
+                                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+                                colRipple: Appearance.colors.colPrimaryContainerActive
+                                downAction: () => { Config.options.background.widgets.media.showLyrics = !Config.options.background.widgets.media.showLyrics }
+
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "lyrics"
+                                    iconSize: root.buttonIconSize
+                                    fill: root.showLyrics ? 1 : 0
+                                    color: root.showLyrics
+                                        ? Appearance.colors.colOnPrimary
+                                        : Appearance.colors.colOnPrimaryContainer
+                                }
+                            }
+
                             MaterialShapeWrappedMaterialSymbol {
                                 shape: MaterialShape.Shape.Cookie12Sided
                                 color: Appearance.colors.colPrimary
@@ -906,12 +930,23 @@ AbstractBackgroundWidget {
                     Lyrics {
                         anchors.fill: parent
                         anchors.margins: 10
+                        visible: root.showLyrics
                         textAlignment: Text.AlignHCenter
                         textColor: Appearance.colors.colOnPrimaryContainer
                         activeColor: Appearance.colors.colPrimary
                         dimColor: Appearance.colors.colSubtext
                         indicatorColor: Appearance.colors.colPrimary
                         indicatorShapeColor: Appearance.colors.colOnPrimary
+                    }
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        visible: !root.showLyrics
+                        fill: 1
+                        text: "lyrics"
+                        iconSize: 40
+                        color: Appearance.colors.colOnPrimaryContainer
+                        opacity: 0.35
                     }
                 }
             }

@@ -1348,6 +1348,14 @@ Singleton {
                     property bool enable: false
                     property int delay: 300 // Delay before sending request. Reduces (potential) rate limits and lag.
                 }
+                property JsonObject media: JsonObject {
+                    property bool enable: true
+                    // The song's title and artist go to lrclib.net only while
+                    // the lyrics are actually on screen.
+                    property bool showLyrics: true
+                    property bool artColors: true
+                    property bool blurredBackground: true
+                }
                 property JsonObject ai: JsonObject {
                     property bool textFadeIn: false
                 }

@@ -212,7 +212,7 @@ ContentPage {
             ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-pctrade.png`
                 name: "end4-pC"
-                subtitle: Translation.tr("pctrade — Widgets")
+                subtitle: Translation.tr("pctrade · Widgets, Media tab")
                 link: "https://github.com/pctrade/end4-pC"
             }
             ForkCard {

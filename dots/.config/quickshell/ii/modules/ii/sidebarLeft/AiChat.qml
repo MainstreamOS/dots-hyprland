@@ -15,12 +15,10 @@ Item {
     id: root
     property real padding: 4
     property var inputField: messageInputField
-    // Guarded wherever the strings below read it. The sidebar builds its pages
-    // inside a binding that also depends on the translated tab names, so every
-    // chat is discarded and built again the moment translations land, and the
-    // translated strings of the one on its way out are asked for a value once
-    // more after its own id has gone. Nothing shows them by then, so they are
-    // left empty rather than reaching through an id that is no longer there.
+    // Guarded wherever the strings below read it. A chat being torn down can
+    // have its translated strings asked for a value once more after its own
+    // id has gone. Nothing shows them by then, so they are left empty rather
+    // than reaching through an id that is no longer there.
     property string commandPrefix: "/"
 
     property var suggestionQuery: ""

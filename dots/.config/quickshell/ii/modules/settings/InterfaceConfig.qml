@@ -681,6 +681,59 @@ ContentPage {
                 }
             }
         }
+
+        ConfigRow {
+            ColumnLayout {
+                ContentSubsectionLabel {
+                    text: Translation.tr("Media")
+                }
+                ConfigSelectionArray {
+                    currentValue: Config.options.sidebar.media.enable ? 1 : 0
+                    onSelected: newValue => {
+                        Config.options.sidebar.media.enable = (newValue === 1);
+                    }
+                    options: [
+                        { displayName: Translation.tr("No"),  icon: "close", value: 0 },
+                        { displayName: Translation.tr("Yes"), icon: "check", value: 1 }
+                    ]
+                }
+            }
+        }
+
+        ContentSubsection {
+            visible: Config.options.sidebar.media.enable
+
+            // The Media tab has these options too, so after a click here has
+            // set one each switch goes back to following it, and a change
+            // made in the sidebar shows here.
+            ConfigSwitch {
+                buttonIcon: "lyrics"
+                text: Translation.tr("Lyrics")
+                checked: Config.options.sidebar.media.showLyrics
+                onCheckedChanged: {
+                    Config.options.sidebar.media.showLyrics = checked;
+                    checked = Qt.binding(() => Config.options.sidebar.media.showLyrics);
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "palette"
+                text: Translation.tr("Album colors")
+                checked: Config.options.sidebar.media.artColors
+                onCheckedChanged: {
+                    Config.options.sidebar.media.artColors = checked;
+                    checked = Qt.binding(() => Config.options.sidebar.media.artColors);
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "blur_on"
+                text: Translation.tr("Blurred art")
+                checked: Config.options.sidebar.media.blurredBackground
+                onCheckedChanged: {
+                    Config.options.sidebar.media.blurredBackground = checked;
+                    checked = Qt.binding(() => Config.options.sidebar.media.blurredBackground);
+                }
+            }
+        }
     }
 
     // ── Right Sidebar ─────────────────────────────────────────────────────────

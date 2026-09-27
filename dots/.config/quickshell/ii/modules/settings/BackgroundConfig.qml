@@ -910,6 +910,23 @@ ContentPage {
         }
 
         ContentSubsection {
+            visible: Config.options.background.widgets.media.enable
+            title: Translation.tr("Media player")
+
+            // The widget has a lyrics button of its own, so after a click
+            // here has set it the switch goes back to following it.
+            ConfigSwitch {
+                buttonIcon: "lyrics"
+                text: Translation.tr("Lyrics")
+                checked: Config.options.background.widgets.media.showLyrics
+                onCheckedChanged: {
+                    Config.options.background.widgets.media.showLyrics = checked;
+                    checked = Qt.binding(() => Config.options.background.widgets.media.showLyrics);
+                }
+            }
+        }
+
+        ContentSubsection {
             visible: Config.options.background.widgets.customImage.enable
             title: Translation.tr("Picture")
             ConfigSpinBox {
