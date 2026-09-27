@@ -110,12 +110,30 @@ _migrate() {
     fi
 }
 
+# Run on the install or update that brings the mDNS drop-in, and not after it.
+#
+# The drop-in takes effect on a reload of resolved, which flushes its caches
+# and keeps name resolution up, where a restart would drop it for a moment.
+# Avahi may have renamed itself while the two fought over the host name;
+# asking it for the real name again undoes that without a restart.
+_mdns_arrived() {
+    [ -d /run/systemd/system ] || return 0
+    systemctl try-reload-or-restart systemd-resolved.service 2>/dev/null || true
+    if systemctl -q is-active avahi-daemon.service 2>/dev/null; then
+        timeout 5 avahi-set-host-name "$(uname -n | cut -d. -f1)" >/dev/null 2>&1 || true
+    fi
+}
+
 post_install() {
     _migrate
+    _mdns_arrived
 }
 
 post_upgrade() {
     _migrate
+    if [ "$(vercmp "$2" 1.0-14)" -lt 0 ]; then
+        _mdns_arrived
+    fi
 }
 
 post_remove() {

@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=13
+pkgrel=14
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -54,11 +54,12 @@ source=(
   mainstream-vmwgfx.sh
   vmwgfx-greeter-setup
   mainstream-vmwgfx-greeter.service
+  mainstream-mdns.conf
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -112,4 +113,7 @@ package() {
   install -Dm755 "$srcdir/vmwgfx-greeter-setup"          "$pkgdir/usr/lib/mainstream/vmwgfx/greeter-setup"
   install -Dm644 "$srcdir/mainstream-vmwgfx-greeter.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-vmwgfx-greeter.service"
+
+  install -Dm644 "$srcdir/mainstream-mdns.conf" \
+      "$pkgdir/usr/lib/systemd/resolved.conf.d/mainstream-mdns.conf"
 }
