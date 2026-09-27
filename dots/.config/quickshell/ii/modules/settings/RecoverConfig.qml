@@ -156,7 +156,7 @@ ContentPage {
             Layout.fillWidth: true
             visible: !root.snapshotsAvailable
             materialIcon: "info"
-            text: Translation.tr("This install's root is not on Btrfs, so there are no snapshots to roll back to. Repair Install below still puts the system's own files right.")
+            text: Translation.tr("Snapshots were never set up on this install, so there are none to roll back to. Repair Install below still puts the system's own files right.")
         }
 
         Rectangle {

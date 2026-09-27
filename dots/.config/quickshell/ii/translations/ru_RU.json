@@ -2331,5 +2331,7 @@
   "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.": "Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.",
   "Window buttons": "Window buttons",
   "The close, maximize and minimize buttons on each title bar": "The close, maximize and minimize buttons on each title bar",
-  "The bar and the dock run end to end along opposite edges": "The bar and the dock run end to end along opposite edges"
+  "The bar and the dock run end to end along opposite edges": "The bar and the dock run end to end along opposite edges",
+  "Snapshots were never set up on this install, so there are none to roll back to. Repair Install below still puts the system's own files right.": "Snapshots were never set up on this install, so there are none to roll back to. Repair Install below still puts the system's own files right.",
+  "Snapshots were never set up on this install, so updates are not snapshotted first. Test what matters to you after each update, and keep a backup of anything you cannot replace.": "Snapshots were never set up on this install, so updates are not snapshotted first. Test what matters to you after each update, and keep a backup of anything you cannot replace."
 }

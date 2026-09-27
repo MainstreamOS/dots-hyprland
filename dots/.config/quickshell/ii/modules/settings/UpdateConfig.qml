@@ -591,7 +591,7 @@ ContentPage {
                 materialIcon: "sync"
                 text: root.snapshotsAvailable
                     ? Translation.tr("Before anything installs, a snapshot of your entire system is saved automatically — this is your safety net. If something ever goes wrong after updating, the Recovery page will walk you through rolling back to exactly how your system was before the update.")
-                    : Translation.tr("This install's root is not on Btrfs, so updates are not snapshotted first. Test what matters to you after each update, and keep a backup of anything you cannot replace.")
+                    : Translation.tr("Snapshots were never set up on this install, so updates are not snapshotted first. Test what matters to you after each update, and keep a backup of anything you cannot replace.")
             }
         }
 
