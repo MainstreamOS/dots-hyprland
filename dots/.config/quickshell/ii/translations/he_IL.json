@@ -2453,5 +2453,7 @@
   "Copy for Mac and Linux": "Copy for Mac and Linux",
   "%1 is saved for one account only, so sharing is not offered on it. To share on it, forget this network on the Wi-Fi page, then connect to it again.": "%1 is saved for one account only, so sharing is not offered on it. To share on it, forget this network on the Wi-Fi page, then connect to it again.",
   "Your folders stay closed on %1, even though it is turned on under Networks.": "Your folders stay closed on %1, even though it is turned on under Networks.",
-  "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off.": "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off."
+  "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off.": "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off.",
+  "AI CLI installer": "AI CLI installer",
+  "AI CLI installer polkit action": "AI CLI installer polkit action"
 }

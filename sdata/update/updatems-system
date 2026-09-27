@@ -224,6 +224,18 @@ _install_file 0644 \
     /usr/share/polkit-1/actions/org.mainstreamos.gaming-tuning.policy \
     "$(t "Gaming tuning polkit action")"
 
+# The AI sidebar falls back to this helper when a vendor's own installer
+# cannot fetch, and machines set up before the helper existed never got it.
+_install_file 0755 \
+    "$REPO_DIR/sdata/polkit/ai-cli-install" \
+    /usr/local/bin/ai-cli-install \
+    "$(t "AI CLI installer")"
+
+_install_file 0644 \
+    "$REPO_DIR/sdata/polkit/org.mainstreamos.ai-cli-install.policy" \
+    /usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy \
+    "$(t "AI CLI installer polkit action")"
+
 # ── SDDM background helper + polkit ────────────────────────────────────────
 _install_file 0755 \
     "$REPO_DIR/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh" \
