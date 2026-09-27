@@ -1484,6 +1484,39 @@ Singleton {
             else if (previous === "span")
                 Config.options.dock.position = onScreen;
         }
+        // A style picked in Settings, where each style keeps the roundness it
+        // was last given. Float rounds all four corners alike and Rect only
+        // shapes the pair facing the desktop, so each style is asked for a
+        // different pair and only those are carried out and back in. Hug has
+        // no corner of its own to keep. The Welcome app sets styles as presets
+        // through setDockStyle instead.
+        function pickDockStyle(style) {
+            const dock = Config.options.dock;
+            const previous = dock.cornerStyle;
+            if (previous === style)
+                return;
+            if (previous === "float")
+                dock.radiusFloat = dock.radius;
+            else if (previous === "rect")
+                dock.topRadiusRect = dock.topRadius;
+            else if (previous !== "span") {
+                dock.radiusNotch = dock.radius;
+                dock.topRadiusNotch = dock.topRadius;
+            }
+            root.sizes.setDockStyle(style);
+            if (style === "float") {
+                if (dock.radiusFloat >= -1)
+                    dock.radius = dock.radiusFloat;
+            } else if (style === "rect") {
+                if (dock.topRadiusRect >= -1)
+                    dock.topRadius = dock.topRadiusRect;
+            } else if (style !== "span") {
+                if (dock.radiusNotch >= -1)
+                    dock.radius = dock.radiusNotch;
+                if (dock.topRadiusNotch >= -1)
+                    dock.topRadius = dock.topRadiusNotch;
+            }
+        }
         // Which edge each sidebar opens from. A vertical bar gathers every
         // control onto one side of the screen, so the panels it opens belong
         // on that side too rather than a reach across the display. A vertical

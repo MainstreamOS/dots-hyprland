@@ -2469,5 +2469,8 @@
   "Checking the code…": "Checking the code…",
   "Sign in to Google in your browser within a minute, then click Copy to Clipboard on the page that shows a code. The sidebar picks it up from there.": "Sign in to Google in your browser within a minute, then click Copy to Clipboard on the page that shows a code. The sidebar picks it up from there.",
   "Paste Code": "Paste Code",
-  "Removed the installer's setting that let root sign in over SSH with a password": "Removed the installer's setting that let root sign in over SSH with a password"
+  "Removed the installer's setting that let root sign in over SSH with a password": "Removed the installer's setting that let root sign in over SSH with a password",
+  "Bar & Dock": "Bar & Dock",
+  "Dock position": "Dock position",
+  "Dock style": "Dock style"
 }

@@ -8,41 +8,6 @@ ContentPage {
     id: root
     forceWidth: true
 
-    // Float rounds all four corners alike and Rect only shapes the pair facing
-    // the desktop, so each style is asked for a different pair and only those
-    // are carried out and back in. Hug has no corner of its own to keep.
-    function stashRoundness(style) {
-        const dock = Config.options.dock;
-        if (style === "span")
-            return;
-        if (style === "float")
-            dock.radiusFloat = dock.radius;
-        else if (style === "rect")
-            dock.topRadiusRect = dock.topRadius;
-        else {
-            dock.radiusNotch = dock.radius;
-            dock.topRadiusNotch = dock.topRadius;
-        }
-    }
-
-    function restoreRoundness(style) {
-        const dock = Config.options.dock;
-        if (style === "span")
-            return;
-        if (style === "float") {
-            if (dock.radiusFloat >= -1)
-                dock.radius = dock.radiusFloat;
-        } else if (style === "rect") {
-            if (dock.topRadiusRect >= -1)
-                dock.topRadius = dock.topRadiusRect;
-        } else {
-            if (dock.radiusNotch >= -1)
-                dock.radius = dock.radiusNotch;
-            if (dock.topRadiusNotch >= -1)
-                dock.topRadius = dock.topRadiusNotch;
-        }
-    }
-
     ContentSection {
         icon: "call_to_action"
         title: Translation.tr("Behavior")
@@ -327,14 +292,7 @@ ContentPage {
             title: Translation.tr("Corner style")
             ConfigSelectionArray {
                 currentValue: Config.options.dock.cornerStyle
-                onSelected: newValue => {
-                    const previous = Config.options.dock.cornerStyle;
-                    if (previous === newValue)
-                        return;
-                    root.stashRoundness(previous);
-                    Appearance.sizes.setDockStyle(newValue);
-                    root.restoreRoundness(newValue);
-                }
+                onSelected: newValue => Appearance.sizes.pickDockStyle(newValue)
                 // In the Bar page's order, each named for the bar style it
                 // matches. Notch, set down on the edge with a curve leaving
                 // each end, keeps the stored value "hug" so a config or a theme
