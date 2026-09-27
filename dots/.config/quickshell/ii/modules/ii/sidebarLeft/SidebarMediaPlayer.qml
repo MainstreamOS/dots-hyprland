@@ -132,18 +132,12 @@ Item {
         id: artDownloader
         property string target: ""
         property bool stopped: false
-        // The address goes to curl as an argument of its own, is never read
-        // as an option or a glob, and only goes out over http or https: it
-        // comes from whatever the player reports. Other media surfaces fetch
-        // the same art into the same folder, so each download writes under a
-        // name of its own and moves in whole. Stopping it stops curl too, so
-        // nothing keeps downloading for a song that is gone.
+        // Stopping it stops curl too, so nothing keeps downloading for a song
+        // that is gone.
         function fetch() {
             artDownloader.target = root.artFilePath;
             artDownloader.stopped = false;
-            artDownloader.command = ["bash", "-c",
-                '[ -f "$1" ] && exit 0; t="$1.part.$$"; stop() { kill $(jobs -p) 2>/dev/null; wait; rm -f "$t"; exit 143; }; trap stop TERM; curl -4 -fsSL -g --proto "=http,https" --max-time 20 --max-filesize 20000000 --create-dirs -o "$t" -- "$2" & wait $! && mv -f "$t" "$1"; s=$?; rm -f "$t"; exit $s',
-                "coverart", artDownloader.target, root.artUrl];
+            artDownloader.command = ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artDownloader.target, root.artUrl, "http,https"];
             artDownloader.running = true;
         }
         function stop() {
