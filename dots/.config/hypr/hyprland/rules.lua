@@ -300,9 +300,12 @@ hl.layer_rule({ match = { namespace = "quickshell:dockRight" }, animation = "sli
 -- Arrangement order the shell itself depends on, so it belongs here and not in
 -- custom/, which an existing install keeps its own copy of. A higher order is
 -- handled first and so reserves its edge first: either bar outranks a pinned
--- dock sharing its layer, leaving the dock to be the one shortened.
+-- dock sharing its layer, leaving the dock to be the one shortened. A pinned
+-- left sidebar comes after everything else, so it only pushes windows and fits
+-- between the bar and the dock instead of shortening either of them.
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, order = 10 })
 hl.layer_rule({ match = { namespace = "quickshell:verticalBar" }, order = 10 })
+hl.layer_rule({ match = { namespace = "quickshell:sidebarLeft" }, order = -1 })
 hl.layer_rule({ match = { namespace = "quickshell:screenCorners" }, animation = "popin 120%"})
 hl.layer_rule({ match = { namespace = "quickshell:lockWindowPusher" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:notificationPopup" }, animation = "fade"})

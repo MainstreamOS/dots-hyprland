@@ -51,13 +51,20 @@ Singleton {
         return keep;
     }
 
-    function filterWindowRegionsByLayers(windowRegions, layerRegions) {
+    // How much of `inner` the region `outer` covers, from 0 to 1.
+    function coveredFraction(inner, outer) {
+        const interX = Math.max(0, Math.min(inner.at[0] + inner.size[0], outer.at[0] + outer.size[0]) - Math.max(inner.at[0], outer.at[0]));
+        const interY = Math.max(0, Math.min(inner.at[1] + inner.size[1], outer.at[1] + outer.size[1]) - Math.max(inner.at[1], outer.at[1]));
+        const innerArea = inner.size[0] * inner.size[1];
+        return innerArea > 0 ? (interX * interY) / innerArea : 0;
+    }
+
+    // A layer's surface often reaches past what it draws, like a sidebar
+    // sized for its extended width, so touching a window is no sign of
+    // hiding it. Only a window a layer covers almost entirely is out of reach.
+    function filterWindowRegionsByLayers(windowRegions, layerRegions, hiddenFraction = 0.9) {
         return windowRegions.filter(windowRegion => {
-            for (let i = 0; i < layerRegions.length; ++i) {
-                if (intersectionOverUnion(windowRegion, layerRegions[i]) > 0)
-                    return false;
-            }
-            return true;
+            return !layerRegions.some(layerRegion => coveredFraction(windowRegion, layerRegion) >= hiddenFraction);
         });
     }
 

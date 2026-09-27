@@ -55,6 +55,26 @@ Scope { // Scope
         }
     }
 
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftPinned"
+        value: root.pin && !root.detach
+    }
+
+    // The strip the pinned sidebar reserves, and where, for the surfaces
+    // raised over it with the overview that would otherwise keep clear of it.
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftZone"
+        value: GlobalStates.sidebarLeftOpen && root.pin && !root.detach
+            ? (sidebarLoader.item?.sidebarWidth ?? 0) : 0
+    }
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftScreen"
+        value: sidebarLoader.item?.screen?.name ?? ""
+    }
+
     function togglePin() {
         if (!root.pin) pinWithFunnyHyprlandWorkaroundProc.doIt()
         else root.pin = !root.pin;
@@ -100,6 +120,12 @@ Scope { // Scope
 
             exclusionMode: ExclusionMode.Normal
             exclusiveZone: root.pin ? sidebarWidth : 0
+            // Pinned, the sidebar's reserved space moves every window beside
+            // it as it comes and goes, and Hyprland reports no window event
+            // for that, so the window list everything else reads would keep
+            // the old positions. Showing and hiding it pinned does the same;
+            // see onVisibleChanged below.
+            onExclusiveZoneChanged: HyprlandData.refreshSoon()
             implicitWidth: Appearance.sizes.sidebarWidthExtended + Appearance.sizes.elevationMargin
             WlrLayershell.namespace: "quickshell:sidebarLeft"
             // Hyprland 0.49: OnDemand is Exclusive, Exclusive just breaks click-outside-to-close
@@ -119,17 +145,32 @@ Scope { // Scope
                 item: sidebarLeftBackground
             }
 
-            onVisibleChanged: {
-                if (visible) {
+            // Pinned, the sidebar stays up while the desktop is used: it
+            // leaves the shared focus grab, so a click on a window goes to that
+            // window instead of closing the sidebar, and the keyboard follows
+            // the click there and back. Unpinned, it closes on a click outside
+            // again. Super+A and Escape still close it either way.
+            function syncFocusGrab() {
+                if (panelWindow.visible && !root.pin)
                     GlobalFocusGrab.addDismissable(panelWindow);
-                } else {
+                else
                     GlobalFocusGrab.removeDismissable(panelWindow);
+            }
+            onVisibleChanged: {
+                panelWindow.syncFocusGrab();
+                if (root.pin) HyprlandData.refreshSoon();
+            }
+            Connections {
+                target: root
+                function onPinChanged() {
+                    panelWindow.syncFocusGrab();
                 }
             }
             Connections {
                 target: GlobalFocusGrab
                 function onDismissed() {
-                    panelWindow.hide();
+                    if (!root.pin)
+                        panelWindow.hide();
                 }
             }
 

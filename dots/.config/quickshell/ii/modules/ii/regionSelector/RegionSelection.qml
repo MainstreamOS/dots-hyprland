@@ -88,17 +88,19 @@ PanelWindow {
     // mid-drag shift presses are honoured.
     property bool _shiftHeld: false
     property var imageRegions: []
+    // Windows move into this monitor's coordinates before they are compared
+    // with the layers, which are already in them.
     readonly property list<var> windowRegions: RegionFunctions.filterWindowRegionsByLayers(
-        root.windows.filter(w => w.workspace.id === root.activeWorkspaceId),
+        root.windows.filter(w => w.workspace.id === root.activeWorkspaceId).map(window => {
+            return {
+                at: [window.at[0] - root.monitorOffsetX, window.at[1] - root.monitorOffsetY],
+                size: [window.size[0], window.size[1]],
+                class: window.class,
+                title: window.title,
+            }
+        }),
         root.layerRegions
-    ).map(window => {
-        return {
-            at: [window.at[0] - root.monitorOffsetX, window.at[1] - root.monitorOffsetY],
-            size: [window.size[0], window.size[1]],
-            class: window.class,
-            title: window.title,
-        }
-    })
+    )
     readonly property list<var> layerRegions: {
         const layersOfThisMonitor = root.layers[root.hyprlandMonitor.name]
         const topLayers = layersOfThisMonitor?.levels["2"]
@@ -157,27 +159,21 @@ PanelWindow {
             return;
         }
 
-        // Layer regions
-        const clickedLayer = root.layerRegions.find(region => {
-            return region.at[0] <= x && x <= region.at[0] + region.size[0] && region.at[1] <= y && y <= region.at[1] + region.size[1];
-        });
-        if (clickedLayer) {
-            root.targetedRegionX = clickedLayer.at[0];
-            root.targetedRegionY = clickedLayer.at[1];
-            root.targetedRegionWidth = clickedLayer.size[0];
-            root.targetedRegionHeight = clickedLayer.size[1];
-            return;
-        }
-
-        // Window regions
-        const clickedWindow = root.windowRegions.find(region => {
-            return region.at[0] <= x && x <= region.at[0] + region.size[0] && region.at[1] <= y && y <= region.at[1] + region.size[1];
-        });
-        if (clickedWindow) {
-            root.targetedRegionX = clickedWindow.at[0];
-            root.targetedRegionY = clickedWindow.at[1];
-            root.targetedRegionWidth = clickedWindow.size[0];
-            root.targetedRegionHeight = clickedWindow.size[1];
+        // Layer and window regions. Only kinds that are drawn can be picked,
+        // and where a layer's surface reaches over a window beside it, the
+        // smaller of the two is the more specific target.
+        const underPointer = region => region.at[0] <= x && x <= region.at[0] + region.size[0] && region.at[1] <= y && y <= region.at[1] + region.size[1];
+        const clickedLayer = root.enableLayerRegions ? root.layerRegions.find(underPointer) : undefined;
+        const clickedWindow = root.enableWindowRegions ? root.windowRegions.find(underPointer) : undefined;
+        const area = region => region.size[0] * region.size[1];
+        const clickedTarget = (clickedLayer && clickedWindow)
+            ? (area(clickedWindow) < area(clickedLayer) ? clickedWindow : clickedLayer)
+            : (clickedLayer ?? clickedWindow);
+        if (clickedTarget) {
+            root.targetedRegionX = clickedTarget.at[0];
+            root.targetedRegionY = clickedTarget.at[1];
+            root.targetedRegionWidth = clickedTarget.size[0];
+            root.targetedRegionHeight = clickedTarget.size[1];
             return;
         }
 

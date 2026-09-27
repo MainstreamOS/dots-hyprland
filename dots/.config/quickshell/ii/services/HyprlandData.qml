@@ -70,6 +70,13 @@ Singleton {
         updateWorkspaces();
     }
 
+    // For changes Hyprland sends no event about, such as windows moving when
+    // a layer's reserved space appears or goes. Shares the event debounce,
+    // so a caller never adds a second query to a burst already coming.
+    function refreshSoon() {
+        updateAllDebounceTimer.restart();
+    }
+
     function biggestWindowForWorkspace(workspaceId) {
         const windowsInThisWorkspace = HyprlandData.windowList.filter(w => w.workspace.id == workspaceId);
         return windowsInThisWorkspace.reduce((maxWin, win) => {

@@ -183,6 +183,11 @@ Scope {
         function edgeClearance(edge) {
             const index = { left: 0, top: 1, right: 2, bottom: 3 }[edge];
             let c = panelWindow.monitorData?.reserved?.[index] ?? 0;
+            // A pinned left sidebar keeps its strip reserved, but the overview
+            // draws over it, so the content centers on the whole screen.
+            if (edge === Appearance.sizes.sidebarLeftEdge
+                    && GlobalStates.sidebarLeftScreen === (panelWindow.screen?.name ?? ""))
+                c = Math.max(0, c - GlobalStates.sidebarLeftZone);
             if (Config.options.dock.enable && Appearance.sizes.dockEdge === edge)
                 c += GlobalStates.dockPinned ? Appearance.sizes.elevationMargin : Appearance.sizes.dockExtent;
             if (edge === "top" && Config.options.dock.enable

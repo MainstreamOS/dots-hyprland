@@ -54,6 +54,12 @@ Singleton {
     // Written by the dock; a pinned dock reserves an exclusive zone, an
     // unpinned one reveals over other surfaces.
     property bool dockPinned: false
+    // Written by the left sidebar; pinned, it reserves an exclusive zone.
+    property bool sidebarLeftPinned: false
+    // Written by the left sidebar: the strip it reserves while pinned open,
+    // and the screen that strip is on.
+    property real sidebarLeftZone: 0
+    property string sidebarLeftScreen: ""
     property var mediaTransferUrls: []
     property bool mediaReceiveActive: false
     property bool osdBrightnessOpen: false

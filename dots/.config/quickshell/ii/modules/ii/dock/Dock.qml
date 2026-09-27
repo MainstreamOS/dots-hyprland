@@ -178,6 +178,18 @@ Scope { // Scope
                 right: dockRoot.dockEdge !== "left"
             }
 
+            // Raised over the overview, the dock is arranged after a pinned
+            // left sidebar and would give up that strip, though the overview
+            // covers the sidebar; reaching back over it keeps the dock where
+            // it sits the rest of the time.
+            readonly property real sidebarReach: GlobalStates.overviewOpen
+                && GlobalStates.sidebarLeftScreen === (perScreen.modelData?.name ?? "")
+                ? GlobalStates.sidebarLeftZone : 0
+            margins {
+                left: Appearance.sizes.sidebarLeftEdge === "left" && dockRoot.anchors.left ? -dockRoot.sidebarReach : 0
+                right: Appearance.sizes.sidebarLeftEdge === "right" && dockRoot.anchors.right ? -dockRoot.sidebarReach : 0
+            }
+
             // How much of this screen the row may run along. The surface is
             // anchored to both ends of its axis, so the compositor has already
             // sized it to the whole output; asking for more is ignored rather

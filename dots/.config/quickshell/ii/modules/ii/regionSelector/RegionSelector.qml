@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import qs
+import qs.services
 import qs.modules.common
 import QtQuick
 import Quickshell
@@ -11,6 +12,18 @@ Scope {
 
     function dismiss() {
         GlobalStates.regionSelectorOpen = false
+    }
+
+    // The window list can be behind the screen: a pinned sidebar that just
+    // closed moved windows without Hyprland saying so. Asking again on open
+    // lets the outlines follow what is really there.
+    Connections {
+        target: GlobalStates
+        function onRegionSelectorOpenChanged() {
+            if (!GlobalStates.regionSelectorOpen) return;
+            HyprlandData.updateWindowList();
+            HyprlandData.updateLayers();
+        }
     }
 
     property var action: RegionSelection.SnipAction.Copy
