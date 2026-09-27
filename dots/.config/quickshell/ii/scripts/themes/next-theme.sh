@@ -39,4 +39,4 @@ NAME="$(jq -r --arg s "$NEXT" 'map(select(.slug == $s)) | .[0].name // $s' "$IND
 [ -n "$NAME" ] && [ "$NAME" != "null" ] || NAME="$NEXT"
 
 notify "Switching to $NAME"
-exec "$SCRIPT_DIR/apply-theme.sh" "$NEXT"
+exec bash "$SCRIPT_DIR/apply-theme.sh" "$NEXT"
