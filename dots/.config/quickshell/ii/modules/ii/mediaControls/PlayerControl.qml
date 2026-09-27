@@ -97,7 +97,14 @@ Item { // Player instance
         id: coverArtDownloader
         property string targetFile: root.artUrl
         property string artFilePath: root.artFilePath
-        command: [ "bash", "-c", '[ -f "$1" ] || curl -4 -sSL "$2" -o "$1"', "coverart", artFilePath, targetFile ]
+        // The address comes from whatever the player reports, so it is never
+        // read as an option or a glob. Local players such as mpv report their
+        // art as a file:// path, and the panels that take their colors from
+        // this folder need that copy too; the size cap stops a path that never
+        // ends, like /dev/zero, from filling the cache. Other media surfaces
+        // read the same folder, so the file only appears there once it is
+        // whole.
+        command: [ "bash", "-c", '[ -f "$1" ] && exit 0; t="$1.part.$$"; curl -4 -fsSL -g --proto "=http,https,file" --max-filesize 20000000 --max-time 20 -o "$t" -- "$2" && mv -f "$t" "$1"; s=$?; rm -f "$t"; exit $s', "coverart", artFilePath, targetFile ]
         onExited: (exitCode, exitStatus) => {
             root.downloaded = true
         }

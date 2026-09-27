@@ -116,7 +116,12 @@ AbstractBackgroundWidget {
         id: coverArtDownloader
         property string targetFile: root.artUrl ?? ""
         property string artFilePath: root.artFilePath
-        command: ["bash", "-c", `[ -f ${artFilePath} ] || curl -sSL '${targetFile}' -o '${artFilePath}'`]
+        // The address comes from whatever the player reports, so it reaches
+        // curl as an argument of its own, never read as an option or a glob,
+        // and only over http or https.
+        command: ["bash", "-c",
+            '[ -f "$1" ] && exit 0; curl -4 -fsSL -g --proto "=http,https" --max-time 20 --max-filesize 20000000 -o "$1.part" -- "$2" && mv -f "$1.part" "$1"; s=$?; rm -f "$1.part"; exit $s',
+            "coverart", coverArtDownloader.artFilePath, coverArtDownloader.targetFile]
         onExited: { root.downloaded = true }
     }
 
