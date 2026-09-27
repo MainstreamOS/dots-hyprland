@@ -997,6 +997,26 @@ ContentPage {
     }
 
     ContentSection {
+        objectName: "notificationsSection"
+        icon: "notifications"
+        title: Translation.tr("Notifications")
+
+        // How long a popup stays up when the app sending it leaves that to
+        // the desktop.
+        ConfigSpinBox {
+            icon: "av_timer"
+            text: Translation.tr("Timeout (ms)")
+            value: Config.options.notifications.timeout
+            from: 1000
+            to: 60000
+            stepSize: 1000
+            onValueChanged: {
+                Config.options.notifications.timeout = value;
+            }
+        }
+    }
+
+    ContentSection {
         icon: "voting_chip"
         title: Translation.tr("On-screen display")
 
