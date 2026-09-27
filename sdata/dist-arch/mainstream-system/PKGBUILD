@@ -56,6 +56,7 @@ source=(
   mainstream-vmwgfx-greeter.service
   mainstream-mdns.conf
   file-sharing
+  sharing-common.sh
   org.mainstreamos.file-sharing.policy
   sharing.sysusers
   sharing.tmpfiles
@@ -71,7 +72,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP
+  SKIP SKIP SKIP
 )
 
 build() {
@@ -130,6 +131,7 @@ package() {
       "$pkgdir/usr/lib/systemd/resolved.conf.d/mainstream-mdns.conf"
 
   install -Dm755 "$srcdir/file-sharing"                  "$pkgdir/usr/lib/mainstream/file-sharing"
+  install -Dm644 "$srcdir/sharing-common.sh"             "$pkgdir/usr/lib/mainstream/sharing-common.sh"
   install -Dm644 "$srcdir/org.mainstreamos.file-sharing.policy" \
       "$pkgdir/usr/share/polkit-1/actions/org.mainstreamos.file-sharing.policy"
   install -Dm644 "$srcdir/sharing.sysusers"              "$pkgdir/usr/lib/sysusers.d/mainstream-sharing.conf"

@@ -16,8 +16,10 @@ lib=/usr/lib/mainstream/libmainstream-vmwgfx-close.so
 
 vmware_gpu() {
     for dev in /sys/bus/pci/devices/*; do
-        [ "$(cat "$dev/vendor" 2>/dev/null)" = 0x15ad ] || continue
-        case "$(cat "$dev/device" 2>/dev/null)" in
+        { read -r id < "$dev/vendor"; } 2>/dev/null || continue
+        [ "$id" = 0x15ad ] || continue
+        { read -r id < "$dev/device"; } 2>/dev/null || continue
+        case $id in
             0x0405|0x0406) return 0 ;;
         esac
     done

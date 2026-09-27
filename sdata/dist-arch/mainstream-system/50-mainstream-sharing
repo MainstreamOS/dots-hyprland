@@ -13,18 +13,7 @@
 PATH=/usr/bin
 export LC_ALL=C
 umask 022
-
-ZONE=MainstreamHome
-STATE=/var/lib/mainstream/sharing/state
-TRUSTED_DIR=/var/lib/mainstream/sharing/trusted
-SAMBA_ETC=/etc/samba
-SMB_CONF=$SAMBA_ETC/smb.conf
-MARKER='# Managed by Mainstream Settings > Sharing'
-SERVICES=(smb.service wsdd.service)
-LOCK=/run/lock/mainstream-file-sharing.lock
-WSDD_ENV=/run/mainstream/sharing/wsdd.env
-IPSEC_GUARD=/usr/lib/mainstream/sharing-ipsec.nft
-IPSEC_TABLE=mainstream_sharing
+. /usr/lib/mainstream/sharing-common.sh
 
 action=${2:-}
 conn=${CONNECTION_UUID:-}
@@ -34,9 +23,7 @@ case $action in up|down) ;; *) exit 0 ;; esac
 # Samba that somebody set up with their own smb.conf, or one reached through
 # a symlink, is theirs to run. Only a regular file is read, so something else
 # put in its place, like a FIFO, cannot hold up NetworkManager's other hooks.
-first=""
-[[ ! -L $SAMBA_ETC && ! -L $SMB_CONF && -f $SMB_CONF ]] && IFS= read -r first <"$SMB_CONF"
-[[ $first == "$MARKER" ]] || exit 0
+[[ $(config_kind) == managed ]] || exit 0
 
 # Settings > Sharing holds this lock while it changes the state or a network's
 # zone, so what is read below is what it left, not what it is about to change.
@@ -44,42 +31,6 @@ first=""
 # An enable holds the lock through its download, so the wait is short, and
 # past it the hook carries on as it would have without the lock.
 { exec 9>"$LOCK" && flock -w 10 9; } 2>/dev/null
-
-zone_of() {
-    nmcli -g connection.zone connection show uuid "$1" 2>/dev/null
-}
-
-# The helper's eligible(): a system profile for a wired network or for Wi-Fi
-# that takes a password, joined rather than served.
-eligible() {
-    local type mode key perms
-    perms=$(nmcli -g connection.permissions connection show uuid "$1" 2>/dev/null) || return 1
-    [[ -z $perms ]] || return 1
-    type=$(nmcli -g connection.type connection show uuid "$1" 2>/dev/null) || return 1
-    case $type in
-        802-3-ethernet) return 0 ;;
-        802-11-wireless) ;;
-        *) return 1 ;;
-    esac
-    mode=$(nmcli -g 802-11-wireless.mode connection show uuid "$1" 2>/dev/null) || return 1
-    case $mode in ''|infrastructure) ;; *) return 1 ;; esac
-    key=$(nmcli -g 802-11-wireless-security.key-mgmt connection show uuid "$1" 2>/dev/null) || key=""
-    case $key in ''|none|owe) return 1 ;; esac
-    return 0
-}
-
-# The helper's is_home(). Any account can put a profile of its own in the
-# zone without a password, so the zone alone never makes a network trusted:
-# the helper's record of the trust has to be there too, and the profile has to
-# still pass the checks the helper made before it trusted it.
-is_home() {
-    local rec
-    [[ $1 =~ ^[0-9a-fA-F-]{36}$ ]] || return 1
-    rec=$TRUSTED_DIR/${1,,}
-    [[ -f $rec && ! -L $rec ]] || return 1
-    [[ $(zone_of "$1") == "$ZONE" ]] || return 1
-    eligible "$1"
-}
 
 # True while a connection other than $1 is up and trusted. The one going down
 # is left out, since NetworkManager can still list it as active at this point.
@@ -96,18 +47,7 @@ other_home_up() {
 # only with the interfaces of the trusted networks that are up, written where
 # the drop-in wsdd.service.d/mainstream-sharing.conf reads them. The helper,
 # /usr/lib/mainstream/file-sharing, does the same when it changes something.
-home_devices() {  # $1 = a connection to leave out, or nothing
-    local u d uuids=() devs=()
-    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
-    for u in "${uuids[@]}"; do
-        [[ -n $u && $u != "${1:-}" ]] && is_home "$u" || continue
-        mapfile -t devs < <(nmcli -g GENERAL.DEVICES connection show uuid "$u" 2>/dev/null | tr ',' '\n')
-        for d in "${devs[@]}"; do
-            [[ $d =~ ^[A-Za-z0-9_.-]{1,15}$ ]] && printf '%s\n' "$d"
-        done
-    done | sort -u
-}
-
+#
 # Returns 0 when the list changed. With no interface the file goes, and wsdd
 # must not run.
 write_wsdd_env() {  # $1 = a connection to leave out, or nothing
@@ -127,13 +67,6 @@ write_wsdd_env() {  # $1 = a connection to leave out, or nothing
     fi
     rm -f "$tmp"
     return 1
-}
-
-wsdd_confined() {
-    local cmd files re='\$\{?WSDD_PARAMS([^A-Za-z0-9_]|$)'
-    cmd=$(systemctl show -P ExecStart wsdd.service 2>/dev/null) || return 1
-    files=$(systemctl show -P EnvironmentFiles wsdd.service 2>/dev/null) || return 1
-    [[ $cmd =~ $re && $files == *"$WSDD_ENV"* ]]
 }
 
 # Samba listens on every interface and lets in every private address; only
@@ -178,7 +111,7 @@ case $action in
     up)
         [[ -n $conn ]] || exit 0
         state=""
-        [[ -f $STATE ]] && IFS= read -r state <"$STATE"
+        [[ -f $STATE_FILE ]] && IFS= read -r state <"$STATE_FILE"
         [[ $state == on ]] || exit 0
         is_home "$conn" || exit 0
         firewall_up || exit 0
