@@ -13,3 +13,8 @@
 # that runs until then. Replacing it would throw every tuned resolution,
 # refresh rate, scale, position and VRR choice back to guesswork.
 .config/hypr/monitors.lua
+
+# Settings > Layouts writes the per-workspace layouts into workspaces.lua; the
+# shipped copy is only the starting list. Replacing it would put every
+# workspace back on the stock layout.
+.config/hypr/workspaces.lua

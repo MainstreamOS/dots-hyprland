@@ -14,13 +14,21 @@
 # decorations.py makes that call per setting, since it is the one place that
 # knows how each is spelled.
 #
+# Settings > Layouts rides along on the same copies: its default layout sits
+# in general.lua and its per-workspace switch in hyprland.lua, and layouts.py
+# carries those two the same way. The touchpad gestures in general.lua are
+# only a copy of choices kept in config.json, which updates never touch, so
+# they are written again from there with gestures.py once general.lua has
+# been replaced.
+#
 # Anything missing along the way (python3, the old file, a reader that fails)
 # leaves the update exactly as it would be without this, and quiet about it.
 # The functions here return 0 whatever happens, so a caller under errexit
 # carries on.
 
 DECO_CARRY_DIR=""
-DECO_USER_FILES=("${HOME}/.config/hypr/hyprland/general.lua" "${HOME}/.config/hypr/hyprland/animations/active")
+DECO_GESTURES_PENDING=""
+DECO_USER_FILES=("${HOME}/.config/hypr/hyprland/general.lua" "${HOME}/.config/hypr/hyprland/animations/active" "${HOME}/.config/hypr/hyprland.lua")
 
 # Where a tree keeps its dotfiles: under dots/, or at the top in the oldest layout.
 _deco_carry_prefix() {
@@ -75,7 +83,7 @@ deco_carry_begin() {
     # Most releases ship the same files as the one before, and one copy of
     # each distinct set is enough.
     id=""
-    for f in hypr/hyprland/general.lua hypr/hyprland/animations/active quickshell/ii/scripts/themes/decorations-schema.json; do
+    for f in hypr/hyprland/general.lua hypr/hyprland/animations/active hypr/hyprland.lua quickshell/ii/scripts/themes/decorations-schema.json; do
       id+="$(git -C "$REPO_ROOT" rev-parse -q --verify "${rev}:${prefix}.config/${f}" 2>/dev/null || echo none):"
     done
     [[ -z "${seen[$id]:-}" ]] || continue
@@ -92,6 +100,8 @@ deco_carry_begin() {
       || rm -f "${f}/animations/active" || true
     git -C "$REPO_ROOT" show "${rev}:${prefix}.config/quickshell/ii/scripts/themes/decorations-schema.json" >"${f}/decorations-schema.json" 2>/dev/null \
       || rm -f "${f}/decorations-schema.json" || true
+    git -C "$REPO_ROOT" show "${rev}:${prefix}.config/hypr/hyprland.lua" >"${f}/hyprland.lua" 2>/dev/null \
+      || rm -f "${f}/hyprland.lua" || true
     n=$((n + 1))
   done
   if (( n == 0 )) || ! mkdir -p "${dir}/yours/animations" 2>/dev/null; then
@@ -107,10 +117,14 @@ deco_carry_begin() {
 # had when it was replaced rather than what they had when the run started.
 deco_carry_snapshot() {
   local file="${1:-}" dest
+  # The gestures come back from config.json, which needs no copy, so this is
+  # noted even when there is no folder to copy into.
+  [[ "$file" == "${DECO_USER_FILES[0]}" ]] && DECO_GESTURES_PENDING=1
   [[ -n "$DECO_CARRY_DIR" && -f "$file" ]] || return 0
   case "$file" in
     "${DECO_USER_FILES[0]}") dest="${DECO_CARRY_DIR}/yours/general.lua" ;;
     "${DECO_USER_FILES[1]}") dest="${DECO_CARRY_DIR}/yours/animations/active" ;;
+    "${DECO_USER_FILES[2]}") dest="${DECO_CARRY_DIR}/yours/hyprland.lua" ;;
     *) return 0 ;;
   esac
   cp "$file" "$dest" 2>/dev/null || rm -f "$dest" 2>/dev/null || true
@@ -120,10 +134,26 @@ deco_carry_snapshot() {
 # Called once the conflicts are settled. Puts the user's own values back into
 # whatever the update replaced, says which in one line, and removes the copies.
 deco_carry_finish() {
-  local dir="${DECO_CARRY_DIR:-}" prefix="dots/" py new out="" shown="" i limit=4
+  local dir="${DECO_CARRY_DIR:-}" prefix="dots/" py new out="" shown="" i limit=4 layouts="" gestures
   local -a run=(python3) was=() labels=()
-  [[ -n "$dir" ]] || return 0
   [[ -d "${REPO_ROOT}/dots/.config" ]] || prefix=""
+  if command -v timeout >/dev/null 2>&1; then run=(timeout -k 5 20 python3); fi
+  # Every general.lua that went through a conflict gets its gestures written
+  # again, whether or not there is anything else to carry.
+  if [[ -n "${DECO_GESTURES_PENDING:-}" ]]; then
+    DECO_GESTURES_PENDING=""
+    gestures="${REPO_ROOT}/${prefix}.config/quickshell/ii/scripts/hyprland/gestures.py"
+    if [[ "${DRY_RUN:-false}" != true && "${EUID:-0}" -ne 0 && -f "$gestures" \
+          && -f "${DECO_USER_FILES[0]}" && ! -L "${DECO_USER_FILES[0]}" ]] \
+       && command -v python3 >/dev/null 2>&1; then
+      local gestures_rc=0
+      "${run[@]}" "$gestures" apply --general "${DECO_USER_FILES[0]}" >/dev/null 2>&1 || gestures_rc=$?
+      if (( gestures_rc == 0 )); then
+        if declare -F log_info >/dev/null 2>&1; then log_info "Kept your touchpad gestures"; else echo "Kept your touchpad gestures"; fi
+      fi
+    fi
+  fi
+  [[ -n "$dir" ]] || return 0
   py="${REPO_ROOT}/${prefix}.config/quickshell/ii/scripts/themes/decorations.py"
   new="${REPO_ROOT}/${prefix}.config/hypr/hyprland/general.lua"
   for i in "${dir}"/was/*/general.lua; do
@@ -133,16 +163,24 @@ deco_carry_finish() {
   # neither did has nothing to put back.
   if [[ -f "$py" && -f "$new" ]] && (( ${#was[@]} )) \
      && [[ -f "${dir}/yours/general.lua" || -f "${dir}/yours/animations/active" ]]; then
-    # Bounded: the write waits on the lock the Settings page also takes, and
-    # this runs while Hyprland's autoreload is still held off.
-    if command -v timeout >/dev/null 2>&1; then run=(timeout -k 5 20 python3); fi
+    # Bounded (see run above): the write waits on the lock the Settings page
+    # also takes, and this runs while Hyprland's autoreload is still held off.
     # The new release's reader, so a setting its schema dropped is not carried.
     out=$("${run[@]}" "$py" carry "${DECO_USER_FILES[0]}" "${dir}/yours/general.lua" "$new" "${was[@]}" 2>/dev/null) || out=""
+  fi
+  py="${REPO_ROOT}/${prefix}.config/quickshell/ii/scripts/hyprland/layouts.py"
+  if [[ -f "$py" ]] && (( ${#was[@]} )) \
+     && [[ -f "${dir}/yours/general.lua" || -f "${dir}/yours/hyprland.lua" ]]; then
+    layouts=$("${run[@]}" "$py" carry "$dir" "${DECO_USER_FILES[0]}" "$new" "${DECO_USER_FILES[2]}" "${REPO_ROOT}/${prefix}.config/hypr/hyprland.lua" 2>/dev/null) || layouts=""
   fi
   # Let go of only once the copies are gone, so a run stopped part-way through
   # this still has them to finish the pass with on its way out.
   rm -rf "$dir" 2>/dev/null || true
   DECO_CARRY_DIR=""
+  if [[ -n "$layouts" ]]; then
+    layouts="${layouts//$'\n'/, }"
+    if declare -F log_info >/dev/null 2>&1; then log_info "Kept your Layouts settings: ${layouts}"; else echo "Kept your Layouts settings: ${layouts}"; fi
+  fi
   [[ -n "$out" ]] || return 0
   mapfile -t labels <<<"$out"
   # One short line even for someone who applied a theme, which sets nearly
@@ -176,7 +214,7 @@ deco_carry_wrap_older_runner() {
   handle_file_conflict() {
     local _deco_carry_file="" _deco_carry_rc=0
     case "${2:-}" in
-      "${DECO_USER_FILES[0]}"|"${DECO_USER_FILES[1]}") _deco_carry_file=1 ;;
+      "${DECO_USER_FILES[0]}"|"${DECO_USER_FILES[1]}"|"${DECO_USER_FILES[2]}") _deco_carry_file=1 ;;
     esac
     if [[ -n "$_deco_carry_file" ]]; then
       deco_carry_begin || true

@@ -48,69 +48,22 @@ ContentPage {
     // Each slot in Config.options.gestures maps to one hl.gesture() block.
     // Hyprland rejects re-defining a fingers+direction pair ("overshadowed"),
     // so changes rewrite the whole marker-fenced block in hyprland/general.lua
-    // and take effect via a full hyprctl reload.
-    function gestureBlock() {
-        const g = Config.options.gestures
-        const lua = {
-            swipe3: {
-                move:      '{\n    fingers = 3,\n    direction = "swipe",\n    action = "move"\n}',
-                workspace: '{\n    fingers = 3,\n    direction = "horizontal",\n    action = "workspace"\n}',
-                resize:    '{\n    fingers = 3,\n    direction = "swipe",\n    action = "resize"\n}'
-            },
-            pinch3: {
-                float:      '{\n    fingers = 3,\n    direction = "pinch",\n    action = "float"\n}',
-                fullscreen: '{\n    fingers = 3,\n    direction = "pinch",\n    action = "fullscreen"\n}',
-                close:      '{\n    fingers = 3,\n    direction = "pinch",\n    action = "close"\n}'
-            },
-            horizontal4: {
-                workspace: '{\n    fingers = 4,\n    direction = "horizontal",\n    action = "workspace"\n}',
-                special:   '{\n    fingers = 4,\n    direction = "horizontal",\n    action = "special"\n}'
-            },
-            up4: {
-                overviewOpen: '{\n    fingers = 4,\n    direction = "up",\n    action = function()\n        hl.dispatch(hl.dsp.global("quickshell:overviewWorkspacesToggle"))\n    end\n}',
-                fullscreen:   '{\n    fingers = 4,\n    direction = "up",\n    action = "fullscreen"\n}',
-                special:      '{\n    fingers = 4,\n    direction = "up",\n    action = "special"\n}'
-            },
-            down4: {
-                overviewClose: '{\n    fingers = 4,\n    direction = "down",\n    action = function()\n        hl.dispatch(hl.dsp.global("quickshell:overviewWorkspacesClose"))\n    end\n}',
-                close:         '{\n    fingers = 4,\n    direction = "down",\n    action = "close"\n}'
-            }
-        }
-        const lines = []
-        for (const slot of ["swipe3", "pinch3", "horizontal4", "up4", "down4"]) {
-            // Unknown values (hand-edited config.json) fall back to the slot's
-            // default — the first key — so the file always matches what the
-            // combo's index-0 fallback displays. The own-property guard keeps
-            // Object.prototype members ("constructor") out of the Lua.
-            let val = g[slot]
-            if (val !== "none" && !Object.prototype.hasOwnProperty.call(lua[slot], val))
-                val = Object.keys(lua[slot])[0]
-            const body = lua[slot][val]
-            if (body) lines.push("hl.gesture(" + body + ")")
-        }
-        return lines.join("\n")
-    }
+    // and take effect via a full hyprctl reload. gestures.py holds the mapping,
+    // which the updater also runs to put the block back after a release
+    // replaces general.lua.
+    readonly property string gesturesScript: CF.FileUtils.trimFileProtocol(`${Directories.scriptPath}/hyprland/gestures.py`)
 
     // Exit codes: 0 = rewritten (reload), 1 = marker block missing (surface
     // an error), 2 = file already matches (no-op — lets Component.onCompleted
     // run this as a cheap self-heal after dots updates reset general.lua).
+    // The values go along as arguments: a choice just made may not have
+    // reached config.json yet.
     function applyGestures() {
-        const py =
-            "import sys, re, os\n" +
-            "path, block = sys.argv[1], sys.argv[2]\n" +
-            "text = open(path).read()\n" +
-            "pat = re.compile(r'(?s)(-- BEGIN gestures[^\\n]*\\n).*?(-- END gestures)')\n" +
-            "new, n = pat.subn(lambda m: m.group(1) + block + ('\\n' if block else '') + m.group(2), text, count=1)\n" +
-            "if n == 0:\n" +
-            "    sys.exit(1)\n" +
-            "if new == text:\n" +
-            "    sys.exit(2)\n" +
-            "tmp = path + '.tmp'\n" +
-            "f = open(tmp, 'w')\n" +
-            "f.write(new)\n" +
-            "f.close()\n" +
-            "os.replace(tmp, path)\n"
-        gestureWriter.command = ["python3", "-c", py, root.hyprGeneralConf, gestureBlock()]
+        const g = Config.options.gestures
+        const cmd = ["python3", root.gesturesScript, "apply", "--general", root.hyprGeneralConf]
+        for (const slot of ["swipe3", "pinch3", "horizontal4", "up4", "down4"])
+            cmd.push("--slot", slot + "=" + g[slot])
+        gestureWriter.command = cmd
         gestureWriter.running = false
         gestureWriter.running = true
     }
