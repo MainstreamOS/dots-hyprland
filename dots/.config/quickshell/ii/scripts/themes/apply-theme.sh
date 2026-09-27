@@ -165,6 +165,8 @@ PRESERVE_DOCK_PINS=""
 PRESERVE_UPDATES=""
 PRESERVE_WEATHER=""
 PRESERVE_WIDGETS_KNOWN=""
+PRESERVE_NOTIF_POS=""
+PRESERVE_LIVE_BAR=""
 if [ -f "$SHELL_CONFIG" ]; then
     # What the live config keeps regardless of what a theme carries, read in
     # one pass. Each of these was its own jq, so the file was forked over and
@@ -192,6 +194,12 @@ if [ -f "$SHELL_CONFIG" ]; then
     #   background.widgets        read for its names only: every desktop widget
     #                             this build knows, so the ones a snapshot never
     #                             heard of can be switched off further down.
+    #   notifications.position    the live spot, written in further down when a
+    #                             snapshot names none. Read with `?` so a
+    #                             notifications value that is not an object
+    #                             reads as unset instead of failing the pass.
+    #   bar.bottom, bar.vertical  the live bar's edge, which the Hug dock further
+    #                             down has to face.
     #
     # One value per line, which is safe because tojson escapes any newline
     # inside a value rather than emitting it. Reading them tab separated would
@@ -199,7 +207,8 @@ if [ -f "$SHELL_CONFIG" ]; then
     # `// empty` also treats false as absent, so that is matched here.
     mapfile -t _PRESERVED < <(jq -r '
         [.appearance.themeSchedule, .light.night, .cursor, .bar.seededWidgets,
-         .dock.pinnedApps, .apps, .updates, .bar.weather, .background.widgets]
+         .dock.pinnedApps, .apps, .updates, .bar.weather, .background.widgets,
+         (.notifications.position? // null), {bottom: (.bar.bottom // false), vertical: (.bar.vertical // false)}]
         | map(if . == null or . == false then "" else tojson end) | .[]' \
         "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_THEME_SCHED="${_PRESERVED[0]:-}"
@@ -211,6 +220,8 @@ if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_UPDATES="${_PRESERVED[6]:-}"
     PRESERVE_WEATHER="${_PRESERVED[7]:-}"
     PRESERVE_WIDGETS_KNOWN="${_PRESERVED[8]:-}"
+    PRESERVE_NOTIF_POS="${_PRESERVED[9]:-}"
+    PRESERVE_LIVE_BAR="${_PRESERVED[10]:-}"
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -266,10 +277,7 @@ fi
 # snapshot from before the setting existed names none, and the adapter would
 # keep the live spot while the file lost it, so the next start would move
 # them. Write the live spot in so the screen and the file agree.
-if ! jq -e '.notifications | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; then
-    PRESERVE_NOTIF_POS=$(jq -c '.notifications.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
-    [ -n "$PRESERVE_NOTIF_POS" ] && { JQ_FILTER+=' | .notifications.position = $notifpos'; JQ_ARGS+=(--argjson notifpos "$PRESERVE_NOTIF_POS"); }
-fi
+[ -n "$PRESERVE_NOTIF_POS" ] && { JQ_FILTER+=' | if ((.notifications // {}) | has("position")) then . else .notifications.position = $notifpos end'; JQ_ARGS+=(--argjson notifpos "$PRESERVE_NOTIF_POS"); }
 # The Hug dock (span) runs the whole length of its edge, so it only sits on the
 # one facing the bar, and the shell holds it there whatever the file says. The
 # edge above may have come from the live config rather than the theme, so it is
@@ -279,7 +287,7 @@ fi
 # shell has its bar put away any edge will do, as it does for the pickers, and
 # the theme's own edge stands.
 if [ "$(cat "$XDG_RUNTIME_DIR/quickshell-bar.state" 2>/dev/null)" != "hidden" ]; then
-    LIVE_BAR=$(jq -c '{bottom: (.bar.bottom // false), vertical: (.bar.vertical // false)}' "$SHELL_CONFIG" 2>/dev/null || true)
+    LIVE_BAR="${PRESERVE_LIVE_BAR:-}"
     [ -n "$LIVE_BAR" ] || LIVE_BAR='{"bottom": false, "vertical": false}'
     JQ_FILTER+=' | if .dock.cornerStyle == "span" then
         ((if (.bar | has("bottom")) then .bar.bottom else $livebar.bottom end) == true) as $b

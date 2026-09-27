@@ -127,12 +127,15 @@ case "$MODE" in
         # One picture per core at a time: a folder of large pictures would
         # otherwise have every one of them decoded in memory at once.
         jobs_max="$(nproc 2>/dev/null || echo 4)"
+        running=0
         for f in "$TARGET"/*; do
             [ -f "$f" ] || continue
-            while [ "$(jobs -rp | wc -l)" -ge "$jobs_max" ]; do
+            if (( running >= jobs_max )); then
                 wait -n || true
-            done
+                running=$((running - 1))
+            fi
             generate_thumbnail "$f" &
+            running=$((running + 1))
         done
         wait
         ;;

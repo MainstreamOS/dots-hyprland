@@ -490,6 +490,13 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             aliases = self._aliases[real] = set()
         aliases.add(shown)
 
+    def _resolve(self, path):
+        shown = os.path.normpath(path)
+        real = os.path.realpath(shown)
+        if real != shown:
+            self._remember_alias(real, shown)
+        return shown, real
+
     # ---- emblems ---------------------------------------------------------
 
     def update_file_info(self, file):
@@ -504,10 +511,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             return
         # Resolved even while nothing is shared, so a folder Files shows
         # through a symlink is still refreshed when Settings shares it.
-        shown = os.path.normpath(path)
-        real = os.path.realpath(shown)
-        if real != shown:
-            self._remember_alias(real, shown)
+        _, real = self._resolve(path)
         if real in self._shared:
             file.add_emblem(EMBLEM)
 
@@ -525,10 +529,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             return []
         # The path Files shows is what the user reads and what sharing.sh is
         # handed, since it resolves paths itself; the caches use the resolved one.
-        path = os.path.normpath(path)
-        real = os.path.realpath(path)
-        if real != path:
-            self._remember_alias(real, path)
+        path, real = self._resolve(path)
         info = self._menu_info(path, real)
         kind = menu_kind(info) if info is not None else None
         self._shown = (real, kind)
@@ -667,21 +668,10 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
                 self._acting.discard(real)
                 self._notify_shared(path, info.get("name") or "", self._host(info))
             else:
-                _run(["add", path, "view"], lambda result: added(result, info))
-
-        def added(result, info):
-            self._acting.discard(real)
-            code = result.get("error")
-            if code is None:
-                self._record(path, real, result)
-                self._notify_shared(path, result.get("name") or "", self._host(info))
-            elif code == "no-access":
-                # This session cannot write shares yet; setting up the
-                # account on the Sharing page is what fixes that.
-                self._open_settings(path)
-            else:
-                self._notify(fill(tr("%1 was not shared"), os.path.basename(path)),
-                             tr(ERROR_TEXT.get(code, TRY_AGAIN_TEXT)))
+                # A no-access answer means this session cannot write shares
+                # yet; setting up the account on the Sharing page fixes that.
+                _run(["add", path, "view"],
+                     lambda result: self._after_add(path, real, result, info, self._open_settings))
 
         _run(["info", path], checked)
 
@@ -722,18 +712,19 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
         if real in self._acting:
             return
         self._acting.add(real)
+        _run(["add", path, "view"], lambda result: self._after_add(path, real, result, {}))
 
-        def added(result):
-            self._acting.discard(real)
-            code = result.get("error")
-            if code is None:
-                self._record(path, real, result)
-                self._notify_shared(path, result.get("name") or "", self._host({}))
-            else:
-                self._notify(fill(tr("%1 was not shared"), os.path.basename(path)),
-                             tr(ERROR_TEXT.get(code, TRY_AGAIN_TEXT)))
-
-        _run(["add", path, "view"], added)
+    def _after_add(self, path, real, result, host_info, on_no_access=None):
+        self._acting.discard(real)
+        code = result.get("error")
+        if code is None:
+            self._record(path, real, result)
+            self._notify_shared(path, result.get("name") or "", self._host(host_info))
+        elif code == "no-access" and on_no_access is not None:
+            on_no_access(path)
+        else:
+            self._notify(fill(tr("%1 was not shared"), os.path.basename(path)),
+                         tr(ERROR_TEXT.get(code, TRY_AGAIN_TEXT)))
 
     def _record(self, path, real, share):
         """Shows what an action just did at once, then confirms it with a

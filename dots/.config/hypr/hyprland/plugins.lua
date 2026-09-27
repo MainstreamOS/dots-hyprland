@@ -174,16 +174,21 @@ local function titleBarSlot(name, mode)
     return name
 end
 
+local function readHex(name, mode)
+    local v = readCustomValue(titleBarSlot(name, mode))
+    if not v then return nil end
+    v = v:gsub("^#", "")
+    if v:match("^%x%x%x%x%x%x$") or v:match("^%x%x%x%x%x%x%x%x$") then return v end
+    return nil
+end
+
 -- hyprbars takes a single bar_color carrying its own alpha, so the color and
 -- the opacity are composed here rather than set as two keys. Always a value:
 -- the plugin has one stock bar for both modes, and a dark bar on a light
 -- desktop is what leaving the key to it would give.
 local function titleBarColor(mode)
-    local hex = readCustomValue(titleBarSlot("titlebars.color", mode))
-    if hex then
-        hex = hex:gsub("^#", "")
-        if not hex:match("^%x%x%x%x%x%x$") then hex = nil end
-    end
+    local hex = readHex("titlebars.color", mode)
+    if hex and #hex ~= 6 then hex = nil end
     hex = hex or TITLE_BAR_DEFAULTS[mode].color
     local on = tonumber(readCustomValue(titleBarSlot("titlebars.opacity", mode)) or "")
         or TITLE_BAR_DEFAULTS[mode].opacity
@@ -210,13 +215,9 @@ local function titleBarButton(mode)
     elseif size > TITLE_BAR_BUTTON_MAX then size = TITLE_BAR_BUTTON_MAX end
     local defaults = TITLE_BAR_DEFAULTS[mode]
     local function colorOf(name)
-        local hex = readCustomValue(titleBarSlot("titlebars." .. name, mode))
-        if hex then
-            hex = hex:gsub("^#", "")
-            if hex:match("^%x%x%x%x%x%x$") then return "rgb(" .. hex .. ")" end
-            if hex:match("^%x%x%x%x%x%x%x%x$") then return "rgba(" .. hex .. ")" end
-        end
-        return defaults[name]
+        local hex = readHex("titlebars." .. name, mode)
+        if not hex then return defaults[name] end
+        return (#hex == 6 and "rgb(" or "rgba(") .. hex .. ")"
     end
     return size, colorOf("buttonBackground"), colorOf("buttonIconColor"), colorOf("buttonHighlight")
 end
@@ -469,32 +470,22 @@ local function applyPluginConfig()
             local btnSize, btnBg, btnFg, btnHover = titleBarButton(mode)
             -- Only a plugin built with buttons_pop_in draws its own hover
             -- color, and an older build is not handed a field it does not
-            -- know. A nil leaves the field out of each table below.
+            -- know. A nil leaves the field out of the table below.
             if not keyAvailable("plugin:hyprbars:buttons_pop_in") then btnHover = nil end
-            hl.plugin.hyprbars.add_button({
-                bg_color = btnBg,
-                fg_color = btnFg,
-                hover_color = btnHover,
-                size     = btnSize,
-                icon     = "󰖭",
-                action   = TITLE_BAR_CLOSE,
-            })
-            hl.plugin.hyprbars.add_button({
-                bg_color = btnBg,
-                fg_color = btnFg,
-                hover_color = btnHover,
-                size     = btnSize,
-                icon     = "󰖯",
-                action   = TITLE_BAR_MAXIMIZE,
-            })
-            hl.plugin.hyprbars.add_button({
-                bg_color = btnBg,
-                fg_color = btnFg,
-                hover_color = btnHover,
-                size     = btnSize,
-                icon     = "󰖰",
-                action   = TITLE_BAR_MINIMIZE,
-            })
+            for _, b in ipairs({
+                { icon = "󰖭", action = TITLE_BAR_CLOSE },
+                { icon = "󰖯", action = TITLE_BAR_MAXIMIZE },
+                { icon = "󰖰", action = TITLE_BAR_MINIMIZE },
+            }) do
+                hl.plugin.hyprbars.add_button({
+                    bg_color = btnBg,
+                    fg_color = btnFg,
+                    hover_color = btnHover,
+                    size     = btnSize,
+                    icon     = b.icon,
+                    action   = b.action,
+                })
+            end
         end
     end
 end
