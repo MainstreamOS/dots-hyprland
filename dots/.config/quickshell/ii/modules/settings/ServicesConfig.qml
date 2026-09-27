@@ -188,7 +188,6 @@ ContentPage {
     ContentSection {
         icon: "search"
         title: Translation.tr("Search")
-        /*
         ConfigSwitch {
             text: Translation.tr("Use Levenshtein distance-based algorithm instead of fuzzy")
             checked: Config.options.search.sloppy
@@ -199,7 +198,6 @@ ContentPage {
                 text: Translation.tr("Could be better if you make a ton of typos,\nbut results can be weird and might not work with acronyms\n(e.g. \"GIMP\" might not give you the paint program)")
             }
         }
-        */
 
         ConfigSwitch {
             text: Translation.tr("File and folder search")
