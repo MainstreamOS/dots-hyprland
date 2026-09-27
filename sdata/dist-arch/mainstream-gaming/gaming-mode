@@ -152,11 +152,7 @@ else
     # Nothing chosen yet: the screen with the keyboard focus right now is the
     # closest thing to "the one being looked at".
     if [[ -z "$gm_out" ]] && command -v hyprctl >/dev/null 2>&1; then
-        gm_out=$(hyprctl monitors -j 2>/dev/null \
-            | python3 -c 'import sys,json
-try: m=json.load(sys.stdin)
-except Exception: raise SystemExit
-print(next((x["name"] for x in m if x.get("focused")), m[0]["name"] if m else ""))' 2>/dev/null)
+        gm_out=$(hyprctl monitors -j 2>/dev/null | jq -r '(map(select(.focused)) + .)[0].name // empty' 2>/dev/null)
     fi
     if [[ -n "$gm_out" ]]; then
         mkdir -p "$conf_dir"

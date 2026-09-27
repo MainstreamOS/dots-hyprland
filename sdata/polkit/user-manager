@@ -75,13 +75,13 @@ last_admin() {  # $1 = user
 # Make-administrator switch. A shell that cannot log in says it is not.
 _no_login_shell() {  # $1 = shell
     case "${1##*/}" in
-        nologin|false|halt|shutdown|sync|""|sync) return 0 ;;
+        nologin|false|halt|shutdown|sync|"") return 0 ;;
         *) return 1 ;;
     esac
 }
 
 cmd_list() {
-    local first=1 rows=()
+    local rows=()
     while IFS=: read -r name _ uid _ gecos home shell; do
         (( uid >= 1000 && uid < 65534 )) || continue
         _no_login_shell "$shell" && continue
@@ -92,14 +92,7 @@ cmd_list() {
                    '{name:$name, fullName:$fullName, home:$home, shell:$shell, admin:$admin}')") \
             || die "could not build the account list"
     done < <(getent passwd)
-    echo -n '['
-    local row
-    for row in ${rows[@]+"${rows[@]}"}; do
-        (( first )) || echo -n ','
-        first=0
-        printf '%s' "$row"
-    done
-    echo ']'
+    printf '%s\n' "${rows[@]}" | jq -cs . || die "could not build the account list"
 }
 
 cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wheel

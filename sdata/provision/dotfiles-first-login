@@ -36,19 +36,16 @@ mkdir -p "$(dirname "$LOG")"
 # read this log is the one that cannot get in. The journal is the copy that
 # always works, since any user may write to it and an administrator reads it
 # back with: journalctl -t mainstream-first-login
-# The shared file is best effort, for the case where it is group-writable.
-SHARED_LOG=/var/log/mainstream/user-provision.log
 _fl_log() {
     local line
     printf -v line '%s [first-login %s] %s' "$(date '+%Y-%m-%d %H:%M:%S')" "$USER" "$*"
     printf '%s\n' "$line" >> "$LOG" 2>/dev/null || true
-    printf '%s\n' "$line" >> "$SHARED_LOG" 2>/dev/null || true
     command -v systemd-cat >/dev/null 2>&1 \
         && printf '%s\n' "$line" | systemd-cat -t mainstream-first-login 2>/dev/null || true
     printf '%s\n' "$line" >&2
 }
 
-_fl_log "starting: shell=$SHELL home=$HOME marker=$([[ -f "$HOME/.dotfiles-pending-user-setup" ]] && echo present || echo absent)"
+_fl_log "starting: shell=$SHELL home=$HOME marker=$([[ -f "$MARKER" ]] && echo present || echo absent)"
 trap '_fl_log "exiting rc=$?"' EXIT
 
 install_venv_requirements() {
