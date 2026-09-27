@@ -86,6 +86,12 @@ Scope { // Scope
             readonly property bool notchSeamFix: dockFlares && Config.options.dock.showBackground
                 && Appearance.colors.colDockBackground.a < 1
             readonly property real flareBleed: notchSeamFix ? Appearance.rounding.dock : 0
+            // The notch and the Hug strip never show together; either way their
+            // pieces are painted opaque and faded as one.
+            readonly property bool seamFix: notchSeamFix || spanSeamFix
+            readonly property color surfaceFill: seamFix ? Appearance.colors.colDockBackgroundOpaque
+                : Appearance.colors.colDockBackground
+            readonly property color surfaceOutline: seamFix ? content.colBorderOpaque : content.colBorder
             // How far each curve laps over the body. One covers the hairline a
             // fractional scale can leave between them; the body's outline is a
             // pixel of its own, so the lap has to clear that too or a stub of it
@@ -160,8 +166,9 @@ Scope { // Scope
                 // it has to stand off.
                 readonly property color colLayer0BorderOnLayer1: blend(rest.colLayer0BorderOnLayer1, overDim.colLayer0BorderOnLayer1)
                 // The window marks of an app that is not the focused one.
-                readonly property color colMarkFaint: blend(rest.faded(rest.colOnLayer0, 0.6),
-                    overDim.faded(overDim.colOnLayer0, 0.6))
+                readonly property color markFaintRest: rest.faded(rest.colOnLayer0, 0.6)
+                readonly property color markFaintOverDim: overDim.faded(overDim.colOnLayer0, 0.6)
+                readonly property color colMarkFaint: blend(markFaintRest, markFaintOverDim)
                 readonly property color colBorder: blend(Appearance.colors.colDockBackgroundBorder,
                     Appearance.colors.colDockOverLauncherBorder)
                 // The notched dock carries its own alpha on the container rather
@@ -530,12 +537,9 @@ Scope { // Scope
                                 // the roundness was arrived at.
                                 implicitSize: Math.min(Appearance.rounding.dock,
                                     Appearance.rounding.dockFlareFit)
-                                color: dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
-                                    : Appearance.colors.colDockBackground
+                                color: dockRoot.surfaceFill
                                 outlineWidth: Config.options.dock.showBackground ? 1 : 0
-                                outlineColor: dockRoot.notchSeamFix
-                                    ? dockRoot.content.colBorderOpaque
-                                    : dockRoot.content.colBorder
+                                outlineColor: dockRoot.surfaceOutline
                             }
 
                             // The curves at the two ends of a horizontal dock.
@@ -634,8 +638,7 @@ Scope { // Scope
                                 ShapePath {
                                     strokeWidth: -1
                                     strokeColor: "transparent"
-                                    fillColor: dockRoot.spanSeamFix ? Appearance.colors.colDockBackgroundOpaque
-                                        : Appearance.colors.colDockBackground
+                                    fillColor: dockRoot.surfaceFill
                                     pathHints: ShapePath.PathSolid | ShapePath.PathNonIntersecting
                                     startX: spanShape.px(0, 0)
                                     startY: spanShape.py(0, 0)
@@ -666,8 +669,7 @@ Scope { // Scope
 
                                 ShapePath {
                                     strokeWidth: 1
-                                    strokeColor: dockRoot.spanSeamFix ? dockRoot.content.colBorderOpaque
-                                        : dockRoot.content.colBorder
+                                    strokeColor: dockRoot.surfaceOutline
                                     fillColor: "transparent"
                                     capStyle: ShapePath.FlatCap
                                     startX: spanShape.px(spanShape.side - spanShape.inset, spanShape.out)
@@ -704,16 +706,13 @@ Scope { // Scope
                                 // The Hug strip draws its own surface and outline,
                                 // and this is left only as where the strip lies.
                                 color: !Config.options.dock.showBackground || dockRoot.dockSpans ? "transparent"
-                                    : dockRoot.notchSeamFix ? Appearance.colors.colDockBackgroundOpaque
-                                    : Appearance.colors.colDockBackground
+                                    : dockRoot.surfaceFill
                                 // The outward curves take the outline on along
                                 // their sweep and are drawn over the sides they
                                 // share with the body, so what is left of this one
                                 // is the top, which is the only part on show.
                                 border.width: Config.options.dock.showBackground && !dockRoot.dockSpans ? 1 : 0
-                                border.color: dockRoot.notchSeamFix
-                                    ? dockRoot.content.colBorderOpaque
-                                    : dockRoot.content.colBorder
+                                border.color: dockRoot.surfaceOutline
                                 // The pair facing the screen edge answers to the
                                 // edge roundness; the pair facing the desktop to
                                 // the other. A corner that curves outward is drawn

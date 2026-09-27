@@ -293,9 +293,9 @@ Item {
                                         // The same state layer as the menu's rows, which the
                                         // layer colors are too faint to show on this surface.
                                         colBackgroundHover: wsButton.isCurrent ? Appearance.colors.colSecondaryContainerHover
-                                            : ColorUtils.mix(Appearance.m3colors.m3onSurface, Appearance.m3colors.m3surfaceContainer, 0.08)
+                                            : Appearance.colors.colMenuItemHover
                                         colRipple: wsButton.isCurrent ? Appearance.colors.colSecondaryContainerActive
-                                            : ColorUtils.mix(Appearance.m3colors.m3onSurface, Appearance.m3colors.m3surfaceContainer, 0.12)
+                                            : Appearance.colors.colMenuItemActive
                                         contentItem: StyledText {
                                             anchors.centerIn: parent
                                             text: String(wsButton.workspaceValue)
@@ -371,11 +371,8 @@ Item {
         implicitHeight: 36
         implicitWidth: Math.max(itemRow.implicitWidth + 20, 180)
         buttonRadius: Appearance.rounding.small
-        // The button's own hover and press colors suit another surface and
-        // all but vanish on the menu's; the text color laid over the surface,
-        // the way Material draws a state layer, shows on any palette.
-        colBackgroundHover: ColorUtils.mix(Appearance.m3colors.m3onSurface, Appearance.m3colors.m3surfaceContainer, 0.08)
-        colRipple: ColorUtils.mix(Appearance.m3colors.m3onSurface, Appearance.m3colors.m3surfaceContainer, 0.12)
+        colBackgroundHover: Appearance.colors.colMenuItemHover
+        colRipple: Appearance.colors.colMenuItemActive
 
         contentItem: RowLayout {
             id: itemRow

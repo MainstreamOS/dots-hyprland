@@ -42,8 +42,8 @@ Scope {
     // is given a moment to land.
     Process {
         id: look
-        // The shell doing the looking is a child too, so it leaves itself out.
-        command: ["sh", "-c", '[ -z "$(pgrep -P "$PPID" | grep -vx "$$")" ]']
+        // The shell doing the looking is a child too, so one child left means idle.
+        command: ["sh", "-c", '[ "$(pgrep -c -P "$PPID")" -le 1 ]']
         onExited: (exitCode, exitStatus) => {
             root._idleLooks = (exitCode === 0 && !Config.writePending) ? root._idleLooks + 1 : 0;
             if (root._idleLooks >= 2) {

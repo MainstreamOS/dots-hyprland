@@ -76,6 +76,8 @@ ShellRoot {
         TouchpadAutoDisable._watchEnabled = true
         // Only the shell's bar is ever put away, see _publishBarOpen.
         GlobalStates._publishBarOpen = true
+        // Only the shell draws the launcher, see _judgeLauncherEnabled.
+        Appearance._judgeLauncherEnabled = true
     }
 
 

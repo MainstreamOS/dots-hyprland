@@ -27,9 +27,7 @@ MouseArea {
         if (!Appearance.autoIconContrast || iconPixels.length === 0)
             return false;
         const bg = Qt.color(root.backdrop);
-        const linear = v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-        const luminance = (r, g, b) => 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-        const lbg = luminance(bg.r, bg.g, bg.b);
+        const lbg = ColorUtils.luminanceOfRgb(bg.r, bg.g, bg.b);
         let total = 0;
         let standing = 0;
         for (let i = 0; i < iconPixels.length; i += 4) {
@@ -39,11 +37,11 @@ MouseArea {
             const r = iconPixels[i] / 255 * a + bg.r * (1 - a);
             const g = iconPixels[i + 1] / 255 * a + bg.g * (1 - a);
             const b = iconPixels[i + 2] / 255 * a + bg.b * (1 - a);
-            const l = luminance(r, g, b);
+            const l = ColorUtils.luminanceOfRgb(r, g, b);
             total += a;
             // A pixel counts if it is lighter or darker enough to see, or a
             // color far enough from the surface to see at the same lightness.
-            if ((Math.max(l, lbg) + 0.05) / (Math.min(l, lbg) + 0.05) >= 1.5
+            if (ColorUtils.contrastOfLuminances(l, lbg) >= 1.5
                     || Math.hypot(r - bg.r, g - bg.g, b - bg.b) >= 0.35)
                 standing += a;
         }

@@ -90,9 +90,6 @@ Item {
     // Hyprland does not care how a key is spelled, so the same binding file
     // holds both `F1` and `f10`. The maps above are written one way, so the
     // lookup folds case rather than expecting the binds to agree with them.
-    // A capitalization pass used to live in CheatsheetKeybindsCategory.qml and
-    // went with that file when the cheatsheet was reverted, which is what left
-    // the function key symbols working for some binds and not others.
     readonly property var keySubstitutionsFolded: {
         const folded = {};
         for (const k in root.keySubstitutions)

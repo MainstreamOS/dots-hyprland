@@ -94,14 +94,16 @@ Singleton {
     // kept while they read, and otherwise unless the opposite ones read
     // clearly better against every part.
     readonly property bool autoIconContrast: !paletteSettling && (Config.options?.appearance.autoIconContrast ?? true)
+    // Only the shell draws the launcher, the app list and the dock over the
+    // dim. Settings, the Welcome app and the dialogs load this too, and would
+    // otherwise work out all of their colors again on every palette change
+    // and slider step for nothing. shell.qml turns this on.
+    property bool _judgeLauncherEnabled: false
     function worstContrast(ink, places) {
-        return Math.min(...places.map(bg => ColorUtils.contrastRatio(ink, bg)))
+        return ColorUtils.worstContrast(ink, places)
     }
     function contentFlipped(places, turnedPlaces) {
-        if (!autoIconContrast)
-            return false
-        const own = worstContrast(m3colors.m3onSurface, places)
-        return own < 4.5 && worstContrast(ColorUtils.mirrorLightness(m3colors.m3onSurface), turnedPlaces) > own * 1.25
+        return autoIconContrast && ColorUtils.inkTurns(m3colors.m3onSurface, places, turnedPlaces)
     }
     // A color someone picked in a middle tone leaves both of the palette's
     // inks short, and there the inks are carried to white or black anyway, so
@@ -235,9 +237,6 @@ Singleton {
             ? root.barPickedFlipped
             : root.followsDock(root.barPillForDock) ? root.dockContent.flipped
             : root.contentFlipped(root.barPillAsIs, root.barPillPlaces(root.barBackdrop, root.colors.colBarWidget, root.barPillTurns))
-        // Judged on this surface's own stock places, which are what its stock
-        // tokens are measured against, whatever the dock decided.
-        stockFlipped: root.contentFlipped(root.barStockPillPlaces, root.barStockPillPlaces)
     }
     readonly property SurfaceContent barStripContent: SurfaceContent {
         m3: root.m3colors
@@ -246,7 +245,6 @@ Singleton {
         stockBackdrops: [root.barStockBackdrop]
         adaptive: root.autoIconContrast
         flipped: root.followsDock(backdrops) ? root.dockContent.flipped : root.contentFlipped(backdrops, backdrops)
-        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
     readonly property SurfaceContent dockContent: SurfaceContent {
         m3: root.m3colors
@@ -255,7 +253,6 @@ Singleton {
         stockBackdrops: [root.dockStockBackdrop]
         adaptive: root.autoIconContrast
         flipped: root.dockJoinsBar ? !root.dockOwnFlipped : root.dockOwnFlipped
-        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
 
     // The dim is laid over its window's faint clear color, and both over
@@ -299,9 +296,8 @@ Singleton {
         palette: root.colors
         backdrops: [root.dockOverLauncherBackdrop]
         stockBackdrops: [root.dockOverLauncherStockBackdrop]
-        adaptive: root.autoIconContrast
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         flipped: root.contentFlipped(backdrops, backdrops)
-        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
     readonly property color launcherBackdrop: laidOverDim(colors.colLauncherPanel, colors.colLauncherShadow,
         colors.colLauncherDim, true)
@@ -336,7 +332,7 @@ Singleton {
         const need = Math.min(content.markContrast,
             borderStanding(content.onStock(colors.colOutlineVariant), dockStockSurface, stockUnder))
         const stands = o => borderStanding(o, surface, under)
-        const reaches = o => stands(o) >= need - 0.01
+        const reaches = o => ColorUtils.meets(stands(o), need)
         if (reaches(outline))
             return colors.dockBorder(outline)
         const line = ColorUtils.composite(colors.surfaceBorder(outline, surface), under)
@@ -358,22 +354,20 @@ Singleton {
         palette: root.colors
         backdrops: [root.launcherBackdrop]
         stockBackdrops: [root.launcherStockBackdrop]
-        adaptive: root.autoIconContrast
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         holdsFills: true
         flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
             ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
-        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
     readonly property LauncherSurfaceContent drawerContent: LauncherSurfaceContent {
         m3: root.m3colors
         palette: root.colors
         backdrops: [root.drawerBackdrop]
         stockBackdrops: [root.drawerStockBackdrop]
-        adaptive: root.autoIconContrast
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         holdsFills: true
         flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
             ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
-        stockFlipped: root.contentFlipped(stockBackdrops, stockBackdrops)
     }
 
     // The colors content is drawn in on a surface that can be turned the other
@@ -392,7 +386,9 @@ Singleton {
         // index, with which way the content would be drawn there.
         property var backdrops: ["black"]
         property var stockBackdrops: ["black"]
-        property bool stockFlipped: false
+        // Judged on this surface's own stock places, which are what its stock
+        // tokens are measured against, whatever the dock decided.
+        property bool stockFlipped: adaptive && ColorUtils.inkTurns(m3.m3onSurface, stockBackdrops, stockBackdrops)
         // Whether a fill keeps at least the edge it has on the stock surface.
         // In the launcher a fill is what shows where the keyboard is and
         // which row is picked, so one that fades into the surface loses the
@@ -633,8 +629,8 @@ Singleton {
             const light = ColorUtils.relativeLuminance(restText) > ColorUtils.relativeLuminance(here)
             const need = Math.min(textContrast, ColorUtils.contrastRatio(onStock(paletteText), laid(onStock(c), stockRest)))
             const shows = standing(onStock(c), stockRest)
-            const holds = f => ColorUtils.contrastRatio(light ? "white" : "black", laid(f, here)) >= need - 0.01
-                && standing(f, here) >= shows - 0.01
+            const holds = f => ColorUtils.meets(ColorUtils.contrastRatio(light ? "white" : "black", laid(f, here)), need)
+                && ColorUtils.meets(standing(f, here), shows)
             if (holds(pressed))
                 return pressed
             const toward = ColorUtils.mixForContrast(rest, light ? "white" : "black", here, shows)
@@ -651,7 +647,7 @@ Singleton {
                 return fillColor
             const side = ColorUtils.relativeLuminance(tone(c)) > ColorUtils.relativeLuminance(laid(fillColor, backdrops[0])) ? "white" : "black"
             const need = Math.min(textContrast, stockOn(c, paletteFill))
-            return ColorUtils.mixUntil(fillColor, toward, f => ColorUtils.contrastRatio(side, laid(f, backdrops[0])) >= need - 0.01)
+            return ColorUtils.mixUntil(fillColor, toward, f => ColorUtils.meets(ColorUtils.contrastRatio(side, laid(f, backdrops[0])), need))
         }
         // A hover fill that takes the place of a resting one, set off it as
         // far as the palette's own pair stands apart on the stock surface, or
@@ -669,12 +665,12 @@ Singleton {
             const restHere = laid(rest, backdrops[0])
             const shows = ColorUtils.contrastRatio(laid(onStock(paletteFill), stockBackdrops[0]),
                 laid(onStock(paletteRest), stockBackdrops[0]))
-            const apart = f => ColorUtils.contrastRatio(laid(f, backdrops[0]), restHere) >= shows - 0.01
+            const apart = f => ColorUtils.meets(ColorUtils.contrastRatio(laid(f, backdrops[0]), restHere), shows)
             const light = ColorUtils.relativeLuminance(tone(c)) > ColorUtils.relativeLuminance(laid(fillColor, backdrops[0]))
             const need = Math.min(textContrast, stockOn(c, paletteFill))
-            const reads = f => ColorUtils.contrastRatio(light ? "white" : "black", laid(f, backdrops[0])) >= need - 0.01
+            const reads = f => ColorUtils.meets(ColorUtils.contrastRatio(light ? "white" : "black", laid(f, backdrops[0])), need)
             const standsOff = Math.min(markContrast, standing(onStock(paletteFill), stockBackdrops[0]))
-            const stands = f => standing(f, backdrops[0]) >= standsOff - 0.01
+            const stands = f => ColorUtils.meets(standing(f, backdrops[0]), standsOff)
             if (apart(fillColor)) {
                 if (stands(fillColor))
                     return fillColor
@@ -940,8 +936,7 @@ Singleton {
         // The outline is the palette's own recipe, the outline tone laid over
         // the surface, made with the surface as drawn: a picked color gets an
         // edge in its own hue, and the outline tone follows the content's side.
-        property color colBarBackgroundBorder: ColorUtils.applyAlpha(
-            ColorUtils.mix(root.barStripContent.colOutlineVariant, colBarBackground, 0.4), colBarBackground.a)
+        property color colBarBackgroundBorder: surfaceBorder(root.barStripContent.colOutlineVariant, colBarBackground)
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
         property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
@@ -1083,6 +1078,11 @@ Singleton {
         property color colSurfaceContainerHighest: ColorUtils.solveOverlayColor(m3colors.m3surfaceContainerHigh, m3colors.m3surfaceContainerHighest, 1 - root.contentTransparency)
         property color colSurfaceContainerHighestHover: ColorUtils.mix(m3colors.m3surfaceContainerHighest, m3colors.m3onSurface, 0.95)
         property color colSurfaceContainerHighestActive: ColorUtils.mix(m3colors.m3surfaceContainerHighest, m3colors.m3onSurface, 0.85)
+        // The layer hover and press colors all but vanish on a menu's surface;
+        // the text color laid over the surface, the way Material draws a state
+        // layer, shows on any palette.
+        property color colMenuItemHover: ColorUtils.mix(m3colors.m3onSurface, m3colors.m3surfaceContainer, 0.08)
+        property color colMenuItemActive: ColorUtils.mix(m3colors.m3onSurface, m3colors.m3surfaceContainer, 0.12)
         property color colOnSurface: m3colors.m3onSurface
         property color colOnSurfaceVariant: m3colors.m3onSurfaceVariant
         // Misc
@@ -1424,14 +1424,14 @@ Singleton {
         readonly property bool dockSpans: Config.options?.dock.cornerStyle === "span"
         property bool barShown: root.barShownOnFile
         property string dockEdge: {
-            const flip = { top: "bottom", bottom: "top", left: "right", right: "left" };
+            const pos = Config.options.dock.position;
             // config.json is hand-editable and every consumer picks its edge by
             // negation, so an unrecognised value would anchor the dock to all
             // four edges at once instead of falling back to one.
-            const want = flip[Config.options.dock.position] ? Config.options.dock.position : "bottom";
+            const want = ["top", "bottom", "left", "right"].includes(pos) ? pos : "bottom";
             if (root.sizes.dockSpans)
-                return root.sizes.barShown ? flip[root.sizes.barEdge] : want;
-            return want === root.sizes.barEdge ? flip[want] : want;
+                return root.sizes.barShown ? root.sizes.oppositeEdge(root.sizes.barEdge) : want;
+            return want === root.sizes.barEdge ? root.sizes.oppositeEdge(want) : want;
         }
         // Whether the dock may be set on an edge in the style it has now.
         function dockEdgeAllowed(edge) {
