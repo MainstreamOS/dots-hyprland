@@ -48,7 +48,7 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 12   // bump as you add more cards
+    readonly property int cardCount: 13   // bump as you add more cards
     // The window's own title doubles as each page's heading, so a page that
     // names itself does not spend a line of its own saying so.
     readonly property string cardTitle: {
@@ -64,9 +64,9 @@ ApplicationWindow {
         return Translation.tr("Getting around");
     }
 
-    // The footer shows the walkthrough as three parts, since twelve steps
-    // read as a long way to go to someone new. The ranges come from the apps
-    // page and the page count, so a tour page added later lands in Tour.
+    // The footer shows the walkthrough as three parts, since the full list of
+    // steps reads as a long way to go to someone new. The ranges come from the
+    // apps page and the page count, so a tour page added later lands in Tour.
     readonly property var sections: [
         { label: Translation.tr("Setup"),  first: 0, count: root.installCardIndex + 1 },
         { label: Translation.tr("Tour"),   first: root.installCardIndex + 1, count: root.cardCount - root.installCardIndex - 2 },
@@ -336,7 +336,7 @@ ApplicationWindow {
 
                 // Cards are built lazily — only the visited ones are
                 // instantiated, so the welcome paints card 0 immediately
-                // instead of constructing all eleven (with their timers and
+                // instead of constructing every card (with their timers and
                 // animations) up front. Once shown, a card stays loaded so
                 // navigating back to it is instant.
                 LazyCard { sourceComponent: card0Comp }
@@ -349,6 +349,7 @@ ApplicationWindow {
                 LazyCard { sourceComponent: card4Comp }
                 LazyCard { sourceComponent: card5Comp }
                 LazyCard { sourceComponent: card6Comp }
+                LazyCard { sourceComponent: cardDesktopMenuComp }
                 LazyCard { sourceComponent: card7Comp }
                 LazyCard { sourceComponent: card8Comp }
                 // add more LazyCard { sourceComponent: cardNComp } here
@@ -364,6 +365,7 @@ ApplicationWindow {
             Component { id: card4Comp; Card4MoveBetweenWorkspaces {} }
             Component { id: card5Comp; Card5FileDragViaBar {} }
             Component { id: card6Comp; Card6DockPreview {} }
+            Component { id: cardDesktopMenuComp; CardDesktopMenu {} }
             Component { id: card7Comp; Card7AppShowcaseTabs {} }
             Component { id: card8Comp; Card8Contribute {} }
         }
@@ -5524,6 +5526,554 @@ ApplicationWindow {
             PauseAnimation { duration: 280 }
             NumberAnimation { target: card6; property: "cursorX"; to: card6.mockW + 60; duration: 500; easing.type: Easing.InCubic }
             ScriptAction { script: card6.dockHovered = false }
+            PauseAnimation { duration: 600 }
+        }
+    }
+
+
+    // ── Desktop right-click menu ─────────────────────────────────────────
+    // Picks up where the dock page leaves off: the same bar and dock over the
+    // workspace that page emptied, so the only new thing is where the
+    // right-click lands. The menu is DesktopMenu.qml's, row for row, drawn at
+    // the size the dock page draws its own menu.
+    component CardDesktopMenu : Item {
+        id: cardDesk
+
+        // ── State ──
+        property real cursorX: 1000
+        property real cursorY: 1000
+        property real cursorPulse: 1.0     // briefly scales the cursor on right-click
+        property bool menuVisible: false
+
+        // The rows of DesktopMenu.qml, in its order. A divided row has the
+        // menu's rule above it, and a flipped glyph is turned over the way
+        // that menu turns the bar's.
+        readonly property var menuRows: [
+            { icon: "image", label: Translation.tr("Change Wallpaper") },
+            { icon: "dashboard_customize", label: Translation.tr("Personalize Desktop") },
+            { icon: "toast", flipped: true, divided: true, label: Translation.tr("Personalize Bar") },
+            { icon: "toast", label: Translation.tr("Personalize Dock") },
+            { icon: "display_settings", divided: true, label: Translation.tr("Display Settings") },
+            { icon: "style", divided: true, label: Translation.tr("Switch Theme") }
+        ]
+
+        // ── Mockup geometry ──
+        readonly property int mockW: root.mockW
+        readonly property int mockH: root.mockH
+
+        // Bar and dock as the dock page draws them, so turning the page from
+        // there leaves both exactly where they were.
+        readonly property int barW: root.barW
+        readonly property int barH: 30
+        readonly property int barX: (mockW - barW) / 2
+        readonly property int barY: 12
+        readonly property int barPillH: 22
+        readonly property int barSlotW: root.barSlotW
+        readonly property int barSlotH: root.barSlotH
+        readonly property int barSlotR: root.barSlotR
+        readonly property int barIconSize: root.barIconSize
+        readonly property int barIndicatorInset: root.barIndicatorInset
+        // Workspace 3, where the dock page's loop ends once Spotify fades.
+        readonly property int currentWs: 2
+        readonly property int totalWs: 10
+
+        readonly property var dockApps: [
+            "google-chrome", "spotify", "org.gnome.Nautilus", "gimp", "discord"
+        ]
+        readonly property int dockIconSize: 29
+        readonly property int dockGap: 14
+        readonly property int dockPadding: 14
+        readonly property int dockCellCount: dockApps.length + 2   // pin + apps + drawer
+        readonly property real dockW: dockCellCount * dockIconSize + (dockCellCount - 1) * dockGap + 2 * dockPadding
+        readonly property real dockH: dockIconSize + 2 * dockPadding
+        readonly property real dockX: (mockW - dockW) / 2
+        readonly property real dockY: mockH - dockH - 14
+
+        // The menu opens with its corner on the click and grows right and
+        // down, as DesktopMenu.qml places it. This spot leaves the whole menu
+        // room between the bar and the dock, so it never has to flip.
+        readonly property int clickX: 220
+        readonly property int clickY: 86
+        readonly property int menuPad: 4
+        readonly property int menuRowH: 26
+        readonly property int menuSepH: 7
+        readonly property int menuHoverX: clickX + 56
+
+        function menuRowTop(i) {
+            let top = menuPad
+            for (let r = 0; r <= i; r++) {
+                if (menuRows[r].divided) top += menuSepH
+                if (r < i) top += menuRowH
+            }
+            return top
+        }
+        function menuRowCenterY(i) {
+            return clickY + menuRowTop(i) + menuRowH / 2
+        }
+
+        // Worked out from where the pointer is rather than set by the
+        // timeline, so a row lights the moment the pointer crosses into it,
+        // as a real hover would.
+        readonly property int hoveredRow: {
+            if (!menuVisible) return -1
+            const x = cursorX - clickX
+            const y = cursorY - clickY
+            if (x < menuPad || x > deskMenu.width - menuPad) return -1
+            for (let i = 0; i < menuRows.length; i++) {
+                const top = menuRowTop(i)
+                if (y >= top && y < top + menuRowH) return i
+            }
+            return -1
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 28
+            spacing: 28
+
+            // Left: title + body
+            CardLeftColumn {
+                title: Translation.tr("Right-click the desktop for quick settings")
+                body: Translation.tr("Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.")
+            }
+
+            // Right: animated mockup
+            Item {
+                id: deskMockupHost
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                Item {
+                    id: deskMockupContainer
+                    width: cardDesk.mockW
+                    height: cardDesk.mockH
+                    anchors.centerIn: parent
+                    scale: Math.min(
+                        1.0,
+                        (deskMockupHost.width  - 8) / width,
+                        (deskMockupHost.height - 8) / height
+                    )
+
+                    Rectangle {
+                        id: deskMockup
+                        anchors.fill: parent
+                        radius: 14
+                        color: "#0e0e12"
+                        border.color: ColorUtils.transparentize(Appearance.colors.colOutline, 0.6)
+                        border.width: 1
+                        clip: true
+
+                        // ─── Bar at top (same as the dock page's) ───
+                        Rectangle {
+                            id: barFrameDesk
+                            x: cardDesk.barX
+                            y: cardDesk.barY
+                            width: cardDesk.barW
+                            height: cardDesk.barH
+                            radius: cardDesk.barH / 2
+                            color: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.45)
+                            border.color: ColorUtils.transparentize(Appearance.colors.colOutline, 0.35)
+                            border.width: 1
+
+                            // Left: the workspaces, then the tray, the way the
+                            // shipped layout orders them.
+                            PillBg {
+                                id: workspacePillDesk
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: cardDesk.barPillH
+                                width: barWsStripDesk.implicitWidth + 10
+                                Item {
+                                    id: barWsStripDesk
+                                    anchors.centerIn: parent
+                                    implicitWidth: cardDesk.barSlotW * cardDesk.totalWs
+                                    implicitHeight: cardDesk.barSlotH
+
+                                    WorkspaceIndicator { anchors.fill: parent; z: 1; card: cardDesk }
+
+                                    Row {
+                                        z: 2
+                                        anchors.fill: parent
+                                        Repeater {
+                                            model: cardDesk.totalWs
+                                            delegate: Item {
+                                                required property int index
+                                                width: cardDesk.barSlotW
+                                                height: cardDesk.barSlotH
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: cardDesk.barSlotR * 2
+                                                    height: cardDesk.barSlotR * 2
+                                                    radius: width / 2
+                                                    color: Appearance.colors.colOnLayer0
+                                                    opacity: 0.35
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            PillBg {
+                                id: sysTrayPillDesk
+                                anchors.left: workspacePillDesk.right
+                                anchors.leftMargin: 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: cardDesk.barPillH
+                                width: trayRowDesk.implicitWidth + 12
+                                Row {
+                                    id: trayRowDesk
+                                    anchors.centerIn: parent
+                                    spacing: 6
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "discord-tray.svg" }
+                                    TrayAppIcon { anchors.verticalCenter: parent.verticalCenter; trayIcon: "steam_tray_mono.svg" }
+                                }
+                            }
+
+                            // Center: the utility buttons, the clock, and the
+                            // weather beside it.
+                            Row {
+                                id: barCenterDesk
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+                                PillBg {
+                                    height: cardDesk.barPillH
+                                    width: utilRowDesk.implicitWidth + 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Row {
+                                        id: utilRowDesk
+                                        anchors.centerIn: parent
+                                        spacing: 5
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "screenshot_region"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "videocam"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "mic"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                    }
+                                }
+                                PillBg {
+                                    height: cardDesk.barPillH
+                                    width: clockTextDesk.implicitWidth + 16
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    StyledText {
+                                        id: clockTextDesk
+                                        anchors.centerIn: parent
+                                        text: "9:41 AM"
+                                        font.pixelSize: 10
+                                        color: Appearance.colors.colOnLayer1
+                                    }
+                                }
+                                PillBg {
+                                    height: cardDesk.barPillH
+                                    width: weatherRowDesk.implicitWidth + 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Row {
+                                        id: weatherRowDesk
+                                        anchors.centerIn: parent
+                                        spacing: 2
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "clear_day"
+                                            iconSize: 11
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        StyledText {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "73°F"
+                                            font.pixelSize: 9
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Right: what is playing, then the status icons
+                            // against the screen edge.
+                            Row {
+                                id: barRightDesk
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 3
+                                MediaPill { id: mediaPillDesk; card: cardDesk; inRow: true }
+                                PillBg {
+                                    height: cardDesk.barPillH
+                                    width: indicatorRowDesk.implicitWidth + 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Row {
+                                        id: indicatorRowDesk
+                                        anchors.centerIn: parent
+                                        spacing: 6
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "volume_up"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "lan"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "bluetooth"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "settings"; iconSize: 10
+                                            color: Appearance.colors.colOnLayer1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ─── Dock (same as the dock page's) ───
+                        Rectangle {
+                            id: dockStripDesk
+                            x: cardDesk.dockX
+                            y: cardDesk.dockY
+                            width: cardDesk.dockW
+                            height: cardDesk.dockH
+                            radius: Appearance.rounding.large
+                            color: "#000000"
+                            border.color: ColorUtils.transparentize(Appearance.colors.colOutline, 0.5)
+                            border.width: 1
+                            z: 2
+
+                            Row {
+                                anchors.left: parent.left
+                                anchors.leftMargin: cardDesk.dockPadding
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: cardDesk.dockGap
+
+                                // Pin button
+                                Item {
+                                    width: cardDesk.dockIconSize
+                                    height: cardDesk.dockIconSize
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "push_pin"
+                                        iconSize: cardDesk.dockIconSize - 6
+                                        color: Appearance.colors.colOnLayer0
+                                        opacity: 0.85
+                                    }
+                                }
+
+                                // Pinned apps, each with its open-window mark
+                                Repeater {
+                                    model: cardDesk.dockApps
+                                    delegate: Item {
+                                        id: deskDockSlot
+                                        required property string modelData
+                                        width: cardDesk.dockIconSize
+                                        height: cardDesk.dockIconSize
+                                        IconImage {
+                                            anchors.centerIn: parent
+                                            implicitSize: cardDesk.dockIconSize
+                                            source: Quickshell.iconPath(deskDockSlot.modelData, "image-missing")
+                                        }
+                                        Rectangle {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.bottom: parent.bottom
+                                            anchors.bottomMargin: -6
+                                            width: 10
+                                            height: 2
+                                            radius: 1
+                                            color: Appearance.colors.colOnLayer0
+                                            opacity: 0.55
+                                        }
+                                    }
+                                }
+
+                                // App drawer toggle
+                                Item {
+                                    width: cardDesk.dockIconSize
+                                    height: cardDesk.dockIconSize
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: "apps"
+                                        iconSize: cardDesk.dockIconSize - 6
+                                        color: Appearance.colors.colOnLayer0
+                                        opacity: 0.85
+                                    }
+                                }
+                            }
+                        }
+
+                        // ─── Desktop menu ───
+                        // The dock page's menu card with DesktopMenu.qml's
+                        // rows in it, sized like that page's rows.
+                        Rectangle {
+                            id: deskMenu
+                            x: cardDesk.clickX
+                            y: cardDesk.clickY
+                            width: deskMenuColumn.implicitWidth + cardDesk.menuPad * 2
+                            height: deskMenuColumn.implicitHeight + cardDesk.menuPad * 2
+                            radius: 12
+                            color: Appearance.m3colors.m3surfaceContainer
+                            // Fade only, no grow: the real menu fades in
+                            // right where the pointer already is.
+                            opacity: cardDesk.menuVisible ? 1 : 0
+                            visible: opacity > 0
+                            z: 7
+                            Behavior on opacity {
+                                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                            }
+
+                            ColumnLayout {
+                                id: deskMenuColumn
+                                anchors {
+                                    fill: parent
+                                    margins: cardDesk.menuPad
+                                }
+                                spacing: 0
+
+                                Repeater {
+                                    model: cardDesk.menuRows
+                                    delegate: ColumnLayout {
+                                        id: deskMenuEntry
+                                        required property var modelData
+                                        required property int index
+                                        Layout.fillWidth: true
+                                        spacing: 0
+
+                                        ContextMenuSeparator {
+                                            visible: deskMenuEntry.modelData.divided === true
+                                            implicitHeight: cardDesk.menuSepH
+                                        }
+
+                                        // Lit with a state layer rather than the real
+                                        // row's hover color, which sits too close to
+                                        // the card's own to read at this size.
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            implicitHeight: cardDesk.menuRowH
+                                            implicitWidth: Math.max(deskMenuRow.implicitWidth + 24, 144)
+                                            radius: 8
+                                            color: ColorUtils.transparentize(Appearance.m3colors.m3onSurface,
+                                                cardDesk.hoveredRow === deskMenuEntry.index ? 0.88 : 1)
+                                            Behavior on color {
+                                                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+                                            }
+
+                                            RowLayout {
+                                                id: deskMenuRow
+                                                anchors {
+                                                    fill: parent
+                                                    leftMargin: 10
+                                                    rightMargin: 14
+                                                }
+                                                spacing: 8
+                                                MaterialSymbol {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    text: deskMenuEntry.modelData.icon
+                                                    iconSize: 13
+                                                    rotation: deskMenuEntry.modelData.flipped ? 180 : 0
+                                                    color: Appearance.m3colors.m3onSurface
+                                                }
+                                                StyledText {
+                                                    Layout.fillWidth: true
+                                                    text: deskMenuEntry.modelData.label
+                                                    font.pixelSize: 11
+                                                    color: Appearance.m3colors.m3onSurface
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ─── Cursor cue ───
+                        MaterialSymbol {
+                            id: deskCursor
+                            z: 8
+                            text: "arrow_selector_tool"
+                            iconSize: 20
+                            color: Appearance.colors.colOnLayer0
+                            x: cardDesk.cursorX - 4
+                            y: cardDesk.cursorY - 4
+                            scale: cardDesk.cursorPulse
+                            transformOrigin: Item.TopLeft
+                            Behavior on scale {
+                                NumberAnimation { duration: 120; easing.type: Easing.OutBack }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Animation timeline ──
+        // The pointer comes onto the empty workspace and right-clicks it, and
+        // the menu opens at the click. It then runs down every row so each one
+        // lights in turn, and comes back up to settle on Personalize Desktop
+        // before the menu closes and the loop starts over.
+        SequentialAnimation {
+            id: deskCycle
+            running: cardDesk.visible
+            loops: Animation.Infinite
+
+            // Reset
+            ScriptAction {
+                script: {
+                    cardDesk.cursorX = cardDesk.mockW + 60
+                    cardDesk.cursorY = cardDesk.mockH * 0.45
+                    cardDesk.menuVisible = false
+                    cardDesk.cursorPulse = 1.0
+                }
+            }
+            PauseAnimation { duration: 700 }
+
+            // Cursor drifts in onto the bare desktop
+            ParallelAnimation {
+                NumberAnimation { target: cardDesk; property: "cursorX"; to: cardDesk.clickX; duration: 900; easing.type: Easing.OutCubic }
+                NumberAnimation { target: cardDesk; property: "cursorY"; to: cardDesk.clickY; duration: 900; easing.type: Easing.OutCubic }
+            }
+            PauseAnimation { duration: 350 }
+
+            // Right-click: quick cursor pulse, menu opens at the pointer
+            ScriptAction { script: cardDesk.cursorPulse = 0.78 }
+            PauseAnimation { duration: 110 }
+            ParallelAnimation {
+                ScriptAction { script: cardDesk.cursorPulse = 1.0 }
+                ScriptAction { script: cardDesk.menuVisible = true }
+            }
+            PauseAnimation { duration: 700 }
+
+            // Onto the first row
+            ParallelAnimation {
+                NumberAnimation { target: cardDesk; property: "cursorX"; to: cardDesk.menuHoverX; duration: 380; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: cardDesk; property: "cursorY"; to: cardDesk.menuRowCenterY(0); duration: 380; easing.type: Easing.InOutQuad }
+            }
+            PauseAnimation { duration: 600 }
+
+            // Down past every row to the last
+            NumberAnimation { target: cardDesk; property: "cursorY"; to: cardDesk.menuRowCenterY(cardDesk.menuRows.length - 1); duration: 1800; easing.type: Easing.InOutQuad }
+            PauseAnimation { duration: 700 }
+
+            // Back up to settle on Personalize Desktop
+            NumberAnimation { target: cardDesk; property: "cursorY"; to: cardDesk.menuRowCenterY(1); duration: 900; easing.type: Easing.InOutQuad }
+            PauseAnimation { duration: 2200 }
+
+            // Close menu, cursor parks off-screen right for the loop
+            ScriptAction { script: cardDesk.menuVisible = false }
+            PauseAnimation { duration: 280 }
+            NumberAnimation { target: cardDesk; property: "cursorX"; to: cardDesk.mockW + 60; duration: 500; easing.type: Easing.InCubic }
             PauseAnimation { duration: 600 }
         }
     }
