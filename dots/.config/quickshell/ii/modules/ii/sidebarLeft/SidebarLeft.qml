@@ -48,7 +48,9 @@ Scope { // Scope
         }
         stdout: StdioCollector {
             onStreamFinished: {
-                pinWithFunnyHyprlandWorkaroundProc.hook(text);
+                // The last step has nothing to run after it.
+                if (pinWithFunnyHyprlandWorkaroundProc.hook)
+                    pinWithFunnyHyprlandWorkaroundProc.hook(text);
             }
         }
     }
