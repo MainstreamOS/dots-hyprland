@@ -2455,5 +2455,18 @@
   "Your folders stay closed on %1, even though it is turned on under Networks.": "Your folders stay closed on %1, even though it is turned on under Networks.",
   "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off.": "The firewall is turned off while sharing is running, so your shared folders can be reached from other networks this computer is connected to. Turn the firewall back on, or turn sharing off.",
   "AI CLI installer": "AI CLI installer",
-  "AI CLI installer polkit action": "AI CLI installer polkit action"
+  "AI CLI installer polkit action": "AI CLI installer polkit action",
+  "Plan | Your Google account. Pick it to use its models": "Plan | Your Google account. Pick it to use its models",
+  "Plan | %1 through your Google account. No API key needed": "Plan | %1 through your Google account. No API key needed",
+  "Gemini could not use your Google sign-in. Log in again to keep chatting.": "Gemini could not use your Google sign-in. Log in again to keep chatting.",
+  "Finish signing in to %1 in your browser…": "Finish signing in to %1 in your browser…",
+  "Open the page again": "Open the page again",
+  "Antigravity stopped with code %1": "Antigravity stopped with code %1",
+  "Plan | Google's Gemini through Antigravity and your Google account, free or with Google AI Pro or Ultra. Sign in from the sidebar, no API key needed": "Plan | Google's Gemini through Antigravity and your Google account, free or with Google AI Pro or Ultra. Sign in from the sidebar, no API key needed",
+  "Signed in. Gemini is in the picker now and answers through your Google account.": "Signed in. Gemini is in the picker now and answers through your Google account.",
+  "Sign in with a terminal": "Sign in with a terminal",
+  "Opens the full app, which shows any first-run screens and takes a pasted sign-in code.": "Opens the full app, which shows any first-run screens and takes a pasted sign-in code.",
+  "Checking the code…": "Checking the code…",
+  "Sign in to Google in your browser within a minute, then click Copy to Clipboard on the page that shows a code. The sidebar picks it up from there.": "Sign in to Google in your browser within a minute, then click Copy to Clipboard on the page that shows a code. The sidebar picks it up from there.",
+  "Paste Code": "Paste Code"
 }

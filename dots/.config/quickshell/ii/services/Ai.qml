@@ -27,6 +27,7 @@ Singleton {
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
     property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
     property Component codexCliApiStrategy: CodexCliApiStrategy {}
+    property Component antigravityCliApiStrategy: AntigravityCliApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -366,6 +367,10 @@ Singleton {
         "anthropic": anthropicApiStrategy.createObject(this),
         "claude-code": claudeCodeApiStrategy.createObject(this),
         "codex-cli": codexCliApiStrategy.createObject(this),
+        "antigravity-cli": antigravityCliApiStrategy.createObject(this, {
+            "exitText": Translation.tr("Antigravity stopped with code %1"),
+            "lapsedText": Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."),
+        }),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -404,6 +409,38 @@ Singleton {
             "installFallback": "codex",
             "login": "codex login",
             "readyCheck": "codex login status >/dev/null 2>&1"
+        },
+        "antigravity-cli": {
+            "name": "Antigravity",
+            "cmd": "agy",
+            // Google's own installer, run with a throwaway home and config
+            // folders: after placing the binary it hands over to `agy
+            // install`, which rewrites the shell profiles wherever those point,
+            // and those are files Mainstream updates keep in step. The binary
+            // still lands in the real ~/.local/bin, and it keeps itself up to
+            // date from there.
+            "install": "t=$(mktemp -d) && trap 'rm -rf \"$t\"' EXIT && curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://antigravity.google/cli/install.sh | HOME=\"$t\" XDG_CONFIG_HOME=\"$t/.config\" ZDOTDIR=\"$t\" bash -s -- --dir \"$HOME/.local/bin\"",
+            // A one-line question starts Google's sign-in by itself: the CLI
+            // opens the browser, waits a minute for the code Google's page
+            // shows, then answers and exits. It only offers that when it has a
+            // terminal, so script gives it a hidden one, fed from a pipe the
+            // sidebar writes the code into; held open both ways here, the pipe
+            // never reads as closed while the CLI waits. It runs in the chat's
+            // own folder so the question joins no other history, in a session
+            // of its own so a retry can end it whole, and the pid is checked
+            // first since it may be reused after a restart. Its exit code is
+            // kept so a sign-in that ran out of time says so at once.
+            "login": "dir=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli\"; mkdir -p \"$dir\" && cd \"$dir\" || exit 1; p=$(cat login.pid 2>/dev/null); if [ -n \"$p\" ] && [ \"$(ps -o comm= -p \"$p\")\" = bash ] && [ \"$(ps -o sid= -p \"$p\" | tr -d ' ')\" = \"$p\" ]; then kill -- -\"$p\"; fi; rm -f login.exit code.fifo; mkfifo -m 600 code.fifo || exit 1; setsid bash -c 'exec 3<>code.fifo; SHELL=/bin/bash script -qec \"agy --disable-slash-commands --print=\\\"Reply with only these words: You are signed in.\\\"\" /dev/null <&3 > login.log 2>&1; echo $? > login.exit; rm -f code.fifo' > /dev/null 2>&1 < /dev/null & echo $! > login.pid",
+            // Where the code Google's page shows goes; see login above.
+            "loginCodePipe": "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli/code.fifo",
+            "loginInBackground": true,
+            "loginFailedCheck": "f=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli/login.exit\"; [ -s \"$f\" ] && [ \"$(cat \"$f\")\" != 0 ]",
+            // The full app, for a sign-in the hidden one could not finish: it
+            // shows any first-run screens and takes a pasted code.
+            "terminalLogin": "dir=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli\"; mkdir -p \"$dir\" && cd \"$dir\" && rm -f login.exit && agy",
+            // The login lives in the system keyring, so the CLI is the only
+            // reliable judge; listing models fails at once when signed out.
+            "readyCheck": "timeout 20 agy models >/dev/null 2>&1"
         }
     })
     readonly property var cliPlanModels: ({
@@ -420,6 +457,11 @@ Singleton {
             "codex-terra": { alias: "gpt-5.6-terra", name: "Codex Terra" },
             "codex-luna": { alias: "gpt-5.6-luna", name: "Codex Luna" },
             "codex-gpt-5-5": { alias: "gpt-5.5", name: "Codex GPT-5.5" },
+        },
+        // No alias: the CLI answers with the model the account uses by
+        // default until the list the signed-in account offers is known.
+        "antigravity-cli": {
+            "gemini-plan-default": { alias: "", name: "Gemini" },
         }
     })
     readonly property var cliPlans: ({
@@ -450,6 +492,23 @@ Singleton {
             homepage: "https://learn.chatgpt.com/docs/codex/cli",
             firstPick: "codex-terra",
             idPrefix: "codex-",
+        },
+        // Google serves personal accounts through Antigravity now; the
+        // Gemini CLI turns them away.
+        "antigravity-cli": {
+            // "gemini" alone would also match the key-backed Gemini ids.
+            setupId: "gemini-plan",
+            setupName: "Gemini (Google account)",
+            setupDescription: Translation.tr("Plan | Google's Gemini through Antigravity and your Google account, free or with Google AI Pro or Ultra. Sign in from the sidebar, no API key needed"),
+            readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
+            setupHomepage: "https://antigravity.google/product/antigravity-cli",
+            modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
+            signedIn: Translation.tr("Signed in. Gemini is in the picker now and answers through your Google account."),
+            icon: "antigravity-symbolic",
+            endpoint: "https://antigravity.google",
+            homepage: "https://antigravity.google",
+            firstPick: "gemini-plan-default",
+            idPrefix: "gemini-plan",
         }
     })
     property var cliPlanState: ({})
@@ -537,7 +596,8 @@ Singleton {
             if (!root._detectQueue.includes(fmt)) root._detectQueue.push(fmt);
             return;
         }
-        const script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${entry.readyCheck}; then echo ready; fi; fi < /dev/null`;
+        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${entry.readyCheck}; then echo ready; fi; fi < /dev/null`;
+        if (entry.loginFailedCheck) script += `; if ${entry.loginFailedCheck}; then echo loginfailed; fi`;
         cliDetectProc.format = fmt;
         cliDetectProc.command = ["bash", "-lc", script];
         cliDetectProc.running = true;
@@ -568,16 +628,130 @@ Singleton {
     // The login flow is interactive: only under a terminal does the CLI print
     // its link, open the browser, and take back whatever the flow needs. So
     // the sign-in gets a real terminal window and the watcher below notices
-    // when the login lands.
+    // when the login lands. A CLI whose only question can be answered for the
+    // user signs in with no window at all, and gets longer to finish, since
+    // the whole sign-in then happens in the browser.
     function _runLogin() {
         const entry = root.currentCliSetup;
         if (!entry) return;
+        root.loginCodeSent = false;
         root.setupState = "loggingIn";
+        if (entry.loginInBackground) {
+            Quickshell.execDetached(["bash", "-c", root.cliPathPrefix + entry.login]);
+            loginWatch.triesLeft = 150;
+            return;
+        }
         const script = root.cliPathPrefix + entry.login
             + "; echo; echo 'You can close this window.'; read -r -n 1 -s";
         Quickshell.execDetached(["bash", "-c",
             `${Config.options.apps.terminal} -e bash -c '${CF.StringUtils.shellSingleQuoteEscape(script)}'`]);
         loginWatch.triesLeft = 60;
+    }
+
+    // For a browser tab closed before the sign-in finished: starting over
+    // opens a fresh one and replaces the attempt that was waiting on it.
+    function restartLogin() {
+        if (root.setupState !== "loggingIn" || !root.currentCliSetup?.loginInBackground) return;
+        root._runLogin();
+    }
+
+    // ── The code a browser sign-in hands back ─────────────────────
+    // Some CLIs finish signing in only once the code Google's page shows is
+    // typed back in. The sidebar takes it from the clipboard: by itself when
+    // the page's Copy button changes it, or from Paste Code. What the
+    // clipboard held when the sign-in began is left alone, since sending a
+    // code from an earlier attempt would use this attempt up.
+    property bool loginCodeSent: false
+    property string _clipboardAtStart: ""
+    readonly property bool watchingForLoginCode: root.setupState === "loggingIn"
+        && (root.currentCliSetup?.loginCodePipe ?? "") !== "" && !root.loginCodeSent
+
+    function looksLikeLoginCode(text) {
+        return /^[A-Za-z0-9\/_.~-]{10,512}$/.test(text);
+    }
+
+    function sendLoginCode(code) {
+        const entry = root.currentCliSetup;
+        const clean = (code ?? "").trim();
+        if (!entry?.loginCodePipe || !root.looksLikeLoginCode(clean) || codeSendProc.running) return;
+        root.loginCodeSent = true;
+        codeSendProc.pendingCode = clean;
+        codeSendProc.command = ["bash", "-c",
+            `f="${entry.loginCodePipe}"; [ -p "$f" ] || exit 3; timeout 5 bash -c 'cat > "$1"' _ "$f"`];
+        codeSendProc.stdinEnabled = true;
+        codeSendProc.running = true;
+    }
+
+    function pasteLoginCode() {
+        clipboardReadProc.running = false;
+        clipboardReadProc.running = true;
+    }
+
+    // The code goes down stdin: as an argument it would be readable in ps by
+    // anyone on the machine while the command runs.
+    Process {
+        id: codeSendProc
+        property string pendingCode: ""
+        onRunningChanged: {
+            if (running && pendingCode.length > 0) {
+                write(pendingCode + "\n");
+                pendingCode = "";
+                stdinEnabled = false;
+            }
+        }
+        // No pipe means the sign-in it belonged to is already over.
+        onExited: (code) => {
+            if (code !== 0 && root.setupState === "loggingIn") root.setupState = "error";
+        }
+    }
+
+    Process {
+        id: clipboardReadProc
+        command: ["wl-paste", "--no-newline", "--type", "text"]
+        stdout: StdioCollector { onStreamFinished: root.sendLoginCode(this.text) }
+    }
+
+    // wl-paste reads the clipboard without the focus a Qt clipboard read
+    // needs, so the code is seen even while the browser has it. The snapshot
+    // is taken first, and each new clipboard arrives as one line.
+    Process {
+        id: clipboardSnapshotProc
+        command: ["bash", "-c", "wl-paste --no-newline --type text 2>/dev/null | head -c 600"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root._clipboardAtStart = this.text.trim();
+                if (root.watchingForLoginCode) clipboardWatchProc.running = true;
+            }
+        }
+    }
+    Process {
+        id: clipboardWatchProc
+        command: ["wl-paste", "--type", "text", "--watch", "bash", "-c", "head -c 600 | tr -d '\n'; echo"]
+        stdout: SplitParser {
+            onRead: line => {
+                const text = line.trim();
+                if (text !== root._clipboardAtStart && root.looksLikeLoginCode(text)) root.sendLoginCode(text);
+            }
+        }
+    }
+    onWatchingForLoginCodeChanged: {
+        clipboardWatchProc.running = false;
+        if (root.watchingForLoginCode) {
+            clipboardSnapshotProc.running = false;
+            clipboardSnapshotProc.running = true;
+        }
+    }
+
+    // The way out when the sign-in in the background could not finish: the
+    // CLI's own app in a terminal, watched the same way as the others.
+    function loginInTerminal() {
+        const entry = root.currentCliSetup;
+        if (!entry?.terminalLogin) return;
+        root.setupState = "loggingIn";
+        const script = root.cliPathPrefix + entry.terminalLogin;
+        Quickshell.execDetached(["bash", "-c",
+            `${Config.options.apps.terminal} -e bash -c '${CF.StringUtils.shellSingleQuoteEscape(script)}'`]);
+        loginWatch.triesLeft = 150;
     }
 
     Process {
@@ -596,6 +770,11 @@ Singleton {
             };
             root.cliPlanState = nextState;
             if (nextState[fmt].ready && root.currentModel?.api_format === fmt) root.setupState = "";
+            // A sign-in in the background that ended without a login is over,
+            // so the banner offers the next step now rather than at the end
+            // of the watch.
+            else if (cliDetectProc.buf.includes("loginfailed") && root.setupState === "loggingIn"
+                    && root.currentModel?.api_format === fmt) root.setupState = "error";
             root.syncCliPlanModels(fmt);
             const plan = root.cliPlans[fmt];
             if (!wasReady && nextState[fmt].ready && root.currentModelId === plan.setupId) {
@@ -1484,6 +1663,15 @@ Singleton {
                 requester.markDone();
             } else if (!requester.message.done) {
                 requester.markDone();
+            }
+
+            // A plan whose sign-in stopped working is checked again, which
+            // swaps its models back for the setup entry and its Log in button
+            // rather than failing every later message the same way.
+            if (requester.currentStrategy.loginLapsed) {
+                requester.currentStrategy.loginLapsed = false;
+                const fmt = root.models[requester.message.model]?.api_format ?? root.currentModel?.api_format;
+                if (fmt) root.detectCli(fmt);
             }
 
             // Handle error responses
