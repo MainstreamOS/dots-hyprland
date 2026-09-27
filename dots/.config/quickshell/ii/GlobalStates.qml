@@ -56,6 +56,10 @@ Singleton {
     property bool dockPinned: false
     // Written by the left sidebar; pinned, it reserves an exclusive zone.
     property bool sidebarLeftPinned: false
+    // Written by the left sidebar: how far it reaches in from its edge while
+    // open without reserving that room. Pinned, its exclusive zone moves
+    // popups instead.
+    property real sidebarLeftCover: 0
     // Written by the left sidebar: the strip it reserves while pinned open,
     // and the screen that strip is on.
     property real sidebarLeftZone: 0

@@ -2340,5 +2340,11 @@
   "Album art": "Album art",
   "No lyrics found": "No lyrics found",
   "Couldn't reach LRCLIB": "Couldn't reach LRCLIB",
-  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab"
+  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab",
+  "Top left": "Trên cùng bên trái",
+  "Top center": "Trên cùng ở giữa",
+  "Top right": "Trên cùng bên phải",
+  "Bottom left": "Dưới cùng bên trái",
+  "Bottom center": "Dưới cùng ở giữa",
+  "Bottom right": "Dưới cùng bên phải"
 }

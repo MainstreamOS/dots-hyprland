@@ -2340,5 +2340,11 @@
   "Album art": "Album art",
   "No lyrics found": "No lyrics found",
   "Couldn't reach LRCLIB": "Couldn't reach LRCLIB",
-  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab"
+  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab",
+  "Top left": "Oben links",
+  "Top center": "Oben mittig",
+  "Top right": "Oben rechts",
+  "Bottom left": "Unten links",
+  "Bottom center": "Unten mittig",
+  "Bottom right": "Unten rechts"
 }

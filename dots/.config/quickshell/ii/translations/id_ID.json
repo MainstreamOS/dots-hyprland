@@ -2340,5 +2340,11 @@
   "Album art": "Album art",
   "No lyrics found": "No lyrics found",
   "Couldn't reach LRCLIB": "Couldn't reach LRCLIB",
-  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab"
+  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab",
+  "Top left": "Kiri atas",
+  "Top center": "Tengah atas",
+  "Top right": "Kanan atas",
+  "Bottom left": "Kiri bawah",
+  "Bottom center": "Tengah bawah",
+  "Bottom right": "Kanan bawah"
 }

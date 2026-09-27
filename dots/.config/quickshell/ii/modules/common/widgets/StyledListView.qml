@@ -10,6 +10,9 @@ ListView {
     id: root
     spacing: 5
     property real removeOvershoot: 20 // Account for gaps and bouncy animations
+    // Which way a removed item leaves: 1 right, -1 left, 0 shrinks and fades
+    // where it is, for a list with no screen edge beside it to slide past.
+    property int removeDirection: 1
     property int dragIndex: -1
     property real dragDistance: 0
     property bool popin: true
@@ -41,9 +44,18 @@ ListView {
             // while that of a mouse wheel is typically in multiples of ±120.
             var scrollFactor = Math.abs(wheelEvent.angleDelta.y) >= root.mouseScrollDeltaThreshold ? root.mouseScrollFactor : root.touchpadScrollFactor;
 
-            const maxY = Math.max(0, root.contentHeight - root.height);
             const base = scrollAnim.running ? root.scrollTargetY : root.contentY;
-            var targetY = Math.max(0, Math.min(base - delta * scrollFactor, maxY));
+            var targetY;
+            if (root.verticalLayoutDirection === ListView.BottomToTop) {
+                // Bottom up, the content sits above zero and rests at the
+                // bottom, so the range runs from the oldest item down to that
+                // rest.
+                const restY = root.originY + root.contentHeight - root.height;
+                targetY = Math.max(Math.min(root.originY, restY), Math.min(base - delta * scrollFactor, restY));
+            } else {
+                const maxY = Math.max(0, root.contentHeight - root.height);
+                targetY = Math.max(0, Math.min(base - delta * scrollFactor, maxY));
+            }
 
             root.scrollTargetY = targetY;
             root.contentY = targetY;
@@ -137,10 +149,9 @@ ListView {
     remove: Transition {
         enabled: animateAppearance
         animations: [
-            Appearance?.animation.elementMove.numberAnimation.createObject(this, {
-                property: "x",
-                to: root.width + root.removeOvershoot,
-            }),
+            Appearance?.animation.elementMove.numberAnimation.createObject(this, root.removeDirection === 0
+                ? { property: "scale", to: 0.9 }
+                : { property: "x", to: root.removeDirection * (root.width + root.removeOvershoot) }),
             Appearance?.animation.elementMove.numberAnimation.createObject(this, {
                 property: "opacity",
                 to: 0,

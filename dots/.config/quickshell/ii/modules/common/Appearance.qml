@@ -1605,6 +1605,11 @@ Singleton {
         property real mediaControlsWidth: 440
         property real mediaControlsHeight: 160
         property real notificationPopupWidth: 410
+        // Where notification popups sit, read by the popup and by the picker in
+        // Settings so the spot shown picked is always the one in use. A
+        // hand-edited value neither knows lands on the stock corner.
+        readonly property string notificationPosition: ["top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right"]
+            .includes(Config.options?.notifications.position) ? Config.options.notifications.position : "top_right"
         property real osdWidth: 180
         property real searchWidthCollapsed: 210
         property real searchWidth: 360

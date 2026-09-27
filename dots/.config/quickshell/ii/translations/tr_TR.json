@@ -2340,5 +2340,11 @@
   "Album art": "Album art",
   "No lyrics found": "No lyrics found",
   "Couldn't reach LRCLIB": "Couldn't reach LRCLIB",
-  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab"
+  "pctrade · Widgets, Media tab": "pctrade · Widgets, Media tab",
+  "Top left": "Sol üst",
+  "Top center": "Orta üst",
+  "Top right": "Sağ üst",
+  "Bottom left": "Sol alt",
+  "Bottom center": "Orta alt",
+  "Bottom right": "Sağ alt"
 }

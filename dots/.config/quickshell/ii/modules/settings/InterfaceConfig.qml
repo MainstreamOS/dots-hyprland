@@ -997,9 +997,52 @@ ContentPage {
     }
 
     ContentSection {
+        id: notificationsSection
         objectName: "notificationsSection"
         icon: "notifications"
         title: Translation.tr("Notifications")
+
+        readonly property list<var> positions: [
+            { displayName: Translation.tr("Top left"), icon: "north_west", value: "top_left" },
+            { displayName: Translation.tr("Top center"), icon: "north", value: "top_center" },
+            { displayName: Translation.tr("Top right"), icon: "north_east", value: "top_right" },
+            { displayName: Translation.tr("Bottom left"), icon: "south_west", value: "bottom_left" },
+            { displayName: Translation.tr("Bottom center"), icon: "south", value: "bottom_center" },
+            { displayName: Translation.tr("Bottom right"), icon: "south_east", value: "bottom_right" }
+        ]
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "picture_in_picture"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Position")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: notificationsSection.positions
+                currentIndex: Math.max(0, model.findIndex(p => p.value === Appearance.sizes.notificationPosition))
+                onActivated: index => {
+                    Config.options.notifications.position = model[index].value;
+                    // A sample in the new spot shows where it is. Settings runs
+                    // in its own process, where the shell's notification
+                    // service would start a second server, so the sample goes
+                    // out through notify-send like any app's, and transient so
+                    // it stays out of the history.
+                    Quickshell.execDetached(["notify-send", "--transient", "-a", Translation.tr("Settings"),
+                        Translation.tr("Notifications"), model[index].displayName]);
+                }
+            }
+        }
 
         // How long a popup stays up when the app sending it leaves that to
         // the desktop.

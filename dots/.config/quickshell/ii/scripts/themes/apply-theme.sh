@@ -262,6 +262,14 @@ if ! jq -e '.dock | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; t
     PRESERVE_DOCK_POS=$(jq -c '.dock.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     [ -n "$PRESERVE_DOCK_POS" ] && { JQ_FILTER+=' | .dock.position = $dockpos'; JQ_ARGS+=(--argjson dockpos "$PRESERVE_DOCK_POS"); }
 fi
+# Where notifications appear belongs to the theme when it names a spot. A
+# snapshot from before the setting existed names none, and the adapter would
+# keep the live spot while the file lost it, so the next start would move
+# them. Write the live spot in so the screen and the file agree.
+if ! jq -e '.notifications | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; then
+    PRESERVE_NOTIF_POS=$(jq -c '.notifications.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
+    [ -n "$PRESERVE_NOTIF_POS" ] && { JQ_FILTER+=' | .notifications.position = $notifpos'; JQ_ARGS+=(--argjson notifpos "$PRESERVE_NOTIF_POS"); }
+fi
 # The Hug dock (span) runs the whole length of its edge, so it only sits on the
 # one facing the bar, and the shell holds it there whatever the file says. The
 # edge above may have come from the live config rather than the theme, so it is

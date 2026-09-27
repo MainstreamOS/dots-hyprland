@@ -75,6 +75,15 @@ Scope { // Scope
         value: sidebarLoader.item?.screen?.name ?? ""
     }
 
+    // How far in from its edge the sidebar reaches while it is open without
+    // reserving that room, so popups on the same edge can sit beside it.
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftCover"
+        value: GlobalStates.sidebarLeftOpen && !root.pin && !root.detach
+            ? (sidebarLoader.item?.sidebarWidth ?? Appearance.sizes.sidebarWidth) : 0
+    }
+
     function togglePin() {
         if (!root.pin) pinWithFunnyHyprlandWorkaroundProc.doIt()
         else root.pin = !root.pin;

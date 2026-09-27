@@ -23,6 +23,11 @@ MouseArea { // Notification group area
 
     property real dragConfirmThreshold: 70 // Drag further to discard notification
     property real dismissOvershoot: 20 // Account for gaps and bouncy animations
+    // Which way the card leaves when no swipe picked one (middle-click): 1
+    // right, -1 left, 0 fades it where it is, for a column with no screen
+    // edge beside it to slide past.
+    property int dismissDirection: 1
+    property real dismissFade: 1
     property var qmlParent: root?.parent?.parent // There's something between this and the parent ListView
     property var parentDragIndex: qmlParent?.dragIndex
     property var parentDragDistance: qmlParent?.dragDistance
@@ -32,10 +37,13 @@ MouseArea { // Notification group area
         dragIndexDiff == 1 ? (parentDragDistance * 0.3) :
         dragIndexDiff == 2 ? (parentDragDistance * 0.1) : 0
 
-    function destroyWithAnimation(left = false) {
+    function destroyWithAnimation(left) {
         root.qmlParent.resetDrag()
         background.anchors.leftMargin = background.anchors.leftMargin; // Break binding
-        destroyAnimation.left = left;
+        const direction = left === undefined ? root.dismissDirection : (left ? -1 : 1);
+        destroyAnimation.slideTo = direction === 0 ? background.anchors.leftMargin
+            : (root.width + root.dismissOvershoot) * direction;
+        destroyAnimation.fadeTo = root.dismissDirection === 0 ? 0 : 1;
         destroyAnimation.running = true;
     }
 
@@ -52,16 +60,27 @@ MouseArea { // Notification group area
 
     SequentialAnimation { // Drag finish animation
         id: destroyAnimation
-        property bool left: true
+        property real slideTo: 0
+        property real fadeTo: 1
         running: false
 
-        NumberAnimation {
-            target: background.anchors
-            property: "leftMargin"
-            to: (root.width + root.dismissOvershoot) * (destroyAnimation.left ? -1 : 1)
-            duration: Appearance.animation.elementMove.duration
-            easing.type: Appearance.animation.elementMove.type
-            easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
+        ParallelAnimation {
+            NumberAnimation {
+                target: background.anchors
+                property: "leftMargin"
+                to: destroyAnimation.slideTo
+                duration: Appearance.animation.elementMove.duration
+                easing.type: Appearance.animation.elementMove.type
+                easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
+            }
+            NumberAnimation {
+                target: root
+                property: "dismissFade"
+                to: destroyAnimation.fadeTo
+                duration: Appearance.animation.elementMoveFast.duration
+                easing.type: Appearance.animation.elementMoveFast.type
+                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+            }
         }
         onFinished: () => {
             root.notifications.forEach((notif) => {
@@ -113,9 +132,12 @@ MouseArea { // Notification group area
         }
     }
 
+    // The fade goes on the card and its shadow rather than on root, whose
+    // opacity the list's own transitions write.
     StyledRectangularShadow {
         target: background
         visible: popup
+        opacity: root.dismissFade
     }
     Rectangle { // Background of the notification
         id: background
@@ -124,6 +146,7 @@ MouseArea { // Notification group area
         color: popup ? Appearance.colors.colBackgroundSurfaceContainer : Appearance.colors.colLayer2
         radius: Appearance.rounding.normal
         anchors.leftMargin: root.xOffset
+        opacity: root.dismissFade
 
         Behavior on anchors.leftMargin {
             enabled: !dragManager.dragging
@@ -229,6 +252,9 @@ MouseArea { // Notification group area
                 StyledListView { // Notification body (expanded)
                     id: notificationsColumn
                     implicitHeight: contentHeight
+                    // The card clips its rows, so a centered column keeps the
+                    // slide rather than fading them.
+                    removeDirection: root.dismissDirection < 0 ? -1 : 1
                     Layout.fillWidth: true
                     spacing: expanded ? 5 : 3
                     // clip: true
@@ -244,6 +270,7 @@ MouseArea { // Notification group area
                         required property int index
                         required property var modelData
                         notificationObject: modelData
+                        dismissDirection: root.dismissDirection
                         expanded: root.expanded
                         onlyNotification: (root.notificationCount === 1)
                         opacity: (!root.expanded && index == 1 && root.notificationCount > 2) ? 0.5 : 1

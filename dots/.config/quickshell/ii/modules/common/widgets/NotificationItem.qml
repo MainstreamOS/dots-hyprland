@@ -19,6 +19,8 @@ Item { // Notification item area
     property real summaryElideRatio: 0.85
 
     property real dragConfirmThreshold: 70 // Drag further to discard notification
+    // Which way the row leaves when no swipe picked one: -1 left, otherwise right.
+    property int dismissDirection: 1
     property real dismissOvershoot: notificationIcon.implicitWidth + 20 // Account for gaps and bouncy animations
     property var qmlParent: root?.parent?.parent // There's something between this and the parent ListView
     property var parentDragIndex: qmlParent?.dragIndex ?? -1
@@ -31,7 +33,8 @@ Item { // Notification item area
 
     implicitHeight: background.implicitHeight
 
-    function destroyWithAnimation(left = false) {
+    function destroyWithAnimation(left) {
+        if (left === undefined) left = root.dismissDirection < 0;
         root.qmlParent.resetDrag()
         background.anchors.leftMargin = background.anchors.leftMargin; // Break binding
         destroyAnimation.left = left;
