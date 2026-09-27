@@ -82,15 +82,21 @@ AbstractBackgroundWidget {
         animation: Appearance.animation.elementResize.numberAnimation.createObject(this)
     }
 
-    property bool downloaded: false
+    // The cached copy is shown straight away, so art fetched before appears
+    // at once instead of after the downloader has looked for it. Art that is
+    // not there yet fails to load, which shows the placeholder, and comes in
+    // once the download lands.
+    property bool artMissing: false
+    property bool artReloading: false
     // The widget's own lyrics button and the Background page flip the same key.
     property bool showLyrics: Config.options.background.widgets.media.showLyrics
 
     property string displayedArtFilePath: {
-        if (!root.downloaded) return ""
-        if (root.artUrl && root.artUrl.startsWith("file://")) return root.artUrl
-        return root.downloaded ? Qt.resolvedUrl(artFilePath) : ""
+        if (!root.artUrl || root.artReloading) return ""
+        if (root.artUrl.startsWith("file://")) return root.artUrl
+        return Qt.resolvedUrl(artFilePath)
     }
+    onDisplayedArtFilePathChanged: root.artMissing = false
 
     implicitHeight: card.implicitHeight
     implicitWidth: card.implicitWidth
@@ -98,17 +104,10 @@ AbstractBackgroundWidget {
     onArtFilePathChanged: updateArt()
 
     function updateArt() {
-        if (!root.artUrl || root.artUrl.length === 0) {
-            root.downloaded = false
+        if (!root.artUrl || root.artUrl.length === 0 || root.artUrl.startsWith("file://"))
             return
-        }
-        if (root.artUrl.startsWith("file://")) {
-            root.downloaded = true
-            return
-        }
         coverArtDownloader.targetFile = root.artUrl
         coverArtDownloader.artFilePath = root.artFilePath
-        root.downloaded = false
         coverArtDownloader.running = true
     }
 
@@ -122,7 +121,14 @@ AbstractBackgroundWidget {
         command: ["bash", "-c",
             '[ -f "$1" ] && exit 0; curl -4 -fsSL -g --proto "=http,https" --max-time 20 --max-filesize 20000000 -o "$1.part" -- "$2" && mv -f "$1.part" "$1"; s=$?; rm -f "$1.part"; exit $s',
             "coverart", coverArtDownloader.artFilePath, coverArtDownloader.targetFile]
-        onExited: { root.downloaded = true }
+        // Art that was missing when the images looked is loaded again once it
+        // has arrived; a failed download leaves the placeholder.
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0 && root.artMissing) {
+                root.artReloading = true
+                Qt.callLater(() => root.artReloading = false)
+            }
+        }
     }
 
     StyledRectangularShadow {
@@ -187,12 +193,13 @@ AbstractBackgroundWidget {
                 StyledImage {
                     anchors.fill: parent
                     source: root.displayedArtFilePath
+                    onStatusChanged: if (status === Image.Error) root.artMissing = true
                     fillMode: Image.PreserveAspectCrop
                     cache: false
                     antialiasing: true
                     sourceSize.width: root.singleWidth * 2
                     sourceSize.height: root.cardHeight * 2
-                    visible: root.displayedArtFilePath !== ""
+                    visible: root.displayedArtFilePath !== "" && !root.artMissing
                 }
 
                 MaterialSymbol {
@@ -201,7 +208,7 @@ AbstractBackgroundWidget {
                     text: "music_note"
                     iconSize: root.cardHeight / 3
                     color: Appearance.colors.colOnSecondaryContainer
-                    visible: root.displayedArtFilePath === ""
+                    visible: root.displayedArtFilePath === "" || root.artMissing
                 }
 
                 Rectangle {
@@ -308,12 +315,13 @@ AbstractBackgroundWidget {
                     StyledImage {
                         anchors.fill: parent
                         source: root.displayedArtFilePath
+                        onStatusChanged: if (status === Image.Error) root.artMissing = true
                         fillMode: Image.PreserveAspectCrop
                         cache: false
                         antialiasing: true
                         sourceSize.width: artBlock.width * 2
                         sourceSize.height: artBlock.height * 2
-                        visible: root.displayedArtFilePath !== ""
+                        visible: root.displayedArtFilePath !== "" && !root.artMissing
                     }
 
                     MaterialSymbol {
@@ -322,7 +330,7 @@ AbstractBackgroundWidget {
                         text: "music_note"
                         iconSize: root.cardHeight / 3
                         color: Appearance.colors.colOnSecondaryContainer
-                        visible: root.displayedArtFilePath === ""
+                        visible: root.displayedArtFilePath === "" || root.artMissing
                     }
                 }
 
@@ -454,12 +462,13 @@ AbstractBackgroundWidget {
                     StyledImage {
                         anchors.fill: parent
                         source: root.displayedArtFilePath
+                        onStatusChanged: if (status === Image.Error) root.artMissing = true
                         fillMode: Image.PreserveAspectCrop
                         cache: false
                         antialiasing: true
                         sourceSize.width: bigArt.width * 2
                         sourceSize.height: bigArt.height * 2
-                        visible: root.displayedArtFilePath !== ""
+                        visible: root.displayedArtFilePath !== "" && !root.artMissing
                     }
 
                     MaterialSymbol {
@@ -468,7 +477,7 @@ AbstractBackgroundWidget {
                         text: "music_note"
                         iconSize: root.cardHeight / 2.5
                         color: Appearance.colors.colOnSecondaryContainer
-                        visible: root.displayedArtFilePath === ""
+                        visible: root.displayedArtFilePath === "" || root.artMissing
                     }
                 }
 
@@ -601,12 +610,13 @@ AbstractBackgroundWidget {
                         StyledImage {
                             anchors.fill: parent
                             source: root.displayedArtFilePath
+                            onStatusChanged: if (status === Image.Error) root.artMissing = true
                             fillMode: Image.PreserveAspectCrop
                             cache: false
                             antialiasing: true
                             sourceSize.width: artRect.width * 2
                             sourceSize.height: artRect.height * 2
-                            visible: root.displayedArtFilePath !== ""
+                            visible: root.displayedArtFilePath !== "" && !root.artMissing
                         }
 
                         MaterialSymbol {
@@ -615,7 +625,7 @@ AbstractBackgroundWidget {
                             text: "music_note"
                             iconSize: root.cardHeight / 3
                             color: Appearance.colors.colOnSecondaryContainer
-                            visible: root.displayedArtFilePath === ""
+                            visible: root.displayedArtFilePath === "" || root.artMissing
                         }
                     }
 
@@ -820,12 +830,13 @@ AbstractBackgroundWidget {
                             StyledImage {
                                 anchors.fill: parent
                                 source: root.displayedArtFilePath
+                                onStatusChanged: if (status === Image.Error) root.artMissing = true
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
                                 antialiasing: true
                                 sourceSize.width: labelArt.width * 2
                                 sourceSize.height: labelArt.height * 2
-                                visible: root.displayedArtFilePath !== ""
+                                visible: root.displayedArtFilePath !== "" && !root.artMissing
                             }
 
                             MaterialSymbol {
@@ -834,7 +845,7 @@ AbstractBackgroundWidget {
                                 text: "music_note"
                                 iconSize: 22
                                 color: Appearance.colors.colOnPrimaryContainer
-                                visible: root.displayedArtFilePath === ""
+                                visible: root.displayedArtFilePath === "" || root.artMissing
                             }
                         }
 
