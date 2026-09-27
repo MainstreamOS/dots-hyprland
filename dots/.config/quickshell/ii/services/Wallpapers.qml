@@ -26,6 +26,9 @@ Singleton {
         "jpg", "jpeg", "png", "webp", "avif", "bmp", "svg", "mp4", "mkv", "webm", "avi", "mov", "m4v", "ogv"
     ]
     property list<string> wallpapers: [] // List of absolute file paths (without file://)
+    // Set while the picker chooses a picture for one monitor. The background
+    // layer draws that as a still, so the folder lists images alone.
+    property bool imagesOnly: false
     readonly property bool thumbnailGenerationRunning: thumbgenProc.running
     property real thumbnailGenerationProgress: 0
     property bool videoApplied: false
@@ -71,9 +74,11 @@ Singleton {
         id: selectProc
         property string filePath: ""
         property bool darkMode: Appearance.m3colors.darkmode
-        function select(filePath, darkMode = Appearance.m3colors.darkmode) {
+        property string monitorName: ""
+        function select(filePath, darkMode = Appearance.m3colors.darkmode, monitorName = "") {
             selectProc.filePath = filePath
             selectProc.darkMode = darkMode
+            selectProc.monitorName = monitorName
             selectProc.exec(["test", "-d", FileUtils.trimFileProtocol(filePath)])
         }
         onExited: (exitCode, exitStatus) => {
@@ -81,20 +86,25 @@ Singleton {
                 setDirectory(selectProc.filePath);
                 return;
             }
+            // A pick for one monitor is stored and drawn there, never themed.
+            if (selectProc.monitorName !== "") {
+                MonitorWallpapers.setPicture(selectProc.monitorName, selectProc.filePath);
+                return;
+            }
             root.apply(selectProc.filePath, selectProc.darkMode);
         }
     }
 
-    function select(filePath, darkMode = Appearance.m3colors.darkmode) {
-        selectProc.select(filePath, darkMode);
+    function select(filePath, darkMode = Appearance.m3colors.darkmode, monitorName = "") {
+        selectProc.select(filePath, darkMode, monitorName);
     }
 
-    function randomFromCurrentFolder(darkMode = Appearance.m3colors.darkmode) {
+    function randomFromCurrentFolder(darkMode = Appearance.m3colors.darkmode, monitorName = "") {
         if (folderModel.count === 0) return;
         const randomIndex = Math.floor(Math.random() * folderModel.count);
         const filePath = folderModel.get(randomIndex, "filePath");
         print("Randomly selected wallpaper:", filePath);
-        root.select(filePath, darkMode);
+        root.select(filePath, darkMode, monitorName);
     }
 
     Process {
@@ -139,7 +149,7 @@ Singleton {
         id: folderModel
         folder: Qt.resolvedUrl(root.defaultFolder)
         caseSensitive: false
-        nameFilters: root.extensions.map(ext => `*${searchQuery.split(" ").filter(s => s.length > 0).map(s => `*${s}*`)}*.${ext}`)
+        nameFilters: root.extensions.filter(ext => !root.imagesOnly || !root.videoExtensions.includes(ext)).map(ext => `*${searchQuery.split(" ").filter(s => s.length > 0).map(s => `*${s}*`)}*.${ext}`)
         showDirs: true
         showDotAndDotDot: false
         showOnlyReadable: true

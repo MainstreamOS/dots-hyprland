@@ -15,6 +15,11 @@ MouseArea {
     property int columns: 4
     property real previewCellAspectRatio: 4 / 3
     property bool useDarkMode: Appearance.m3colors.darkmode
+    // The monitor this pick is for, or empty for the main wallpaper. The
+    // highlighted tile is what that screen shows now.
+    readonly property string monitorTarget: GlobalStates.wallpaperSelectorMonitor
+    readonly property string currentPath: (root.monitorTarget !== "" ? MonitorWallpapers.pathFor(root.monitorTarget) : "")
+        || Config.options.background.wallpaperPath
 
     function updateThumbnails() {
         const totalImageMargin = (Appearance.sizes.wallpaperSelectorItemMargins + Appearance.sizes.wallpaperSelectorItemPadding) * 2;
@@ -40,9 +45,18 @@ MouseArea {
         }
     }
 
+    // Hands the choice to the system dialog. For one monitor the file it
+    // returns is stored for that screen; otherwise the wallpaper script
+    // takes it as the main wallpaper.
+    function openSystemPicker() {
+        if (root.monitorTarget !== "") MonitorWallpapers.pickWithSystemDialog(root.monitorTarget);
+        else Wallpapers.openFallbackPicker(root.useDarkMode);
+        GlobalStates.wallpaperSelectorOpen = false;
+    }
+
     function selectWallpaperPath(filePath) {
         if (filePath && filePath.length > 0) {
-            Wallpapers.select(filePath, root.useDarkMode);
+            Wallpapers.select(filePath, root.useDarkMode, root.monitorTarget);
             filterField.text = "";
         }
     }
@@ -155,7 +169,7 @@ MouseArea {
                             pixelSize: Appearance.font.pixelSize.normal
                             weight: Font.Medium
                         }
-                        text: Translation.tr("Pick a wallpaper")
+                        text: root.monitorTarget !== "" ? Translation.tr("This screen only") : Translation.tr("Pick a wallpaper")
                     }
                     ListView {
                         // Quick dirs
@@ -246,6 +260,18 @@ MouseArea {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
+                // Picking for one monitor leaves the colors alone, which is easy
+                // to miss in a picker that otherwise looks like the usual one.
+                NoticeBox {
+                    visible: root.monitorTarget !== ""
+                    Layout.margins: 4
+                    Layout.bottomMargin: 0
+                    Layout.fillWidth: true
+                    radius: wallpaperGridBackground.radius - Layout.margins
+                    materialIcon: "desktop_windows"
+                    text: Translation.tr("Only this screen changes. Your colors stay with the main wallpaper.")
+                }
+
                 AddressBar {
                     id: addressBar
                     Layout.margins: 4
@@ -322,8 +348,8 @@ MouseArea {
                             fileModelData: modelData
                             width: grid.cellWidth
                             height: grid.cellHeight
-                            colBackground: (index === grid?.currentIndex || containsMouse) ? Appearance.colors.colPrimary : (fileModelData.filePath === Config.options.background.wallpaperPath) ? Appearance.colors.colSecondaryContainer : ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
-                            colText: (index === grid.currentIndex || containsMouse) ? Appearance.colors.colOnPrimary : (fileModelData.filePath === Config.options.background.wallpaperPath) ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer0
+                            colBackground: (index === grid?.currentIndex || containsMouse) ? Appearance.colors.colPrimary : (fileModelData.filePath === root.currentPath) ? Appearance.colors.colSecondaryContainer : ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
+                            colText: (index === grid.currentIndex || containsMouse) ? Appearance.colors.colOnPrimary : (fileModelData.filePath === root.currentPath) ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer0
 
                             onEntered: {
                                 grid.currentIndex = index;
@@ -356,13 +382,9 @@ MouseArea {
 
                             IconToolbarButton {
                                 implicitWidth: height
-                                onClicked: {
-                                    Wallpapers.openFallbackPicker(root.useDarkMode);
-                                    GlobalStates.wallpaperSelectorOpen = false;
-                                }
+                                onClicked: root.openSystemPicker()
                                 altAction: () => {
-                                    Wallpapers.openFallbackPicker(root.useDarkMode);
-                                    GlobalStates.wallpaperSelectorOpen = false;
+                                    root.openSystemPicker();
                                     Config.options.wallpaperSelector.useSystemFileDialog = true;
                                 }
                                 text: "open_in_new"
@@ -374,7 +396,7 @@ MouseArea {
                             IconToolbarButton {
                                 implicitWidth: height
                                 onClicked: {
-                                    Wallpapers.randomFromCurrentFolder();
+                                    Wallpapers.randomFromCurrentFolder(Appearance.m3colors.darkmode, root.monitorTarget);
                                 }
                                 text: "ifl"
                                 StyledToolTip {
@@ -383,6 +405,9 @@ MouseArea {
                             }
 
                             IconToolbarButton {
+                                // Light or dark only matters to the colors,
+                                // which a picture for one screen never sets.
+                                visible: root.monitorTarget === ""
                                 implicitWidth: height
                                 onClicked: root.useDarkMode = !root.useDarkMode
                                 text: root.useDarkMode ? "dark_mode" : "light_mode"
@@ -452,6 +477,15 @@ MouseArea {
         target: Wallpapers
         function onChanged() {
             GlobalStates.wallpaperSelectorOpen = false;
+        }
+    }
+
+    // Wallpapers.changed follows only a main wallpaper pick, so a picture
+    // for one monitor closes the picker here.
+    Connections {
+        target: MonitorWallpapers
+        function onAssigned(monitorName) {
+            if (monitorName === root.monitorTarget) GlobalStates.wallpaperSelectorOpen = false;
         }
     }
 }

@@ -26,6 +26,11 @@ Scope {
             id: menuWindow
 
             screen: GlobalStates.desktopMenuScreen ?? Quickshell.screens[0]
+            // Off the default monitor the wallpaper rows are this screen's
+            // own: the default monitor's wallpaper is the one the colors come
+            // from, and it stays the one Super+W changes.
+            readonly property string targetMonitor: menuWindow.screen?.name ?? ""
+            readonly property bool forThisScreen: MonitorWallpapers.isOtherMonitor(menuWindow.targetMonitor)
             color: "transparent"
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:desktopMenu"
@@ -92,18 +97,30 @@ Scope {
                     spacing: 0
 
                     // A menu opened on the wallpaper leads with the wallpaper.
-                    // The two rows for the desktop itself come first and
+                    // The rows for the desktop itself come first and
                     // together, then the pair of strips along its edges, then
                     // the monitor, which is the least desktop thing here.
                     DesktopMenuItem {
                         iconName: "image"
                         label: Translation.tr("Change Wallpaper")
-                        // What Super+W does, so picking a wallpaper means the
-                        // same thing here as it does from the keyboard, the
-                        // system file dialog setting included.
+                        // On the default monitor this is what Super+W does, so
+                        // picking a wallpaper means the same thing here as it
+                        // does from the keyboard. On any other monitor it picks
+                        // a picture for that screen alone, which leaves the
+                        // colors as they are. The system file dialog setting
+                        // holds for both.
+                        onClicked: menuWindow.changeWallpaper()
+                    }
+
+                    // Only once this screen has a picture of its own, so the
+                    // row always does something.
+                    DesktopMenuItem {
+                        visible: menuWindow.forThisScreen && MonitorWallpapers.hasPicture(menuWindow.targetMonitor)
+                        iconName: "reset_image"
+                        label: Translation.tr("Use Main Wallpaper")
                         onClicked: {
+                            MonitorWallpapers.clearPicture(menuWindow.targetMonitor);
                             GlobalStates.desktopMenuOpen = false;
-                            Hyprland.dispatch(`hl.dsp.global("quickshell:wallpaperSelectorToggle")`);
                         }
                     }
 
@@ -146,6 +163,25 @@ Scope {
                         onClicked: menuWindow.openSettingsPage("ThemesConfig.qml")
                     }
                 }
+            }
+
+            // Read before the menu closes, which takes this window with it.
+            function changeWallpaper() {
+                const monitorName = menuWindow.targetMonitor;
+                const screen = menuWindow.screen;
+                const forThisScreen = menuWindow.forThisScreen;
+                GlobalStates.desktopMenuOpen = false;
+                if (!forThisScreen) {
+                    Hyprland.dispatch(`hl.dsp.global("quickshell:wallpaperSelectorToggle")`);
+                    return;
+                }
+                if (Config.options.wallpaperSelector.useSystemFileDialog) {
+                    MonitorWallpapers.pickWithSystemDialog(monitorName);
+                    return;
+                }
+                GlobalStates.wallpaperSelectorScreen = screen;
+                GlobalStates.wallpaperSelectorMonitor = monitorName;
+                GlobalStates.wallpaperSelectorOpen = true;
             }
 
             function openSettingsPage(page) {

@@ -2348,5 +2348,8 @@
   "Bottom center": "底部居中",
   "Bottom right": "右下角",
   "Right-click the desktop for quick settings": "Right-click the desktop for quick settings",
-  "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.": "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme."
+  "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.": "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.",
+  "Use Main Wallpaper": "Use Main Wallpaper",
+  "This screen only": "仅此屏幕",
+  "Only this screen changes. Your colors stay with the main wallpaper.": "只会更改此屏幕。颜色仍跟随主壁纸。"
 }

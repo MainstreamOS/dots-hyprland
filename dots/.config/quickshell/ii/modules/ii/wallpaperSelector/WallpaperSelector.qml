@@ -21,6 +21,9 @@ Scope {
             id: panelWindow
             readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
             property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
+            // Opened for one monitor's own picture, the picker comes up on
+            // that monitor; otherwise the compositor places it.
+            screen: GlobalStates.wallpaperSelectorMonitor !== "" ? GlobalStates.wallpaperSelectorScreen : null
 
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:wallpaperSelector"
@@ -61,6 +64,23 @@ Scope {
             }
         }
     }
+
+    // A monitor's own picture is drawn by the background layer as a still,
+    // so the picker leaves videos out while it chooses one.
+    Binding {
+        target: Wallpapers
+        property: "imagesOnly"
+        value: GlobalStates.wallpaperSelectorMonitor !== ""
+    }
+
+    // The monitor it was opened for can stop being one with a picture of its
+    // own while the picker is up, by becoming the default monitor or being
+    // unplugged. The picker closes then rather than refusing every pick, and
+    // does not turn to the main wallpaper, where the next click would retheme.
+    readonly property bool monitorTargetGone: GlobalStates.wallpaperSelectorOpen
+        && GlobalStates.wallpaperSelectorMonitor !== ""
+        && !MonitorWallpapers.isOtherMonitor(GlobalStates.wallpaperSelectorMonitor)
+    onMonitorTargetGoneChanged: if (root.monitorTargetGone) GlobalStates.wallpaperSelectorOpen = false
 
     function toggleWallpaperSelector() {
         if (Config.options.wallpaperSelector.useSystemFileDialog) {

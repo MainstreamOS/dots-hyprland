@@ -504,6 +504,13 @@ ContentPage {
             // a small monitor's shot is left alone. If magick isn't there the
             // full-size shot stays rather than the save losing its preview.
             `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
+            // A screen with a picture of its own shows something this machine
+            // alone has, so the shot comes from the default monitor, whose
+            // wallpaper the theme's colors come from.
+            `QSC="\${qsConfig:-ii}"\n` +
+            `if [ -n "$FOCUSED" ] && [ "$(qs -c "$QSC" ipc call monitorWallpapers hasPicture "$FOCUSED" 2>/dev/null)" = "true" ]; then\n` +
+            `    FOCUSED=$(qs -c "$QSC" ipc call monitorWallpapers defaultMonitor 2>/dev/null)\n` +
+            `fi\n` +
             `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
             `magick "$DIR/preview.png" -resize ${ThemeLibrary.previewMaxDimension}x${ThemeLibrary.previewMaxDimension}\\> "$DIR/preview.png" 2>/dev/null || true\n` +
             // Millisecond resolution so back-to-back Update saves (within

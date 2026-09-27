@@ -59,8 +59,21 @@ Variants {
         property int workspaceChunkSize: Config?.options.bar.workspaces.shown ?? 10
         property int totalWorkspaces: Math.ceil(lastWorkspaceId / workspaceChunkSize) * workspaceChunkSize
         // Wallpaper
-        property bool wallpaperIsVideo: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
-        property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
+        // A monitor other than the default one can be given a picture of its
+        // own from the desktop menu. The default monitor always draws the main
+        // wallpaper, the one the colors come from, so it is never handed one.
+        readonly property string screenName: bgRoot.modelData?.name ?? ""
+        // Pictures this screen could not load, so a moved or deleted file gives
+        // way to the main wallpaper instead of leaving the screen bare.
+        property var failedPicturePaths: ({})
+        readonly property var monitorPicture: {
+            const picture = MonitorWallpapers.pictureFor(bgRoot.screenName);
+            return (picture && !bgRoot.failedPicturePaths[picture.path]) ? picture : null;
+        }
+        readonly property bool mainWallpaperIsVideo: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
+        property bool wallpaperIsVideo: !bgRoot.monitorPicture && bgRoot.mainWallpaperIsVideo
+        property string wallpaperPath: bgRoot.monitorPicture ? bgRoot.monitorPicture.path
+            : (bgRoot.mainWallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath)
         // Preserve a minimum 10% headroom so parallax has range to move through even when
         // workspaceZoom is 1. Matches pre-refactor behavior which had a hardcoded 1.1 baseline.
         readonly property real parallaxRation: Math.max(1.1, Config.options.background.parallax.workspaceZoom)
@@ -149,6 +162,33 @@ Variants {
         // that never loads is never the one being carried off.
         property url shownWallpaper: ""
         property bool wallpaperSwapPending: false
+
+        // A screen's own picture is known a moment after the shell starts or
+        // the monitor is plugged in. Until then a change lands without an
+        // effect, so the picture comes up directly instead of animating in
+        // over the main wallpaper. The timer lets effects through should that
+        // moment never come.
+        property bool pictureSettled: false
+        readonly property bool pictureKnown: MonitorWallpapers.ready && MonitorWallpapers.knows(bgRoot.screenName)
+        onPictureKnownChanged: if (bgRoot.pictureKnown) Qt.callLater(() => bgRoot.pictureSettled = true)
+        Timer {
+            running: !bgRoot.pictureSettled
+            interval: 3000
+            onTriggered: bgRoot.pictureSettled = true
+        }
+        // A screen plugged in after the wallpaper was set has no change to
+        // react to, so it is measured once here.
+        Component.onCompleted: {
+            if (bgRoot.pictureKnown) bgRoot.pictureSettled = true;
+            bgRoot.updateZoomScale();
+        }
+        Connections {
+            target: MonitorWallpapers
+            // A new pick may be the same file put back, so it gets another try.
+            function onAssigned(monitorName) {
+                if (monitorName === bgRoot.screenName) bgRoot.failedPicturePaths = ({});
+            }
+        }
         property string swapEffect: "fade"
         // The knobs the effects turn. Every one is animated on every run
         // and the effects differ only in where each ends, so switching the
@@ -280,23 +320,43 @@ Variants {
         }
 
         // Wallpaper zoom scale
+        // A picture given to this screen carries the size it was measured at
+        // when picked. Anything else is measured one run at a time, and a
+        // change that lands during a run is measured once that run ends, so a
+        // late answer can never size the wrong picture.
         function updateZoomScale() {
+            const picture = bgRoot.monitorPicture;
+            if (picture && picture.path === bgRoot.wallpaperPath && picture.width > 0 && picture.height > 0) {
+                bgRoot.wallpaperWidth = picture.width;
+                bgRoot.wallpaperHeight = picture.height;
+                return;
+            }
+            if (getWallpaperSizeProc.running) return;
             getWallpaperSizeProc.path = bgRoot.wallpaperPath;
             getWallpaperSizeProc.running = true;
         }
         Process {
             id: getWallpaperSizeProc
-            property string path: bgRoot.wallpaperPath
-            command: ["magick", "identify", "-format", "%w %h", path]
+            property string path
+            // One line per frame for an animated picture; the first is enough.
+            // -ping reads the size from the header instead of decoding the
+            // whole picture.
+            command: ["magick", "identify", "-ping", "-format", "%w %h\n", getWallpaperSizeProc.path]
             stdout: StdioCollector {
                 id: wallpaperSizeOutputCollector
-                onStreamFinished: {
-                    const output = wallpaperSizeOutputCollector.text;
-                    const [width, height] = output.split(" ").map(Number);
-                    bgRoot.wallpaperWidth = width;
-                    bgRoot.wallpaperHeight = height;
-                    // minSuitableScale is a reactive binding; no manual assignment needed.
+            }
+            onExited: {
+                if (getWallpaperSizeProc.path !== bgRoot.wallpaperPath) {
+                    bgRoot.updateZoomScale();
+                    return;
                 }
+                const [width, height] = wallpaperSizeOutputCollector.text.split("\n")[0].split(" ").map(Number);
+                // A picture that cannot be measured is sized to the screen
+                // rather than to whatever was shown before it.
+                const measured = width > 0 && height > 0;
+                bgRoot.wallpaperWidth = measured ? width : bgRoot.modelData.width;
+                bgRoot.wallpaperHeight = measured ? height : bgRoot.modelData.height;
+                // minSuitableScale is a reactive binding; no manual assignment needed.
             }
         }
 
@@ -342,7 +402,7 @@ Variants {
                 ]
                 onSourceChanged: {
                     const effect = Config.options.background.wallpaperTransition;
-                    if (bgRoot.shownWallpaper == "" || effect === "none" || bgRoot.wallpaperIsVideo
+                    if (bgRoot.shownWallpaper == "" || !bgRoot.pictureSettled || effect === "none" || bgRoot.wallpaperIsVideo
                             || source == bgRoot.shownWallpaper) {
                         swapAnimation.stop();
                         bgRoot.finishSwap();
@@ -366,6 +426,16 @@ Variants {
                         bgRoot.shownWallpaper = source;
                         bgRoot.maybeStartSwap();
                     } else if (status === Image.Error) {
+                        // This screen's own picture would not load (moved,
+                        // deleted, or on a drive not mounted yet), so it gives
+                        // way to the main wallpaper. Marking it moves the
+                        // source on at once, and the change handler sets up
+                        // whatever comes next from there.
+                        const picture = bgRoot.monitorPicture;
+                        if (picture) {
+                            bgRoot.failedPicturePaths = Object.assign({}, bgRoot.failedPicturePaths, { [picture.path]: true });
+                            return;
+                        }
                         swapAnimation.stop();
                         bgRoot.finishSwap();
                         bgRoot.wallpaperSwapPending = false;

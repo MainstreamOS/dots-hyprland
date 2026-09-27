@@ -133,6 +133,16 @@ Singleton {
     property bool superDown: false
     property bool superReleaseMightTrigger: true
     property bool wallpaperSelectorOpen: false
+    // The monitor the picker is choosing a picture for, by connector name,
+    // and its screen; empty for the main wallpaper, which themes everything.
+    // Cleared on every close, so Super+W always opens on the main wallpaper.
+    property string wallpaperSelectorMonitor: ""
+    property var wallpaperSelectorScreen: null
+    onWallpaperSelectorOpenChanged: {
+        if (root.wallpaperSelectorOpen) return;
+        root.wallpaperSelectorMonitor = "";
+        root.wallpaperSelectorScreen = null;
+    }
     property bool workspaceShowNumbers: false
     property string openFolderId: ""  // Set by dock to open a folder in the app drawer
     // Whether the hyprland-scroll-overview plugin is currently loaded into

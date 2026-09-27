@@ -2348,5 +2348,8 @@
   "Bottom center": "Tengah bawah",
   "Bottom right": "Kanan bawah",
   "Right-click the desktop for quick settings": "Right-click the desktop for quick settings",
-  "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.": "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme."
+  "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.": "Any empty spot works, wherever no window is in the way. Pick a new wallpaper, or open the Settings page for your desktop, bar, dock, displays, or theme.",
+  "Use Main Wallpaper": "Use Main Wallpaper",
+  "This screen only": "Layar ini saja",
+  "Only this screen changes. Your colors stay with the main wallpaper.": "Hanya layar ini yang berubah. Warna tetap mengikuti wallpaper utama."
 }
