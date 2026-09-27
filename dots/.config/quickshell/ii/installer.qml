@@ -25,8 +25,8 @@ ApplicationWindow {
     minimumHeight: 600
     // Deliberately not translated. This string is the window's identity, not
     // a label: the rule that floats the installer matches on it, and the
-    // dispatch that centres the window builds a regex from it. Translating it
-    // would leave the installer tiled and the centring aimed at nothing, on
+    // dispatch that centers the window builds a regex from it. Translating it
+    // would leave the installer tiled and the centering aimed at nothing, on
     // the live image, with nothing logged to say why.
     title: "Welcome"
     color: Appearance.m3colors.m3surfaceContainerLow
@@ -97,7 +97,7 @@ ApplicationWindow {
                     // Asking for a position it has already asked for is what
                     // turned a resize into a move into another resize, forking
                     // two hyprctl processes each time round. A genuinely new
-                    // target is always honoured; only a repeat is dropped.
+                    // target is always honored; only a repeat is dropped.
                     if (tx === root.lastRecenterX && ty === root.lastRecenterY)
                         return;
                     root.lastRecenterX = tx;
@@ -105,7 +105,7 @@ ApplicationWindow {
                     // Wayland xdg-shell does not allow clients to set their
                     // own x/y after creation — assigning root.x/root.y is a
                     // no-op on Hyprland. Ask the compositor to move us via
-                    // a hyprctl dispatch keyed on our (translated) title.
+                    // a hyprctl dispatch keyed on our title.
                     let titleRegex = (root.title || "")
                         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
                     if (!titleRegex) return;
@@ -226,18 +226,8 @@ ApplicationWindow {
         // Blank line between blocks matches DisplayConfig's output style and
         // keeps the file readable when Settings → Display rewrites it.
         let fileContent = blocks.join("\n\n") + "\n";
-        let escaped = fileContent
-            .replace(/\\/g, "\\\\")
-            .replace(/'/g, "\\'")
-            .replace(/\n/g, "\\n");
-        let escapedPath = root.monitorsConfPath
-            .replace(/\\/g, "\\\\")
-            .replace(/'/g, "\\'");
-        let py =
-            "path = '" + escapedPath + "'\n" +
-            "content = '" + escaped + "'\n" +
-            "open(path, 'w').write(content)\n";
-        writeProc.command = ["python3", "-c", py];
+        writeProc.command = ["python3", "-c", "import sys; open(sys.argv[1], 'w').write(sys.argv[2])",
+                             root.monitorsConfPath, fileContent];
         writeProc.running = false;
         writeProc.running = true;
         return true;
@@ -303,7 +293,7 @@ ApplicationWindow {
         onExited: {
             // Nothing below matters once the installer is taking over, and
             // this is the busiest moment of the live session. Re-reading the
-            // monitors and re-centring here cost another two or three
+            // monitors and re-centering here cost another two or three
             // processes and a full rebuild of the display rows for a window
             // about to close.
             if (root.startInstallQueued) {
@@ -682,8 +672,6 @@ ApplicationWindow {
                                         }
                                     }
                                 }
-
-                                // Apply button
                             }
                         }
                     }
