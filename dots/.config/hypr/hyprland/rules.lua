@@ -2,6 +2,9 @@
 
 -- Disable blur for xwayland context menus
 hl.window_rule({match = {class = "^()$", title = "^()$" },                   no_blur = true })
+-- Menus and dropdowns of X11 apps such as Steam are windows of their own with
+-- no title, drawn square to the edge; window rounding would clip their corners.
+hl.window_rule({match = {xwayland = true, title = "^()$" },                  rounding = 0 })
 
 -- Floating
 hl.window_rule({match = {title = "^(Open File)(.*)$" },                      center = true})
