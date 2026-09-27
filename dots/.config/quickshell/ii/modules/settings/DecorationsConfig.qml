@@ -38,7 +38,6 @@ ContentPage {
     property real inactiveOpacityValue: 1.0
     property bool dimInactiveEnabled: true
     property real dimStrengthValue: 0.05
-    property int previousCornerStyle: Config.options.bar.cornerStyle
     property bool _decoReady: false
     property int  cursorSize:      24
 
@@ -227,6 +226,9 @@ ContentPage {
             let values = ({})
             try { values = JSON.parse(decoReader.buf || "{}") } catch (e) { values = ({}) }
             root.applyDecoValues(values)
+            // A clicked switch no longer follows its value (see ConfigSwitch),
+            // and a theme apply can change the corners under it.
+            swRoundCorners.checked = Qt.binding(() => root.roundCornersEnabled)
             root._decoReady = true
         }
     }
@@ -239,6 +241,9 @@ ContentPage {
     // not to its windows.
     function resetWindowSections() {
         const d = root.decoDefaults;
+        // The page's own read can be older than a switch turned off in the
+        // Welcome app, which leaves its squared look and memory behind.
+        const wasOff = !root.roundCornersEnabled || RoundedCorners.remembersOff();
         const pairs = Object.keys(d)
             .filter(k => !k.startsWith("titleBar"))
             .map(k => `${k}=${d[k]}`);
@@ -254,6 +259,9 @@ ContentPage {
         swShadows.checked = Qt.binding(() => root.shadowsEnabled);
         swBorders.checked = Qt.binding(() => root.bordersEnabled);
         swRoundCorners.checked = Qt.binding(() => root.roundCornersEnabled);
+        // Reset turns the window corners on at the stock radius, so the bar
+        // and the screen corners come back with them, as from the switch.
+        if (wasOff && d.rounding > 0) RoundedCorners.turnOn(d.rounding);
         swBlurXray.checked = Qt.binding(() => root.blurXrayEnabled);
         swDimInactive.checked = Qt.binding(() => root.dimInactiveEnabled);
         if (d.titleBars !== undefined) TitleBars.setEnabled(d.titleBars);
@@ -537,19 +545,28 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 checked: root.roundCornersEnabled
                 animateChanges: root._decoReady
                 onCheckedChanged: {
-                    if (!root._decoReady) return;
+                    // Only a click moves the switch away from the page's
+                    // value; a reread or a reset moves both together and must
+                    // write nothing back. The bar's own corners and the
+                    // screen's rounded corners follow the window rounding.
+                    if (!root._decoReady || checked === root.roundCornersEnabled) return;
                     root.roundCornersEnabled = checked;
-                    root.setDecoration([`rounding=${checked ? root.roundingValue : 0}`]);
-                    // The bar's own corners follow the window rounding.
-                    if (!checked) {
-                        root.previousCornerStyle = Config.options.bar.cornerStyle;
-                        Config.options.bar.cornerStyle = 2;
+                    if (checked) {
+                        const radius = RoundedCorners.turnOn(root.roundingValue);
+                        if (radius > 0) {
+                            root.roundingValue = radius;
+                            root.setDecoration([`rounding=${radius}`]);
+                        } else {
+                            decoReader.running = false;
+                            decoReader.running = true;
+                        }
                     } else {
-                        Config.options.bar.cornerStyle = root.previousCornerStyle;
+                        RoundedCorners.turnOff(root.roundingValue);
+                        root.setDecoration(["rounding=0"]);
                     }
                 }
                 StyledToolTip {
-                    text: Translation.tr("Rounded corners on windows and the bar")
+                    text: Translation.tr("Rounded corners on windows, the bar and the screen")
                 }
             }
             // All file-edit + plugin load/unload mechanics live in the

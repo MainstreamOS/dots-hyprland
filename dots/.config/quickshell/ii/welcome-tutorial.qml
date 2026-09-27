@@ -543,7 +543,7 @@ ApplicationWindow {
         Config.options.bar.floatWidth = -1;
         Config.options.bar.notchWidth = -1;
         Config.options.bar.floatSplit = false;
-        Config.options.bar.cornerStyle = v;
+        RoundedCorners.pickBarStyle(v);
     }
 
     function applyDockStyle(v) {
@@ -3289,7 +3289,6 @@ ApplicationWindow {
         property string shadowColorValue: "rgba(00000020)"
         property var shadowOffsetValue: [0, 2]
         property string animationProfileValue: "expressive"
-        property int previousCornerStyle: Config.options.bar.cornerStyle
         property var decoDefaults: ({})
         property var motion: ({})
 
@@ -3379,8 +3378,13 @@ ApplicationWindow {
                 if (!cardWindows.roundCornersEnabled && values.rounding === hugOn)
                     cardWindows.roundingWhileOff = cardWindows.roundingValue
                 cardWindows.applyDecoValues(values)
-                if (values.rounding === 0 && cardWindows.roundingValue === hugOn)
+                if (values.rounding === 0 && cardWindows.roundingValue === hugOn) {
                     cardWindows.roundingValue = cardWindows.roundingWhileOff
+                    // Turned off while on Hug, the switch remembered Hug's radius.
+                    const memory = Config.options.appearance.roundCornersRestore
+                    if (memory.windowRounding === hugOn)
+                        memory.windowRounding = cardWindows.roundingWhileOff
+                }
                 // A switch that has been clicked no longer follows its value
                 // (see ConfigSwitch), and the style page can change this one.
                 roundCornersSwitch.checked = Qt.binding(() => cardWindows.roundCornersEnabled)
@@ -3751,19 +3755,28 @@ ApplicationWindow {
                             checked: cardWindows.roundCornersEnabled
                             animateChanges: cardWindows.decoReady
                             onCheckedChanged: {
-                                if (!cardWindows.decoReady) return;
+                                // Only a click moves the switch away from the
+                                // card's value; a reread moves both together
+                                // and must write nothing back. The bar's own
+                                // corners and the screen's rounded corners
+                                // follow the window rounding.
+                                if (!cardWindows.decoReady || checked === cardWindows.roundCornersEnabled) return;
                                 cardWindows.roundCornersEnabled = checked;
-                                cardWindows.setDecoration([`rounding=${checked ? cardWindows.roundingValue : 0}`]);
-                                // The bar's own corners follow the window rounding.
-                                if (!checked) {
-                                    cardWindows.previousCornerStyle = Config.options.bar.cornerStyle;
-                                    Config.options.bar.cornerStyle = 2;
+                                if (checked) {
+                                    const radius = RoundedCorners.turnOn(cardWindows.roundingValue);
+                                    if (radius > 0) {
+                                        cardWindows.roundingValue = radius;
+                                        cardWindows.setDecoration([`rounding=${radius}`]);
+                                    } else {
+                                        root.decorationsRewritten();
+                                    }
                                 } else {
-                                    Config.options.bar.cornerStyle = cardWindows.previousCornerStyle;
+                                    RoundedCorners.turnOff(cardWindows.roundingValue);
+                                    cardWindows.setDecoration(["rounding=0"]);
                                 }
                             }
                             StyledToolTip {
-                                text: Translation.tr("Rounded corners on windows and the bar")
+                                text: Translation.tr("Rounded corners on windows, the bar and the screen")
                             }
                         }
                         ConfigSwitch {

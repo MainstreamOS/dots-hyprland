@@ -248,6 +248,11 @@ JQ_FILTER+=' | .dock = ({showBackground: true, backgroundOpacity: -1, background
 # sits on goes with the colors that decide it, and a theme saved before the
 # switch existed was saved with it on.
 JQ_FILTER+=' | .appearance = ({autoIconContrast: true} + (.appearance // {}))'
+# What Rounded Corners turns back on to goes with the squared look it was saved
+# beside. A theme saved before that memory existed remembers nothing, and an
+# absent key would leave the adapter holding the live memory from before, as
+# would a value it cannot read, so only whole numbers are kept.
+JQ_FILTER+=' | .appearance.roundCornersRestore = ({barCornerStyle: -1, fakeScreenRounding: -1, windowRounding: -1} + (.appearance.roundCornersRestore | if type == "object" then with_entries(select(.value | type == "number" and . == floor)) else {} end))'
 # Which edge the dock sits on belongs to the theme, but only when the theme has
 # an opinion. A snapshot taken before the setting existed names no edge, and an
 # absent key is the worst of both: the adapter keeps showing the dock where it

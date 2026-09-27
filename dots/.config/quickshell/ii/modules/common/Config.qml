@@ -436,6 +436,14 @@ Singleton {
                     property int opacity: 15
                 }
                 property int fakeScreenRounding: 2 // 0: None | 1: Always | 2: When not fullscreen
+                // What the Rounded Corners switch turns back on to: the bar
+                // style, the screen corners and the window radius. -1 is
+                // nothing remembered. See services/RoundedCorners.qml.
+                property JsonObject roundCornersRestore: JsonObject {
+                    property int barCornerStyle: -1
+                    property int fakeScreenRounding: -1
+                    property int windowRounding: -1
+                }
                 property JsonObject fonts: JsonObject {
                     property string main: "Google Sans Flex"
                     property string numbers: "Google Sans Flex"

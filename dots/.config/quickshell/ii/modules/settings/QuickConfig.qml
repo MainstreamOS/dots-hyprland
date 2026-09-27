@@ -405,7 +405,7 @@ ContentPage {
                         const i = model.findIndex(o => o.value === Config.options.bar.cornerStyle);
                         return i !== -1 ? i : 0;
                     }
-                    onActivated: index => { Config.options.bar.cornerStyle = model[index].value; }
+                    onActivated: index => { RoundedCorners.pickBarStyle(model[index].value); }
                     model: [
                         {
                             displayName: Translation.tr("Float"),

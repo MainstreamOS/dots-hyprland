@@ -149,7 +149,7 @@ ContentPage {
                 ConfigSelectionArray {
                     currentValue: Config.options.bar.cornerStyle
                     onSelected: newValue => {
-                        Config.options.bar.cornerStyle = newValue; // Update local copy
+                        RoundedCorners.pickBarStyle(newValue);
                     }
                     options: [
                         {
