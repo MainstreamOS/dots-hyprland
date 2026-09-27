@@ -5,6 +5,7 @@ import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Io
+import "monitor-wallpaper-keys.js" as Keys
 pragma Singleton
 pragma ComponentBehavior: Bound
 
@@ -149,7 +150,7 @@ Singleton {
         id: folderModel
         folder: Qt.resolvedUrl(root.defaultFolder)
         caseSensitive: false
-        nameFilters: root.extensions.filter(ext => !root.imagesOnly || !root.videoExtensions.includes(ext)).map(ext => `*${searchQuery.split(" ").filter(s => s.length > 0).map(s => `*${s}*`)}*.${ext}`)
+        nameFilters: (root.imagesOnly ? Keys.imageExtensions : root.extensions).map(ext => `*${searchQuery.split(" ").filter(s => s.length > 0).map(s => `*${s}*`)}*.${ext}`)
         showDirs: true
         showDotAndDotDot: false
         showOnlyReadable: true

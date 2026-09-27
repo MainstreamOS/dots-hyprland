@@ -27,8 +27,8 @@ Singleton {
     // Saved connection names (SSIDs with profiles)
     property var savedConnectionNames: new Set()
     
-    // Sorted once per scan, not from a binding. Sorting on strength in a
-    // binding rebuilt the list on every scan, and every row with it.
+    // Sorted once per scan, not from a binding: a binding that sorts on
+    // strength would rebuild the list, and every row with it, on every scan.
     property var friendlyWifiNetworks: []
     readonly property list<var> savedNetworks: friendlyWifiNetworks.filter(n => n.isSaved && !n.active)
     readonly property list<var> availableNetworks: friendlyWifiNetworks.filter(n => !n.isSaved && !n.active)
@@ -178,8 +178,8 @@ Singleton {
                 }
             }
         }
-        // Only for a network that plausibly wants one. Asking on any failure
-        // prompted for a password when the network was just out of range.
+        // Only for a network that plausibly wants one: a failure alone also
+        // covers a network that is just out of range, which needs no password.
         onExited: (exitCode, exitStatus) => {
             const target = root.wifiConnectTarget;
             if (target && exitCode !== 0 && !target.askingPassword)
@@ -259,8 +259,8 @@ Singleton {
     Process {
         id: rescanProcess
         command: ["nmcli", "dev", "wifi", "list", "--rescan", "yes"]
-        // Output unused; getNetworks asks for the fields this service wants.
-        // Reading it per line rebuilt the list once per network in range.
+        // Output unused: getNetworks reads the fields this service wants once
+        // per scan, so the list is not rebuilt once per network in range.
         onExited: {
             wifiScanning = false;
             getNetworks.running = true;
@@ -448,9 +448,9 @@ Singleton {
 
                 const rNetworks = root.wifiNetworks;
 
-                // Matched by name, since the list above is one entry per name.
-                // Matching on radio and band rebuilt the object whenever the
-                // strongest radio changed, taking the password prompt with it.
+                // Matched by name, since the list above is one entry per name. Radio
+                // and band change whenever the strongest radio does, and matching on
+                // them would rebuild the object, taking the password prompt with it.
                 const stillThere = ssid => wifiNetworks.some(n => n.ssid === ssid);
                 // A network being joined stays until it is done with.
                 const inUse = ap => ap.askingPassword || ap === root.wifiConnectTarget;

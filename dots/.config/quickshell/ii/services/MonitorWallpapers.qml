@@ -149,6 +149,7 @@ Singleton {
             // -ping reads the size from the header instead of decoding the
             // whole picture, so the screen changes as soon as it closes.
             command: ["magick", "identify", "-ping", "-format", "%w %h\n", probe.path]
+            environment: Images.magickEnvironment
             stdout: StdioCollector {
                 id: probeOutput
             }

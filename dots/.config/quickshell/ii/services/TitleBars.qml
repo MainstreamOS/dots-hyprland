@@ -73,6 +73,14 @@ Singleton {
         return `${root.customDir}/${name}${dark ? "" : "Light"}`
     }
 
+    // Writes each path and value pair in order and reloads once, so plugins.lua
+    // reads them together. A failed write stops it before the reload.
+    function writeAndReload(pairs) {
+        Quickshell.execDetached(["bash", "-c",
+            'while [ $# -gt 1 ]; do printf "%s" "$2" > "$1" || exit; shift 2; done; hyprctl reload',
+            "titlebars"].concat(pairs))
+    }
+
     // The mode on screen, whose set the properties below show and edits land in.
     readonly property bool dark: Appearance.m3colors.darkmode
 
@@ -149,9 +157,7 @@ Singleton {
             root.buttonIconColorLight = newIconColor
             root.buttonHighlightLight = newHighlight
         }
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && printf "%s" "$5" > "$4" && printf "%s" "$7" > "$6" && hyprctl reload',
-            root.buttonSizePath, String(newSize),
+        root.writeAndReload([root.buttonSizePath, String(newSize),
             root.slotPath("titlebars.buttonBackground", d), String(newColor),
             root.slotPath("titlebars.buttonIconColor", d), String(newIconColor),
             root.slotPath("titlebars.buttonHighlight", d), String(newHighlight)])
@@ -165,9 +171,7 @@ Singleton {
     function setButtonsOnHover(value) {
         if (value === root.buttonsOnHover) return
         root.buttonsOnHover = value
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && hyprctl reload',
-            root.buttonsOnHoverPath, value ? "1" : "0"])
+        root.writeAndReload([root.buttonsOnHoverPath, value ? "1" : "0"])
     }
 
     // The close, maximize and minimize buttons can be left off the bars
@@ -181,9 +185,7 @@ Singleton {
     function setButtonsEnabled(value) {
         if (value === root.buttonsEnabled) return
         root.buttonsEnabled = value
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && hyprctl reload',
-            root.buttonsEnabledPath, value ? "1" : "0"])
+        root.writeAndReload([root.buttonsEnabledPath, value ? "1" : "0"])
     }
 
     // Scrolling on a title bar steps its window between minimized, normal,
@@ -196,9 +198,7 @@ Singleton {
     function setScrollActions(value) {
         if (value === root.scrollActions) return
         root.scrollActions = value
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && hyprctl reload',
-            root.scrollActionsPath, value ? "1" : "0"])
+        root.writeAndReload([root.scrollActionsPath, value ? "1" : "0"])
     }
 
     // Written together, because they compose into one value the plugin reads:
@@ -217,9 +217,7 @@ Singleton {
             root.colorLight = newColor
             root.opacityLight = newOpacity
         }
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && hyprctl reload',
-            root.slotPath("titlebars.color", d), String(newColor),
+        root.writeAndReload([root.slotPath("titlebars.color", d), String(newColor),
             root.slotPath("titlebars.opacity", d), String(newOpacity)])
     }
 
@@ -238,14 +236,11 @@ Singleton {
         root.buttonIconColorLight = ""
         root.buttonHighlightDark = ""
         root.buttonHighlightLight = ""
-        const emptied = []
+        const pairs = [root.buttonSizePath, String(root.defaultButtonSize), root.buttonsEnabledPath, "1"]
         for (const name of ["titlebars.color", "titlebars.opacity", "titlebars.buttonBackground",
                 "titlebars.buttonIconColor", "titlebars.buttonHighlight"])
-            emptied.push(root.slotPath(name, true), root.slotPath(name, false))
-        Quickshell.execDetached(["bash", "-c",
-            'printf "%s" "$1" > "$0" && printf "%s" "$3" > "$2" && shift 3 && for f in "$@"; do : > "$f" || exit; done && hyprctl reload',
-            root.buttonSizePath, String(root.defaultButtonSize),
-            root.buttonsEnabledPath, "1"].concat(emptied))
+            pairs.push(root.slotPath(name, true), "", root.slotPath(name, false), "")
+        root.writeAndReload(pairs)
     }
 
     Process {

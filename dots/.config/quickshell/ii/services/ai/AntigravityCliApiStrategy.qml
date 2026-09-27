@@ -11,6 +11,7 @@ ApiStrategy {
     // this module does not import.
     property string exitText: "Antigravity stopped with code %1"
     property string lapsedText: "Gemini could not use your Google sign-in. Log in again to keep chatting."
+    property string workDir: ""
     // Set when a run fails its sign-in. Ai.qml clears it and checks the plan
     // again, which then offers the sign-in instead of failing every message.
     property bool loginLapsed: false
@@ -35,7 +36,7 @@ ApiStrategy {
         // The CLI treats the folder it runs in as the workspace the model may
         // read. An empty folder of its own keeps the user's files out of the
         // chat. No system prompt: print mode has no way to carry one.
-        script += "dir=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli\"\n";
+        script += "dir=\"" + root.workDir + "\"\n";
         script += "mkdir -p \"$dir\" && cd \"$dir\" || exit 1\n";
 
         // The = form keeps a message or id that starts with a dash from being
@@ -67,9 +68,11 @@ ApiStrategy {
     }
 
     function fail(message: AiMessageData, detail: string) {
+        const lapsed = root.isSignInError(detail);
+        if (lapsed) root.loginLapsed = true;
         if (root._errored) return;
         root._errored = true;
-        root.append(message, `**Error**: ${detail}`);
+        root.append(message, `**Error**: ${lapsed ? root.lapsedText : detail}`);
     }
 
     function isSignInError(text: string): bool {
@@ -112,12 +115,7 @@ ApiStrategy {
             if (result.conversation_id) root.sessionId = result.conversation_id;
             if (result.status !== "SUCCESS") {
                 const detail = result.error || result.status || JSON.stringify(result);
-                if (root.isSignInError(detail)) {
-                    root.loginLapsed = true;
-                    root.fail(message, root.lapsedText);
-                } else {
-                    root.fail(message, detail);
-                }
+                root.fail(message, detail);
                 return { finished: true };
             }
             // Deltas are the usual way the reply arrives; the whole response
@@ -148,12 +146,7 @@ ApiStrategy {
             const marked = lines.filter(l => l.startsWith("error:")).map(l => l.slice(6).trim());
             const detail = marked.length > 0 ? marked[marked.length - 1]
                 : (lines.length > 0 ? lines[lines.length - 1] : root.exitText.arg(json.code));
-            if (root.isSignInError(detail)) {
-                root.loginLapsed = true;
-                root.fail(message, root.lapsedText);
-            } else {
-                root.fail(message, detail);
-            }
+            root.fail(message, detail);
             return { finished: true };
         }
         }

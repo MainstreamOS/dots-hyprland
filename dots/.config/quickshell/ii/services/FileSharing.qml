@@ -44,7 +44,6 @@ Singleton {
     // is stopped, since nothing would keep port 445 to the home network.
     property bool firewall: true
     property bool account: false
-    property bool canShare: false
     property string user: ""
     property string hostname: ""
     property var addresses: []
@@ -205,9 +204,6 @@ Singleton {
         }
         root.statusBusy = true;
         statusProc.startedAt = root.generation;
-        statusProc.out = "";
-        statusProc.outDone = false;
-        statusProc.exited = false;
         statusProc.running = true;
     }
 
@@ -216,39 +212,33 @@ Singleton {
     Process {
         id: statusProc
         property int startedAt: 0
-        property string out: ""
-        property bool outDone: false
-        property bool exited: false
         // Through bash, so a missing or unexecutable script still ends in an
         // answer (an empty one) instead of a process that never started.
         command: ["bash", root.scriptPath, "status"]
         stdout: StdioCollector {
-            onStreamFinished: {
-                statusProc.out = this.text;
-                statusProc.outDone = true;
-                root.statusFinished();
-            }
+            id: statusOut
         }
-        onExited: {
-            statusProc.exited = true;
-            root.statusFinished();
-        }
+        onExited: root.statusFinished()
     }
 
     function statusFinished() {
-        if (!statusProc.outDone || !statusProc.exited)
-            return;
-        statusProc.outDone = false;
-        statusProc.exited = false;
         root.statusBusy = false;
         if (statusProc.startedAt === root.generation)
-            root.applyStatus(statusProc.out);
+            root.applyStatus(statusOut.text);
         else
             root.refreshQueued = true;
         if (root.refreshQueued) {
             root.refreshQueued = false;
             // After this handler returns, when the process has let go.
             Qt.callLater(() => root.refresh(false));
+        }
+    }
+
+    function parseJson(text) {
+        try {
+            return JSON.parse(String(text ?? "").trim());
+        } catch (e) {
+            return null;
         }
     }
 
@@ -261,12 +251,7 @@ Singleton {
             return;
         root.lastStatus = text;
 
-        let s = null;
-        try {
-            s = JSON.parse(text);
-        } catch (e) {
-            s = null;
-        }
+        let s = root.parseJson(text);
         // No answer reads as no helper, which shows the page's update notice
         // rather than switches that cannot work.
         if (!s || typeof s !== "object" || s.error !== undefined)
@@ -280,7 +265,6 @@ Singleton {
         root.firewall = s.firewall !== false;
         root.helperBusy = s.busy === true;
         root.account = s.account === true;
-        root.canShare = s.canShare === true;
         root.user = typeof s.user === "string" ? s.user : "";
         root.hostname = typeof s.hostname === "string" ? s.hostname : "";
         root.addresses = Array.isArray(s.addresses) ? s.addresses : [];
@@ -342,6 +326,12 @@ Singleton {
         return why;
     }
 
+    function networkRefusal(conn) {
+        return conn && (conn.reason ?? "") !== ""
+            ? root.ineligibleMessage(conn)
+            : Translation.tr("Connect to your home network first, then turn this on.");
+    }
+
     function firewallMessage() {
         return Translation.tr("The firewall is turned off, so sharing stays off to keep your folders safe. Turn the firewall back on to share folders.");
     }
@@ -367,9 +357,7 @@ Singleton {
             return root.firewallMessage();
         if (code === 5) {
             const conn = root.connections.find(c => c.uuid === uuid);
-            if (conn && reason.includes("has its own firewall zone"))
-                return root.ineligibleMessage({ name: conn.name, reason: "zone" });
-            return Translation.tr("Connect to your home network first, then turn this on.");
+            return root.networkRefusal(conn && reason.includes("has its own firewall zone") ? { name: conn.name, reason: "zone" } : null);
         }
 
         let fallback = Translation.tr("The change could not be applied.");
@@ -411,9 +399,6 @@ Singleton {
         if (lookupProc.running)
             return;
         lookupProc.startedAt = root.storeGeneration;
-        lookupProc.out = "";
-        lookupProc.outDone = false;
-        lookupProc.exitCode = -1;
         lookupProc.running = true;
     }
 
@@ -424,9 +409,6 @@ Singleton {
     Process {
         id: lookupProc
         property int startedAt: 0
-        property string out: ""
-        property bool outDone: false
-        property int exitCode: -1
         command: ["bash", "-c",
             'id=$(head -n 1 -- "$1" 2>/dev/null); '
             + 'if [ -n "$id" ]; then '
@@ -439,26 +421,12 @@ Singleton {
             + 'exit 2',
             "--", root.passwordIdPath, root.secretApplication]
         stdout: StdioCollector {
-            onStreamFinished: {
-                lookupProc.out = this.text;
-                lookupProc.outDone = true;
-                root.lookupFinished();
-            }
+            id: lookupOut
         }
-        onExited: code => {
-            lookupProc.exitCode = code;
-            root.lookupFinished();
-        }
+        onExited: code => root.lookupFinished(code, lookupOut.text)
     }
 
-    function lookupFinished() {
-        if (lookupProc.exitCode < 0 || !lookupProc.outDone)
-            return;
-        const code = lookupProc.exitCode;
-        const text = lookupProc.out;
-        lookupProc.exitCode = -1;
-        lookupProc.outDone = false;
-        lookupProc.out = "";
+    function lookupFinished(code, text) {
         root.keyringChecked = true;
         // A save made while this read ran is newer than what it found, and
         // says for itself whether the keyring took it.
@@ -581,8 +549,6 @@ Singleton {
         helperProc.password = pw ?? "";
         helperProc.input = pw ?? "";
         helperProc.hadAccount = root.account;
-        helperProc.exitCode = -1;
-        helperProc.errDone = false;
         helperProc.command = ["pkexec", root.helperPath, verb].concat(args);
         // stdinEnabled has to be on before running goes true, or the write
         // lands after the helper has already read.
@@ -590,8 +556,6 @@ Singleton {
         helperProc.running = true;
     }
 
-    // The exit and the helper's last words arrive separately; the outcome is
-    // read once both are in.
     Process {
         id: helperProc
         property string verb: ""
@@ -600,14 +564,8 @@ Singleton {
         property string input: ""
         property string password: ""
         property bool hadAccount: false
-        property int exitCode: -1
-        property bool errDone: false
         stderr: StdioCollector {
             id: helperErr
-            onStreamFinished: {
-                helperProc.errDone = true;
-                root.helperFinished();
-            }
         }
         // A password handed over as an argument is readable in ps by anyone
         // on the machine while the command runs, so it goes down stdin.
@@ -619,20 +577,12 @@ Singleton {
                 stdinEnabled = false;
             }
         }
-        onExited: code => {
-            helperProc.exitCode = code;
-            root.helperFinished();
-        }
+        onExited: code => root.helperFinished(code)
     }
 
-    function helperFinished() {
-        if (helperProc.exitCode < 0 || !helperProc.errDone)
-            return;
+    function helperFinished(code) {
         const verb = helperProc.verb;
-        const code = helperProc.exitCode;
         const pw = helperProc.password;
-        helperProc.exitCode = -1;
-        helperProc.errDone = false;
         helperProc.password = "";
         root.busyAction = "";
         root.busyTarget = "";
@@ -663,9 +613,6 @@ Singleton {
         root.busyAction = verb;
         root.busyTarget = target ?? "";
         scriptProc.verb = verb;
-        scriptProc.exitCode = -1;
-        scriptProc.outDone = false;
-        scriptProc.out = "";
         scriptProc.command = command;
         scriptProc.running = true;
     }
@@ -673,35 +620,15 @@ Singleton {
     Process {
         id: scriptProc
         property string verb: ""
-        property string out: ""
-        property int exitCode: -1
-        property bool outDone: false
         stdout: StdioCollector {
-            onStreamFinished: {
-                scriptProc.out = this.text;
-                scriptProc.outDone = true;
-                root.scriptFinished();
-            }
+            id: scriptOut
         }
-        onExited: code => {
-            scriptProc.exitCode = code;
-            root.scriptFinished();
-        }
+        onExited: code => root.scriptFinished(code)
     }
 
-    function scriptFinished() {
-        if (scriptProc.exitCode < 0 || !scriptProc.outDone)
-            return;
+    function scriptFinished(code) {
         const verb = scriptProc.verb;
-        const code = scriptProc.exitCode;
-        let reply = null;
-        try {
-            reply = JSON.parse(scriptProc.out.trim());
-        } catch (e) {
-            reply = null;
-        }
-        scriptProc.exitCode = -1;
-        scriptProc.outDone = false;
+        const reply = root.parseJson(scriptOut.text);
         root.busyAction = "";
         root.busyTarget = "";
         if (code !== 0 || !reply || reply.error !== undefined)
@@ -734,9 +661,7 @@ Singleton {
         // is not offered; the helper would refuse it only after the prompt.
         const conn = root.currentConnection;
         if (!conn || !conn.eligible) {
-            root.fail("setup", conn && (conn.reason ?? "") !== ""
-                ? root.ineligibleMessage(conn)
-                : Translation.tr("Connect to your home network first, then turn this on."));
+            root.fail("setup", root.networkRefusal(conn));
             root.refreshed();
             return;
         }
@@ -790,9 +715,7 @@ Singleton {
         }
         const conn = root.connections.find(c => c.uuid === uuid);
         if (on && conn && !conn.eligible) {
-            root.fail("networks", (conn.reason ?? "") !== ""
-                ? root.ineligibleMessage(conn)
-                : Translation.tr("Connect to your home network first, then turn this on."));
+            root.fail("networks", root.networkRefusal(conn));
             root.refresh(true);
             return;
         }
@@ -941,9 +864,6 @@ Singleton {
         if (root.pendingFolder.length === 0 || infoProc.running)
             return;
         infoProc.forPath = root.pendingFolder;
-        infoProc.out = "";
-        infoProc.outDone = false;
-        infoProc.exited = false;
         infoProc.command = ["bash", root.scriptPath, "info", root.pendingFolder];
         infoProc.running = true;
     }
@@ -953,39 +873,20 @@ Singleton {
     Process {
         id: infoProc
         property string forPath: ""
-        property string out: ""
-        property bool outDone: false
-        property bool exited: false
         stdout: StdioCollector {
-            onStreamFinished: {
-                infoProc.out = this.text;
-                infoProc.outDone = true;
-                root.infoFinished();
-            }
+            id: infoOut
         }
-        onExited: {
-            infoProc.exited = true;
-            root.infoFinished();
-        }
+        onExited: root.infoFinished()
     }
 
     function infoFinished() {
-        if (!infoProc.outDone || !infoProc.exited)
-            return;
-        infoProc.outDone = false;
-        infoProc.exited = false;
         if (infoProc.forPath !== root.pendingFolder) {
             // Named while this ran. After this handler returns, when the
             // process has let go.
             Qt.callLater(root.checkPendingFolder);
             return;
         }
-        let info = null;
-        try {
-            info = JSON.parse(infoProc.out.trim());
-        } catch (e) {
-            info = null;
-        }
+        const info = root.parseJson(infoOut.text);
         root.pendingShared = info?.shared === true;
         root.pendingAccess = info?.access === "edit" ? "edit" : "view";
         root.pendingChecked = true;
@@ -1018,12 +919,7 @@ Singleton {
         command: ["bash", root.scriptPath, "gen-password"]
         stdout: StdioCollector {
             onStreamFinished: {
-                let pw = "";
-                try {
-                    pw = String(JSON.parse(this.text.trim()).password ?? "");
-                } catch (e) {
-                    pw = "";
-                }
+                const pw = String(root.parseJson(this.text)?.password ?? "");
                 if (genProc.verb === "suggest") {
                     if (pw.length > 0)
                         root.passwordSuggested(pw);

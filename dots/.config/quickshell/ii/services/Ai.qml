@@ -368,6 +368,7 @@ Singleton {
         "claude-code": claudeCodeApiStrategy.createObject(this),
         "codex-cli": codexCliApiStrategy.createObject(this),
         "antigravity-cli": antigravityCliApiStrategy.createObject(this, {
+            "workDir": root.antigravityDir,
             "exitText": Translation.tr("Antigravity stopped with code %1"),
             "lapsedText": Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."),
         }),
@@ -430,19 +431,23 @@ Singleton {
             // of its own so a retry can end it whole, and the pid is checked
             // first since it may be reused after a restart. Its exit code is
             // kept so a sign-in that ran out of time says so at once.
-            "login": "dir=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli\"; mkdir -p \"$dir\" && cd \"$dir\" || exit 1; p=$(cat login.pid 2>/dev/null); if [ -n \"$p\" ] && [ \"$(ps -o comm= -p \"$p\")\" = bash ] && [ \"$(ps -o sid= -p \"$p\" | tr -d ' ')\" = \"$p\" ]; then kill -- -\"$p\"; fi; rm -f login.exit code.fifo; mkfifo -m 600 code.fifo || exit 1; setsid bash -c 'exec 3<>code.fifo; SHELL=/bin/bash script -qec \"agy --disable-slash-commands --print=\\\"Reply with only these words: You are signed in.\\\"\" /dev/null <&3 > login.log 2>&1; echo $? > login.exit; rm -f code.fifo' > /dev/null 2>&1 < /dev/null & echo $! > login.pid",
+            "login": "dir=\"" + root.antigravityDir + "\"; mkdir -p \"$dir\" && cd \"$dir\" || exit 1; p=$(cat login.pid 2>/dev/null); if [ -n \"$p\" ] && [ \"$(ps -o comm= -p \"$p\")\" = bash ] && [ \"$(ps -o sid= -p \"$p\" | tr -d ' ')\" = \"$p\" ]; then kill -- -\"$p\"; fi; rm -f login.exit code.fifo; mkfifo -m 600 code.fifo || exit 1; setsid bash -c 'exec 3<>code.fifo; SHELL=/bin/bash script -qec \"agy --disable-slash-commands --print=\\\"Reply with only these words: You are signed in.\\\"\" /dev/null <&3 > login.log 2>&1; echo $? > login.exit; rm -f code.fifo' > /dev/null 2>&1 < /dev/null & echo $! > login.pid",
             // Where the code Google's page shows goes; see login above.
-            "loginCodePipe": "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli/code.fifo",
+            "loginCodePipe": root.antigravityDir + "/code.fifo",
             "loginInBackground": true,
-            "loginFailedCheck": "f=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli/login.exit\"; [ -s \"$f\" ] && [ \"$(cat \"$f\")\" != 0 ]",
+            "loginFailedCheck": "f=\"" + root.antigravityDir + "/login.exit\"; [ -s \"$f\" ] && [ \"$(cat \"$f\")\" != 0 ]",
             // The full app, for a sign-in the hidden one could not finish: it
             // shows any first-run screens and takes a pasted code.
-            "terminalLogin": "dir=\"${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli\"; mkdir -p \"$dir\" && cd \"$dir\" && rm -f login.exit && agy",
+            "terminalLogin": "dir=\"" + root.antigravityDir + "\"; mkdir -p \"$dir\" && cd \"$dir\" && rm -f login.exit && agy",
             // The login lives in the system keyring, so the CLI is the only
             // reliable judge; listing models fails at once when signed out.
             "readyCheck": "timeout 20 agy models >/dev/null 2>&1"
         }
     })
+    // Left for bash to expand where it is used. The sign-in's code pipe and
+    // exit file and the chat's own runs all live here, so every use has to
+    // name this one folder.
+    readonly property string antigravityDir: "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli"
     readonly property var cliPlanModels: ({
         "claude-code": {
             "claude-fable": { alias: "fable", name: "Claude Fable" },

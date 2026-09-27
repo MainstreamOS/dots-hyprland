@@ -101,6 +101,23 @@ Singleton {
         }
     }
 
+    // An answer already had, or a pause LRCLIB asked for, settles a song
+    // without a request.
+    function answerFromMemory(key) {
+        const known = root.cache.get(key);
+        if (known) {
+            root.remember(key, known);
+            root.show(key, known.status, known.lines);
+            return true;
+        }
+        if (root.retryAt > Date.now()) {
+            root.show(key, "rate_limited", []);
+            root.retryWhenAllowed();
+            return true;
+        }
+        return false;
+    }
+
     function lookUp() {
         if (!root.shown)
             return;
@@ -115,17 +132,8 @@ Singleton {
             root.show(key, "no_info", []);
             return;
         }
-        const known = root.cache.get(key);
-        if (known) {
-            root.remember(key, known);
-            root.show(key, known.status, known.lines);
+        if (root.answerFromMemory(key))
             return;
-        }
-        if (root.retryAt > Date.now()) {
-            root.show(key, "rate_limited", []);
-            root.retryWhenAllowed();
-            return;
-        }
         root.show(key, "loading", []);
         root.request(key, [
             "python3",
@@ -220,17 +228,8 @@ Singleton {
             root.show("", "idle", []);
             return;
         }
-        const known = root.cache.get(next.key);
-        if (known) {
-            root.remember(next.key, known);
-            root.show(next.key, known.status, known.lines);
+        if (root.answerFromMemory(next.key))
             return;
-        }
-        if (root.retryAt > Date.now()) {
-            root.show(next.key, "rate_limited", []);
-            root.retryWhenAllowed();
-            return;
-        }
         lyricsProc.requestKey = next.key;
         lyricsProc.answered = false;
         lyricsProc.stopping = false;
