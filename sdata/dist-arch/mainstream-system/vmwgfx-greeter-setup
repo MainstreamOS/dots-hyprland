@@ -1,0 +1,33 @@
+#!/bin/sh
+# Loads the VMware graphics fix into SDDM's login-screen compositor, on
+# machines with that GPU only, and takes it away again on any other, so a VM
+# image moved to other graphics goes back to the stock command.
+# Decided by PCI ID rather than by the bound driver, because this runs before
+# the display manager and the driver may not have claimed the card yet.
+# The drop-in can outlive this package, since a downgrade to a release without
+# the fix runs neither this script nor post_remove. So its command names only
+# the library, never a file of ours to run: a preload library that is gone
+# just makes the loader warn, where a missing command would leave the login
+# screen blank.
+# Named to sort last: older images also shipped a drop-in called sddm.conf that
+# sets CompositorCommand, and SDDM lets the last file in name order win.
+conf=/etc/sddm.conf.d/zz-mainstream-vmwgfx.conf
+lib=/usr/lib/mainstream/libmainstream-vmwgfx-close.so
+
+vmware_gpu() {
+    for dev in /sys/bus/pci/devices/*; do
+        [ "$(cat "$dev/vendor" 2>/dev/null)" = 0x15ad ] || continue
+        case "$(cat "$dev/device" 2>/dev/null)" in
+            0x0405|0x0406) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+if [ -r "$lib" ] && vmware_gpu; then
+    mkdir -p "${conf%/*}"
+    printf '[Wayland]\nCompositorCommand=/usr/bin/env LD_PRELOAD=%s start-hyprland\n' "$lib" > "$conf.tmp" && mv -f "$conf.tmp" "$conf"
+else
+    rm -f "$conf" "$conf.tmp"
+fi
+exit 0

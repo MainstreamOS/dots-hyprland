@@ -1,0 +1,10 @@
+[Unit]
+Description=Load the VMware graphics fix into the login screen
+Before=display-manager.service sddm.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/vmwgfx/greeter-setup
+
+[Install]
+WantedBy=multi-user.target

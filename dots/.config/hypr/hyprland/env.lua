@@ -25,6 +25,43 @@ for dir in (home_dir .. "/.local/share/flatpak/exports/share:/var/lib/flatpak/ex
 end
 hl.env("XDG_DATA_DIRS", table.concat(xdg_data_dirs, ":"))
 
+-- VMware's virtual GPU (vmwgfx, which VirtualBox's VMSVGA adapter uses too)
+-- hands over app buffers as surfaces Hyprland cannot release, so Hyprland
+-- turns away every window an app draws on the GPU and the desktop stays
+-- black. Where mainstream-system's fix for that is loaded into this Hyprland,
+-- apps keep drawing on the GPU; anywhere it is missing, drawing in software
+-- keeps the session usable. The fix is looked for in this process's own
+-- memory map, since anything in the environment would also reach a Hyprland
+-- started from inside the session, which does not get the library. It is
+-- checked at every start rather than written at install, so a VM moved to
+-- other graphics follows it. A LIBGL_ALWAYS_SOFTWARE of 0 in custom/env.lua
+-- undoes it.
+local function drmDriverPresent(name)
+    for i = 0, 7 do
+        local uevent = io.open("/sys/class/drm/card" .. i .. "/device/uevent", "r")
+        if uevent then
+            local text = uevent:read("a") or ""
+            uevent:close()
+            if text:find("DRIVER=" .. name .. "\n", 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+local function vmwgfxCloseLoaded()
+    local maps = io.open("/proc/self/maps", "r")
+    if not maps then
+        return false
+    end
+    local text = maps:read("a") or ""
+    maps:close()
+    return text:find("/libmainstream-vmwgfx-close.so", 1, true) ~= nil
+end
+if drmDriverPresent("vmwgfx") and not vmwgfxCloseLoaded() then
+    hl.env("LIBGL_ALWAYS_SOFTWARE", "1")
+end
+
 -- Themes
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")

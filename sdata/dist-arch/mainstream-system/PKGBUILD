@@ -2,9 +2,9 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=12
+pkgrel=13
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
-arch=(any)
+arch=(x86_64 aarch64)
 license=(None)
 depends=(
   git
@@ -16,7 +16,9 @@ depends=(
   xdg-desktop-portal
   cups
   ipp-usb
+  libdrm
 )
+options=(!debug)
 install=mainstream-system.install
 source=(
   hyprbars-rebuild.sh
@@ -48,11 +50,21 @@ source=(
   luks-keyfile-fix
   mainstream-luks-keyfile.service
   mainstream-luks-keyfile.timer
+  vmwgfx-close.c
+  mainstream-vmwgfx.sh
+  vmwgfx-greeter-setup
+  mainstream-vmwgfx-greeter.service
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP
 )
+
+build() {
+  gcc $CFLAGS -shared -fPIC $(pkg-config --cflags libdrm) \
+      -o libmainstream-vmwgfx-close.so "$srcdir/vmwgfx-close.c" $LDFLAGS $(pkg-config --libs libdrm)
+}
 
 package() {
   install -Dm755 "$srcdir/hyprbars-rebuild.sh"            "$pkgdir/usr/lib/mainstream/hyprbars/rebuild.sh"
@@ -94,4 +106,10 @@ package() {
       "$pkgdir/usr/lib/systemd/system/mainstream-luks-keyfile.service"
   install -Dm644 "$srcdir/mainstream-luks-keyfile.timer" \
       "$pkgdir/usr/lib/systemd/system/mainstream-luks-keyfile.timer"
+
+  install -Dm755 "$srcdir/libmainstream-vmwgfx-close.so" "$pkgdir/usr/lib/mainstream/libmainstream-vmwgfx-close.so"
+  install -Dm644 "$srcdir/mainstream-vmwgfx.sh"          "$pkgdir/etc/profile.d/mainstream-vmwgfx.sh"
+  install -Dm755 "$srcdir/vmwgfx-greeter-setup"          "$pkgdir/usr/lib/mainstream/vmwgfx/greeter-setup"
+  install -Dm644 "$srcdir/mainstream-vmwgfx-greeter.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-vmwgfx-greeter.service"
 }

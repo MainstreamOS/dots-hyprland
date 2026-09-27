@@ -92,6 +92,11 @@ _migrate() {
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block mainstream-luks-keyfile.service 2>/dev/null || true
     fi
+    # VMware's virtual GPU needs its fix in the login screen's compositor as
+    # well. The service decides at every boot; running it now means the next
+    # login screen already has it.
+    systemctl preset mainstream-vmwgfx-greeter.service 2>/dev/null || true
+    /usr/lib/mainstream/vmwgfx/greeter-setup 2>/dev/null || true
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
@@ -111,4 +116,9 @@ post_install() {
 
 post_upgrade() {
     _migrate
+}
+
+post_remove() {
+    # Without the fix installed, SDDM goes back to its stock login-screen command.
+    rm -f /etc/sddm.conf.d/zz-mainstream-vmwgfx.conf
 }

@@ -1,3 +1,4 @@
 enable hyprbars-rebuild.timer
 enable scrolloverview-rebuild.timer
 enable mainstream-luks-keyfile.timer
+enable mainstream-vmwgfx-greeter.service
