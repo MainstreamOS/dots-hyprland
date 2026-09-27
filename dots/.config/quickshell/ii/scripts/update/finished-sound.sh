@@ -25,7 +25,9 @@ PY
 )
 [[ "${enabled:-0}" == 1 ]] || exit 0
 
-name=$([[ "$rc" == 0 ]] && echo complete || echo dialog-warning)
+# 100 is the helper's partial success, which the Update page reports as a
+# completed update, so it sounds like one too.
+name=$([[ "$rc" == 0 || "$rc" == 100 ]] && echo complete || echo dialog-warning)
 file=""
 for t in "${theme:-freedesktop}" freedesktop; do
     for ext in oga ogg; do
