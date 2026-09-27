@@ -11,7 +11,7 @@ RippleButton {
 
     property bool showPing: false
 
-    visible: SidebarLeftTabs.hasPages
+    visible: SidebarLeftTabs.buttonShown
 
     property real buttonPadding: 5
     implicitWidth: distroIcon.width + buttonPadding * 2
@@ -56,7 +56,12 @@ RippleButton {
         anchors.centerIn: parent
         width: 19.5
         height: 19.5
-        source: Config.options.bar.topLeftIcon == 'distro' ? SystemInfo.distroIcon : `${Config.options.bar.topLeftIcon}-symbolic`
+        // The stock icon is the logo of the model picked in the Intelligence
+        // tab; with AI off the button is not shown at all. No model object yet
+        // means local AI is still being looked up.
+        source: Config.options.bar.topLeftIcon == 'distro' ? SystemInfo.distroIcon
+            : Config.options.bar.topLeftIcon === "spark" ? (Ai.currentModel?.icon ?? "ollama-symbolic")
+            : `${Config.options.bar.topLeftIcon}-symbolic`
         colorize: true
         color: root.tones.colOnLayer0
 

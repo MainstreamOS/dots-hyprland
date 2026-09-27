@@ -316,7 +316,7 @@ Singleton {
         }),
         "claude": aiModelComponent.createObject(this, {
             "name": "Claude",
-            "icon": "spark-symbolic",
+            "icon": "claude-symbolic",
             "description": Translation.tr("Online | Anthropic's Claude Opus 4.8 over the Messages API"),
             "homepage": "https://www.anthropic.com/claude",
             "endpoint": "https://api.anthropic.com/v1/messages",
@@ -431,7 +431,7 @@ Singleton {
             setupHomepage: "https://docs.anthropic.com/en/docs/claude-code",
             modelDescription: Translation.tr("Plan | %1 through your Claude subscription. No API key needed"),
             signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Fable, Opus, Opus 1M, Sonnet, and Haiku."),
-            icon: "spark-symbolic",
+            icon: "claude-symbolic",
             endpoint: "https://api.anthropic.com",
             homepage: "https://www.anthropic.com/claude",
             firstPick: "claude-fable",

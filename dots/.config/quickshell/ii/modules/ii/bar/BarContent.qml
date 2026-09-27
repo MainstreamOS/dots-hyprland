@@ -51,7 +51,7 @@ Item { // Bar content region
         // The button hides itself when none of the things it opens are turned
         // on. The slot can't see that from the outside, so it would keep the
         // space reserved for a button nobody can see.
-        case "sidebarButton": return SidebarLeftTabs.hasPages;
+        case "sidebarButton": return SidebarLeftTabs.buttonShown;
         case "activeWindow": return root.useShortenedForm === 0;
         case "activeWindowPill": return root.useShortenedForm === 0;
         case "media": return root.useShortenedForm < 2;

@@ -33,4 +33,10 @@ Singleton {
     ]
 
     readonly property bool hasPages: root.definitions.some(tab => tab.enabled)
+
+    // The bar button's stock icon is the logo of the AI model picked in the
+    // sidebar, so with AI off it has nothing to show and stays off the bar. A
+    // distro or custom icon still shows whenever there is a page to open.
+    readonly property bool buttonShown: root.hasPages
+        && (Config.options.bar.topLeftIcon !== "spark" || root.tabs.some(tab => tab.id === "ai"))
 }
