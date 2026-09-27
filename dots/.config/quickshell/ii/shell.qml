@@ -46,6 +46,8 @@ ShellRoot {
     }
 
     Component.onCompleted: {
+        // Only the main shell clears the shared caches, see _clearCachesEnabled.
+        Directories._clearCachesEnabled = true
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
         Location.load()

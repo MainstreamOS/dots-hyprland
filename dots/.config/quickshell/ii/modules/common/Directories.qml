@@ -66,16 +66,40 @@ Singleton {
     property string userAvatarPathAccountsService: FileUtils.trimFileProtocol(`/var/lib/AccountsService/icons/${SystemInfo.username}`)
     property string userAvatarPathRicersAndWeirdSystems: FileUtils.trimFileProtocol(`${Directories.home}/.face`)
     property string userAvatarPathRicersAndWeirdSystems2: FileUtils.trimFileProtocol(`${Directories.home}/.face.icon`)
-    // Cleanup on init
+    // Every process makes sure these exist; only the main shell clears any
+    // of them, below.
     Component.onCompleted: {
         Quickshell.execDetached(["mkdir", "-p", `${shellConfig}`])
         Quickshell.execDetached(["mkdir", "-p", `${favicons}`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${coverArt}'; mkdir -p '${coverArt}'`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${booruPreviews}'; mkdir -p '${booruPreviews}'`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${latexOutput}'; mkdir -p '${latexOutput}'`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${cliphistDecode}'; mkdir -p '${cliphistDecode}'`])
+        Quickshell.execDetached(["mkdir", "-p", `${coverArt}`])
+        Quickshell.execDetached(["mkdir", "-p", `${booruPreviews}`])
+        Quickshell.execDetached(["mkdir", "-p", `${latexOutput}`])
+        Quickshell.execDetached(["mkdir", "-p", `${cliphistDecode}`])
         Quickshell.execDetached(["mkdir", "-p", `${aiChats}`])
         Quickshell.execDetached(["mkdir", "-p", `${userActions}`])
-        Quickshell.execDetached(["rm", "-rf", `${tempImages}`])
+    }
+
+    // Whatever writes into the folders below reads their paths from here
+    // first, so nothing this shell writes there can be older than this.
+    readonly property real startTime: Date.now()
+
+    // Only the main shell sets this. Settings, the Welcome app and Uninstall
+    // Apps load this too, as processes of their own, and clearing from those
+    // would empty the folders under the shell that is showing what is in them.
+    property bool _clearCachesEnabled: false
+    on_ClearCachesEnabledChanged: {
+        if (!_clearCachesEnabled) return
+        // Media already playing at startup gets its art fetched straight
+        // away, alongside this rather than after it, so only what an earlier
+        // run left behind is taken and a fresh download never is. Each folder
+        // goes on its own: the ones under /tmp can belong to whoever logged
+        // in first, and one that cannot be made must not keep the rest full.
+        // Once per login: a reload of the shell keeps what these hold, so art
+        // fetched before shows at once rather than being fetched again. The
+        // runtime folder empties at logout, which starts the next login clean.
+        Quickshell.execDetached(["bash", "-c",
+            'm="${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/quickshell-ii-caches-cleared}"; [ -n "$m" ] && [ -e "$m" ] && exit 0; before="$1"; shift; for d in "$@"; do mkdir -p -- "$d" && find "$d" -mindepth 1 -maxdepth 1 ! -newermt "@$before" -exec rm -rf -- {} +; done; [ -n "$m" ] && : > "$m"',
+            "clear-caches", String(Math.floor(startTime / 1000)),
+            coverArt, booruPreviews, latexOutput, cliphistDecode, tempImages])
     }
 }
