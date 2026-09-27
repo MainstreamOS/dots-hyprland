@@ -70,6 +70,7 @@ Singleton {
     }
     Process {
         id: wallEdgeSampler
+        environment: Images.magickEnvironment
         stdout: StdioCollector {
             onStreamFinished: {
                 const hex = text.trim().split("\n").map(line => line.trim().slice(0, 6))

@@ -12,6 +12,12 @@ SHELL_CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
 MATUGEN_DIR="$XDG_CONFIG_HOME/matugen"
 terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 
+# ImageMagick may otherwise take all of memory and then spill to disk, and
+# /tmp is memory as well, so a picture too big to handle would freeze the
+# system instead of failing. Exported so the wallpaper categorizer gets them
+# too. The same values as Images.magickEnvironment in the shell.
+export MAGICK_MEMORY_LIMIT=2GiB MAGICK_MAP_LIMIT=1GiB MAGICK_DISK_LIMIT=1GiB
+
 pre_process() {
     local mode_flag="$1"
     # Set GNOME color-scheme if mode_flag is dark or light
@@ -87,11 +93,11 @@ set_sddm_background() {
     local tmpfile
     tmpfile="$(mktemp /tmp/sddm-bg-XXXXXX.jpg)"
     if command -v magick &>/dev/null; then
-        magick "$wallpaper_path" -quality 90 "$tmpfile" 2>/dev/null || return
+        magick "$wallpaper_path" -quality 90 "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return; }
     elif command -v convert &>/dev/null; then
-        convert "$wallpaper_path" -quality 90 "$tmpfile" 2>/dev/null || return
+        convert "$wallpaper_path" -quality 90 "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return; }
     else
-        cp "$wallpaper_path" "$tmpfile" 2>/dev/null || return
+        cp "$wallpaper_path" "$tmpfile" 2>/dev/null || { rm -f "$tmpfile"; return; }
     fi
 
     # Copy to SDDM theme dir
@@ -417,7 +423,10 @@ set_scrolloverview_wallpaper() {
             # folder for as long as it runs, and this is a full decode and encode.
             plugin_path="$scaled"
         elif command -v magick &>/dev/null; then
-            magick "$src" -resize "${screen_width}x${screen_height}^>" "$scaled" 2>/dev/null && plugin_path="$scaled"
+            # The size hint has a JPEG decoded at no more than about the screen
+            # size, which keeps a very large photo inside the memory cap above.
+            magick -define "jpeg:size=${screen_width}x${screen_height}" "$src" \
+                -resize "${screen_width}x${screen_height}^>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         elif command -v convert &>/dev/null; then
             convert "$src" -resize "${screen_width}x${screen_height}^>" "$scaled" 2>/dev/null && plugin_path="$scaled"
         fi

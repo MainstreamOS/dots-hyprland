@@ -15,7 +15,16 @@ RESIZED_IMG_PATH="/tmp/quickshell/ai/wallpaper.jpg"
 
 # Resize image for speed
 mkdir -p "$(dirname "$RESIZED_IMG_PATH")"
-magick "$SOURCE_IMG_PATH" -resize 200x -quality 50 "$RESIZED_IMG_PATH"
+# A video wallpaper is judged by its first frame, read by ffmpeg alone:
+# magick would decode every frame into memory first.
+case "${SOURCE_IMG_PATH,,}" in
+    *.mp4|*.webm|*.mkv|*.avi|*.mov|*.m4v|*.ogv)
+        ffmpeg -nostdin -v error -y -i "$SOURCE_IMG_PATH" -frames:v 1 -vf scale=200:-2 -q:v 10 "$RESIZED_IMG_PATH"
+        ;;
+    *)
+        magick "$SOURCE_IMG_PATH" -resize 200x -quality 50 "$RESIZED_IMG_PATH"
+        ;;
+esac
 
 # Get API key
 API_KEY=$(secret-tool lookup 'application' 'illogical-impulse' | jq -r '.apiKeys.gemini')

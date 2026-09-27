@@ -2288,9 +2288,9 @@ ApplicationWindow {
                 DrawnWallpaper {
                     anchors.fill: parent
                 }
-                // The wallpaper actually set, over the drawn one. A video, or
-                // a picture whose thumbnail is still being made, leaves the
-                // drawn one showing.
+                // The wallpaper actually set, over the drawn one, which stays
+                // in view while the thumbnail is made. A video shows its first
+                // frame.
                 ThumbnailImage {
                     anchors.fill: parent
                     fillMode: Image.PreserveAspectCrop

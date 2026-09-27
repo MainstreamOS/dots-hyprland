@@ -105,15 +105,45 @@ StyledImage {
         // blown up to fill it. A source we can't thumbnail — no magick, cache
         // not writable — is reported as itself, so the worst case is reading the
         // full-size file rather than showing nothing at all.
+        //
+        // A video never reaches magick, which decodes every frame into memory
+        // to make one picture: tens of gigabytes for a short 4K clip, enough to
+        // freeze the whole system. ffmpeg reads the first frame alone, the same
+        // one the wallpaper script uses. A video that fails reports nothing,
+        // since the image decoder could not read it either.
+        //
+        // Stopping this Process signals only bash, and closing the window kills
+        // bash outright. Neither reaches the generator, which would run on with
+        // nothing to take its result, so it is tied to bash's death and given a
+        // time limit besides. It writes beside the thumbnail and renames into
+        // place, so a run stopped partway never leaves a broken file that the
+        // next one would take as finished.
+        environment: Images.magickEnvironment
         command: ["bash", "-c", `
             src="$0"; thumb="$1"; max="$2"
             [ -f "$src" ] || exit 0
-            use="$src"
             if [ -f "$thumb" ] && [ ! "$src" -nt "$thumb" ]; then
                 use="$thumb"
-            elif mkdir -p "\${thumb%/*}" 2>/dev/null && magick "$src" -resize "\${max}x\${max}>" "$thumb" 2>/dev/null; then
-                use="$thumb"
+            else
+                case "\${src,,}" in
+                    *.mp4|*.webm|*.mkv|*.avi|*.mov|*.m4v|*.ogv) video=1; use="" ;;
+                    *) video=""; use="$src" ;;
+                esac
+                dir="\${thumb%/*}"
+                part="$thumb.$$.part.png"
+                if mkdir -p "$dir" 2>/dev/null; then
+                    find "$dir" -maxdepth 1 -name "\${thumb##*/}.*.part.png" -mmin +2 -delete 2>/dev/null
+                    if [ -n "$video" ]; then
+                        setpriv --pdeathsig TERM timeout -k 5 60 ffmpeg -nostdin -v error -y -i "$src" -frames:v 1 \\
+                            -vf "scale='min(iw,$max)':'min(ih,$max)':force_original_aspect_ratio=decrease" "$part"
+                    else
+                        setpriv --pdeathsig TERM timeout -k 5 60 magick -define "jpeg:size=$((max * 2))x$((max * 2))" \\
+                            "$src" -delete 1--1 -resize "\${max}x\${max}>" "$part"
+                    fi 2>/dev/null && mv -f "$part" "$thumb" && use="$thumb"
+                    rm -f "$part"
+                fi
             fi
+            [ -n "$use" ] || exit 0
             printf '%s\\t%s\\n' "$(stat -c %.9Y "$use" 2>/dev/null || stat -c %Y "$use")" "$use"
         `,
             FileUtils.trimFileProtocol(root.sourcePath),

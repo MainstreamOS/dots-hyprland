@@ -29,6 +29,18 @@ Singleton {
     // time the page is rebuilt.
     readonly property size wallpaperPreviewSourceSize: Qt.size(768, 432)
 
+    // For a Process that runs ImageMagick on a picture the user chose. Left
+    // alone it may take all of memory and then spill to disk, and /tmp is
+    // memory as well, so a picture too big to handle would freeze the system
+    // instead of failing. A picture's pixels must fit in one of the three, so
+    // the 2 GiB of memory is what lets a 16K still through, and the three
+    // together cap a runaway at about 4 GiB.
+    readonly property var magickEnvironment: ({
+        "MAGICK_MEMORY_LIMIT": "2GiB",
+        "MAGICK_MAP_LIMIT": "1GiB",
+        "MAGICK_DISK_LIMIT": "1GiB"
+    })
+
     function thumbnailSizeNameForDimensions(width: int, height: int): string {
         const sizeNames = Object.keys(thumbnailSizes);
         for(let i = 0; i < sizeNames.length; i++) {
