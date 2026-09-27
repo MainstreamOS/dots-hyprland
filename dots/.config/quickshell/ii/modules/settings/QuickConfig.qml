@@ -24,11 +24,6 @@ ContentPage {
         }
     }
 
-    Process {
-        id: themeApplyProc
-        onExited: MaterialThemeLoader.reapplyTheme()
-    }
-
     // Picking a folder turns the slideshow on and shows one straight away, so
     // the button does something visible rather than leaving the desktop
     // unchanged until the first interval is up. The rotation lives in the main
@@ -52,12 +47,12 @@ ContentPage {
 
     Process { id: slideshowNextProc }
 
+    // Started detached: this page is rebuilt as soon as the new colors land,
+    // and a run it owned would be killed along with it, before the steps that
+    // follow the colors (terminal colors, the login background, the portal).
+    // The new colors reach this page through MaterialThemeLoader's file watch.
     function applyTheme(args) {
-        if (themeApplyProc.running)
-            return;
-
-        themeApplyProc.command = ["bash", "-c", `${Directories.wallpaperSwitchScriptPath} ${args}`];
-        themeApplyProc.running = true;
+        Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} ${args}`]);
     }
 
     component SmallLightDarkPreferenceButton: RippleButton {
