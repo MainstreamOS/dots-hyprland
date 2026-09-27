@@ -246,13 +246,14 @@ function MainstreamTitleBarMinimize()
     return toScratchpad()
 end
 
--- Scrolling on a title bar steps its window one rung along minimized, normal,
--- maximized and fullscreen: up climbs and down descends. The plugin focuses the
--- window under the pointer before running the command, so the active window is
--- the one scrolled on. A step past either end is a dispatcher that does
--- nothing, which hl.dispatch accepts without a complaint. A fullscreen window
--- has no title bar, so down from fullscreen only comes from the command run by
--- hand, and it lands one rung lower like any other step. Minimized means the
+-- Scrolling on a title bar steps its window one rung along minimized, normal
+-- and maximized: up climbs and down descends. Fullscreen is not a rung, since a
+-- fullscreen window has no title bar to scroll back down on. The plugin focuses
+-- the window under the pointer before running the command, so the active
+-- window is the one scrolled on. A step past either end is a dispatcher that
+-- does nothing, which hl.dispatch accepts without a complaint. Down from
+-- fullscreen only comes from the command run by hand, and it lands on
+-- maximized like one rung lower. Minimized means the
 -- scratchpad alone: a window a rule or the user put on a named special
 -- workspace climbs and descends like any other, down to the scratchpad, where
 -- the minimize button would bring it back to the desktop instead.
@@ -272,8 +273,6 @@ function MainstreamTitleBarStep(direction)
     if up then
         if mode == FULLSCREEN_NONE then
             return hl.dsp.window.fullscreen({ mode = "maximized", action = "set" })
-        elseif mode == FULLSCREEN_MAXIMIZED then
-            return hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set" })
         end
         return hl.dsp.no_op()
     end

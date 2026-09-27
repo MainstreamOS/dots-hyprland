@@ -738,7 +738,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 TitleBars.setScrollActions(checked);
             }
             StyledToolTip {
-                text: Translation.tr("Scroll up on a title bar to maximize, then go fullscreen. Scroll down to restore, then minimize.")
+                text: Translation.tr("Scroll up on a title bar to maximize. Scroll down to restore, then minimize.")
             }
         }
 
