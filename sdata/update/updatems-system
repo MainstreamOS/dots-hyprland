@@ -607,6 +607,23 @@ else
             RC=1
         fi
     done
+
+    # The live image lets root sign in over SSH with a password, and installs
+    # from before the finalize step removed that drop-in still carry it: the
+    # moment someone turns sshd on, it would take root's password. Only the
+    # untouched copy goes; a file someone changed is theirs.
+    _ssh_dropin=/etc/ssh/sshd_config.d/10-archiso.conf
+    if [[ -f "$_ssh_dropin" && ! -L "$_ssh_dropin" ]] \
+        && ! pacman -Qqo "$_ssh_dropin" >/dev/null 2>&1 \
+        && [[ "$(cat "$_ssh_dropin")" == $'# Allow root login using password authentication\nPasswordAuthentication yes\nPermitRootLogin yes' ]]; then
+        if rm -f -- "$_ssh_dropin"; then
+            ok "$(t "Removed the installer's setting that let root sign in over SSH with a password")"
+            systemctl try-reload-or-restart sshd.service 2>/dev/null || true
+        else
+            warn "$(tf "Could not remove %s" "$_ssh_dropin")"
+            RC=1
+        fi
+    fi
 fi
 
 if [[ $RC -eq 0 ]]; then
