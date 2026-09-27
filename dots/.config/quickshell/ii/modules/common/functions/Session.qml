@@ -16,65 +16,28 @@ Singleton {
     //   4. Exits, causing closeWindowsProc.onExited to run the
     //      pending logout/reboot/poweroff action.
     //
-    // No QML Timer is required. The waiting happens entirely in
-    // the child process, so it does not block Quickshell's event loop.
     property var _afterWindowsClosed: null
 
     Process {
         id: closeWindowsProc
-
-        command: [
-            "bash",
-            "-c",
-            `
-            set -u
-
-            # Capture the addresses of all windows that exist right now.
-            windows=$(hyprctl clients -j | jq -r '.[].address')
-
-            # Gracefully request that every captured window close.
-            while read -r address; do
-                [ -n "$address" ] || continue
-
-                hyprctl dispatch 'hl.dsp.window.close({ window = "address:'"$address"'" })'
-            done <<< "$windows"
-
-            # Wait until every captured window has disappeared.
-            #
-            # This checks the compositor's current window list rather
-            # than checking whether the application PID still exists.
-            while read -r address; do
-                [ -n "$address" ] || continue
-
-                while hyprctl clients -j |
-                    jq -e --arg address "$address" \
-                    'any(.[]; .address == $address)' >/dev/null
-                do
-                    sleep 0.1
-                done
-            done <<< "$windows"
-            `
-        ]
-
+        command: ["bash", Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/session/close.sh"]
         onExited: {
             const f = root._afterWindowsClosed;
             root._afterWindowsClosed = null;
-
-            if (f)
-                f();
+            if (f) f();
         }
     }
 
     function closeAllWindows(after) {
+        // Replace any queued post-snapshot action with the new one (last
+        // write wins). If a snapshot is already running, the existing
+        // onExited will fire `after` when it finishes; no need to retrigger.
         root._afterWindowsClosed = after;
 
         // Nothing to wait for.
         if (HyprlandData.windowList.length === 0) {
             root._afterWindowsClosed = null;
-
-            if (after)
-                after();
-
+            if (after) after();
             return;
         }
 
