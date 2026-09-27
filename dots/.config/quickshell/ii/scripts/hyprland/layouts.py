@@ -22,6 +22,13 @@ import os
 import re
 import sys
 
+# The shared writer lives beside the theme scripts. No bytecode is written for
+# it: the updater runs these from its clone, and a __pycache__ left there would
+# be copied home as a changed file on the next full pass.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "themes"))
+sys.dont_write_bytecode = True
+from decorations import _locked, _publish
+
 LAYOUT = re.compile(r'(^[ \t]*general\s*=\s*\{[^}]*?layout\s*=\s*")([^"]+)(")', re.S | re.M)
 ACTIVE_WORKSPACES = re.compile(r'(?m)^\s*tryRequire\("workspaces"\)')
 COMMENTED_WORKSPACES = re.compile(r'(?m)^(\s*)--\s*(tryRequire\("workspaces"\))')
@@ -52,17 +59,6 @@ def per_workspace_of(text):
     return None
 
 
-def write(path, text):
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(text)
-    try:
-        os.chmod(tmp, os.stat(path).st_mode & 0o7777)
-    except OSError:
-        pass
-    os.replace(tmp, path)
-
-
 def carry(carry_dir, live_general, new_general, live_hyprland, new_hyprland):
     kept = []
     was = sorted(glob.glob(os.path.join(carry_dir, "was", "*")))
@@ -70,12 +66,14 @@ def carry(carry_dir, live_general, new_general, live_hyprland, new_hyprland):
     mine = layout_of(read(os.path.join(carry_dir, "yours", "general.lua")))
     shipped = [layout_of(read(os.path.join(d, "general.lua"))) for d in was]
     shipped = [v for v in shipped if v is not None]
-    live_text = read(live_general)
-    if mine and shipped and mine not in shipped and live_text is not None:
-        now, new = layout_of(live_text), layout_of(read(new_general))
-        if now is not None and now != mine and now == new:
-            write(live_general, LAYOUT.sub(lambda m: m.group(1) + mine + m.group(3), live_text, count=1))
-            kept.append("default layout")
+    if mine and shipped and mine not in shipped:
+        with _locked(live_general):
+            live_text = read(live_general)
+            now, new = layout_of(live_text), layout_of(read(new_general))
+            if now is not None and now != mine and now == new:
+                _publish(live_general, LAYOUT.sub(lambda m: m.group(1) + mine + m.group(3), live_text, count=1),
+                         encoding="utf-8")
+                kept.append("default layout")
 
     mine = per_workspace_of(read(os.path.join(carry_dir, "yours", "hyprland.lua")))
     shipped = [per_workspace_of(read(os.path.join(d, "hyprland.lua"))) for d in was]
@@ -88,7 +86,7 @@ def carry(carry_dir, live_general, new_general, live_hyprland, new_hyprland):
                 text = COMMENTED_WORKSPACES.sub(r"\1\2", live_text, count=1)
             else:
                 text = UNCOMMENTED_WORKSPACES.sub(r"\1-- \2", live_text, count=1)
-            write(live_hyprland, text)
+            _publish(live_hyprland, text, encoding="utf-8")
             kept.append("per-workspace layouts")
     return kept
 

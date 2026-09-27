@@ -25,6 +25,13 @@ import os
 import re
 import sys
 
+# The shared writer lives beside the theme scripts. No bytecode is written for
+# it: the updater runs these from its clone, and a __pycache__ left there would
+# be copied home as a changed file on the next full pass.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "themes"))
+sys.dont_write_bytecode = True
+from decorations import _locked, _publish
+
 # Each slot's choices in order; the first is what a slot with no value, or a
 # value this release does not know, falls back to, as the page's dropdowns do.
 GESTURES = {
@@ -98,26 +105,20 @@ def block(choices):
 
 
 def apply(general_path, text_block):
-    try:
-        with open(general_path, encoding="utf-8") as f:
-            text = f.read()
-    except OSError:
-        return 1
-    new, count = MARKERS.subn(
-        lambda m: m.group(1) + text_block + ("\n" if text_block else "") + m.group(2),
-        text, count=1)
-    if count == 0:
-        return 1
-    if new == text:
-        return 2
-    tmp = general_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(new)
-    try:
-        os.chmod(tmp, os.stat(general_path).st_mode & 0o7777)
-    except OSError:
-        pass
-    os.replace(tmp, general_path)
+    with _locked(general_path):
+        try:
+            with open(general_path, encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            return 1
+        new, count = MARKERS.subn(
+            lambda m: m.group(1) + text_block + ("\n" if text_block else "") + m.group(2),
+            text, count=1)
+        if count == 0:
+            return 1
+        if new == text:
+            return 2
+        _publish(general_path, new, encoding="utf-8")
     return 0
 
 

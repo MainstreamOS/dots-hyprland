@@ -303,6 +303,30 @@ def _locked(path):
     return _Lock()
 
 
+def _publish(path, text, encoding=None):
+    # Beside the target and renamed over it: the target is read by the Hyprland
+    # config and a reload can be reading it at any moment. The name is unique
+    # per writer: a shared one meant two writers held the same inode, and the
+    # loser's rename published a half-written file.
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".",
+                               prefix=os.path.basename(path) + ".")
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            fh.write(text)
+        try:
+            os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def write(general_path, values, flag_dir=None, schema=None):
     with _locked(general_path):
         return _write_locked(general_path, values, flag_dir, schema)
@@ -372,27 +396,7 @@ def _write_locked(general_path, values, flag_dir=None, schema=None, done=None):
             text = text[:span[0]] + rendered + text[span[1]:]
         written += 1
         done.append(row["key"])
-    # Beside the target and renamed over it: general.lua is sourced by the
-    # Hyprland config and a reload can be reading it at any moment. The name is
-    # unique per writer — a shared one meant two writers held the same inode,
-    # and the loser's rename published a half-written file.
-    import tempfile
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(general_path) or ".",
-                               prefix=os.path.basename(general_path) + ".")
-    try:
-        with os.fdopen(fd, "w") as fh:
-            fh.write(text)
-        try:
-            os.chmod(tmp, os.stat(general_path).st_mode & 0o7777)
-        except OSError:
-            pass
-        os.replace(tmp, general_path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    _publish(general_path, text)
     return written
 
 
