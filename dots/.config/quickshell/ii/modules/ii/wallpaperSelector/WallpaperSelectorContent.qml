@@ -12,7 +12,9 @@ import Quickshell.Io
 
 MouseArea {
     id: root
-    property int columns: 4
+    // Three on a narrower picker, such as one on a portrait screen, so the
+    // thumbnails stay about the size they are on a landscape one.
+    property int columns: root.width > 0 && root.width < 1100 ? 3 : 4
     property real previewCellAspectRatio: 4 / 3
     property bool useDarkMode: Appearance.m3colors.darkmode
     // The monitor this pick is for, or empty for the main wallpaper. The
