@@ -814,7 +814,19 @@ get_changed_files() {
     find "$dir_path" -type f -print0 2>/dev/null
     return
   fi
-  
+
+  # With a range to trust, what the release changed is the whole answer, even
+  # when that is nothing in this folder. A file it did not touch stays as the
+  # user left it, edits and deletions included.
+  if [[ -n "${EXP_RANGE_BASE:-}" ]]; then
+    local file
+    git -C "$REPO_ROOT" diff -z --name-only --diff-filter=ACMR "$EXP_RANGE_BASE" HEAD -- "$dir_path" 2>/dev/null |
+      while IFS= read -r -d '' file; do
+        [[ -f "${REPO_ROOT}/${file}" ]] && printf '%s\0' "${REPO_ROOT}/${file}"
+      done
+    return 0
+  fi
+
   # Try git-based detection first
   if git rev-parse --verify HEAD@{1} &>/dev/null 2>&1; then
     local temp_file
