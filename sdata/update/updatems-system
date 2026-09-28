@@ -4,19 +4,17 @@
 # (section 5b) right after the user-level updatems step, so it runs as
 # root and writes to /usr/share, /usr/share/polkit-1, and /usr/local/bin.
 #
-# Scope: file copies only. Specifically:
-#   /usr/share/plymouth/themes/mainstream/   (Plymouth boot splash theme)
-#   /usr/share/polkit-1/actions/...sddm-bg.policy
-#   /usr/share/polkit-1/rules.d/50-sddm-bg.rules
-#   /usr/local/bin/sddm-bg-helper
-#   /usr/local/bin/mainstream-update-helper  (the helper that just ran us)
-#   /usr/local/bin/updatems                  (the user-level command)
-#   /usr/local/bin/updatems-system           (this script itself)
+# Scope: every root-owned file in ROOT_FILES below, installed byte for byte
+# from the clone, the Plymouth theme and /etc/skel, plus the repairs further
+# down that bring a machine installed from an older image to what a new
+# install of this release gets.
 #
 # Deliberately NOT done here:
 #   - mkinitcpio rebuild (1–2 min per kernel × N kernels). Plymouth
 #     reads its theme dir at boot, so a refreshed theme becomes active
-#     on the next mkinitcpio run that the user triggers anyway.
+#     on the next mkinitcpio run that the user triggers anyway. The one
+#     exception is a boot image that would hibernate memory, disk key
+#     included, onto an unencrypted swap; see that step below.
 #   - plymouth-set-default-theme (one-time install-time concern; already
 #     pointing at "mainstream").
 #   - /etc/kernel/cmdline rewrites for splash/quiet flags (set once at
@@ -29,7 +27,62 @@
 #   REPO_DIR defaults to ~$ORIG_USER/.cache/dots-hyprland — the path
 #   updatems uses for its clone. The helper passes this explicitly so
 #   we don't have to resolve it ourselves.
+#        updatems-system --list-root-files
+#   prints ROOT_FILES as "mode source destination" lines and changes nothing.
 set -u
+
+# The root helpers, their polkit actions and rules, and the libraries and
+# units the rest of the system calls, as mode|path in the clone|destination.
+# One list, so a helper the image ships cannot be missed by the update and
+# leave installed machines on the copy they were installed with; the ISO
+# build checks what it ships against it. The update tooling comes first, so
+# the Update page stops finding the system half pending as soon as possible,
+# even when a later step here stalls. install replaces a file rather than
+# writing into it, so the helper running this keeps reading the copy it
+# started with.
+ROOT_FILES=(
+    "0755|sdata/update/mainstream-update-helper|/usr/local/bin/mainstream-update-helper"
+    "0755|sdata/update/updatems|/usr/local/bin/updatems"
+    "0755|sdata/update/updatems-system|/usr/local/bin/updatems-system"
+    "0644|sdata/lib/tr.sh|/usr/local/lib/mainstream-tr.sh"
+    "0644|sdata/lib/provision-user.sh|/usr/local/lib/mainstream-provision-user.sh"
+    "0644|sdata/lib/venv-common.sh|/usr/local/lib/mainstream-venv-common.sh"
+    "0755|sdata/provision/dotfiles-first-login|/usr/local/bin/dotfiles-first-login"
+    "0755|sdata/polkit/user-manager|/usr/local/bin/user-manager"
+    "0644|sdata/polkit/org.mainstreamos.user-manager.policy|/usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy"
+    "0755|sdata/polkit/app-remover|/usr/local/bin/app-remover"
+    "0644|sdata/polkit/org.mainstreamos.app-remover.policy|/usr/share/polkit-1/actions/org.mainstreamos.app-remover.policy"
+    "0644|sdata/polkit/50-app-remover.rules|/usr/share/polkit-1/rules.d/50-app-remover.rules"
+    "0755|sdata/polkit/disk-mounter|/usr/local/bin/disk-mounter"
+    "0644|sdata/polkit/org.mainstreamos.disk-mounter.policy|/usr/share/polkit-1/actions/org.mainstreamos.disk-mounter.policy"
+    "0755|sdata/polkit/power-key-helper.sh|/usr/local/bin/power-key-helper"
+    "0644|sdata/polkit/org.illogicalimpulse.power-key.policy|/usr/share/polkit-1/actions/org.illogicalimpulse.power-key.policy"
+    "0644|sdata/polkit/50-power-key.rules|/usr/share/polkit-1/rules.d/50-power-key.rules"
+    "0755|sdata/polkit/gaming-tuning|/usr/local/bin/gaming-tuning"
+    "0644|sdata/polkit/org.mainstreamos.gaming-tuning.policy|/usr/share/polkit-1/actions/org.mainstreamos.gaming-tuning.policy"
+    "0755|sdata/polkit/ollama-setup|/usr/local/bin/ollama-setup"
+    "0644|sdata/polkit/org.mainstreamos.ollama-setup.policy|/usr/share/polkit-1/actions/org.mainstreamos.ollama-setup.policy"
+    "0755|sdata/polkit/ai-cli-install|/usr/local/bin/ai-cli-install"
+    "0644|sdata/polkit/org.mainstreamos.ai-cli-install.policy|/usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy"
+    "0755|dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh|/usr/local/bin/sddm-bg-helper"
+    "0644|sdata/polkit/org.illogicalimpulse.sddm-bg.policy|/usr/share/polkit-1/actions/org.illogicalimpulse.sddm-bg.policy"
+    "0644|sdata/polkit/50-sddm-bg.rules|/usr/share/polkit-1/rules.d/50-sddm-bg.rules"
+    "0644|sdata/polkit/50-keyboard-layout.rules|/usr/share/polkit-1/rules.d/50-keyboard-layout.rules"
+    "0644|sdata/dist-arch/mainstream.pub|/usr/local/share/mainstream.pub"
+    "0755|sdata/keyring/mainstream-keyring-init|/usr/local/bin/mainstream-keyring-init"
+    "0755|sdata/keyring/mainstream-keyring-repair|/usr/local/bin/mainstream-keyring-repair"
+    "0644|sdata/keyring/pacman-keyring-init.service|/etc/systemd/system/pacman-keyring-init.service"
+    "0644|sdata/keyring/pacman-keyring-init.timer|/etc/systemd/system/pacman-keyring-init.timer"
+    "0755|sdata/boot/mainstream-limine-windows|/usr/local/bin/mainstream-limine-windows"
+)
+
+if [[ "${1:-}" == --list-root-files ]]; then
+    for _entry in "${ROOT_FILES[@]}"; do
+        IFS='|' read -r _mode _src _dst <<<"$_entry"
+        printf '%s %s %s\n' "$_mode" "$_src" "$_dst"
+    done
+    exit 0
+fi
 
 [[ $EUID -eq 0 ]] || { echo "updatems-system: must run as root" >&2; exit 1; }
 
@@ -116,12 +169,36 @@ _install_file() {
         RC=1
         return 0
     fi
+    # Already the release's copy with the mode and owner it should have, which
+    # is most files on most runs: rewriting it would only bury the files that
+    # did change among lines that say nothing.
+    if [[ -f "$dst" && ! -L "$dst" ]] && cmp -s "$src" "$dst" \
+       && [[ "$(stat -c '%a %u %g' "$dst" 2>/dev/null)" == "$(printf '%o' "$((8#$mode))") 0 0" ]]; then
+        return 0
+    fi
     if install -D -m "$mode" -o root -g root "$src" "$dst"; then
         ok "$(tf "%s refreshed -> %s" "$label" "$dst")"
     else
         warn "$(tf "%s install failed (src=%s dst=%s)" "$label" "$src" "$dst")"
         RC=1
     fi
+}
+
+for _entry in "${ROOT_FILES[@]}"; do
+    IFS='|' read -r _mode _src _dst <<<"$_entry"
+    _install_file "$_mode" "$REPO_DIR/$_src" "$_dst" "$(basename "$_dst")"
+done
+[[ $RC -eq 0 ]] && ok "$(t "The system helpers and their polkit files match this release.")"
+
+# The Update page asks for a new login while this file lists a reason, and
+# the session removes it as it starts. Written as the person it is for, since
+# it lives in their home.
+_relogin_note() {  # $1 = user  $2 = reason, in English
+    local home
+    home="$(getent passwd "$1" | cut -d: -f6)"
+    [[ -n "$home" && -d "$home" ]] || return 0
+    runuser -u "$1" -- sh -c 'mkdir -p "$1" && { grep -qxF "$2" "$1/relogin-needed" 2>/dev/null || printf "%s\n" "$2" >> "$1/relogin-needed"; }' \
+        sh "$home/.local/state/mainstream" "$2" </dev/null 2>/dev/null || true
 }
 
 # ── Plymouth theme files (no rebuild — see header) ─────────────────────────
@@ -174,74 +251,6 @@ else
     fi
 fi
 
-# ── Accounts: the shared provisioning path ────────────────────────────────
-# An account made from Settings used to be built by its own code, which
-# drifted from what the installer does until a new user got a desktop the
-# installer would never have produced. Both call this library now, so these
-# have to reach machines that already exist.
-_install_file 0644 \
-    "$REPO_DIR/sdata/lib/provision-user.sh" \
-    /usr/local/lib/mainstream-provision-user.sh \
-    "$(t "User provisioning library")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/lib/venv-common.sh" \
-    /usr/local/lib/mainstream-venv-common.sh \
-    "$(t "Venv path helper")"
-
-_install_file 0755 \
-    "$REPO_DIR/sdata/provision/dotfiles-first-login" \
-    /usr/local/bin/dotfiles-first-login \
-    "$(t "First-login setup")"
-
-_install_file 0755 \
-    "$REPO_DIR/sdata/polkit/user-manager" \
-    /usr/local/bin/user-manager \
-    "$(t "Account manager")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/org.mainstreamos.user-manager.policy" \
-    /usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy \
-    "$(t "Account manager polkit action")"
-
-_install_file 0755 \
-    "$REPO_DIR/sdata/polkit/gaming-tuning" \
-    /usr/local/bin/gaming-tuning \
-    "$(t "Gaming tuning helper")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/org.mainstreamos.gaming-tuning.policy" \
-    /usr/share/polkit-1/actions/org.mainstreamos.gaming-tuning.policy \
-    "$(t "Gaming tuning polkit action")"
-
-# The AI sidebar falls back to this helper when a vendor's own installer
-# cannot fetch, and machines set up before the helper existed never got it.
-_install_file 0755 \
-    "$REPO_DIR/sdata/polkit/ai-cli-install" \
-    /usr/local/bin/ai-cli-install \
-    "$(t "AI CLI installer")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/org.mainstreamos.ai-cli-install.policy" \
-    /usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy \
-    "$(t "AI CLI installer polkit action")"
-
-# ── SDDM background helper + polkit ────────────────────────────────────────
-_install_file 0755 \
-    "$REPO_DIR/dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh" \
-    /usr/local/bin/sddm-bg-helper \
-    "$(t "SDDM bg helper")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/org.illogicalimpulse.sddm-bg.policy" \
-    /usr/share/polkit-1/actions/org.illogicalimpulse.sddm-bg.policy \
-    "$(t "SDDM polkit action")"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/50-sddm-bg.rules" \
-    /usr/share/polkit-1/rules.d/50-sddm-bg.rules \
-    "$(t "SDDM polkit rules")"
-
 # ── SDDM greeter config: .conf → .lua ──────────────────────────────────────
 # Hyprland 0.56.1 puts a notice on screen for any .conf config and drops the
 # format in 0.57. The greeter runs its own compositor, and its config is
@@ -274,12 +283,8 @@ fi
 
 # ── Keyboard layout: login screen and Settings agree ──────────────────────
 # Settings → Keyboard hands its list to systemd-localed, which is what the
-# greeter reads at start, so the two type in the same layouts. The rule lets an
-# active local user do that without a password.
-_install_file 0644 \
-    "$REPO_DIR/sdata/polkit/50-keyboard-layout.rules" \
-    /usr/share/polkit-1/rules.d/50-keyboard-layout.rules \
-    "$(t "Keyboard layout polkit rules")"
+# greeter reads at start, so the two type in the same layouts. The rule in
+# ROOT_FILES lets an active local user do that without a password.
 
 # The rest belongs to the login screen, so it is only for a machine that has
 # one: the tmpfiles line names the sddm account, and without that account the
@@ -444,34 +449,8 @@ systemctl start mainstream-printer-setup.service 2>/dev/null || true
 # This lands over git rather than over pacman, which is the only delivery path
 # left on a machine whose [mainstream] signing key never got trusted: there
 # pacman -Syu fails for every repo, core and extra included, so a fix shipped
-# as a package could never arrive.
-KEYRING_SRC="$REPO_DIR/sdata/keyring"
-
-_install_file 0644 \
-    "$REPO_DIR/sdata/dist-arch/mainstream.pub" \
-    /usr/local/share/mainstream.pub \
-    "$(t "[mainstream] signing key")"
-
-_install_file 0755 \
-    "$KEYRING_SRC/mainstream-keyring-init" \
-    /usr/local/bin/mainstream-keyring-init \
-    "$(t "Keyring init")"
-
-_install_file 0755 \
-    "$KEYRING_SRC/mainstream-keyring-repair" \
-    /usr/local/bin/mainstream-keyring-repair \
-    "$(t "Keyring repair command")"
-
-_install_file 0644 \
-    "$KEYRING_SRC/pacman-keyring-init.service" \
-    /etc/systemd/system/pacman-keyring-init.service \
-    "$(t "Keyring init service")"
-
-_install_file 0644 \
-    "$KEYRING_SRC/pacman-keyring-init.timer" \
-    /etc/systemd/system/pacman-keyring-init.timer \
-    "$(t "Keyring init timer")"
-
+# as a package could never arrive. The key, the tools and the units themselves
+# are in ROOT_FILES.
 systemctl daemon-reload 2>/dev/null || true
 # Installs made while the unit disabled its own timer after one success have
 # no watchdog left, so enabling here is what puts a stranded machine back
@@ -495,29 +474,67 @@ if [[ -x /usr/local/bin/mainstream-keyring-init ]] \
     fi
 fi
 
-# ── Update tooling (refreshes itself + updatems + helper) ──────────────────
-# Refreshing the helper while it's mid-run is safe on Linux — the
-# kernel keeps the inode open via the existing fd until the process
-# exits, then the new file takes over for subsequent invocations.
-_install_file 0755 \
-    "$REPO_DIR/sdata/update/mainstream-update-helper" \
-    /usr/local/bin/mainstream-update-helper \
-    "$(t "Update helper")"
+# ── GameMode ───────────────────────────────────────────────────────────────
+# GameMode's polkit rules let only the gamemode group change the CPU governor
+# and game priorities, and nothing put anyone in it, so a game run through it
+# got little more than a screen kept awake. New accounts join as they are set
+# up; the people already here join from this, once each, so someone who
+# leaves the group afterwards stays out. Local accounts with a login shell
+# only: a directory service's users are not /etc/group's to hold.
+GAMEMODE_LEDGER=/var/lib/mainstream/gamemode-group-offered
+UMS_PERSON="${SUDO_USER:-$(stat -c %U "$REPO_DIR" 2>/dev/null || true)}"
+if getent group gamemode >/dev/null 2>&1; then
+    while IFS=: read -r _u _ _uid _ _ _ _shell; do
+        [[ "$_uid" =~ ^[0-9]+$ ]] && (( _uid >= 1000 && _uid < 60000 )) || continue
+        grep -qxF -- "$_shell" /etc/shells 2>/dev/null || continue
+        grep -qxF -- "$_u" "$GAMEMODE_LEDGER" 2>/dev/null && continue
+        if ! id -nG "$_u" 2>/dev/null | tr ' ' '\n' | grep -qxF gamemode; then
+            if ! usermod -aG gamemode "$_u" 2>/dev/null; then
+                warn "$(tf "Could not add %s to the gamemode group" "$_u")"
+                RC=1
+                continue
+            fi
+            ok "$(tf "Added %s to the gamemode group, which takes effect at the next login" "$_u")"
+            [[ "$_u" == "$UMS_PERSON" ]] \
+                && _relogin_note "$_u" "Your account joined the gamemode group"
+        fi
+        mkdir -p "${GAMEMODE_LEDGER%/*}" && printf '%s\n' "$_u" >> "$GAMEMODE_LEDGER"
+    done < /etc/passwd
+fi
 
-_install_file 0644 \
-    "$REPO_DIR/sdata/lib/tr.sh" \
-    /usr/local/lib/mainstream-tr.sh \
-    "$(t "Script translations")"
+# ── Firewall zone ──────────────────────────────────────────────────────────
+# Installs from before 2.0.0 carry the zone without the printer discovery
+# services, so adding a printer still stops at a firewall prompt. Only the
+# zone exactly as those installs wrote it is replaced; one someone changed is
+# theirs.
+FW_ZONE=/etc/firewalld/zones/MainstreamWorkstation.xml
+FW_ZONE_SRC="$REPO_DIR/sdata/firewalld/MainstreamWorkstation.xml"
+if [[ -f "$FW_ZONE" && ! -L "$FW_ZONE" ]] \
+   && [[ "$(md5sum < "$FW_ZONE" | cut -d' ' -f1)" == 9b0f529fa04f9dca6d3008f009326e77 ]] \
+   && ! pacman -Qqo "$FW_ZONE" >/dev/null 2>&1; then
+    _install_file 0644 "$FW_ZONE_SRC" "$FW_ZONE" "$(basename "$FW_ZONE")"
+    # The running firewall is handed the two services directly, since a reload
+    # would also drop an interface a Sharing session has moved for now.
+    if cmp -s "$FW_ZONE_SRC" "$FW_ZONE" && systemctl is-active --quiet firewalld.service 2>/dev/null; then
+        firewall-cmd --zone=MainstreamWorkstation --add-service=mdns --add-service=ipp-client >/dev/null 2>&1 || true
+    fi
+fi
 
-_install_file 0755 \
-    "$REPO_DIR/sdata/update/updatems" \
-    /usr/local/bin/updatems \
-    "$(t "updatems")"
-
-_install_file 0755 \
-    "$REPO_DIR/sdata/update/updatems-system" \
-    /usr/local/bin/updatems-system \
-    "$(t "updatems-system")"
+# ── Sleep hook ─────────────────────────────────────────────────────────────
+# The image's hook turns the screens off before suspend and back on after,
+# through a dispatcher form the Lua config refuses, so it has done nothing on
+# any install. No package owns it, so the fixed copy comes from here, and only
+# over a copy an image shipped: when the hook changes again, the checksum of
+# the copy it replaces joins this list.
+SLEEP_HOOK=/usr/lib/systemd/system-sleep/hyprland-dpms.sh
+if [[ -f "$SLEEP_HOOK" && ! -L "$SLEEP_HOOK" ]]; then
+    case "$(md5sum < "$SLEEP_HOOK" | cut -d' ' -f1)" in
+        36525ed3cd430d788aee18849bfbb07b|eb2ed1c353509828a28e379ed0fdcffd)
+            pacman -Qqo "$SLEEP_HOOK" >/dev/null 2>&1 \
+                || _install_file 0755 "$REPO_DIR/sdata/system-sleep/hyprland-dpms.sh" "$SLEEP_HOOK" "$(basename "$SLEEP_HOOK")"
+            ;;
+    esac
+fi
 
 # ── Apple hardware ─────────────────────────────────────────────────────────
 # The Mac quirks ran at install time only, so a Mac installed before one
@@ -570,11 +587,100 @@ fi
 
 # A machine that gained a Windows install after the first boot never had
 # anything look for it again, and the installers only ever checked the one ESP
-# they mounted. Refreshed and re-run on every update so the menu catches up.
-_install_file 755 "$REPO_DIR/sdata/boot/mainstream-limine-windows" \
-    /usr/local/bin/mainstream-limine-windows "$(t "Windows boot entry scanner")"
+# they mounted. Refreshed with ROOT_FILES and re-run on every update so the
+# menu catches up.
 if [[ -x /usr/local/bin/mainstream-limine-windows ]]; then
     /usr/local/bin/mainstream-limine-windows || true
+fi
+
+# ── Hibernation beside an encrypted root ──────────────────────────────────
+# Installs before 3.0.0 could name a plain swap partition in resume= beside an
+# encrypted root, so hibernating wrote all of memory, the disk key included,
+# to that partition unencrypted. A new install turns hibernation off in that
+# layout; this does the same, once, and only when every probe agrees: the root
+# is on dm-crypt and the command line unlocks it, resume= names exactly one
+# device and it is a plain swap partition, and /etc/kernel/cmdline is the only
+# command line the boot entries are built from. The drop-in is what stops
+# hibernation, the EFI HibernateLocation route included, so it goes first.
+HIB_DROPIN=/etc/systemd/sleep.conf.d/50-mainstream-no-hibernate.conf
+HIB_STAMP=/var/lib/mainstream/hibernation-plain-swap-off
+_hib_plain_resume_dev() {  # prints the swap device and the resume= token
+    local line tok spec="" n=0 dev root f
+    # cmdline_remove writes the file back as a single line, so a file it could
+    # not carry over word for word, one with a comment or a second line, is
+    # left alone.
+    [[ "$(grep -c '[^[:space:]]' /etc/kernel/cmdline)" -eq 1 ]] \
+        && ! grep -q '#' /etc/kernel/cmdline || return 1
+    line="$(cat /etc/kernel/cmdline)"
+    for tok in $line; do
+        case "$tok" in
+            resume=*) spec="${tok#resume=}"; n=$((n + 1)) ;;
+            resume_offset=*) return 1 ;;
+        esac
+    done
+    [[ $n -eq 1 && -n "$spec" ]] || return 1
+    grep -Eq '(^|[[:space:]])(rd\.luks\.(name|uuid)|luks\.(name|uuid)|cryptdevice)=' <<<"$line" || return 1
+    root="$(_gpu_root_source)"
+    [[ -n "$root" && "$(_gpu_dev_class "$root")" == encrypted ]] || return 1
+    for f in /etc/default/limine /etc/limine-entry-tool.conf \
+             /etc/limine-entry-tool.d/*.conf /usr/share/limine-entry-tool.d/*.conf; do
+        [[ -f "$f" ]] || continue
+        grep -Eq '^[[:space:]]*KERNEL_CMDLINE' "$f" && return 1
+    done
+    case "$spec" in
+        /dev/*) dev="$spec" ;;
+        PARTUUID=*|UUID=*|PARTLABEL=*|LABEL=*) dev="$(findfs "$spec" 2>/dev/null)" || return 1 ;;
+        *) return 1 ;;
+    esac
+    [[ -n "$dev" ]] && _gpu_is_block "$dev" || return 1
+    [[ "$(_gpu_dev_class "$dev")" == part ]] || return 1
+    [[ "$(lsblk -d -n -o FSTYPE "$dev" 2>/dev/null)" == swap ]] || return 1
+    printf '%s resume=%s\n' "$dev" "$spec"
+}
+if [[ ! -e "$HIB_STAMP" && ! -e "$HIB_DROPIN" && -f /etc/kernel/cmdline ]] \
+   && grep -Eq '(^|[[:space:]])resume=' /etc/kernel/cmdline \
+   && _src_ok "$GPU_LIB_SRC"; then
+    # shellcheck source=/dev/null
+    source "$GPU_LIB_SRC"
+    if _hib_found="$(_hib_plain_resume_dev)"; then
+        read -r _hib_dev _hib_tok <<<"$_hib_found"
+        say "$(tf "The root is encrypted and its hibernation swap %s is not; turning hibernation off." "$_hib_dev")"
+        if mkdir -p "${HIB_DROPIN%/*}" \
+           && printf '%s\n' '[Sleep]' AllowHibernation=no AllowSuspendThenHibernate=no AllowHybridSleep=no \
+                > "$HIB_DROPIN"; then
+            ok "$(t "Hibernation is off, so memory is no longer written to that swap unencrypted.")"
+            mkdir -p "${HIB_STAMP%/*}" && : > "$HIB_STAMP"
+            GPU_SUDO='' KERNEL_CMDLINE=/etc/kernel/cmdline cmdline_remove resume
+            if grep -Eq '(^|[[:space:]])resume=' /etc/kernel/cmdline; then
+                warn "$(t "Could not take resume= out of /etc/kernel/cmdline.")"
+                RC=1
+            elif [[ " $(cat /proc/cmdline 2>/dev/null) " == *" $_hib_tok "* ]] \
+                 && command -v limine-mkinitcpio >/dev/null 2>&1; then
+                # The boot images carry their command line, so they would keep
+                # looking for an image on that swap until the next kernel update.
+                say "$(t "Rebuilding the boot images without resume=...")"
+                _inhibit=()
+                command -v systemd-inhibit >/dev/null 2>&1 \
+                    && _inhibit=(systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" --why="Rebuilding the boot image")
+                # Into a file, and shown once it is done: straight into the
+                # page's pipe, a Settings window closed partway through would
+                # end the build halfway through writing a boot image.
+                _hib_log="$(mktemp)" || _hib_log=/dev/null
+                "${_inhibit[@]}" limine-mkinitcpio </dev/null >"$_hib_log" 2>&1
+                _hib_rc=$?
+                [[ "$_hib_log" == /dev/null ]] || { sed 's/^/    /' "$_hib_log"; rm -f "$_hib_log"; }
+                if [[ $_hib_rc -eq 0 ]]; then
+                    ok "$(t "Boot images rebuilt without resume=.")"
+                else
+                    warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them without resume=.")"
+                    RC=1
+                fi
+            fi
+        else
+            warn "$(tf "Could not write %s; hibernation stays on." "$HIB_DROPIN")"
+            RC=1
+        fi
+    fi
 fi
 
 # ── Install leftovers ──────────────────────────────────────────────────────
@@ -613,6 +719,57 @@ else
             warn "$(tf "Could not remove %s" "$_ssh_dropin")"
             RC=1
         fi
+    fi
+
+    # The rest of what the live session leaves in /etc that the finalize step
+    # now sweeps: a lid and suspend key that do nothing, a journal that
+    # forgets every boot, a console trying to sign in an account that is gone,
+    # the live resolver and NVIDIA options. The same test as above: unowned,
+    # not a link, and exactly as an image shipped it.
+    _nvidia_live_redundant() {
+        # The live options carry modeset=1, which some of these machines ask
+        # for nowhere else; they go once the machine's own options do, or
+        # where no NVIDIA display is there to need them.
+        grep -qs 'nvidia-drm modeset=1' /etc/modprobe.d/nvidia.conf && return 0
+        local d
+        for d in /sys/bus/pci/devices/*; do
+            [[ "$(cat "$d/vendor" 2>/dev/null)" == 0x10de && "$(cat "$d/class" 2>/dev/null)" == 0x03* ]] && return 1
+        done
+        return 0
+    }
+    _reload_logind=0 _reload_units=0 _reload_resolved=0 _journal_dir=0
+    while read -r _leftover _sums; do
+        [[ -f "$_leftover" && ! -L "$_leftover" ]] || continue
+        pacman -Qqo "$_leftover" >/dev/null 2>&1 && continue
+        [[ " $_sums " == *" $(md5sum < "$_leftover" | cut -d' ' -f1) "* ]] || continue
+        [[ "$_leftover" != */nvidia-live.conf ]] || _nvidia_live_redundant || continue
+        if rm -f -- "$_leftover"; then
+            ok "$(tf "Removed %s, left behind by the installer's live session" "$_leftover")"
+            case "$_leftover" in
+                */logind.conf.d/*)          _reload_logind=1 ;;
+                */getty@tty1.service.d/*)   _reload_units=1 ;;
+                */resolved.conf.d/*)        _reload_resolved=1 ;;
+                */journald.conf.d/*)        _journal_dir=1 ;;
+            esac
+        else
+            warn "$(tf "Could not remove %s" "$_leftover")"
+            RC=1
+        fi
+    done <<'LIVE_LEFTOVERS'
+/etc/systemd/logind.conf.d/do-not-suspend.conf 4b048fe0a1ea96ae4090aa8fd202322b
+/etc/systemd/journald.conf.d/volatile-storage.conf 38a8ebba73bb122b54d90ae9a5220eb6
+/etc/systemd/system/getty@tty1.service.d/autologin.conf b711780346682e17bb32e3c9da0984a3 f452e360b605a39aa0f378960b79f7e3 b016d08b0deadd4edffd24da5f9f50ae
+/etc/systemd/resolved.conf.d/archiso.conf 205649a7db506d9f31cc15f440a1b81f
+/etc/modprobe.d/nvidia-live.conf 4cc10f2193d8d2b2fdb5647fb7d37713
+LIVE_LEFTOVERS
+    # logind rereads its settings on a hangup, the way the power button helper
+    # asks it to, without touching a session. journald keeps what it started
+    # with until the next boot, which then keeps its logs in the directory.
+    [[ $_reload_logind -eq 1 ]] && { systemctl kill -s HUP systemd-logind.service 2>/dev/null || true; }
+    [[ $_reload_units -eq 1 ]] && { systemctl daemon-reload 2>/dev/null || true; }
+    [[ $_reload_resolved -eq 1 ]] && { systemctl try-reload-or-restart systemd-resolved.service 2>/dev/null || true; }
+    if [[ $_journal_dir -eq 1 && ! -d /var/log/journal ]]; then
+        mkdir -p /var/log/journal && { systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true; }
     fi
 fi
 

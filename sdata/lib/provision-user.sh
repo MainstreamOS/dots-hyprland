@@ -244,13 +244,16 @@ provision_dotfiles() {  # $1 = user  $2 = "fresh" when the account was just crea
 # sambashare, where mainstream-system has created it, is what lets the account
 # share folders from Files: a session that starts in it can write the usershare
 # directory without the extra access the Sharing page grants a running one.
+# gamemode, where GameMode is installed, is the only group its polkit rules let
+# change the CPU governor and game priorities; outside it GameMode does little
+# more than keep the screen awake.
 # wheel is not among them, because being an administrator is a choice someone
 # makes about an account rather than part of setting one up.
 provision_groups() {  # $1 = user
     local u="$1" g
     id "$u" >/dev/null 2>&1 || { _pu_warn "no such user: $u"; return 1; }
     for g in render video i2c; do groupadd -f "$g"; done
-    for g in network audio video input power storage lp optical render i2c sambashare; do
+    for g in network audio video input power storage lp optical render i2c sambashare gamemode; do
         getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$u" || true
     done
     # Administrator is the caller's decision, not a consequence of being set

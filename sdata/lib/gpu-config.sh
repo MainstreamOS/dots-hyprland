@@ -277,6 +277,24 @@ cmdline_upsert() {
     printf '%s\n' "${toks[*]}" | _gpu_write_file "$kc"
 }
 
+# ── cmdline_remove <key>... ─────────────────────────────────────────────────
+# cmdline_upsert's counterpart, built on the same seed: drops every token whose
+# key (the part before the first =) is one of those named, so "resume" takes
+# resume=... and leaves resume_offset= to be named on its own.
+cmdline_remove() {
+    local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}" current="" t key keep
+    current="$(_gpu_cmdline_current)"
+    local -a toks=()
+    for t in $current; do
+        keep=true
+        for key in "$@"; do
+            if [[ "${t%%=*}" == "$key" ]]; then keep=false; break; fi
+        done
+        [[ $keep == true ]] && toks+=("$t") || true
+    done
+    printf '%s\n' "${toks[*]}" | _gpu_write_file "$kc"
+}
+
 # ── write_modprobe_conf <nvidia|amd> ────────────────────────────────────────
 # Always mkdir -p the dir first (fixes the archiso Kepler/Fermi missing-mkdir
 # bug), then write the canonical per-vendor options file. One writer subsumes

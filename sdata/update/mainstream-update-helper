@@ -53,9 +53,14 @@
 #   0    everything succeeded (or was skipped)
 #   101  primary succeeded, but the Mainstream dotfiles did not update. Not
 #        soft: the machine is still on its old release and the QML says so.
+#   102  the dotfiles updated, but updatems-system did not finish, so the
+#        root-owned half of the release is still pending.
 #   100  primary succeeded (or partial), extras failed — the QML banner
 #        renders this as "completed with errors" so users notice the
 #        non-fatal failure
+#   4    pacman refused the upgrade because Arch's Qt moved past the release
+#        mainstream-quickshell-git is pinned to. Nothing was changed, and
+#        nothing after the package step ran.
 #   N    pacman / aur / flatpak exit code on a primary failure
 
 set -u
@@ -373,6 +378,18 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
                 PACMAN_RC=$?
             fi
         fi
+    fi
+    # The desktop is built against one Qt minor release and pinned to it, so
+    # once Arch moves past it pacman refuses the whole transaction, before
+    # changing anything, and keeps refusing until the rebuilt desktop is
+    # published. A retry only repeats that, and the generic failure reads as
+    # something broken on this machine.
+    if [[ "$PACMAN_RC" -ne 0 && "$MAINSTREAM_REPO_OFFLINE" -eq 0 ]] \
+       && grep -q "breaks dependency 'qt6-base<[^']*' required by mainstream-quickshell-git" "$PACMAN_LOG"; then
+        echo ""
+        echo ">>> $(t "Nothing was changed. Arch has moved to a newer Qt than this desktop is built for, and taking it now would break the desktop. The update will go through once the matching desktop update is published.")"
+        rm -f "$PACMAN_LOG"
+        exit 4
     fi
     if [[ "$PACMAN_RC" -ne 0 ]]; then
         # When one of our own packages starts shipping a file an older install
@@ -765,7 +782,7 @@ if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$A
 if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi
 if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 101;            fi
-if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 101;            fi
+if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 102;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 exit 0
