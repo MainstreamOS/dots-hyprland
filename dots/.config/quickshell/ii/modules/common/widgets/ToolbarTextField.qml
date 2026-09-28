@@ -8,6 +8,7 @@ TextField {
     id: filterField
 
     property alias colBackground: background.color
+    property alias radius: background.radius
 
     Layout.fillHeight: true
     implicitWidth: 200

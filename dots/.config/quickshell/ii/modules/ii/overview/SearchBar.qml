@@ -68,6 +68,7 @@ RowLayout {
         focus: GlobalStates.overviewOpen
         font.pixelSize: Appearance.font.pixelSize.small
         colBackground: Appearance.launcherContent.colLayer1
+        radius: RoundedCorners.on ? Appearance.rounding.full : 0
         color: Appearance.launcherContent.colOnLayer1Field
         placeholderTextColor: Appearance.launcherContent.colSubtextField
         selectedTextColor: Appearance.launcherContent.colOnSecondaryContainer
