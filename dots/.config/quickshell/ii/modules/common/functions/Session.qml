@@ -7,10 +7,43 @@ import qs.modules.common
 Singleton {
     id: root
 
-    function closeAllWindows() {
-        HyprlandData.windowList.map(w => w.pid).forEach(pid => {
-            Quickshell.execDetached(["kill", pid]);
-        });
+    // Function to close all currently open windows gracefully.
+    //
+    // The shell process:
+    //   1. Captures the current window addresses.
+    //   2. Sends each window a graceful close request.
+    //   3. Waits until every captured window disappears.
+    //   4. Exits, causing closeWindowsProc.onExited to run the
+    //      pending logout/reboot/poweroff action.
+    //
+    property var _afterWindowsClosed: null
+
+    Process {
+        id: closeWindowsProc
+        command: ["bash", Quickshell.env("HOME") + "/.config/quickshell/ii/scripts/session/close.sh"]
+        onExited: {
+            const f = root._afterWindowsClosed;
+            root._afterWindowsClosed = null;
+            if (f) f();
+        }
+    }
+
+    function closeAllWindows(after) {
+        // Replace any queued post-snapshot action with the new one (last
+        // write wins). If a snapshot is already running, the existing
+        // onExited will fire `after` when it finishes; no need to retrigger.
+        root._afterWindowsClosed = after;
+
+        // Nothing to wait for.
+        if (HyprlandData.windowList.length === 0) {
+            root._afterWindowsClosed = null;
+            if (after) after();
+            return;
+        }
+
+        // Don't start another instance if one is already running.
+        if (!closeWindowsProc.running)
+            closeWindowsProc.running = true;
     }
 
     // Capture the current window set for session/restore.sh to replay on the
@@ -62,8 +95,9 @@ Singleton {
 
     function logout() {
         snapshotThen(() => {
-            closeAllWindows();
-            Quickshell.execDetached(["pkill", "-i", "Hyprland"]);
+            closeAllWindows(() => {
+                Quickshell.execDetached(["pkill", "-i", "Hyprland"]);
+            });
         });
     }
 
@@ -97,22 +131,25 @@ Singleton {
 
     function poweroff() {
         snapshotThen(() => {
-            closeAllWindows();
-            Quickshell.execDetached(["bash", "-c", `systemctl poweroff || loginctl poweroff`]);
+            closeAllWindows(() => {
+                Quickshell.execDetached(["bash", "-c", `systemctl poweroff || loginctl poweroff`]);
+            });
         });
     }
 
     function reboot() {
         snapshotThen(() => {
-            closeAllWindows();
-            Quickshell.execDetached(["bash", "-c", `reboot || loginctl reboot`]);
+            closeAllWindows(() => {
+                Quickshell.execDetached(["bash", "-c", `reboot || loginctl reboot`]);
+            });
         });
     }
 
     function rebootToFirmware() {
         snapshotThen(() => {
-            closeAllWindows();
-            Quickshell.execDetached(["bash", "-c", `systemctl reboot --firmware-setup || loginctl reboot --firmware-setup`]);
+            closeAllWindows(() => {
+                Quickshell.execDetached(["bash", "-c", `systemctl reboot --firmware-setup || loginctl reboot --firmware-setup`]);
+            });
         });
     }
 }
