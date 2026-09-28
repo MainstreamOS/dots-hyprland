@@ -13,6 +13,11 @@ Singleton {
 
         const keywordsToTypes = {
             'reboot': 'restart_alt',
+            'restart': 'restart_alt',
+            'log out': 'logout',
+            'logging out': 'logout',
+            'shut down': 'power_settings_new',
+            'shutting down': 'power_settings_new',
             'record': 'screen_record',
             'battery': 'power',
             'power': 'power',

@@ -11,7 +11,7 @@
 #
 #   session.py snapshot [--dry-run] [--allow-empty]
 #       One-shot capture into $XDG_STATE_HOME/quickshell/sessions/last.json.
-#       Called by Session.qml before a power action so the final state is
+#       Called by end-session.sh before a power action so the final state is
 #       authoritative, and by the watcher on every change.
 #
 #   session.py restore [--force] [--dry-run]
@@ -48,6 +48,10 @@ from pathlib import Path
 
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "quickshell/sessions"
 SNAPSHOT_PATH = STATE_DIR / "last.json"
+# Written by end-session.sh while it closes every window before a log out or
+# power off, and removed if an app stays open and the request is canceled.
+ENDING_PATH = STATE_DIR / "ending"
+ENDING_MAX_AGE_S = 600
 LOG_PATH = STATE_DIR / "session.log"
 LOCK_PATH = STATE_DIR / "watch.lock"
 CONFIG_PATH = Path.home() / ".config/illogical-impulse/config.json"
@@ -370,6 +374,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
         log("watch", f"cannot connect to the event socket: {e}")
         return 1
 
+    # A new session: whatever the last one was ending into is over.
+    ENDING_PATH.unlink(missing_ok=True)
     log("watch", f"watching (debounce {WATCH_DEBOUNCE_S:.0f}s, periodic {WATCH_PERIODIC_S:.0f}s)")
     buf = b""
     dirty = False
@@ -379,6 +385,14 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
     def save(reason: str) -> None:
         nonlocal saves
+        # Apps closing one by one before the session ends would each be saved
+        # as a smaller desktop, over the snapshot taken just before they were
+        # asked to close. Bounded by age, in case the request died midway.
+        try:
+            if time.time() - ENDING_PATH.stat().st_mtime < ENDING_MAX_AGE_S:
+                return
+        except OSError:
+            pass
         windows = capture_windows()
         if windows is None:
             return

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Thin gate for session/session.py snapshot. Stable path for Session.qml's
-# synchronous pre-power-action snapshotProc and the Gaming Mode session
+# Thin gate for session/session.py snapshot. Stable path for end-session.sh,
+# before a log out, restart or shut down, and for the Gaming Mode session
 # switch. Routine capture is the watcher's job (watch.sh); this is the
 # authoritative final write on the paths that know a session is ending.
 set -uo pipefail
