@@ -815,14 +815,19 @@ cmd_trust() {  # $1 = uuid, $2 = on|off
         # even if moving it out of the zone fails. A zone somebody set by
         # hand is theirs, not a trust this page gave.
         forget_trust "$CONN"
+        local zone_rc=0
         if [[ $(zone_of "$CONN") == "$ZONE" ]]; then
-            set_zone "$CONN" ""
+            # In a subshell, since a failure here ends the helper: sharing
+            # must not stay up for a network that was just untrusted. The
+            # failure is still reported, once the services are down.
+            ( set_zone "$CONN" "" ) || zone_rc=$?
         fi
-        if ! home_active; then
+        if (( zone_rc != 0 )) || ! home_active; then
             stop_services
         elif [[ $(config_kind) == managed ]]; then
             sync_wsdd try
         fi
+        (( zone_rc == 0 )) || die "$zone_rc" "sharing was stopped, but $CONN could not be moved out of the home zone"
     fi
     log "trust: $CONN $2"
 }

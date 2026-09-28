@@ -864,9 +864,12 @@ Singleton {
     }
 
     // A request left by a Settings window that closed before setup finished.
+    // One over an hour old is dropped: it was for setting sharing up then, not
+    // for whenever sharing is next turned on.
     Process {
         running: true
-        command: ["cat", "--", root.pendingPath]
+        command: ["bash", "-c", 'find "$1" -maxdepth 0 -mmin +60 -delete 2>/dev/null; [ -f "$1" ] && cat -- "$1"',
+            "bash", root.pendingPath]
         stdout: StdioCollector {
             onStreamFinished: {
                 const p = this.text;

@@ -40,6 +40,10 @@ WATCHED_DIRS = (STATE_DIR, USERS_DIR, USERSHARE_DIR)
 # absolute path and nothing else.
 STATE_HOME = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
 PENDING_FILE = os.path.join(STATE_HOME, "mainstream", "sharing-pending")
+# A request is for sharing being set up now. One left from a Settings window
+# closed without turning sharing on would otherwise share that folder whenever
+# sharing is next turned on, for any reason, possibly weeks later.
+PENDING_MAX_AGE = 3600
 
 CACHE_SECONDS = 5
 # A status run asks NetworkManager and systemd, which can stall; a run that
@@ -243,8 +247,11 @@ def _take_pending():
     except OSError:
         return None
     try:
-        with open(taken, "rb") as f:
-            path = os.fsdecode(f.read())
+        if time.time() - os.stat(taken).st_mtime > PENDING_MAX_AGE:
+            path = ""
+        else:
+            with open(taken, "rb") as f:
+                path = os.fsdecode(f.read())
     except OSError:
         path = ""
     try:
