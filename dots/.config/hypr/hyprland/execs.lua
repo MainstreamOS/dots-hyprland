@@ -5,10 +5,10 @@ hl.on("hyprland.start", function ()
     -- launches (the portal is Requisite= on it; Qt init stalls on a portal
     -- that cannot start), so qs is chained after them in one exec_cmd —
     -- separate exec_cmd calls have no ordering guarantee. --no-block matters:
-    -- a plain start waits for the WHOLE transaction, which via
-    -- xdg-desktop-autostart.target includes Discord and friends — qs would
-    -- not spawn until every autostart app finished launching. The target
-    -- itself activates immediately; only the wanted units keep starting.
+    -- a plain start waits for the WHOLE transaction, every service the
+    -- session pulls in, and qs would not spawn until the slowest had started.
+    -- The target itself activates immediately; only the wanted units keep
+    -- starting.
     --
     -- An update can leave the shell's own files for after it has finished
     -- (finish-deferred.sh in the dotfiles clone). When nothing got to them
@@ -17,6 +17,14 @@ hl.on("hyprland.start", function ()
     -- the Update page's "log out and back in" note asks for, so it goes too.
     local finishUpdate = "rm -f \"${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed\"; d=\"$HOME/.cache/dots-hyprland\"; if [ -s \"$d/.update-deferred\" ] && [ -f \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" ]; then timeout -k 5 60 bash \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" --login >/dev/null 2>&1; fi; true"
     hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start --no-block hyprland-session.target && (systemctl --user try-restart xdg-desktop-portal-hyprland.service || true) && (" .. finishUpdate .. ") && qs -n -c $qsConfig")
+
+    -- Apps set to open at login start once the shell's tray is up. An app
+    -- that looks for a tray while there is none, as Discord does, gives up
+    -- and shows no icon for the rest of the session. Only the shell provides
+    -- the tray, and it starts last in the chain above, so this cannot run
+    -- ahead of the session target. Bounded, so a desktop without a tray
+    -- still gets its apps, a little later.
+    hl.exec_cmd("gdbus wait --session --timeout 10 org.kde.StatusNotifierWatcher; systemctl --user start --no-block hyprland-autostart.target")
 
     -- Bar, wallpaper
     hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
