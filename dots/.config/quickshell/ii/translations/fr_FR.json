@@ -2495,5 +2495,7 @@
   "Run Update to finish setting up sharing.": "Run Update to finish setting up sharing.",
   "Showing the end of a long run. Copy takes all of it.": "Showing the end of a long run. Copy takes all of it.",
   "The update could not be started.": "The update could not be started.",
-  "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.": "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above."
+  "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.": "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.",
+  "This account cannot install updates. An administrator can run the update, or make this account an administrator in Settings > Accounts.": "This account cannot install updates. An administrator can run the update, or make this account an administrator in Settings > Accounts.",
+  "The change was not made: authentication failed.": "The change was not made: authentication failed."
 }

@@ -131,8 +131,11 @@ cleanup() {
     # the user manually removes the lock. Only clear it when no package
     # manager is still alive — the lock may belong to another running
     # pacman, and deleting it under a live transaction risks concurrent
-    # database writes.
-    if ! pgrep -x pacman >/dev/null 2>&1; then
+    # database writes. libalpm keeps the lock open while it holds it, so
+    # nothing having it open is the test, whichever front end took it.
+    local rc=0
+    fuser -s /var/lib/pacman/db.lck 2>/dev/null || rc=$?
+    if (( rc == 1 )); then
         rm -f /var/lib/pacman/db.lck 2>/dev/null
     fi
 }
@@ -266,8 +269,17 @@ SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
 AUTO_REBUILD_QS=0
 TOPGRADE_EXTRA_ARGS=()
+# Everything after a bare -- is for topgrade, whatever it looks like: the page
+# sends the Advanced field's words there, and topgrade's own options start
+# with -- too.
+_topgrade_rest=0
 for arg in "$@"; do
+    if (( _topgrade_rest )); then
+        TOPGRADE_EXTRA_ARGS+=("$arg")
+        continue
+    fi
     case "$arg" in
+        --)                         _topgrade_rest=1 ;;
         --skip-system)              SKIP_SYSTEM=1 ;;
         --skip-aur)                 SKIP_AUR=1 ;;
         --skip-flatpak)             SKIP_FLATPAK=1 ;;
@@ -397,7 +409,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     # published. A retry only repeats that, and the generic failure reads as
     # something broken on this machine.
     if [[ "$PACMAN_RC" -ne 0 && "$MAINSTREAM_REPO_OFFLINE" -eq 0 ]] \
-       && grep -q "breaks dependency 'qt6-base<[^']*' required by mainstream-quickshell-git" "$PACMAN_LOG"; then
+       && grep -qE "(breaks dependency|unable to satisfy dependency) 'qt6-base<[^']*' required by mainstream-quickshell-git" "$PACMAN_LOG"; then
         echo ""
         echo ">>> $(t "Nothing was changed. Arch has moved to a newer Qt than this desktop is built for, and taking it now would break the desktop. The update will go through once the matching desktop update is published.")"
         rm -f "$PACMAN_LOG"

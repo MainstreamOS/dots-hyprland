@@ -146,8 +146,11 @@ ContentPage {
         if (flagEdge)                  args.push("--edge");
         if (customArgs.trim().length > 0) {
             // Custom args are passed through to topgrade when extras runs.
-            // Split on whitespace so multi-token args reach topgrade properly.
+            // Split on whitespace so multi-token args reach topgrade properly,
+            // and sent after -- so the helper hands on the options among them
+            // rather than taking them for its own.
             let extra = customArgs.trim().split(/\s+/);
+            args.push("--");
             for (let i = 0; i < extra.length; i++) args.push(extra[i]);
         }
         return args;
@@ -259,6 +262,14 @@ ContentPage {
         // to print its first line. Its message comes out in the session's
         // language, so it only settles the question for a helper that does
         // not print that line.
+        // A standard account is turned away by sudo with the right password,
+        // and being told the password was wrong would send it round in circles.
+        const sudoNotAllowed = root.outputText.indexOf("is not in the sudoers file") !== -1
+            || root.outputText.indexOf("is not allowed to run sudo") !== -1;
+        if (exitCode === 1 && !root.helperStarted && sudoNotAllowed) {
+            root.outputText += "\n\n" + Translation.tr("This account cannot install updates. An administrator can run the update, or make this account an administrator in Settings > Accounts.");
+            return;
+        }
         const sudoRefused = root.outputText.indexOf("incorrect password") !== -1
             || root.outputText.indexOf("Sorry, try again") !== -1;
         const authFailed = exitCode === 1 && !root.helperStarted
