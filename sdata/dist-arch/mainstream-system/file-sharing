@@ -430,10 +430,13 @@ wait_for_databases() {  # $@ = packages
 # that no pacman holds is debris from a killed transaction that would
 # otherwise block every install on this machine.
 wait_for_pacman_lock() {
-    local waited=0
+    local waited=0 rc
     while [[ -e $PACMAN_LOCK ]]; do
-        if ! pgrep -x pacman >/dev/null 2>&1; then
-            log "the pacman lock is stale (no pacman running); removing it"
+        # libalpm keeps the lock open for as long as it holds it, whichever
+        # front end that is, so only a lock nothing has open is a leftover.
+        rc=0; fuser -s "$PACMAN_LOCK" 2>/dev/null || rc=$?
+        if (( rc == 1 )); then
+            log "the pacman lock is stale (nothing has it open); removing it"
             rm -f "$PACMAN_LOCK"
             return 0
         fi

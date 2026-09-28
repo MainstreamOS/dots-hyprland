@@ -106,13 +106,15 @@ wait_for_repo() {
 # pressed Install has no next tick, so wait for the lock rather than fail on it.
 wait_for_pacman_lock() {
   [[ -e /var/lib/pacman/db.lck ]] || return 0
-  local waited=0
+  local waited=0 rc
   while [[ -e /var/lib/pacman/db.lck ]]; do
-    # A lock with no pacman behind it is debris from a killed transaction, which
-    # would otherwise block every install on this machine forever. The rest of the
-    # fleet clears it on the same test.
-    if ! pgrep -x pacman >/dev/null 2>&1; then
-      log "pacman database lock is stale (no pacman running); removing it"
+    # A lock nothing has open is debris from a killed transaction, which would
+    # otherwise block every install on this machine forever. libalpm keeps it
+    # open while it holds it, whichever front end that is, so a process name
+    # is not the test.
+    rc=0; fuser -s /var/lib/pacman/db.lck 2>/dev/null || rc=$?
+    if (( rc == 1 )); then
+      log "pacman database lock is stale (nothing has it open); removing it"
       rm -f /var/lib/pacman/db.lck 2>/dev/null
       return 0
     fi

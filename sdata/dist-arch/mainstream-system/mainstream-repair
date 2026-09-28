@@ -26,7 +26,10 @@ TEMP_SUDOERS="/etc/sudoers.d/99-mainstream-repair-active"
 rm -f "$TEMP_SUDOERS"
 cleanup() {
     rm -f "$TEMP_SUDOERS"
-    if ! pgrep -x pacman >/dev/null 2>&1; then
+    # Only a lock nothing has open is a leftover; another front end may hold it.
+    local rc=0
+    fuser -s /var/lib/pacman/db.lck 2>/dev/null || rc=$?
+    if (( rc == 1 )); then
         rm -f /var/lib/pacman/db.lck 2>/dev/null
     fi
 }
