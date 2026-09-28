@@ -68,8 +68,11 @@ session_packages() {
 # Whether anything the session loaded has already been replaced on disk. The
 # packages behind it usually cannot be named any more, so this answers yes or
 # no and leaves the naming to the caller's own list.
+# Only code counts. The session also maps icon caches, compiled schemas and
+# fonts under /usr/share, which most updates regenerate, and a stale copy of
+# those cannot break a reload the way a replaced library can.
 session_has_replaced() {
-    _session_maps | grep -q '^gone '
+    _session_maps | grep -qE '^gone /usr/(lib|lib64|bin)/'
 }
 
 # names on stdin -> the ones that matter, on stdout. $1 is a file holding the
