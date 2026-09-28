@@ -16,10 +16,11 @@
 #
 # Settings > Layouts rides along on the same copies: its default layout sits
 # in general.lua and its per-workspace switch in hyprland.lua, and layouts.py
-# carries those two the same way. The touchpad gestures in general.lua are
-# only a copy of choices kept in config.json, which updates never touch, so
-# they are written again from there with gestures.py once general.lua has
-# been replaced.
+# carries those two the same way. So does Settings > Display, whose default
+# monitor sits in general.lua's cursor table. The touchpad gestures in
+# general.lua are only a copy of choices kept in config.json, which updates
+# never touch, so they are written again from there with gestures.py once
+# general.lua has been replaced.
 #
 # Anything missing along the way (python3, the old file, a reader that fails)
 # leaves the update exactly as it would be without this, and quiet about it.
@@ -139,7 +140,7 @@ deco_carry_snapshot() {
 # Called once the conflicts are settled. Puts the user's own values back into
 # whatever the update replaced, says which in one line, and removes the copies.
 deco_carry_finish() {
-  local dir="${DECO_CARRY_DIR:-}" prefix="dots/" py new out="" shown="" i limit=4 layouts="" gestures
+  local dir="${DECO_CARRY_DIR:-}" prefix="dots/" py new out="" shown="" i limit=4 layouts="" display="" gestures
   local -a run=(python3) was=() labels=()
   [[ -d "${REPO_ROOT}/dots/.config" ]] || prefix=""
   if command -v timeout >/dev/null 2>&1; then run=(timeout -k 5 20 python3); fi
@@ -178,6 +179,63 @@ deco_carry_finish() {
      && [[ -f "${dir}/yours/general.lua" || -f "${dir}/yours/hyprland.lua" ]]; then
     layouts=$("${run[@]}" "$py" carry "$dir" "${DECO_USER_FILES[0]}" "$new" "${DECO_USER_FILES[2]}" "${REPO_ROOT}/${prefix}.config/hypr/hyprland.lua" 2>/dev/null) || layouts=""
   fi
+  # Settings > Display keeps the default monitor in the cursor table of the
+  # same general.lua. No release ships one, so any the user's copy holds is
+  # theirs. It is read the way that page reads it and written the way it
+  # writes it, under the lock the Decorations writer takes, and only into a
+  # file that has none of its own yet: one there now was picked since.
+  if [[ -f "${dir}/yours/general.lua" && -f "${DECO_USER_FILES[0]}" && ! -L "${DECO_USER_FILES[0]}" ]]; then
+    display=$("${run[@]}" -B - "${REPO_ROOT}/${prefix}.config/quickshell/ii/scripts/themes" \
+                "${dir}/yours/general.lua" "${DECO_USER_FILES[0]}" 2>/dev/null <<'PY'
+import re
+import sys
+
+sys.dont_write_bytecode = True
+themes, yours, live = sys.argv[1:4]
+sys.path.insert(0, themes)
+from decorations import _locked, _publish
+
+CURSOR = re.compile(r'^\s*cursor\s*=\s*\{')
+NAME = re.compile(r'^\s*default_monitor\s*=\s*"([^"]+)"')
+CLOSE = re.compile(r'^\s*\}')
+
+
+def text_of(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def default_monitor(text):
+    name, inside = None, False
+    for line in (text or "").split("\n"):
+        if CURSOR.match(line):
+            inside = True
+        if inside:
+            m = NAME.match(line)
+            if m:
+                name = m.group(1)
+        if CLOSE.match(line):
+            inside = False
+    return name
+
+
+mine = default_monitor(text_of(yours))
+if mine:
+    with _locked(live):
+        text = text_of(live)
+        if text is not None and default_monitor(text) is None:
+            text, n = re.subn(r'(?m)^(\s*cursor\s*=\s*\{)',
+                              lambda m: m.group(1) + '\n        default_monitor = "' + mine + '",',
+                              text, count=1)
+            if n:
+                _publish(live, text, encoding="utf-8")
+                print("default monitor")
+PY
+) || display=""
+  fi
   # Let go of only once the copies are gone, so a run stopped part-way through
   # this still has them to finish the pass with on its way out.
   rm -rf "$dir" 2>/dev/null || true
@@ -185,6 +243,9 @@ deco_carry_finish() {
   if [[ -n "$layouts" ]]; then
     layouts="${layouts//$'\n'/, }"
     _deco_say "Kept your Layouts settings: ${layouts}"
+  fi
+  if [[ -n "$display" ]]; then
+    _deco_say "Kept your Display settings: ${display}"
   fi
   [[ -n "$out" ]] || return 0
   mapfile -t labels <<<"$out"

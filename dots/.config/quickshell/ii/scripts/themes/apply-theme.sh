@@ -80,6 +80,7 @@ BACKUP=""
 STAGED=0
 SUCCESS=0
 CHILD_PID=""
+DECO_STAGED=""
 
 cleanup() {
     if [ "$SUCCESS" != "1" ]; then
@@ -94,6 +95,7 @@ cleanup() {
         write_last_applied "$PREV_APPLIED"
     fi
     [ -n "$BACKUP" ] && [ -f "$BACKUP" ] && rm -f "$BACKUP" 2>/dev/null
+    if [ -n "$DECO_STAGED" ]; then rm -f "$DECO_STAGED" 2>/dev/null || true; fi
     write_apply_state "idle"
 }
 trap cleanup EXIT
@@ -266,6 +268,17 @@ jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/nul
 # The roundness each dock style remembers goes with them, or switching styles
 # after an older theme would bring back what the theme before it remembered.
 JQ_FILTER+=' | .bar = ({backgroundOpacity: -1, widgetOpacity: -1, widgetRadius: -1, floatRadius: -1, floatWidth: -1, notchWidth: -1, floatSplit: false, widgetColorDark: "", widgetColorLight: "", backgroundColorDark: "", backgroundColorLight: "", floatStyleShadow: true} + (.bar // {}))'
+# Magnify's stock strength came down from 135 to 100 percent in 3.0.0, so a
+# theme saved before then with the stock strength (-1) was wearing 135. So was
+# one naming no effect at all, saved when Magnify was the only one. Such a
+# snapshot is known by what it lacks: every config.json written since names
+# appearance.roundCornersRestore, which the filler further down adds.
+JQ_FILTER+=' | if ((.appearance | type) == "object" and (.appearance | has("roundCornersRestore"))) then .
+    elif ((.dock == null or (.dock | type) == "object")
+          and ((.dock.hoverEffect // "magnify") == "magnify")
+          and ((.dock.hoverMagnify // -1) | type == "number" and . < 0))
+    then .dock.hoverEffect = "magnify" | .dock.hoverMagnify = 135
+    else . end'
 JQ_FILTER+=' | .dock = ({showBackground: true, radiusFloat: -2, radiusNotch: -2, topRadiusRect: -2, topRadiusNotch: -2, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1, iconSize: -1, indicatorStyle: "dashes", hoverEffect: "glow", hoverMagnify: -1, glowMagnify: -1, glowColorDark: "", glowColorLight: "", glowIntensity: -1, showOverviewButton: true, showPinButton: true} + (.dock // {}))'
 # Whether the content on the bar, the dock and the launcher answers to what it
 # sits on goes with the colors that decide it, and a theme saved before the
@@ -421,8 +434,26 @@ fi
 # without it keeps the live curve, which the Hug style may have set.
 # --push hands the same completed set to the compositor from inside the one
 # interpreter, so the change shows before the reload at the end gets there.
+#
+# A snapshot from before Title Bars kept a set for each mode had one color and
+# opacity for both, so a color it picked goes on the light bar too instead of
+# the stock light one. Without a color it is left to stock: the settings page
+# of that time saved the stock opacity beside every color change, so an
+# opacity alone was rarely a choice. The copy is staged outside the theme
+# folder, which stays as it was saved.
 if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
-    python3 "$DECORATIONS_PY" restore "$GENERAL_CONF" "$DECO_JSON" \
+    DECO_SRC="$DECO_JSON"
+    if jq -e '(has("titleBarColorLight") | not) and ((.titleBarColor // "") | type == "string" and test("^#?[0-9A-Fa-f]{6}$"))' \
+            "$DECO_JSON" >/dev/null 2>&1; then
+        DECO_STAGED=$(mktemp --tmpdir="$XDG_RUNTIME_DIR" decorations.XXXXXX.json 2>/dev/null) || DECO_STAGED=""
+        if [ -n "$DECO_STAGED" ] \
+           && jq '.titleBarColorLight = .titleBarColor
+                  | if has("titleBarOpacityLight") then . else .titleBarOpacityLight = (.titleBarOpacity // 0.5333) end' \
+                  "$DECO_JSON" > "$DECO_STAGED" 2>/dev/null; then
+            DECO_SRC="$DECO_STAGED"
+        fi
+    fi
+    python3 "$DECORATIONS_PY" restore "$GENERAL_CONF" "$DECO_SRC" \
         --flag-dir "$(dirname "$CUSTOM_CONF")" --push >/dev/null 2>&1 \
         || dlog "decoration restore failed"
 fi
