@@ -675,6 +675,13 @@ Singleton {
         return /^[A-Za-z0-9\/_.~-]{10,512}$/.test(text);
     }
 
+    // What the watcher sends without being asked has to look like Google's
+    // code, which always carries a slash. A password copied during the same
+    // sign-in usually does not, and sending one would hand it to the CLI.
+    function looksLikeCopiedCode(text) {
+        return text.length >= 20 && text.indexOf("/") !== -1 && root.looksLikeLoginCode(text);
+    }
+
     function sendLoginCode(code) {
         const entry = root.currentCliSetup;
         const clean = (code ?? "").trim();
@@ -721,7 +728,7 @@ Singleton {
     // is taken first, and each new clipboard arrives as one line.
     Process {
         id: clipboardSnapshotProc
-        command: ["bash", "-c", "wl-paste --no-newline --type text 2>/dev/null | head -c 600"]
+        command: ["bash", "-c", "wl-paste --no-newline --type text 2>/dev/null | head -c 600 | tr -d '\\n'"]
         stdout: StdioCollector {
             onStreamFinished: {
                 root._clipboardAtStart = this.text.trim();
@@ -735,7 +742,7 @@ Singleton {
         stdout: SplitParser {
             onRead: line => {
                 const text = line.trim();
-                if (text !== root._clipboardAtStart && root.looksLikeLoginCode(text)) root.sendLoginCode(text);
+                if (text !== root._clipboardAtStart && root.looksLikeCopiedCode(text)) root.sendLoginCode(text);
             }
         }
     }
@@ -752,6 +759,9 @@ Singleton {
     function loginInTerminal() {
         const entry = root.currentCliSetup;
         if (!entry?.terminalLogin) return;
+        // The terminal takes the code itself, and there is no pipe to send one
+        // down, so the clipboard is left alone.
+        root.loginCodeSent = true;
         root.setupState = "loggingIn";
         const script = root.cliPathPrefix + entry.terminalLogin;
         Quickshell.execDetached(["bash", "-c",
