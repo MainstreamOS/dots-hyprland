@@ -59,12 +59,11 @@ DockButton {
 
     readonly property var desktopEntry: {
         // guessDesktopEntry() resolves through DesktopEntries.byId(), a plain
-        // function call that registers no dependency, so read the entry list to
-        // make the database itself one. The list value, not its length: a
-        // rescan after a .desktop change replaces entry objects while the
-        // count stays the same, and a length dependency would leave this
-        // binding holding a dead object showing the pre-rescan icon.
-        DesktopEntries.applications.values;
+        // function call that registers no dependency, so read AppSearch's
+        // records to make the database itself one. They are replaced after
+        // every rescan, when a .desktop change can alter an app while the
+        // count stays the same, and when the copy of a looked-up entry lands.
+        AppSearch.records;
         root.lookupAttempt;
         if (root.isFolder) return null;
         return AppSearch.guessDesktopEntry(root.lookupAppId);

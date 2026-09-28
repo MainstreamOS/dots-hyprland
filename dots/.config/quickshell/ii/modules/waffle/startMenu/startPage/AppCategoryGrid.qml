@@ -13,11 +13,11 @@ import qs.modules.waffle.looks
 Rectangle {
     id: root
     property AggregatedAppCategoryModel aggregatedCategory
-    property list<DesktopEntry> desktopEntries: [...DesktopEntries.applications.values.filter(app => {
+    property var desktopEntries: AppSearch.list.filter(app => {
         const appCategories = app.categories;
         const gridCategories = root.aggregatedCategory.categories;
         return appCategories.some(cat => gridCategories.indexOf(cat) !== -1);
-    })].sort((a, b) => a.name.localeCompare(b.name));
+    }).sort((a, b) => a.name.localeCompare(b.name));
 
     property Item windowRootItem: {
         var item = root;
@@ -57,7 +57,7 @@ Rectangle {
                 values: root.desktopEntries.slice(0, 3)
             }
             delegate: SmallGridAppButton {
-                required property DesktopEntry modelData
+                required property var modelData
                 desktopEntry: modelData
             }
         }
@@ -161,7 +161,7 @@ Rectangle {
     component CategoryFolderContent: WToolTipContent {
         id: categoryFolderContent
         property string title
-        property list<DesktopEntry> desktopEntries: root.desktopEntries
+        property var desktopEntries: root.desktopEntries
         horizontalPadding: 0
         verticalPadding: 0
         radius: Looks.radius.large
@@ -260,7 +260,7 @@ Rectangle {
                 Repeater {
                     model: root.desktopEntries.slice(3, 7)
                     delegate: WAppIcon {
-                        required property DesktopEntry modelData
+                        required property var modelData
                         tryCustomIcon: false
                         iconName: modelData.icon
                         implicitSize: 16
@@ -272,7 +272,7 @@ Rectangle {
 
     component SmallGridAppButton: SmallGridButton {
         id: smallGridAppButton
-        property DesktopEntry desktopEntry
+        property var desktopEntry
 
         property bool pinnedStart: LauncherApps.isPinned(smallGridAppButton.desktopEntry.id);
         property bool pinnedTaskbar: TaskbarApps.isPinned(smallGridAppButton.desktopEntry.id);

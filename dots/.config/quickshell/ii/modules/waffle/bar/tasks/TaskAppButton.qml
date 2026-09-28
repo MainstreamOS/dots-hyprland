@@ -22,10 +22,11 @@ AppButton {
 
     readonly property var desktopEntry: {
         // heuristicLookup() is a plain function call and registers no
-        // dependency, so read the entry list to make the database itself one.
-        DesktopEntries.applications.values.length;
+        // dependency, so read AppSearch's records to make the database itself
+        // one. They are replaced after every rescan and when a copy lands.
+        AppSearch.records;
         root.lookupAttempt;
-        return DesktopEntries.heuristicLookup(root.appEntry.appId);
+        return AppSearch.recordFor(DesktopEntries.heuristicLookup(root.appEntry.appId));
     }
 
     Timer {

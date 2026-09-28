@@ -38,7 +38,7 @@ BodyRectangle {
         BigAppGrid {
             Layout.fillWidth: true
             columns: 8
-            desktopEntries: Config.options.launcher.pinnedApps.map(appId => DesktopEntries.byId(appId))
+            desktopEntries: Config.options.launcher.pinnedApps.map(appId => AppSearch.recordFor(DesktopEntries.byId(appId)))
         }
     }
 

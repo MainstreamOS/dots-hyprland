@@ -53,7 +53,7 @@ Rectangle {
 
         property var desktopEntry: {
             const desktopEntryString = root.activePlayer?.desktopEntry ?? "";
-            return DesktopEntries.byId(desktopEntryString);
+            return AppSearch.recordFor(DesktopEntries.byId(desktopEntryString));
         }
 
         FluentIcon {

@@ -13,7 +13,7 @@ import qs.modules.waffle.looks
 
 WButton {
     id: root
-    required property DesktopEntry desktopEntry
+    required property var desktopEntry
 
     property bool pinnedStart: LauncherApps.isPinned(root.desktopEntry.id);
     property bool pinnedTaskbar: TaskbarApps.isPinned(root.desktopEntry.id);

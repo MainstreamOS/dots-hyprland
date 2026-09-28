@@ -16,7 +16,7 @@ Item {
     property Item targetButton
     property alias isOpen: menuLoader.active
     readonly property bool isFolder: appToplevel?.isFolder === true
-    readonly property var desktopEntry: (!isFolder && appToplevel) ? DesktopEntries.heuristicLookup(appToplevel.appId) : null
+    readonly property var desktopEntry: (!isFolder && appToplevel) ? AppSearch.recordFor(DesktopEntries.heuristicLookup(appToplevel.appId)) : null
     readonly property bool hasWindows: (appToplevel?.toplevels.length ?? 0) > 0
     readonly property bool hasDesktopActions: (!isFolder && desktopEntry?.actions.length) ?? false
     readonly property bool volumeFeatureEnabled: Config.options.dock.contextMenuVolume.enable

@@ -90,7 +90,7 @@ Rectangle {
                                 const iconName = PolkitService.flow?.iconName ?? "";
                                 if (iconName === "")
                                     return Translation.tr("Command-line-invoked Action");
-                                const desktopEntry = DesktopEntries.applications.values.find(entry => {
+                                const desktopEntry = AppSearch.list.find(entry => {
                                     return entry.icon == iconName;
                                 });
                                 return desktopEntry ? desktopEntry.name : Translation.tr("Unknown Application");

@@ -639,7 +639,7 @@ Item {
                                 const apps = [];
                                 for (let i = 0; i < root.folderPopupData.appIds.length; i++) {
                                     const appId = root.folderPopupData.appIds[i];
-                                    const entry = DesktopEntries.heuristicLookup(appId);
+                                    const entry = AppSearch.recordFor(DesktopEntries.heuristicLookup(appId));
                                     if (entry) {
                                         apps.push({ id: appId, entry: entry });
                                     }
