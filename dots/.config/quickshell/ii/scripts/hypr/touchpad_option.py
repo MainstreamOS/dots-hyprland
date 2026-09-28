@@ -18,6 +18,8 @@ import os
 import re
 import sys
 
+from managed_block import rewrite
+
 OPENER = re.compile(r'^\s*touchpad\s*=\s*\{\s*(--.*)?$')
 VALUE = re.compile(r'^(true|false|-?\d+(\.\d+)?)$')
 KEY = re.compile(r'^[a-z_]+$')
@@ -99,13 +101,9 @@ def main(argv):
         if value is not None:
             print(value)
         return 0
-    new = set_key(text, key, argv[3])
-    if new == text:
-        return 0
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as output:
-        output.write(new)
-    os.replace(tmp, path)
+    # Read again under the lock: another writer may have changed the file
+    # since the read above.
+    rewrite(path, lambda current: set_key(current, key, argv[3]))
     return 0
 
 

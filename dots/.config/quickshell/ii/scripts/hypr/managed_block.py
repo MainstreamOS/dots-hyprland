@@ -17,30 +17,64 @@
 # touched; anything new or reworked comes through this file, where the logic
 # lives once and can be run against a scratch file. Other writers sharing these
 # files stay scoped to their own lines, the way the wallpaper pointer edit is.
+import fcntl
 import os
 import re
+import stat
 import sys
+import tempfile
+
+
+def rewrite(path, change):
+    """Rewrites path to change(old text) under <path>.lock, the lock the other
+    Settings writers of these files take, through a temp file of its own.
+    Settings starts these writers without waiting on them, so two can run at
+    once: unlocked, one loses the other's change, and a shared temp name can
+    put a half-written file in place."""
+    folder = os.path.dirname(path) or '.'
+    os.makedirs(folder, exist_ok=True)
+    with open(path + '.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            with open(path) as handle:
+                text = handle.read()
+        except FileNotFoundError:
+            text = None
+        new = change(text or '')
+        if new == text:
+            return
+        fd, tmp = tempfile.mkstemp(dir=folder, prefix='.' + os.path.basename(path) + '.')
+        try:
+            with os.fdopen(fd, 'w') as output:
+                output.write(new)
+            # mkstemp makes the file private; the config keeps the mode it had.
+            mode = stat.S_IMODE(os.stat(path).st_mode) if text is not None else 0o644
+            os.chmod(tmp, mode)
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
 
 def upsert(path, base, content):
     begin = '-- BEGIN ' + base + ' (managed by Settings)'
     end = '-- END ' + base
     block = begin + '\n' + content.rstrip('\n') + '\n' + end + '\n'
-    text = open(path).read() if os.path.exists(path) else ''
     pattern = re.compile(
         r'-- BEGIN ' + re.escape(base) + r'[^\n]*\n.*?-- END ' + re.escape(base) + r'[^\n]*\n?',
         re.S)
-    if pattern.search(text):
-        text = pattern.sub(lambda match: block, text, count=1)
-    else:
+
+    def change(text):
+        if pattern.search(text):
+            return pattern.sub(lambda match: block, text, count=1)
         if text and not text.endswith('\n'):
             text += '\n'
-        text += '\n' + block
-    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as output:
-        output.write(text)
-    os.replace(tmp, path)
+        return text + '\n' + block
+
+    rewrite(path, change)
 
 
 if __name__ == '__main__':
