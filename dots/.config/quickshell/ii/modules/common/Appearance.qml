@@ -21,7 +21,9 @@ Singleton {
     ColorQuantizer {
         id: wallColorQuant
         property string wallpaperPath: Config.options.background.wallpaperPath
-        property bool wallpaperIsVideo: wallpaperPath.endsWith(".mp4") || wallpaperPath.endsWith(".webm") || wallpaperPath.endsWith(".mkv") || wallpaperPath.endsWith(".avi") || wallpaperPath.endsWith(".mov")
+        // The same list Wallpapers.videoExtensions keeps; a video missed here is
+        // handed to magick whole, which decodes every frame.
+        property bool wallpaperIsVideo: /\.(mp4|webm|mkv|avi|mov|m4v|ogv)$/i.test(wallpaperPath)
         source: Qt.resolvedUrl(wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath)
         depth: 0 // 2^0 = 1 color
         rescaleSize: 10
