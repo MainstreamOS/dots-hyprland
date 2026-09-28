@@ -171,6 +171,20 @@ ApplicationWindow {
             "import sys\nopen(sys.argv[2], 'w').write(sys.argv[1] + '\\n')\n",
             value, Quickshell.env("HOME") + "/.config/hypr/custom/scrolloverview.layout"]);
     }
+    // Starts from what is saved, as Settings does: shown as Vertical over a
+    // saved Horizontal, picking Vertical would look like no change and write
+    // nothing.
+    Process {
+        running: true
+        command: ["cat", Quickshell.env("HOME") + "/.config/hypr/custom/scrolloverview.layout"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const saved = this.text.trim();
+                if (saved === "vertical" || saved === "horizontal")
+                    root.scrollOverviewLayout = saved;
+            }
+        }
+    }
 
     // Shared mockup geometry — the feature cards render the same
     // 600x380 canvas and 560-wide bar, so these live here as one
