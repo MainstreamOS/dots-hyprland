@@ -738,12 +738,30 @@ else
         done
         return 0
     }
+    # g_wheel gave every administrator root without a password so the live
+    # session could run the installer. It goes only where another rule still
+    # lets administrators use sudo with theirs, which the installer wrote.
+    _wheel_keeps_sudo() {
+        local f
+        for f in /etc/sudoers /etc/sudoers.d/*; do
+            [[ -f "$f" && "$f" != /etc/sudoers.d/g_wheel ]] || continue
+            grep -qE '^[[:space:]]*%wheel[[:space:]]+ALL[[:space:]]*=[[:space:]]*\(ALL(:ALL)?\)[[:space:]]+ALL[[:space:]]*$' "$f" && return 0
+        done
+        return 1
+    }
+    # A hook the live image's boot used; mkinitcpio fails outright if a
+    # configuration still names one that is gone.
+    _gsp_hook_unused() {
+        ! grep -rqs 'nvidia-gsp-strip' /etc/mkinitcpio.conf /etc/mkinitcpio.conf.d/
+    }
     _reload_logind=0 _reload_units=0 _reload_resolved=0 _journal_dir=0
     while read -r _leftover _sums; do
         [[ -f "$_leftover" && ! -L "$_leftover" ]] || continue
         pacman -Qqo "$_leftover" >/dev/null 2>&1 && continue
         [[ " $_sums " == *" $(md5sum < "$_leftover" | cut -d' ' -f1) "* ]] || continue
         [[ "$_leftover" != */nvidia-live.conf ]] || _nvidia_live_redundant || continue
+        [[ "$_leftover" != */sudoers.d/g_wheel ]] || _wheel_keeps_sudo || continue
+        [[ "$_leftover" != */nvidia-gsp-strip ]] || _gsp_hook_unused || continue
         if rm -f -- "$_leftover"; then
             ok "$(tf "Removed %s, left behind by the installer's live session" "$_leftover")"
             case "$_leftover" in
@@ -762,7 +780,21 @@ else
 /etc/systemd/system/getty@tty1.service.d/autologin.conf b711780346682e17bb32e3c9da0984a3 f452e360b605a39aa0f378960b79f7e3 b016d08b0deadd4edffd24da5f9f50ae
 /etc/systemd/resolved.conf.d/archiso.conf 205649a7db506d9f31cc15f440a1b81f
 /etc/modprobe.d/nvidia-live.conf 4cc10f2193d8d2b2fdb5647fb7d37713
+/etc/sudoers.d/g_wheel 80bed5eba711f3755e088a58cd1dbb21
+/etc/sudoers.d/liveuser 228f342dc4e3bb421502a259ee676a0a
+/etc/initcpio/install/nvidia-gsp-strip c382dd2ff279666b2073cafca33e3bc3
 LIVE_LEFTOVERS
+    # The live account's home, which the installer's account removal leaves
+    # behind. Only while no account on this machine lives there.
+    if [[ -d /home/liveuser && ! -L /home/liveuser ]] && ! id liveuser >/dev/null 2>&1 \
+       && ! getent passwd | cut -d: -f6 | grep -qx /home/liveuser; then
+        if rm -rf --one-file-system -- /home/liveuser; then
+            ok "$(tf "Removed %s, left behind by the installer's live session" /home/liveuser)"
+        else
+            warn "$(tf "Could not remove %s" /home/liveuser)"
+            RC=1
+        fi
+    fi
     # logind rereads its settings on a hangup, the way the power button helper
     # asks it to, without touching a session. journald keeps what it started
     # with until the next boot, which then keeps its logs in the directory.
