@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.modules.common
+import qs.modules.common.models.hyprland
 import QtQuick
 import Quickshell
 
@@ -24,6 +25,16 @@ Singleton {
     // Config.qml's shipped bar.cornerStyle and appearance.fakeScreenRounding.
     readonly property int stockBarStyle: 1
     readonly property int stockScreenRounding: 2
+
+    // Whether the corners are on, for the shell's own panels to follow, such
+    // as the sidebars. Read from the window rounding, as the switch itself
+    // is, so corners squared by a theme or by the Decorations page count the
+    // same as the switch. On until Hyprland answers.
+    readonly property bool on: (windowRounding.value ?? 1) > 0
+    HyprlandConfigOption {
+        id: windowRounding
+        key: "decoration:rounding"
+    }
 
     function inRange(v, lo, hi) {
         return Number.isInteger(v) && v >= lo && v <= hi;
