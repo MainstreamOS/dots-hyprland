@@ -1,8 +1,8 @@
 post_install() {
     # The OS-first boot reset runs as a sddm.service ExecStartPre (10-gaming.conf) --
     # no separate unit to enable, so it can't be lost on the squashfs install. Just
-    # reload so the drop-in is picked up, and leave /etc/sddm.conf at the no-User base
-    # with the greeter pointed at Hyprland without waiting for a reboot.
+    # reload so the drop-in is picked up, and leave /etc/sddm.conf at the desktop base
+    # (the person's own autologin, if they chose one) without waiting for a reboot.
     systemctl daemon-reload >/dev/null 2>&1 || true
     modprobe ntsync >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true

@@ -3,13 +3,17 @@
 # entry a strict one-shot and enforces the boot target on every other sddm start:
 #   * a FRESH marker (a deliberate switch armed it moments ago) -> consume it and
 #     leave /etc/sddm.conf so THIS start performs the single autologin it asked for.
+#   * a FRESH greeter marker (a deliberate logout to the login screen) -> consume it
+#     and leave the stripped User= so THIS start shows the password greeter, even
+#     for someone whose own desktop autologin the reset would otherwise put back.
 #   * no marker, on the FIRST sddm start of a cold boot, with boot-target=gaming ->
 #     write the gamescope autologin (boot-straight-to-gaming) for this one start.
 #   * no marker otherwise -- a cold boot with the default desktop target, or any
 #     in-boot restart (a StartLimit-stranded restart reached late, a gamescope crash,
-#     a reboot-from-gaming, any unexpected start) -> run `gaming-mode-switch reset` to
-#     strip the autologin User= so SDDM reaches the password greeter and never
-#     re-enters a broken gamescope session in a loop. Both markers live in /run
+#     a reboot-from-gaming, any unexpected start) -> run `gaming-mode-switch reset`,
+#     which leaves only the desktop autologin the person chose, or none, so SDDM
+#     reaches their desktop or the password greeter and never re-enters a broken
+#     gamescope session in a loop. Both markers live in /run
 #     (tmpfs), so a reboot always clears them; anything ambiguous falls back to reset
 #     (the safe, password-greeter direction).
 #
@@ -19,8 +23,14 @@
 # hiccup here can never wedge the login screen.
 set -u
 MARKER="/run/gaming-mode-armed"
+GREETER="/run/gaming-mode-greeter"
 BOOTED="/run/gaming-mode-booted"
 
+if [[ -e "$GREETER" ]]; then
+    age=$(( $(date +%s) - $(stat -c %Y "$GREETER" 2>/dev/null || echo 0) ))
+    rm -f "$GREETER"
+    [[ "$age" -ge 0 && "$age" -le 120 ]] && exit 0
+fi
 fresh=0
 if [[ -e "$MARKER" ]]; then
     age=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || echo 0) ))
@@ -49,7 +59,7 @@ if [[ ! -e "$BOOTED" ]]; then
     fi
 fi
 
-# Cold boot with the default desktop target, or any in-boot restart: strip the
-# autologin User= so SDDM reaches the password greeter (OS-first).
+# Cold boot with the default desktop target, or any in-boot restart: back to the
+# desktop autologin the person chose, or the password greeter (OS-first).
 /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
 exit 0

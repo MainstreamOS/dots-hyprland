@@ -11,16 +11,19 @@
 #   desktop  - Steam "Exit to Desktop": write User+Session=hyprland, arm the marker,
 #              restart sddm -> a single seamless autologin back to Hyprland.
 #   logout   - Steam "Exit to Desktop" when the user chose the login-screen return in
-#              Gaming Mode Setup: strip the autologin User= and restart sddm so the
+#              Gaming Mode Setup: strip the autologin User=, arm the greeter marker so
+#              the check before the restart leaves it stripped, and restart sddm so the
 #              session ends at the password greeter (the shared/public-machine case).
-#   reset    - strip the autologin User= so the next sddm start reaches the password
-#              greeter. Idempotent, never restarts sddm. Run before every sddm start
-#              by the gaming-mode-arm-check ExecStartPre, and from the Hyprland desktop.
+#   reset    - put back the desktop autologin the person chose (autologin-user), or
+#              strip User= when there is none, so the next sddm start reaches their
+#              desktop or the password greeter, never gamescope. Idempotent, never
+#              restarts sddm. Run before every sddm start by the gaming-mode-arm-check
+#              ExecStartPre, and from the Hyprland desktop.
 #   boot-gaming - boot-straight-to-gaming: write User+Session=gamescope WITHOUT
 #              restarting (sddm is about to start). Called only by gaming-mode-arm-check
 #              on the first sddm start of a cold boot when boot-target=gaming.
 #   get/set  - read/write the small Gaming Mode preference store (return-target,
-#              boot-target, open-setup) at /etc/mainstream-gaming/prefs.conf. `get` is read-only and
+#              boot-target, open-setup, autologin-user) at /etc/mainstream-gaming/prefs.conf. `get` is read-only and
 #              unprivileged; `set` is reached via the scoped sudoers rule from the menu.
 #
 # One-shot autologin: SDDM autologins whenever the merged [Autologin] has a non-empty
@@ -28,9 +31,10 @@
 # Relogin is irrelevant). gaming/desktop therefore arm /run/gaming-mode-armed; the
 # sddm ExecStartPre (gaming-mode-arm-check) consumes the marker on the deliberate
 # entry but, finding no marker on any LATER start (a gamescope-crash Restart=always, a
-# reboot-from-gaming, a Steam Restart/Shutdown, or a cold boot), runs `reset` to strip
-# User= -- so SDDM falls back to the password greeter instead of re-entering a broken
-# session, and every cold boot is OS-first regardless of leftover gaming state.
+# reboot-from-gaming, a Steam Restart/Shutdown, or a cold boot), runs `reset` -- so SDDM
+# falls back to the desktop autologin the person chose, or the password greeter,
+# instead of re-entering a broken session, and every cold boot is OS-first regardless
+# of leftover gaming state.
 #
 # Reached via a scoped NOPASSWD sudoers rule. User entry is /usr/bin/gaming-mode;
 # Steam's power menu reaches the desktop case through /usr/lib/os-session-select.
@@ -39,6 +43,7 @@ set -u
 CONF="/etc/sddm.conf"
 LOCK="/run/gaming-mode-switch.lock"
 ARMED="/run/gaming-mode-armed"
+GREETER="/run/gaming-mode-greeter"
 PREFS="/etc/mainstream-gaming/prefs.conf"
 GAMING_SESSION="gamescope-session.desktop"
 DESKTOP_SESSION="hyprland.desktop"
@@ -59,6 +64,16 @@ resolve_user() {
         exit 1
     fi
     printf '%s' "$u"
+}
+
+# The desktop autologin the person chose, such as the installer's "Log in
+# automatically", or nothing. SDDM keeps that choice in the same [Autologin] block
+# this script rewrites, so without it every reset threw the choice away. Only ever
+# paired with the desktop session, so it can never loop a broken gaming session.
+own_autologin_user() {
+    local u; u="$(read_pref autologin-user)"
+    [[ -n "$u" ]] && valid_login_user "$u" && printf '%s' "$u"
+    return 0
 }
 
 # Lowest-uid human account, used as the boot-straight-to-gaming autologin user when
@@ -181,11 +196,12 @@ case "${1:-}" in
         ;;
     logout)
         write_autologin "" "$DESKTOP_SESSION"
+        : > "$GREETER" 2>/dev/null || true
         unmask_sleep
         restart_dm
         ;;
     reset)
-        write_autologin "" "$DESKTOP_SESSION"
+        write_autologin "$(own_autologin_user)" "$DESKTOP_SESSION"
         unmask_sleep
         ;;
     boot-gaming)
@@ -207,6 +223,7 @@ case "${1:-}" in
             return-target) [[ "$val" == "desktop"  || "$val" == "greeter" ]] || exit 2 ;;
             boot-target)   [[ "$val" == "desktop"  || "$val" == "gaming"  ]] || exit 2 ;;
             open-setup)    [[ "$val" == "remember" || "$val" == "always"  ]] || exit 2 ;;
+            autologin-user) [[ -z "$val" ]] || valid_login_user "$val" || exit 2 ;;
             *) exit 2 ;;
         esac
         write_pref "$key" "$val"
