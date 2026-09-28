@@ -59,8 +59,9 @@
 #        renders this as "completed with errors" so users notice the
 #        non-fatal failure
 #   4    pacman refused the upgrade because Arch's Qt moved past the release
-#        mainstream-quickshell-git is pinned to. Nothing was changed, and
-#        nothing after the package step ran.
+#        mainstream-quickshell-git is pinned to. No package changed; Flatpak,
+#        Snap and the system half still ran, and the rest waits for the
+#        rebuilt desktop.
 #   N    pacman / aur / flatpak exit code on a primary failure
 
 set -u
@@ -325,6 +326,7 @@ FLATPAK_RC=0
 SNAP_RC=0
 DOTFILES_RC=0
 DOTFILES_SYS_RC=0
+QT_PIN_HELD=0
 TOPGRADE_RC=0
 MAINSTREAM_REPO_OFFLINE=0
 
@@ -412,10 +414,10 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
        && grep -qE "(breaks dependency|unable to satisfy dependency) 'qt6-base<[^']*' required by mainstream-quickshell-git" "$PACMAN_LOG"; then
         echo ""
         echo ">>> $(t "Nothing was changed. Arch has moved to a newer Qt than this desktop is built for, and taking it now would break the desktop. The update will go through once the matching desktop update is published.")"
-        rm -f "$PACMAN_LOG"
-        exit 4
-    fi
-    if [[ "$PACMAN_RC" -ne 0 ]]; then
+        # Flatpak, Snap and the system half do not depend on Qt, so they
+        # still run; what builds on the package set waits with it.
+        QT_PIN_HELD=1
+    elif [[ "$PACMAN_RC" -ne 0 ]]; then
         # When one of our own packages starts shipping a file an older install
         # or ISO wrote directly, pacman refuses the upgrade with "exists in
         # filesystem" and no scriptlet can help, because the conflict check
@@ -620,7 +622,20 @@ fi
 # .update-backups/ rather than blocking on a prompt. No-op when
 # already at the latest tag. Auto-clones the repo on first run.
 # Runs as the calling user (updatems refuses root).
-if [[ "$SKIP_DOTFILES" -eq 0 && "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]]; then
+if [[ "$SKIP_DOTFILES" -eq 0 && "$QT_PIN_HELD" -eq 1 ]]; then
+    # The dotfiles wait for the rebuilt desktop, but the root files the clone
+    # already holds are the ones that match the desktop in place, and putting
+    # them in is what finishes an update whose system half did not run.
+    echo ""
+    echo "── $(t "Dotfiles: waiting for the desktop update that matches the new Qt.")"
+    DOTFILES_DEFERRED=1
+    if command -v updatems-system >/dev/null 2>&1 && [[ -d "$ORIG_HOME/.cache/dots-hyprland/.git" ]]; then
+        echo ""
+        echo "── $(t "Mainstream system bits — updatems-system")"
+        updatems-system "$ORIG_HOME/.cache/dots-hyprland"
+        DOTFILES_SYS_RC=$?
+    fi
+elif [[ "$SKIP_DOTFILES" -eq 0 && "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]]; then
     echo ""
     echo "── $(t "Dotfiles: deferred — the system package update failed, and dotfile releases can depend on packages it would have installed. Re-run the update once the package step succeeds.")"
     DOTFILES_DEFERRED=1
@@ -773,7 +788,10 @@ printf "  %-30s %s\n" "$(t "System packages (pacman):")"     "$(status_for "$SKI
 printf "  %-30s %s\n" "$(t "AUR (yay/paru):")"               "$(status_for "$SKIP_AUR"      "$AUR_RC")"
 printf "  %-30s %s\n" "$(t "Flatpak:")"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC")"
 printf "  %-30s %s\n" "$(t "Snap:")"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC")"
-if [[ "${DOTFILES_DEFERRED:-0}" -eq 1 ]]; then
+if [[ "$QT_PIN_HELD" -eq 1 ]]; then
+    printf "  %-30s %s\n" "$(t "Dotfiles (updatems):")"          "$(t "waiting for the desktop update")"
+    printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC")"
+elif [[ "${DOTFILES_DEFERRED:-0}" -eq 1 ]]; then
     printf "  %-30s %s\n" "$(t "Dotfiles (updatems):")"          "$(t "deferred (system update failed)")"
     printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(t "deferred (system update failed)")"
 else
@@ -801,6 +819,9 @@ fi
 # timeouts, transient git-fetch failures, and topgrade quirks
 # shouldn't turn the whole update banner red for a regular user. The
 # log still shows the failure for the power-user case.
+# The Qt pin hold is its own answer, whatever else ran, so the page can say
+# why the desktop did not update.
+if [[ "$QT_PIN_HELD" -eq 1 ]]; then exit 4; fi
 if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
 if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
 if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi

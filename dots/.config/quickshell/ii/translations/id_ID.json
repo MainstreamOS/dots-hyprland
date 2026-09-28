@@ -2497,5 +2497,8 @@
   "The update could not be started.": "The update could not be started.",
   "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.": "Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.",
   "This account cannot install updates. An administrator can run the update, or make this account an administrator in Settings > Accounts.": "This account cannot install updates. An administrator can run the update, or make this account an administrator in Settings > Accounts.",
-  "The change was not made: authentication failed.": "The change was not made: authentication failed."
+  "The change was not made: authentication failed.": "The change was not made: authentication failed.",
+  "Dotfiles: waiting for the desktop update that matches the new Qt.": "Dotfiles: waiting for the desktop update that matches the new Qt.",
+  "waiting for the desktop update": "waiting for the desktop update",
+  "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published.": "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published."
 }

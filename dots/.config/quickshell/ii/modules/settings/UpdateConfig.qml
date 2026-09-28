@@ -287,10 +287,10 @@ ContentPage {
         if (exitCode === 3) {
             root.outputText += "\n\n" + Translation.tr("Another update was already running, so this one did not start.");
         } else if (exitCode === 4) {
-            // The desktop's Qt pin held pacman back, so the whole transaction
-            // was refused and trying again cannot help until a rebuilt
-            // desktop package is out.
-            root.outputText += "\n\n" + Translation.tr("Nothing was changed. Arch moved to a newer Qt than this desktop is built for; the update will go through once the matching desktop update is published.");
+            // The desktop's Qt pin held pacman back, so no package changed and
+            // trying again cannot help until a rebuilt desktop package is out.
+            // Flatpak, Snap and the system files went ahead regardless.
+            root.outputText += "\n\n" + Translation.tr("System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published.");
         } else if (exitCode === 101) {
             root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
         } else if (exitCode === 102) {
