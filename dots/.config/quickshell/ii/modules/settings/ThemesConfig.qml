@@ -19,6 +19,9 @@ ContentPage {
     readonly property string homePath: FileUtils.trimFileProtocol(Directories.home)
     readonly property string shellConfigPath: Directories.shellConfigPath
     readonly property string themesDir: ThemeLibrary.themesDir
+    // The settings that belong to the person rather than to a look: saving,
+    // exporting and importing leave them out, and applying keeps the live ones.
+    readonly property string userSettingsPath: `${root.homePath}/.config/quickshell/ii/scripts/themes/user-settings.json`
     readonly property string lastAppliedPath: ThemeLibrary.lastAppliedPath
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -457,10 +460,15 @@ ContentPage {
             //   - background.widgetsLocked (whether the desktop widgets can be
             //                                dragged is how this machine is
             //                                used, not part of a look.)
+            //   - user-settings.json       (search, AI, lock security, language,
+            //                                battery, pins, time, gestures and
+            //                                the like: this person's settings,
+            //                                listed once for save, apply and
+            //                                sharing.)
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates) | del(.background.widgetsLocked)' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            `jq --slurpfile user '${root.userSettingsPath}' 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates) | del(.background.widgetsLocked) | reduce $user[0][] as $p (.; delpaths([$p]))' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.
@@ -806,6 +814,13 @@ STRIP = [("appearance", "themeSchedule"), ("light", "night"), ("cursor",),
          # the manifest this machine trusts for release news -- neither is part
          # of a look, and neither may be carried in from outside.
          ("apps",), ("updates",)]
+# This person's own settings, listed once for the save, the apply and this.
+# The apply keeps the live ones whatever a theme carries, so an unreadable list
+# still leaves them safe here.
+try:
+    STRIP += [tuple(p) for p in json.load(open("${root.userSettingsPath}")) if isinstance(p, list) and p]
+except (OSError, ValueError):
+    pass
 
 def theme_installed(kind, name, cursors=False):
     # kind is the shared-data subdirectory a look lives in ("themes" for widget

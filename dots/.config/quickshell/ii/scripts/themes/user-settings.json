@@ -1,0 +1,17 @@
+[
+  ["search"],
+  ["ai"],
+  ["policies"],
+  ["lock", "security"],
+  ["language"],
+  ["battery"],
+  ["launcher", "pinnedApps"],
+  ["tray", "pinnedItems"],
+  ["tray", "invertPinnedItems"],
+  ["time"],
+  ["calendar"],
+  ["gestures"],
+  ["networking"],
+  ["screenRecord", "savePath"],
+  ["screenSnip", "savePath"]
+]

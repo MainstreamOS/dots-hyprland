@@ -167,6 +167,12 @@ PRESERVE_WEATHER=""
 PRESERVE_WIDGETS_KNOWN=""
 PRESERVE_NOTIF_POS=""
 PRESERVE_LIVE_BAR=""
+PRESERVE_USER=""
+# This person's own settings (search, AI, lock security, language, battery,
+# pins, time, gestures and the like), listed once for save, apply and sharing.
+# An unreadable list reads as empty so the pass below still runs for the rest.
+USER_PATHS='[]'
+[ -r "$SCRIPT_DIR/user-settings.json" ] && USER_PATHS="$(<"$SCRIPT_DIR/user-settings.json")"
 if [ -f "$SHELL_CONFIG" ]; then
     # What the live config keeps regardless of what a theme carries, read in
     # one pass. Each of these was its own jq, so the file was forked over and
@@ -200,15 +206,18 @@ if [ -f "$SHELL_CONFIG" ]; then
     #                             reads as unset instead of failing the pass.
     #   bar.bottom, bar.vertical  the live bar's edge, which the Hug dock further
     #                             down has to face.
+    #   user-settings.json        every path it lists, with its live value or
+    #                             null where the live config has none.
     #
     # One value per line, which is safe because tojson escapes any newline
     # inside a value rather than emitting it. Reading them tab separated would
     # not be: that escapes backslashes too, and apps.* holds shell commands.
     # `// empty` also treats false as absent, so that is matched here.
-    mapfile -t _PRESERVED < <(jq -r '
+    mapfile -t _PRESERVED < <(jq -r --argjson userpaths "$USER_PATHS" '
         [.appearance.themeSchedule, .light.night, .cursor, .bar.seededWidgets,
          .dock.pinnedApps, .apps, .updates, .bar.weather, .background.widgets,
-         (.notifications.position? // null), {bottom: (.bar.bottom // false), vertical: (.bar.vertical // false)}]
+         (.notifications.position? // null), {bottom: (.bar.bottom // false), vertical: (.bar.vertical // false)},
+         (. as $cfg | [$userpaths[] | select(type == "array" and length > 0) as $p | {p: $p, v: ($cfg | try getpath($p) catch null)}])]
         | map(if . == null or . == false then "" else tojson end) | .[]' \
         "$SHELL_CONFIG" 2>/dev/null || true)
     PRESERVE_THEME_SCHED="${_PRESERVED[0]:-}"
@@ -222,6 +231,7 @@ if [ -f "$SHELL_CONFIG" ]; then
     PRESERVE_WIDGETS_KNOWN="${_PRESERVED[8]:-}"
     PRESERVE_NOTIF_POS="${_PRESERVED[9]:-}"
     PRESERVE_LIVE_BAR="${_PRESERVED[10]:-}"
+    PRESERVE_USER="${_PRESERVED[11]:-}"
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
@@ -253,8 +263,10 @@ jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/nul
 # it keeps the buttons at its ends belong to the look as much as its colors do,
 # so they ride along with the rest of its dress. A theme that names none of them
 # was saved wearing stock and reads as stock, the same as one naming no color.
+# The roundness each dock style remembers goes with them, or switching styles
+# after an older theme would bring back what the theme before it remembered.
 JQ_FILTER+=' | .bar = ({backgroundOpacity: -1, widgetOpacity: -1, widgetRadius: -1, floatRadius: -1, floatWidth: -1, notchWidth: -1, floatSplit: false, widgetColorDark: "", widgetColorLight: "", backgroundColorDark: "", backgroundColorLight: "", floatStyleShadow: true} + (.bar // {}))'
-JQ_FILTER+=' | .dock = ({showBackground: true, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1, iconSize: -1, indicatorStyle: "dashes", hoverEffect: "glow", hoverMagnify: -1, glowMagnify: -1, glowColorDark: "", glowColorLight: "", glowIntensity: -1, showOverviewButton: true, showPinButton: true} + (.dock // {}))'
+JQ_FILTER+=' | .dock = ({showBackground: true, radiusFloat: -2, radiusNotch: -2, topRadiusRect: -2, topRadiusNotch: -2, backgroundOpacity: -1, backgroundColorDark: "", backgroundColorLight: "", badgeColorDark: "", badgeColorLight: "", badgeTextColorDark: "", badgeTextColorLight: "", radius: -1, cornerStyle: "float", topRadius: -1, iconSize: -1, indicatorStyle: "dashes", hoverEffect: "glow", hoverMagnify: -1, glowMagnify: -1, glowColorDark: "", glowColorLight: "", glowIntensity: -1, showOverviewButton: true, showPinButton: true} + (.dock // {}))'
 # Whether the content on the bar, the dock and the launcher answers to what it
 # sits on goes with the colors that decide it, and a theme saved before the
 # switch existed was saved with it on.
@@ -324,6 +336,11 @@ else                                JQ_FILTER+=' | del(.updates)'; fi
 # at all, so an inherited copy would answer it on this machine's behalf.
 if [ -n "$PRESERVE_WEATHER" ]; then JQ_FILTER+=' | .bar.weather = $weather'; JQ_ARGS+=(--argjson weather "$PRESERVE_WEATHER");
 else                                JQ_FILTER+=' | del(.bar.weather)'; fi
+# This person's own settings are whatever they are now, never what a theme
+# carries: a theme saved before they changed, or one from someone else, would
+# otherwise quietly set them back or hand over the other machine's. One the
+# live config lacks is dropped, the same as apps and updates.
+[ -n "$PRESERVE_USER" ] && { JQ_FILTER+=' | reduce $user[] as $u (.; if $u.v == null then delpaths([$u.p]) else setpath($u.p; $u.v) end)'; JQ_ARGS+=(--argjson user "$PRESERVE_USER"); }
 if [ "$JQ_FILTER" = '.' ]; then
     cp -f "$THEME_DIR/config.json" "$TMP" || { rm -f "$TMP"; rollback "failed to copy config.json"; }
 else
