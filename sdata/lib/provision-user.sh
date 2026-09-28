@@ -97,6 +97,20 @@ _pu_lua_has() {  # $1 = user  $2 = text  $3 = file
     _pu_as "$1" grep -qE -- "^[[:space:]]*[^-[:space:]].*$2" "$3" 2>/dev/null
 }
 
+# Gives a home to its owner. A drive or network share mounted inside it, a
+# second disk for games say, is not part of the account: its ownership is
+# somebody's decision, and chown on a network share fails and would fail the
+# whole step.
+_pu_own_home() {  # $1 = user
+    local u="$1" home mp
+    local -a prune=()
+    home="$(_pu_home "$u")" || return 1
+    while IFS= read -r mp; do
+        [[ "$mp" == "$home"/* ]] && prune+=( -path "$mp" -prune -o )
+    done < <(findmnt -J -o TARGET 2>/dev/null | jq -r '.. | .target? // empty' 2>/dev/null)
+    find "$home" "${prune[@]}" -exec chown -h "$u:$u" {} +
+}
+
 # The per-machine parts of a home: built rather than copied. The virtualenv
 # records absolute paths, the plugin binaries carry a build stamp good for one
 # compositor version, and the greeted marker decides whether the welcome
@@ -242,7 +256,7 @@ provision_dotfiles() {  # $1 = user  $2 = "fresh" when the account was just crea
     # so on stdout, which is expected here and is not worth the noise. Real
     # trouble still arrives on stderr and in the exit code.
     rsync -a "${args[@]}" "$src/" "$home/" >/dev/null || { _pu_warn "could not lay the dotfiles over $home"; return 1; }
-    chown -R "$u:$u" "$home"
+    _pu_own_home "$u"
 
     # skel is what the next account is seeded from, so bring it along rather
     # than leaving the next user to land in the same place.
@@ -283,7 +297,9 @@ provision_groups() {  # $1 = user
     # ddcutil reaches an external monitor's brightness over the DDC/CI bus,
     # which needs the i2c-dev module present from boot.
     echo i2c-dev > /etc/modules-load.d/i2c-dev.conf
-    if [[ -x /usr/bin/zsh ]]; then
+    # A first-time default, like the ones in provision_desktop: someone who
+    # has used the account may have picked another shell.
+    if [[ -x /usr/bin/zsh ]] && ! provision_has_logged_in "$u"; then
         _pu_log "Setting default shell to Zsh for $u..."
         chsh -s /usr/bin/zsh "$u" >/dev/null 2>&1 || _pu_warn "could not change the shell for $u"
     fi
@@ -312,11 +328,14 @@ provision_venv() {  # $1 = user
     baked_ver="$(cat "$venv/.python-version" 2>/dev/null || true)"
     # An interpreter that is not there at all is the other way this venv goes
     # stale, and it reads as an empty version rather than a different one.
-    if [[ -z "$target_ver" ]]; then
-        _pu_warn "venv: /usr/bin/python3.12 is missing, rebuilding $venv from the system python"
-        rm -rf "$venv"
-        return 0
-    elif [[ -n "$baked_ver" && "$baked_ver" != "$target_ver" ]]; then
+    if [[ -z "$target_ver" || ( -n "$baked_ver" && "$baked_ver" != "$target_ver" ) ]]; then
+        # First login builds a new one, but only for an account nobody has
+        # used yet; an established home would be left with none at all.
+        if provision_has_logged_in "$u"; then
+            _pu_warn "venv: $venv was built for Python ${baked_ver:-?} and this machine has ${target_ver:-none}; run Update or Repair Install to rebuild it"
+            return 0
+        fi
+        _pu_warn "venv: $venv does not match Python ${target_ver:-3.12}, leaving it to first login to rebuild"
         rm -rf "$venv"
         return 0
     fi
@@ -584,6 +603,14 @@ else
     _pu_warn "dotfiles-first-login not found in /usr/local/bin — skipping first-session trigger deploy."
 fi
 
+# Everything from here is a first-time default: folders, default apps and the
+# look. An account someone has used holds their own choices there, and Repair
+# says it is safe to run on one.
+if provision_has_logged_in "$u"; then
+    _pu_log "$u has logged in before, keeping their default apps and appearance"
+    return 0
+fi
+
 # ---------------------------------------------------------------------------
 # Fix Nautilus home directory and set as default file manager
 # ---------------------------------------------------------------------------
@@ -722,8 +749,10 @@ provision_user_home() {  # $1 = user  $2 = "fresh" when the account was just cre
     _pu_step groups   provision_groups   "$u"
     _pu_step venv     provision_venv     "$u"
     _pu_step plugins  provision_plugins  "$u"
+    # Before the desktop step, which writes as the owner: a home kept from an
+    # earlier account of this name is still closed to everyone but root.
+    _pu_step own      _pu_own_home       "$u"
     _pu_step desktop  provision_desktop  "$u"
-    _pu_step own      chown -R "$u:$u" "$home"
     _pu_step firstrun provision_first_run "$u"
 
     # A short account of what the new user will actually find, so a session

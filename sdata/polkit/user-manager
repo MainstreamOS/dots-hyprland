@@ -96,7 +96,7 @@ cmd_list() {
 }
 
 cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wheel
-    local u="${1:-}" full="${2:-}" admin="${3:-}" pw
+    local u="${1:-}" full="${2:-}" admin="${3:-}" pw base fresh=fresh
     valid_name "$u" || die "not a valid user name: $u"
     id "$u" >/dev/null 2>&1 && die "user already exists: $u"
     [[ -r "$PROVISION_LIB" ]] || die "provisioning library missing at $PROVISION_LIB"
@@ -106,8 +106,22 @@ cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wh
 
     # -m seeds the home from /etc/skel, which is the whole point: the new
     # account starts from the same tree a fresh install starts from.
+    # A home kept when an earlier account of this name was deleted is still
+    # that person's, and useradd leaves it as it is rather than seeding it. It
+    # is set up like any home in use, and a failed setup must not take it with
+    # the account.
+    base="$(useradd -D 2>/dev/null | sed -n 's/^HOME=//p')"
+    [[ -e "${base:-/home}/$u" ]] && fresh=""
+
     log "creating $u"
     useradd -m -c "$full" -s /bin/bash "$u" || die "useradd failed for $u"
+
+    # lastlog2 keys its records by name and userdel leaves them, so a new
+    # account with an old name would read as logged in already and never get
+    # its first-login setup. A kept home keeps its record with it.
+    if [[ -n "$fresh" ]] && command -v lastlog2 >/dev/null 2>&1; then
+        lastlog2 -C -u "$u" >/dev/null 2>&1 || true
+    fi
 
     # shellcheck source=/dev/null
     source "$PROVISION_LIB"
@@ -121,9 +135,13 @@ cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wh
     # No password has been set yet, so nothing can reach this account, and it
     # holds nothing anyone typed. Removing it leaves the machine as it was
     # rather than leaving a broken entry on the Accounts page.
-    if ! provision_user_home "$u" fresh; then
+    if ! provision_user_home "$u" "$fresh"; then
         log "provisioning failed for $u; removing the half-built account"
-        userdel -r "$u" >/dev/null 2>&1 || log "WARN: could not remove $u after the failed provision"
+        if [[ -n "$fresh" ]]; then
+            userdel -r "$u" >/dev/null 2>&1 || log "WARN: could not remove $u after the failed provision"
+        else
+            userdel "$u" >/dev/null 2>&1 || log "WARN: could not remove $u after the failed provision"
+        fi
         die "could not set up a home for $u; the account was not created"
     fi
 
@@ -241,16 +259,29 @@ _sharing_cleanup() {  # $1 = user  $2 = the uid it had
 }
 
 cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
-    local u="${1:-}" mode="${2:-keep-home}" uid
+    local u="${1:-}" mode="${2:-keep-home}" uid home
     require_human_user "$u"
     [[ "$u" == "$(id -un "${PKEXEC_UID:-0}" 2>/dev/null)" ]] && die "refusing to delete the account asking"
     last_admin "$u" && die "$u is the only administrator; promote someone else first"
     uid="$(id -u "$u")"
+    home="$(getent passwd "$u" | cut -d: -f6)"
     case "$mode" in
         remove-home) userdel -r "$u" || die "could not delete $u" ;;
-        keep-home)   userdel "$u"    || die "could not delete $u" ;;
+        keep-home)
+            userdel "$u" || die "could not delete $u"
+            # The kept files still carry the old account's number, which
+            # useradd hands to the next account it makes. Closed to everyone
+            # but root until an account of this name is made again.
+            if [[ -n "$home" && "$home" != / && -d "$home" && ! -L "$home" ]]; then
+                chown root:root "$home" && chmod 700 "$home" \
+                    || log "WARN: could not close $home to the next account"
+            fi
+            ;;
         *) die "expected keep-home or remove-home, got: $mode" ;;
     esac
+    # The login screen finds pictures and settings by name, so a later
+    # account of this name would otherwise show this person's.
+    rm -f -- "/var/lib/AccountsService/users/$u" "/var/lib/AccountsService/icons/$u"
     log "$u deleted ($mode)"
     _sharing_cleanup "$u" "$uid"
 }
