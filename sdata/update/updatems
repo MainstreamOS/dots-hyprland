@@ -23,16 +23,17 @@
 #      tag via `git reset --hard`, then run:
 #         ./setup exp-update --skip-notice --non-interactive \
 #                            --default-choice backup -p
-#      so per-file conflicts go to .update-backups/<file>.<ts>.bak
-#      rather than blocking on a prompt, AND any mainstream-* PKGBUILDs
-#      that bumped between the last-applied tag and the new tag get
-#      rebuilt + installed via `makepkg -sCi --noconfirm`. exp-update's
-#      non-interactive default for -p is "build only packages with
-#      changed PKGBUILDs" — no-op when no PKGBUILD has changed, which
-#      is the common case. Required because the mainstream-* PKGBUILD
-#      packages (metas + the quickshell/microtex -git builds) are not
-#      served by the [mainstream] binary repo; rebuilding them from
-#      the clone is their only update path.
+#      so a file the user changed since the last release is backed up
+#      to .update-backups/<file>.<ts>.bak before it is replaced, rather
+#      than blocking on a prompt. With -p, a mainstream-* package whose
+#      PKGBUILD changed between the last-applied tag and the new tag is
+#      built from the clone and installed (`makepkg -sCi --noconfirm`),
+#      but only when it is installed and that PKGBUILD is newer than
+#      both the installed build and the version the repositories serve.
+#      The [mainstream] repo is how these packages normally arrive (in
+#      the panel update flow its pacman -Syu has run by this point), so
+#      a build only happens when the repositories do not serve that
+#      version yet. Otherwise -p does nothing, which is the common case.
 #   5. Write the new tag to the marker on success.
 #
 # Exit codes:
@@ -189,6 +190,10 @@ _recover_corrupt_clone() {
     git -C "$CLONE_DIR" submodule update --init --recursive 2>/dev/null \
         || warn "submodule init had non-zero exit (continuing)"
     [[ -n "$saved_marker" ]] && printf '%s\n' "$saved_marker" > "$MARKER"
+    # The shell files an update left for after it finished are listed here,
+    # and the next exp-update puts them in; set aside, they would stay at the
+    # older release for good.
+    [[ -s "$aside/.update-deferred" ]] && cp -p "$aside/.update-deferred" "$CLONE_DIR/.update-deferred"
     cd "$CLONE_DIR" || die "cannot cd to $CLONE_DIR"
     ok "$(tf "Fresh clone in place. Any local edits are still in %s." "$aside")"
 }
@@ -268,7 +273,7 @@ fi
 # into a stash nobody is told to look in.
 _exclude="${CLONE_DIR}/.git/info/exclude"
 mkdir -p "$(dirname "$_exclude")" 2>/dev/null || true
-for _p in '.updatems-applied-tag' '.update-backups/' '.update-lock'; do
+for _p in '.updatems-applied-tag' '.update-backups/' '.update-lock' '.update-deferred'; do
     grep -qxF "$_p" "$_exclude" 2>/dev/null || printf '%s\n' "$_p" >> "$_exclude"
 done
 DIRTY=0
