@@ -62,6 +62,10 @@ Flow {
             required property int index
             readonly property real naturalWidth: contentItem.implicitWidth + horizontalPadding * 2
             baseWidth: root.buttonWidth > 0 ? root.buttonWidth : naturalWidth + root.justifyExtra
+            // Fitting the buttons to one line is layout, not a gesture.
+            // Animated, a freshly built row starts at full width and wraps
+            // onto a second line until the buttons have shrunk.
+            enableImplicitWidthAnimation: false
             onYChanged: {
                 if (index === 0) {
                     paletteButton.leftmost = true
