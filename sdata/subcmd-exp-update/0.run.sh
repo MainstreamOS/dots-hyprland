@@ -1448,9 +1448,28 @@ exp_apply_deferred() {
   done
   EXP_STAGING=0
   exp_commit_staged
-  rm -f "$EXP_DEFERRED_FILE"
+
+  # A copy can fail without saying so (a full disk under the backups, a
+  # rename that did not take), so each file is looked at once the set is in
+  # place. One that is not yet the release's copy stays listed for the next
+  # run or login instead of staying at the older release for good.
+  local -a left=()
+  for line in ${entries[@]+"${entries[@]}"}; do
+    IFS=$'\t' read -r op base rel <<<"$line"
+    [[ "$op" == M && -n "${rel:-}" && -f "${REPO_ROOT}/${rel}" ]] || continue
+    home=$(exp_home_path_for "$rel")
+    should_ignore "$home" && continue
+    cmp -s "${REPO_ROOT}/${rel}" "$home" || left+=("$line")
+  done
+  if (( ${#left[@]} )); then
+    printf '%s\n' "${left[@]}" >"$EXP_DEFERRED_FILE"
+    n=$(( n - ${#left[@]} ))
+    log_warning "${#left[@]} file(s) the update had left for later could not be put in place yet; they are tried again next time"
+  else
+    rm -f "$EXP_DEFERRED_FILE"
+  fi
   EXP_DEFERRED_SEEN=()
-  if (( n )); then
+  if (( n > 0 )); then
     log_success "Put in place ${n} file(s) the update had left for after it finished"
   fi
   return 0
