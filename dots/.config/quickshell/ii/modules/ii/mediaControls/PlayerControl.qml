@@ -19,7 +19,10 @@ Item { // Player instance
     property string artDownloadLocation: Directories.coverArt
     property string artFileName: Qt.md5(artUrl)
     property string artFilePath: `${artDownloadLocation}/${artFileName}`
-    property color artDominantColor: ColorUtils.mix((colorQuantizer?.colors[0] ?? (root.savedArtColor || Appearance.colors.colPrimary)), Appearance.colors.colPrimaryContainer, 0.8) || Appearance.m3colors.m3secondaryContainer
+    // A track with no art is part of the binding rather than an assignment in
+    // onArtFilePathChanged, which would break it for every track after.
+    property color artDominantColor: root.artUrl.length == 0 ? Appearance.m3colors.m3secondaryContainer
+        : (ColorUtils.mix((colorQuantizer?.colors[0] ?? (root.savedArtColor || Appearance.colors.colPrimary)), Appearance.colors.colPrimaryContainer, 0.8) || Appearance.m3colors.m3secondaryContainer)
 
     // The album color is kept beside the cached art and read as the card is
     // built. The popup builds its cards afresh every time it opens, and a
@@ -101,10 +104,8 @@ Item { // Player instance
     }
 
     onArtFilePathChanged: {
-        if (root.artUrl.length == 0) {
-            root.artDominantColor = Appearance.m3colors.m3secondaryContainer
+        if (root.artUrl.length == 0)
             return;
-        }
 
         // Binding does not work in Process
         coverArtDownloader.targetFile = root.artUrl 
