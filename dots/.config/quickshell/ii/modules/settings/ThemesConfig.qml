@@ -708,6 +708,13 @@ ContentPage {
         // Track which slug is in-flight so onExited can clear lastAppliedSlug
         // if the user just deleted the currently active theme.
         property string deletingSlug: ""
+        // The page is rebuilt on a color change and left on navigation, which
+        // ends a delete without onExited. Writes are let through again then,
+        // rather than blocked for the rest of the Settings session.
+        Component.onDestruction: {
+            if (running)
+                Config.blockWrites = false;
+        }
     }
     function deleteTheme(theme) {
         // Block the QML config adapter from racing with our config.json patch
