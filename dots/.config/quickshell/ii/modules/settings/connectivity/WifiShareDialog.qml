@@ -73,11 +73,14 @@ Popup {
             + ' nmcli -t -f NAME,TYPE connection show 2>/dev/null | while IFS= read -r line; do'
             + '   case "$line" in *:802-11-wireless) ;; *) continue ;; esac;'
             + '   name="${line%:802-11-wireless}"; name="$(printf "%s" "$name" | sed "s/\\\\\\\\:/:/g")";'
-            + '   ssid="$(nmcli -g 802-11-wireless.ssid connection show "$name" 2>/dev/null)";'
+            // Read unescaped: -g escapes ':' and '\\' by default, and the QR
+            // code has its own escaping on top, so a password with either
+            // character would reach the phone wrong.
+            + '   ssid="$(nmcli -e no -g 802-11-wireless.ssid connection show "$name" 2>/dev/null)";'
             + '   [ "$ssid" = "$target" ] || continue;'
-            + '   printf "keymgmt=%s\\n" "$(nmcli -s -g 802-11-wireless-security.key-mgmt connection show "$name" 2>/dev/null)";'
-            + '   printf "psk=%s\\n" "$(nmcli -s -g 802-11-wireless-security.psk connection show "$name" 2>/dev/null)";'
-            + '   printf "hidden=%s\\n" "$(nmcli -g 802-11-wireless.hidden connection show "$name" 2>/dev/null)";'
+            + '   printf "keymgmt=%s\\n" "$(nmcli -e no -s -g 802-11-wireless-security.key-mgmt connection show "$name" 2>/dev/null)";'
+            + '   printf "psk=%s\\n" "$(nmcli -e no -s -g 802-11-wireless-security.psk connection show "$name" 2>/dev/null)";'
+            + '   printf "hidden=%s\\n" "$(nmcli -e no -g 802-11-wireless.hidden connection show "$name" 2>/dev/null)";'
             + '   echo found=1; exit 0;'
             + ' done',
             root.ssid]
