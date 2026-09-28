@@ -25,7 +25,7 @@ declare -A OFF=(
 die() { printf 'gaming-tuning: %s\n' "$*" >&2; exit 1; }
 
 set_kernel_opt() {
-    local name="$1" want="$2" on off key line before foreign="" token="" out=() t
+    local name="$1" want="$2" on off key line before foreign="" token="" out=() t drop_prev=""
     on="${ON[$name]:-}"
     [ -n "$on" ] || die "unknown option: $name"
     off="${OFF[$name]}"
@@ -52,7 +52,7 @@ set_kernel_opt() {
         token="$on"
     elif [ -r "$STATE/$key.prev" ]; then
         token="$(cat "$STATE/$key.prev")"
-        rm -f "$STATE/$key.prev"
+        drop_prev=1
     elif [ -n "$foreign" ]; then
         # Off was asked for over a value this helper never set; it stays.
         token="$foreign"
@@ -70,6 +70,9 @@ set_kernel_opt() {
         printf '%s\n' "$before" > "$CMDLINE"
         die "the boot image could not be rebuilt, so the change was undone"
     fi
+    # Forgotten only once the machine will boot without it, so an undone
+    # change still has the person's own value to go back to.
+    if [ -n "$drop_prev" ]; then rm -f "$STATE/$key.prev"; fi
 }
 
 case "${1:-}" in
