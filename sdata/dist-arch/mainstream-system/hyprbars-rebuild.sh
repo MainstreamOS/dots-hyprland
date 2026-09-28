@@ -209,7 +209,7 @@ quarantine_stale_targets() {
         built_for=""
         [[ -r "$stamp" ]] && built_for="$(sed -n '1p' "$stamp" 2>/dev/null)"
         if [[ "$built_for" != "$hypr_ver" ]]; then
-            mv -f "$target" "$target.stale" &&                 log "quarantined $target (built for ${built_for:-unknown}, Hyprland is $hypr_ver)"
+            mv -fT "$target" "$target.stale" &&                 log "quarantined $target (built for ${built_for:-unknown}, Hyprland is $hypr_ver)"
         fi
     done
 }
@@ -369,15 +369,25 @@ git -C "$SRC_DIR" rev-parse HEAD > "$LAST_GOOD_FILE"
 BUILT_SHA="$(git -C "$SRC_DIR" rev-parse HEAD)"
 
 # Distribute. Preserve owner so Hyprland (running as the user) can read it.
+STAMP_TMP="$(mktemp)"
 for target in "${TARGETS[@]}"; do
     user_home="${target%/.local/share/hyprland/plugins/hyprbars.so}"
+    # Everything below runs as root inside folders the user owns, so a link
+    # anywhere under the home would aim these writes at a file of its choosing.
+    if [[ "$(realpath -e -- "$target" 2>/dev/null)" != "$(realpath -e -- "$user_home" 2>/dev/null)/.local/share/hyprland/plugins/hyprbars.so" ]]; then
+        log "Skipped $target: its path goes through a link"
+        continue
+    fi
     user="$(stat -c '%U' "$user_home")"
     install -m 755 -o "$user" -g "$user" "$BUILT_SO" "$target"
-    printf '%s\n%s\n' "$HYPR_VER" "$BUILT_SHA" > "$target.builtfor"
-    chown "$user:$user" "$target.builtfor"
+    # Written beside root and put in place with install, which replaces the
+    # name rather than writing through a link the user left there.
+    printf '%s\n%s\n' "$HYPR_VER" "$BUILT_SHA" > "$STAMP_TMP"
+    install -m 644 -o "$user" -g "$user" "$STAMP_TMP" "$target.builtfor"
     rm -f "$target.stale"
     log "Updated $target (owner: $user)"
 done
+rm -f "$STAMP_TMP"
 
 clear_or_recovered_status "$HYPR_VER"
 
