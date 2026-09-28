@@ -107,12 +107,16 @@ function setup_user_manager(){
   # in Settings, plus the provisioning library the helper and the installer
   # both call so a new account is built the same way the first one was.
   #
-  # No rules file: unlike removing an app, creating an account and granting it
-  # administrator is worth one authentication even for a member of wheel.
+  # Its rules file grants nothing: unlike removing an app, creating an account
+  # and granting it administrator is worth one authentication even for a member
+  # of wheel. It only stops a standard account's session from keeping an
+  # administrator's authentication for later.
   x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/user-manager" \
       /usr/local/bin/user-manager
   x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.user-manager.policy" \
       /usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/50-user-manager.rules" \
+      /usr/share/polkit-1/rules.d/50-user-manager.rules
   x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/provision-user.sh" \
       /usr/local/lib/mainstream-provision-user.sh
   x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/venv-common.sh" \

@@ -50,6 +50,7 @@ ROOT_FILES=(
     "0755|sdata/provision/dotfiles-first-login|/usr/local/bin/dotfiles-first-login"
     "0755|sdata/polkit/user-manager|/usr/local/bin/user-manager"
     "0644|sdata/polkit/org.mainstreamos.user-manager.policy|/usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy"
+    "0644|sdata/polkit/50-user-manager.rules|/usr/share/polkit-1/rules.d/50-user-manager.rules"
     "0755|sdata/polkit/app-remover|/usr/local/bin/app-remover"
     "0644|sdata/polkit/org.mainstreamos.app-remover.policy|/usr/share/polkit-1/actions/org.mainstreamos.app-remover.policy"
     "0644|sdata/polkit/50-app-remover.rules|/usr/share/polkit-1/rules.d/50-app-remover.rules"

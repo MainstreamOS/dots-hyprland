@@ -14,7 +14,8 @@
     user authenticates as an admin ONCE, then a short run of account edits
     does not re-prompt for each one. `allow_inactive` and `allow_any` keep
     the full-strength prompt, so an SSH or inactive session cannot inherit
-    that.
+    that. 50-user-manager.rules keeps it to administrators' own sessions,
+    since polkit keeps it for the whole session it was typed in.
 
     Unlike the app-remover action, no rules file grants this without a
     password. Creating an account and handing it administrator rights is

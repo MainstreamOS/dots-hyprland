@@ -1,0 +1,10 @@
+// Account changes keep an administrator's authentication for a few minutes
+// (auth_admin_keep in the policy), and polkit keeps it for the whole session
+// it was typed in. Typed into a standard account's session, to change that
+// account's picture say, it would let the account make itself an
+// administrator meanwhile, so only an administrator's own session keeps it.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.mainstreamos.user-manager" && !subject.isInGroup("wheel")) {
+        return polkit.Result.AUTH_ADMIN;
+    }
+});
