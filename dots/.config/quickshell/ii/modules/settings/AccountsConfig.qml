@@ -24,14 +24,32 @@ ContentPage {
     // message pinned forever, so it is restarted the moment work finishes.
     onBusyChanged: if (!busy) statusClearTimer.restart()
     property bool statusIsError: false
+    // user-manager comes with the root half of an update, after the dotfiles
+    // that bring this page, and a command that cannot start never reports
+    // back, so without this check the page would sit empty and say nothing.
+    property bool helperMissing: false
 
     Component.onCompleted: {
         currentUserProc.running = true
     }
 
     function refresh() {
-        accountListProc.running = false
-        accountListProc.running = true
+        helperCheck.running = false
+        helperCheck.running = true
+    }
+
+    Process {
+        id: helperCheck
+        command: ["sh", "-c", "test -x /usr/local/bin/user-manager"]
+        onExited: (code) => {
+            root.helperMissing = (code !== 0)
+            if (root.helperMissing) {
+                root.accounts = []
+                return
+            }
+            accountListProc.running = false
+            accountListProc.running = true
+        }
     }
 
     // The helper writes "ERROR: <reason>" to stderr before it exits, and that
@@ -72,7 +90,7 @@ ContentPage {
         onExited: {
             root.currentUser = currentUserProc.buf.trim()
             currentUserProc.buf = ""
-            accountListProc.running = true
+            helperCheck.running = true
         }
     }
 
@@ -789,8 +807,17 @@ ContentPage {
             }
         }
 
+        StyledText {
+            Layout.fillWidth: true
+            visible: root.helperMissing
+            wrapMode: Text.Wrap
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("Account management is not fully installed on this machine. Run an update, then come back.")
+        }
+
         ColumnLayout {
-            visible: root.accounts.length === 0
+            visible: root.accounts.length === 0 && !root.helperMissing
             Layout.fillWidth: true
             Layout.topMargin: 20; Layout.bottomMargin: 20
             spacing: 8
@@ -810,6 +837,8 @@ ContentPage {
 
     // ── Add an account ────────────────────────────────────────────────────────
     ContentSection {
+        // Every step of making an account goes through the helper.
+        visible: !root.helperMissing
         icon: "person_add"
         title: Translation.tr("Add an Account")
 

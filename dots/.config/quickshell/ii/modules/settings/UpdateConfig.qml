@@ -71,6 +71,18 @@ ContentPage {
     // in whatever language sudo complains.
     readonly property string startMarker: "@@MAINSTREAM-UPDATE-HELPER-START"
     property bool helperStarted: false
+    // A missing first line only means that when the installed helper is one
+    // that prints it. An older one, left by an update whose root half did not
+    // run, exits 1 for a failed package step too, and when it prints nothing
+    // at all only sudo's own words can say the password was wrong.
+    property bool helperMarksStart: false
+    // Two things an update can leave for later. Updating finishes with a root
+    // half (updatems-system) that installs the release's own update tools, so
+    // once a release has been applied, either copy differing from the clone's
+    // means that half never ran for it. The relogin note is left for changes
+    // that only load at login, and goes at the next login.
+    property bool systemHalfPending: false
+    property bool reloginNeeded: false
     // The launcher reports a failure to start through runningChanged alone,
     // with no exited to follow; this says whether exited already spoke.
     property bool launcherExited: false
@@ -116,7 +128,7 @@ ContentPage {
     // immediately on submit, and from this property on helper exit.
     property string pendingPassword: ""
 
-    function buildHelperArgs() {
+    function buildHelperArgs(finishing) {
         // The privileged work runs in /usr/local/bin/mainstream-update-helper
         // which writes a temporary NOPASSWD sudoers rule, runs pacman +
         // yay/paru + flatpak directly, then optionally tops up with
@@ -125,7 +137,9 @@ ContentPage {
         if (flagSkipSystem)            args.push("--skip-system");
         if (flagSkipAur)               args.push("--skip-aur");
         if (flagSkipFlatpak)           args.push("--skip-flatpak");
-        if (flagSkipDotfiles)          args.push("--skip-dotfiles");
+        // The root half only runs after the dotfiles step, so a run meant to
+        // finish it cannot skip that step.
+        if (flagSkipDotfiles && !finishing) args.push("--skip-dotfiles");
         if (flagSkipExtras)            args.push("--skip-extras");
         if (flagSkipFirmware)          args.push("--skip-firmware");
         if (flagAutoRebuildQuickshell) args.push("--auto-rebuild-quickshell");
@@ -174,21 +188,34 @@ ContentPage {
         clearProc.running = true;
     }
 
-    function startUpdate() {
+    function startUpdate(finishing) {
         if (isRunning) return;
         if (passwordField.text.length === 0) {
             outputText = Translation.tr("Enter your password to start the update.");
             return;
         }
         resetRunState();
+        // The last run may have installed a newer helper.
+        helperMarkCheck.running = true;
         // Snapshot the password and clear the visible field so it
         // doesn't sit on screen for the rest of the run.
         pendingPassword = passwordField.text;
         passwordField.text = "";
-        helperProc.command = ["bash", root.launcher, root.stateDir].concat(buildHelperArgs());
+        helperProc.command = ["bash", root.launcher, root.stateDir].concat(buildHelperArgs(finishing === true));
         helperProc.stdinEnabled = true;
         helperProc.running = true;
         isRunning = true;
+    }
+
+    // The notice sits above the password field and already asks for the
+    // password, so an empty field only takes the focus. The output is left
+    // alone, since it may be the record of the run that left this undone.
+    function finishPendingUpdate() {
+        if (passwordField.text.length === 0) {
+            passwordField.forceActiveFocus();
+            return;
+        }
+        startUpdate(true);
     }
 
     function showStopFailed() {
@@ -218,6 +245,8 @@ ContentPage {
         // the auto-scrolled viewport lands on the Summary text rather than on
         // the blank lines the log ends with.
         root.outputText = root.outputText.replace(/\s+$/, "");
+        // Whatever the run did, it may have finished what an earlier one left.
+        leftoverCheck.running = true;
         if (root.userStopped) {
             root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
             return;
@@ -227,11 +256,13 @@ ContentPage {
             return;
         }
         // sudo exits 1 when the password is wrong, and the helper never gets
-        // to print its first line. Its message is only checked as well, since
-        // it comes out in the session's language.
-        const authFailed = (exitCode === 1 && !root.helperStarted)
-            || root.outputText.indexOf("incorrect password") !== -1
+        // to print its first line. Its message comes out in the session's
+        // language, so it only settles the question for a helper that does
+        // not print that line.
+        const sudoRefused = root.outputText.indexOf("incorrect password") !== -1
             || root.outputText.indexOf("Sorry, try again") !== -1;
+        const authFailed = exitCode === 1 && !root.helperStarted
+            && (root.helperMarksStart || sudoRefused);
         if (authFailed) {
             root.outputText += "\n\n" + Translation.tr("Authentication failed — wrong password. Try again.");
             return;
@@ -244,8 +275,17 @@ ContentPage {
         // leaves the machine on its old release and must not read as success.
         if (exitCode === 3) {
             root.outputText += "\n\n" + Translation.tr("Another update was already running, so this one did not start.");
+        } else if (exitCode === 4) {
+            // The desktop's Qt pin held pacman back, so the whole transaction
+            // was refused and trying again cannot help until a rebuilt
+            // desktop package is out.
+            root.outputText += "\n\n" + Translation.tr("Nothing was changed. Arch moved to a newer Qt than this desktop is built for; the update will go through once the matching desktop update is published.");
         } else if (exitCode === 101) {
             root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
+        } else if (exitCode === 102) {
+            // The desktop files landed but the root-owned half did not, which
+            // the Finish update notice offers to complete.
+            root.outputText += "\n\n" + Translation.tr("Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.");
         } else if (exitCode === 0 || exitCode === 100) {
             root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
         } else {
@@ -325,6 +365,12 @@ ContentPage {
             root.helperStarted = true;
             return;
         }
+        // A helper too old to print that line still opens every step with a
+        // banner and starts each early refusal with ">>> ", and sudo prints
+        // neither. The record itself is the proof then, since the helper on
+        // disk may have been replaced by the very run being read.
+        if (!root.helperStarted && (line.indexOf("═══") !== -1 || line.indexOf(">>> ") === 0))
+            root.helperStarted = true;
         const at = line.indexOf(root.exitSentinel);
         if (at === -1) {
             root.queueOutput(line + "\n");
@@ -438,11 +484,45 @@ ContentPage {
         }
     }
 
+    // Asked when the page opens, before a finished record is replayed, since
+    // reading that record's end depends on it, and again as each run starts.
+    property bool markChecked: false
+    Process {
+        id: helperMarkCheck
+        running: true
+        command: ["bash", "-c", 'grep -qsF -- "$0" /usr/local/bin/mainstream-update-helper', root.startMarker]
+        onExited: (code) => {
+            root.helperMarksStart = (code === 0);
+            if (!root.markChecked) {
+                root.markChecked = true;
+                probeProc.running = true;
+            }
+        }
+    }
+
+    // Read when the page opens and after each run, since the dotfiles step of
+    // a run writes the relogin note and its root half settles the other.
+    Process {
+        id: leftoverCheck
+        running: true
+        command: ["bash", "-c",
+            'c="$HOME/.cache/dots-hyprland";'
+            + ' if [ -e "$c/.updatems-applied-tag" ] && { ! cmp -s /usr/local/bin/updatems-system "$c/sdata/update/updatems-system"'
+            + ' || ! cmp -s /usr/local/bin/mainstream-update-helper "$c/sdata/update/mainstream-update-helper"; }; then echo system; fi;'
+            + ' [ -e "${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed" ] && echo relogin; exit 0']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const found = this.text.split("\n");
+                root.systemHalfPending = found.indexOf("system") !== -1;
+                root.reloginNeeded = found.indexOf("relogin") !== -1;
+            }
+        }
+    }
+
     // Asked once when the page opens: is a run under way, and if not, is there
     // a record of the last one to show.
     Process {
         id: probeProc
-        running: true
         command: ["bash", "-c",
             'if [ -f "$1" ]; then read up _ < /proc/uptime; s="";'
             + ' [ "$(stat -c %Y "$0")" -lt "$(( $(date +%s) - ${up%.*} ))" ] && s=" rebooted";'
@@ -658,6 +738,39 @@ ContentPage {
                 onClicked: copyProc.running = true
             }
         ]
+
+        // The ordinary update finishes it: the helper runs the root half after
+        // the dotfiles step even when there is no new release to apply. Held
+        // back while a reboot is pending, since the password field is too.
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: root.systemHalfPending && !root.isRunning && !root.awaitingReboot
+            materialIcon: "update"
+            text: Translation.tr("Part of the last update did not finish. Enter your password and press Finish update to complete it.")
+
+            Item {
+                Layout.fillWidth: true
+            }
+            RippleButtonWithIcon {
+                Layout.fillWidth: false
+                buttonRadius: Appearance.rounding.small
+                colBackground: ColorUtils.transparentize(Appearance.colors.colPrimaryContainer)
+                colBackgroundHover: Appearance.colors.colPrimaryContainerHover
+                colRipple: Appearance.colors.colPrimaryContainerActive
+                materialIcon: "play_arrow"
+                mainText: Translation.tr("Finish update")
+                onClicked: root.finishPendingUpdate()
+            }
+        }
+
+        // A reboot logs in again as well, so its reminder covers this one.
+        NoticeBox {
+            Layout.fillWidth: true
+            visible: root.reloginNeeded && !root.rebootRequired
+            materialIcon: "logout"
+            text: Translation.tr("Log out and back in to finish updating.")
+        }
+
         StyledText {
             visible: root.outputTrimmed
             Layout.fillWidth: true

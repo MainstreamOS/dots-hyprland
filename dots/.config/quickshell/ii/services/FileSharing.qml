@@ -580,6 +580,19 @@ Singleton {
         onExited: code => root.helperFinished(code)
     }
 
+    Process {
+        id: helperCheck
+        property string scope: ""
+        property string message: ""
+        command: ["sh", "-c", 'test -x "$0"', root.helperPath]
+        onExited: code => {
+            // A change started since then owns the error line.
+            if (root.busyAction !== "")
+                return;
+            root.fail(helperCheck.scope, code === 0 ? helperCheck.message : Translation.tr("Run Update to finish setting up sharing."));
+        }
+    }
+
     function helperFinished(code) {
         const verb = helperProc.verb;
         const pw = helperProc.password;
@@ -598,7 +611,17 @@ Singleton {
             else if (verb === "disable")
                 root.dropPendingFolder();
         } else {
-            root.fail(helperProc.scope, root.helperMessage(verb, code, helperErr.text, helperProc.uuid));
+            const message = root.helperMessage(verb, code, helperErr.text, helperProc.uuid);
+            // pkexec answers a helper it cannot run with the same codes as a
+            // prompt that was dismissed, and the helper comes with the root
+            // half of an update, which can lag behind this page.
+            if (code === 126 || code === 127) {
+                helperCheck.scope = helperProc.scope;
+                helperCheck.message = message;
+                helperCheck.running = true;
+            } else {
+                root.fail(helperProc.scope, message);
+            }
             // Already saved means it is shown the moment the account exists.
             if ((verb === "enable" || verb === "account") && !helperProc.hadAccount && root.storedPassword !== pw)
                 root.unconfirmedPassword = pw;
