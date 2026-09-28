@@ -19,10 +19,12 @@ ColumnLayout {
     spacing: 6
 
     RowLayout {
+        id: titleRow
         Layout.fillWidth: true
         spacing: 6
-        
+
         OptionalMaterialSymbol {
+            id: titleIcon
             icon: root.icon
             iconSize: Appearance.font.pixelSize.hugeass
             transform: Scale { xScale: root.mirrorIcon ? -1 : 1; origin.x: Appearance.font.pixelSize.hugeass / 2 }
@@ -32,6 +34,13 @@ ColumnLayout {
             font.pixelSize: Appearance.font.pixelSize.larger
             font.weight: Font.Medium
             color: Appearance.colors.colOnSecondaryContainer
+            // Wraps within what the row has left rather than widening it. A
+            // page's column is as wide as its widest section, so a title longer
+            // than the column, like a display's make and model in a wide font
+            // or a long translation, pushed the whole section past the page.
+            wrapMode: Text.Wrap
+            Layout.maximumWidth: Math.max(0, titleRow.width - titleIcon.width - titleExtraContainer.implicitWidth
+                - headerExtraContainer.implicitWidth - titleRow.spacing * 4)
         }
 
         RowLayout {
