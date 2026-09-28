@@ -934,6 +934,9 @@ ContentPage {
                     newUserField.text = ""
                     newUserPassField.text = ""
                     fullNameField.text = ""
+                    // Cleared with the rest, or the next account made here
+                    // becomes an administrator without anyone choosing it.
+                    makeAdminSwitch.checked = false
                 }
                 contentItem: RowLayout {
                     anchors.centerIn: parent; spacing: 6
