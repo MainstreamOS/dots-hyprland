@@ -122,7 +122,9 @@ ContentPage {
         if (code === 126) {
             root.lastError = Translation.tr("The change was not made: authentication was cancelled.");
         } else if (code === 127) {
-            root.lastError = Translation.tr("The change was not made: the gaming stack is not fully installed.");
+            // pkexec gives 127 when authentication fails or is refused; a
+            // missing helper is caught before this runs (helperPresent).
+            root.lastError = Translation.tr("The change was not made: authentication failed.");
         } else if (code !== 0) {
             const lines = applyErr.text.trim().split("\n").filter(l => l.length > 0);
             root.lastError = lines.length > 0
