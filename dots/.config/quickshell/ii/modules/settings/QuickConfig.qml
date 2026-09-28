@@ -96,8 +96,20 @@ ContentPage {
     // and a run it owned would be killed along with it, before the steps that
     // follow the colors (terminal colors, the login background, the portal).
     // The new colors reach this page through MaterialThemeLoader's file watch.
-    function applyTheme(args) {
-        Quickshell.execDetached(["bash", "-c", `${Directories.wallpaperSwitchScriptPath} ${args}`]);
+    //
+    // Runs wait their turn, since two at once race each other to the same
+    // files and the slower one wins. A mode pick is kept until a run takes it,
+    // so a Light click cannot be lost behind a palette pick queued after it.
+    // The lock stays with the wrapper: whatever switchwall leaves running
+    // must not hold it.
+    function applyTheme(mode) {
+        Quickshell.execDetached(["bash", "-c",
+            'd="${XDG_RUNTIME_DIR:-/tmp}/quickshell-ii-theme"; mkdir -p "$d" || exit 1;'
+            + ' if [ -n "$1" ]; then printf "%s\\n" "$1" > "$d/mode"; fi;'
+            + ' exec 9>"$d/lock"; flock 9 || exit 1;'
+            + ' m=""; if [ -e "$d/mode" ]; then m=$(cat "$d/mode"); rm -f "$d/mode"; fi;'
+            + ' "$0" --noswitch ${m:+--mode "$m"} 9>&-',
+            Directories.wallpaperSwitchScriptPath, mode ?? ""]);
     }
 
     component SmallLightDarkPreferenceButton: RippleButton {
@@ -109,7 +121,7 @@ ContentPage {
         toggled: Appearance.m3colors.darkmode === dark
         colBackground: Appearance.colors.colLayer2
         onClicked: {
-            applyTheme(`--mode ${dark ? "dark" : "light"} --noswitch`);
+            applyTheme(dark ? "dark" : "light");
         }
         contentItem: Item {
             anchors.centerIn: parent
@@ -342,7 +354,7 @@ ContentPage {
                 interval: 150
                 repeat: false
                 onTriggered: {
-                    applyTheme("--noswitch");
+                    applyTheme("");
                 }
             }
             options: [
