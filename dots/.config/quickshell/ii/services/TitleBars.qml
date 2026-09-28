@@ -189,7 +189,7 @@ Singleton {
     }
 
     // Scrolling on a title bar steps its window between minimized, normal,
-    // maximized and fullscreen. On unless switched off, so an absent file
+    // and maximized. On unless switched off, so an absent file
     // reads as on. Saved beside the other title bar values and applied on
     // the same reload.
     readonly property string scrollActionsPath: `${root.customDir}/titlebars.scrollActions`
