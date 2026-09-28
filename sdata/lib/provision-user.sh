@@ -82,6 +82,21 @@ _pu_home() {  # $1 = user
     printf '%s\n' "$h"
 }
 
+# Writes into a home go through its owner's own permissions. Done as root, a
+# link the owner left at one of these paths would aim the write at any file on
+# the system, and Repair runs on homes whose owners have had every chance to
+# leave one.
+_pu_as() {  # $1 = user, rest = command
+    local u="$1"; shift
+    setpriv --reuid="$u" --regid="$(id -g "$u")" --init-groups -- "$@"
+}
+
+# Whether a Lua file already sets something up. The shipped custom files carry
+# the same lines commented out as examples, and those must not count.
+_pu_lua_has() {  # $1 = user  $2 = text  $3 = file
+    _pu_as "$1" grep -qE -- "^[[:space:]]*[^-[:space:]].*$2" "$3" 2>/dev/null
+}
+
 # The per-machine parts of a home: built rather than copied. The virtualenv
 # records absolute paths, the plugin binaries carry a build stamp good for one
 # compositor version, and the greeted marker decides whether the welcome
@@ -325,8 +340,7 @@ provision_first_run() {  # $1 = user
         return 0
     fi
     rm -f "$home/.local/state/quickshell/user/first_run.txt"
-    touch "$home/.dotfiles-pending-user-setup"
-    chown "$u:$u" "$home/.dotfiles-pending-user-setup"
+    _pu_as "$u" touch "$home/.dotfiles-pending-user-setup"
 }
 
 # Hyprland refuses a plugin whose .builtfor stamp does not name the Hyprland
@@ -343,6 +357,12 @@ provision_plugins() {  # $1 = user
     home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     dir="$home/.local/share/hyprland/plugins"
     [[ -d "$dir" ]] || { _pu_log "no plugin directory, nothing to check"; return 0; }
+    # Root deletes and installs in here, so it has to be the folder it looks
+    # like rather than a link to somewhere else.
+    if [[ "$(realpath -e -- "$dir" 2>/dev/null)" != "$(realpath -e -- "$home" 2>/dev/null)/.local/share/hyprland/plugins" ]]; then
+        _pu_warn "the plugin folder of $u goes through a link, leaving it alone"
+        return 0
+    fi
 
     # Judged exactly the way plugins.lua judges it at login: the first line of
     # each file, from the same version file the guard reads. A stamp carries
@@ -358,7 +378,9 @@ provision_plugins() {  # $1 = user
 
     for so in "$dir"/*.so; do
         [[ -e "$so" ]] || continue
-        stamp="$(head -n1 "$so.builtfor" 2>/dev/null || true)"
+        # Read as the owner, since the stamp is theirs to point at anything and
+        # its first line goes into the log.
+        stamp="$(_pu_as "$u" head -n1 -- "$so.builtfor" 2>/dev/null || true)"
         if [[ "$stamp" == "$want" ]]; then
             _pu_log "$(basename "$so"): stamped $stamp, keeping"
             continue
@@ -374,6 +396,11 @@ provision_plugins() {  # $1 = user
         for src in ${caller_home:+"$caller_home/.local/share/hyprland/plugins/$(basename "$so")"} \
                    /home/*/.local/share/hyprland/plugins/"$(basename "$so")"; do
             [[ -e "$src" ]] || continue
+            # The binary runs inside the new account's session, so it has to
+            # come from someone who could already change the system, the same
+            # rule the dotfiles clone is held to.
+            _pu_trusted_dir "$(dirname "$src")" || continue
+            [[ ! -L "$src" && ! -L "$src.builtfor" ]] || continue
             [[ "$(head -n1 "$src.builtfor" 2>/dev/null || true)" == "$want" ]] || continue
             found="$src"; break
         done
@@ -448,29 +475,26 @@ provision_desktop() {  # $1 = user
 if [[ -n "$_cjk_ime" ]]; then
     _pu_log "Configuring the $_cjk_ime input method for $u..."
     _ime_env="$home/.config/hypr/custom/env.lua"
-    if [[ -f "$_ime_env" ]] && ! grep -q 'im=fcitx' "$_ime_env"; then
-        cat >> "$_ime_env" << 'IMEENVEOF'
+    if [[ -f "$_ime_env" ]] && ! _pu_lua_has "$u" 'im=fcitx' "$_ime_env"; then
+        _pu_as "$u" tee -a "$_ime_env" >/dev/null << 'IMEENVEOF'
 hl.env({ name = "XMODIFIERS", value = "@im=fcitx" })
 hl.env({ name = "QT_IM_MODULE", value = "fcitx" })
 hl.env({ name = "QT_IM_MODULES", value = "wayland;fcitx" })
 hl.env({ name = "SDL_IM_MODULE", value = "fcitx" })
 hl.env({ name = "GLFW_IM_MODULE", value = "ibus" })
 IMEENVEOF
-        chown "$u:$u" "$_ime_env"
     fi
     _ime_execs="$home/.config/hypr/custom/execs.lua"
-    if [[ -f "$_ime_execs" ]] && ! grep -q 'fcitx5' "$_ime_execs"; then
-        echo 'hl.on("hyprland.start", function() hl.exec_cmd("fcitx5 -d") end)' >> "$_ime_execs"
-        chown "$u:$u" "$_ime_execs"
+    if [[ -f "$_ime_execs" ]] && ! _pu_lua_has "$u" 'fcitx5' "$_ime_execs"; then
+        echo 'hl.on("hyprland.start", function() hl.exec_cmd("fcitx5 -d") end)' | _pu_as "$u" tee -a "$_ime_execs" >/dev/null
     fi
     for _gtkv in gtk-3.0 gtk-4.0; do
         _gtkini="$home/.config/$_gtkv/settings.ini"
         if [[ -f "$_gtkini" ]]; then
-            grep -q '^gtk-im-module=' "$_gtkini" || sed -i '/^\[Settings\]/a gtk-im-module=fcitx' "$_gtkini"
+            _pu_as "$u" grep -q '^gtk-im-module=' "$_gtkini" || _pu_as "$u" sed -i '/^\[Settings\]/a gtk-im-module=fcitx' "$_gtkini"
         else
-            printf '[Settings]\ngtk-im-module=fcitx\n' > "$_gtkini"
+            printf '[Settings]\ngtk-im-module=fcitx\n' | _pu_as "$u" tee "$_gtkini" >/dev/null
         fi
-        chown "$u:$u" "$_gtkini"
     done
     # A profile with the engine already in the group is the difference
     # between typing at first boot and a trip through the config tool.
@@ -478,8 +502,8 @@ IMEENVEOF
     _ime_layout=us
     case "$_kb" in jp*) _ime_layout=jp ;; kr*) _ime_layout=kr ;; esac
     if [[ ! -f "$_ime_profile" ]]; then
-        install -d -o "$u" -g "$u" "$home/.config/fcitx5"
-        cat > "$_ime_profile" << IMEPROFEOF
+        _pu_as "$u" mkdir -p "$home/.config/fcitx5"
+        _pu_as "$u" tee "$_ime_profile" >/dev/null << IMEPROFEOF
 [Groups/0]
 Name=Default
 Default Layout=$_ime_layout
@@ -496,15 +520,14 @@ Layout=
 [GroupOrder]
 0=Default
 IMEPROFEOF
-        chown "$u:$u" "$_ime_profile"
     fi
 fi
 
 # Add hyprpolkitagent autostart if not already present in dotfiles
 EXECS_LUA="$home/.config/hypr/custom/execs.lua"
-if [[ -f "$EXECS_LUA" ]] && ! grep -q "hyprpolkitagent" "$EXECS_LUA"; then
+if [[ -f "$EXECS_LUA" ]] && ! _pu_lua_has "$u" 'hyprpolkitagent' "$EXECS_LUA"; then
     _pu_log "Adding hyprpolkitagent to Hyprland autostart..."
-    echo 'hl.on("hyprland.start", function() hl.exec_cmd("hyprpolkitagent") end)' >> "$EXECS_LUA"
+    echo 'hl.on("hyprland.start", function() hl.exec_cmd("hyprpolkitagent") end)' | _pu_as "$u" tee -a "$EXECS_LUA" >/dev/null
 elif [[ ! -f "$EXECS_LUA" ]]; then
     _pu_warn "Could not find $EXECS_LUA — hyprpolkitagent will not autostart."
 fi
@@ -519,8 +542,8 @@ fi
 if [[ -f /usr/local/bin/dotfiles-first-login ]]; then
     _pu_log "Deploying dotfiles-first-login first-session triggers..."
     SYSTEMD_USER_DIR="$home/.config/systemd/user"
-    mkdir -p "$SYSTEMD_USER_DIR"
-    cat > "$SYSTEMD_USER_DIR/dotfiles-first-login.service" << 'SERVICEEOF'
+    _pu_as "$u" mkdir -p "$SYSTEMD_USER_DIR"
+    _pu_as "$u" tee "$SYSTEMD_USER_DIR/dotfiles-first-login.service" >/dev/null << 'SERVICEEOF'
 [Unit]
 Description=Dotfiles first graphical login setup
 Documentation=man:systemd.service(5)
@@ -533,25 +556,23 @@ KillMode=process
 Environment=DOTFILES_FIRST_LOGIN_FOREGROUND=1
 ExecStart=/usr/local/bin/dotfiles-first-login
 SERVICEEOF
-    chown -R "$u:$u" "$SYSTEMD_USER_DIR"
 
     EXECS_LUA="$home/.config/hypr/custom/execs.lua"
-    mkdir -p "$(dirname "$EXECS_LUA")"
-    touch "$EXECS_LUA"
-    sed -i \
+    _pu_as "$u" mkdir -p "$(dirname "$EXECS_LUA")"
+    _pu_as "$u" touch "$EXECS_LUA"
+    _pu_as "$u" sed -i \
         -e '\|dotfiles-first-login.service|d' \
         -e '\|/usr/local/bin/dotfiles-first-login|d' \
         "$EXECS_LUA" 2>/dev/null || true
-    cat >> "$EXECS_LUA" << 'EXECSEOF'
+    _pu_as "$u" tee -a "$EXECS_LUA" >/dev/null << 'EXECSEOF'
 hl.on("hyprland.start", function() hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP XDG_SESSION_TYPE && systemctl --user start dotfiles-first-login.service || /usr/local/bin/dotfiles-first-login") end)
 EXECSEOF
-    chown "$u:$u" "$EXECS_LUA"
 
     # Keep an XDG autostart entry as a harmless backup for sessions that do
     # run an autostart helper.
     AUTOSTART_DIR="$home/.config/autostart"
-    mkdir -p "$AUTOSTART_DIR"
-    cat > "$AUTOSTART_DIR/dotfiles-first-login.desktop" << 'AUTOSTARTEOF'
+    _pu_as "$u" mkdir -p "$AUTOSTART_DIR"
+    _pu_as "$u" tee "$AUTOSTART_DIR/dotfiles-first-login.desktop" >/dev/null << 'AUTOSTARTEOF'
 [Desktop Entry]
 Type=Application
 Name=Dotfiles First-Login Setup
@@ -559,7 +580,6 @@ Exec=sh -c 'dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY
 X-GNOME-Autostart-enabled=true
 NoDisplay=true
 AUTOSTARTEOF
-    chown -R "$u:$u" "$AUTOSTART_DIR"
 else
     _pu_warn "dotfiles-first-login not found in /usr/local/bin — skipping first-session trigger deploy."
 fi
