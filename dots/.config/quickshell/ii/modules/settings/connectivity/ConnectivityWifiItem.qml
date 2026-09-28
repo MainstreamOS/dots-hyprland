@@ -12,6 +12,12 @@ Rectangle {
     property bool isConnecting: Network.wifiConnectTarget === root.wifiNetwork && !wifiNetwork?.active
     property bool isActive: wifiNetwork?.active ?? false
     property bool isAskingPassword: wifiNetwork?.askingPassword ?? false
+    // Leaving the page counts as Cancel: a prompt left open holds the whole
+    // list still.
+    Component.onDestruction: {
+        if (root.wifiNetwork?.askingPassword)
+            root.wifiNetwork.askingPassword = false;
+    }
     property bool expanded: false
     
     // Parse security type for display

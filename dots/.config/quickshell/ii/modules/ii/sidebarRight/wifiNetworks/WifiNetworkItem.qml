@@ -12,6 +12,22 @@ DialogListItem {
     enabled: !(Network.wifiConnectTarget === root.wifiNetwork && !wifiNetwork?.active)
 
     active: (wifiNetwork?.askingPassword || wifiNetwork?.active) ?? false
+
+    // A prompt left open holds the whole list still (Network keeps the rows
+    // in place while one is up), so closing the sidebar or losing this row
+    // counts as Cancel.
+    function dropPrompt() {
+        if (root.wifiNetwork?.askingPassword)
+            root.wifiNetwork.askingPassword = false;
+    }
+    Component.onDestruction: dropPrompt()
+    Connections {
+        target: GlobalStates
+        function onSidebarRightOpenChanged() {
+            if (!GlobalStates.sidebarRightOpen)
+                root.dropPrompt();
+        }
+    }
     onClicked: {
         Network.connectToWifiNetwork(wifiNetwork);
     }
