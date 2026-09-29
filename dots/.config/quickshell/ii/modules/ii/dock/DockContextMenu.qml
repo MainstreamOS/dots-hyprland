@@ -42,6 +42,18 @@ Item {
         menuLoader.active = false;
     }
 
+    // Every window of the app, whichever row of the menu named the workspace.
+    function moveWindowsTo(ws) {
+        // 0.55 Lua dispatch; follow = false keeps "silent" semantics.
+        for (const toplevel of root.appToplevel.toplevels) {
+            const addr = `0x${toplevel.HyprlandToplevel?.address}`;
+            Hyprland.dispatch(
+                `hl.dsp.window.move({workspace = ${ws}, follow = false, window = "address:${addr}"})`
+            );
+        }
+        root.close();
+    }
+
     Loader {
         id: menuLoader
         active: false
@@ -308,18 +320,102 @@ Item {
                                             extraVisibleCondition: wsButton.isCurrent
                                             text: Translation.tr("Current workspace")
                                         }
-                                        onClicked: {
-                                            // 0.55 Lua dispatch; follow = false keeps "silent" semantics.
-                                            const ws = wsButton.workspaceValue;
-                                            for (const toplevel of root.appToplevel.toplevels) {
-                                                const addr = `0x${toplevel.HyprlandToplevel?.address}`;
-                                                Hyprland.dispatch(
-                                                    `hl.dsp.window.move({workspace = ${ws}, follow = false, window = "address:${addr}"})`
-                                                );
+                                        onClicked: root.moveWindowsTo(wsButton.workspaceValue)
+                                    }
+                                }
+                            }
+
+                            // The workspaces given a name from the bar, wherever
+                            // they fall in the numbering, set apart from the row
+                            // above so they read as the user's own.
+                            ContextMenuSeparator {
+                                visible: WorkspaceNames.entries.length > 0
+                            }
+
+                            StyledText {
+                                visible: WorkspaceNames.entries.length > 0
+                                Layout.leftMargin: 10
+                                Layout.bottomMargin: 2
+                                text: Translation.tr("Named workspaces")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.m3colors.m3outline
+                            }
+
+                            // Five at once; with more, the sixth shows mostly cut
+                            // and the list scrolls, as the volume list above does,
+                            // so a long list cannot run the menu off the screen.
+                            StyledListView {
+                                id: namedList
+                                readonly property int maxVisible: 5
+                                visible: count > 0
+                                Layout.fillWidth: true
+                                Layout.bottomMargin: 4
+                                clip: true
+                                spacing: 0
+                                implicitWidth: 200
+                                implicitHeight: {
+                                    if (count === 0) return 0;
+                                    const per = (contentHeight + spacing) / count;
+                                    const rows = count > maxVisible ? maxVisible + 0.7 : count;
+                                    return Math.round(rows * per - spacing);
+                                }
+                                ScrollBar.vertical: StyledScrollBar {
+                                    policy: namedList.count > namedList.maxVisible ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                                }
+                                model: ScriptModel { values: WorkspaceNames.entries }
+                                // The number and name as the bar's list of named
+                                // workspaces draws them, and the one on screen
+                                // marked as it is in the row above.
+                                delegate: RippleButton {
+                                    id: namedButton
+                                    required property var modelData
+                                    readonly property bool isCurrent: namedButton.modelData.id === moveToWorkspaceBlock.activeWorkspaceId
+                                    width: namedList.width
+                                    implicitHeight: 32
+                                    buttonRadius: Appearance.rounding.small
+                                    colBackground: namedButton.isCurrent ? Appearance.colors.colSecondaryContainer
+                                        : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+                                    colBackgroundHover: namedButton.isCurrent ? Appearance.colors.colSecondaryContainerHover
+                                        : Appearance.colors.colMenuItemHover
+                                    colRipple: namedButton.isCurrent ? Appearance.colors.colSecondaryContainerActive
+                                        : Appearance.colors.colMenuItemActive
+                                    contentItem: RowLayout {
+                                        anchors {
+                                            fill: parent
+                                            leftMargin: 10
+                                            rightMargin: 14
+                                        }
+                                        spacing: 8
+                                        Rectangle {
+                                            implicitWidth: Math.max(22, namedNumber.implicitWidth + 10)
+                                            implicitHeight: 22
+                                            radius: height / 2
+                                            color: namedButton.isCurrent ? Appearance.m3colors.m3surfaceContainer
+                                                : Appearance.colors.colSecondaryContainer
+                                            StyledText {
+                                                id: namedNumber
+                                                anchors.centerIn: parent
+                                                text: String(namedButton.modelData.id)
+                                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                                color: namedButton.isCurrent ? Appearance.m3colors.m3onSurface
+                                                    : Appearance.colors.colOnSecondaryContainer
                                             }
-                                            root.close();
+                                        }
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            text: namedButton.modelData.name
+                                            horizontalAlignment: Text.AlignLeft
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            font.variableAxes: namedButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
+                                            color: namedButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
+                                            elide: Text.ElideRight
                                         }
                                     }
+                                    StyledToolTip {
+                                        extraVisibleCondition: namedButton.isCurrent
+                                        text: Translation.tr("Current workspace")
+                                    }
+                                    onClicked: root.moveWindowsTo(namedButton.modelData.id)
                                 }
                             }
                         }
