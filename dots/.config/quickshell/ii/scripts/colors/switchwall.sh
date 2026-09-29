@@ -91,6 +91,19 @@ set_sddm_background() {
 
     [[ ! -d "$sddm_theme_dir" ]] && return
 
+    # A light/dark toggle, an accent pick or a style pick keeps the wallpaper,
+    # and re-encoding it at full size and handing it through pkexec again would
+    # only produce the file that is already there. What was last copied is
+    # noted beside the other generated state, since the login theme's folder
+    # isn't this user's to write in.
+    local stamp_file="$STATE_DIR/user/generated/sddm-background.stamp"
+    local stamp
+    stamp="$(cache_key_for "$1")" || stamp=""
+    if [[ -n "$stamp" && -f "$dest" && "$(cat "$stamp_file" 2>/dev/null)" == "$stamp" ]]; then
+        return
+    fi
+    local copied=""
+
     # Convert to jpg (or copy if already jpg) using a temp file, then move into place
     local tmpfile
     tmpfile="$(mktemp /tmp/sddm-bg-XXXXXX.jpg)"
@@ -106,8 +119,9 @@ set_sddm_background() {
     # Try direct copy first, fall back to pkexec with polkit helper (no password needed)
     if cp "$tmpfile" "$dest" 2>/dev/null; then
         chmod 644 "$dest" 2>/dev/null
+        copied=1
     elif command -v sddm-bg-helper &>/dev/null; then
-        pkexec sddm-bg-helper "$tmpfile" "$dest" 2>/dev/null
+        pkexec sddm-bg-helper "$tmpfile" "$dest" 2>/dev/null && copied=1
     fi
     rm -f "$tmpfile"
 
@@ -119,11 +133,20 @@ set_sddm_background() {
         if cp "$1" "$video_dest" 2>/dev/null; then
             chmod 644 "$video_dest" 2>/dev/null
         elif command -v sddm-bg-helper &>/dev/null; then
-            pkexec sddm-bg-helper "$1" "$video_dest" 2>/dev/null
+            pkexec sddm-bg-helper "$1" "$video_dest" 2>/dev/null || copied=""
+        else
+            copied=""
         fi
     elif [[ -e "$video_dest" ]]; then
         rm -f "$video_dest" 2>/dev/null \
             || { command -v sddm-bg-helper &>/dev/null && pkexec sddm-bg-helper --clear "$video_dest" 2>/dev/null; }
+    fi
+
+    if [[ -n "$copied" && -n "$stamp" ]]; then
+        mkdir -p "${stamp_file%/*}" 2>/dev/null
+        printf '%s' "$stamp" > "$stamp_file" 2>/dev/null
+    else
+        rm -f "$stamp_file" 2>/dev/null
     fi
 }
 
