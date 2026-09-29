@@ -2,8 +2,9 @@
 # Gaming Mode entry point, bound to Super+G in Hyprland. The gamescope session
 # stack ships with this package; Steam and the 32-bit Vulkan stack are pulled on
 # first use so the base install stays lean. Writes a per-GPU gamescope-session
-# config the first time, then hands off to gaming-mode-switch to flip SDDM into
-# Steam Big Picture.
+# config the first time, then hands the switch to the session's own ending
+# (end-session.sh), which closes the desktop's apps the way logging out does
+# before gaming-mode-switch flips SDDM into Steam Big Picture.
 set -u
 
 notify() {
@@ -196,30 +197,38 @@ if (( first_entry )) && [[ -n "${gm_out:-}" ]]; then
     esac
 fi
 
-# 3. Clear any stale WAYLAND_DISPLAY/DISPLAY the outgoing Hyprland session exported
-#    into the user systemd environment, so the gamescope session (which reuses the
-#    same user manager) doesn't inherit it and try to nest. BACKEND=drm already forces
-#    KMS, but this keeps the environment clean.
-systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null || true
-
-# 4. Capture the desktop session before tearing it down so it's restored when the user
-#    returns from gaming -- the same snapshot shutdown/reboot/hibernate take. Run it
-#    synchronously while the windows are still up (the shutdown hook fires too late once
-#    the switch is under way). snapshot.sh self-gates on the session-restore toggle, so
-#    this is a no-op unless the user enabled restore in the power settings.
-snap="$HOME/.config/quickshell/ii/scripts/session/snapshot.sh"
-[[ -x "$snap" ]] && "$snap" >/dev/null 2>&1 || true
-
-# 5. The one-time resolution tip, shown on the next desktop return (see --tips), for a
+# 3. The one-time resolution tip, shown on the next desktop return (see --tips), for a
 #    first entry step 2c could not settle.
 if (( first_entry )); then
     mkdir -p "$state_dir"
     if (( res_handled )); then touch "$state_dir/res-hint-done"; else touch "$state_dir/res-hint-armed"; fi
 fi
 
-# 6. Flip the display manager into the Steam Big Picture session.
+# 4. Switch to the Steam Big Picture session. The desktop is ended the way logging
+#    out ends it (end-session.sh): the windows are recorded for the return, every app
+#    is asked to close so it can save its work or ask to, and the switch happens only
+#    once they have gone. An app that stays open cancels it, and a notification names
+#    it. The permission is checked first, so an account that may not switch at all
+#    keeps its apps.
+if ! sudo -n -l /usr/bin/gaming-mode-switch gaming >/dev/null 2>&1; then
+    notify -c "Couldn't switch sessions -- a system update may be needed. Staying on the desktop."
+    exit 1
+fi
 notify "Switching to Steam Big Picture..."
+end_session="$HOME/.config/quickshell/ii/scripts/session/end-session.sh"
+if [[ -f "$end_session" ]]; then
+    bash "$end_session" gaming
+    rc=$?
+    # 2 means a desktop older than its gaming action; that one switches the old way.
+    (( rc == 2 )) || exit "$rc"
+fi
+# The old way: record the windows, then switch at once. The gamescope session reuses
+# this user manager, so the desktop's displays are cleared from it first.
+systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null || true
+snap="$HOME/.config/quickshell/ii/scripts/session/snapshot.sh"
+[[ -x "$snap" ]] && "$snap" >/dev/null 2>&1 || true
 if ! sudo -n /usr/bin/gaming-mode-switch gaming; then
+    systemctl --user import-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null || true
     notify -c "Couldn't switch sessions -- a system update may be needed. Staying on the desktop."
     exit 1
 fi

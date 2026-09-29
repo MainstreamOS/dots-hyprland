@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Logs out, restarts or shuts down the way a session manager does: the open
-# windows are recorded for the next login, every app is asked to close so it
-# can save its work or ask to, and the session only ends once they have gone.
-# An app that stays open cancels the request, with a notification saying
-# which, rather than the session ending under it or later, when it is closed.
+# Logs out, restarts, shuts down or switches to Gaming Mode the way a session
+# manager does: the open windows are recorded for the next login, every app is
+# asked to close so it can save its work or ask to, and the session only ends
+# once they have gone. An app that stays open cancels the request, with a
+# notification saying which, rather than the session ending under it or later,
+# when it is closed.
 #
-#   end-session.sh logout|poweroff|reboot|firmware
+#   end-session.sh logout|poweroff|reboot|firmware|gaming
 #
 # It runs apart from the shell, so a shell reload while apps are closing
 # cannot drop the request.
@@ -16,7 +17,8 @@ case "$action" in
     logout)          summary_wait="Logging out";   summary_cancel="Log out canceled" ;;
     poweroff)        summary_wait="Shutting down"; summary_cancel="Shut down canceled" ;;
     reboot|firmware) summary_wait="Restarting";    summary_cancel="Restart canceled" ;;
-    *) echo "usage: end-session.sh logout|poweroff|reboot|firmware" >&2; exit 2 ;;
+    gaming)          summary_wait="Switching to Gaming Mode"; summary_cancel="Gaming Mode canceled" ;;
+    *) echo "usage: end-session.sh logout|poweroff|reboot|firmware|gaming" >&2; exit 2 ;;
 esac
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -149,4 +151,12 @@ case "$action" in
     poweroff) systemctl poweroff || loginctl poweroff ;;
     reboot)   systemctl reboot || loginctl reboot ;;
     firmware) systemctl reboot --firmware-setup || loginctl reboot --firmware-setup ;;
+    # The gamescope session reuses this user manager, so the desktop's
+    # displays leave it only now that the switch is going ahead, and come
+    # back if the switch is refused.
+    gaming)   systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null
+              sudo -n /usr/bin/gaming-mode-switch gaming || {
+                  systemctl --user import-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null
+                  notify-send -a "Mainstream" "$summary_cancel" "Couldn't switch sessions. A system update may be needed." 2>/dev/null
+                  false; } ;;
 esac || rm -f "$ENDING"
