@@ -69,6 +69,14 @@ Singleton {
         getData.running = true;
     }
 
+    // Reads the stored data only when the login keyring is already open. The
+    // read itself brings up the keyring's unlock prompt, and an autologin start
+    // (or a return from Gaming Mode) has nobody who typed the password; whatever
+    // needs a key reads it when it is actually used.
+    function fetchKeyringDataIfUnlocked() {
+        unlockedCheck.running = true;
+    }
+
     function saveKeyringData() {
         saveData.stdinEnabled = true;
         saveData.running = true;
@@ -87,6 +95,14 @@ Singleton {
                 root.dataChanged()
                 stdinEnabled = false // End input stream
             }
+        }
+    }
+
+    Process {
+        id: unlockedCheck
+        command: ["bash", "-c", `${Directories.scriptPath}/keyring/is_unlocked.sh 2> /dev/null`]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) root.fetchKeyringData();
         }
     }
 

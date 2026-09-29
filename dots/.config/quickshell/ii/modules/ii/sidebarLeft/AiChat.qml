@@ -24,6 +24,20 @@ Item {
     property var suggestionQuery: ""
     property var suggestionList: []
 
+    // The keyring is left closed at startup when nobody typed its password, so
+    // the API keys are read here, when the chat is opened or switched to a model
+    // that needs one. Asking now, while someone is using the chat, beats asking
+    // the moment the desktop appears.
+    function loadApiKeysIfNeeded() {
+        if (Ai.currentModel?.requires_key && !KeyringStorage.loaded)
+            KeyringStorage.fetchKeyringData();
+    }
+    Component.onCompleted: loadApiKeysIfNeeded()
+    Connections {
+        target: Ai
+        function onCurrentModelIdChanged() { root.loadApiKeysIfNeeded(); }
+    }
+
     onFocusChanged: focus => {
         if (focus) {
             root.inputField.forceActiveFocus();

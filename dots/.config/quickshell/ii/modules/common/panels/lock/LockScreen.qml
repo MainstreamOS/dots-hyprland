@@ -136,7 +136,7 @@ Scope {
         if (Config.options.lock.launchOnStartup && Persistent.isNewHyprlandInstance) {
             root.lock();
         } else {
-            KeyringStorage.fetchKeyringData();
+            KeyringStorage.fetchKeyringDataIfUnlocked();
         }
     }
     Connections {
