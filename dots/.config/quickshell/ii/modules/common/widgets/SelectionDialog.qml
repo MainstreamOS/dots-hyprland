@@ -20,7 +20,7 @@ Item {
     Rectangle { // Scrim
         id: scrimOverlay
         anchors.fill: parent
-        radius: Appearance.rounding.small
+        radius: RoundedCorners.on ? Appearance.rounding.small : 0
         color: Appearance.colors.colScrim
         MouseArea {
             hoverEnabled: true
@@ -33,7 +33,7 @@ Item {
     Rectangle { // The dialog
         id: dialog
         color: Appearance.m3colors.m3surfaceContainerHigh
-        radius: Appearance.rounding.normal
+        radius: RoundedCorners.on ? Appearance.rounding.normal : 0
         anchors.fill: parent
         anchors.margins: dialogMargin
         implicitHeight: dialogColumnLayout.implicitHeight

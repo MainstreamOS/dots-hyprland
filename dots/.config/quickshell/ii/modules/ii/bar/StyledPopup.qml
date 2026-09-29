@@ -120,7 +120,7 @@ LazyLoader {
             implicitWidth: root.contentItem.implicitWidth + margin * 2
             implicitHeight: root.contentItem.implicitHeight + margin * 2
             color: Appearance.m3colors.m3surfaceContainer
-            radius: Appearance.rounding.small
+            radius: RoundedCorners.on ? Appearance.rounding.small : 0
             children: [root.contentItem]
 
             border.width: 1

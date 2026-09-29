@@ -163,7 +163,7 @@ ApplicationWindow {
         Rectangle {
             // Content container
             color: Appearance.m3colors.m3surfaceContainerLow
-            radius: Appearance.rounding.windowRounding - root.contentPadding
+            radius: RoundedCorners.on ? Appearance.rounding.windowRounding - root.contentPadding : 0
             implicitHeight: contentColumn.implicitHeight
             implicitWidth: contentColumn.implicitWidth
             Layout.fillWidth: true

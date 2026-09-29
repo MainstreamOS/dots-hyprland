@@ -140,7 +140,7 @@ MouseArea {
         border.width: 1
         border.color: Appearance.colors.colLayer0Border
         color: Appearance.colors.colLayer0
-        radius: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
+        radius: RoundedCorners.on ? Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1 : 0
 
         property int calculatedRows: Math.ceil(grid.count / grid.columns)
 
@@ -158,7 +158,7 @@ MouseArea {
                 implicitWidth: quickDirColumnLayout.implicitWidth
                 implicitHeight: quickDirColumnLayout.implicitHeight
                 color: Appearance.colors.colLayer1
-                radius: wallpaperGridBackground.radius - Layout.margins
+                radius: Math.max(0, wallpaperGridBackground.radius - Layout.margins)
 
                 ColumnLayout {
                     id: quickDirColumnLayout
@@ -269,7 +269,7 @@ MouseArea {
                     Layout.margins: 4
                     Layout.bottomMargin: 0
                     Layout.fillWidth: true
-                    radius: wallpaperGridBackground.radius - Layout.margins
+                    radius: Math.max(0, wallpaperGridBackground.radius - Layout.margins)
                     materialIcon: "desktop_windows"
                     text: Translation.tr("Only this screen changes. Your colors stay with the main wallpaper.")
                 }
@@ -283,7 +283,7 @@ MouseArea {
                     onNavigateToDirectory: path => {
                         Wallpapers.setDirectory(path.length == 0 ? "/" : path);
                     }
-                    radius: wallpaperGridBackground.radius - Layout.margins
+                    radius: Math.max(0, wallpaperGridBackground.radius - Layout.margins)
                 }
 
                 Item {

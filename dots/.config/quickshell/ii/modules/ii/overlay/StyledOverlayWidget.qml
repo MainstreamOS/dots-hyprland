@@ -8,6 +8,7 @@ import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
 import qs.modules.common.widgets.widgetCanvas
+import qs.services
 
 /*
  * To make an overlay widget:
@@ -32,12 +33,12 @@ AbstractOverlayWidget {
     readonly property string materialSymbol: modelData.materialSymbol ?? "widgets"
     property string title: identifier.replace(/([A-Z])/g, " $1").replace(/^./, function(str){ return str.toUpperCase(); })
     property var persistentStateEntry: Persistent.states.overlay[identifier]
-    property real radius: Appearance.rounding.windowRounding
+    property real radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
     property real minimumWidth: contentItem.implicitWidth
     property real minimumHeight: contentItem.implicitHeight
     property real resizeMargin: 8
     property real padding: 6
-    property real contentRadius: radius - padding
+    property real contentRadius: Math.max(0, radius - padding)
 
     // Resizing
     function getXResizeDirection(x) {

@@ -98,7 +98,7 @@ LazyLoader {
             implicitWidth: popupContent.implicitWidth + margin * 2
             implicitHeight: popupContent.implicitHeight + margin * 2
             color: Appearance.m3colors.m3surfaceContainer
-            radius: Appearance.rounding.small
+            radius: RoundedCorners.on ? Appearance.rounding.small : 0
             border.width: 1
             border.color: Appearance.colors.colLayer0Border
 

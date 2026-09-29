@@ -73,7 +73,7 @@ Scope { // Scope
                 id: oskBackground
                 anchors.centerIn: parent
                 color: Appearance.colors.colLayer0
-                radius: Appearance.rounding.windowRounding
+                radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
                 property real padding: 10
                 implicitWidth: oskRowLayout.implicitWidth + padding * 2
                 implicitHeight: oskRowLayout.implicitHeight + padding * 2

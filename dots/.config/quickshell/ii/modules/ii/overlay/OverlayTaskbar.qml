@@ -18,7 +18,7 @@ Rectangle {
     implicitWidth: contentRow.implicitWidth + (padding * 2)
     implicitHeight: contentRow.implicitHeight + (padding * 2)
     color: Appearance.m3colors.m3surfaceContainer
-    radius: Appearance.rounding.large
+    radius: RoundedCorners.on ? Appearance.rounding.large : 0
     border.color: Appearance.colors.colOutlineVariant
     border.width: 1
 
@@ -133,7 +133,7 @@ Rectangle {
         colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
         colRippleToggled: Appearance.colors.colSecondaryContainerActive
 
-        buttonRadius: root.radius - (root.height - height) / 2
+        buttonRadius: Math.max(0, root.radius - (root.height - height) / 2)
 
         contentItem: Item {
             anchors.centerIn: parent

@@ -73,7 +73,7 @@ PopupWindow {
             }
 
             color: Appearance.colors.colLayer0
-            radius: Appearance.rounding.windowRounding
+            radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
             border.width: 1
             border.color: Appearance.colors.colLayer0Border
             clip: true
@@ -149,7 +149,7 @@ PopupWindow {
             active: visible
             sourceComponent: RippleButton {
                 id: backButton
-                buttonRadius: popupBackground.radius - popupBackground.padding
+                buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
                 horizontalPadding: 12
                 implicitWidth: contentItem.implicitWidth + horizontalPadding * 2
                 implicitHeight: 36
@@ -178,7 +178,7 @@ PopupWindow {
         }
         RippleButton {
             id: pinEntry
-            buttonRadius: popupBackground.radius - popupBackground.padding
+            buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
             horizontalPadding: 12
             implicitWidth: contentItem.implicitWidth + horizontalPadding * 2
             implicitHeight: 36
@@ -242,7 +242,7 @@ PopupWindow {
                 forceSpecialInteractionColumn: menuEntriesRepeater.specialInteractionColumnNeeded
                 menuEntry: modelData
 
-                buttonRadius: popupBackground.radius - popupBackground.padding
+                buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
 
                 onDismiss: root.close()
                 onOpenSubmenu: handle => {

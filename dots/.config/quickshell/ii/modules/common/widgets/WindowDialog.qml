@@ -4,6 +4,7 @@ import Quickshell
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
+import qs.services
 
 Rectangle {
     id: root
@@ -33,7 +34,7 @@ Rectangle {
         dialogBackground.implicitHeight = show ? backgroundHeight : 0
     }
 
-    radius: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
+    radius: RoundedCorners.on ? Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1 : 0
 
     MouseArea { // Clicking outside the dialog should dismiss
         anchors.fill: parent
@@ -45,13 +46,14 @@ Rectangle {
     Rectangle {
         id: dialogBackground
         anchors.horizontalCenter: parent.horizontalCenter
-        radius: Appearance.rounding.large
+        property real padding: Appearance.rounding.large
+        radius: RoundedCorners.on ? Appearance.rounding.large : 0
         color: Appearance.m3colors.m3surfaceContainerHigh // Use opaque version of layer3
         
         property real targetY: root.height / 2 - root.backgroundHeight / 2
         y: root.show ? targetY : (targetY - root.backgroundAnimationMovementDistance)
         implicitWidth: root.backgroundWidth
-        implicitHeight: contentColumn.implicitHeight + dialogBackground.radius * 2
+        implicitHeight: contentColumn.implicitHeight + dialogBackground.padding * 2
         Behavior on implicitHeight {
             NumberAnimation {
                 id: dialogBackgroundHeightAnimation
@@ -78,7 +80,7 @@ Rectangle {
             id: contentColumn
             anchors {
                 fill: parent
-                margins: dialogBackground.radius
+                margins: dialogBackground.padding
             }
             spacing: 16
             opacity: root.show ? 1 : 0

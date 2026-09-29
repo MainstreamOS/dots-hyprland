@@ -986,7 +986,7 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: root.contentPadding
         color: Appearance.m3colors.m3surfaceContainerLow
-        radius: Appearance.rounding.windowRounding - root.contentPadding
+        radius: RoundedCorners.on ? Appearance.rounding.windowRounding - root.contentPadding : 0
 
         ColumnLayout {
         anchors.fill: parent

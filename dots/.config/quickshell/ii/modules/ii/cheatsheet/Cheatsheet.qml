@@ -75,7 +75,7 @@ Scope { // Scope
                 color: Appearance.colors.colLayer0
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
-                radius: Appearance.rounding.windowRounding
+                radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
                 property real padding: 20
                 implicitWidth: cheatsheetColumnLayout.implicitWidth + padding * 2
                 implicitHeight: cheatsheetColumnLayout.implicitHeight + padding * 2

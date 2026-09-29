@@ -456,7 +456,7 @@ PanelWindow {
                 borderColor: root.windowBorderColor
                 fillColor: targeted ? root.windowFillColor : "transparent"
                 text: `${modelData.class}`
-                radius: Appearance.rounding.windowRounding
+                radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
             }
         }
 
@@ -487,7 +487,7 @@ PanelWindow {
                 borderColor: root.windowBorderColor
                 fillColor: targeted ? root.windowFillColor : "transparent"
                 text: `${modelData.namespace}`
-                radius: Appearance.rounding.windowRounding
+                radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
             }
         }
 
