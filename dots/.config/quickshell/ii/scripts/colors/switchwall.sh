@@ -555,7 +555,7 @@ switch() {
                     "Can't switch to video wallpaper" \
                     "Missing dependencies: ${missing_deps[*]}")
                 if [[ "$action" == "install_arch" ]]; then
-                    kitty -1 sudo pacman -S "${missing_deps[*]}"
+                    kitty -1 sudo pacman -S "${missing_deps[@]}"
                     if command -v mpvpaper &>/dev/null && command -v ffmpeg &>/dev/null; then
                         notify-send 'Wallpaper switcher' 'Alright, try again!' -a "Wallpaper switcher"
                     fi
