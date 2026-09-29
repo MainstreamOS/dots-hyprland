@@ -68,6 +68,8 @@ set_colormode() {
 # makes, so the title bars still follow it.
 reload_for_colormode() {
     [[ -n "${colormode_changed:-}" ]] || return 0
+    # apply-theme.sh reloads once everything it writes is in place.
+    [[ -z "${config_staged_flag:-}" ]] || return 0
     hyprctl reload >/dev/null 2>&1 9>&- &
 }
 
@@ -163,6 +165,12 @@ post_process() {
         # single-key push and leaves the login screen on the theme's wallpaper.
         if [[ -n "${keep_slideshow_flag:-}" ]]; then
             set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
+        elif [[ -n "${config_staged_flag:-}" ]]; then
+            # apply-theme.sh reloads once the rest of the theme is written, so a
+            # reload here would only be a second one landing late. The overview
+            # is told first, so it doesn't wait on the login background's encode.
+            set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height" "eval"
+            set_sddm_background "$wallpaper_path"
         else
             set_sddm_background "$wallpaper_path"
             set_scrolloverview_wallpaper "$wallpaper_path" "$screen_width" "$screen_height"
@@ -456,8 +464,9 @@ set_scrolloverview_wallpaper() {
     lua_path="${lua_path//\\/\\\\}"
     lua_path="${lua_path//\"/\\\"}"
     # A run that changed the mode reloads all the same: the title bars only
-    # take up the other mode's colors on a reload.
-    if [[ "$push_mode" == "eval" && -z "${colormode_changed:-}" ]]; then
+    # take up the other mode's colors on a reload. Under apply-theme.sh that
+    # reload is the one it makes at the end.
+    if [[ "$push_mode" == "eval" && ( -z "${colormode_changed:-}" || -n "${config_staged_flag:-}" ) ]]; then
         hyprctl eval "hl.config({ plugin = { scrolloverview = { wallpaper_path = \"$lua_path\" } } })" >/dev/null 2>&1 &
     else
         hyprctl reload >/dev/null 2>&1 &
