@@ -305,7 +305,25 @@ kill_existing_mpvpaper() {
         read -r comm < "$p/comm" 2>/dev/null || continue
         [[ "$comm" == "mpvpaper" ]] && kill -9 "${p#/proc/}" 2>/dev/null
     done
+    rm -f "$MPVPAPER_STATE" 2>/dev/null
     return 0
+}
+
+# What the running mpvpaper instances were started with: the video, the
+# options and the monitors, one per line. A run that would start exactly the
+# same again (a light/dark toggle, a style pick, re-applying the theme, the
+# shell coming up after the restore script) leaves them playing instead of
+# tearing every one down for a blank frame and a fresh decoder. The restore
+# script writes the same record. Kept in the runtime directory, so it goes with
+# the session the processes belong to.
+MPVPAPER_STATE="${XDG_RUNTIME_DIR:-/tmp}/quickshell-mpvpaper.${UID:-0}.state"
+mpvpaper_running() {
+    local p comm
+    for p in /proc/[0-9]*; do
+        read -r comm < "$p/comm" 2>/dev/null || continue
+        [[ "$comm" == "mpvpaper" ]] && return 0
+    done
+    return 1
 }
 
 create_restore_script() {
@@ -320,10 +338,12 @@ for p in /proc/[0-9]*; do
     [ "\$comm" = "mpvpaper" ] && kill -9 "\${p#/proc/}" 2>/dev/null
 done
 
-for monitor in \$(hyprctl monitors -j | jq -r '.[] | .name'); do
+monitors=\$(hyprctl monitors -j | jq -r '.[] | .name')
+for monitor in \$monitors; do
     mpvpaper -p -a FULL -o "$VIDEO_OPTS" "\$monitor" "$video_path" &
     sleep 0.1
 done
+printf '%s\\n%s\\n%s' "$video_path" "$VIDEO_OPTS" "\$monitors" > "$MPVPAPER_STATE"
 EOF
     mv "$RESTORE_SCRIPT.tmp" "$RESTORE_SCRIPT"
     chmod +x "$RESTORE_SCRIPT"
@@ -565,8 +585,6 @@ switch() {
             exit 0
         fi
 
-        kill_existing_mpvpaper
-
         if is_video "$imgpath"; then
             mkdir -p "$THUMBNAIL_DIR"
 
@@ -604,14 +622,29 @@ switch() {
             # Set video wallpaper
             local video_path="$imgpath"
             monitors=$(hyprctl monitors -j | jq -r '.[] | .name')
-            for monitor in $monitors; do
-                nohup mpvpaper -p -a FULL -o "$VIDEO_OPTS" "$monitor" "$video_path" >/dev/null 2>&1 &
-                sleep 0.1
-            done
+            local playing
+            playing="$(printf '%s\n%s\n%s' "$video_path" "$VIDEO_OPTS" "$monitors")"
+            if [[ "$(cat "$MPVPAPER_STATE" 2>/dev/null)" != "$playing" ]] || ! mpvpaper_running; then
+                kill_existing_mpvpaper
+                for monitor in $monitors; do
+                    nohup mpvpaper -p -a FULL -o "$VIDEO_OPTS" "$monitor" "$video_path" >/dev/null 2>&1 &
+                    sleep 0.1
+                done
+                printf '%s' "$playing" > "$MPVPAPER_STATE" 2>/dev/null
+            fi
 
-            # Extract first frame for color generation
+            # Extract first frame for color generation. Only when the video is
+            # not the one the thumbnail was taken from: two videos can share a
+            # name, so the source is noted beside it rather than trusted from
+            # the file name. Leaving an unchanged thumbnail alone also keeps
+            # the overview's scaled copy, which is checked against its date.
             thumbnail="$THUMBNAIL_DIR/$(basename "$imgpath").jpg"
-            ffmpeg -y -i "$imgpath" -vframes 1 "$thumbnail" 2>/dev/null
+            local thumb_src
+            thumb_src="$(cache_key_for "$imgpath")" || thumb_src=""
+            if [[ ! -s "$thumbnail" || -z "$thumb_src" || "$(cat "$thumbnail.src" 2>/dev/null)" != "$thumb_src" ]]; then
+                ffmpeg -y -i "$imgpath" -vframes 1 "$thumbnail" 2>/dev/null \
+                    && [[ -n "$thumb_src" ]] && printf '%s' "$thumb_src" > "$thumbnail.src" 2>/dev/null
+            fi
 
             # Set thumbnail path (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
@@ -621,9 +654,8 @@ switch() {
             if [ -f "$thumbnail" ]; then
                 palette_img="$thumbnail"
                 # Keyed on the video rather than the thumbnail: ffmpeg rewrites
-                # the thumbnail every run, so its mtime never matches twice and
-                # a thumbnail key could only ever miss, filling the store with
-                # entries nothing can read.
+                # the thumbnail whenever the video changes, and a key on the
+                # thumbnail would say nothing about the video it came from.
                 palette_key="$(cache_key_for "$video_path")"
                 if cache_get "$SRCCOLOR_CACHE" "$palette_key" '^#[0-9a-fA-F]{6}$'; then
                     palette_hex="$cache_value"
@@ -640,6 +672,7 @@ switch() {
                 exit 1
             fi
         else
+            kill_existing_mpvpaper
             # Handing matugen the picture means decoding it, which on anything
             # camera-sized is most of the wait. All it takes from the picture is
             # one colour, and the scheme it builds from that colour is the same

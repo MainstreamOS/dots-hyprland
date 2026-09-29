@@ -55,7 +55,11 @@ Singleton {
             root.videoApplied = true;
             // Putting a video wallpaper back as the shell comes up is not the
             // user choosing anything, and a rotation must survive a restart.
-            root.apply(Config.options.background.wallpaperPath, Appearance.m3colors.darkmode, true);
+            // Only playback is restored: the palette built from it is already
+            // on disk, and rebuilding it would also clear a picked accent.
+            // switchwall leaves the video alone when the restore script has
+            // already started it the same way.
+            Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--noswitch", "--picture-only", "--keep-slideshow"]);
         }
     }
     
