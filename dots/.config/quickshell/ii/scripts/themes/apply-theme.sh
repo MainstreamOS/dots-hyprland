@@ -408,7 +408,15 @@ else
     jq "${JQ_ARGS[@]}" "$JQ_FILTER" "$THEME_DIR/config.json" > "$TMP" \
         || { rm -f "$TMP"; rollback "failed to stage config.json"; }
 fi
+# Swapped in under the lock switchwall's own edits of config.json take, so an
+# edit that read the previous file cannot land on top of this one. Let go
+# straight away, since switchwall takes it again below.
+CONFIG_WRITE_LOCK="$XDG_RUNTIME_DIR/quickshell-config-write.${UID:-0}.lock"
+if command -v flock >/dev/null 2>&1 && { exec 6>"$CONFIG_WRITE_LOCK"; } 2>/dev/null; then
+    flock -w 5 6 2>/dev/null || true
+fi
 mv -f "$TMP" "$SHELL_CONFIG"
+exec 6>&-
 STAGED=1
 
 # switchwall gives up with a success code when there is no image to read, and

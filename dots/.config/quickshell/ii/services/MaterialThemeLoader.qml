@@ -119,7 +119,9 @@ Singleton {
     }
 
     function toggleLightDark() {
-        if (toggleLightDarkProc.running) return;
+        // A theme apply owns config.json until it finishes, and the toggle's
+        // own rewrite of it would put the previous theme's file back.
+        if (toggleLightDarkProc.running || Config.themeApplyInProgress) return;
         const currentlyDark = Appearance.m3colors.darkmode;
         toggleLightDarkProc.command = [
             Directories.wallpaperSwitchScriptPath,
