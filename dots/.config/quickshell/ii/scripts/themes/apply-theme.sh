@@ -146,8 +146,7 @@ write_last_applied "$SLUG"
 WP_FILE=""
 MODE=""
 if [ -f "$THEME_DIR/meta.json" ]; then
-    WP_FILE=$(jq -r '.wallpaperFile // ""' "$THEME_DIR/meta.json" 2>/dev/null || echo "")
-    MODE=$(jq -r '.mode // ""' "$THEME_DIR/meta.json" 2>/dev/null || echo "")
+    { IFS= read -r WP_FILE; IFS= read -r MODE; } < <(jq -r '(.wallpaperFile // "" | tostring | gsub("\n"; " ")), (.mode // "" | tostring)' "$THEME_DIR/meta.json" 2>/dev/null || true) || true
 fi
 WP_ABS=""
 [ -n "$WP_FILE" ] && [ -f "$THEME_DIR/$WP_FILE" ] && WP_ABS="$THEME_DIR/$WP_FILE"
@@ -285,6 +284,12 @@ if [ -f "$SHELL_CONFIG" ]; then
 fi
 JQ_FILTER='.'
 JQ_ARGS=()
+# What the snapshot says about itself, asked in one pass rather than a jq each.
+THEME_HAS_SLIDESHOW=""; THEME_HAS_FOLDER=""; THEME_HAS_DOCK_POS=""
+{ IFS= read -r THEME_HAS_SLIDESHOW; IFS= read -r THEME_HAS_FOLDER; IFS= read -r THEME_HAS_DOCK_POS; } < <(jq -r '
+    ((.background.slideshow // false) != false),
+    ((try (.background.slideshow | has("folder")) catch false) == true),
+    ((try (.dock | has("position")) catch false) == true)' "$THEME_DIR/config.json" 2>/dev/null || true) || true
 [ -n "$WP_ABS" ]                  && { JQ_FILTER+=' | .background.wallpaperPath = $p';            JQ_ARGS+=(--arg p "$WP_ABS"); }
 # The wallpaper slideshow belongs to whichever theme is on, so a theme saved
 # with a single wallpaper has to stop one the previous theme started. A key
@@ -292,12 +297,12 @@ JQ_ARGS=()
 # adapter keeps the value it already has when a key disappears from the file —
 # so say it outright. Themes saved before the slideshow existed land here too,
 # which is what makes them turn it off rather than inherit it.
-jq -e '.background.slideshow' "$THEME_DIR/config.json" >/dev/null 2>&1 \
+[ "$THEME_HAS_SLIDESHOW" = true ] \
     || JQ_FILTER+=' | .background.slideshow.enable = false'
 # An imported theme has had the folder stripped out of it, since it named a
 # directory in someone else's home. Empty rather than missing, so it resolves
 # to the local wallpaper directory instead of whatever this machine last used.
-jq -e '.background.slideshow | has("folder")' "$THEME_DIR/config.json" >/dev/null 2>&1 \
+[ "$THEME_HAS_FOLDER" = true ] \
     || JQ_FILTER+=' | .background.slideshow.folder = ""'
 # How see-through the bar is and what color its pills take belong to the theme,
 # so a snapshot naming none of it means stock rather than whatever the last theme
@@ -342,7 +347,7 @@ JQ_FILTER+=' | .appearance.roundCornersRestore = ({barCornerStyle: -1, fakeScree
 # absent key is the worst of both: the adapter keeps showing the dock where it
 # is while the file says nothing, so the next start moves it somewhere the user
 # never chose. Write the live edge in instead, so the screen and the file agree.
-if ! jq -e '.dock | has("position")' "$THEME_DIR/config.json" >/dev/null 2>&1; then
+if [ "$THEME_HAS_DOCK_POS" != true ]; then
     PRESERVE_DOCK_POS=$(jq -c '.dock.position // empty' "$SHELL_CONFIG" 2>/dev/null || true)
     [ -n "$PRESERVE_DOCK_POS" ] && { JQ_FILTER+=' | .dock.position = $dockpos'; JQ_ARGS+=(--argjson dockpos "$PRESERVE_DOCK_POS"); }
 fi
@@ -463,6 +468,26 @@ DECORATIONS_PY="$SCRIPT_DIR/decorations.py"
 # not how the stock set updates.
 ANIM_SRC="$THEME_DIR/animations"
 ANIM_DST="$XDG_CONFIG_HOME/hypr/hyprland/animations"
+# The steps from here to the reload each touch something of their own — the
+# decorations, the interface settings, the fonts and the window rules — and none
+# reads what another writes, so they run side by side and are waited on
+# together before the reload. Each keeps the apply lock on descriptor 9 until it
+# is done, so the next apply still waits for all of them.
+DECO_SRC=""
+if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
+    DECO_SRC="$DECO_JSON"
+    if jq -e '(has("titleBarColorLight") | not) and ((.titleBarColor // "") | type == "string" and test("^#?[0-9A-Fa-f]{6}$"))' \
+            "$DECO_JSON" >/dev/null 2>&1; then
+        DECO_STAGED=$(mktemp --tmpdir="$XDG_RUNTIME_DIR" decorations.XXXXXX.json 2>/dev/null) || DECO_STAGED=""
+        if [ -n "$DECO_STAGED" ] \
+           && jq '.titleBarColorLight = .titleBarColor
+                  | if has("titleBarOpacityLight") then . else .titleBarOpacityLight = (.titleBarOpacity // 0.5333) end' \
+                  "$DECO_JSON" > "$DECO_STAGED" 2>/dev/null; then
+            DECO_SRC="$DECO_STAGED"
+        fi
+    fi
+fi
+(
 if [ -d "$ANIM_SRC" ] && [ -f "$DECORATIONS_PY" ]; then
     SHIPPED=$(python3 "$DECORATIONS_PY" shipped "$GENERAL_CONF" 2>/dev/null | tr '\n' ' ')
     mkdir -p "$ANIM_DST"
@@ -488,46 +513,45 @@ fi
 # the stock light one. Without a color it is left to stock: the settings page
 # of that time saved the stock opacity beside every color change, so an
 # opacity alone was rarely a choice. The copy is staged outside the theme
-# folder, which stays as it was saved.
-if [ -f "$DECO_JSON" ] && [ -f "$DECORATIONS_PY" ]; then
-    DECO_SRC="$DECO_JSON"
-    if jq -e '(has("titleBarColorLight") | not) and ((.titleBarColor // "") | type == "string" and test("^#?[0-9A-Fa-f]{6}$"))' \
-            "$DECO_JSON" >/dev/null 2>&1; then
-        DECO_STAGED=$(mktemp --tmpdir="$XDG_RUNTIME_DIR" decorations.XXXXXX.json 2>/dev/null) || DECO_STAGED=""
-        if [ -n "$DECO_STAGED" ] \
-           && jq '.titleBarColorLight = .titleBarColor
-                  | if has("titleBarOpacityLight") then . else .titleBarOpacityLight = (.titleBarOpacity // 0.5333) end' \
-                  "$DECO_JSON" > "$DECO_STAGED" 2>/dev/null; then
-            DECO_SRC="$DECO_STAGED"
-        fi
-    fi
+# folder, which stays as it was saved (above, so cleanup still removes it).
+if [ -n "$DECO_SRC" ]; then
     python3 "$DECORATIONS_PY" restore "$GENERAL_CONF" "$DECO_SRC" \
         --flag-dir "$(dirname "$CUSTOM_CONF")" --push >/dev/null 2>&1 \
         || dlog "decoration restore failed"
 fi
+) &
 
 # ── 5b. Restore interface look (gsettings) if the theme snapshotted it ──────
 # Themes saved before this feature have no interface.json → live gsettings are
 # left alone. Applied AFTER switchwall so the saved App style / Icons / Mouse
 # cursor / cursor size win over matugen's icon-theme recolor.
 IFACE_JSON="$THEME_DIR/interface.json"
-if [ -f "$IFACE_JSON" ] && command -v gsettings >/dev/null 2>&1; then
-    GTK_THEME=$(jq -r '.gtkTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
-    ICON_THEME=$(jq -r '.iconTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
-    CURSOR_THEME=$(jq -r '.cursorTheme // empty' "$IFACE_JSON" 2>/dev/null || true)
-    CURSOR_SIZE=$(jq -r '.cursorSize // empty' "$IFACE_JSON" 2>/dev/null || true)
-    [ -n "$GTK_THEME" ]    && gsettings set org.gnome.desktop.interface gtk-theme    "$GTK_THEME"    2>/dev/null || true
-    [ -n "$ICON_THEME" ]   && gsettings set org.gnome.desktop.interface icon-theme   "$ICON_THEME"   2>/dev/null || true
-    [ -n "$CURSOR_THEME" ] && gsettings set org.gnome.desktop.interface cursor-theme "$CURSOR_THEME" 2>/dev/null || true
-    [ -n "$CURSOR_SIZE" ]  && gsettings set org.gnome.desktop.interface cursor-size  "$CURSOR_SIZE"  2>/dev/null || true
+if [ -f "$IFACE_JSON" ] && command -v gsettings >/dev/null 2>&1; then (
+    GTK_THEME=""; ICON_THEME=""; CURSOR_THEME=""; CURSOR_SIZE=""
+    { IFS= read -r GTK_THEME; IFS= read -r ICON_THEME; IFS= read -r CURSOR_THEME; IFS= read -r CURSOR_SIZE; } < <(jq -r '
+        (.gtkTheme, .iconTheme, .cursorTheme, .cursorSize)
+        | if . == null or . == false then "" else tostring | gsub("\n"; " ") end' "$IFACE_JSON" 2>/dev/null || true) || true
+    # Only what differs is written: every write reaches dconf and each app
+    # watching it, the same value included.
+    IFACE_NOW=$(gsettings list-recursively org.gnome.desktop.interface 2>/dev/null || true)
+    iface_set() {
+        local shown="'$2'"
+        [ "${3:-}" = raw ] && shown="$2"
+        case $'\n'"$IFACE_NOW"$'\n' in *$'\n'"org.gnome.desktop.interface $1 $shown"$'\n'*) return 0 ;; esac
+        gsettings set org.gnome.desktop.interface "$1" "$2" 2>/dev/null || true
+    }
+    [ -n "$GTK_THEME" ]    && iface_set gtk-theme    "$GTK_THEME"
+    [ -n "$ICON_THEME" ]   && iface_set icon-theme   "$ICON_THEME"
+    [ -n "$CURSOR_THEME" ] && iface_set cursor-theme "$CURSOR_THEME"
+    [ -n "$CURSOR_SIZE" ]  && iface_set cursor-size  "$CURSOR_SIZE" raw
     # gsettings alone doesn't repaint the Hyprland cursor — push it live.
     [ -n "$CURSOR_THEME" ] && [ -n "$CURSOR_SIZE" ] && command -v hyprctl >/dev/null 2>&1 \
         && hyprctl setcursor "$CURSOR_THEME" "$CURSOR_SIZE" >/dev/null 2>&1 || true
-fi
+) & fi
 
 # ── 5c. Mirror the theme's shell fonts into the GTK/Qt interface fonts ──────
 # Reads the just-restored config.json; no-op if apply-gtk-font.sh is absent.
-[ -x "$SCRIPT_DIR/apply-gtk-font.sh" ] && bash "$SCRIPT_DIR/apply-gtk-font.sh" 2>/dev/null || true
+[ -x "$SCRIPT_DIR/apply-gtk-font.sh" ] && { bash "$SCRIPT_DIR/apply-gtk-font.sh" 2>/dev/null & }
 
 # ── 5d. Restore window rules if the theme snapshotted them ──────────────────
 # Same contract as decorations: a theme saved before rules existed has no
@@ -539,11 +563,12 @@ fi
 WR_JSON="$THEME_DIR/windowrules.json"
 WINDOWRULES_PY="$XDG_CONFIG_HOME/quickshell/ii/scripts/hyprland/windowrules.py"
 if [ -f "$WR_JSON" ] && [ -f "$WINDOWRULES_PY" ]; then
-    python3 "$WINDOWRULES_PY" write \
+    { python3 "$WINDOWRULES_PY" write \
         "$XDG_CONFIG_HOME/hypr/hyprland/userrules.json" \
         "$XDG_CONFIG_HOME/hypr/hyprland/userrules.lua" --no-reload \
-        < "$WR_JSON" >/dev/null 2>&1 || dlog "window rules restore failed"
+        < "$WR_JSON" >/dev/null 2>&1 || dlog "window rules restore failed"; } &
 fi
+wait
 
 # ── 6. Re-assert last-applied (recorded up front; see write_last_applied) ──
 write_last_applied "$SLUG"
