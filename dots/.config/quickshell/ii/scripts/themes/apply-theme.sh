@@ -104,11 +104,34 @@ on_signal() {
     trap - TERM INT
     # Cancelled to start a different theme. Bash doesn't pass the signal on to
     # what it is waiting for, so the colour run has to be taken down by hand or
-    # it keeps writing the cancelled theme's palette over the incoming one.
-    [ -n "$CHILD_PID" ] && kill -TERM "$CHILD_PID" 2>/dev/null
+    # it keeps writing the cancelled theme's palette over the incoming one. The
+    # whole group goes, since matugen, its hooks and the stylesheet generator
+    # would otherwise carry on writing after switchwall itself has gone.
+    if [ -n "$CHILD_PID" ]; then
+        kill -TERM -- "-$CHILD_PID" 2>/dev/null || kill -TERM "$CHILD_PID" 2>/dev/null
+    fi
     exit 143
 }
 trap on_signal TERM INT
+
+# Runs switchwall in a session of its own, so everything it starts shares one
+# process group that on_signal can take down together. Backgrounded and waited
+# on, because bash holds trapped signals until a foreground child finishes and
+# a cancellation has to be acted on now. Descriptor 9 carries this run's lock
+# and is closed for the whole colour run: switchwall starts things that outlive
+# it — mpvpaper for a video wallpaper lasts the session — and an inherited lock
+# is never given back.
+run_switchwall() {
+    SW_RC=0
+    if command -v setsid >/dev/null 2>&1; then
+        setsid -w bash "$SWITCHWALL" "$@" 9>&- &
+    else
+        bash "$SWITCHWALL" "$@" 9>&- &
+    fi
+    CHILD_PID=$!
+    wait "$CHILD_PID" || SW_RC=$?
+    CHILD_PID=""
+}
 
 write_apply_state "applying"
 
@@ -136,6 +159,21 @@ if [ -f "$SHELL_CONFIG" ]; then
     cp -f "$SHELL_CONFIG" "$BACKUP"
 fi
 
+# The mode the desktop is in before this run, for a rollback to go back to:
+# switchwall flips the colour scheme, the widget theme and the colormode flag
+# before it builds the palette, so by the time it fails they already name the
+# theme that is being given up on.
+PREV_MODE=$(cat "$XDG_CONFIG_HOME/hypr/custom/colormode" 2>/dev/null || true)
+case "$PREV_MODE" in
+    dark|light) ;;
+    *) case "$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)" in
+           *prefer-dark*) PREV_MODE=dark ;;
+           *prefer-light*) PREV_MODE=light ;;
+           *) PREV_MODE="" ;;
+       esac ;;
+esac
+COLORS_TOUCHED=0
+
 rollback() {
     local reason="$1"
     dlog "rollback: $reason"
@@ -144,6 +182,16 @@ rollback() {
         mv -f "$BACKUP" "$SHELL_CONFIG"
         BACKUP=""
         dlog "rollback: restored backup over $SHELL_CONFIG"
+    fi
+    # A colour run that failed partway can already have written the new
+    # palette, the GTK and Hyprland colours and the icons, and flipped the
+    # mode. Putting config.json back alone would leave all of that on screen
+    # under the previous theme's name, so the colours are built again from the
+    # config just restored.
+    if [ "$COLORS_TOUCHED" = "1" ]; then
+        COLORS_TOUCHED=0
+        run_switchwall --noswitch ${PREV_MODE:+--mode "$PREV_MODE"}
+        [ "$SW_RC" -eq 0 ] || dlog "rollback: previous colours could not be rebuilt (rc=$SW_RC)"
     fi
     write_last_applied "$PREV_APPLIED"
     exit 5
@@ -376,16 +424,8 @@ EFFECTIVE_WP=$(jq -r '.background.wallpaperPath // ""' "$SHELL_CONFIG" 2>/dev/nu
 SWITCHWALL_ARGS=(--noswitch --config-staged)
 [ -n "$MODE" ] && SWITCHWALL_ARGS+=(--mode "$MODE")
 if [ -x "$SWITCHWALL" ] || [ -f "$SWITCHWALL" ]; then
-    # Backgrounded and waited on, because bash holds trapped signals until a
-    # foreground child finishes and a cancellation has to be acted on now.
-    # Descriptor 9 carries this run's lock and is closed for the whole colour
-    # run: switchwall starts things that outlive it — mpvpaper for a video
-    # wallpaper lasts the session — and an inherited lock is never given back.
-    SW_RC=0
-    bash "$SWITCHWALL" "${SWITCHWALL_ARGS[@]}" 9>&- &
-    CHILD_PID=$!
-    wait "$CHILD_PID" || SW_RC=$?
-    CHILD_PID=""
+    COLORS_TOUCHED=1
+    run_switchwall "${SWITCHWALL_ARGS[@]}"
     [ "$SW_RC" -eq 0 ] || rollback "switchwall.sh exited non-zero (rc=$SW_RC)"
 else
     rollback "switchwall.sh not found at $SWITCHWALL"
