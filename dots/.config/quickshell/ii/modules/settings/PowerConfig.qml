@@ -211,11 +211,17 @@ ContentPage {
 
             Item { Layout.fillWidth: true }
         }
+    }
+
+    // ── Session Menu ──────────────────────────────────────────────────────────
+    ContentSection {
+        icon: "power_settings_new"
+        title: Translation.tr("Session Menu")
 
         ConfigRow {
             uniform: false
             ConfigSwitch {
-                buttonIcon: "power_settings_new"
+                buttonIcon: "view_week"
                 text: Translation.tr("Simple session menu")
                 checked: Config.options.session.simpleMenu
                 onCheckedChanged: {
