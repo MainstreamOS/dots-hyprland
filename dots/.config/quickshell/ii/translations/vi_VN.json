@@ -2500,5 +2500,7 @@
   "The change was not made: authentication failed.": "The change was not made: authentication failed.",
   "Dotfiles: waiting for the desktop update that matches the new Qt.": "Dotfiles: waiting for the desktop update that matches the new Qt.",
   "waiting for the desktop update": "waiting for the desktop update",
-  "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published.": "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published."
+  "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published.": "System packages were held back: Arch moved to a newer Qt than this desktop is built for. Flatpak, Snap and the system files still updated, and the rest goes through once the matching desktop update is published.",
+  "Simple session menu": "Simple session menu",
+  "Lock, Logout, Reboot and Shutdown in one row of large buttons. Turn it off for the full menu, with Sleep, Hibernate, Task Manager and Reboot to firmware settings.": "Lock, Logout, Reboot and Shutdown in one row of large buttons. Turn it off for the full menu, with Sleep, Hibernate, Task Manager and Reboot to firmware settings."
 }

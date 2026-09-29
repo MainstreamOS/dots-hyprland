@@ -211,6 +211,21 @@ ContentPage {
 
             Item { Layout.fillWidth: true }
         }
+
+        ConfigRow {
+            uniform: false
+            ConfigSwitch {
+                buttonIcon: "power_settings_new"
+                text: Translation.tr("Simple session menu")
+                checked: Config.options.session.simpleMenu
+                onCheckedChanged: {
+                    Config.options.session.simpleMenu = checked
+                }
+                StyledToolTip {
+                    text: Translation.tr("Lock, Logout, Reboot and Shutdown in one row of large buttons. Turn it off for the full menu, with Sleep, Hibernate, Task Manager and Reboot to firmware settings.")
+                }
+            }
+        }
     }
 
     // ── Power Saving ──────────────────────────────────────────────────────────

@@ -13,5 +13,6 @@
   ["gestures"],
   ["networking"],
   ["screenRecord", "savePath"],
-  ["screenSnip", "savePath"]
+  ["screenSnip", "savePath"],
+  ["session", "simpleMenu"]
 ]

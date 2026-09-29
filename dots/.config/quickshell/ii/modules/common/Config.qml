@@ -242,6 +242,22 @@ Singleton {
         return true
     }
 
+    // The session menu became one row of four large buttons, and a file
+    // written before that has no say in it. Its owner has only known the full
+    // menu, so they keep it and can pick the simple one in Settings. A fresh
+    // install writes the key with every other default and never gets here.
+    function keepFullSessionMenu() {
+        let stored = null
+        try {
+            stored = JSON.parse(configFileView.text())
+        } catch (e) {
+            return false
+        }
+        if (!stored || stored.session?.simpleMenu !== undefined) return false
+        root.options.session.simpleMenu = false
+        return true
+    }
+
     function reloadFromFile() {
         root._reloading = true
         configFileView.reload()
@@ -362,7 +378,8 @@ Singleton {
             const seeded = root.seedBarLayoutFromLegacySwitches()
             const scrubbed = root.scrubRetiredBarModules()
             const united = root.migrateWeatherUnits()
-            if (seeded || scrubbed || united) fileWriteTimer.restart()
+            const kept = root.keepFullSessionMenu()
+            if (seeded || scrubbed || united || kept) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -924,6 +941,10 @@ Singleton {
             // were open, on the workspaces they were on.
             property JsonObject session: JsonObject {
                 property bool restoreEnabled: true
+                // The session menu as one row of Lock, Logout, Reboot and
+                // Shutdown. Off, it is the full grid with Sleep, Hibernate,
+                // Task Manager and Reboot to firmware settings as well.
+                property bool simpleMenu: true
             }
 
             property JsonObject brightness: JsonObject {

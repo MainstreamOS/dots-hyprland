@@ -99,6 +99,54 @@ Scope {
                     }
                 }
 
+                // Only the chosen menu is built, so a button it leaves out can
+                // never take the focus.
+                Loader {
+                    id: menuLoader
+                    focus: true
+                    Layout.alignment: Qt.AlignHCenter
+                    sourceComponent: Config.options.session.simpleMenu ? simpleMenuComponent : fullMenuComponent
+                }
+
+                DescriptionLabel {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: sessionRoot.subtitle
+                }
+            }
+
+            ColumnLayout {
+                anchors {
+                    top: contentColumn.bottom
+                    topMargin: 10
+                    horizontalCenter: contentColumn.horizontalCenter
+                }
+                spacing: 10
+
+                Loader {
+                    Layout.alignment: Qt.AlignHCenter
+                    active: SessionWarnings.downloadRunning
+                    visible: active
+                    sourceComponent: DescriptionLabel {
+                        text: Translation.tr("There might be a download in progress. Check your Downloads folder.")
+                        textColor: Appearance.m3colors.m3onErrorContainer
+                        color: Appearance.m3colors.m3errorContainer
+                    }
+                }
+
+                Loader {
+                    Layout.alignment: Qt.AlignHCenter
+                    active: SessionWarnings.packageManagerRunning
+                    visible: active
+                    sourceComponent: DescriptionLabel {
+                        text: Translation.tr("Your package manager is running")
+                        textColor: Appearance.m3colors.m3onErrorContainer
+                        color: Appearance.m3colors.m3errorContainer
+                    }
+                }
+            }
+
+            Component {
+                id: fullMenuComponent
                 GridLayout {
                     columns: 4
                     columnSpacing: 15
@@ -231,40 +279,79 @@ Scope {
                         KeyNavigation.left: sessionReboot
                     }
                 }
-
-                DescriptionLabel {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: sessionRoot.subtitle
-                }
             }
 
-            ColumnLayout {
-                anchors {
-                    top: contentColumn.bottom
-                    topMargin: 10
-                    horizontalCenter: contentColumn.horizontalCenter
-                }
-                spacing: 10
+            Component {
+                id: simpleMenuComponent
+                RowLayout {
+                    id: simpleRow
+                    spacing: 15
+                    // Twice the full menu's buttons, or as large as four still fit
+                    // on a narrow screen.
+                    readonly property real buttonSize: Math.max(120, Math.min(240, Math.floor((sessionMouseArea.width - 2 * 32 - 3 * spacing) / 4)))
 
-                Loader {
-                    Layout.alignment: Qt.AlignHCenter
-                    active: SessionWarnings.downloadRunning
-                    visible: active
-                    sourceComponent: DescriptionLabel {
-                        text: Translation.tr("There might be a download in progress. Check your Downloads folder.")
-                        textColor: Appearance.m3colors.m3onErrorContainer
-                        color: Appearance.m3colors.m3errorContainer
+                    SessionActionButton {
+                        id: simpleLock
+                        focus: sessionRoot.visible
+                        size: simpleRow.buttonSize
+                        buttonIcon: "lock"
+                        buttonText: Translation.tr("Lock")
+                        onClicked: {
+                            Session.lock();
+                            sessionRoot.hide();
+                        }
+                        onFocusChanged: {
+                            if (focus)
+                                sessionRoot.subtitle = buttonText;
+                        }
+                        KeyNavigation.right: simpleLogout
                     }
-                }
-
-                Loader {
-                    Layout.alignment: Qt.AlignHCenter
-                    active: SessionWarnings.packageManagerRunning
-                    visible: active
-                    sourceComponent: DescriptionLabel {
-                        text: Translation.tr("Your package manager is running")
-                        textColor: Appearance.m3colors.m3onErrorContainer
-                        color: Appearance.m3colors.m3errorContainer
+                    SessionActionButton {
+                        id: simpleLogout
+                        size: simpleRow.buttonSize
+                        buttonIcon: "logout"
+                        buttonText: Translation.tr("Logout")
+                        onClicked: {
+                            Session.logout();
+                            sessionRoot.hide();
+                        }
+                        onFocusChanged: {
+                            if (focus)
+                                sessionRoot.subtitle = buttonText;
+                        }
+                        KeyNavigation.left: simpleLock
+                        KeyNavigation.right: simpleReboot
+                    }
+                    SessionActionButton {
+                        id: simpleReboot
+                        size: simpleRow.buttonSize
+                        buttonIcon: "restart_alt"
+                        buttonText: Translation.tr("Reboot")
+                        onClicked: {
+                            Session.reboot();
+                            sessionRoot.hide();
+                        }
+                        onFocusChanged: {
+                            if (focus)
+                                sessionRoot.subtitle = buttonText;
+                        }
+                        KeyNavigation.left: simpleLogout
+                        KeyNavigation.right: simpleShutdown
+                    }
+                    SessionActionButton {
+                        id: simpleShutdown
+                        size: simpleRow.buttonSize
+                        buttonIcon: "power_settings_new"
+                        buttonText: Translation.tr("Shutdown")
+                        onClicked: {
+                            Session.poweroff();
+                            sessionRoot.hide();
+                        }
+                        onFocusChanged: {
+                            if (focus)
+                                sessionRoot.subtitle = buttonText;
+                        }
+                        KeyNavigation.left: simpleReboot
                     }
                 }
             }

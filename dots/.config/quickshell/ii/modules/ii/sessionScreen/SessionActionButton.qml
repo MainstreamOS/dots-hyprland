@@ -10,8 +10,9 @@ RippleButton {
     property string buttonText
     property bool keyboardDown: false
     property real size: 120
+    readonly property real sizeFactor: size / 120
 
-    buttonRadius: (button.focus || button.down) ? size / 2 : Appearance.rounding.verylarge
+    buttonRadius: (button.focus || button.down) ? size / 2 : Appearance.rounding.verylarge * sizeFactor
     colBackground: button.keyboardDown ? Appearance.colors.colSecondaryContainerActive : 
         button.focus ? Appearance.colors.colPrimary : 
         Appearance.colors.colSecondaryContainer
@@ -47,7 +48,7 @@ RippleButton {
         anchors.fill: parent
         color: button.colText
         horizontalAlignment: Text.AlignHCenter
-        iconSize: 45
+        iconSize: Math.round(45 * button.sizeFactor)
         text: buttonIcon
     }
 
