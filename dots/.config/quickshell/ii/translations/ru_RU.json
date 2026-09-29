@@ -1191,7 +1191,7 @@
   "Temperature unit": "Temperature unit",
   "Celsius": "Celsius",
   "Fahrenheit": "Fahrenheit",
-  "For a sharp, correct picture, open Steam → Settings → Display and turn OFF \"HDR\" and turn OFF \"Automatically Set Resolution\" (the gamescope scaling).": "For a sharp, correct picture, open Steam → Settings → Display and turn OFF \"HDR\" and turn OFF \"Automatically Set Resolution\" (the gamescope scaling).",
+  "For a correct picture, open Steam → Settings → Display and turn OFF \"Enable HDR\". \"Automatically Set Resolution\" starts off, so Steam uses your desktop's resolution.": "For a correct picture, open Steam → Settings → Display and turn OFF \"Enable HDR\". \"Automatically Set Resolution\" starts off, so Steam uses your desktop's resolution.",
   "Force kill window": "Force kill window",
   "Force specific monitor": "Force specific monitor",
   "Forked Projects": "Forked Projects",

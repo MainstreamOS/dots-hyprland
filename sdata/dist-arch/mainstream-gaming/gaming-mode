@@ -26,8 +26,8 @@ launch_setup() {  # $1 = firstrun|reconfig
 
 # --tips: Hyprland-start hook. Once, after the first Gaming Mode session returns to the
 # desktop, point the user at Steam's "Automatically Set Resolution" toggle -- it defaults
-# on and renders soft, and there is no config/env lever to flip it for them. No-op unless
-# armed (set when entering gaming below), and never shown twice.
+# on and renders soft. Armed only when step 2c below could not turn it off for them, and
+# never shown twice.
 if [[ "${1:-}" == "--tips" ]]; then
     if [[ -e "$state_dir/res-hint-armed" ]]; then
         rm -f "$state_dir/res-hint-armed"; touch "$state_dir/res-hint-done"
@@ -168,6 +168,34 @@ else
     fi
 fi
 
+# 2c. Steam's "Automatically Set Resolution" stays on until the screen has a saved
+#     mode in gamescope's mode file, and while it is on Steam draws its own screens
+#     at 1080p and stretches them across a larger display. On the first entry into
+#     Gaming Mode the screen's line goes in with the mode the desktop runs it at, the
+#     same line Steam writes when the toggle is turned off, so the picture is sharp
+#     from the start and the toggle still works both ways. A line already there,
+#     whoever wrote it, is left alone. Internal panels are skipped: Steam neither
+#     caps nor offers the toggle there.
+first_entry=0
+[[ -e "$state_dir/res-hint-done" || -e "$state_dir/res-hint-armed" ]] || first_entry=1
+res_handled=0
+if (( first_entry )) && [[ -n "${gm_out:-}" ]]; then
+    case "$gm_out" in
+        eDP*|LVDS*|DSI*) res_handled=1 ;;
+        *)
+            gm_line=$(hyprctl monitors -j 2>/dev/null | jq -r --arg n "$gm_out" '
+                .[] | select(.name == $n and (.make // "") != "" and (.model // "") != "")
+                | "\(.make) \(.model):\(.width)x\(.height)@\(.refreshRate | round) 0"' 2>/dev/null | head -n1)
+            if [[ -n "$gm_line" ]]; then
+                modes_file="${XDG_CONFIG_HOME:-$HOME/.config}/gamescope/modes.cfg"
+                mkdir -p "${modes_file%/*}" && touch "$modes_file"
+                grep -qF -- "${gm_line%%:*}:" "$modes_file" || printf '%s\n' "$gm_line" >> "$modes_file"
+                res_handled=1
+            fi
+            ;;
+    esac
+fi
+
 # 3. Clear any stale WAYLAND_DISPLAY/DISPLAY the outgoing Hyprland session exported
 #    into the user systemd environment, so the gamescope session (which reuses the
 #    same user manager) doesn't inherit it and try to nest. BACKEND=drm already forces
@@ -182,9 +210,12 @@ systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null || true
 snap="$HOME/.config/quickshell/ii/scripts/session/snapshot.sh"
 [[ -x "$snap" ]] && "$snap" >/dev/null 2>&1 || true
 
-# 5. Arm the one-time resolution tip, shown on the next desktop return (see --tips).
-[[ -e "$state_dir/res-hint-done" || -e "$state_dir/res-hint-armed" ]] || \
-    { mkdir -p "$state_dir" && touch "$state_dir/res-hint-armed"; }
+# 5. The one-time resolution tip, shown on the next desktop return (see --tips), for a
+#    first entry step 2c could not settle.
+if (( first_entry )); then
+    mkdir -p "$state_dir"
+    if (( res_handled )); then touch "$state_dir/res-hint-done"; else touch "$state_dir/res-hint-armed"; fi
+fi
 
 # 6. Flip the display manager into the Steam Big Picture session.
 notify "Switching to Steam Big Picture..."

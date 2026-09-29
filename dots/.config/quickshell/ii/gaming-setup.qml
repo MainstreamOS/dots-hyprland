@@ -183,7 +183,7 @@ ApplicationWindow {
                     NoticeBox {
                         Layout.fillWidth: true
                         materialIcon: "display_settings"
-                        text: Translation.tr("For a sharp, correct picture, open Steam → Settings → Display and turn OFF \"HDR\" and turn OFF \"Automatically Set Resolution\" (the gamescope scaling).")
+                        text: Translation.tr("For a correct picture, open Steam → Settings → Display and turn OFF \"Enable HDR\". \"Automatically Set Resolution\" starts off, so Steam uses your desktop's resolution.")
                     }
 
                     Item { Layout.fillHeight: true }
