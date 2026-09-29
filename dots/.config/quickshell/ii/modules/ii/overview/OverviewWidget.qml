@@ -225,6 +225,15 @@ Item {
 
                     property bool atInitPosition: (initX == x && initY == y)
 
+                    // Cut at its workspace's edge only while it is at rest. A
+                    // dropped window stays whole until the timer below has put
+                    // it in its new place; clipped to the workspace it left, it
+                    // would vanish until Hyprland reported the move.
+                    property bool settling: false
+                    workspaceWidth: root.workspaceImplicitWidth
+                    workspaceHeight: root.workspaceImplicitHeight
+                    restrictToWorkspace: !Drag.active && !settling
+
                     // Offset on the canvas
                     property int workspaceColIndex: getWsColumn(windowData?.workspace.id)
                     property int workspaceRowIndex: getWsRow(windowData?.workspace.id)
@@ -244,9 +253,11 @@ Item {
                     property bool workspaceAtBottomLeft: (workspaceAtLeft && workspaceAtBottom) 
                     property bool workspaceAtBottomRight: (workspaceAtRight && workspaceAtBottom) 
                     property real distanceFromLeftEdge: xWithinWorkspaceWidget
-                    property real distanceFromRightEdge: root.workspaceImplicitWidth - (xWithinWorkspaceWidget + targetWindowWidth)
+                    // Held at 0 for a window cut at the edge, whose cut corner
+                    // then takes the workspace's own radius.
+                    property real distanceFromRightEdge: Math.max(0, root.workspaceImplicitWidth - (xWithinWorkspaceWidget + targetWindowWidth))
                     property real distanceFromTopEdge: yWithinWorkspaceWidget
-                    property real distanceFromBottomEdge: root.workspaceImplicitHeight - (yWithinWorkspaceWidget + targetWindowHeight)
+                    property real distanceFromBottomEdge: Math.max(0, root.workspaceImplicitHeight - (yWithinWorkspaceWidget + targetWindowHeight))
                     property real distanceFromTopLeftCorner: Math.max(distanceFromLeftEdge, distanceFromTopEdge)
                     property real distanceFromTopRightCorner: Math.max(distanceFromRightEdge, distanceFromTopEdge)
                     property real distanceFromBottomLeftCorner: Math.max(distanceFromLeftEdge, distanceFromBottomEdge)
@@ -264,6 +275,7 @@ Item {
                         onTriggered: {
                             window.x = Math.round(xWithinWorkspaceWidget + xOffset)
                             window.y = Math.round(yWithinWorkspaceWidget + yOffset)
+                            window.settling = false
                         }
                     }
 
@@ -272,7 +284,13 @@ Item {
                     Drag.hotSpot.y: height / 2
                     MouseArea {
                         id: dragArea
-                        anchors.fill: parent
+                        // Only the part drawn on its workspace answers the
+                        // pointer, so the part cut off leaves the workspace
+                        // under it free to hover and click.
+                        x: window.visibleLeft
+                        y: window.visibleTop
+                        width: Math.max(0, window.visibleRight - window.visibleLeft)
+                        height: Math.max(0, window.visibleBottom - window.visibleTop)
                         enabled: !window.closing
                         hoverEnabled: !window.closing
                         onEntered: hovered = true // For hover color change
@@ -281,12 +299,16 @@ Item {
                         drag.target: parent
                         onPressed: (mouse) => {
                             if (mouse.button !== Qt.LeftButton) return
+                            // In the window's own coordinates, and read before
+                            // the drag lifts the cut and this area moves.
+                            const hotSpotX = mouse.x + dragArea.x
+                            const hotSpotY = mouse.y + dragArea.y
                             root.draggingFromWorkspace = windowData?.workspace.id
                             window.pressed = true
                             window.Drag.active = true
                             window.Drag.source = window
-                            window.Drag.hotSpot.x = mouse.x
-                            window.Drag.hotSpot.y = mouse.y
+                            window.Drag.hotSpot.x = hotSpotX
+                            window.Drag.hotSpot.y = hotSpotY
                             // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
                         }
                         onReleased: (mouse) => {
@@ -296,11 +318,13 @@ Item {
                             window.Drag.active = false
                             root.draggingFromWorkspace = -1
                             if (targetWorkspace !== -1 && targetWorkspace !== windowData?.workspace.id) {
+                                window.settling = true
                                 Hyprland.dispatch(`hl.dsp.window.move({ workspace = ${targetWorkspace}, follow = false, window = "address:${window.windowData?.address}" })`)
                                 updateWindowPosition.restart()
                             }
                             else {
                                 if (!window.windowData?.floating) {
+                                    window.settling = true
                                     updateWindowPosition.restart()
                                     return
                                 }

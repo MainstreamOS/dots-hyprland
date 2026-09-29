@@ -46,13 +46,26 @@ Item { // Window
     property bool hovered: false
     property bool pressed: false
 
+    // A window partly off its screen is cut at its workspace's edge instead of
+    // spilling onto the workspaces beside it; restrictToWorkspace is lifted
+    // while it is dragged, so it shows whole on its way to another one. The
+    // workspace sits at xOffset/yOffset on the grid, and x/y are this window's
+    // own place there, so the cut follows every move and animation.
+    property real workspaceWidth: 0
+    property real workspaceHeight: 0
+    readonly property bool clipped: restrictToWorkspace && workspaceWidth > 0 && workspaceHeight > 0
+    readonly property real visibleLeft: clipped ? Math.max(0, xOffset - x) : 0
+    readonly property real visibleTop: clipped ? Math.max(0, yOffset - y) : 0
+    readonly property real visibleRight: clipped ? Math.min(width, xOffset + workspaceWidth - x) : width
+    readonly property real visibleBottom: clipped ? Math.min(height, yOffset + workspaceHeight - y) : height
+
     property bool centerIcons: Config.options.overview.centerIcons
     property real iconGapRatio: 0.06
     property real iconToWindowRatio: centerIcons ? 0.35 : 0.15
     property real xwaylandIndicatorToIconRatio: 0.35
     property real iconToWindowRatioCompact: 0.6
     property string iconPath: Quickshell.iconPath(AppSearch.guessIcon(windowData?.class), "image-missing")
-    property bool compactMode: Appearance.font.pixelSize.smaller * 4 > targetWindowHeight || Appearance.font.pixelSize.smaller * 4 > targetWindowWidth
+    property bool compactMode: Appearance.font.pixelSize.smaller * 4 > visibleArea.height || Appearance.font.pixelSize.smaller * 4 > visibleArea.width
 
     property bool indicateXWayland: windowData?.xwayland ?? false
 
@@ -69,14 +82,28 @@ Item { // Window
 
     layer.enabled: true
     layer.effect: OpacityMask {
-        maskSource: Rectangle {
+        maskSource: Item {
             width: root.width
             height: root.height
-            topLeftRadius: root.topLeftRadius
-            topRightRadius: root.topRightRadius
-            bottomRightRadius: root.bottomRightRadius
-            bottomLeftRadius: root.bottomLeftRadius
+            Rectangle {
+                x: root.visibleLeft
+                y: root.visibleTop
+                width: Math.max(0, root.visibleRight - root.visibleLeft)
+                height: Math.max(0, root.visibleBottom - root.visibleTop)
+                topLeftRadius: root.topLeftRadius
+                topRightRadius: root.topRightRadius
+                bottomRightRadius: root.bottomRightRadius
+                bottomLeftRadius: root.bottomLeftRadius
+            }
         }
+    }
+
+    Item {
+        id: visibleArea
+        x: root.visibleLeft
+        y: root.visibleTop
+        width: Math.max(0, root.visibleRight - root.visibleLeft)
+        height: Math.max(0, root.visibleBottom - root.visibleTop)
     }
 
     Behavior on x {
@@ -139,7 +166,7 @@ Item { // Window
 
     // Color overlay for interactions
     Rectangle {
-        anchors.fill: parent
+        anchors.fill: visibleArea
         topLeftRadius: root.topLeftRadius
         topRightRadius: root.topRightRadius
         bottomRightRadius: root.bottomRightRadius
@@ -153,11 +180,11 @@ Item { // Window
 
     StyledImage {
         id: windowIcon
-        property real baseSize: Math.min(root.targetWindowWidth, root.targetWindowHeight)
+        property real baseSize: Math.min(visibleArea.width, visibleArea.height)
         anchors {
-            top: root.centerIcons ? undefined : parent.top
-            left: root.centerIcons ? undefined : parent.left
-            centerIn: root.centerIcons ? parent : undefined
+            top: root.centerIcons ? undefined : visibleArea.top
+            left: root.centerIcons ? undefined : visibleArea.left
+            centerIn: root.centerIcons ? visibleArea : undefined
             margins: baseSize * root.iconGapRatio
         }
         property var iconSize: {
