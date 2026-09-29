@@ -14,8 +14,8 @@ Item {
     readonly property var sectionIds: ["left", "center", "right"]
     readonly property var moduleCatalog: [
         { id: "sidebarButton", name: Translation.tr("Sidebar button"),    icon: "left_panel_open" },
-        { id: "activeWindow",  name: Translation.tr("Window title"),      icon: "select_window" },
-        { id: "activeWindowPill", name: Translation.tr("Window title (pill)"), icon: "select_window" },
+        { id: "activeWindow",  name: Translation.tr("Workspace title"),   icon: "select_window" },
+        { id: "activeWindowPill", name: Translation.tr("Workspace title (pill)"), icon: "select_window" },
         { id: "resources",     name: Translation.tr("System resources"),  icon: "monitor_heart" },
         { id: "network",       name: Translation.tr("Network speed"),     icon: "network_check" },
         { id: "media",         name: Translation.tr("Media"),             icon: "music_note" },

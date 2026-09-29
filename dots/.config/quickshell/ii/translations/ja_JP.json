@@ -2504,5 +2504,7 @@
   "Simple session menu": "Simple session menu",
   "Lock, Logout, Reboot and Shutdown in one row of large buttons. Turn it off for the full menu, with Sleep, Hibernate, Task Manager and Reboot to firmware settings.": "Lock, Logout, Reboot and Shutdown in one row of large buttons. Turn it off for the full menu, with Sleep, Hibernate, Task Manager and Reboot to firmware settings.",
   "Session Menu": "Session Menu",
-  "Named workspaces": "Named workspaces"
+  "Named workspaces": "Named workspaces",
+  "Workspace title": "Workspace title",
+  "Workspace title (pill)": "Workspace title (pill)"
 }
