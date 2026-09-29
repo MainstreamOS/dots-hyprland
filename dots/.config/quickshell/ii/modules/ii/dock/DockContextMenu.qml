@@ -273,6 +273,14 @@ Item {
                             readonly property int workspacesShown: Config.options.bar.workspaces.shown
                             readonly property int activeWorkspaceId: Hyprland.monitorFor(root.QsWindow.window?.screen)?.activeWorkspace?.id ?? 1
                             readonly property int workspaceBase: Math.max(0, Math.floor((activeWorkspaceId - 1) / workspacesShown)) * workspacesShown
+                            // Whether some window of the app is on a workspace other than the one on
+                            // screen. Only then is this workspace somewhere to move it to.
+                            readonly property bool appElsewhere: (root.appToplevel?.toplevels ?? []).some(t =>
+                                HyprlandData.clientForToplevel(t)?.workspace?.id !== moveToWorkspaceBlock.activeWorkspaceId)
+                            // The named workspaces worth offering: all of them, except the one on screen
+                            // while the app is already all there.
+                            readonly property var namedEntries: WorkspaceNames.entries.filter(entry =>
+                                entry.id !== moveToWorkspaceBlock.activeWorkspaceId || moveToWorkspaceBlock.appElsewhere)
 
                             ContextMenuItem {
                                 Layout.fillWidth: true
@@ -329,11 +337,11 @@ Item {
                             // they fall in the numbering, set apart from the row
                             // above so they read as the user's own.
                             ContextMenuSeparator {
-                                visible: WorkspaceNames.entries.length > 0
+                                visible: moveToWorkspaceBlock.namedEntries.length > 0
                             }
 
                             StyledText {
-                                visible: WorkspaceNames.entries.length > 0
+                                visible: moveToWorkspaceBlock.namedEntries.length > 0
                                 Layout.leftMargin: 10
                                 Layout.bottomMargin: 2
                                 text: Translation.tr("Named workspaces")
@@ -362,7 +370,7 @@ Item {
                                 ScrollBar.vertical: StyledScrollBar {
                                     policy: namedList.count > namedList.maxVisible ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                                 }
-                                model: ScriptModel { values: WorkspaceNames.entries }
+                                model: ScriptModel { values: moveToWorkspaceBlock.namedEntries }
                                 // The number and name as the bar's list of named
                                 // workspaces draws them, and the one on screen
                                 // marked as it is in the row above.
