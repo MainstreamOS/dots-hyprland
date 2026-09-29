@@ -223,6 +223,7 @@ Scope {
         }
 
         function collapseDrawer(refocus) {
+            appDrawer.closeContextMenu();
             appDrawer.expanded = false;
             appDrawer.searchText = "";
             Qt.callLater(() => { flickable.contentY = 0; });
@@ -233,6 +234,7 @@ Scope {
         }
 
         function resetDrawer() {
+            appDrawer.closeContextMenu();
             appDrawer.expanded = panelWindow.drawerStartsExpanded;
             appDrawer.searchText = "";
             appDrawer.folderPopupVisible = false;

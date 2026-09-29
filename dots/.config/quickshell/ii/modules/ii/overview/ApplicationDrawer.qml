@@ -62,6 +62,13 @@ Item {
     property bool _contextIsFolder: false
     property bool _contextInFolderPopup: false
 
+    // The menu draws on the window's overlay, outside the launcher's fade, and
+    // the window stays mapped once the launcher closes, so whatever puts the
+    // launcher away has to put the menu away with it.
+    function closeContextMenu() {
+        appContextMenu.close();
+    }
+
     // Folder state
     property int _dragHoverIndex: -1
     property bool folderPopupVisible: false
