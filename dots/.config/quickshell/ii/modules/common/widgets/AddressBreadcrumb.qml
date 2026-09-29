@@ -26,6 +26,7 @@ ListView {
         id: folderButton
         required property var modelData
         required property int index
+        height: root.height
         buttonText: index === 0 ? "/" : modelData
         toggled: {
             if (directory.trim() === "/") return index === 0;
