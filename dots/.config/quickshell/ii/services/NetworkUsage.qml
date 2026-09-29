@@ -33,12 +33,11 @@ Singleton {
     property string interfaceNames: ""
     property var lastReading: null
 
-    // Poll only while an ii bar holds the widget. The bars share one layout
+    // Poll only while a bar holds the widget. The bars share one layout
     // and are loaded on these same conditions, so no widget has to sign in.
     // A slot a narrow screen hides still counts: telling it apart would cost
     // more than one small read a second.
-    readonly property bool watching: Config.options.panelFamily === "ii"
-        && ObjectUtils.layoutHasEnabledWidget(Config.options.bar.layout, "network")
+    readonly property bool watching: ObjectUtils.layoutHasEnabledWidget(Config.options.bar.layout, "network")
         && GlobalStates.barOpen && !GlobalStates.screenLocked
 
     function formatRate(bytesPerSecond) {

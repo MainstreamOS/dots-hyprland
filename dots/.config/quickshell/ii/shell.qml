@@ -81,38 +81,10 @@ ShellRoot {
     }
 
 
-    // Panel families
-    property list<string> families: ["ii", "waffle"]
-    function cyclePanelFamily() {
-        const currentIndex = families.indexOf(Config.options.panelFamily)
-        const nextIndex = (currentIndex + 1) % families.length
-        Config.options.panelFamily = families[nextIndex]
-    }
-
-    component PanelFamilyLoader: LazyLoader {
-        required property string identifier
-        property bool extraCondition: true
-        active: Config.ready && Config.options.panelFamily === identifier && extraCondition
-    }
-    
-    PanelFamilyLoader {
-        identifier: "ii"
+    // Panels
+    LazyLoader {
+        active: Config.ready
         component: IllogicalImpulseFamily {}
-    }
-
-    PanelFamilyLoader {
-        identifier: "waffle"
-        component: WaffleFamily {}
-    }
-
-
-    // Shortcuts
-    IpcHandler {
-        target: "panelFamily"
-
-        function cycle(): void {
-            root.cyclePanelFamily()
-        }
     }
 
     // An update replaces the files this shell is running from, one at a time.
@@ -134,13 +106,6 @@ ShellRoot {
             Quickshell.watchFiles = true
             Quickshell.reload(true)
         }
-    }
-
-    GlobalShortcut {
-        name: "panelFamilyCycle"
-        description: "Cycles panel family"
-
-        onPressed: root.cyclePanelFamily()
     }
 }
 
