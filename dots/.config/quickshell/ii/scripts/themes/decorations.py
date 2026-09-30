@@ -162,12 +162,29 @@ def _insert_field(text, path, field, rendered):
     return head + "\n" + indent + field + " = " + rendered + tail
 
 
+# The escapes _format writes, read back the way Lua reads them, so a value
+# comes back as it was saved instead of gaining a backslash on every round trip.
+_LUA_ESCAPE = re.compile(r'\\(\d{1,3}|.)', re.S)
+_LUA_SIMPLE = {"n": "\n", "r": "\r", "t": "\t", "\\": "\\", '"': '"', "'": "'"}
+
+
+def _lua_unescape(text):
+    def one(match):
+        code = match.group(1)
+        if code.isdigit():
+            return chr(int(code)) if int(code) < 256 else match.group(0)
+        return _LUA_SIMPLE.get(code, match.group(0))
+    return _LUA_ESCAPE.sub(one, text)
+
+
 def _parse(raw, kind):
     raw = raw.strip().rstrip(",").strip()
     if kind == "bool":
         return raw.lower() in ("true", "1", "yes", "on")
     if kind == "str":
-        return raw.strip('"') or None
+        if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+            raw = _lua_unescape(raw[1:-1])
+        return raw or None
     if kind == "vec2":
         parts = raw.strip("{}").split(",")
         if len(parts) != 2:
@@ -191,8 +208,24 @@ def _format(value, kind):
         # lands in general.lua, which the compositor evaluates as Lua. Escaping
         # the quote and backslash keeps a value like `x" .. os.execute(...)`
         # a harmless string instead of an expression that breaks out of it.
-        safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
-        return '"' + safe + '"'
+        # A line break or any other control character would end the line with
+        # the string still open, which Lua refuses, and the whole file with it,
+        # so those are written as escapes too.
+        out = []
+        for ch in str(value):
+            if ch == "\\":
+                out.append("\\\\")
+            elif ch == '"':
+                out.append('\\"')
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ord(ch) < 32 or ord(ch) == 127:
+                out.append("\\%03d" % ord(ch))
+            else:
+                out.append(ch)
+        return '"' + "".join(out) + '"'
     if kind == "vec2":
         return "{%s, %s}" % (int(round(float(value[0]))), int(round(float(value[1]))))
     if kind == "int":
