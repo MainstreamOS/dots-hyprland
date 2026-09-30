@@ -283,7 +283,16 @@ ContentPage {
     }
 
     // ── Save theme (capture) ────────────────────────────────────────────────
-    Process { id: saveProc }
+    Process {
+        id: saveProc
+        // The screenshot is all the window was hidden for, so it comes back as
+        // soon as the script has one, not once the whole save is done.
+        stdout: SplitParser {
+            onRead: data => {
+                if (data.trim() === "SHOT") root.restoreWindowAfterShot()
+            }
+        }
+    }
     function beginSave(updateSlug) {
         root.pendingUpdateSlug = updateSlug || ""
         root.saveThemeName = updateSlug
@@ -421,6 +430,22 @@ ContentPage {
             `THEMES='${root.themesDir}'\n` +
             `DIR="$THEMES/$SLUG"\n` +
             `mkdir -p "$DIR"\n` +
+            // Screenshot of primary focused monitor. Always overwrites
+            // preview.png — same path whether this is a brand-new save
+            // or an Update on an existing theme. Taken before anything else,
+            // since it is the only step the window has to be out of the way
+            // for: the script says SHOT the moment it has it and Settings
+            // comes back while the rest of the save carries on.
+            `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
+            // A screen with a picture of its own shows something this machine
+            // alone has, so the shot comes from the default monitor, whose
+            // wallpaper the theme's colors come from.
+            `QSC="\${qsConfig:-ii}"\n` +
+            `if [ -n "$FOCUSED" ] && [ "$(qs -c "$QSC" ipc call monitorWallpapers hasPicture "$FOCUSED" 2>/dev/null)" = "true" ]; then\n` +
+            `    FOCUSED=$(qs -c "$QSC" ipc call monitorWallpapers defaultMonitor 2>/dev/null)\n` +
+            `fi\n` +
+            `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
+            `echo SHOT\n` +
             // Snapshot the live config but strip user-level meta-state that
             // shouldn't ride along with a theme:
             //   - appearance.themeSchedule  (Day/Night picks span themes by
@@ -500,10 +525,6 @@ ContentPage {
                          `done\n` +
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
-            // Screenshot of primary focused monitor. Always overwrites
-            // preview.png — same path whether this is a brand-new save
-            // or an Update on an existing theme.
-            //
             // Downscaled on the way out rather than stored at monitor
             // resolution. Nothing ever draws this larger than the save card,
             // so a native-resolution grim was several megabytes and a few
@@ -511,15 +532,7 @@ ContentPage {
             // the page and carried into every export. `>` only ever shrinks, so
             // a small monitor's shot is left alone. If magick isn't there the
             // full-size shot stays rather than the save losing its preview.
-            `FOCUSED=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n1)\n` +
-            // A screen with a picture of its own shows something this machine
-            // alone has, so the shot comes from the default monitor, whose
-            // wallpaper the theme's colors come from.
-            `QSC="\${qsConfig:-ii}"\n` +
-            `if [ -n "$FOCUSED" ] && [ "$(qs -c "$QSC" ipc call monitorWallpapers hasPicture "$FOCUSED" 2>/dev/null)" = "true" ]; then\n` +
-            `    FOCUSED=$(qs -c "$QSC" ipc call monitorWallpapers defaultMonitor 2>/dev/null)\n` +
-            `fi\n` +
-            `if [ -n "$FOCUSED" ]; then grim -o "$FOCUSED" "$DIR/preview.png"; else grim "$DIR/preview.png"; fi\n` +
+            // The shot itself is taken first thing, above.
             `magick "$DIR/preview.png" -resize ${ThemeLibrary.previewMaxDimension}x${ThemeLibrary.previewMaxDimension}\\> "$DIR/preview.png" 2>/dev/null || true\n` +
             // Millisecond resolution so back-to-back Update saves (within
             // the same wall-clock second) still produce a distinct
