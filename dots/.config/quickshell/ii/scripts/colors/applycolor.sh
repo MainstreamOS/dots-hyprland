@@ -40,6 +40,21 @@ colorstrings=$(cat $STATE_DIR/user/generated/material_colors.scss | cut -d: -f2 
 IFS=$'\n'
 colorlist=($colornames)     # Array of color names
 colorvalues=($colorstrings) # Array of color values
+unset IFS
+
+# The whole palette as one sed script, so each template is rewritten in a
+# single pass rather than by one process per colour.
+palette_sed=""
+for i in "${!colorlist[@]}"; do
+  palette_sed+="s/${colorlist[$i]} #/${colorvalues[$i]#\#}/g"$'\n'
+done
+
+# The terminal files are only rebuilt, and the terminals only told, when what
+# they are built from has changed: a toggle under forceDarkMode or an accent
+# pick that lands on the same terminal palette has nothing new to show them.
+term_source_file="$STATE_DIR/user/generated/terminal/.source"
+term_source="$(cat "$STATE_DIR/user/generated/material_colors.scss" \
+  "$SCRIPT_DIR/terminal/kitty-theme.conf" "$SCRIPT_DIR/terminal/sequences.txt" 2>/dev/null | cksum)"
 
 apply_kitty() {  
   # Check if terminal escape sequence template exists
@@ -51,18 +66,16 @@ apply_kitty() {
   mkdir -p "$STATE_DIR"/user/generated/terminal
   cp "$SCRIPT_DIR/terminal/kitty-theme.conf" "$STATE_DIR"/user/generated/terminal/kitty-theme.conf
   # Apply colors
-  for i in "${!colorlist[@]}"; do
-    sed -i "s/${colorlist[$i]} #/${colorvalues[$i]#\#}/g" "$STATE_DIR"/user/generated/terminal/kitty-theme.conf
-  done
+  sed -i "$palette_sed" "$STATE_DIR"/user/generated/terminal/kitty-theme.conf
 
   # Reload. pgrep/pidof read every /proc/*/cmdline and hang while any task
   # sits wedged in the kernel holding its mm lock; /proc/*/comm reads don't.
-  local p comm kitty_pids=""
+  local p comm kitty_pids=()
   for p in /proc/[0-9]*; do
     read -r comm < "$p/comm" 2>/dev/null || continue
-    [[ "$comm" == "kitty" ]] && kitty_pids="$kitty_pids ${p#/proc/}"
+    [[ "$comm" == "kitty" ]] && kitty_pids+=("${p#/proc/}")
   done
-  [[ -n "$kitty_pids" ]] && kill -SIGUSR1 $kitty_pids
+  [[ ${#kitty_pids[@]} -gt 0 ]] && kill -SIGUSR1 "${kitty_pids[@]}"
   return 0
 }
 
@@ -92,11 +105,7 @@ apply_anyterm() {
   mkdir -p "$STATE_DIR"/user/generated/terminal
   cp "$SCRIPT_DIR/terminal/sequences.txt" "$STATE_DIR"/user/generated/terminal/sequences.txt
   # Apply colors
-  for i in "${!colorlist[@]}"; do
-    sed -i "s/${colorlist[$i]} #/${colorvalues[$i]#\#}/g" "$STATE_DIR"/user/generated/terminal/sequences.txt
-  done
-
-  sed -i "s/\$alpha/$term_alpha/g" "$STATE_DIR/user/generated/terminal/sequences.txt"
+  sed -i -e "$palette_sed" -e "s/\$alpha/$term_alpha/g" "$STATE_DIR"/user/generated/terminal/sequences.txt
 
   for file in /dev/pts/*; do
     if [[ $file =~ ^/dev/pts/[0-9]+$ ]]; then
@@ -119,12 +128,16 @@ apply_kvantum() {
 }
 
 apply_term() {
+  if [[ -n "$term_source" && "$(cat "$term_source_file" 2>/dev/null)" == "$term_source" ]]; then
+    return 0
+  fi
   apply_anyterm &
   apply_kitty &
   apply_ghostty &
   # Keep apply_term alive until its children finish, otherwise the
   # outer flock releases before apply_kitty's cp+sed runs.
   wait
+  mkdir -p "${term_source_file%/*}" && printf '%s' "$term_source" > "$term_source_file"
 }
 
 # Check if terminal theming is enabled in config
