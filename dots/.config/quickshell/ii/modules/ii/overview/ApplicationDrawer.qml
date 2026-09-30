@@ -728,69 +728,32 @@ Item {
         }
     }
 
-    // ── Context Menu (Popup — matches TaskList.qml style) ──────────
-    Popup {
+    // ── Context Menu (the shared context menu) ──────────
+    ContextMenuPopup {
         id: appContextMenu
-        padding: 0
-        background: Item {
-            StyledRectangularShadow { target: menuBg }
-            Rectangle {
-                id: menuBg
-                anchors.fill: parent
-                color: Appearance.m3colors.m3surfaceContainer
-                radius: Appearance.rounding.normal
-            }
-        }
 
         contentItem: ColumnLayout {
             spacing: 0
 
             // ── App options ─────────────────────────────
             // Pin / Unpin to dock
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(pinRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: !root._contextIsFolder && !root._contextInFolderPopup
-                buttonRadius: Appearance.rounding.small
+                iconName: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
+                label: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "")
+                    ? Translation.tr("Unpin from dock")
+                    : Translation.tr("Pin to dock")
                 onClicked: {
                     TaskbarApps.togglePin(root.contextMenuApp.id)
                     appContextMenu.close()
                 }
-                contentItem: RowLayout {
-                    id: pinRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "")
-                            ? Translation.tr("Unpin from dock")
-                            : Translation.tr("Pin to dock")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
-                }
             }
 
             // ── Folder options ──────────────────────────
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(renameRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: root._contextIsFolder
-                buttonRadius: Appearance.rounding.small
+                iconName: "edit"
+                label: Translation.tr("Rename folder")
                 onClicked: {
                     root._pendingFolderRenameId = root.contextMenuApp.id
                     root._pendingFolderApp1Id = ""
@@ -798,210 +761,63 @@ Item {
                     root.folderNameDialogVisible = true
                     appContextMenu.close()
                 }
-                contentItem: RowLayout {
-                    id: renameRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: "edit"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Rename folder")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
-                }
             }
 
             // Pin / Unpin folder to dock
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(folderDockPinRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: root._contextIsFolder
-                buttonRadius: Appearance.rounding.small
+                iconName: TaskbarApps.isFolderPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
+                label: TaskbarApps.isFolderPinned(root.contextMenuApp?.id ?? "")
+                    ? Translation.tr("Unpin from dock")
+                    : Translation.tr("Pin to dock")
                 onClicked: {
                     TaskbarApps.toggleFolderPin(root.contextMenuApp.id)
                     appContextMenu.close()
                 }
-                contentItem: RowLayout {
-                    id: folderDockPinRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: TaskbarApps.isFolderPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: TaskbarApps.isFolderPinned(root.contextMenuApp?.id ?? "")
-                            ? Translation.tr("Unpin from dock")
-                            : Translation.tr("Pin to dock")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
-                }
             }
 
-            // Separator
-            Item {
-                implicitHeight: 9
-                Layout.fillWidth: true
+            ContextMenuSeparator {
                 visible: root._contextIsFolder
-                Rectangle {
-                    anchors {
-                        left: parent.left; right: parent.right
-                        verticalCenter: parent.verticalCenter
-                        leftMargin: 10; rightMargin: 10
-                    }
-                    implicitHeight: 1
-                    color: ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.7)
-                }
             }
 
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(deleteRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: root._contextIsFolder
-                buttonRadius: Appearance.rounding.small
+                iconName: "delete"
+                label: Translation.tr("Delete folder")
                 onClicked: {
                     AppFolderManager.deleteFolder(root.contextMenuApp.id)
                     appContextMenu.close()
-                }
-                contentItem: RowLayout {
-                    id: deleteRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: "delete"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Delete folder")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
                 }
             }
 
             // ── Folder-popup app options ──────────────────
             // Pin / Unpin (inside folder popup)
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(folderPinRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: root._contextInFolderPopup
-                buttonRadius: Appearance.rounding.small
+                iconName: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
+                label: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "")
+                    ? Translation.tr("Unpin from dock")
+                    : Translation.tr("Pin to dock")
                 onClicked: {
                     TaskbarApps.togglePin(root.contextMenuApp.id)
                     appContextMenu.close()
                 }
-                contentItem: RowLayout {
-                    id: folderPinRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "") ? "keep_off" : "keep"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: TaskbarApps.isPinned(root.contextMenuApp?.id ?? "")
-                            ? Translation.tr("Unpin from dock")
-                            : Translation.tr("Pin to dock")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
-                }
             }
 
-            // Separator
-            Item {
-                implicitHeight: 9
-                Layout.fillWidth: true
+            ContextMenuSeparator {
                 visible: root._contextInFolderPopup
-                Rectangle {
-                    anchors {
-                        left: parent.left; right: parent.right
-                        verticalCenter: parent.verticalCenter
-                        leftMargin: 10; rightMargin: 10
-                    }
-                    implicitHeight: 1
-                    color: ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.7)
-                }
             }
 
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(removeRow.implicitWidth + 20, 160)
+            ContextMenuItem {
                 visible: root._contextInFolderPopup
-                buttonRadius: Appearance.rounding.small
+                iconName: "folder_off"
+                label: Translation.tr("Remove from folder")
                 onClicked: {
                     if (root.openFolder) {
                         AppFolderManager.removeAppFromFolder(
                             root.openFolder.id, root.contextMenuApp.id)
                     }
                     appContextMenu.close()
-                }
-                contentItem: RowLayout {
-                    id: removeRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: "folder_off"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Remove from folder")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
                 }
             }
         }

@@ -163,9 +163,8 @@ ContentPage {
     // One instance for the whole grid, pointed at whichever card was right
     // clicked, drawn the way the shell draws its other context menus.
     property var menuTheme: null
-    Popup {
+    ContextMenuPopup {
         id: cardMenu
-        padding: 0
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         parent: Overlay.overlay
@@ -178,49 +177,11 @@ ContentPage {
             cardMenu.open()
         }
 
-        background: Item {
-            StyledRectangularShadow {
-                target: cardMenuBg
-            }
-            Rectangle {
-                id: cardMenuBg
-                anchors.fill: parent
-                color: Appearance.m3colors.m3surfaceContainer
-                radius: Appearance.rounding.normal
-            }
-        }
-
-        component MenuRow: RippleButton {
-            Layout.fillWidth: true
-            implicitHeight: 36
-            buttonRadius: Appearance.rounding.small
-            property string symbol: ""
-            property string label: ""
-            implicitWidth: Math.max(rowContent.implicitWidth + 20, 180)
-            contentItem: RowLayout {
-                id: rowContent
-                spacing: 10
-                MaterialSymbol {
-                    Layout.leftMargin: 10
-                    text: symbol
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.m3colors.m3onSurface
-                }
-                StyledText {
-                    Layout.fillWidth: true
-                    Layout.rightMargin: 10
-                    text: label
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    color: Appearance.m3colors.m3onSurface
-                }
-            }
-        }
-
         contentItem: ColumnLayout {
             spacing: 0
 
-            MenuRow {
-                symbol: "edit"
+            ContextMenuItem {
+                iconName: "edit"
                 label: Translation.tr("Rename")
                 onClicked: {
                     const theme = root.menuTheme
@@ -235,9 +196,9 @@ ContentPage {
             // something has drifted from it. It stays available while the
             // schedule is on, because setting again what is already set cannot
             // fight the schedule.
-            MenuRow {
+            ContextMenuItem {
                 visible: cardMenu.onActiveTheme
-                symbol: "refresh"
+                iconName: "refresh"
                 label: Translation.tr("Reapply")
                 enabled: !root.applyInFlight
                 onClicked: {

@@ -19,122 +19,37 @@ Item {
     property bool editable: false
     signal editRequested(int originalIndex, string content, var date)
 
-    // Shared styled context menu
-    Popup {
+    // The shared context menu
+    ContextMenuPopup {
         id: taskContextMenu
         property int taskIndex: -1
         property string taskContent: ""
         property var taskDate: null
         property bool taskDone: false
 
-        padding: 0
-        background: Item {
-            StyledRectangularShadow {
-                target: menuBg
-            }
-            Rectangle {
-                id: menuBg
-                anchors.fill: parent
-                color: Appearance.m3colors.m3surfaceContainer
-                radius: Appearance.rounding.normal
-            }
-        }
-
         contentItem: ColumnLayout {
             spacing: 0
 
-            // Edit item
-            Loader {
-                active: root.editable
-                Layout.fillWidth: true
-                sourceComponent: RippleButton {
-                    id: editButton
-                    implicitHeight: 36
-                    implicitWidth: Math.max(editRow.implicitWidth + 20, 160)
-                    buttonRadius: Appearance.rounding.small
-                    onClicked: {
-                        root.editRequested(taskContextMenu.taskIndex, taskContextMenu.taskContent, taskContextMenu.taskDate)
-                        taskContextMenu.close()
-                    }
-                    contentItem: RowLayout {
-                        id: editRow
-                        anchors {
-                            fill: parent
-                            leftMargin: 10
-                            rightMargin: 14
-                        }
-                        spacing: 8
-                        MaterialSymbol {
-                            text: "edit"
-                            iconSize: Appearance.font.pixelSize.normal
-                            color: Appearance.m3colors.m3onSurface
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: Translation.tr("Edit")
-                            horizontalAlignment: Text.AlignLeft
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.m3colors.m3onSurface
-                            elide: Text.ElideRight
-                        }
-                    }
+            ContextMenuItem {
+                visible: root.editable
+                iconName: "edit"
+                label: Translation.tr("Edit")
+                onClicked: {
+                    root.editRequested(taskContextMenu.taskIndex, taskContextMenu.taskContent, taskContextMenu.taskDate)
+                    taskContextMenu.close()
                 }
             }
 
-            // Separator (only when editable)
-            Loader {
-                active: root.editable
-                Layout.fillWidth: true
-                sourceComponent: Item {
-                    implicitHeight: 9
-                    Rectangle {
-                        anchors {
-                            left: parent.left
-                            right: parent.right
-                            verticalCenter: parent.verticalCenter
-                            leftMargin: 10
-                            rightMargin: 10
-                        }
-                        implicitHeight: 1
-                        color: ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.7)
-                    }
-                }
+            ContextMenuSeparator {
+                visible: root.editable
             }
 
-            // Delete item
-            RippleButton {
-                id: deleteButton
-                Layout.fillWidth: true
-                implicitHeight: 36
-                implicitWidth: Math.max(deleteRow.implicitWidth + 20, 160)
-                buttonRadius: Appearance.rounding.small
+            ContextMenuItem {
+                iconName: "delete"
+                label: Translation.tr("Delete")
                 onClicked: {
                     Todo.deleteItem(taskContextMenu.taskIndex)
                     taskContextMenu.close()
-                }
-                contentItem: RowLayout {
-                    id: deleteRow
-                    anchors {
-                        fill: parent
-                        leftMargin: 10
-                        rightMargin: 14
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        text: "delete"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.m3colors.m3onSurface
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Delete")
-                        horizontalAlignment: Text.AlignLeft
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.m3colors.m3onSurface
-                        elide: Text.ElideRight
-                    }
                 }
             }
         }

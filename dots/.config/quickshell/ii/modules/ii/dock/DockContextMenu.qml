@@ -81,20 +81,13 @@ Item {
             implicitWidth: menuBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
             implicitHeight: menuBackground.implicitHeight + Appearance.sizes.elevationMargin * 2
 
-            StyledRectangularShadow {
-                target: menuBackground
-            }
-
-            Rectangle {
+            ContextMenuCard {
                 id: menuBackground
-                property real padding: 4
 
                 // The window is the background plus a shadow margin on every
                 // side, so centring insets it evenly and the breathing room
                 // sits between popup and dock.
                 anchors.centerIn: parent
-                color: Appearance.m3colors.m3surfaceContainer
-                radius: Appearance.rounding.normal
                 implicitWidth: menuColumn.implicitWidth + padding * 2
                 implicitHeight: menuColumn.implicitHeight + padding * 2
 
@@ -246,6 +239,7 @@ Item {
                                 required property var modelData
                                 width: volList.width
                                 nodes: modelData
+                                rowRadius: menuBackground.rowRadius
                             }
                         }
                     }
@@ -307,7 +301,7 @@ Item {
                                         readonly property bool isCurrent: wsButton.workspaceValue === moveToWorkspaceBlock.activeWorkspaceId
                                         implicitWidth: 28
                                         implicitHeight: 28
-                                        buttonRadius: Appearance.rounding.small
+                                        buttonRadius: menuBackground.rowRadius
                                         colBackground: wsButton.isCurrent ? Appearance.colors.colSecondaryContainer
                                             : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
                                         // The same state layer as the menu's rows, which the
@@ -371,22 +365,19 @@ Item {
                                     policy: namedList.count > namedList.maxVisible ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                                 }
                                 model: ScriptModel { values: moveToWorkspaceBlock.namedEntries }
-                                // The number and name as the bar's list of named
-                                // workspaces draws them, and the one on screen
-                                // marked as it is in the row above.
+                                // The number drawn as that workspace's button in the
+                                // row above, the one on screen filled as it is there,
+                                // with the name beside it.
                                 delegate: RippleButton {
                                     id: namedButton
                                     required property var modelData
                                     readonly property bool isCurrent: namedButton.modelData.id === moveToWorkspaceBlock.activeWorkspaceId
                                     width: namedList.width
                                     implicitHeight: 32
-                                    buttonRadius: Appearance.rounding.small
-                                    colBackground: namedButton.isCurrent ? Appearance.colors.colSecondaryContainer
-                                        : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
-                                    colBackgroundHover: namedButton.isCurrent ? Appearance.colors.colSecondaryContainerHover
-                                        : Appearance.colors.colMenuItemHover
-                                    colRipple: namedButton.isCurrent ? Appearance.colors.colSecondaryContainerActive
-                                        : Appearance.colors.colMenuItemActive
+                                    buttonRadius: menuBackground.rowRadius
+                                    colBackground: ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+                                    colBackgroundHover: Appearance.colors.colMenuItemHover
+                                    colRipple: Appearance.colors.colMenuItemActive
                                     contentItem: RowLayout {
                                         anchors {
                                             fill: parent
@@ -395,18 +386,19 @@ Item {
                                         }
                                         spacing: 8
                                         Rectangle {
-                                            implicitWidth: Math.max(22, namedNumber.implicitWidth + 10)
-                                            implicitHeight: 22
-                                            radius: height / 2
-                                            color: namedButton.isCurrent ? Appearance.m3colors.m3surfaceContainer
-                                                : Appearance.colors.colSecondaryContainer
+                                            implicitWidth: Math.max(28, namedNumber.implicitWidth + 12)
+                                            implicitHeight: 28
+                                            radius: menuBackground.rowRadius
+                                            color: namedButton.isCurrent ? Appearance.colors.colSecondaryContainer
+                                                : "transparent"
                                             StyledText {
                                                 id: namedNumber
                                                 anchors.centerIn: parent
                                                 text: String(namedButton.modelData.id)
-                                                font.pixelSize: Appearance.font.pixelSize.smaller
-                                                color: namedButton.isCurrent ? Appearance.m3colors.m3onSurface
-                                                    : Appearance.colors.colOnSecondaryContainer
+                                                font.pixelSize: Appearance.font.pixelSize.small
+                                                font.variableAxes: namedButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
+                                                color: namedButton.isCurrent ? Appearance.colors.colOnSecondaryContainer
+                                                    : Appearance.m3colors.m3onSurface
                                             }
                                         }
                                         StyledText {
@@ -415,7 +407,7 @@ Item {
                                             horizontalAlignment: Text.AlignLeft
                                             font.pixelSize: Appearance.font.pixelSize.small
                                             font.variableAxes: namedButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
-                                            color: namedButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
+                                            color: Appearance.m3colors.m3onSurface
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -468,47 +460,11 @@ Item {
         }
     }
 
-    component ContextMenuItem: RippleButton {
-        id: menuItemRoot
-        property string iconName
-        property string label
-        implicitHeight: 36
-        implicitWidth: Math.max(itemRow.implicitWidth + 20, 180)
-        buttonRadius: Appearance.rounding.small
-        colBackgroundHover: Appearance.colors.colMenuItemHover
-        colRipple: Appearance.colors.colMenuItemActive
-
-        contentItem: RowLayout {
-            id: itemRow
-            anchors {
-                fill: parent
-                leftMargin: 10
-                rightMargin: 14
-            }
-            spacing: 8
-
-            MaterialSymbol {
-                text: menuItemRoot.iconName
-                iconSize: Appearance.font.pixelSize.normal
-                color: menuItemRoot.enabled ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3outline
-                visible: menuItemRoot.iconName !== ""
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            StyledText {
-                Layout.fillWidth: true
-                text: menuItemRoot.label
-                horizontalAlignment: Text.AlignLeft
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: menuItemRoot.enabled ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3outline
-                elide: Text.ElideRight
-            }
-        }
-    }
-
     component ContextMenuVolumeRow: Item {
         id: volRow
         required property var nodes
+        // The card's, handed in: this row is declared outside the menu.
+        property real rowRadius: 0
         readonly property var primaryNode: (nodes && nodes.length > 0) ? nodes[0] : null
         readonly property bool allMuted: {
             if (!nodes || nodes.length === 0) return false;
@@ -579,7 +535,9 @@ Item {
                 id: muteBtn
                 implicitWidth: 30
                 implicitHeight: 30
-                buttonRadius: Appearance.rounding.small
+                buttonRadius: volRow.rowRadius
+                colBackgroundHover: Appearance.colors.colMenuItemHover
+                colRipple: Appearance.colors.colMenuItemActive
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: volRow.setMutedAll(!volRow.allMuted)
                 contentItem: MaterialSymbol {

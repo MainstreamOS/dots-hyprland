@@ -58,19 +58,8 @@ Scope {
                 }
             }
 
-            // Darker than the shared default, which is faint enough to vanish
-            // over a bright wallpaper. Deeper rather than wider on purpose:
-            // the card is kept one elevation margin from the screen edges, so
-            // a larger blur would be cut off exactly where the menu is most
-            // likely to open.
-            StyledRectangularShadow {
-                target: menuCard
-                color: ColorUtils.transparentize(Appearance.m3colors.m3shadow, 0.4)
-            }
-
-            Rectangle {
+            ContextMenuCard {
                 id: menuCard
-                property real padding: 4
 
                 // The card grows right and down from the click, and to the
                 // other side of it when that edge is too close. Sliding it
@@ -85,8 +74,6 @@ Scope {
                 y: menuCard.place(GlobalStates.desktopMenuY, height, menuWindow.height)
                 implicitWidth: menuColumn.implicitWidth + padding * 2
                 implicitHeight: menuColumn.implicitHeight + padding * 2
-                color: Appearance.m3colors.m3surfaceContainer
-                radius: Appearance.rounding.normal
 
                 ColumnLayout {
                     id: menuColumn
@@ -100,7 +87,7 @@ Scope {
                     // The rows for the desktop itself come first and
                     // together, then the pair of strips along its edges, then
                     // the monitor, which is the least desktop thing here.
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "image"
                         label: Translation.tr("Change Wallpaper")
                         // On the default monitor this is what Super+W does, so
@@ -114,7 +101,7 @@ Scope {
 
                     // Only once this screen has a picture of its own, so the
                     // row always does something.
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         visible: menuWindow.forThisScreen && MonitorWallpapers.hasPicture(menuWindow.targetMonitor)
                         iconName: "reset_image"
                         label: Translation.tr("Use Main Wallpaper")
@@ -124,7 +111,7 @@ Scope {
                         }
                     }
 
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "dashboard_customize"
                         label: Translation.tr("Personalize Desktop")
                         onClicked: menuWindow.openSettingsPage("BackgroundConfig.qml")
@@ -132,14 +119,18 @@ Scope {
 
                     ContextMenuSeparator {}
 
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "toast"
+                        // The bar's glyph is a toast, which points the wrong
+                        // way for a strip along an edge, so Settings turns it
+                        // over. A row here showing it the other way up would
+                        // not read as the same thing.
                         iconRotation: 180
                         label: Translation.tr("Personalize Bar")
                         onClicked: menuWindow.openSettingsPage("BarConfig.qml")
                     }
 
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "toast"
                         label: Translation.tr("Personalize Dock")
                         onClicked: menuWindow.openSettingsPage("DockConfig.qml")
@@ -147,7 +138,7 @@ Scope {
 
                     ContextMenuSeparator {}
 
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "display_settings"
                         label: Translation.tr("Display Settings")
                         onClicked: menuWindow.openSettingsPage("DisplayConfig.qml")
@@ -157,7 +148,7 @@ Scope {
 
                     // On its own at the end, because a theme is the one thing
                     // here that changes everything above it at once.
-                    DesktopMenuItem {
+                    ContextMenuItem {
                         iconName: "style"
                         label: Translation.tr("Switch Theme")
                         onClicked: menuWindow.openSettingsPage("ThemesConfig.qml")
@@ -189,49 +180,6 @@ Scope {
                 Quickshell.execDetached(["sh", "-c",
                     `QS_SETTINGS_PAGE=${page} quickshell -p '`
                     + StringUtils.shellSingleQuoteEscape(Directories.settingsAppPath) + "'"]);
-            }
-        }
-    }
-
-    // Same row as the dock's own context menu, so both menus read alike.
-    component DesktopMenuItem: RippleButton {
-        id: menuItemRoot
-        property string iconName
-        // The bar's glyph is a toast, which points the wrong way for a strip
-        // along an edge, so Settings turns it over. A row here showing it the
-        // other way up would not read as the same thing.
-        property int iconRotation: 0
-        property string label
-        Layout.fillWidth: true
-        implicitHeight: 36
-        implicitWidth: Math.max(itemRow.implicitWidth + 20, 200)
-        buttonRadius: Appearance.rounding.small
-        colBackgroundHover: Appearance.colors.colMenuItemHover
-        colRipple: Appearance.colors.colMenuItemActive
-
-        contentItem: RowLayout {
-            id: itemRow
-            anchors {
-                fill: parent
-                leftMargin: 10
-                rightMargin: 14
-            }
-            spacing: 8
-
-            MaterialSymbol {
-                text: menuItemRoot.iconName
-                iconSize: Appearance.font.pixelSize.normal
-                color: Appearance.m3colors.m3onSurface
-                rotation: menuItemRoot.iconRotation
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            StyledText {
-                Layout.fillWidth: true
-                text: menuItemRoot.label
-                horizontalAlignment: Text.AlignLeft
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: Appearance.m3colors.m3onSurface
             }
         }
     }

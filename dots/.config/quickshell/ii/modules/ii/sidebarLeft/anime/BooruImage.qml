@@ -115,18 +115,13 @@ Button {
                 width: contextMenu.width
                 height: contextMenu.height
 
-                StyledRectangularShadow {
-                    target: contextMenu
-                }
-                Rectangle {
+                ContextMenuCard {
                     id: contextMenu
                     anchors.centerIn: parent
                     opacity: root.showActions ? 1 : 0
                     visible: opacity > 0
-                    radius: Appearance.rounding.small
-                    color: Appearance.m3colors.m3surfaceContainer
-                    implicitHeight: contextMenuColumnLayout.implicitHeight + radius * 2
-                    implicitWidth: contextMenuColumnLayout.implicitWidth
+                    implicitHeight: contextMenuColumnLayout.implicitHeight + padding * 2
+                    implicitWidth: contextMenuColumnLayout.implicitWidth + padding * 2
 
                     Behavior on opacity {
                         NumberAnimation {
@@ -138,13 +133,16 @@ Button {
 
                     ColumnLayout {
                         id: contextMenuColumnLayout
-                        anchors.centerIn: parent
+                        anchors {
+                            fill: parent
+                            margins: contextMenu.padding
+                        }
                         spacing: 0
 
-                        MenuButton {
+                        ContextMenuItem {
                             id: openFileLinkButton
-                            Layout.fillWidth: true
-                            buttonText: Translation.tr("Open file link")
+                            iconName: "open_in_new"
+                            label: Translation.tr("Open file link")
                             onClicked: {
                                 root.showActions = false
                                 Hyprland.dispatch("hl.config({cursor = {no_warps = true}})")
@@ -152,11 +150,11 @@ Button {
                                 Hyprland.dispatch("hl.config({cursor = {no_warps = false}})")
                             }
                         }
-                        MenuButton {
+                        ContextMenuItem {
                             id: sourceButton
                             visible: root.imageData.source && root.imageData.source.length > 0
-                            Layout.fillWidth: true
-                            buttonText: Translation.tr("Go to source (%1)").arg(StringUtils.getDomain(root.imageData.source))
+                            iconName: "link"
+                            label: Translation.tr("Go to source (%1)").arg(StringUtils.getDomain(root.imageData.source))
                             enabled: root.imageData.source && root.imageData.source.length > 0
                             onClicked: {
                                 root.showActions = false
@@ -165,10 +163,10 @@ Button {
                                 Hyprland.dispatch("hl.config({cursor = {no_warps = false}})")
                             }
                         }
-                        MenuButton {
+                        ContextMenuItem {
                             id: downloadButton
-                            Layout.fillWidth: true
-                            buttonText: Translation.tr("Download")
+                            iconName: "download"
+                            label: Translation.tr("Download")
                             onClicked: {
                                 root.showActions = false;
                                 const targetPath = root.imageData.is_nsfw ? root.nsfwPath : root.downloadPath;

@@ -12,7 +12,6 @@ PopupWindow {
     id: root
     required property QsMenuHandle trayItemMenuHandle
     property string trayItemId: ""
-    property real popupBackgroundMargin: 0
 
     signal menuClosed
     signal menuOpened(qsWindow: var) // Correct type is QsWindow, but QML does not like that
@@ -55,14 +54,8 @@ PopupWindow {
                 stackView.pop();
         }
 
-        StyledRectangularShadow {
-            target: popupBackground
-            opacity: popupBackground.opacity
-        }
-
-        Rectangle {
+        ContextMenuCard {
             id: popupBackground
-            readonly property real padding: 4
             anchors {
                 left: parent.left
                 right: parent.right
@@ -71,12 +64,6 @@ PopupWindow {
                 bottom: Config.options.bar.vertical ? undefined : Config.options.bar.bottom ? parent.bottom : undefined
                 margins: root.padding
             }
-
-            color: Appearance.colors.colLayer0
-            radius: RoundedCorners.on ? Appearance.rounding.windowRounding : 0
-            border.width: 1
-            border.color: Appearance.colors.colLayer0Border
-            clip: true
 
             opacity: 0
             Component.onCompleted: opacity = 1
@@ -99,6 +86,10 @@ PopupWindow {
                     fill: parent
                     margins: popupBackground.padding
                 }
+                // Here rather than on the card, whose shadow a clip would cut
+                // off: the card animates to each level's size, and a level
+                // larger than it is kept inside while it grows.
+                clip: true
                 pushEnter: NoAnim {}
                 pushExit: NoAnim {}
                 popEnter: NoAnim {}
@@ -147,76 +138,24 @@ PopupWindow {
             Layout.fillWidth: true
             visible: submenu.isSubMenu
             active: visible
-            sourceComponent: RippleButton {
-                id: backButton
-                buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
-                horizontalPadding: 12
-                implicitWidth: contentItem.implicitWidth + horizontalPadding * 2
-                implicitHeight: 36
-
+            sourceComponent: ContextMenuItem {
+                iconName: "chevron_left"
+                label: Translation.tr("Back")
                 downAction: () => stackView.pop()
-
-                contentItem: RowLayout {
-                    anchors {
-                        verticalCenter: parent.verticalCenter
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: backButton.horizontalPadding
-                        rightMargin: backButton.horizontalPadding
-                    }
-                    spacing: 8
-                    MaterialSymbol {
-                        iconSize: 20
-                        text: "chevron_left"
-                    }
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Translation.tr("Back")
-                    }
-                }
             }
         }
-        RippleButton {
+        ContextMenuItem {
             id: pinEntry
-            buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
-            horizontalPadding: 12
-            implicitWidth: contentItem.implicitWidth + horizontalPadding * 2
-            implicitHeight: 36
-            Layout.topMargin: 0
-            Layout.bottomMargin: 0
-            Layout.fillWidth: true
-
             visible: root.trayItemId !== undefined && root.trayItemId.length > 0 && stackView.depth === 1
+            iconName: "push_pin"
+            label: TrayService.isPinned(root.trayItemId) ? Translation.tr("Unpin") : Translation.tr("Pin")
             releaseAction: () => TrayService.togglePin(root.trayItemId);
-
-            contentItem: RowLayout {
-                anchors {
-                    verticalCenter: parent.verticalCenter
-                    left: parent.left
-                    right: parent.right
-                    leftMargin: pinEntry.horizontalPadding
-                    rightMargin: pinEntry.horizontalPadding
-                }
-                spacing: 8
-
-                MaterialSymbol {
-                    iconSize: 18
-                    text: "push_pin"
-                }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    text: TrayService.isPinned(root.trayItemId) ? Translation.tr("Unpin") : Translation.tr("Pin")
-                }
-            }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 1
-            color: Appearance.colors.colSubtext
-            Layout.topMargin: 4
-            Layout.bottomMargin: 4
+        // Between the menu's own Back or Pin row and the app's entries, so only
+        // when one of those rows is there.
+        ContextMenuSeparator {
+            visible: submenu.isSubMenu || pinEntry.visible
         }
 
         Repeater {
@@ -236,20 +175,32 @@ PopupWindow {
                 return false;
             }
             model: menuOpener.children
-            delegate: SysTrayMenuEntry {
+            // The app's separators are drawn as the menu's own.
+            delegate: Loader {
+                id: entryLoader
                 required property QsMenuEntry modelData
-                forceIconColumn: menuEntriesRepeater.iconColumnNeeded
-                forceSpecialInteractionColumn: menuEntriesRepeater.specialInteractionColumnNeeded
-                menuEntry: modelData
+                Layout.fillWidth: true
+                sourceComponent: entryLoader.modelData.isSeparator ? entrySeparator : entryRow
 
-                buttonRadius: Math.max(0, popupBackground.radius - popupBackground.padding)
+                Component {
+                    id: entrySeparator
+                    ContextMenuSeparator {}
+                }
+                Component {
+                    id: entryRow
+                    SysTrayMenuEntry {
+                        forceIconColumn: menuEntriesRepeater.iconColumnNeeded
+                        forceSpecialInteractionColumn: menuEntriesRepeater.specialInteractionColumnNeeded
+                        menuEntry: entryLoader.modelData
 
-                onDismiss: root.close()
-                onOpenSubmenu: handle => {
-                    stackView.push(subMenuComponent.createObject(null, {
-                        handle: handle,
-                        isSubMenu: true
-                    }));
+                        onDismiss: root.close()
+                        onOpenSubmenu: handle => {
+                            stackView.push(subMenuComponent.createObject(null, {
+                                handle: handle,
+                                isSubMenu: true
+                            }));
+                        }
+                    }
                 }
             }
         }
