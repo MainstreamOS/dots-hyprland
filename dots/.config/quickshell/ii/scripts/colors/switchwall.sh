@@ -816,12 +816,21 @@ switch() {
     # gets kept is the finished stylesheet, under everything that went into it.
     scss_cache_key=""
     scss_cache_file=""
-    if [[ -n "${palette_key:-}" ]]; then
+    # What the stylesheet is built from: the picture, or a picked accent colour,
+    # which needs no picture and so is its own key.
+    local scss_source="${palette_key:-}"
+    [[ "$color_flag" == "1" && -n "$color" ]] && scss_source="color:${color,,}"
+    # The mode the generator is actually run in. forceDarkMode runs it dark
+    # whatever the desktop's mode, so a light/dark toggle has nothing new to
+    # build and is served the same entry.
+    local scss_mode="${mode_flag:-}"
+    [[ "$force_dark_mode" == "true" ]] && scss_mode="dark"
+    if [[ -n "$scss_source" ]]; then
         # forceDarkMode belongs in here: it decides whether the generator is
         # run against the dark palette or the current one, so it changes what
         # the cached stylesheet contains without changing anything else here.
         scss_cache_key="$(printf '%s|%s|%s|%s|%s|%s|%s|%s|%s' \
-            "$palette_key" "${mode_flag:-}" "${type_flag:-}" "${harmony:-}" \
+            "$scss_source" "$scss_mode" "${type_flag:-}" "${harmony:-}" \
             "${harmonize_threshold:-}" "${term_fg_boost:-}" "${force_dark_mode:-}" \
             "$(cache_key_for "$terminalscheme")" \
             "$(cache_key_for "$SCRIPT_DIR/generate_colors_material.py")" | sha256sum 2>/dev/null)"
