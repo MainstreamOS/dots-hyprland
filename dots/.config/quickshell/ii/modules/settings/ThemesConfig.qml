@@ -140,13 +140,7 @@ ContentPage {
             // Rebuilt by re-reading every theme, the way saving and deleting
             // already rebuild it, so one theme's rename cannot leave the index
             // disagreeing with the rest of the library.
-            "out = []\n" +
-            "for entry in sorted(os.listdir(themes_dir)):\n" +
-            "    m = os.path.join(themes_dir, entry, 'meta.json')\n" +
-            "    if not os.path.isfile(m): continue\n" +
-            "    try: out.append(json.load(open(m)))\n" +
-            "    except Exception: pass\n" +
-            "json.dump(out, open(os.path.join(themes_dir, 'index.json'), 'w'), indent=2)\n",
+            root.pyRebuildIndex + "rebuild_index(themes_dir)\n",
             root.themesDir, theme.slug, name]
         renameProc.running = false
         renameProc.running = true
@@ -590,24 +584,7 @@ ContentPage {
             `printf '%s' "$SLUG" > '${root.lastAppliedPath}.tmp' && mv -f '${root.lastAppliedPath}.tmp' '${root.lastAppliedPath}'\n` +
             // Rebuild index
             `python3 - "$THEMES" <<'PY'\n` +
-            `import json, os, sys\n` +
-            `themes_dir = sys.argv[1]\n` +
-            `out = []\n` +
-            // An import stages into a dot-prefixed directory alongside the real
-            // ones and only sanitises the archive's meta.json near the end, so a
-            // run killed partway leaves a hidden directory holding whatever the
-            // file claimed its slug was. Skipping dotted names keeps that out of
-            // the index instead of publishing it as a theme.
-            `for name in sorted(os.listdir(themes_dir)):\n` +
-            `    if name.startswith("."): continue\n` +
-            `    p = os.path.join(themes_dir, name)\n` +
-            `    meta = os.path.join(p, "meta.json")\n` +
-            `    if os.path.isdir(p) and os.path.isfile(meta):\n` +
-            `        try:\n` +
-            `            with open(meta) as f: out.append(json.load(f))\n` +
-            `        except Exception: pass\n` +
-            `with open(os.path.join(themes_dir, "index.json"), "w") as f:\n` +
-            `    json.dump(out, f, indent=2)\n` +
+            `import sys\n` + root.pyRebuildIndex + `rebuild_index(sys.argv[1])\n` +
             `PY\n`
         saveProc.command = ["bash", "-c", bash]
         saveProc.running = false
@@ -758,17 +735,7 @@ ContentPage {
             // ── Remove theme dir and rebuild index ────────────────────────────
             `rm -rf -- "$THEME_DIR"\n` +
             `python3 - '${root.themesDir}' <<'PY'\n` +
-            `import json, os, sys\n` +
-            `themes_dir = sys.argv[1]\n` +
-            `out = []\n` +
-            `for n in sorted(os.listdir(themes_dir)):\n` +
-            `    if n.startswith("."): continue\n` +
-            `    p = os.path.join(themes_dir, n); m = os.path.join(p, "meta.json")\n` +
-            `    if os.path.isdir(p) and os.path.isfile(m):\n` +
-            `        try:\n` +
-            `            with open(m) as f: out.append(json.load(f))\n` +
-            `        except: pass\n` +
-            `open(os.path.join(themes_dir, "index.json"), "w").write(json.dumps(out, indent=2))\n` +
+            `import sys\n` + root.pyRebuildIndex + `rebuild_index(sys.argv[1])\n` +
             `PY\n`
         deleteProc.command = ["bash", "-c", bash]
         deleteProc.running = false
@@ -803,6 +770,29 @@ ContentPage {
     // doesn't exist, so they come out on export and are re-pointed at local
     // values on import. wallpaperPath goes too: apply-theme.sh recomputes it
     // from the bundled wallpaper, and import writes the local copy's path.
+    // One rebuild of index.json for every path that changes the library, so
+    // they can't drift apart. Dot-prefixed directories are an import's staging
+    // area, and a run killed partway leaves one holding whatever slug the file
+    // claimed, so they are never published as themes.
+    readonly property string pyRebuildIndex: `
+def rebuild_index(themes_dir):
+    import json, os
+    out = []
+    for name in sorted(os.listdir(themes_dir)):
+        if name.startswith("."):
+            continue
+        p = os.path.join(themes_dir, name)
+        m = os.path.join(p, "meta.json")
+        if os.path.isdir(p) and os.path.isfile(m):
+            try:
+                with open(m) as f:
+                    out.append(json.load(f))
+            except Exception:
+                pass
+    with open(os.path.join(themes_dir, "index.json"), "w") as f:
+        json.dump(out, f, indent=2)
+`
+
     readonly property string pyPortable: `
 import json, os
 
@@ -1066,7 +1056,7 @@ print("OK|" + out_path)
             `--file-filter="All files | *" 2>/dev/null) || { echo CANCEL; exit 0; }\n` +
             `[ -n "$IN" ] || { echo CANCEL; exit 0; }\n` +
             `python3 - "$IN" '${root.themesDir}' '${root.shellConfigPath}' <<'PY'\n` +
-            root.pyPortable +
+            root.pyPortable + root.pyRebuildIndex +
             `import re, shutil, sys, tarfile, tempfile, time
 archive, themes_dir, live_config = sys.argv[1], sys.argv[2], sys.argv[3]
 EXACT = {"meta.json", "config.json", "interface.json", "decorations.json", "windowrules.json", "preview.png"}
@@ -1289,16 +1279,7 @@ try:
     shutil.rmtree(previous, ignore_errors=True)
     tmp = None
 
-    index = []
-    for d in sorted(os.listdir(themes_dir)):
-        if d.startswith("."): continue
-        mp = os.path.join(themes_dir, d, "meta.json")
-        if os.path.isdir(os.path.join(themes_dir, d)) and os.path.isfile(mp):
-            try:
-                index.append(json.load(open(mp)))
-            except Exception:
-                pass
-    json.dump(index, open(os.path.join(themes_dir, "index.json"), "w"), indent=2)
+    rebuild_index(themes_dir)
     print("OK|" + json.dumps({"name": name, "missing": missing, "newer": newer, "replaced": replaced}))
 finally:
     if tmp and os.path.isdir(tmp):
