@@ -297,6 +297,50 @@ cache_put() {
     [[ -n "${3:-}" ]] || return 0
     cache_rewrite "$1" "$2" "$3"
 }
+
+# Everything that reads colours out of a picture shrinks it first: matugen to
+# 112 pixels square, the stylesheet generator and the scheme detector to about
+# 128. Each of them decoding the full picture to get there was three full
+# decodes of every new wallpaper, so they are handed one small copy instead,
+# made once. Named for the picture's path, date and size rather than its file
+# name, since two pictures can share a name. SVG and AVIF are flattened on the
+# way, which is also what lets matugen and PIL read them at all. The picture
+# itself is the answer when there is no magick or the copy can't be made.
+COLORSRC_DIR="$CACHE_DIR/user/generated/colorsrc"
+colour_source() {
+    local src="$1" key copy
+    if [[ ! -f "$src" ]] || ! command -v magick >/dev/null 2>&1; then
+        printf '%s' "$src"
+        return
+    fi
+    key="$(cache_key_for "$src")" || { printf '%s' "$src"; return; }
+    copy="$COLORSRC_DIR/$(printf '%s' "$key" | sha256sum | cut -c1-32).png"
+    if [[ ! -s "$copy" ]]; then
+        mkdir -p "$COLORSRC_DIR" 2>/dev/null
+        local flatten=()
+        case "${src,,}" in *.svg|*.svgz|*.avif) flatten=(-flatten) ;; esac
+        # [0] is the first frame, so an animated picture makes one copy.
+        if magick -define jpeg:size=1024x1024 "${src}[0]" -resize '512x512>' "${flatten[@]}" \
+                "$copy.$$.png" 2>/dev/null && [[ -s "$copy.$$.png" ]]; then
+            mv -f "$copy.$$.png" "$copy"
+            ls -1t "$COLORSRC_DIR"/*.png 2>/dev/null | tail -n "+$((PALETTE_CACHE_KEEP + 1))" \
+                | while IFS= read -r stale; do rm -f "$stale"; done
+            # The copies from before were named after the picture alone.
+            rm -f "$CACHE_DIR"/user/generated/colorsrc-*.png 2>/dev/null
+        else
+            rm -f "$copy.$$.png"
+            printf '%s' "$src"
+            return
+        fi
+    fi
+    printf '%s' "$copy"
+}
+
+# The copy for this run's picture, made the first time something needs it, so
+# a run whose colours all come from the caches never makes one.
+ensure_palette_src() {
+    [[ -n "${palette_src:-}" ]] || palette_src="$(colour_source "$palette_img")"
+}
 cache_drop() {
     [[ -f "$1" ]] || return 0
     cache_rewrite "$1" "$2" ""
@@ -596,6 +640,8 @@ switch() {
     # because there is no picture to read.
     palette_key=""
     palette_hex=""
+    palette_img=""
+    palette_src=""
 
     if [[ "$color_flag" == "1" ]]; then
         matugen_args+=(color hex "$color")
@@ -683,7 +729,6 @@ switch() {
                     matugen_args+=(color hex "$palette_hex")
                 else
                     palette_hex=""
-                    matugen_args+=(image "$thumbnail")
                 fi
                 generate_colors_material_args=(--path "$thumbnail")
                 create_restore_script "$video_path"
@@ -700,34 +745,17 @@ switch() {
             # either way — so once that colour is known, the picture never has
             # to be opened again.
             palette_img="$imgpath"
-            # matugen exits 101 on AVIF and on SVG, and the material generator
-            # is PIL-based with the same gaps, but both formats display fine —
-            # so the colour is read from a small rasterised copy while the
-            # wallpaper stays the original. The cache is keyed on that original,
-            # since this copy is rewritten whenever the source changes and a key
-            # on it could only ever miss.
-            local palette_src="$imgpath"
-            case "${imgpath,,}" in
-                *.avif|*.svg|*.svgz)
-                    if command -v magick >/dev/null 2>&1; then
-                        local colorsrc="$CACHE_DIR/user/generated/colorsrc-$(basename "$imgpath").png"
-                        if [[ ! -f "$colorsrc" || "$imgpath" -nt "$colorsrc" ]]; then
-                            mkdir -p "${colorsrc%/*}" 2>/dev/null
-                            magick "$imgpath" -resize '512x512>' -flatten "$colorsrc" 2>/dev/null || true
-                        fi
-                        [[ -s "$colorsrc" ]] && palette_src="$colorsrc"
-                    fi
-                    ;;
-            esac
+            # The cache is keyed on the original, never on the small copy the
+            # colours are read from (colour_source), which is remade whenever
+            # the picture changes.
             palette_key="$(cache_key_for "$imgpath")"
             if cache_get "$SRCCOLOR_CACHE" "$palette_key" '^#[0-9a-fA-F]{6}$'; then
                 palette_hex="$cache_value"
                 matugen_args+=(color hex "$palette_hex")
             else
                 palette_hex=""
-                matugen_args+=(image "$palette_src")
             fi
-            generate_colors_material_args=(--path "$palette_src")
+            generate_colors_material_args=(--path "$imgpath")
             # Update wallpaper path in config (skip if apply-theme.sh already staged it)
             if [[ -z "$skip_config_writes" ]]; then
                 [[ -n "${clear_accent_color:-}" ]] && set_accent_color ""
@@ -742,6 +770,12 @@ switch() {
     if [[ -n "${picture_only_flag:-}" ]]; then
         picture_only_post_process "$imgpath"
         return 0
+    fi
+
+    # A picture whose colour isn't cached yet is read from its small copy.
+    if [[ -n "$palette_img" && -z "$palette_hex" ]]; then
+        ensure_palette_src
+        matugen_args+=(image "$palette_src")
     fi
 
     # Determine mode if not set
@@ -772,7 +806,7 @@ switch() {
     # If type_flag is 'auto', detect scheme type from image (after imgpath is set)
     if [[ "$type_flag" == "auto" ]]; then
         if [[ -n "$imgpath" && -f "$imgpath" ]]; then
-            detected_type="$(detect_scheme_type_from_image "$imgpath")"
+            detect_scheme_type_from_image "$imgpath"
             # Only use detected_type if it's valid
             valid_detected=0
             for t in "${allowed_types[@]}"; do
@@ -866,6 +900,11 @@ switch() {
         { exec {generated_colors_fd}<"$scss_cache_file"; } 2>/dev/null
     fi
     if [[ -z "$generated_colors_fd" ]]; then
+        # Handed the small copy too; its --path is always the first pair.
+        if [[ -n "$palette_img" && "${generate_colors_material_args[0]:-}" == "--path" ]]; then
+            ensure_palette_src
+            generate_colors_material_args[1]="$palette_src"
+        fi
         exec {generated_colors_fd}< <(python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" </dev/null)
         generated_colors_pid=$!
     fi
@@ -988,29 +1027,46 @@ main() {
         config_jq --arg color "$color" '.appearance.palette.accentColor = $color'
     }
 
+    # Sets detected_type rather than printing it, so the small copy made on
+    # the way (ensure_palette_src) is still there for the readers after it.
     detect_scheme_type_from_image() {
         local img="$1"
+        detected_type=""
         # The answer is one of two scheme names decided by a single number
         # measured off the picture, so it can't change while the file doesn't.
         # Arriving at it means starting a Python interpreter and decoding the
-        # image at full size, and the same unchanged wallpaper gets asked about
-        # on every theme apply and every light/dark toggle, so keep the last
-        # answer and the file it belongs to.
+        # image, and the same unchanged wallpaper gets asked about on every
+        # theme apply and every light/dark toggle, so keep the last answer and
+        # the file it belongs to.
         local cache="$STATE_DIR/user/generated/scheme-for-image.cache"
         local key
         key="$(cache_key_for "$img")"
+        # A video used to be handed to the detector as it is, which it cannot
+        # open, so every answer stored for one is the fallback. Its answers are
+        # kept under a key of their own now, read off the thumbnail.
+        is_video "$img" && key+="|frame"
         if cache_get "$cache" "$key"; then
-            printf '%s' "$cache_value"
+            detected_type="$cache_value"
             return 0
         fi
 
+        # Keyed on the wallpaper, read off the small copy of the picture the
+        # palette comes from: the thumbnail's, for a video.
+        local read="$img"
+        if [[ -n "$palette_img" ]]; then
+            ensure_palette_src
+            read="$palette_src"
+        fi
         source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
-        local detected
-        detected="$("$SCRIPT_DIR"/scheme_for_image.py "$img" 2>/dev/null | tr -d '\n')"
+        local detected status=0
+        detected="$("$SCRIPT_DIR"/scheme_for_image.py "$read" 2>/dev/null)" || status=$?
         deactivate
+        detected="${detected//$'\n'/}"
 
-        [[ -n "$detected" ]] && cache_put "$cache" "$key" "$detected"
-        printf '%s' "$detected"
+        # The detector names a fallback when it cannot read the picture, and
+        # that is no answer to keep: the next run should try again.
+        [[ $status -eq 0 && -n "$detected" ]] && cache_put "$cache" "$key" "$detected"
+        detected_type="$detected"
     }
 
     while [[ $# -gt 0 ]]; do

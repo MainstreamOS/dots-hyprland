@@ -76,6 +76,8 @@ ContentPage {
             wall="$1"; cache="$2"; detect="$3"
             [ -f "$wall" ] || exit 0
             key="$wall:$(stat -c '%Y:%s' "$wall")"
+            # switchwall keeps a video's answer under a key of its own.
+            case "\${wall,,}" in *.mp4|*.webm|*.mkv|*.avi|*.mov|*.m4v|*.ogv) key="$key|frame" ;; esac
             scheme="$(awk -F '\\t' -v k="$key" '$1 == k { print $2; exit }' "$cache" 2>/dev/null)"
             venv="\${ILLOGICAL_IMPULSE_VIRTUAL_ENV/#\\~/$HOME}"
             [ -n "$scheme" ] || scheme="$("$venv/bin/python" "$detect" "$wall" 2>/dev/null)"
