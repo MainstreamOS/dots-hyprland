@@ -1509,8 +1509,17 @@ finally:
             }
 
             // ── Existing theme cards ──
+            // Kept per theme rather than rebuilt with the whole list: an apply
+            // moves the active card to the front and a save or rename changes
+            // one entry, and a plain array model destroyed and recreated every
+            // card each time. A card is matched on its slug, name and save
+            // time, so one whose content changed is still built afresh.
             Repeater {
-                model: root.orderedThemes
+                model: ScriptModel {
+                    objectProp: "cardKey"
+                    values: root.orderedThemes.map(t => Object.assign({}, t,
+                        { cardKey: `${t.slug}|${t.name}|${t.created || 0}` }))
+                }
                 delegate: Rectangle {
                     id: themeCard
                     required property var modelData

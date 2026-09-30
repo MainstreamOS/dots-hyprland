@@ -45,9 +45,8 @@ Singleton {
     // pair only makes sense together: this has to stay comfortably above
     // previewSourceSize or the previews are upscaled.
     //
-    // Applied only when a theme is saved or updated. Themes captured before
-    // this keep their full-size preview and stay slow to decode until their
-    // next save — there is no migration pass over the library.
+    // Applied when a theme is saved or updated, and once to the previews
+    // saved before this existed (Component.onCompleted below).
     readonly property int previewMaxDimension: 1024
 
     // Qt keys its pixmap cache on the requested size and the fill mode as well
@@ -93,7 +92,24 @@ Singleton {
         root.themes = parsed
     }
 
-    Component.onCompleted: ensureDirsProc.running = true
+    Component.onCompleted: {
+        ensureDirsProc.running = true
+        // Previews saved before the size cap are full screenshots, decoded at
+        // full size on every visit to the page. Brought down to the cap once,
+        // then never looked at again.
+        Quickshell.execDetached(["bash", "-c",
+            'd="$1"; max="$2"; mark="$d/.previews-capped"\n' +
+            '[ -e "$mark" ] || [ ! -d "$d" ] && exit 0\n' +
+            'command -v magick >/dev/null 2>&1 || exit 0\n' +
+            'for p in "$d"/*/preview.png; do\n' +
+            '    [ -f "$p" ] || continue\n' +
+            '    read -r w h < <(magick identify -format "%w %h\\n" "$p[0]" 2>/dev/null) || continue\n' +
+            '    [ "${w:-0}" -gt "$max" ] || [ "${h:-0}" -gt "$max" ] || continue\n' +
+            '    magick "$p" -resize "${max}x${max}>" "$p.tmp.png" 2>/dev/null && mv -f "$p.tmp.png" "$p" || rm -f "$p.tmp.png"\n' +
+            'done\n' +
+            ': > "$mark"',
+            "preview-cap", root.themesDir, String(root.previewMaxDimension)])
+    }
 
     Process {
         id: ensureDirsProc
