@@ -35,12 +35,48 @@ Singleton {
 
     function load() {} // For forcing singleton initialization
 
+    // The stock depth never changes while the shell runs, so what opening the
+    // launcher sends is worked out once from the schema, in the same form
+    // decorations.py sends it, and handed to hyprctl directly rather than
+    // starting Python on every open. Closing still goes through the file,
+    // which is the one place the user's own depth is kept current.
+    property string stockEval: ""
+    function _lua(value, kind) {
+        if (kind === "int")
+            return String(Math.round(Number(value)))
+        const text = Number(value).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
+        return text.length > 0 ? text : "0"
+    }
+    FileView {
+        path: `${root.configDir}/quickshell/ii/scripts/themes/decorations-schema.json`
+        printErrors: false
+        onLoaded: {
+            try {
+                const keys = root.depthKeys.split(",")
+                const sections = ({})
+                for (const row of JSON.parse(text()).keys) {
+                    if (!keys.includes(row.key) || !row.hypr || row.default === undefined)
+                        continue
+                    const parts = row.hypr.split(":")
+                    const leaf = parts.slice(1).join(".")
+                    ;(sections[parts[0]] = sections[parts[0]] ?? []).push(`["${leaf}"] = ${root._lua(row.default, row.type)}`)
+                }
+                const body = Object.keys(sections).map(s => `${s} = { ${sections[s].join(", ")} }`).join(", ")
+                root.stockEval = body.length > 0 ? `hl.config({ ${body} })` : ""
+            } catch (e) {
+                root.stockEval = ""
+            }
+        }
+    }
+
     Connections {
         target: GlobalStates
         function onOverviewOpenChanged() {
             // Only the depth moves; whether the blur reads through to the
             // wallpaper is a look, not a strength, and stays the user's.
-            if (GlobalStates.overviewOpen)
+            if (GlobalStates.overviewOpen && root.stockEval.length > 0)
+                Quickshell.execDetached(["hyprctl", "eval", root.stockEval])
+            else if (GlobalStates.overviewOpen)
                 Quickshell.execDetached(["python3", root.decorationsPy, "push-defaults", root.generalConf,
                                          "--keys", root.depthKeys])
             else
