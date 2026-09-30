@@ -73,6 +73,32 @@ Singleton {
         return `${root.customDir}/${name}${dark ? "" : "Light"}`
     }
 
+    // Writes each path and value pair, then hands the running compositor the
+    // one hl.config it needs instead of re-running the whole config. An empty
+    // push leaves the compositor alone, for a change it isn't showing. A push
+    // it refuses, such as a key an older plugin build doesn't have, falls back
+    // to the reload.
+    function writeAndPush(pairs, lua) {
+        Quickshell.execDetached(["bash", "-c",
+            'lua="$1"; shift; while [ $# -gt 1 ]; do printf "%s" "$2" > "$1" || exit; shift 2; done; ' +
+            'if [ -n "$lua" ]; then out=$(hyprctl eval "$lua" 2>&1); case "$out" in *[Ee]rror*) hyprctl reload >/dev/null 2>&1 ;; esac; fi',
+            "titlebars", lua].concat(pairs))
+    }
+
+    // The bar color hyprbars draws, composed the way plugins.lua composes it
+    // from the files: six hex digits and the opacity as the alpha, each
+    // falling back to the mode's stock value.
+    readonly property var stockBar: ({ dark: { color: "333333", opacity: 0.5333 }, light: { color: "f3f3f3", opacity: 0.3 } })
+    function barColor(color, opacity, dark) {
+        const stock = dark ? root.stockBar.dark : root.stockBar.light
+        let hex = String(color ?? "").replace(/^#/, "")
+        if (!/^[0-9a-fA-F]{6}$/.test(hex)) hex = stock.color
+        let on = parseFloat(opacity)
+        if (isNaN(on)) on = stock.opacity
+        on = Math.max(0, Math.min(1, on))
+        return `rgba(${hex}${Math.floor(on * 255 + 0.5).toString(16).padStart(2, "0")})`
+    }
+
     // Writes each path and value pair in order and reloads once, so plugins.lua
     // reads them together. A failed write stops it before the reload.
     function writeAndReload(pairs) {
@@ -171,7 +197,8 @@ Singleton {
     function setButtonsOnHover(value) {
         if (value === root.buttonsOnHover) return
         root.buttonsOnHover = value
-        root.writeAndReload([root.buttonsOnHoverPath, value ? "1" : "0"])
+        root.writeAndPush([root.buttonsOnHoverPath, value ? "1" : "0"],
+            root.enabled ? `hl.config({ plugin = { hyprbars = { buttons_on_hover = ${value ? "true" : "false"} } } })` : "")
     }
 
     // The close, maximize and minimize buttons can be left off the bars
@@ -217,8 +244,12 @@ Singleton {
             root.colorLight = newColor
             root.opacityLight = newOpacity
         }
-        root.writeAndReload([root.slotPath("titlebars.color", d), String(newColor),
-            root.slotPath("titlebars.opacity", d), String(newOpacity)])
+        // Only the set for the mode on screen is showing; the other one is
+        // read on the reload that switching modes makes anyway.
+        root.writeAndPush([root.slotPath("titlebars.color", d), String(newColor),
+            root.slotPath("titlebars.opacity", d), String(newOpacity)],
+            root.enabled && d === root.dark
+                ? `hl.config({ plugin = { hyprbars = { bar_color = "${root.barColor(newColor, newOpacity, d)}" } } })` : "")
     }
 
     // Everything back to how the title bars come, both modes at once, under a
