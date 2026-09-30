@@ -218,6 +218,13 @@ Singleton {
     // for the same target. Updated by apply(), which is the only place
     // the live theme actually changes.
     property string _lastScheduledSlug: ""
+    property bool _baselineSeeded: false
+    FileView {
+        id: lastAppliedView
+        path: `${root.themesDir}/last-applied.txt`
+        blockLoading: true
+        printErrors: false
+    }
 
     // Which scheduled slug last failed, and how many times running. Cleared by
     // any successful apply.
@@ -243,6 +250,15 @@ Singleton {
         // for themesIndexProc to finish — it calls _evaluateSchedule
         // again itself once it's done.
         if (!root._validSlugsLoaded) return
+        // The theme already on screen when the shell starts is where the
+        // schedule stands, so a restart whose scheduled theme is already on
+        // doesn't apply it all over again. Taken once, before the first pick.
+        if (!root._baselineSeeded) {
+            root._baselineSeeded = true
+            const onScreen = (lastAppliedView.text() ?? "").trim()
+            if (onScreen.length > 0 && root._validSlugs[onScreen] && root._lastScheduledSlug === "")
+                root._lastScheduledSlug = onScreen
+        }
         const s = Config.options.appearance.themeSchedule
         if (!s || s.mode === "off") return
         let target = ""
