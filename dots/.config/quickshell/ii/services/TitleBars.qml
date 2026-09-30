@@ -73,30 +73,20 @@ Singleton {
         return `${root.customDir}/${name}${dark ? "" : "Light"}`
     }
 
-    // Writes each path and value pair, then hands the running compositor the
-    // one hl.config it needs instead of re-running the whole config. An empty
-    // push leaves the compositor alone, for a change it isn't showing. A push
-    // it refuses, such as a key an older plugin build doesn't have, falls back
-    // to the reload.
-    function writeAndPush(pairs, lua) {
+    // plugins.lua's own apply, run in the compositor: it reads the files again
+    // and sets the bar's color, the hover buttons and the scroll steps exactly
+    // as a reload would, without re-running the whole config. A config loaded
+    // before plugins.lua offered it has no such function, and reloads instead.
+    readonly property string applyLua: 'if MainstreamApplyPluginConfig then MainstreamApplyPluginConfig() else hl.exec_cmd("hyprctl reload") end'
+
+    // Writes each path and value pair, then has the compositor re-apply them,
+    // or leaves it alone for a change it isn't showing. One it refuses falls
+    // back to the reload.
+    function writeAndApply(pairs, apply) {
         Quickshell.execDetached(["bash", "-c",
             'lua="$1"; shift; while [ $# -gt 1 ]; do printf "%s" "$2" > "$1" || exit; shift 2; done; ' +
             'if [ -n "$lua" ]; then out=$(hyprctl eval "$lua" 2>&1); case "$out" in *[Ee]rror*) hyprctl reload >/dev/null 2>&1 ;; esac; fi',
-            "titlebars", lua].concat(pairs))
-    }
-
-    // The bar color hyprbars draws, composed the way plugins.lua composes it
-    // from the files: six hex digits and the opacity as the alpha, each
-    // falling back to the mode's stock value.
-    readonly property var stockBar: ({ dark: { color: "333333", opacity: 0.5333 }, light: { color: "f3f3f3", opacity: 0.3 } })
-    function barColor(color, opacity, dark) {
-        const stock = dark ? root.stockBar.dark : root.stockBar.light
-        let hex = String(color ?? "").replace(/^#/, "")
-        if (!/^[0-9a-fA-F]{6}$/.test(hex)) hex = stock.color
-        let on = parseFloat(opacity)
-        if (isNaN(on)) on = stock.opacity
-        on = Math.max(0, Math.min(1, on))
-        return `rgba(${hex}${Math.floor(on * 255 + 0.5).toString(16).padStart(2, "0")})`
+            "titlebars", apply ? root.applyLua : ""].concat(pairs))
     }
 
     // Writes each path and value pair in order and reloads once, so plugins.lua
@@ -197,8 +187,7 @@ Singleton {
     function setButtonsOnHover(value) {
         if (value === root.buttonsOnHover) return
         root.buttonsOnHover = value
-        root.writeAndPush([root.buttonsOnHoverPath, value ? "1" : "0"],
-            root.enabled ? `hl.config({ plugin = { hyprbars = { buttons_on_hover = ${value ? "true" : "false"} } } })` : "")
+        root.writeAndApply([root.buttonsOnHoverPath, value ? "1" : "0"], root.enabled)
     }
 
     // The close, maximize and minimize buttons can be left off the bars
@@ -225,7 +214,7 @@ Singleton {
     function setScrollActions(value) {
         if (value === root.scrollActions) return
         root.scrollActions = value
-        root.writeAndReload([root.scrollActionsPath, value ? "1" : "0"])
+        root.writeAndApply([root.scrollActionsPath, value ? "1" : "0"], root.enabled)
     }
 
     // Written together, because they compose into one value the plugin reads:
@@ -246,15 +235,18 @@ Singleton {
         }
         // Only the set for the mode on screen is showing; the other one is
         // read on the reload that switching modes makes anyway.
-        root.writeAndPush([root.slotPath("titlebars.color", d), String(newColor),
-            root.slotPath("titlebars.opacity", d), String(newOpacity)],
-            root.enabled && d === root.dark
-                ? `hl.config({ plugin = { hyprbars = { bar_color = "${root.barColor(newColor, newOpacity, d)}" } } })` : "")
+        root.writeAndApply([root.slotPath("titlebars.color", d), String(newColor),
+            root.slotPath("titlebars.opacity", d), String(newOpacity)], root.enabled && d === root.dark)
     }
 
     // Everything back to how the title bars come, both modes at once, under a
     // single reload. The buttons come with the bars, so they return too.
     function resetAppearance() {
+        // Buttons that were never changed have nothing for the reload to
+        // rebuild, so only the bar's own settings need applying.
+        const buttonsStock = root.buttonsEnabled && root.buttonSize === root.defaultButtonSize
+            && [root.buttonBackgroundDark, root.buttonBackgroundLight, root.buttonIconColorDark,
+                root.buttonIconColorLight, root.buttonHighlightDark, root.buttonHighlightLight].every(v => v === "")
         root.colorDark = ""
         root.colorLight = ""
         root.opacityDark = root.defaultOpacityDark
@@ -271,7 +263,10 @@ Singleton {
         for (const name of ["titlebars.color", "titlebars.opacity", "titlebars.buttonBackground",
                 "titlebars.buttonIconColor", "titlebars.buttonHighlight"])
             pairs.push(root.slotPath(name, true), "", root.slotPath(name, false), "")
-        root.writeAndReload(pairs)
+        if (buttonsStock)
+            root.writeAndApply(pairs, root.enabled)
+        else
+            root.writeAndReload(pairs)
     }
 
     Process {

@@ -490,6 +490,14 @@ local function applyPluginConfig()
     end
 end
 
+-- The shell calls this after it changes one of the title bar files, through
+-- `hyprctl eval "MainstreamApplyPluginConfig()"`, instead of reloading the whole
+-- config: the files are read again and everything above lands as it would on
+-- a reload. The buttons are the exception. The plugin only empties its list on
+-- a reload, so the mark above keeps this from adding a second set, and a
+-- change to the buttons themselves still asks for the reload.
+MainstreamApplyPluginConfig = applyPluginConfig
+
 -- Apply synchronously inside the reload chain — by the time config.reloaded
 -- fires, the plugin's PLUGIN_INIT has completed addConfigValueV2 +
 -- addLuaFunction, so the keys are in m_configValues and add_button is
