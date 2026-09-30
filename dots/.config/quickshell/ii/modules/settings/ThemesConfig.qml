@@ -981,7 +981,9 @@ meta = json.load(open(os.path.join(theme_dir, "meta.json")))
 # archive claims it: widget places are shares of the screen now, and a build
 # from before reads them as pixels, so it should say so when it imports one.
 meta["formatVersion"] = FORMAT_VERSION
-with tarfile.open(out_path, "w:gz") as tar:
+# The pictures are the bulk of a theme and are already compressed, so the
+# fastest level costs next to nothing in size and much less time.
+with tarfile.open(out_path, "w:gz", compresslevel=1) as tar:
     entry(tar, "config.json", cfg)
     entry(tar, "meta.json", meta)
     # Only the picture meta.json names, when it names one: a folder from before
@@ -1124,15 +1126,18 @@ def fail():
 # rename — a half-written theme never appears in the grid.
 tmp = tempfile.mkdtemp(prefix=".importing-", dir=themes_dir)
 try:
+    # Read as a stream, one pass from start to end, each wanted member written
+    # out as it goes by: listing the members first and extracting them after
+    # decompressed the whole archive twice.
     try:
-        tar = tarfile.open(archive, "r:*")
+        tar = tarfile.open(archive, "r|*")
     except Exception:
         fail()
     with tar:
         picked, seen, total_bytes = [], set(), 0
         ss_picked, ss_seen, ss_bytes = [], set(), 0
         anim_picked, anim_seen, anim_bytes = [], set(), 0
-        for m in tar.getmembers():
+        for m in tar:
             if not m.isfile():
                 continue
             raw = m.name[2:] if m.name.startswith("./") else m.name
@@ -1145,6 +1150,7 @@ try:
                 anim_bytes += m.size
                 m.name = "animations/" + an
                 anim_picked.append(m)
+                tar.extract(m, tmp, filter="data")
                 continue
             ss = slideshow_name(raw)
             if ss:
@@ -1155,6 +1161,7 @@ try:
                 ss_bytes += m.size
                 m.name = "slideshow/" + ss
                 ss_picked.append(m)
+                tar.extract(m, tmp, filter="data")
                 continue
             # Anything else nested is dropped rather than flattened, so a
             # picture folder can't smuggle in a second meta.json.
@@ -1173,9 +1180,9 @@ try:
             seen.add(n)
             m.name = n
             picked.append(m)
+            tar.extract(m, tmp, filter="data")
         if "meta.json" not in seen or "config.json" not in seen:
             fail()
-        tar.extractall(tmp, members=picked + ss_picked + anim_picked, filter="data")
 
     try:
         meta = json.load(open(os.path.join(tmp, "meta.json")))
