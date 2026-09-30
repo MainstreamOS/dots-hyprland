@@ -307,6 +307,23 @@ case "$current_theme" in
   *) apply_icon_theme=0 ;;
 esac
 
+# Under a theme apply the icon theme is the theme's to choose: it sets the one
+# it was saved with once the colours are done, and this copy runs detached, so
+# it could finish on either side of that and undo it. So it waits for the
+# apply to end, and then only refreshes the recoloured set if that is what the
+# theme left in place.
+apply_state="${XDG_RUNTIME_DIR:-/tmp}/quickshell-theme-apply.state"
+if [ "$(cat "$apply_state" 2>/dev/null)" = "applying" ]; then
+  waited=0
+  while [ "$(cat "$apply_state" 2>/dev/null)" = "applying" ] && [ "$waited" -lt 600 ]; do
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  if [ "$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'")" != "$theme_name" ]; then
+    apply_icon_theme=0
+  fi
+fi
+
 if [ "$apply_icon_theme" = "1" ] && command -v gsettings >/dev/null 2>&1; then
   gsettings set org.gnome.desktop.interface icon-theme "$base_theme" >/dev/null 2>&1 || true
   gsettings set org.gnome.desktop.interface icon-theme "$theme_name" >/dev/null 2>&1 || true
@@ -320,7 +337,7 @@ fi
 
 if [ "$apply_icon_theme" = "1" ] && command -v kwriteconfig6 >/dev/null 2>&1; then
   kwriteconfig6 --file kdeglobals --group Icons --key Theme "$theme_name" >/dev/null 2>&1 || true
-elif command -v kwriteconfig5 >/dev/null 2>&1; then
+elif [ "$apply_icon_theme" = "1" ] && command -v kwriteconfig5 >/dev/null 2>&1; then
   kwriteconfig5 --file kdeglobals --group Icons --key Theme "$theme_name" >/dev/null 2>&1 || true
 fi
 
