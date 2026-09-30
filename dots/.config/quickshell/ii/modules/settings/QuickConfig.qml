@@ -102,11 +102,19 @@ ContentPage {
     // so a Light click cannot be lost behind a palette pick queued after it.
     // The lock stays with the wrapper: whatever switchwall leaves running
     // must not hold it.
+    //
+    // Each click takes a ticket, and a run that gets its turn only goes ahead
+    // if no click came after it: switchwall reads the config as it starts, so
+    // the newest waiting run carries every pick before it, and clicking
+    // through the styles costs one regeneration rather than one each.
     function applyTheme(mode) {
         Quickshell.execDetached(["bash", "-c",
             'd="${XDG_RUNTIME_DIR:-/tmp}/quickshell-ii-theme"; mkdir -p "$d" || exit 1;'
             + ' if [ -n "$1" ]; then printf "%s\\n" "$1" > "$d/mode"; fi;'
+            + ' exec 8>"$d/ticket.lock"; flock 8 || exit 1;'
+            + ' t=$(( $(cat "$d/ticket" 2>/dev/null || echo 0) + 1 )); printf "%s" "$t" > "$d/ticket"; exec 8>&-;'
             + ' exec 9>"$d/lock"; flock 9 || exit 1;'
+            + ' [ "$(cat "$d/ticket" 2>/dev/null)" = "$t" ] || exit 0;'
             + ' m=""; if [ -e "$d/mode" ]; then m=$(cat "$d/mode"); rm -f "$d/mode"; fi;'
             + ' "$0" --noswitch ${m:+--mode "$m"} 9>&-',
             Directories.wallpaperSwitchScriptPath, mode ?? ""]);
