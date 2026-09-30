@@ -23,16 +23,23 @@ pre_process() {
     # Set GNOME color-scheme if mode_flag is dark or light
     # Only steer the widget theme while the user is on the stock adw-gtk3
     # pair — a manual pick in Settings > Themes > System look wins.
-    local current_gtk
-    current_gtk="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")"
+    # Both are read in one go and written only when they differ: every write
+    # reaches dconf and each app watching it, the same value included.
+    local current_gtk="" current_scheme="" key value
+    while read -r _ key value; do
+        case "$key" in
+            gtk-theme) current_gtk="${value//\'/}" ;;
+            color-scheme) current_scheme="${value//\'/}" ;;
+        esac
+    done < <(gsettings list-recursively org.gnome.desktop.interface 2>/dev/null)
     if [[ "$mode_flag" == "dark" ]]; then
-        gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
-        case "$current_gtk" in adw-gtk3|adw-gtk3-dark|"")
+        [[ "$current_scheme" == "prefer-dark" ]] || gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+        case "$current_gtk" in adw-gtk3|"")
             gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark' ;;
         esac
     elif [[ "$mode_flag" == "light" ]]; then
-        gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
-        case "$current_gtk" in adw-gtk3|adw-gtk3-dark|"")
+        [[ "$current_scheme" == "prefer-light" ]] || gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
+        case "$current_gtk" in adw-gtk3-dark|"")
             gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3' ;;
         esac
     fi
@@ -373,6 +380,12 @@ config_jq() {
         local tmp
         tmp="$(mktemp "$SHELL_CONFIG_FILE.XXXXXX" 2>/dev/null)" || return 0
         if jq "$@" "$SHELL_CONFIG_FILE" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+            # An edit that changes nothing is not written: every rewrite has
+            # each Quickshell process reload the file.
+            if cmp -s "$tmp" "$SHELL_CONFIG_FILE"; then
+                rm -f "$tmp"
+                return 0
+            fi
             chmod --reference="$SHELL_CONFIG_FILE" "$tmp" 2>/dev/null
             mv -f "$tmp" "$SHELL_CONFIG_FILE"
         else
@@ -558,17 +571,9 @@ switch() {
     local skip_config_writes="${config_staged_flag:-}"
 
     # Start Gemini auto-categorization if enabled
-    aiStylingEnabled=$(jq -r '.background.widgets.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
-    if [[ "$aiStylingEnabled" == "true" ]]; then
+    if [[ "${cfg_ai_styling:-}" == "true" ]]; then
         categorize_wallpaper "$imgpath" &
     fi
-
-    read scale screenx screeny screensizey < <(hyprctl monitors -j | jq '.[] | select(.focused) | .scale, .x, .y, .height' | xargs)
-    cursorposx=$(hyprctl cursorpos -j | jq '.x' 2>/dev/null) || cursorposx=960
-    cursorposx=$(bc <<< "scale=0; ($cursorposx - $screenx) * $scale / 1")
-    cursorposy=$(hyprctl cursorpos -j | jq '.y' 2>/dev/null) || cursorposy=540
-    cursorposy=$(bc <<< "scale=0; ($cursorposy - $screeny) * $scale / 1")
-    cursorposy_inverted=$((screensizey - cursorposy))
 
     matugen_args=(--source-color-index 0)
     # Only set on the picture path; a hand-picked accent colour needs no cache
@@ -737,7 +742,7 @@ switch() {
     force_dark_mode=""
     if [[ -n "$mode_flag" ]]; then
         matugen_args+=(--mode "$mode_flag")
-        force_dark_mode="$(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode' "$SHELL_CONFIG_FILE" 2>/dev/null)"
+        force_dark_mode="${cfg_force_dark_mode:-}"
         if [[ "$force_dark_mode" == "true" ]]; then
             generate_colors_material_args+=(--mode "dark")
         else
@@ -779,7 +784,7 @@ switch() {
 
     # Check if app and shell theming is enabled in config
     if [ -f "$SHELL_CONFIG_FILE" ]; then
-        enable_apps_shell=$(jq -r '.appearance.wallpaperTheming.enableAppsAndShell' "$SHELL_CONFIG_FILE")
+        enable_apps_shell="${cfg_enable_apps_shell:-}"
         if [ "$enable_apps_shell" == "false" ]; then
             echo "App and shell theming disabled, skipping matugen and color generation"
             reload_for_colormode
@@ -789,9 +794,9 @@ switch() {
 
     # Set harmony and related properties
     if [ -f "$SHELL_CONFIG_FILE" ]; then
-        harmony=$(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.harmony' "$SHELL_CONFIG_FILE")
-        harmonize_threshold=$(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.harmonizeThreshold' "$SHELL_CONFIG_FILE")
-        term_fg_boost=$(jq -r '.appearance.wallpaperTheming.terminalGenerationProps.termFgBoost' "$SHELL_CONFIG_FILE")
+        harmony="${cfg_harmony:-}"
+        harmonize_threshold="${cfg_harmonize_threshold:-}"
+        term_fg_boost="${cfg_term_fg_boost:-}"
         [[ "$harmony" != "null" && -n "$harmony" ]] && generate_colors_material_args+=(--harmony "$harmony")
         [[ "$harmonize_threshold" != "null" && -n "$harmonize_threshold" ]] && generate_colors_material_args+=(--harmonize_threshold "$harmonize_threshold")
         [[ "$term_fg_boost" != "null" && -n "$term_fg_boost" ]] && generate_colors_material_args+=(--term_fg_boost "$term_fg_boost")
@@ -929,11 +934,29 @@ main() {
     keep_slideshow_flag=""
     stop_slideshow=""
 
-    get_type_from_config() {
-        jq -r '.appearance.palette.type' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "auto"
-    }
-    get_accent_color_from_config() {
-        jq -r '.appearance.palette.accentColor' "$SHELL_CONFIG_FILE" 2>/dev/null || echo ""
+    # Every setting the run goes by, in one pass over config.json rather than a
+    # jq each. Read once the arguments are handled, since --color writes the
+    # accent before it is read back here.
+    read_config_settings() {
+        local cfg=()
+        mapfile -t cfg < <(jq -r '[.appearance.palette.type, .appearance.palette.accentColor,
+            .background.widgets.clock.cookie.aiStyling,
+            .appearance.wallpaperTheming.terminalGenerationProps.forceDarkMode,
+            .appearance.wallpaperTheming.enableAppsAndShell,
+            .appearance.wallpaperTheming.terminalGenerationProps.harmony,
+            .appearance.wallpaperTheming.terminalGenerationProps.harmonizeThreshold,
+            .appearance.wallpaperTheming.terminalGenerationProps.termFgBoost]
+            | .[] | tostring | gsub("\n"; " ")' "$SHELL_CONFIG_FILE" 2>/dev/null)
+        # Unreadable reads as it did one jq at a time: the type as auto and
+        # the rest as unset.
+        cfg_palette_type="${cfg[0]:-auto}"
+        cfg_accent_color="${cfg[1]:-}"
+        cfg_ai_styling="${cfg[2]:-}"
+        cfg_force_dark_mode="${cfg[3]:-}"
+        cfg_enable_apps_shell="${cfg[4]:-}"
+        cfg_harmony="${cfg[5]:-}"
+        cfg_harmonize_threshold="${cfg[6]:-}"
+        cfg_term_fg_boost="${cfg[7]:-}"
     }
     set_accent_color() {
         local color="$1"
@@ -1022,8 +1045,10 @@ main() {
         esac
     done
 
+    read_config_settings
+
     # If accentColor is set in config, use it
-    config_color="$(get_accent_color_from_config)"
+    config_color="$cfg_accent_color"
     if [[ "$config_color" =~ ^#?[A-Fa-f0-9]{6}$ ]]; then
         color_flag="1"
         color="$config_color"
@@ -1041,7 +1066,7 @@ main() {
 
     # If type_flag is not set, get it from config
     if [[ -z "$type_flag" ]]; then
-        type_flag="$(get_type_from_config)"
+        type_flag="$cfg_palette_type"
     fi
 
     # Validate type_flag (allow 'auto' as well)
