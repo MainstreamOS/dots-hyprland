@@ -651,10 +651,10 @@ switch() {
                     && [[ -n "$thumb_src" ]] && printf '%s' "$thumb_src" > "$thumbnail.src" 2>/dev/null
             fi
 
-            # Set thumbnail path (skip if apply-theme.sh already staged it)
-            if [[ -z "$skip_config_writes" ]]; then
-                set_thumbnail_path "$thumbnail"
-            fi
+            # Set thumbnail path. Written under apply-theme.sh as well: it
+            # stages the wallpaper but not this, which only exists once ffmpeg
+            # has run, and an unchanged path isn't rewritten.
+            set_thumbnail_path "$thumbnail"
 
             if [ -f "$thumbnail" ]; then
                 palette_img="$thumbnail"
