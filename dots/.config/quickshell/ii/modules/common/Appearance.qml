@@ -18,17 +18,16 @@ Singleton {
     property int themeRevision: 0
 
     // Transparency. The quadratic functions were derived from analysis of hand-picked transparency values.
-    ColorQuantizer {
-        id: wallColorQuant
-        property string wallpaperPath: Config.options.background.wallpaperPath
-        // The same list Wallpapers.videoExtensions keeps; a video missed here is
-        // handed to magick whole, which decodes every frame.
-        property bool wallpaperIsVideo: /\.(mp4|webm|mkv|avi|mov|m4v|ogv)$/i.test(wallpaperPath)
-        source: Qt.resolvedUrl(wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath)
-        depth: 0 // 2^0 = 1 color
-        rescaleSize: 10
-    }
-    property real wallpaperVibrancy: (wallColorQuant.colors[0]?.hslSaturation + wallColorQuant.colors[0]?.hslLightness) / 2
+    readonly property string _wallpaperPath: Config.options.background.wallpaperPath
+    // The same list Wallpapers.videoExtensions keeps; a video missed here is
+    // handed to magick whole, which decodes every frame.
+    readonly property bool _wallpaperIsVideo: /\.(mp4|webm|mkv|avi|mov|m4v|ogv)$/i.test(_wallpaperPath)
+    // The picture's average colour, read in the same pass as its edges below
+    // from the small copy that pass already makes, so a new wallpaper is
+    // decoded once in each process that loads this rather than twice. Unset
+    // until the first read.
+    property var _wallpaperAverageRead: undefined
+    property real wallpaperVibrancy: (_wallpaperAverageRead?.hslSaturation + _wallpaperAverageRead?.hslLightness) / 2
     // The same for both modes: a light surface that can never be seen through
     // reads as harsh beside a dark one that always can.
     property real autoBackgroundTransparency: { // y = 0.5768x^2 - 0.759x + 0.2896
@@ -45,13 +44,13 @@ Singleton {
     // landscape averages out dark, and the sky is what a see-through strip
     // across the top actually shows. The average stands in until it is read.
     property var wallpaperEdges: ({})
-    readonly property color wallpaperAverage: wallColorQuant.colors[0] ?? m3colors.m3background
+    readonly property color wallpaperAverage: _wallpaperAverageRead ?? m3colors.m3background
     function wallpaperEdge(edge) {
         const read = wallpaperEdges[edge]
         return read !== undefined ? read : wallpaperAverage
     }
-    readonly property string wallpaperFile: FileUtils.trimFileProtocol(wallColorQuant.wallpaperIsVideo
-        ? Config.options.background.thumbnailPath : wallColorQuant.wallpaperPath)
+    readonly property string wallpaperFile: FileUtils.trimFileProtocol(root._wallpaperIsVideo
+        ? Config.options.background.thumbnailPath : root._wallpaperPath)
     onWallpaperFileChanged: wallEdgeDebounce.restart()
     Timer {
         id: wallEdgeDebounce
@@ -59,6 +58,7 @@ Singleton {
         onTriggered: {
             if (root.wallpaperFile === "") {
                 root.wallpaperEdges = ({})
+                root._wallpaperAverageRead = undefined
                 return
             }
             wallEdgeSampler.exec({ command: ["magick", "-define", "jpeg:size=256x144", root.wallpaperFile,
@@ -67,6 +67,7 @@ Singleton {
                 "(", "-clone", "0", "-gravity", "south", "-crop", "64x3+0+0", "+repage", "-scale", "1x1!", ")",
                 "(", "-clone", "0", "-gravity", "west", "-crop", "4x36+0+0", "+repage", "-scale", "1x1!", ")",
                 "(", "-clone", "0", "-gravity", "east", "-crop", "4x36+0+0", "+repage", "-scale", "1x1!", ")",
+                "(", "-clone", "0", "-scale", "1x1!", ")",
                 "-delete", "0", "-format", "%[hex:p{0,0}]\\n", "info:"] })
         }
     }
@@ -79,9 +80,11 @@ Singleton {
                 // Kept until the new picture is read, so a change of wallpaper
                 // does not pass through the average on its way and turn the
                 // icons twice.
-                root.wallpaperEdges = hex.length === 4 && hex.every(h => /^[0-9a-fA-F]{6}$/.test(h))
+                const ok = hex.length === 5 && hex.every(h => /^[0-9a-fA-F]{6}$/.test(h))
+                root.wallpaperEdges = ok
                     ? { top: "#" + hex[0], bottom: "#" + hex[1], left: "#" + hex[2], right: "#" + hex[3] }
                     : ({})
+                root._wallpaperAverageRead = ok ? Qt.color("#" + hex[4]) : undefined
             }
         }
     }
