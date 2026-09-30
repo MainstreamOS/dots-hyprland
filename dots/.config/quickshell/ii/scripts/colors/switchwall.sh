@@ -546,10 +546,26 @@ picture_only_post_process() {
     ) >/dev/null 2>&1 9>&- &
 }
 
+# The category belongs to the picture, so it is asked for once per file rather
+# than on every run: a light/dark toggle, an accent pick or the login re-apply
+# would otherwise send the same wallpaper to Gemini again and re-style the
+# clock for nothing. The file it was worked out for is noted beside it.
 categorize_wallpaper() {
+    local dir="$STATE_DIR/user/generated/wallpaper"
+    local key
+    key="$(cache_key_for "$1")" || key=""
+    if [[ -n "$key" && -s "$dir/category.txt" && "$(cat "$dir/category.key" 2>/dev/null)" == "$key" ]]; then
+        return 0
+    fi
     img_cat=$("$SCRIPT_DIR/../ai/gemini-categorize-wallpaper.sh" "$1")
     # notify-send "Wallpaper category" "$img_cat"
-    echo "$img_cat" > "$STATE_DIR/user/generated/wallpaper/category.txt"
+    mkdir -p "$dir" 2>/dev/null
+    echo "$img_cat" > "$dir/category.txt"
+    if [[ -n "$img_cat" && -n "$key" ]]; then
+        printf '%s' "$key" > "$dir/category.key" 2>/dev/null
+    else
+        rm -f "$dir/category.key" 2>/dev/null
+    fi
 }
 
 switch() {
