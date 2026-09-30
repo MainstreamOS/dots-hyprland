@@ -36,7 +36,12 @@ def pick_scheme(colorfulness):
         return "scheme-tonal-spot"
 
 def load_and_resize_image(img_path, max_dim=128):
-    img = cv2.imread(img_path)
+    # Only a copy about max_dim across is measured, and a JPEG can be decoded
+    # at a quarter of its size for a fraction of the cost of every pixel. It
+    # has no effect on other formats, which are read whole as before.
+    img = cv2.imread(img_path, cv2.IMREAD_REDUCED_COLOR_4)
+    if img is None:
+        img = cv2.imread(img_path)
     if img is None:
         return None
     h, w = img.shape[:2]

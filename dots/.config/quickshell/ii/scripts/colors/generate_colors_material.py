@@ -63,6 +63,14 @@ transparent = (args.transparency == 'transparent')
 
 if args.path is not None:
     image = Image.open(args.path)
+    # Only a small copy is quantized, and a JPEG can be decoded straight at a
+    # fraction of its size, which skips decoding every pixel of a camera-sized
+    # picture. The copy is still resized to the same size below. It has no
+    # effect on other formats.
+    try:
+        image.draft('RGB', calculate_optimal_size(*image.size, args.size))
+    except Exception:
+        pass
 
     if image.format == "GIF":
         image.seek(1)
