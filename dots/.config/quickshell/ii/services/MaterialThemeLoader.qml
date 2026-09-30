@@ -27,14 +27,17 @@ Singleton {
         // costs a full pass of its own, and the same palette read again
         // changes nothing. It is let go before the revision moves, since what
         // rebuilds on that reads the finished palette.
+        let changed = false
         try {
             for (const key in json) {
                 if (json.hasOwnProperty(key)) {
                     // Convert snake_case to CamelCase
                     const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
                     const m3Key = `m3${camelCaseKey}`
-                    if (String(Appearance.m3colors[m3Key]) !== String(json[key]).toLowerCase())
+                    if (String(Appearance.m3colors[m3Key]) !== String(json[key]).toLowerCase()) {
                         Appearance.paletteSettling = true
+                        changed = true
+                    }
                     Appearance.m3colors[m3Key] = json[key]
                 }
             }
@@ -43,7 +46,11 @@ Singleton {
         } finally {
             Appearance.paletteSettling = false
         }
-        Appearance.themeRevision += 1
+        // What follows the revision rebuilds whole pages (Settings recreates
+        // the one on screen), so a write that left every colour as it was,
+        // such as re-applying the theme already on, doesn't move it.
+        if (changed)
+            Appearance.themeRevision += 1
     }
 
     function resetFilePathNextTime() {
