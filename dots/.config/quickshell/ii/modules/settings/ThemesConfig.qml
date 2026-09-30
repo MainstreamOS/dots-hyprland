@@ -492,6 +492,12 @@ ContentPage {
                          `WP_BASE="\${WP##*/}"\n` +
                          `case "$WP_BASE" in *.*) EXT="\${WP_BASE##*.}" ;; *) EXT="img" ;; esac\n` +
                          `[ "$WP" -ef "$DIR/wallpaper.$EXT" ] || cp -f "$WP" "$DIR/wallpaper.$EXT"\n` +
+                         // An update to a picture of another kind leaves the old
+                         // one behind otherwise, and export and import both have
+                         // to guess which of the two is the theme's.
+                         `for OLD in "$DIR"/wallpaper.*; do\n` +
+                         `    [ -e "$OLD" ] && [ "\${OLD##*/}" != "wallpaper.$EXT" ] && rm -f -- "$OLD"\n` +
+                         `done\n` +
                          `WP_FILE="wallpaper.$EXT"\n`
                        : `WP_FILE=""\n`) +
             // Screenshot of primary focused monitor. Always overwrites
@@ -978,9 +984,12 @@ meta["formatVersion"] = FORMAT_VERSION
 with tarfile.open(out_path, "w:gz") as tar:
     entry(tar, "config.json", cfg)
     entry(tar, "meta.json", meta)
+    # Only the picture meta.json names, when it names one: a folder from before
+    # updates tidied up after themselves can still hold an older one.
+    own_wp = str(meta.get("wallpaperFile") or "")
     for n in sorted(os.listdir(theme_dir)):
         p = os.path.join(theme_dir, n)
-        if os.path.isfile(p) and (n in KEEP or n.startswith("wallpaper.")):
+        if os.path.isfile(p) and (n in KEEP or (n.startswith("wallpaper.") and (not own_wp or n == own_wp))):
             tar.add(p, arcname=n)
     for p in images:
         tar.add(p, arcname="slideshow/" + os.path.basename(p))
@@ -1008,9 +1017,16 @@ print("OK|" + out_path)
         id: importProc
         property string buf: ""
         onRunningChanged: if (running) buf = ""
+        // The page is rebuilt on a color change and left on navigation, which
+        // ends an import without onExited. Writes are let through again then.
+        Component.onDestruction: {
+            if (running)
+                Config.blockWrites = false;
+        }
         stdout: SplitParser { onRead: data => importProc.buf += data }
         onExited: {
             root.ioBusy = false
+            Config.blockWrites = false
             const line = (importProc.buf || "").trim().split("\n").filter(l => l.length).pop() || ""
             if (line.startsWith("OK|")) {
                 ThemeLibrary.refresh()
@@ -1050,6 +1066,9 @@ print("OK|" + out_path)
     function importTheme() {
         if (root.ioBusy) return
         root.ioBusy = true
+        // Replacing the applied theme may point config.json's wallpaper at a
+        // kept copy, so the adapter is held off for the run, as delete does.
+        Config.blockWrites = true
         const script =
             `IN=$(zenity --file-selection --title="Import theme" ` +
             `--file-filter="Mainstream theme | *.mtheme" ` +
@@ -1180,7 +1199,18 @@ try:
         live = json.load(open(live_config))
     except Exception:
         live = {}
-    wp = next((f for f in sorted(os.listdir(tmp)) if f.startswith("wallpaper.")), "")
+    # The picture the theme's meta.json names, when the archive has it, since an
+    # older export can carry a second one. Any other copy is left out.
+    def pick_wallpaper(folder, named):
+        files = sorted(os.listdir(folder))
+        named = str(named or "")
+        if named.startswith("wallpaper.") and named in files:
+            return named
+        return next((f for f in files if f.startswith("wallpaper.")), "")
+    wp = pick_wallpaper(tmp, meta.get("wallpaperFile"))
+    for f in os.listdir(tmp):
+        if f.startswith("wallpaper.") and f != wp:
+            os.remove(os.path.join(tmp, f))
 
     # Replacing a theme swaps the whole directory, so anything the incoming file
     # doesn't carry would go out with the old copy. An archive exported without
@@ -1193,7 +1223,11 @@ try:
             if os.path.isfile(src_keep) and not os.path.exists(os.path.join(tmp, keep_name)):
                 shutil.copy2(src_keep, os.path.join(tmp, keep_name))
         if not wp:
-            old_wp = next((f for f in sorted(os.listdir(dest)) if f.startswith("wallpaper.")), "")
+            try:
+                old_named = json.load(open(os.path.join(dest, "meta.json"))).get("wallpaperFile")
+            except Exception:
+                old_named = ""
+            old_wp = pick_wallpaper(dest, old_named)
             if old_wp:
                 shutil.copy2(os.path.join(dest, old_wp), os.path.join(tmp, old_wp))
                 wp = old_wp
@@ -1263,6 +1297,16 @@ try:
     json.dump(meta, open(os.path.join(tmp, "meta.json"), "w"), indent=2)
     json.dump(cfg, open(os.path.join(tmp, "config.json"), "w"), indent=2)
 
+    # The theme on screen can be the one being replaced, with the live wallpaper
+    # a file inside its folder. That file goes with the old folder, so it is
+    # kept where the swap can't take it and config.json is pointed there, the
+    # way deleting a theme keeps it.
+    live_wp = str((live.get("background") or {}).get("wallpaperPath") or "")
+    kept_wp = ""
+    if replaced and live_wp.startswith(dest + os.sep) and os.path.isfile(live_wp):
+        kept_wp = os.path.join(themes_dir, "last-wallpaper" + (os.path.splitext(live_wp)[1] or ".img"))
+        shutil.copy2(live_wp, kept_wp)
+
     # Swap the finished copy in rather than writing over the old one where it
     # stands, so an import that dies partway can't leave a theme made of half
     # of each. The outgoing copy is only discarded once the new one is in place.
@@ -1278,6 +1322,17 @@ try:
         raise
     shutil.rmtree(previous, ignore_errors=True)
     tmp = None
+
+    if kept_wp:
+        try:
+            with open(live_config) as f:
+                data = json.load(f)
+            data.setdefault("background", {})["wallpaperPath"] = kept_wp
+            with open(live_config + ".tmp", "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(live_config + ".tmp", live_config)
+        except Exception:
+            pass
 
     rebuild_index(themes_dir)
     print("OK|" + json.dumps({"name": name, "missing": missing, "newer": newer, "replaced": replaced}))
