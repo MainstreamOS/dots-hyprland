@@ -18,7 +18,20 @@ notify() {
 
 [ -r "$INDEX" ] || { notify 'No themes saved yet.'; exit 0; }
 
-mapfile -t SLUGS < <(jq -r '.[].slug // empty' "$INDEX" 2>/dev/null || true)
+# Day/Night Themes picks the theme itself, and the Themes page holds its Apply
+# buttons back while it does; a switch from here would be undone at the next
+# boundary, and would leave the schedule believing its own pick was on.
+SCHEDULE="$(jq -r '.appearance.themeSchedule.mode // "off"' "$XDG_CONFIG_HOME/illogical-impulse/config.json" 2>/dev/null || true)"
+if [ -n "$SCHEDULE" ] && [ "$SCHEDULE" != "off" ]; then
+    notify 'Day/Night Themes is choosing your theme. Turn it off in Settings to switch by hand.'
+    exit 0
+fi
+
+# The index is a record of what was saved, not of what is there now: a theme
+# folder removed any other way stays listed, and landing on it would stop the
+# cycle there for good, since a failed apply never moves the marker on.
+mapfile -t SLUGS < <(cd "$THEMES_DIR" 2>/dev/null && jq -r '.[].slug // empty' index.json 2>/dev/null \
+    | while IFS= read -r s; do [ -n "$s" ] && [ -d "$s" ] && printf '%s\n' "$s"; done || true)
 COUNT=${#SLUGS[@]}
 # One theme has nothing to switch to, and switching to itself would still cost
 # a full re-apply.
@@ -39,4 +52,8 @@ NAME="$(jq -r --arg s "$NEXT" 'map(select(.slug == $s)) | .[0].name // $s' "$IND
 [ -n "$NAME" ] && [ "$NAME" != "null" ] || NAME="$NEXT"
 
 notify "Switching to $NAME"
-exec bash "$SCRIPT_DIR/apply-theme.sh" "$NEXT"
+# Through the shell, which cancels an apply already running rather than
+# queueing behind it, repaints once the colours land, and says so when a theme
+# fails. Straight to the script only when no shell is there to ask.
+qs -c "${qsConfig:-ii}" ipc call themes apply "$NEXT" >/dev/null 2>&1 \
+    || exec bash "$SCRIPT_DIR/apply-theme.sh" "$NEXT"
