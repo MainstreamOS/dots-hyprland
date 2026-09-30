@@ -252,7 +252,7 @@ Singleton {
         // a newline of its own cannot push the fields after it down a line.
         command: ["bash", "-c",
             'while [ $# -gt 1 ]; do ' +
-            'if v="$(head -n1 -- "$1" 2>/dev/null)"; then printf "%s\\n" "$v"; else printf "%s\\n" "$2"; fi; ' +
+            'v=""; if [ -r "$1" ] && { IFS= read -r v < "$1" || true; }; then printf "%s\\n" "$v"; else printf "%s\\n" "$2"; fi; ' +
             'shift 2; done',
             "titlebars",
             root.flagPath, "1",

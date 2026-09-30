@@ -69,8 +69,7 @@ Singleton {
     }
 
     function refresh() {
-        loadIndexProc.running = false
-        loadIndexProc.running = true
+        indexView.reload()
     }
 
     // Reassigning `themes` resets the pins and every card on the page, so an
@@ -102,29 +101,7 @@ Singleton {
             `mkdir -p '${root.themesDir}' && ` +
             `if [ ! -f '${root.themesIndex}' ]; then echo '[]' > '${root.themesIndex}'; fi`
         ]
-        onExited: loadIndexProc.running = true
-    }
-
-    Process {
-        id: loadIndexProc
-        property string buf: ""
-        command: ["cat", root.themesIndex]
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => loadIndexProc.buf += data }
-        onExited: {
-            root.adoptIndex(loadIndexProc.buf)
-            loadLastAppliedProc.running = false
-            loadLastAppliedProc.running = true
-        }
-    }
-
-    Process {
-        id: loadLastAppliedProc
-        property string buf: ""
-        command: ["bash", "-c", `[ -f '${root.lastAppliedPath}' ] && cat '${root.lastAppliedPath}' || true`]
-        onRunningChanged: if (running) buf = ""
-        stdout: SplitParser { onRead: data => loadLastAppliedProc.buf += data }
-        onExited: root.lastAppliedSlug = (loadLastAppliedProc.buf || "").trim()
+        onExited: indexView.reload()
     }
 
     // Live-track last-applied.txt so the Themes page updates the "active"
@@ -134,6 +111,7 @@ Singleton {
     FileView {
         path: root.lastAppliedPath
         watchChanges: true
+        printErrors: false
         onFileChanged: reload()
         onLoaded: root.lastAppliedSlug = (text() || "").trim()
         onLoadFailed: error => {
@@ -144,11 +122,15 @@ Singleton {
     // The Themes page no longer re-reads the index by being rebuilt, so watch
     // the file for writers this process can't see — a second Settings window,
     // a restore, a future CLI. index.json is rewritten in place rather than
-    // renamed, so the watch survives it.
+    // renamed, so the watch survives it. Read through this view rather than
+    // a process each time.
     FileView {
+        id: indexView
         path: root.themesIndex
         watchChanges: true
-        onFileChanged: root.refresh()
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.adoptIndex(text())
     }
 
 }

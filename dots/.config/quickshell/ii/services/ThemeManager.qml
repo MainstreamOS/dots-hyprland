@@ -44,8 +44,31 @@ Singleton {
     property bool _validSlugsLoaded: false
 
     function _refreshValidSlugs() {
+        themesIndexView.reload()
+    }
+    // The index is read here and only the folder check goes to a process, one
+    // for the whole list, rather than a shell, jq and a loop on every change.
+    function _checkSlugs(raw) {
+        let slugs = []
+        try {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed))
+                slugs = parsed.map(t => t?.slug).filter(s => typeof s === "string" && s.length > 0)
+        } catch (e) {}
         themesIndexProc.running = false
+        themesIndexProc.command = ["bash", "-c",
+            `cd "$1" 2>/dev/null || exit 0\nshift\nfor s; do [ -d "$s" ] && printf '%s\\n' "$s"; done`,
+            "theme-index", root.themesDir, ...slugs]
         themesIndexProc.running = true
+    }
+    FileView {
+        id: themesIndexView
+        path: `${root.themesDir}/index.json`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root._checkSlugs(text())
+        onLoadFailed: root._checkSlugs("")
     }
     Process {
         id: themesIndexProc
@@ -54,12 +77,6 @@ Singleton {
         // theme directory removed any other way than through this page stays
         // listed. A slug only counts as real if its directory is on disk, or the
         // scheduler applies one that isn't and gives up on the window.
-        command: ["bash", "-c",
-            `cd "$1" 2>/dev/null || exit 0\n` +
-            `jq -r '.[].slug // empty' index.json 2>/dev/null | while IFS= read -r s; do\n` +
-            `  [ -n "$s" ] && [ -d "$s" ] && printf '%s\\n' "$s"\n` +
-            `done`,
-            "theme-index", root.themesDir]
         onRunningChanged: if (running) buf = ""
         stdout: SplitParser { onRead: data => themesIndexProc.buf += data + "\n" }
         onExited: {
@@ -288,16 +305,10 @@ Singleton {
         }
     }
 
-    // Refresh the valid-slug cache on startup, and again whenever the
-    // theme library changes. The FileView watcher below catches save /
-    // delete from any process (settings UI or a future CLI tool) by
-    // watching index.json directly — that file is the canonical record
-    // of what's installed. apply-theme.sh doesn't touch index.json, so
-    // there's nothing to refresh on a successful apply.
-    Component.onCompleted: root._refreshValidSlugs()
-    FileView {
-        path: `${root.themesDir}/index.json`
-        watchChanges: true
-        onFileChanged: root._refreshValidSlugs()
-    }
+    // The valid-slug cache is filled when themesIndexView first loads, and
+    // again whenever the theme library changes: its watcher catches save /
+    // delete from any process (settings UI or a future CLI tool) by watching
+    // index.json directly — that file is the canonical record of what's
+    // installed. apply-theme.sh doesn't touch index.json, so there's nothing
+    // to refresh on a successful apply.
 }
