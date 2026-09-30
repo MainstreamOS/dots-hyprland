@@ -50,8 +50,10 @@ Singleton {
                 args += `--set-lua "${key}" '${entries[key]}' `
         }
         if (args.length === 0) return
+        // --eval: a gradient that only changed colour is pushed live rather
+        // than with a reload, which it gets on every palette change.
         Quickshell.execDetached(["bash", "-c",
-            `${root.configuratorScriptPath} --file ${root.shellOverridesPath} ${args}`])
+            `${root.configuratorScriptPath} --file ${root.shellOverridesPath} --eval ${args}`])
     }
 
     function reset(key: string) {

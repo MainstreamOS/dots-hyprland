@@ -45,7 +45,7 @@ def generate_config_line(key, value):
     nested_structure = build_nested_structure(key_parts, value)
     return f'hl.config({{{nested_structure}}})\n'
 
-def edit_hyprland_config(file_path, set_args, reset_args):
+def edit_hyprland_config(file_path, set_args, reset_args, live_eval=False):
     if os.path.exists(file_path):
         with open(file_path, 'r') as file:
             lines = file.readlines()
@@ -57,6 +57,7 @@ def edit_hyprland_config(file_path, set_args, reset_args):
     
     new_lines = []
     found_keys = set()
+    removed = False
     
     patterns = {}
     for k in list(set_dict.keys()) + list(reset_set):
@@ -80,6 +81,7 @@ def edit_hyprland_config(file_path, set_args, reset_args):
                 break
                 
         if matched:
+            removed = True
             continue
             
         # Check if line matches a key to be set
@@ -103,6 +105,12 @@ def edit_hyprland_config(file_path, set_args, reset_args):
                     new_lines[-1] += '\n'
                 new_lines.append(generate_config_line(key, value))
                 
+    # An edit that leaves the file as it was has nothing to write and nothing
+    # for the compositor to pick up, and a reload makes every client
+    # re-configure. Resetting keys that are already absent is the usual case.
+    if "".join(new_lines) == "".join(lines):
+        return
+
     dir_name = os.path.dirname(os.path.abspath(file_path))
     os.makedirs(dir_name, exist_ok=True)
     temp_path = None
@@ -127,8 +135,18 @@ def edit_hyprland_config(file_path, set_args, reset_args):
     # replace above hands it a new one — whether it noticed depended on a
     # race between its re-watch and the next write. The writer applies its
     # own edit instead of hoping to be seen.
+    #
+    # With --eval, lines that only set values are handed over as they are,
+    # which is all a reload would do with them. A removed key still needs the
+    # reload, since only re-reading the config brings back what it overrode.
     try:
-        subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
+        pushed = False
+        if live_eval and not removed and set_dict:
+            chunk = " ".join(generate_config_line(k, v).strip() for k, v in set_dict.items())
+            done = subprocess.run(["hyprctl", "eval", chunk], capture_output=True, text=True, timeout=10)
+            pushed = done.returncode == 0 and "error" not in (done.stdout + done.stderr).lower()
+        if not pushed:
+            subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
         
@@ -144,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument("--set", nargs=2, action="append", metavar=("KEY", "VALUE"), help="Set a configuration key to a value.")
     parser.add_argument("--set-lua", nargs=2, action="append", metavar=("KEY", "LUA"), help="Set a key to a literal Lua value, such as a table.")
     parser.add_argument("--reset", action="append", metavar="KEY", help="Remove a configuration key.")
+    parser.add_argument("--eval", action="store_true", help="Push values that were only set with hyprctl eval instead of a reload.")
     
     args = parser.parse_args()
     
@@ -164,5 +183,5 @@ if __name__ == "__main__":
     if not set_args and not reset_args:
         print("Error: Must specify at least one key to set or reset.")
     else:
-        edit_hyprland_config(file_path, set_args, reset_args)
+        edit_hyprland_config(file_path, set_args, reset_args, live_eval=args.eval)
         

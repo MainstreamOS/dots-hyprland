@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.modules.common
 
 /**
@@ -83,7 +84,22 @@ Singleton {
         const signature = JSON.stringify(entries)
         if (signature === root._lastApplied) return
         root._lastApplied = signature
+        // With both lanes off, which is how they come, the write only clears
+        // two keys. At every start that is a process and a reload for keys the
+        // override file doesn't have, so it is only sent when it has them.
+        if (Object.values(entries).every(v => v === null)) {
+            overridesView.reload()
+            if (!/(active|inactive)_border/.test(overridesView.text() ?? ""))
+                return
+        }
         HyprlandConfig.applyLuaMany(entries)
+    }
+
+    FileView {
+        id: overridesView
+        path: HyprlandConfig.shellOverridesPath
+        blockLoading: true
+        printErrors: false
     }
 
     // Re-derived whenever the palette moves, which is what keeps it in step
