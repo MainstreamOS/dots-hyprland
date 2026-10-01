@@ -3,6 +3,7 @@ pragma Singleton
 import qs.modules.common
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.SystemTray
 
 Singleton {
@@ -15,6 +16,76 @@ Singleton {
     property bool invertPins: Config.options.tray.invertPinnedItems
     property list<var> pinnedItems: invertPins ? itemsNotInUserList : itemsInUserList
     property list<var> unpinnedItems: invertPins ? itemsInUserList : itemsNotInUserList
+
+    // A few StatusNotifier clients only register when they first start. The
+    // watcher is recreated with Quickshell, so those clients disappear after
+    // a reload unless they are invited to register again. Quickshell's tray
+    // API deliberately does not expose arbitrary session-bus calls; use the
+    // system bus client directly here rather than maintaining a companion
+    // shell script with its own parsing and retry policy.
+    property var _registrationQueue: []
+
+    function reregisterStatusNotifierItems() {
+        if (sessionBusList.running)
+            return;
+        sessionBusList.running = true;
+    }
+
+    function _queueRegistrations(output) {
+        let services;
+        try {
+            services = JSON.parse(output)
+                .map(entry => String(entry.name || ""))
+                .filter(name => /(^|\.)StatusNotifierItem(?:[-.]|$)/.test(name));
+        } catch (error) {
+            console.warn("[Tray] Could not read StatusNotifier services:", error);
+            return;
+        }
+
+        _registrationQueue = [...new Set(services)];
+        _registerNextItem();
+    }
+
+    function _registerNextItem() {
+        if (registerItem.running || _registrationQueue.length === 0)
+            return;
+        const service = _registrationQueue.shift();
+        registerItem.command = [
+            "busctl", "--user", "call",
+            "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+            "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem",
+            "s", service
+        ];
+        registerItem.running = true;
+    }
+
+    // The first pass handles already-running clients. The second catches
+    // sandboxed or slow-starting clients that claim their bus name shortly
+    // after Quickshell has come up.
+    Timer {
+        interval: 2500
+        running: true
+        onTriggered: root.reregisterStatusNotifierItems()
+    }
+
+    Timer {
+        interval: 8000
+        running: true
+        onTriggered: root.reregisterStatusNotifierItems()
+    }
+
+    Process {
+        id: sessionBusList
+        command: ["busctl", "--user", "--no-pager", "--no-legend", "--json=short", "list"]
+        stdout: StdioCollector {
+            onStreamFinished: root._queueRegistrations(text)
+        }
+    }
+
+    Process {
+        id: registerItem
+        onExited: root._registerNextItem()
+    }
 
     function getTooltipForItem(item) {
         var result = item.tooltipTitle.length > 0 ? item.tooltipTitle
