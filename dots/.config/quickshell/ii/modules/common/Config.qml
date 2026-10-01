@@ -1332,6 +1332,11 @@ Singleton {
 
             property JsonObject tray: JsonObject {
                 property bool monochromeIcons: false
+                // A tray icon is inverted only when fewer than this share of
+                // its visible pixels stands off the bar. The ratio is WCAG
+                // contrast; 3:1 is the mark for non-text UI graphics.
+                property real autoContrastMinimumRatio: 3
+                property real autoContrastMinimumVisibleShare: 0.65
                 property bool showItemId: false
                 property bool invertPinnedItems: true // Makes the below a whitelist for the tray and blacklist for the pinned area
                 property list<var> pinnedItems: [ "Fcitx" ]

@@ -19,15 +19,32 @@ MouseArea {
     // The icon's own pixels, read once per image, so the judgement below can
     // be made again against a new surface without reading them again.
     property var iconPixels: []
+    // Use an unambiguous foreground while an icon cannot be sampled. This is
+    // deliberately based on the drawn bar surface rather than the global
+    // theme, so every tray client works on light and dark bar variants.
+    readonly property bool fallbackMonochrome: Appearance.autoIconContrast && iconPixels.length === 0
+    readonly property color fallbackInk: {
+        const bg = Qt.color(root.backdrop);
+        const luminance = ColorUtils.luminanceOfRgb(bg.r, bg.g, bg.b);
+        return ColorUtils.contrastOfLuminances(luminance, 0)
+            >= ColorUtils.contrastOfLuminances(luminance, 1) ? "black" : "white";
+    }
     // An icon with nothing of its own standing off the surface, the way a
     // plain white glyph vanishes into a light group, is drawn inverted. One
-    // with something to hold on to, an outline or a color of its own, is left
-    // as the app drew it.
+    // with enough luminance contrast is left as the app drew it. Hue alone
+    // is not enough: saturated icons can still vanish against a dark,
+    // differently colored bar.
     readonly property bool iconLost: {
-        if (!Appearance.autoIconContrast || iconPixels.length === 0)
+        if (!Appearance.autoIconContrast)
             return false;
         const bg = Qt.color(root.backdrop);
         const lbg = ColorUtils.luminanceOfRgb(bg.r, bg.g, bg.b);
+        if (iconPixels.length === 0)
+            return false;
+        const configuredRatio = Number(Config.options.tray.autoContrastMinimumRatio);
+        const configuredShare = Number(Config.options.tray.autoContrastMinimumVisibleShare);
+        const minimumRatio = configuredRatio >= 1 && configuredRatio <= 21 ? configuredRatio : 3;
+        const minimumVisibleShare = configuredShare >= 0 && configuredShare <= 1 ? configuredShare : 0.65;
         let total = 0;
         let standing = 0;
         for (let i = 0; i < iconPixels.length; i += 4) {
@@ -39,13 +56,10 @@ MouseArea {
             const b = iconPixels[i + 2] / 255 * a + bg.b * (1 - a);
             const l = ColorUtils.luminanceOfRgb(r, g, b);
             total += a;
-            // A pixel counts if it is lighter or darker enough to see, or a
-            // color far enough from the surface to see at the same lightness.
-            if (ColorUtils.contrastOfLuminances(l, lbg) >= 1.5
-                    || Math.hypot(r - bg.r, g - bg.g, b - bg.b) >= 0.35)
+            if (ColorUtils.contrastOfLuminances(l, lbg) >= minimumRatio)
                 standing += a;
         }
-        return total > 0 && standing / total < 0.1;
+        return total > 0 && standing / total < minimumVisibleShare;
     }
 
     signal menuOpened(qsWindow: var)
@@ -102,35 +116,129 @@ MouseArea {
         }
     }
 
-    // Reads the icon small and out of sight. A new image from the app, such
-    // as a badge appearing, is read again.
+    // Capture the already-rendered icon, rather than asking the image provider
+    // for it again. Some tray clients send malformed icon updates, and a second
+    // request at this reader's size can race the normal tray request.
+    Item {
+        id: iconSnapshot
+        readonly property bool wanted: Appearance.autoIconContrast && !Config.options.tray.monochromeIcons
+        property var result: null
+        // Each change makes every earlier capture stale. A grab cannot be
+        // cancelled, so its callback checks this number before it writes.
+        property int generation: 0
+        property bool captureInFlight: false
+
+        function refresh() {
+            generation += 1;
+            retry.stop();
+            settle.stop();
+            if (!wanted || trayIcon.status !== Image.Ready) {
+                result = null;
+                return;
+            }
+            take();
+            // Some clients replace icon pixels after emitting the change
+            // signal while retaining the same icon URL. Capture again after
+            // the next rendered frame instead of preserving the stale grab.
+            settle.restart();
+        }
+
+        function take() {
+            if (!wanted || trayIcon.status !== Image.Ready) {
+                result = null;
+                return;
+            }
+
+            if (trayIcon.width <= 0 || trayIcon.height <= 0 || !trayIcon.window) {
+                retry.restart();
+                return;
+            }
+
+            // Keep one grab outstanding. If the icon changed while it ran,
+            // its callback drops the old result and starts the latest capture.
+            if (captureInFlight)
+                return;
+
+            const captureGeneration = generation;
+            captureInFlight = true;
+            const started = trayIcon.grabToImage(function(grab) {
+                captureInFlight = false;
+                if (captureGeneration !== generation) {
+                    take();
+                    return;
+                }
+                if (!wanted || trayIcon.status !== Image.Ready) {
+                    result = null;
+                    return;
+                }
+                result = grab;
+            }, Qt.size(24, 24));
+            if (!started) {
+                captureInFlight = false;
+                if (captureGeneration !== generation)
+                    take();
+                else
+                    retry.restart();
+            }
+        }
+
+        Timer {
+            id: retry
+            interval: 150
+            onTriggered: iconSnapshot.take()
+        }
+
+        Timer {
+            id: settle
+            interval: 150
+            onTriggered: iconSnapshot.take()
+        }
+
+        onWantedChanged: refresh()
+
+        Connections {
+            target: trayIcon
+            function onStatusChanged() { iconSnapshot.refresh(); }
+            function onSourceChanged() { iconSnapshot.refresh(); }
+            function onWidthChanged() { iconSnapshot.refresh(); }
+            function onWindowChanged() { iconSnapshot.refresh(); }
+        }
+
+        Connections {
+            target: root.item
+            function onIconChanged() { iconSnapshot.refresh(); }
+        }
+
+        Component.onCompleted: refresh()
+    }
+
+    // Canvas cannot load an itemgrabber: URL directly, but Image can. Keeping
+    // this invisible image between the grab result and Canvas lets the contrast
+    // reader see the same pixels that are already on screen without a second
+    // status-notifier image request.
+    Image {
+        id: snapshotImage
+        visible: false
+        property var snapshot: iconSnapshot.result
+        source: snapshot ? snapshot.url : ""
+        onStatusChanged: iconReader.requestPaint()
+    }
+
     Canvas {
         id: iconReader
         width: 24
         height: 24
         opacity: 0
-        readonly property string source: root.item?.icon ?? ""
-        property string reading: ""
-        function read() {
-            if (reading !== "")
-                unloadImage(reading);
-            reading = source;
-            if (reading === "")
-                root.iconPixels = [];
-            else if (isImageLoaded(reading))
-                requestPaint();
-            else
-                loadImage(reading);
-        }
-        onSourceChanged: read()
-        Component.onCompleted: read()
-        onImageLoaded: requestPaint()
+        property var snapshot: iconSnapshot.result
+        onSnapshotChanged: requestPaint()
         onPaint: {
             const ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
-            if (reading === "" || !isImageLoaded(reading))
+            if (!snapshot || snapshotImage.snapshot !== snapshot || snapshotImage.status !== Image.Ready) {
+                root.iconPixels = [];
                 return;
-            ctx.drawImage(reading, 0, 0, width, height);
+            }
+            ctx.drawImage(snapshotImage, 0, 0, width, height);
             root.iconPixels = Array.from(ctx.getImageData(0, 0, width, height).data);
         }
     }
@@ -154,7 +262,9 @@ MouseArea {
         }
 
         Loader {
-            active: Config.options.tray.monochromeIcons
+            // A tray client with no readable pixel data is explicitly drawn
+            // in the best-contrasting ink until a usable sample arrives.
+            active: Config.options.tray.monochromeIcons || root.fallbackMonochrome
             anchors.fill: trayIcon
             sourceComponent: Item {
                 Desaturate {
@@ -167,7 +277,9 @@ MouseArea {
                 ColorOverlay {
                     anchors.fill: desaturatedIcon
                     source: desaturatedIcon
-                    color: ColorUtils.transparentize(Appearance.barContent.colOnLayer0, 0.9)
+                    color: root.fallbackMonochrome
+                        ? root.fallbackInk
+                        : ColorUtils.transparentize(Appearance.barContent.colOnLayer0, 0.9)
                 }
             }
         }
