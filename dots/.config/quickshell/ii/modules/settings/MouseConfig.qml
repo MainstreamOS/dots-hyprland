@@ -42,6 +42,9 @@ ContentPage {
     property bool touchpadInternal: false
     property bool disableWhileTyping: true
     property bool disableWithMouse: false
+    // Temporary UI test override. Remove this property and restore the three
+    // visibility bindings below once touchpad-settings testing is complete.
+    property bool forceTouchpadSettingsVisible: false
     property real sensitivity:     0.0
 
     // 2 cards * 150px + 16px gap
@@ -651,7 +654,7 @@ ContentPage {
         ConfigRow {
             // A control that flips a device nothing here has is a switch wired
             // to nothing — machines without a touchpad simply do not show it.
-            visible: root.touchpadDeviceName !== ""
+            visible: root.forceTouchpadSettingsVisible || root.touchpadDeviceName !== ""
             StyledText {
                 Layout.fillWidth: true
                 text: Translation.tr("Touchpad")
@@ -679,7 +682,7 @@ ContentPage {
         }
 
         ConfigRow {
-            visible: root.touchpadInternal
+            visible: root.forceTouchpadSettingsVisible || root.touchpadInternal
             ConfigSwitch {
                 Layout.fillWidth: true
                 buttonIcon: "keyboard"
@@ -695,7 +698,7 @@ ContentPage {
         }
 
         ConfigRow {
-            visible: root.touchpadInternal
+            visible: root.forceTouchpadSettingsVisible || root.touchpadInternal
             ConfigSwitch {
                 Layout.fillWidth: true
                 buttonIcon: "mouse"
