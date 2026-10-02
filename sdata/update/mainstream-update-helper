@@ -684,6 +684,45 @@ fi
 # mirror going slow can hang topgrade indefinitely with no progress
 # output — observed 57+ minute stall in the wild. Users who want
 # lensfun updates can run `topgrade --only lensfun` manually).
+
+# Time limit for the pass. The one stall seen in the wild (lensfun) ran past
+# 57 minutes with no output; an hour still leaves room for a long build.
+TOPGRADE_TIMEOUT_SECS=3600
+TOPGRADE_KILL_GRACE_SECS=30
+
+# Environment for topgrade. runuser gives it no login session, and ProtonPlus's
+# flatpak-spawn --host check needs the caller's session bus. Only topgrade gets
+# it; updatems rebuilds its own paths. The address comes from the user's
+# systemd manager, falling back to the standard socket, and paths the user
+# controls are tested as that user, never as root. No live bus: HOME-only.
+topgrade_session_env() {
+    TOPGRADE_USER_ENV=("HOME=$ORIG_HOME" "SUDO_ASKPASS=/bin/false")
+    local uid rtd addr="" sock probe=()
+    uid=$(id -u "$ORIG_USER" 2>/dev/null) || return 0
+    [[ "$uid" =~ ^[0-9]+$ ]] || return 0
+    rtd="/run/user/$uid"
+    [[ -d "$rtd" ]] || return 0
+
+    command -v timeout >/dev/null 2>&1 && probe=(timeout 5)
+    addr=$("${probe[@]}" runuser -u "$ORIG_USER" -- env XDG_RUNTIME_DIR="$rtd" \
+               systemctl --user show-environment 2>/dev/null \
+           | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -n 1)
+    case "$addr" in
+        unix:path=/*)
+            sock=${addr#unix:path=}
+            sock=${sock%%[,;]*}
+            runuser -u "$ORIG_USER" -- test -S "$sock" 2>/dev/null || addr=""
+            ;;
+        unix:abstract=*) ;;
+        *) addr="" ;;
+    esac
+    if [[ -z "$addr" ]] && runuser -u "$ORIG_USER" -- test -S "$rtd/bus" 2>/dev/null; then
+        addr="unix:path=$rtd/bus"
+    fi
+    [[ -n "$addr" ]] || return 0
+    TOPGRADE_USER_ENV+=("XDG_RUNTIME_DIR=$rtd" "DBUS_SESSION_BUS_ADDRESS=$addr")
+}
+
 if [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo ""
     echo "── $(t "Developer extras: deferred — the system package update failed.")"
@@ -697,11 +736,28 @@ elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
         TG_ARGS+=(--disable firmware)
     fi
     TG_ARGS+=("${TOPGRADE_EXTRA_ARGS[@]}")
-    runuser -u "$ORIG_USER" -- env \
-        HOME="$ORIG_HOME" \
-        SUDO_ASKPASS=/bin/false \
+    topgrade_session_env
+    # timeout ends a stalled step (an unanswered polkit prompt, a dead mirror).
+    # On a terminal it stays in the foreground group so prompts can still read.
+    TG_GUARD=()
+    if command -v timeout >/dev/null 2>&1; then
+        TG_GUARD=(timeout --kill-after="${TOPGRADE_KILL_GRACE_SECS}s")
+        [[ -t 0 ]] && TG_GUARD+=(--foreground)
+        TG_GUARD+=("${TOPGRADE_TIMEOUT_SECS}s")
+    fi
+    TG_STARTED=$SECONDS
+    runuser -u "$ORIG_USER" -- \
+        "${TG_GUARD[@]}" \
+        env -u XDG_RUNTIME_DIR -u DBUS_SESSION_BUS_ADDRESS \
+        "${TOPGRADE_USER_ENV[@]}" \
         topgrade "${TG_ARGS[@]}"
     TOPGRADE_RC=$?
+    # 137 can also be an out-of-memory kill, so it counts only past the limit.
+    if [[ "$TOPGRADE_RC" -eq 124 ]] \
+        || { [[ "$TOPGRADE_RC" -eq 137 ]] && (( SECONDS - TG_STARTED >= TOPGRADE_TIMEOUT_SECS )); }; then
+        echo ""
+        echo ">>> $(tf "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run topgrade in a terminal to see what it was waiting on." "$(( TOPGRADE_TIMEOUT_SECS / 60 ))")"
+    fi
 elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo ""
     echo "── $(t "Developer extras: skipped (per --skip-extras)")"
