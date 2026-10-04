@@ -29,6 +29,9 @@ hl.window_rule({match = {title = "^(.*)(wants to open)$" },                  flo
 -- Keep hidden games rendering — alt-tabbing must not freeze multiplayer
 -- ticks or starve OBS game capture (rate: misc:render_unfocused_fps).
 hl.window_rule({match = {class = "^(steam_app_.*)$" },                       render_unfocused = true})
+-- Headset input never reaches the compositor, so the idle timers would lock, blank and
+-- suspend mid-session. SteamVR opens its status window, XWayland or native, every session.
+hl.window_rule({name = "steamvr-idle-inhibit", match = {class = "^(vrmonitor|com\\.valvesoftware\\.vrmonitor)$" }, idle_inhibit = "always"})
 
 hl.window_rule({match = {class = "^(blueberry\\.py)$" },                     float = true})
 hl.window_rule({match = {class = "^(guifetch)$" },                           float = true}) -- FlafyDev/guifetch
