@@ -413,14 +413,15 @@ for target in "${TARGETS[@]}"; do
         continue
     fi
     user="$(stat -c '%U' "$user_home")"
-    install -m 755 -o "$user" -g "$user" "$BUILT_SO" "$target"
+    group="$(id -g "$user")"
+    install -m 755 -o "$user" -g "$group" "$BUILT_SO" "$target"
     # Version first so the quarantine check keeps reading line one, then the
     # commit, which is what lets the next run tell "same sources" from
     # "nothing has been built here yet".
     # Written beside root and put in place with install, which replaces the
     # name rather than writing through a link the user left there.
     printf '%s\n%s\n' "$HYPR_VER" "$BUILT_SHA" > "$STAMP_TMP"
-    install -m 644 -o "$user" -g "$user" "$STAMP_TMP" "$target.builtfor"
+    install -m 644 -o "$user" -g "$group" "$STAMP_TMP" "$target.builtfor"
     rm -f "$target.stale"
     log "Updated $target (owner: $user)"
 done

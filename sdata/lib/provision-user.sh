@@ -108,7 +108,7 @@ _pu_own_home() {  # $1 = user
     while IFS= read -r mp; do
         [[ "$mp" == "$home"/* ]] && prune+=( -path "$mp" -prune -o )
     done < <(findmnt -J -o TARGET 2>/dev/null | jq -r '.. | .target? // empty' 2>/dev/null)
-    find "$home" "${prune[@]}" -exec chown -h "$u:$u" {} +
+    find "$home" "${prune[@]}" -exec chown -h "$u:" {} +
 }
 
 # The per-machine parts of a home: built rather than copied. The virtualenv
@@ -339,7 +339,7 @@ provision_venv() {  # $1 = user
         rm -rf "$venv"
         return 0
     fi
-    chown -R "$u:$u" "$venv"
+    chown -R "$u:" "$venv"
 }
 
 # Two gates stand between a new account and a themed desktop. first_run.txt
@@ -372,7 +372,7 @@ provision_first_run() {  # $1 = user
 # exists the plugin is removed rather than left in place: a desktop without
 # title bars is a far better outcome than an account nobody can log in to.
 provision_plugins() {  # $1 = user
-    local u="$1" home want dir so stamp src found unit
+    local u="$1" home want dir so stamp src found unit group
     home="$(_pu_home "$u")" || { _pu_warn "no home for $u"; return 1; }
     dir="$home/.local/share/hyprland/plugins"
     [[ -d "$dir" ]] || { _pu_log "no plugin directory, nothing to check"; return 0; }
@@ -424,8 +424,9 @@ provision_plugins() {  # $1 = user
             found="$src"; break
         done
         if [[ -n "$found" ]]; then
-            install -Dm755 -o "$u" -g "$u" "$found"            "$so"
-            install -Dm644 -o "$u" -g "$u" "$found.builtfor"   "$so.builtfor"
+            group="$(id -g "$u")"
+            install -Dm755 -o "$u" -g "$group" "$found"            "$so"
+            install -Dm644 -o "$u" -g "$group" "$found.builtfor"   "$so.builtfor"
             _pu_log "$(basename "$so"): replaced from $found"
         else
             rm -f "$so" "$so.builtfor"
@@ -454,7 +455,7 @@ provision_desktop() {  # $1 = user
     local _ime_env _ime_execs _ime_profile _ime_layout _gtkv _gtkini mime
     local EXECS_LUA SYSTEMD_USER_DIR AUTOSTART_DIR
     local IMAGE_TYPES VIDEO_TYPES AUDIO_TYPES TEXT_TYPES WEB_TYPES DOCUMENT_TYPES
-    local _lang
+    local _lang _gs_script
 
     # The console keymap, read here rather than passed in: the variable that
     # used to carry it belonged to the installer.

@@ -31,18 +31,25 @@
 # action org.mainstreamos.user-manager.
 
 set -euo pipefail
+# pkexec keeps the caller's umask.
+umask 022
 
 PROVISION_LIB=/usr/local/lib/mainstream-provision-user.sh
+# list runs unprivileged every time the page refreshes and needs none of it.
+if [[ "${1:-}" != list && -r "$PROVISION_LIB" ]]; then
+    # shellcheck source=/dev/null
+    source "$PROVISION_LIB"
+fi
 
-# Mirrored into the provisioning log as well, so one file holds the whole
-# story of an account: what was asked for, what ran, and what it found.
-MANAGER_LOG=/var/log/mainstream/user-provision.log
+# Written to the provisioning log, so one file holds the whole story of an
+# account: what was asked for, what ran, and what it found.
 log() {
-    local line
+    local line f=/var/log/mainstream/user-provision.log
     printf -v line '%s [user-manager] %s' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
-    mkdir -p "$(dirname "$MANAGER_LOG")" 2>/dev/null || true
-    printf '%s\n' "$line" >> "$MANAGER_LOG" 2>/dev/null || true
-    echo "$line" >&2
+    printf '%s\n' "$line" >&2
+    # Root appends here, so a log someone else could have swapped for a link is skipped.
+    install -d -m 755 -o root -g root "${f%/*}" 2>/dev/null && [[ ! -L "$f" ]] \
+        && printf '%s\n' "$line" >> "$f" 2>/dev/null || true
 }
 die() { log "ERROR: $*"; exit 22; }
 
@@ -65,9 +72,24 @@ require_human_user() {  # $1 = user
 # The account the Settings page is running as must not be able to lock itself
 # out, and the machine must keep at least one administrator.
 last_admin() {  # $1 = user
-    local admins
-    admins="$(getent group wheel | cut -d: -f4 | tr ',' '\n' | grep -c '[^[:space:]]' || true)"
-    [[ "$admins" -le 1 ]] && id -nG "$1" 2>/dev/null | tr ' ' '\n' | grep -qx wheel
+    local name uid shell
+    [[ " $(id -nG "$1" 2>/dev/null) " == *" wheel "* ]] || return 1
+    while IFS=: read -r name _ uid _ _ _ shell; do
+        [[ "$name" != "$1" ]] && _usable_admin "$name" "$uid" "$shell" && return 1
+    done < <(getent passwd)
+    return 0
+}
+
+# Someone who can still sign in and act as an administrator: a person's account
+# in wheel, as a member or by its primary group, neither locked nor expired.
+_usable_admin() {  # $1 = user  $2 = uid  $3 = shell
+    local uid="$2" shell="$3" pw expire
+    (( uid >= 1000 && uid < 65534 )) || return 1
+    _no_login_shell "$shell" && return 1
+    [[ " $(id -nG "$1" 2>/dev/null) " == *" wheel "* ]] || return 1
+    IFS=: read -r _ pw _ _ _ _ _ expire _ < <(getent shadow "$1") || return 1
+    case "$pw" in '!'*|'*'*) return 1 ;; esac
+    [[ -z "$expire" ]] || (( expire > $(date +%s) / 86400 ))
 }
 
 # A uid above the login floor is not enough to make an account a person: a
@@ -103,6 +125,9 @@ cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wh
 
     pw="$(cat)"
     [[ -n "$pw" ]] || die "no password supplied on stdin"
+    # chpasswd takes one account per line, so anything after a line break
+    # would be read as another account's password.
+    [[ "$pw" != *$'\n'* ]] || die "a password cannot contain a line break"
 
     # -m seeds the home from /etc/skel, which is the whole point: the new
     # account starts from the same tree a fresh install starts from.
@@ -123,8 +148,6 @@ cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wh
         lastlog2 -C -u "$u" >/dev/null 2>&1 || true
     fi
 
-    # shellcheck source=/dev/null
-    source "$PROVISION_LIB"
     # Asked for here rather than by a second authenticated call afterwards: a
     # prompt the user dismisses at that point leaves an account that can already
     # be logged into as a standard user, whatever the switch said.
@@ -155,8 +178,6 @@ cmd_provision() {  # $1 = user
     local u="${1:-}"
     require_human_user "$u"
     [[ -r "$PROVISION_LIB" ]] || die "provisioning library missing at $PROVISION_LIB"
-    # shellcheck source=/dev/null
-    source "$PROVISION_LIB"
     provision_user_home "$u" || die "provisioning failed for $u"
     log "$u provisioned"
 }
@@ -192,6 +213,7 @@ cmd_set_password() {  # $1 = user  $2 = "verify" to require the current password
     pw="$(cat)"
     pw="${pw%$'\n'}"
     [[ -n "$pw" ]] || die "no password supplied on stdin"
+    [[ "$pw" != *$'\n'* ]] || die "a password cannot contain a line break"
     printf '%s:%s\n' "$u" "$pw" | chpasswd || die "could not set the password for $u"
     log "password changed for $u"
 }
@@ -202,7 +224,7 @@ cmd_set_admin() {  # $1 = user  $2 = yes|no
     case "$want" in
         yes) usermod -aG wheel "$u"; log "$u is now an administrator" ;;
         no)
-            last_admin "$u" && die "$u is the only administrator; promote someone else first"
+            last_admin "$u" && die "$u is the only administrator who can sign in; promote someone else first"
             gpasswd -d "$u" wheel >/dev/null 2>&1 || true
             log "$u is no longer an administrator" ;;
         *) die "expected yes or no, got: $want" ;;
@@ -262,7 +284,7 @@ cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
     local u="${1:-}" mode="${2:-keep-home}" uid home
     require_human_user "$u"
     [[ "$u" == "$(id -un "${PKEXEC_UID:-0}" 2>/dev/null)" ]] && die "refusing to delete the account asking"
-    last_admin "$u" && die "$u is the only administrator; promote someone else first"
+    last_admin "$u" && die "$u is the only administrator who can sign in; promote someone else first"
     uid="$(id -u "$u")"
     home="$(getent passwd "$u" | cut -d: -f6)"
     case "$mode" in
@@ -287,9 +309,15 @@ cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
 }
 
 cmd_set_avatar() {  # $1 = user  $2 = source image
-    local u="${1:-}" src="${2:-}" home dest conf edge
+    local u="${1:-}" src="${2:-}" home dest conf edge tmp
+    local -a as_caller=()
     require_human_user "$u"
     [[ -f "$src" && ! -L "$src" ]] || die "not a regular file: $src"
+    # Read as whoever asked, so the path cannot name a file only root may read
+    # and have it published as a picture anyone can open.
+    if [[ -n "${PKEXEC_UID:-}" ]]; then
+        as_caller=(setpriv --reuid="$PKEXEC_UID" --regid="$(id -g "$PKEXEC_UID")" --init-groups --)
+    fi
     home="$(getent passwd "$u" | cut -d: -f6)"
     dest="/var/lib/AccountsService/icons/$u"
     conf="/var/lib/AccountsService/users/$u"
@@ -308,21 +336,26 @@ cmd_set_avatar() {  # $1 = user  $2 = source image
     # Read whole, then take the first line. Piping into head lets identify die
     # on SIGPIPE, and under pipefail the `|| echo 0` then APPENDS to what it had
     # already printed, giving a two-line value that falls through to a plain copy.
-    edge="$(identify -format '%[fx:min(w,h)]\n' "$src" 2>/dev/null || true)"
+    edge="$("${as_caller[@]}" identify -format '%[fx:min(w,h)]\n' "$src" 2>/dev/null || true)"
     edge="${edge%%$'\n'*}"
     case "$edge" in ''|*[!0-9]*) edge=0 ;; esac
+    # Written beside the current picture and moved over it, so a file that
+    # cannot be read leaves that picture in place.
+    tmp="$(mktemp "$dest.XXXXXX")"
     if [[ "$edge" -gt 0 ]]; then
         (( edge > 512 )) && edge=512
         # The destination carries no extension, so the format is named rather
         # than guessed from a filename that has nothing to guess from.
-        magick "$src" -auto-orient -delete 1--1 -resize "${edge}x${edge}^" \
-            -gravity center -extent "${edge}x${edge}" "PNG:$dest" \
-            || die "could not prepare the image for $u"
+        "${as_caller[@]}" magick "$src" -auto-orient -delete 1--1 -resize "${edge}x${edge}^" \
+            -gravity center -extent "${edge}x${edge}" PNG:- > "$tmp" \
+            || { rm -f -- "$tmp"; die "could not prepare the image for $u"; }
     else
-        cp "$src" "$dest" || die "could not copy the image for $u"
+        "${as_caller[@]}" cat -- "$src" > "$tmp" \
+            || { rm -f -- "$tmp"; die "could not copy the image for $u"; }
     fi
-    chmod 644 "$dest"
-    install -Dm644 -o "$u" -g "$u" "$dest" "$home/.face"
+    chmod 644 "$tmp"
+    mv -f -- "$tmp" "$dest"
+    install -Dm644 -o "$u" -g "$(id -g "$u")" "$dest" "$home/.face"
 
     if [[ -f "$conf" ]] && grep -q '^Icon=' "$conf"; then
         sed -i "s|^Icon=.*|Icon=$dest|" "$conf"
