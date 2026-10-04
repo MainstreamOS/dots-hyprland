@@ -119,18 +119,8 @@ ContentPage {
 
     function applyFinished(code) {
         root.applying = false;
-        if (code === 126) {
-            root.lastError = Translation.tr("The change was not made: authentication was cancelled.");
-        } else if (code === 127) {
-            // pkexec gives 127 when authentication fails or is refused; a
-            // missing helper is caught before this runs (helperPresent).
-            root.lastError = Translation.tr("The change was not made: authentication failed.");
-        } else if (code !== 0) {
-            const lines = applyErr.text.trim().split("\n").filter(l => l.length > 0);
-            root.lastError = lines.length > 0
-                ? lines[lines.length - 1].replace(/^gaming-tuning: /, "")
-                : Translation.tr("The change could not be applied.");
-        }
+        if (code !== 0)
+            root.lastError = HelperUtils.failureMessage(code, HelperUtils.helperReason(applyErr.text, "gaming-tuning"));
         root.refresh();
     }
 
