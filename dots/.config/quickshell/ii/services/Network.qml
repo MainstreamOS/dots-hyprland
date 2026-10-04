@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import qs.modules.common
 import qs.services.network
 import "network-rates.js" as Rates
 
@@ -108,9 +109,12 @@ Singleton {
                         : "signal_wifi_bad"
 
     // Control
-    function enableWifi(enabled = true): void {
+    // Settings shows this warning on the page, so it passes quiet.
+    function enableWifi(enabled = true, quiet = false): void {
         const cmd = enabled ? "on" : "off";
         enableWifiProc.exec(["nmcli", "radio", "wifi", cmd]);
+        if (!enabled && !quiet && root.frameAdapterPresent)
+            Quickshell.execDetached(["notify-send", Translation.tr("Wi-Fi turned off"), Translation.tr("Turning Wi-Fi off also turns off the wireless adapter for the Steam Frame (experimental), so the headset cannot stream through it until Wi-Fi is back on."), "-a", "Shell"]);
     }
 
     function toggleWifi(): void {

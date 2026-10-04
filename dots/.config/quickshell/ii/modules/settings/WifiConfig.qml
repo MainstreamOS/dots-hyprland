@@ -234,7 +234,7 @@ Item {
                     text: Translation.tr("Enable Wi-Fi")
                     checked: Network.wifiEnabled
                     onCheckedChanged: {
-                        Network.enableWifi(checked);
+                        Network.enableWifi(checked, true);
                     }
                 }
             }
@@ -474,7 +474,7 @@ Item {
             }
 
             WifiNotice {
-                text: Translation.tr("Set this to the country you are in, so Wi-Fi uses the channels allowed there. Cards that manage their own country, such as most Intel ones, report their own. USB adapters, such as the Steam Frame's, use the one set here.")
+                text: Translation.tr("Set this to the country you are in, so Wi-Fi uses the channels allowed there. Cards that manage their own country, such as most Intel ones, report their own. USB adapters, such as the one for the Steam Frame (experimental), use the one set here.")
             }
         }
     }
