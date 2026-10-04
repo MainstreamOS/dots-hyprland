@@ -93,11 +93,9 @@ Singleton {
     // dock model on every folder change, causing animation glitches.
     // Folder data is resolved lazily by DockAppButton via AppFolderManager.
     property list<var> apps: {
-        // resolveAppId goes through DesktopEntries.byId, a plain call that
-        // registers no dependency, and the entry database fills in lazily
-        // after startup. Windows restored at login would otherwise keep the
-        // raw-id grouping they were dealt before the scan landed.
-        DesktopEntries.applications.values;
+        // resolveAppId registers no dependency, so this re-runs once per app scan
+        // (not once per app) to regroup windows restored before the scan landed.
+        AppSearch.list;
         var map = new Map();
 
         // Pinned apps and folders
