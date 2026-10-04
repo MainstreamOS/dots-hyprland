@@ -120,15 +120,6 @@ require_trustable() {  # $1 = uuid
     [[ -z $zone || $zone == "$ZONE" ]] || die 5 "$1 has its own firewall zone ($zone), so it was left alone"
 }
 
-home_active() {
-    local u uuids=()
-    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
-    for u in "${uuids[@]}"; do
-        is_home "$u" && return 0
-    done
-    return 1
-}
-
 # NetworkManager owns the firewalld binding of every interface it manages,
 # and a zone change on an active connection takes effect at once
 # (nm-settings-nmcli(5)), so the profile is changed through nmcli and nothing
@@ -546,12 +537,6 @@ prune_trust() {
     done
 }
 
-read_state() {
-    local s=""
-    [[ -f $STATE_FILE && ! -L $STATE_FILE ]] && IFS= read -r s <"$STATE_FILE"
-    case $s in on|off) printf '%s\n' "$s" ;; *) printf 'unset\n' ;; esac
-}
-
 write_state() {  # $1 = on|off
     ensure_state_dirs
     write_file "$STATE_FILE" "$1"$'\n'
@@ -637,39 +622,21 @@ read_password() {
     PASSWORD=$pw
 }
 
-# wsdd answers on every interface unless it is given some with -i, which would
-# show this computer to Windows on a network that is up next to a trusted one.
-# So it runs only with the interfaces of the trusted networks that are up,
-# written to $WSDD_ENV, which the drop-in wsdd.service.d/mainstream-sharing.conf
-# reads.
-#
-# Returns 0 when the list changed, so a running wsdd has to restart to follow
-# it. With no interface the file goes, and wsdd must not run.
-write_wsdd_env() {  # $1 = a connection to leave out, or nothing
-    local devs=() d params="" want="" have=""
-    mapfile -t devs < <(home_devices "${1:-}")
-    for d in "${devs[@]}"; do params+="${params:+ }-i $d"; done
-    [[ -n $params ]] && want="WSDD_PARAMS=\"$params\""
-    [[ -f $WSDD_ENV ]] && have=$(<"$WSDD_ENV")
-    [[ $want == "$have" ]] && return 1
-    if [[ -z $want ]]; then
-        rm -f "$WSDD_ENV"
-    else
-        mkdir -p "${WSDD_ENV%/*}" || die 1 "could not create ${WSDD_ENV%/*}"
-        write_file "$WSDD_ENV" "$want"$'\n'
-    fi
-    log "wsdd interfaces: ${params:-none}"
-    return 0
-}
-
+# The hook keeps its own copy that never waits on systemd, since
+# NetworkManager runs its hooks one after another.
 sync_wsdd() {  # $1 = start, or try to only restart one that is running
-    local changed=1
+    local changed=1 rc=0
     if ! wsdd_confined; then
         log "wsdd.service would not read the interfaces from $WSDD_ENV; leaving wsdd stopped"
         systemctl stop wsdd.service >>"$LOG" 2>&1
         return 0
     fi
-    write_wsdd_env && changed=0
+    write_wsdd_env || rc=$?
+    (( rc == 2 )) && die 1 "could not write $WSDD_ENV"
+    if (( rc == 0 )); then
+        changed=0
+        log "wsdd interfaces: $( { cat -- "$WSDD_ENV" || echo none; } 2>/dev/null)"
+    fi
     if [[ ! -s $WSDD_ENV ]]; then
         log "no trusted network is up on an interface wsdd can take; leaving wsdd stopped"
         systemctl stop wsdd.service >>"$LOG" 2>&1
@@ -686,21 +653,6 @@ sync_wsdd() {  # $1 = start, or try to only restart one that is running
     fi
 }
 
-# A VPN made of IPsec policies alone, with no interface of its own (libreswan,
-# or strongswan set up by hand), hands its decrypted traffic in on the
-# interface it travels over. On a trusted network that lands in MainstreamHome,
-# where the private addresses of an office behind the VPN count as local. The
-# table in $IPSEC_GUARD drops SMB that arrived through IPsec. firewalld only
-# ever replaces its own tables, so its reloads leave this one in place.
-guard_ipsec() {
-    nft -f "$IPSEC_GUARD" >>"$LOG" 2>&1
-}
-
-unguard_ipsec() {
-    nft list table inet "$IPSEC_TABLE" >/dev/null 2>&1 || return 0
-    nft delete table inet "$IPSEC_TABLE" >>"$LOG" 2>&1 || log "could not remove the $IPSEC_TABLE table"
-}
-
 # Samba that somebody set up with their own smb.conf is theirs to run, so the
 # services are only started and stopped for the configuration made here.
 # Samba listens on every interface and lets in every private address; only
@@ -708,7 +660,7 @@ unguard_ipsec() {
 start_services() {
     [[ $(config_kind) == managed ]] || { log "$SMB_CONF is not ours; not starting Samba"; return 0; }
     firewall_running || die 1 "the firewall is not running, so sharing stays off"
-    guard_ipsec || die 1 "SMB over IPsec VPNs could not be blocked, so sharing stays off"
+    guard_ipsec >>"$LOG" 2>&1 || die 1 "SMB over IPsec VPNs could not be blocked, so sharing stays off"
     systemctl start smb.service >>"$LOG" 2>&1 || die 1 "the sharing service did not start"
     log "started smb.service"
     sync_wsdd start
@@ -721,7 +673,7 @@ stop_services() {
     else
         log "$SMB_CONF is not ours; not stopping Samba"
     fi
-    unguard_ipsec
+    unguard_ipsec >>"$LOG" 2>&1 || log "could not remove the $IPSEC_TABLE table"
 }
 
 # Setup takes a while and must not die with the window that asked for it.
@@ -761,7 +713,7 @@ cmd_enable() {  # $1 = uuid
     write_state on
     # A home network that is not up yet is left to the network hook, which
     # starts the services when it connects.
-    if home_active; then
+    if home_up; then
         start_services
     else
         log "no home network is up; the services start when one connects"
@@ -807,7 +759,7 @@ cmd_trust() {  # $1 = uuid, $2 = on|off
         ensure_zone_loaded
         set_zone "$CONN" "$ZONE"
         record_trust "$CONN"
-        if [[ $(read_state) == on ]] && home_active; then
+        if [[ $(read_state) == on ]] && home_up; then
             start_services
         fi
     else
@@ -822,7 +774,7 @@ cmd_trust() {  # $1 = uuid, $2 = on|off
             # failure is still reported, once the services are down.
             ( set_zone "$CONN" "" ) || zone_rc=$?
         fi
-        if (( zone_rc != 0 )) || ! home_active; then
+        if (( zone_rc != 0 )) || ! home_up; then
             stop_services
         elif [[ $(config_kind) == managed ]]; then
             sync_wsdd try

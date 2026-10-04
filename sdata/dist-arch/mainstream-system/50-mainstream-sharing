@@ -32,43 +32,6 @@ case $action in up|down) ;; *) exit 0 ;; esac
 # past it the hook carries on as it would have without the lock.
 { exec 9>"$LOCK" && flock -w 10 9; } 2>/dev/null
 
-# True while a connection other than $1 is up and trusted. The one going down
-# is left out, since NetworkManager can still list it as active at this point.
-other_home_up() {
-    local u uuids=()
-    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
-    for u in "${uuids[@]}"; do
-        [[ -n $u && $u != "$1" ]] && is_home "$u" && return 0
-    done
-    return 1
-}
-
-# wsdd answers on every interface unless it is given some with -i, so it runs
-# only with the interfaces of the trusted networks that are up, written where
-# the drop-in wsdd.service.d/mainstream-sharing.conf reads them. The helper,
-# /usr/lib/mainstream/file-sharing, does the same when it changes something.
-#
-# Returns 0 when the list changed. With no interface the file goes, and wsdd
-# must not run.
-write_wsdd_env() {  # $1 = a connection to leave out, or nothing
-    local devs=() d params="" want="" have="" tmp
-    mapfile -t devs < <(home_devices "${1:-}")
-    for d in "${devs[@]}"; do params+="${params:+ }-i $d"; done
-    [[ -n $params ]] && want="WSDD_PARAMS=\"$params\""
-    [[ -f $WSDD_ENV ]] && have=$(<"$WSDD_ENV")
-    [[ $want == "$have" ]] && return 1
-    if [[ -z $want ]]; then
-        rm -f "$WSDD_ENV"
-        return 0
-    fi
-    mkdir -p "${WSDD_ENV%/*}" && tmp=$(mktemp "$WSDD_ENV.XXXXXX") || return 1
-    if printf '%s\n' "$want" >"$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$WSDD_ENV"; then
-        return 0
-    fi
-    rm -f "$tmp"
-    return 1
-}
-
 # Samba listens on every interface and lets in every private address; only
 # the firewall keeps it to trusted networks, so without one it stays off. At
 # boot a trusted wired network can come up while firewalld is still loading:
@@ -110,14 +73,12 @@ sync_wsdd() {  # $1 = a connection to leave out, or nothing; $2 = start, or try
 case $action in
     up)
         [[ -n $conn ]] || exit 0
-        state=""
-        [[ -f $STATE_FILE ]] && IFS= read -r state <"$STATE_FILE"
-        [[ $state == on ]] || exit 0
+        [[ $(read_state) == on ]] || exit 0
         is_home "$conn" || exit 0
         firewall_up || exit 0
         # SMB that arrived through an IPsec VPN without an interface of its
-        # own is dropped by this table; see the helper's guard_ipsec().
-        nft -f "$IPSEC_GUARD" 2>/dev/null || exit 0
+        # own is dropped by this table; see guard_ipsec().
+        guard_ipsec 2>/dev/null || exit 0
         # One at a time, so a wsdd removed on its own does not keep Samba
         # from starting. --no-block, because hooks run one after another and
         # the next one should not wait on smbd.
@@ -126,15 +87,13 @@ case $action in
         ;;
     down)
         systemctl -q is-active "${SERVICES[@]}" 2>/dev/null || exit 0
-        if other_home_up "$conn"; then
+        if home_up "$conn"; then
             sync_wsdd "$conn" try
             exit 0
         fi
         systemctl stop --no-block "${SERVICES[@]}" 2>/dev/null
         rm -f "$WSDD_ENV"
-        if nft list table inet "$IPSEC_TABLE" >/dev/null 2>&1; then
-            nft delete table inet "$IPSEC_TABLE" 2>/dev/null
-        fi
+        unguard_ipsec 2>/dev/null
         ;;
 esac
 exit 0

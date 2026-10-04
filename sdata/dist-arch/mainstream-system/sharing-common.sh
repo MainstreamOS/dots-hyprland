@@ -48,6 +48,12 @@ zone_of() {  # $1 = uuid
     nmcli -g connection.zone connection show uuid "$1" 2>/dev/null
 }
 
+read_state() {
+    local s=""
+    [[ -f $STATE_FILE && ! -L $STATE_FILE ]] && IFS= read -r s <"$STATE_FILE"
+    case $s in on|off) printf '%s\n' "$s" ;; *) printf 'unset\n' ;; esac
+}
+
 # NetworkManager lets anyone in an active session put a profile of their own
 # in any zone, with no password, so the zone alone does not make a network a
 # home network. It counts only while the helper's record of the trust is
@@ -60,6 +66,17 @@ is_home() {  # $1 = uuid
     [[ -f $rec && ! -L $rec ]] || return 1
     [[ $(zone_of "$1") == "$ZONE" ]] || return 1
     eligible "$1"
+}
+
+# True while a trusted network other than $1 is up. The hook leaves out the
+# one going down, since NetworkManager can still list it as active then.
+home_up() {  # $1 = a connection to leave out, or nothing
+    local u uuids=()
+    mapfile -t uuids < <(nmcli -g UUID connection show --active 2>/dev/null)
+    for u in "${uuids[@]}"; do
+        [[ -n $u && $u != "${1:-}" ]] && is_home "$u" && return 0
+    done
+    return 1
 }
 
 # The interfaces a connection is up on, one per line; nothing when it is saved
@@ -90,6 +107,48 @@ home_devices() {  # $1 = a connection to leave out, or nothing
             [[ $d =~ ^[A-Za-z0-9_.-]{1,15}$ ]] && printf '%s\n' "$d"
         done
     done | sort -u
+}
+
+# wsdd answers on every interface unless it is given some with -i, which would
+# show this computer to Windows on a network that is up next to a trusted one.
+# So it runs only with the interfaces of the trusted networks that are up,
+# written to $WSDD_ENV, which the drop-in wsdd.service.d/mainstream-sharing.conf
+# reads. With no interface the file goes, and wsdd must not run.
+#
+# Returns 0 when the list changed, so a running wsdd has to restart to follow
+# it, 1 when it did not, and 2 when the file could not be written.
+write_wsdd_env() {  # $1 = a connection to leave out, or nothing
+    local devs=() d params="" want="" have="" tmp
+    mapfile -t devs < <(home_devices "${1:-}")
+    for d in "${devs[@]}"; do params+="${params:+ }-i $d"; done
+    [[ -n $params ]] && want="WSDD_PARAMS=\"$params\""
+    [[ -f $WSDD_ENV ]] && have=$(<"$WSDD_ENV")
+    [[ $want == "$have" ]] && return 1
+    if [[ -z $want ]]; then
+        rm -f "$WSDD_ENV"
+        return 0
+    fi
+    mkdir -p "${WSDD_ENV%/*}" && tmp=$(mktemp "$WSDD_ENV.XXXXXX") || return 2
+    if printf '%s\n' "$want" >"$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "$WSDD_ENV"; then
+        return 0
+    fi
+    rm -f "$tmp"
+    return 2
+}
+
+# A VPN made of IPsec policies alone, with no interface of its own (libreswan,
+# or strongswan set up by hand), hands its decrypted traffic in on the
+# interface it travels over. On a trusted network that lands in MainstreamHome,
+# where the private addresses of an office behind the VPN count as local. The
+# table in $IPSEC_GUARD drops SMB that arrived through IPsec. firewalld only
+# ever replaces its own tables, so its reloads leave this one in place.
+guard_ipsec() {
+    nft -f "$IPSEC_GUARD"
+}
+
+unguard_ipsec() {
+    nft list table inet "$IPSEC_TABLE" >/dev/null 2>&1 || return 0
+    nft delete table inet "$IPSEC_TABLE"
 }
 
 # The drop-in only works while systemd has loaded it and the unit passes

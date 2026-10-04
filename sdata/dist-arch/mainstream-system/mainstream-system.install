@@ -140,7 +140,7 @@ _esp_snapshot_room() {
     [ "$lowered" = 0 ] || echo "Snapshot boot entries now stop at $limit% of the EFI partition, leaving room for the next boot image."
 }
 
-_migrate() {
+_migrate() {  # $1 = the version upgraded from, or nothing on an install
     rm -f /etc/pacman.d/hooks/95-hyprbars-rebuild.hook \
           /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
     rm -rf /usr/local/lib/hyprbars /usr/local/lib/scrolloverview
@@ -169,16 +169,23 @@ _migrate() {
     # unencrypted EFI partition. Started now so the key it holds stops opening
     # anything as soon as this update lands, and its timer enabled so a run
     # that could not finish tries again after the next boot without holding
-    # the boot up. Machines without a key file skip it.
-    systemctl preset mainstream-luks-keyfile.timer 2>/dev/null || true
+    # the boot up. Machines without a key file skip it. Only the release that
+    # brings the timer enables it, so an administrator's disable sticks.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-12)" -lt 0 ]; then
+        systemctl preset mainstream-luks-keyfile.timer 2>/dev/null || true
+    fi
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block mainstream-luks-keyfile.service 2>/dev/null || true
     fi
     # VMware's virtual GPU needs its fix in the login screen's compositor as
-    # well. The service decides at every boot; running it now means the next
-    # login screen already has it.
-    systemctl preset mainstream-vmwgfx-greeter.service 2>/dev/null || true
-    /usr/lib/mainstream/vmwgfx/greeter-setup 2>/dev/null || true
+    # well. The service decides at every boot; while it is enabled, running it
+    # now means the next login screen already has it.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-13)" -lt 0 ]; then
+        systemctl preset mainstream-vmwgfx-greeter.service 2>/dev/null || true
+    fi
+    if systemctl -q is-enabled mainstream-vmwgfx-greeter.service 2>/dev/null; then
+        /usr/lib/mainstream/vmwgfx/greeter-setup 2>/dev/null || true
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
@@ -228,7 +235,7 @@ post_install() {
 }
 
 post_upgrade() {
-    _migrate
+    _migrate "$2"
     if [ "$(vercmp "$2" 1.0-14)" -lt 0 ]; then
         _mdns_arrived
         _sharing_arrived
@@ -236,6 +243,14 @@ post_upgrade() {
     if [ "$(vercmp "$2" 1.0-15)" -lt 0 ]; then
         _esp_snapshot_room
     fi
+}
+
+# Removing the package takes away the home zone and the hook that stops Samba,
+# so sharing is turned off first. PKEXEC_UID names root as the caller.
+pre_remove() {
+    [ -d /run/systemd/system ] && [ -f /var/lib/mainstream/sharing/state ] || return 0
+    PKEXEC_UID=0 /usr/lib/mainstream/file-sharing disable >/dev/null 2>&1 \
+        || echo "warning: sharing could not be turned off completely; see /var/log/mainstream/file-sharing.log."
 }
 
 post_remove() {

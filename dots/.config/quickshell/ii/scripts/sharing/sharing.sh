@@ -316,6 +316,12 @@ cmd_add() {
         fail no-access
     fi
 
+    # Files and an open Settings window can both add the folder a setup was
+    # waiting for. One at a time, the second finds the share the first made.
+    if { exec 8>"${XDG_RUNTIME_DIR:-/tmp}/mainstream-sharing-add.lock"; } 2>/dev/null; then
+        flock -w 10 8 2>/dev/null
+    fi
+
     # A folder that is already shared stays as it is, so picking it again
     # never quietly takes away what others may do in it; that is the access
     # verb's job. One Samba stopped serving is shared again under its name.

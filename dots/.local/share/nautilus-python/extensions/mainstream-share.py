@@ -355,6 +355,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
         # is not taken for a change
         self._state = None
         self._state_read = 0.0
+        self._account = False
         self._status = None
         self._status_asked = 0.0
         self._status_loaded = 0.0
@@ -392,6 +393,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             self._state_read = now
             previous = self._state
             self._state = _read_state()
+            self._account = _account_set_up()
             self._watch()
             if self._state != "on" and self._shared:
                 self._set_shared({})
@@ -448,6 +450,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             self._status = status
             self._status_loaded = now
             self._state = status.get("state") or ""
+            self._account = bool(status.get("account"))
             self._state_read = now
             shares = {}
             if self._state == "on":
@@ -460,7 +463,7 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
             if _menu_facts(previous) != _menu_facts(status):
                 self._info.clear()
                 self.emit_items_updated_signal()
-            if self._state == "on" and status.get("account"):
+            if self._state == "on" and self._account:
                 self._share_pending()
         waiters, self._status_waiters = self._status_waiters, []
         for waiter in waiters:
@@ -509,7 +512,9 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
     def update_file_info(self, file):
         if not self._sharing_on():
             return
-        if time.monotonic() - self._status_asked >= CACHE_SECONDS:
+        # Only an account that was set up can own a share, so no other one
+        # runs a status every few seconds to look for an emblem.
+        if self._account and time.monotonic() - self._status_asked >= CACHE_SECONDS:
             self._refresh_status()
         if not file.is_directory() or file.get_uri_scheme() != "file":
             return
@@ -589,12 +594,15 @@ class MainstreamShare(GObject.GObject, Nautilus.MenuProvider, Nautilus.InfoProvi
         if not on:
             # Turned off, the folders shared before are kept, and only info
             # knows whether this is one of them.
-            if self._state != "off" or not _account_set_up():
+            if self._state != "off" or not self._account:
                 return {"state": self._state}
             if cached and now - cached[0] < CACHE_SECONDS:
                 return cached[1]
             self._fetch_info(path, real)
             return cached[1] if cached else {"state": self._state}
+        # Any other account is only offered setup, which needs no answer.
+        if not self._account:
+            return {"state": self._state}
         if cached and now - cached[0] < CACHE_SECONDS:
             return cached[1]
         fresh_status = self._status is not None and now - self._status_loaded < CACHE_SECONDS
