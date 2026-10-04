@@ -7,14 +7,13 @@ import qs.modules.common.functions
 
 Image {
     id: styledImage
-    asynchronous: true
+    // image:// sources (theme, tray icons) load on the main thread: the icon provider's
+    // QIcon::fromTheme is not thread-safe, and a background load corrupts memory.
+    asynchronous: !String(source).startsWith("image://")
     retainWhileLoading: true
-    // Off for an image that is already on disk and should simply be there,
-    // such as the album art a player card is built with.
     property bool fadeIn: true
-    // retainWhileLoading keeps the last frame while the image loads again,
-    // for a new size or a new file, so it stays shown through that instead
-    // of fading out and back in.
+    // retainWhileLoading keeps the last frame through a reload (new size or file);
+    // hasFrame keeps it shown then instead of fading out and back in.
     property bool hasFrame: false
     visible: opacity > 0
     opacity: (status === Image.Ready || (status === Image.Loading && hasFrame)) ? 1 : 0

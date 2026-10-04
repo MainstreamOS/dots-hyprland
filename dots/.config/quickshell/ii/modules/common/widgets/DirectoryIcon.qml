@@ -12,7 +12,6 @@ StyledImage {
     required property var fileModelData
     property int currentFallbackIndex: 0
     property var sourceFallbacks: []
-    asynchronous: true
     cache: false
     fillMode: Image.PreserveAspectFit
 

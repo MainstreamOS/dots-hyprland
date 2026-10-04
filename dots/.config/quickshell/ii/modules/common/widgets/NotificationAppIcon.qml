@@ -53,7 +53,6 @@ MaterialShape { // App icon
         sourceComponent: IconImage {
             id: appIconImage
             implicitSize: root.appIconSize
-            asynchronous: true
             source: Quickshell.iconPath(root.appIcon, "image-missing")
         }
     }
@@ -72,7 +71,6 @@ MaterialShape { // App icon
                 fillMode: Image.PreserveAspectCrop
                 cache: false
                 antialiasing: true
-                asynchronous: true
 
                 layer.enabled: true
                 layer.effect: OpacityMask {
@@ -90,7 +88,6 @@ MaterialShape { // App icon
                 anchors.right: parent.right
                 sourceComponent: IconImage {
                     implicitSize: root.smallAppIconSize
-                    asynchronous: true
                     source: Quickshell.iconPath(root.appIcon, "image-missing")
                 }
             }
