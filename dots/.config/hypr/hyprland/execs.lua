@@ -14,8 +14,9 @@ hl.on("hyprland.start", function ()
     -- (finish-deferred.sh in the dotfiles clone). When nothing got to them
     -- before the session ended, they go in here, before the shell reads them,
     -- bounded so the shell is never held back for long. This login is what
-    -- the Update page's "log out and back in" note asks for, so it goes too.
-    local finishUpdate = "rm -f \"${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed\"; d=\"$HOME/.cache/dots-hyprland\"; if [ -s \"$d/.update-deferred\" ] && [ -f \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" ]; then timeout -k 5 60 bash \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" --login >/dev/null 2>&1; fi; true"
+    -- the Update page's "log out and back in" note asks for, so it goes too,
+    -- unless some of those files are still waiting.
+    local finishUpdate = "d=\"$HOME/.cache/dots-hyprland\"; if [ -s \"$d/.update-deferred\" ] && [ -f \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" ]; then timeout -k 5 60 bash \"$d/sdata/subcmd-exp-update/finish-deferred.sh\" --login >/dev/null 2>&1; fi; [ -s \"$d/.update-deferred\" ] || rm -f \"${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed\"; true"
     hl.exec_cmd("dbus-update-activation-environment --all && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start --no-block hyprland-session.target && (systemctl --user try-restart xdg-desktop-portal-hyprland.service || true) && (" .. finishUpdate .. ") && qs -n -c $qsConfig")
 
     -- Apps set to open at login start once the shell's tray is up. An app

@@ -94,15 +94,20 @@ done
 if [[ -f "$lock" ]] && exp_lock_owner_live "$(cat "$lock" 2>/dev/null)"; then
   exit 0
 fi
-# A later run got to the list first. The shell the update that left it held
-# is still the old one in memory until it is let go.
+# A later run got to the list first. The shell it held is still the old one in
+# memory until let go; one that reports itself not held was started since.
 if [[ ! -s "$EXP_DEFERRED_FILE" ]]; then
-  if (( ! login )) && _qs_live; then
+  if (( ! login )) && _qs_live && [[ "$(qs -c ii ipc call updates held 2>/dev/null)" != false ]]; then
     qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
   fi
   exit 0
 fi
-echo $$ >"$lock"
+# Created only when absent, so a run that found the lock free at the same
+# moment cannot take it as well.
+if [[ -f "$lock" ]] && ! exp_lock_owner_live "$(cat "$lock" 2>/dev/null)"; then
+  rm -f "$lock"
+fi
+( set -o noclobber; echo $$ >"$lock" ) 2>/dev/null || exit 0
 trap '[[ "$(cat "$lock" 2>/dev/null)" == "$$" ]] && rm -f "$lock"; exp_discard_staged' EXIT
 
 # The shell is normally still held by the update that left the list. Holding

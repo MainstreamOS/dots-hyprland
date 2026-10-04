@@ -332,8 +332,8 @@ backup_file() {
   local backup_name
   local relative_name="${file#$HOME/}"
   backup_name="${relative_name//\//_}.${timestamp}.bak"
-  # Nearly every path starts at .config, and a leading dot hid each backup
-  # from a plain listing of the folder that holds them.
+  # Nearly every path starts at .config, and a leading dot would hide each
+  # backup from a plain listing of the folder that holds them.
   while [[ "$backup_name" == .* ]]; do backup_name="${backup_name#.}"; done
   
   if cp -p "$file" "${backup_dir}/${backup_name}" 2>/dev/null; then
@@ -366,6 +366,12 @@ _install_repo_file() {
   if ! cp -p "$repo_file" "$tmp" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null
     _exp_inflight_tmp=""
+    # Written in place only for a folder that takes no new files. After a
+    # failed write, such as on a full disk, that would cut the live file short.
+    if [[ -w "$(dirname "$home_file")" ]]; then
+      log_error "Could not write $home_file; it is left as it was"
+      return 1
+    fi
     cp -p "$repo_file" "$home_file"
     return
   fi
@@ -394,16 +400,14 @@ exp_home_is_stock() {
 _backup_and_replace() {
   local repo_file="$1" home_file="$2"
   if [[ "$NON_INTERACTIVE" == true ]] && exp_home_is_stock "$home_file" "${repo_file#"$REPO_ROOT"/}"; then
-    if [[ "$DRY_RUN" != true ]]; then
-      _install_repo_file "$repo_file" "$home_file"
+    if [[ "$DRY_RUN" != true ]] && _install_repo_file "$repo_file" "$home_file"; then
       log_success "Replaced $home_file with repository version"
     fi
     return 0
   fi
   EXP_LAST_BACKUP=""
   if backup_file "$home_file"; then
-    if [[ "$DRY_RUN" != true ]]; then
-      _install_repo_file "$repo_file" "$home_file"
+    if [[ "$DRY_RUN" != true ]] && _install_repo_file "$repo_file" "$home_file"; then
       log_success "Replaced $home_file with repository version"
       if [[ -n "$EXP_LAST_BACKUP" ]]; then
         EXP_OWN_REPLACED+=("${home_file}"$'\t'"${EXP_LAST_BACKUP}")
@@ -471,8 +475,7 @@ handle_file_conflict() {
   1|replace)
     if [[ "$DRY_RUN" == true ]]; then
       log_info "[DRY-RUN] Would replace $home_file with repository version"
-    else
-      _install_repo_file "$repo_file" "$home_file"
+    elif _install_repo_file "$repo_file" "$home_file"; then
       log_success "Replaced $home_file with repository version"
     fi
     ;;
@@ -520,8 +523,7 @@ handle_file_conflict() {
     r)
       if [[ "$DRY_RUN" == true ]]; then
         log_info "[DRY-RUN] Would replace $home_file with repository version"
-      else
-        _install_repo_file "$repo_file" "$home_file"
+      elif _install_repo_file "$repo_file" "$home_file"; then
         log_success "Replaced $home_file with repository version"
       fi
       ;;
@@ -585,9 +587,7 @@ handle_file_conflict() {
 
 # Function to check if PKGBUILD has changed
 check_pkgbuild_changed() {
-  # The loops hand this a glob match that ends in a slash, and a doubled
-  # slash in the path matches nothing git prints.
-  local pkg_dir="${1%/}"
+  local pkg_dir="$1"
   local pkgbuild_path="${pkg_dir}/PKGBUILD"
 
   [[ ! -f "$pkgbuild_path" ]] && return 1
@@ -617,7 +617,7 @@ check_pkgbuild_changed() {
 # carries at that version comes in through pacman instead, a package the user
 # removed stays removed, and a forced run builds nothing this does not allow.
 pkgbuild_wants_build() {
-  local pkg_dir="${1%/}" info name want have repo
+  local pkg_dir="$1" info name want have repo
   command -v vercmp >/dev/null 2>&1 || return 1
   info=$(
     set +eu
@@ -688,15 +688,7 @@ build_packages() {
 
   case "$build_mode" in
   "changed")
-    for pkg_dir in "$ARCH_PACKAGES_DIR"/*/; do
-      pkg_dir="${pkg_dir%/}"
-      if [[ -f "${pkg_dir}/PKGBUILD" ]]; then
-        local pkg_name=$(basename "$pkg_dir")
-        if check_pkgbuild_changed "$pkg_dir" && pkgbuild_wants_build "$pkg_dir"; then
-          packages_to_build+=("$pkg_name")
-        fi
-      fi
-    done
+    packages_to_build=(${changed_pkgbuilds[@]+"${changed_pkgbuilds[@]}"})
     ;;
   "all")
     for pkg_dir in "$ARCH_PACKAGES_DIR"/*/; do
@@ -948,6 +940,7 @@ _exp_relay_pid=""
 _exp_inflight_tmp=""
 _exp_holds_taken=0
 _exp_shell_released=0
+_exp_files_in=0
 
 # The Update page of a Settings window from before 3.0.0 runs the update as
 # its own child, and when that window restarts or closes, the pipe this
@@ -1004,13 +997,15 @@ exp_protect_clone_state() {
   # Such an updatems has already stashed the marker by the time this runs,
   # and without it a retry after a stopped run compares the whole tree. The
   # hop it set up starts at the release it last applied, so that release is
-  # written back, but only when HEAD@{1} is a different commit carrying
+  # written back, but only when HEAD@{1} is an earlier commit carrying
   # exactly a release tag: a retry that already lost the marker parks on the
-  # target itself, and writing that would record the release as delivered.
+  # target itself, and writing that would record the release as delivered,
+  # as would a clone moved back to an older release.
   [[ -e "${REPO_ROOT}/.updatems-applied-tag" || "$DRY_RUN" == true ]] && return 0
   prev=$(git -C "$REPO_ROOT" rev-parse -q --verify 'HEAD@{1}^{commit}' 2>/dev/null) || return 0
   head=$(git -C "$REPO_ROOT" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null) || return 0
   [[ "$prev" != "$head" ]] || return 0
+  git -C "$REPO_ROOT" merge-base --is-ancestor "$prev" "$head" 2>/dev/null || return 0
   tag=$(git -C "$REPO_ROOT" tag --points-at "$prev" 2>/dev/null | grep -E '^[0-9]{1,2}\.[0-9]+\.[0-9]+$' | sort -V | tail -n1) || tag=""
   [[ -n "$tag" ]] || return 0
   printf '%s\n' "$tag" >"${REPO_ROOT}/.updatems-applied-tag" 2>/dev/null || return 0
@@ -1209,8 +1204,10 @@ exp_base_load() {
 }
 
 # Where this update starts from. EXP_RANGE_BASE is the one earlier commit the
-# changed files are read against, when there is one to trust; a forced run
-# also counts a file as untouched when any earlier release shipped it as is.
+# changed files are read against, when there is one to trust. A forced run
+# without one counts a file as untouched when any earlier release shipped it
+# as is; with one, as on every Edge update, a file kept at an older release
+# is backed up before it is replaced.
 exp_base_init() {
   local head prev
   EXP_BASE_SPEC="" EXP_RANGE_BASE=""
@@ -1221,8 +1218,8 @@ exp_base_init() {
       EXP_RANGE_BASE="$prev"
     fi
   fi
-  if [[ "$FORCE_CHECK" == true ]]; then
-    EXP_BASE_SPEC="tags${EXP_RANGE_BASE:+,${EXP_RANGE_BASE}}"
+  if [[ "$FORCE_CHECK" == true && -z "$EXP_RANGE_BASE" ]]; then
+    EXP_BASE_SPEC="tags"
   else
     EXP_BASE_SPEC="$EXP_RANGE_BASE"
   fi
@@ -1295,13 +1292,15 @@ exp_commit_staged() {
       first+=("${EXP_STAGE[i]}" "$dest")
     fi
   done
-  EXP_STAGE=()
   set -- ${first[@]+"${first[@]}"} ${last[@]+"${last[@]}"}
+  # Kept listed until the renames are done, so a run stopped partway through
+  # still has its exit handler remove the copies not yet renamed.
   if command -v python3 >/dev/null 2>&1 \
      && python3 -c 'import os, sys
 a = sys.argv[1:]
 for i in range(0, len(a) - 1, 2):
     os.replace(a[i], a[i + 1])' "$@" 2>/dev/null; then
+    EXP_STAGE=()
     return 0
   fi
   # Whatever python3 did not get to is still staged.
@@ -1309,6 +1308,7 @@ for i in range(0, len(a) - 1, 2):
     if [[ -e "$1" ]]; then mv -f "$1" "$2" || rm -f "$1"; fi
     shift 2
   done
+  EXP_STAGE=()
   return 0
 }
 
@@ -1429,21 +1429,19 @@ exp_apply_deferred() {
   for line in ${entries[@]+"${entries[@]}"}; do
     IFS=$'\t' read -r op base rel <<<"$line"
     [[ -n "${rel:-}" ]] || continue
+    [[ "$op" == M || "$op" == D ]] || continue
     home=$(exp_home_path_for "$rel")
     should_ignore "$home" && continue
-    case "$op" in
-      M)
-        repo_file="${REPO_ROOT}/${rel}"
-        [[ -f "$repo_file" ]] || continue
-        apply_repo_file "$repo_file" "$home" "$rel"
-        ;;
-      D)
-        # Shipped again by a later release, whose copy step has it.
-        [[ -e "${REPO_ROOT}/${rel}" ]] && continue
-        exp_remove_release_file "$home" "$rel"
-        ;;
-      *) continue ;;
-    esac
+    # A later run that lists the path again keeps the first line, so the
+    # release now in the clone says whether it is put in place or removed.
+    repo_file="${REPO_ROOT}/${rel}"
+    if [[ -f "$repo_file" ]]; then
+      apply_repo_file "$repo_file" "$home" "$rel"
+    elif [[ ! -e "$repo_file" ]]; then
+      exp_remove_release_file "$home" "$rel"
+    else
+      continue
+    fi
     n=$((n + 1))
   done
   EXP_STAGING=0
@@ -1456,7 +1454,7 @@ exp_apply_deferred() {
   local -a left=()
   for line in ${entries[@]+"${entries[@]}"}; do
     IFS=$'\t' read -r op base rel <<<"$line"
-    [[ "$op" == M && -n "${rel:-}" && -f "${REPO_ROOT}/${rel}" ]] || continue
+    [[ ( "$op" == M || "$op" == D ) && -n "${rel:-}" && -f "${REPO_ROOT}/${rel}" ]] || continue
     home=$(exp_home_path_for "$rel")
     should_ignore "$home" && continue
     cmp -s "${REPO_ROOT}/${rel}" "$home" || left+=("$line")
@@ -1556,6 +1554,11 @@ exp_sync_venv() {
        && ! git -C "$REPO_ROOT" diff --quiet "$EXP_RANGE_BASE" HEAD -- sdata/uv/requirements.txt 2>/dev/null; then
     git -C "$REPO_ROOT" show "${EXP_RANGE_BASE}:sdata/uv/requirements.txt" >"$stamp" 2>/dev/null || : >"$stamp"
     old="$stamp"
+  elif [[ "$FORCE_CHECK" == true && -z "$EXP_RANGE_BASE" ]]; then
+    # A forced run has no earlier list to read, so what the venv holds now
+    # stands in for it.
+    venv_installed_pins "$venv" >"$stamp" 2>/dev/null || : >"$stamp"
+    old="$stamp"
   else
     return 0
   fi
@@ -1597,8 +1600,11 @@ exp_print_own_changes() {
 # every later config change from taking effect, which is far worse than the
 # errors this avoids.
 _hypr_live() { command -v hyprctl >/dev/null 2>&1 && hyprctl -j version >/dev/null 2>&1; }
+# Hyprland before 0.56 reports a bool option as "int": 0 or 1.
 _hypr_autoreload_is() {
-  hyprctl -j getoption misc:disable_autoreload 2>/dev/null | grep -Eq '"bool": *'"$1"'([^a-z]|$)'
+  local n=0
+  [[ "$1" == true ]] && n=1
+  hyprctl -j getoption misc:disable_autoreload 2>/dev/null | grep -Eq '"bool": *'"$1"'([^a-z]|$)|"int": *'"$n"'([^0-9]|$)'
 }
 # hyprctl keyword only reaches a hyprland.conf; on the Lua config (Hyprland
 # 0.55 and later) it is refused with "Use eval". The value goes through
@@ -1628,6 +1634,12 @@ restore_hypr_autoreload() {
   _hypr_autoreload_restored=1
   _hypr_live || return 0
   _hypr_set_disable_autoreload false >/dev/null 2>&1 || true
+}
+exp_reload_hypr() {
+  [[ "$_hypr_autoreload_restored" -eq 0 ]] && _hypr_live || return 0
+  _hypr_autoreload_restored=1
+  _hypr_set_disable_autoreload false >/dev/null 2>&1 || true
+  hyprctl reload >/dev/null 2>&1 || true
 }
 
 # Lets the shell reload onto the new files. When files were left for after
@@ -1669,6 +1681,9 @@ _exp_exit_handler() {
   exp_discard_staged
   if (( _exp_holds_taken )); then
     deco_carry_finish
+    # A run stopped in the venv sync has every file in, so Hyprland still
+    # takes them.
+    (( _exp_files_in )) && exp_reload_hypr
     restore_hypr_autoreload
     exp_release_shell
   fi
@@ -1728,8 +1743,10 @@ if [[ -f "${REPO_ROOT}/.update-lock" ]]; then
 fi
 
 # Create lock file with current PID
-if [[ "$DRY_RUN" != true ]]; then
-  echo $$ > "${REPO_ROOT}/.update-lock"
+# Only when absent, so a run or finisher that found it free at the same moment
+# cannot take it as well.
+if [[ "$DRY_RUN" != true ]] && ! ( set -o noclobber; echo $$ > "${REPO_ROOT}/.update-lock" ) 2>/dev/null; then
+  log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock" 2>/dev/null))"
 fi
 
 # Main script starts here
@@ -1969,8 +1986,8 @@ fi
 
 # Step 3: Update configuration files
 # Repairs to the machine's own files, before anything is compared against the
-# repository. These used to run only on the install path, so the people who
-# update, who are the ones carrying the old state, never got them.
+# repository. The install path runs them too, but the old state they repair is
+# carried by the people who update.
 if [[ -r "${REPO_ROOT}/sdata/lib/migrations.sh" ]]; then
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/sdata/lib/migrations.sh"
@@ -1978,13 +1995,11 @@ if [[ -r "${REPO_ROOT}/sdata/lib/migrations.sh" ]]; then
 fi
 
 # A run that was killed outright cannot have released anything, and both holds
-# outlive the script that took them. Clearing first costs nothing when there is
-# nothing to clear, and spares the next person a session where their settings
-# quietly stop applying. The shell is left held when an earlier run left files
-# for later, since releasing it would build it from the half-new tree before
-# this run puts them in.
+# outlive the script that took them. Clearing Hyprland's first costs nothing
+# and spares the next person a session where their settings quietly stop
+# applying. The shell's is not released here, since that reloads the whole
+# shell: this run holds it again below, and its own release clears it.
 if _hypr_live; then _hypr_set_disable_autoreload false >/dev/null 2>&1 || true; fi
-if _qs_live && [[ ! -s "$EXP_DEFERRED_FILE" ]]; then qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true; fi
 
 # From here on the exit handler gives back what is taken below.
 _exp_holds_taken=1
@@ -2115,20 +2130,26 @@ else
   log_info "Skipping file updates (no changes detected and not in force mode)"
 fi
 
-# Settings a release renamed or reshaped in config.json, once the files that
-# read them are in. A run that left files for later has this repeated by the
-# finisher, after the rest go in.
+# Settings a release renamed or reshaped, once the files that read them are in.
+# A run that left files for later leaves config.json to the finisher, since the
+# older shell it keeps would drop the new keys at its next save.
 if [[ "$DRY_RUN" != true ]] && declare -F config_migrations_run >/dev/null 2>&1; then
-  config_migrations_run "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+  if (( EXP_DEFER )) && [[ -s "$EXP_DEFERRED_FILE" ]]; then
+    config_migrations_run --hypr-only "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+  else
+    config_migrations_run "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+  fi
 fi
+
+# Before either reload, so Hyprland and the shell move to the new release
+# together, and the shell starts with the venv its scripts run from.
+_exp_files_in=1
+exp_sync_venv || true
 
 # Step 4: Update script permissions
 # The tree is consistent again, so hand Hyprland one reload of the finished
 # thing rather than the several it would have taken along the way.
-if _hypr_live && [[ "$_hypr_autoreload_restored" -eq 0 ]]; then
-  restore_hypr_autoreload
-  hyprctl reload >/dev/null 2>&1 || true
-fi
+exp_reload_hypr
 exp_release_shell
 
 log_header "Updating Script Permissions"
@@ -2141,8 +2162,6 @@ if [[ -d "${HOME}/.local/bin" ]]; then
     log_success "Updated ~/.local/bin script permissions"
   fi
 fi
-
-exp_sync_venv || true
 
 log_header "Update Complete"
 if [[ "$DRY_RUN" == true ]]; then

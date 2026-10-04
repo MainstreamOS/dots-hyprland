@@ -269,7 +269,7 @@ fi
 
 # ── 5. Auto-stash if dirty (uncommitted + untracked) ───────────────────────
 # What this tool and exp-update keep in the clone is not a local edit. Stashing
-# it carried the previous run's conflict backups, and the applied-tag marker,
+# it would put the previous run's conflict backups, and the applied-tag marker,
 # into a stash nobody is told to look in.
 _exclude="${CLONE_DIR}/.git/info/exclude"
 mkdir -p "$(dirname "$_exclude")" 2>/dev/null || true
@@ -337,9 +337,8 @@ if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
 fi
 export HYPRLAND_INSTANCE_SIGNATURE
 
-# The bug this recovery exists for was invisible: the hold was skipped and the
-# update carried on looking fine. Say so if the recovery did not take, rather
-# than leaving the next person to find it the same way.
+# A skipped hold is invisible otherwise: the update carries on looking fine.
+# Say so if the recovery did not take.
 if ! qs -c ii ipc show >/dev/null 2>&1; then
     warn "$(t "Quickshell is not reachable; its reload hold will be skipped during the file sync.")"
 fi

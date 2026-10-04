@@ -106,6 +106,10 @@ ShellRoot {
             Quickshell.watchFiles = true
             Quickshell.reload(true)
         }
+
+        function held(): bool {
+            return !Quickshell.watchFiles
+        }
     }
 }
 

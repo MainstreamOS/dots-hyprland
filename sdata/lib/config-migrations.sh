@@ -10,7 +10,9 @@
 # behind, so running it again, or on a machine that never had that state,
 # changes nothing.
 #
-#   config_migrations_run <path to config.json>
+#   config_migrations_run [--hypr-only] <path to config.json>
+#
+# --hypr-only does the steps in hypr/custom/ and leaves config.json alone.
 #
 # A missing config.json means no shell has run for this user yet, and the
 # first one seeds everything here itself, so there is nothing to do. The
@@ -258,7 +260,9 @@ _cfgmig_config_json() {
 }
 
 config_migrations_run() {
-  local cfg="${1:-}"
+  local hypr_only=0 cfg
+  if [[ "${1:-}" == --hypr-only ]]; then hypr_only=1; shift; fi
+  cfg="${1:-}"
   [[ -n "$cfg" && -e "$cfg" ]] || return 0
   [[ "${DRY_RUN:-false}" != true ]] || return 0
   # Run as root it would leave root-owned files in the user's home.
@@ -270,7 +274,7 @@ config_migrations_run() {
     trap - ERR
     _CFGMIG_NOTES=()
     _cfgmig_titlebars
-    _cfgmig_config_json "$cfg"
+    (( hypr_only )) || _cfgmig_config_json "$cfg"
     _cfgmig_say_notes
   ) || true
   return 0

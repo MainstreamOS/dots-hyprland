@@ -13,6 +13,18 @@ repair_venv_paths() {
         sed -i -E "s|/[^\"'[:space:]]*\\.local/state/quickshell/\\.venv|$venv_path|g" "$venv_path/pyvenv.cfg" 2>/dev/null || true
 }
 
+_venv_uv() {
+    local uv_bin
+    uv_bin=$(command -v uv 2>/dev/null) || uv_bin="$HOME/.local/bin/uv"
+    [[ -x "$uv_bin" ]] && printf '%s\n' "$uv_bin"
+}
+
+venv_installed_pins() {
+    local venv_path="$1" uv_bin
+    uv_bin=$(_venv_uv) || return 1
+    "$uv_bin" pip freeze --python "$venv_path/bin/python"
+}
+
 # Brings an existing venv to exactly the packages a requirements file pins,
 # which is what the installer's `uv pip install -r` gives a new one. A sync
 # rather than an install, so a package the list dropped goes too.
@@ -29,8 +41,7 @@ sync_venv_requirements() {
     local venv_path="$1" requirements="$2" old_requirements="${3:-}" uv_bin relaxed rc=0 loosened=0
     local -a added=()
     [[ -x "$venv_path/bin/python" && -f "$requirements" ]] || return 1
-    uv_bin=$(command -v uv 2>/dev/null) || uv_bin="$HOME/.local/bin/uv"
-    [[ -x "$uv_bin" ]] || return 1
+    uv_bin=$(_venv_uv) || return 1
     if ! "$uv_bin" pip sync --python "$venv_path/bin/python" "$requirements"; then
         grep -qE '^cffi==' "$requirements" || return 1
         relaxed=$(mktemp) || return 1
