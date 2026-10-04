@@ -61,15 +61,30 @@ ContentPage {
         return all;
     }
 
-    // The plugin forgets its per-monitor settings on every reload and takes them
-    // again from plugins.lua, so a reload is what applies the file.
     function writeScrollOverviewMonitors(all) {
         root.scrollOverviewMonitors = all;
+        scrollOverviewMonitorsSaveTimer.restart();
+    }
+
+    // The plugin forgets its per-monitor settings on every reload and takes them
+    // again from plugins.lua, so a reload is what applies the file.
+    function saveScrollOverviewMonitors() {
+        scrollOverviewMonitorsSaveTimer.stop();
+        const all = root.scrollOverviewMonitors;
         const text = Object.keys(all).sort().map(name => [name].concat(Object.keys(all[name]).sort()
             .map(key => `${key}=${key === "scale" ? Number(all[name][key]).toFixed(2) : all[name][key]}`)).join(" ")).join("\n");
         Quickshell.execDetached(["bash", "-c", 'printf "%s" "$1" > "$0" && hyprctl reload',
             root.scrollOverviewMonitorsFile, text.length > 0 ? text + "\n" : ""]);
     }
+
+    // Saved once the value settles: a held spin button or a typed number would
+    // otherwise reload Hyprland at every step.
+    Timer {
+        id: scrollOverviewMonitorsSaveTimer
+        interval: 500
+        onTriggered: root.saveScrollOverviewMonitors()
+    }
+    Component.onDestruction: if (scrollOverviewMonitorsSaveTimer.running) root.saveScrollOverviewMonitors()
 
     // A null value drops that one setting, so the monitor follows the rest again.
     function setScrollOverviewMonitorKey(output, key, value) {
