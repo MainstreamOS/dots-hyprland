@@ -13,6 +13,7 @@ import Quickshell.Io
 import qs.services
 import qs.services.network
 import qs.modules.common
+import qs.modules.common.models
 import qs.modules.common.widgets
 import "modules/settings/connectivity"
 
@@ -316,6 +317,10 @@ ApplicationWindow {
         recenterTimer.restart();
     }
 
+    ShownWifiNetworks {
+        id: shownNetworks
+    }
+
     // ── Main content ──
     ColumnLayout {
         anchors {
@@ -362,7 +367,9 @@ ApplicationWindow {
 
                     // ── Internet notice ──
                     NoticeBox {
-                        readonly property bool online: Network.ethernet || Network.active !== null
+                        // From the Wi-Fi list below, held still while a password is typed there,
+                        // so it agrees with the Connected row and cannot resize and move the list.
+                        readonly property bool online: Network.ethernet || shownNetworks.active !== null
                         Layout.fillWidth: true
                         materialIcon: online ? "check_circle" : "wifi"
                         text: online
@@ -723,14 +730,14 @@ ApplicationWindow {
 
                         // Connected network
                         ConnectivityWifiItem {
-                            visible: Network.wifiEnabled && Network.active !== null
-                            wifiNetwork: Network.active ?? null
+                            visible: Network.wifiEnabled && shownNetworks.active !== null
+                            wifiNetwork: shownNetworks.active
                             Layout.fillWidth: true
                         }
 
                         // Available networks (scrollable, fills remaining space)
                         Rectangle {
-                            visible: Network.wifiEnabled && Network.availableNetworks.length > 0
+                            visible: Network.wifiEnabled && shownNetworks.availableNetworks.length > 0
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.minimumHeight: 80
@@ -752,7 +759,9 @@ ApplicationWindow {
                                     spacing: 4
 
                                     Repeater {
-                                        model: Network.availableNetworks
+                                        model: ScriptModel {
+                                            values: shownNetworks.availableNetworks
+                                        }
 
                                         ConnectivityWifiItem {
                                             required property var modelData
@@ -770,7 +779,7 @@ ApplicationWindow {
 
                         // Empty state
                         ColumnLayout {
-                            visible: Network.wifiEnabled && Network.availableNetworks.length === 0 && !Network.wifiScanning && Network.active === null
+                            visible: Network.wifiEnabled && shownNetworks.availableNetworks.length === 0 && !Network.wifiScanning && shownNetworks.active === null
                             Layout.fillWidth: true
                             Layout.topMargin: 10
                             Layout.bottomMargin: 10

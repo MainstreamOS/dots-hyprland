@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
+import qs.modules.common.models
 import qs.modules.common.widgets
 import "connectivity"
 
@@ -176,6 +177,10 @@ Item {
         onTriggered: root.refreshCountry()
     }
 
+    ShownWifiNetworks {
+        id: shownNetworks
+    }
+
     component WifiNotice: SubtleNoticeBox {
         Layout.fillWidth: true
         Layout.leftMargin: 8
@@ -255,10 +260,10 @@ Item {
         ContentSection {
             icon: "wifi"
             title: Translation.tr("Connected")
-            visible: Network.wifiEnabled && Network.active !== null
+            visible: Network.wifiEnabled && shownNetworks.active !== null
 
             ConnectivityWifiItem {
-                wifiNetwork: Network.active
+                wifiNetwork: shownNetworks.active
                 Layout.fillWidth: true
             }
         }
@@ -267,10 +272,12 @@ Item {
         ContentSection {
             icon: "bookmark"
             title: Translation.tr("Saved Networks")
-            visible: Network.wifiEnabled && Network.savedNetworks.length > 0
+            visible: Network.wifiEnabled && shownNetworks.savedNetworks.length > 0
 
             Repeater {
-                model: Network.savedNetworks
+                model: ScriptModel {
+                    values: shownNetworks.savedNetworks
+                }
 
                 ConnectivityWifiItem {
                     required property var modelData
@@ -280,7 +287,8 @@ Item {
             }
 
             WifiNotice {
-                visible: Network.frameProfile !== null
+                // From the rows above, so it stays beside a Steam row a prompt holds there.
+                visible: shownNetworks.savedNetworks.some(n => n?.frameProfile)
                 materialIcon: "view_in_ar"
                 text: Translation.tr("%1 is the link Steam makes to the Steam Frame (experimental), and Steam connects it by itself. If the headset will not pair, forgetting it and pairing again can help.").arg(Network.frameProfileName)
             }
@@ -293,7 +301,7 @@ Item {
 
             // Empty state
             ColumnLayout {
-                visible: Network.availableNetworks.length === 0 && !Network.wifiScanning
+                visible: shownNetworks.availableNetworks.length === 0 && !Network.wifiScanning
                 Layout.fillWidth: true
                 Layout.topMargin: 20
                 Layout.bottomMargin: 20
@@ -331,7 +339,9 @@ Item {
 
             // Network list (available = not saved)
             Repeater {
-                model: Network.availableNetworks
+                model: ScriptModel {
+                    values: shownNetworks.availableNetworks
+                }
 
                 ConnectivityWifiItem {
                     required property var modelData

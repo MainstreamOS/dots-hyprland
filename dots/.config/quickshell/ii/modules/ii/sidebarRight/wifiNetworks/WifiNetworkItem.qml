@@ -13,9 +13,8 @@ DialogListItem {
 
     active: (wifiNetwork?.askingPassword || wifiNetwork?.active) ?? false
 
-    // A prompt left open holds the whole list still (Network keeps the rows
-    // in place while one is up), so closing the sidebar or losing this row
-    // counts as Cancel.
+    // A prompt left open holds the list still in every view that shows it,
+    // so closing the sidebar or losing this row counts as Cancel.
     function dropPrompt() {
         if (root.wifiNetwork?.askingPassword)
             root.wifiNetwork.askingPassword = false;

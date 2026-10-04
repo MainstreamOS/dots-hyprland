@@ -63,6 +63,9 @@ Singleton {
     property bool devicesKnown: false
     // Kept from the last sort: the rows' own active flags are already the new ones.
     property string sortedActive: ""
+    // Networks gone from the list. A view holds its rows still while one asks
+    // for a password, so these may still be on screen until no prompt is open.
+    property var retiredNetworks: []
 
     function reorderNetworks() {
         const before = root.friendlyWifiNetworks;
@@ -73,9 +76,6 @@ Singleton {
         const activeNow = wifiNetworks.filter(n => n.active).map(n => n.ssid).join("\u0000");
         if (sameNetworks && activeNow === root.sortedActive)
             return;
-        // A prompt is open, and the password being typed lives in a row.
-        if (before.some(n => n.askingPassword))
-            return;
         root.sortedActive = activeNow;
         root.friendlyWifiNetworks = [...wifiNetworks].sort((a, b) => {
             if (a.active && !b.active)
@@ -84,10 +84,15 @@ Singleton {
                 return 1;
             return b.strength - a.strength;
         });
-        for (const network of before) {
-            if (!wifiNetworks.includes(network))
-                network.destroy();
-        }
+    }
+
+    function freeRetiredNetworks() {
+        const all = [...root.wifiNetworks, ...root.retiredNetworks, ...(root.frameProfile ? [root.frameProfile] : [])];
+        if (all.some(n => n.askingPassword))
+            return;
+        for (const network of root.retiredNetworks)
+            network.destroy();
+        root.retiredNetworks = [];
     }
     
     property string wifiStatus: "disconnected"
@@ -133,7 +138,7 @@ Singleton {
 
     function connectToWifiNetwork(accessPoint: WifiAccessPoint): void {
         // Steam brings its link up by itself, on the adapter, when the headset is near.
-        if (accessPoint === root.frameProfile)
+        if (accessPoint.frameProfile)
             return;
         accessPoint.askingPassword = false;
         root.wifiConnectTarget = accessPoint;
@@ -442,14 +447,18 @@ Singleton {
         if (saved)
             getFrameSsid.running = true;
         if (saved && !root.frameProfile) {
-            // The headset's hotspot is on 6 GHz, where Wi-Fi allows only WPA3.
+            // The headset's hotspot is on 6 GHz, where Wi-Fi allows only WPA3. Marked
+            // on the object, since a page held for a prompt can show it after a forget.
             root.frameProfile = apComp.createObject(root, {
-                lastIpcObject: { active: false, strength: 0, frequency: 0, ssid: root.frameProfileName, bssid: "", security: "WPA3", isSaved: true }
+                lastIpcObject: { active: false, strength: 0, frequency: 0, ssid: root.frameProfileName, bssid: "", security: "WPA3", isSaved: true, frameProfile: true }
             });
         } else if (!saved && root.frameProfile) {
             const gone = root.frameProfile;
+            // Not saved anymore, so a page still showing it offers no Forget.
+            gone.lastIpcObject = Object.assign({}, gone.lastIpcObject, { isSaved: false });
+            root.retiredNetworks.push(gone);
             root.frameProfile = null;
-            gone.destroy();
+            root.freeRetiredNetworks();
         }
     }
 
@@ -520,13 +529,17 @@ Singleton {
         const gone = rNetworks.filter(rn => !stillThere(rn.ssid) && !inUse(rn));
         for (const network of gone) {
             rNetworks.splice(rNetworks.indexOf(network), 1);
-            // A list held still for a prompt keeps its rows; reorderNetworks frees them.
-            if (!root.friendlyWifiNetworks.includes(network))
-                network.destroy();
+            root.retiredNetworks.push(network);
         }
 
         for (const network of wifiNetworks) {
-            const match = rNetworks.find(n => n.ssid === network.ssid);
+            let match = rNetworks.find(n => n.ssid === network.ssid);
+            // Back while a view still shows it: the same object keeps that row.
+            const retired = match ? -1 : root.retiredNetworks.findIndex(n => n.ssid === network.ssid);
+            if (retired >= 0) {
+                match = root.retiredNetworks.splice(retired, 1)[0];
+                rNetworks.push(match);
+            }
             if (match) {
                 match.lastIpcObject = network;
             } else {
@@ -537,6 +550,7 @@ Singleton {
         }
 
         root.reorderNetworks();
+        root.freeRetiredNetworks();
     }
 
     Process {

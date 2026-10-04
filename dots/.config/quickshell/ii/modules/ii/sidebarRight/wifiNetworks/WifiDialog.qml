@@ -2,6 +2,7 @@ import qs
 import qs.services
 import qs.services.network
 import qs.modules.common
+import qs.modules.common.models
 import qs.modules.common.widgets
 import qs.modules.common.functions as CF
 import QtQuick
@@ -11,6 +12,10 @@ import Quickshell
 WindowDialog {
     id: root
     backgroundHeight: 600
+
+    ShownWifiNetworks {
+        id: shownNetworks
+    }
 
     WindowDialogTitle {
         text: Translation.tr("Connect to Wi-Fi")
@@ -38,7 +43,7 @@ WindowDialog {
         spacing: 0
 
         model: ScriptModel {
-            values: Network.friendlyWifiNetworks
+            values: shownNetworks.networks
         }
         delegate: WifiNetworkItem {
             required property WifiAccessPoint modelData

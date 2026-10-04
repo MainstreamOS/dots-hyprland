@@ -10,6 +10,7 @@ QtObject {
     readonly property string security: lastIpcObject.security
     readonly property bool isSecure: security.length > 0
     readonly property bool isSaved: lastIpcObject.isSaved ?? false  // Has saved connection profile
+    readonly property bool frameProfile: lastIpcObject.frameProfile ?? false
     readonly property bool onFrameAdapter: lastIpcObject.onFrameAdapter ?? false
 
     property bool askingPassword: false

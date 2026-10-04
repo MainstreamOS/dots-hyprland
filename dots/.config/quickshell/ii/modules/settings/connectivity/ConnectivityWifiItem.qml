@@ -9,13 +9,13 @@ Rectangle {
     id: root
     required property WifiAccessPoint wifiNetwork
     
-    property bool isConnecting: Network.wifiConnectTarget === root.wifiNetwork && !wifiNetwork?.active
+    property bool isConnecting: !!root.wifiNetwork && Network.wifiConnectTarget === root.wifiNetwork && !root.wifiNetwork.active
     property bool isActive: wifiNetwork?.active ?? false
     property bool isAskingPassword: wifiNetwork?.askingPassword ?? false
     // Steam's link to the Steam Frame: only Steam joins it, and it cannot be shared.
-    readonly property bool isFrameProfile: !!wifiNetwork && wifiNetwork === Network.frameProfile
-    // Leaving the page counts as Cancel: a prompt left open holds the whole
-    // list still.
+    readonly property bool isFrameProfile: wifiNetwork?.frameProfile ?? false
+    // Leaving the page counts as Cancel: a prompt left open would hold the
+    // list still in every view that shows it.
     Component.onDestruction: {
         if (root.wifiNetwork?.askingPassword)
             root.wifiNetwork.askingPassword = false;
