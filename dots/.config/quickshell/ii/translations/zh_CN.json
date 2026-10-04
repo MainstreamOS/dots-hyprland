@@ -2484,5 +2484,19 @@
   "starts a kernel that is no longer installed, do not restart": "starts a kernel that is no longer installed, do not restart",
   "The last update found that the boot menu could not start the system. Run the update again to check it.": "The last update found that the boot menu could not start the system. Run the update again to check it.",
   "Do not restart the computer yet. The boot menu still starts a kernel that is no longer installed, so the computer would start without its drivers. The message above says how to build the boot image for the installed kernel.": "Do not restart the computer yet. The boot menu still starts a kernel that is no longer installed, so the computer would start without its drivers. The message above says how to build the boot image for the installed kernel.",
-  "not checked, the EFI partition was busy or unreadable": "not checked, the EFI partition was busy or unreadable"
+  "not checked, the EFI partition was busy or unreadable": "not checked, the EFI partition was busy or unreadable",
+  "Wi-Fi Country": "Wi-Fi Country",
+  "Country": "Country",
+  "Not set": "Not set",
+  "Wi-Fi country support is not installed on this machine. Run an update, then come back.": "Wi-Fi country support is not installed on this machine. Run an update, then come back.",
+  "%1 is saved and takes effect after a restart.": "%1 is saved and takes effect after a restart.",
+  "Wi-Fi has no rules for %1, so it keeps the worldwide settings.": "Wi-Fi has no rules for %1, so it keeps the worldwide settings.",
+  "No country is saved. Wi-Fi is using %1 for now, as your network or card asks.": "No country is saved. Wi-Fi is using %1 for now, as your network or card asks.",
+  "Your network names another country, so Wi-Fi uses only the channels both countries allow.": "Your network names another country, so Wi-Fi uses only the channels both countries allow.",
+  "Wi-Fi is using %1 for now, as your network or card asks. %2 stays saved.": "Wi-Fi is using %1 for now, as your network or card asks. %2 stays saved.",
+  "Set this to the country you are in, so Wi-Fi uses the channels allowed there. Cards that manage their own country, such as most Intel ones, report their own. USB adapters, such as the Steam Frame's, use the one set here.": "Set this to the country you are in, so Wi-Fi uses the channels allowed there. Cards that manage their own country, such as most Intel ones, report their own. USB adapters, such as the Steam Frame's, use the one set here.",
+  "Wi-Fi country set to %s from the time zone": "Wi-Fi country set to %s from the time zone",
+  "Could not set the Wi-Fi country from the time zone": "Could not set the Wi-Fi country from the time zone",
+  "Wi-Fi country cleared because the time zone no longer names one": "Wi-Fi country cleared because the time zone no longer names one",
+  "%1 was guessed from your time zone and follows it. Pick a country to keep it.": "%1 was guessed from your time zone and follows it. Pick a country to keep it."
 }

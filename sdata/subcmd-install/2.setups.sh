@@ -13,6 +13,7 @@ ms_section "Configuring..."
 # the initramfs.
 source "${REPO_ROOT}/sdata/lib/gpu-config.sh"
 source "${REPO_ROOT}/sdata/lib/mac-config.sh"
+source "${REPO_ROOT}/sdata/lib/wifi-country.sh"
 GPU_SUDO=sudo
 GPU_EARLY_KMS_ESP_THRESHOLD=0
 
@@ -99,6 +100,23 @@ function setup_disk_mounter(){
     if systemctl list-unit-files avahi-daemon.service >/dev/null 2>&1; then
       x sudo systemctl enable --now avahi-daemon.service || true
     fi
+  fi
+}
+
+function setup_wifi_country(){
+  # Settings > Wi-Fi's country helper, and a first guess from the time zone.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/mainstream-wifi-country" \
+      /usr/local/bin/mainstream-wifi-country
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.wifi-country.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.wifi-country.policy
+  local cc
+  if cc="$(WIFI_COUNTRY_SUDO=sudo wifi_country_seed)" && [[ -n "$cc" ]]; then
+    if [[ "$cc" == 00 ]]; then
+      echo -e "${STY_CYAN}[$0]: Wi-Fi country cleared because the time zone no longer names one.${STY_RST}"
+    else
+      echo -e "${STY_CYAN}[$0]: Wi-Fi country set to ${cc} from the time zone.${STY_RST}"
+    fi
+    WIFI_COUNTRY_SUDO=sudo wifi_country_apply "$cc" || true
   fi
 }
 
@@ -479,6 +497,9 @@ v setup_keyboard_layout_polkit
 
 showfun setup_disk_mounter
 v setup_disk_mounter
+
+showfun setup_wifi_country
+v setup_wifi_country
 
 showfun setup_app_remover
 v setup_app_remover

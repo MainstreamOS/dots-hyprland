@@ -61,6 +61,8 @@ ROOT_FILES=(
     "0644|sdata/polkit/50-power-key.rules|/usr/share/polkit-1/rules.d/50-power-key.rules"
     "0755|sdata/polkit/gaming-tuning|/usr/local/bin/gaming-tuning"
     "0644|sdata/polkit/org.mainstreamos.gaming-tuning.policy|/usr/share/polkit-1/actions/org.mainstreamos.gaming-tuning.policy"
+    "0755|sdata/polkit/mainstream-wifi-country|/usr/local/bin/mainstream-wifi-country"
+    "0644|sdata/polkit/org.mainstreamos.wifi-country.policy|/usr/share/polkit-1/actions/org.mainstreamos.wifi-country.policy"
     "0755|sdata/polkit/ollama-setup|/usr/local/bin/ollama-setup"
     "0644|sdata/polkit/org.mainstreamos.ollama-setup.policy|/usr/share/polkit-1/actions/org.mainstreamos.ollama-setup.policy"
     "0755|sdata/polkit/ai-cli-install|/usr/local/bin/ai-cli-install"
@@ -607,6 +609,25 @@ if [[ -r "$GPU_LIB_SRC" && ! -e "$NVML_STAMP" ]]; then
         else
             warn "$(t "Could not install the NVIDIA monitoring library")"
         fi
+    fi
+fi
+
+# ── Wi-Fi country ──────────────────────────────────────────────────────────
+# Runs on every update: a country guessed from the time zone follows later
+# time zone changes until one is chosen in Settings.
+WIFI_LIB_SRC="$REPO_DIR/sdata/lib/wifi-country.sh"
+if _src_ok "$WIFI_LIB_SRC"; then
+    # shellcheck source=/dev/null
+    source "$WIFI_LIB_SRC"
+    if _wifi_cc="$(wifi_country_seed)"; then
+        if [[ "$_wifi_cc" == 00 ]]; then
+            ok "$(t "Wi-Fi country cleared because the time zone no longer names one")"
+        elif [[ -n "$_wifi_cc" ]]; then
+            ok "$(tf "Wi-Fi country set to %s from the time zone" "$_wifi_cc")"
+        fi
+        [[ -z "$_wifi_cc" ]] || wifi_country_apply "$_wifi_cc" >/dev/null 2>&1 || true
+    else
+        warn "$(t "Could not set the Wi-Fi country from the time zone")"
     fi
 fi
 

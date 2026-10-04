@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Privileged half of Settings > Wi-Fi's country. Runs under pkexec.
+#   mainstream-wifi-country set XX   keep XX across restarts and apply it now
+#   mainstream-wifi-country clear    stop naming a country
+# Exit 0 done, 1 failed, 2 not a country or bad usage.
+set -euo pipefail
+# pkexec keeps the caller's umask.
+umask 022
+
+CONF=/etc/conf.d/wireless-regdom
+COUNTRIES=/usr/share/zoneinfo/iso3166.tab
+# Read by wifi_country_seed: a country set or cleared here is never replaced by
+# a guess from the time zone.
+STAMP=/var/lib/mainstream/wifi-country
+LINE='^[[:space:]]*(export[[:space:]]+)?WIRELESS_REGDOM='
+
+die()   { printf 'mainstream-wifi-country: %s\n' "$*" >&2; exit 1; }
+usage() { printf 'usage: mainstream-wifi-country set XX | clear\n' >&2; exit 2; }
+
+case "${1:-}" in
+    set)
+        [[ $# -eq 2 && "$2" =~ ^[A-Z]{2}$ ]] || usage
+        awk -F'\t' -v c="$2" '$1 == c { f = 1 } END { exit !f }' "$COUNTRIES" 2>/dev/null || usage
+        ;;
+    clear)
+        [[ $# -eq 1 ]] || usage
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+[[ $EUID -eq 0 ]] || die "must run as root"
+# The file belongs to wireless-regdb, and pacman will not install a package
+# over a file it does not own, so it is never created here.
+[[ -f "$CONF" && ! -L "$CONF" ]] || die "$CONF is missing; wireless-regdb is not installed"
+
+TMP=""
+trap '[[ -z "$TMP" ]] || rm -f "$TMP"' EXIT
+rewrite() {  # awk program, country
+    TMP="$(mktemp "${CONF%/*}/.wireless-regdom.XXXXXX")" || die "cannot write ${CONF%/*}"
+    awk -v re="$LINE" -v cc="${2:-}" "$1" "$CONF" > "$TMP" || die "cannot write $CONF"
+    chmod --reference="$CONF" "$TMP" && chown --reference="$CONF" "$TMP" \
+        || die "cannot write $CONF"
+    mv -f "$TMP" "$CONF" || die "cannot write $CONF"
+    TMP=""
+    { mkdir -p "${STAMP%/*}" && printf 'chosen\n' > "$STAMP"; } 2>/dev/null || true
+}
+
+if [[ "$1" == set ]]; then
+    rewrite '$0 ~ re { if (!done) print "WIRELESS_REGDOM=\"" cc "\""; done = 1; next }
+             { print }
+             END { if (!done) print "WIRELESS_REGDOM=\"" cc "\"" }' "$2"
+    # Without cfg80211 loaded there is no Wi-Fi to tell yet; wireless-regdb's
+    # udev rule applies the file once an adapter loads it.
+    if [[ -d /sys/module/cfg80211 ]]; then
+        iw reg set "$2" || die "the country is saved, but could not be applied now; it applies at the next start"
+    fi
+else
+    rewrite '$0 ~ re { print "#" $0; next } { print }'
+    if [[ -d /sys/module/cfg80211 ]]; then
+        iw reg set 00 || true
+    fi
+fi
