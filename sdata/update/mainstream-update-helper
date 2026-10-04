@@ -23,6 +23,8 @@
 #   101  the dotfiles did not update; the machine is still on its old release
 #   102  the dotfiles updated, but updatems-system did not finish
 #   100  completed with errors: snap or extras failed, or [mainstream] was switched off
+#   105  held: the EFI partition is too full to rebuild the boot image safely; no package changed
+#   106  the boot menu would not start the system and could not be repaired; do not restart
 #   4    pacman refused: Arch's Qt moved past the desktop's pin; no package changed
 #   N    pacman, AUR or flatpak exit code on a primary failure
 
@@ -96,6 +98,7 @@ STEP_PID=""
 STEP_TIMER=""
 STEP_LEAD=""
 STEP_TIMED_OUT=0
+STOPPING=0
 
 # Unattended, a user step waits in the background so a stop trap fires at once.
 # $1 is a time limit in seconds, 0 for none; reaching it stops the step like Stop.
@@ -176,6 +179,12 @@ on_stop() {
     if [[ -n "$STEP_PID" ]]; then
         stop_user_step "$STEP_PID"
         wait "$STEP_PID" 2>/dev/null
+    fi
+    # A step that ran may have rebuilt the boot image, and the page has to
+    # hear when the boot menu would not start it.
+    STOPPING=1
+    if (( ${BOOT_TOUCHED:-0} )) && [[ -z "${BOOT_RC:-}" ]]; then
+        boot_postcheck
     fi
     exit 143
 }
@@ -316,9 +325,53 @@ SNAP_NOTE=""
 DOTFILES_NOTE=""
 TOPGRADE_NOTE=""
 MAINSTREAM_REPO_OFFLINE=0
+BOOT_HELD=0
+# Set once a step that can rebuild the boot image has started.
+BOOT_TOUCHED=0
+# Empty until the boot menu has been checked after the update.
+BOOT_RC=""
+
+# limine-mkinitcpio reports success even when limine.conf could not be saved,
+# so the hashes the menu pins decide.
+boot_postcheck() {
+    local stop_asked=0
+    command -v mainstream-boot-verify >/dev/null 2>&1 || return 0
+    echo ""
+    echo "── $(t "Checking that the boot menu can start the system...")"
+    # A Stop waits for the answer. An ignored signal would pass to the rebuild it may start.
+    trap 'stop_asked=1' INT TERM HUP
+    mainstream-boot-verify --repair
+    BOOT_RC=$?
+    # The page blocks its reboot prompt on either marker.
+    if [[ "$BOOT_RC" -eq 1 ]]; then
+        echo "@@MAINSTREAM-UPDATE-BOOT-BROKEN 1"
+        echo ">>> $(t "Do not restart yet. The boot menu does not match the system's boot image, so the computer would not start. Free some space on the EFI partition, then run the update again: it repairs the boot menu first.")"
+    elif [[ "$BOOT_RC" -eq 3 ]]; then
+        echo "@@MAINSTREAM-UPDATE-BOOT-BROKEN 3"
+        echo ">>> $(tf "Do not restart yet. The boot menu still starts a kernel that is no longer installed, so the computer would start without its drivers. Run \"%s\" in a terminal to build the boot image for the installed kernel. If it says the EFI partition is full, free some space on it and run it again." "sudo limine-mkinitcpio")"
+    fi
+    if (( STOPPING )); then
+        trap '' INT TERM HUP
+    else
+        trap on_stop INT TERM HUP
+        (( stop_asked )) && on_stop
+    fi
+    return 0
+}
+
+# ── 0. Boot menu, before anything can rebuild the boot image ────────────────
+# Mends an entry Limine would refuse and keeps a copy of the working image. It
+# holds the package step when the EFI partition is too full and no copy exists.
+if [[ "$SKIP_SYSTEM" -eq 0 || "$SKIP_AUR" -eq 0 || "$SKIP_DOTFILES" -eq 0 ]] \
+   && command -v mainstream-boot-verify >/dev/null 2>&1; then
+    echo ""
+    echo "── $(t "Checking the boot menu before updating...")"
+    mainstream-boot-verify --preflight
+    [[ $? -eq 2 ]] && BOOT_HELD=1
+fi
 
 # ── 1. System + [mainstream] packages (pacman) ──────────────────────────────
-if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
+if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "System & [mainstream] packages — pacman -Syu")"
@@ -332,6 +385,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     if [[ "${PLAN_OUT%%$'\n'*}" == 1 ]]; then
         echo ">>> $(t "This update replaces parts of the running desktop. A reboot will be needed when it finishes.")"
     fi
+    BOOT_TOUCHED=1
     pacman_tx -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
     PACMAN_RC=${PIPESTATUS[0]}
     if [[ "$PACMAN_RC" -ne 0 ]]; then
@@ -443,6 +497,11 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
         fi
     fi
     rm -f "$PACMAN_LOG"
+elif [[ "$BOOT_HELD" -eq 1 && "$SKIP_SYSTEM" -eq 0 ]]; then
+    echo ""
+    echo ">>> $(t "System packages were held back. The EFI partition, which holds the boot menu and the system's boot image, is nearly full, and no copy of the working boot image could be kept, so this update could leave the computer unable to start. Free some space on it, then run the update again.")"
+    # What builds on the package set waits with it, as after a failed pacman.
+    PACMAN_RC=105
 else
     echo ""
     echo "── $(t "System packages: skipped (per --skip-system)")"
@@ -453,11 +512,16 @@ fi
 # the databases, so building now would be a partial upgrade.
 PKG_STEP_FAILED=0
 [[ "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]] && PKG_STEP_FAILED=1
-if [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
+if [[ "$SKIP_AUR" -eq 0 && "$BOOT_HELD" -eq 1 ]]; then
+    echo ""
+    echo "── $(t "AUR: waiting for the system packages, which were held back.")"
+    AUR_NOTE=held
+elif [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo ""
     echo "── $(t "AUR: deferred — the system package update failed.")"
     AUR_NOTE=deferred
 elif [[ "$SKIP_AUR" -eq 0 ]]; then
+    BOOT_TOUCHED=1
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     if command -v yay >/dev/null 2>&1; then
@@ -569,16 +633,23 @@ if [[ "$SKIP_DOTFILES" -eq 0 && "$QT_PIN_HELD" -eq 1 ]]; then
     echo ""
     echo "── $(t "Dotfiles: waiting for the desktop update that matches the new Qt.")"
     if command -v updatems-system >/dev/null 2>&1 && [[ -d "$ORIG_HOME/.cache/dots-hyprland/.git" ]]; then
+        BOOT_TOUCHED=1
         echo ""
         echo "── $(t "Mainstream system bits — updatems-system")"
         updatems-system "$ORIG_HOME/.cache/dots-hyprland"
         DOTFILES_SYS_RC=$?
     fi
+elif [[ "$SKIP_DOTFILES" -eq 0 && "$BOOT_HELD" -eq 1 ]]; then
+    # Its root half can rebuild the boot image, which the hold is there to prevent.
+    echo ""
+    echo "── $(t "Dotfiles: waiting for the system packages, which were held back.")"
+    DOTFILES_NOTE=held
 elif [[ "$SKIP_DOTFILES" -eq 0 && "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]]; then
     echo ""
     echo "── $(t "Dotfiles: deferred — the system package update failed, and dotfile releases can depend on packages it would have installed. Re-run the update once the package step succeeds.")"
     DOTFILES_NOTE=deferred
 elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
+    BOOT_TOUCHED=1
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "Mainstream dotfiles — updatems")"
@@ -603,6 +674,10 @@ elif [[ "$SKIP_DOTFILES" -ne 0 ]]; then
     echo ""
     echo "── $(t "Dotfiles: skipped (per --skip-dotfiles)")"
 fi
+
+# ── 5c. Boot menu, after the last step that can rebuild the boot image ─────
+# Before the extras, which can run for hours, so the answer is not held back.
+boot_postcheck
 
 # ── 6. Extras (topgrade for developer ecosystems) ───────────────────────────
 # Room for large Proton downloads without holding the sudo rule open all day.
@@ -637,7 +712,11 @@ EOF
     TOPGRADE_USER_ENV+=("PATH=$TOPGRADE_SHIM:$PATH")
 }
 
-if [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
+if [[ "$SKIP_EXTRAS" -eq 0 && "$BOOT_HELD" -eq 1 ]]; then
+    echo ""
+    echo "── $(t "Developer extras: waiting for the system packages, which were held back.")"
+    TOPGRADE_NOTE=held
+elif [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo ""
     echo "── $(t "Developer extras: deferred — the system package update failed.")"
     TOPGRADE_NOTE=deferred
@@ -732,7 +811,7 @@ fi
 
 # ── 8. Summary + exit code ──────────────────────────────────────────────────
 # The summary is for reading; the page relies on the exit code and markers.
-# $3 marks a step that did not run: "absent" (its tool is not installed) or "deferred".
+# $3 marks a step that did not run: "absent" (its tool is not installed), "deferred" or "held".
 status_for() {
     local skip="$1" rc="$2" note="${3:-}"
     if [[ "$skip" -eq 1 ]]; then
@@ -741,6 +820,8 @@ status_for() {
         echo "$(t "not installed")"
     elif [[ "$note" == deferred ]]; then
         echo "$(t "deferred (system update failed)")"
+    elif [[ "$note" == held ]]; then
+        echo "$(t "waiting for the system packages")"
     elif [[ "$rc" -eq 0 ]]; then
         echo "$(t "ok")"
     else
@@ -757,7 +838,11 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  $(t "Summary")"
 echo "═══════════════════════════════════════════════════════════"
-printf "  %-30s %s\n" "$(t "System packages (pacman):")"     "$(status_for "$SKIP_SYSTEM"   "$PACMAN_RC")"
+if [[ "$BOOT_HELD" -eq 1 && "$SKIP_SYSTEM" -eq 0 ]]; then
+    printf "  %-30s %s\n" "$(t "System packages (pacman):")" "$(t "held (EFI partition nearly full)")"
+else
+    printf "  %-30s %s\n" "$(t "System packages (pacman):")" "$(status_for "$SKIP_SYSTEM" "$PACMAN_RC")"
+fi
 printf "  %-30s %s\n" "$(t "AUR (yay/paru):")"               "$(status_for "$SKIP_AUR"      "$AUR_RC" "$AUR_NOTE")"
 printf "  %-30s %s\n" "$(t "Flatpak:")"                      "$(status_for "$SKIP_FLATPAK"  "$FLATPAK_RC" "$FLATPAK_NOTE")"
 printf "  %-30s %s\n" "$(t "Snap:")"                         "$(status_for "$SKIP_SNAP"     "$SNAP_RC" "$SNAP_NOTE")"
@@ -769,7 +854,20 @@ else
     printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC" "$DOTFILES_NOTE")"
 fi
 printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC" "$TOPGRADE_NOTE")"
-if [[ "$REBOOT_NEEDED" -eq 1 ]]; then
+if [[ -n "$BOOT_RC" ]]; then
+    case "$BOOT_RC" in
+        0) BOOT_STATUS="$(t "ok")"
+           [[ "$BOOT_HELD" -eq 1 ]] && BOOT_STATUS="$(t "EFI partition nearly full")" ;;
+        1) BOOT_STATUS="$(t "WOULD NOT START, do not restart")" ;;
+        3) BOOT_STATUS="$(t "starts a kernel that is no longer installed, do not restart")" ;;
+        4) BOOT_STATUS="$(t "not checked, the EFI partition was busy or unreadable")" ;;
+        *) BOOT_STATUS="$(tf "FAILED (rc=%s)" "$BOOT_RC")" ;;
+    esac
+    printf "  %-30s %s\n" "$(t "Boot menu:")" "$BOOT_STATUS"
+fi
+if [[ "$BOOT_RC" == 1 || "$BOOT_RC" == 3 ]]; then
+    printf "  %-30s %s\n" "$(t "Reboot:")" "$(t "not until the boot menu is repaired")"
+elif [[ "$REBOOT_NEEDED" -eq 1 ]]; then
     printf "  %-30s %s\n" "$(t "Reboot:")" "$(t "required")"
 else
     printf "  %-30s %s\n" "$(t "Reboot:")" "$(t "not needed")"
@@ -784,7 +882,10 @@ fi
 # Primary failures (pacman, AUR, flatpak) return their own code. Snap and extras
 # are soft: 100, which the page shows as success while the summary marks the step.
 # The Qt pin hold comes first so the page can say why the desktop did not update.
+# Only a boot menu that would not start the system outranks it.
+if [[ "$BOOT_RC" == 1 ]]; then exit 106; fi
 if [[ "$QT_PIN_HELD" -eq 1 ]]; then exit 4; fi
+if [[ "$BOOT_HELD" -eq 1 ]]; then exit 105; fi
 if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
 if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
 if [[ "$SKIP_FLATPAK"  -ne 1 ]] && [[ "$FLATPAK_RC"      -ne 0 ]]; then exit "$FLATPAK_RC";  fi

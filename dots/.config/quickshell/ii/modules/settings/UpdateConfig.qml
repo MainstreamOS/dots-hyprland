@@ -33,11 +33,16 @@ ContentPage {
     readonly property string rebootPlanMarker: "@@MAINSTREAM-UPDATE-REBOOT-PLAN "
     readonly property string rebootMarker: "@@MAINSTREAM-UPDATE-REBOOT "
     readonly property string rebootCheck: Quickshell.shellPath("scripts/update/reboot-check.sh")
-    // Kept apart so a replayed record cannot silence a fresh prediction:
-    // rebootPredicted is what a run started now would do (pending list or a
-    // live run's plan); rebootRequired is a finished run's verdict.
+    // The boot menu would not start the system as updated, so no reboot is
+    // offered. 3 after the marker: it starts a kernel no longer installed.
+    readonly property string bootBrokenMarker: "@@MAINSTREAM-UPDATE-BOOT-BROKEN"
+    property bool bootBroken: false
+    property bool bootOldKernel: false
+    // Kept apart so a replayed record cannot silence a fresh prediction: rebootPredicted
+    // is what a run started now would do; rebootVerdict is a finished run's.
     property bool rebootPredicted: false
-    property bool rebootRequired: false
+    property bool rebootVerdict: false
+    readonly property bool rebootRequired: root.rebootVerdict && !root.bootBroken
     readonly property bool awaitingReboot: !root.isRunning && root.rebootRequired
     property bool recordPredatesBoot: false
     // Set while a finished record is replayed; its plan marker predicts nothing now.
@@ -126,8 +131,10 @@ ContentPage {
         pendingLines = [];
         outputTrimmed = false;
         helperStarted = false;
-        rebootRequired = false;
+        rebootVerdict = false;
         rebootPredicted = false;
+        bootBroken = false;
+        bootOldKernel = false;
         recordPredatesBoot = false;
         userStopped = false;
         replaying = false;
@@ -180,6 +187,14 @@ ContentPage {
         stopProc.running = true;
     }
 
+    function bootBrokenText() {
+        if (root.recordPredatesBoot)
+            return Translation.tr("The last update found that the boot menu could not start the system. Run the update again to check it.");
+        if (root.bootOldKernel)
+            return Translation.tr("Do not restart the computer yet. The boot menu still starts a kernel that is no longer installed, so the computer would start without its drivers. The message above says how to build the boot image for the installed kernel.");
+        return Translation.tr("Do not restart the computer yet. The boot menu does not match the system's boot image, so the computer would not start, and it could not be repaired, usually because the EFI partition is too full. Free some space on the EFI partition, then run the update again: it repairs the boot menu first.");
+    }
+
     // Runs once the helper has exited, whether watched live or found in the record.
     function finish(exitCode) {
         tailProc.running = false;
@@ -190,8 +205,12 @@ ContentPage {
         root.outputText = root.outputText.replace(/\s+$/, "");
         // Whatever the run did, it may have finished what an earlier one left.
         leftoverCheck.running = true;
+        if (exitCode === 106)
+            root.bootBroken = true;
         if (root.userStopped || exitCode === 143 || exitCode === 130) {
             root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
+            if (root.bootBroken)
+                root.outputText += "\n" + root.bootBrokenText();
             return;
         }
         if (exitCode < 0) {
@@ -228,15 +247,22 @@ ContentPage {
         } else if (exitCode === 102) {
             // The root half did not finish; the Finish update notice offers to complete it.
             root.outputText += "\n\n" + Translation.tr("Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.");
-        } else if (exitCode === 0 || exitCode === 100) {
-            root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
+        } else if (exitCode === 105) {
+            root.outputText += "\n\n" + Translation.tr("System packages were held back: the EFI partition, which holds the boot menu, is too full to rebuild the boot image safely. No system package was changed. Free some space on the EFI partition, then run the update again.");
+        } else if (exitCode === 0 || exitCode === 100 || exitCode === 106) {
+            // 106 set bootBroken above, so its message below stands in for this one.
+            if (!root.bootBroken)
+                root.outputText += "\n\n" + Translation.tr("Update completed successfully.");
         } else {
             root.outputText += "\n\n" + Translation.tr("Update finished with exit code %1.").arg(exitCode);
         }
+        if (root.bootBroken)
+            root.outputText += "\n\n" + root.bootBrokenText();
         if (root.rebootRequired)
             root.outputText += "\n" + Translation.tr("Parts of the running desktop were replaced. Reboot to finish the update; until then some controls may not work.");
-        // Only a success is let go on close; failures and stops stay to be reread.
-        if (exitCode === 0 || exitCode === 100) {
+        // Only a success is let go on close; failures, stops and a boot menu
+        // that would not start stay to be reread.
+        if ((exitCode === 0 || exitCode === 100) && !root.bootBroken) {
             if (root.rebootRequired)
                 rebootMarkProc.running = true;
             seenProc.running = true;
@@ -253,7 +279,7 @@ ContentPage {
         const yes = first === "1";
         if (kind === "verdict") {
             // A record from before this boot: its reboot already happened.
-            root.rebootRequired = yes && !root.recordPredatesBoot;
+            root.rebootVerdict = yes && !root.recordPredatesBoot;
             // That run is over, so it predicts nothing about the next one.
             root.rebootPredicted = false;
         } else if (kind === "plan") {
@@ -300,6 +326,12 @@ ContentPage {
         }
         if (line.indexOf(root.startMarker) !== -1) {
             root.helperStarted = true;
+            return;
+        }
+        const broken = line.indexOf(root.bootBrokenMarker);
+        if (broken !== -1) {
+            root.bootBroken = true;
+            root.bootOldKernel = line.substring(broken + root.bootBrokenMarker.length).trim() === "3";
             return;
         }
         // An older helper without that line still prints step banners or ">>> " refusals, which
@@ -530,7 +562,7 @@ ContentPage {
         stdout: StdioCollector {
             onStreamFinished: {
                 if (this.text.trim() === "pending" && !root.isRunning)
-                    root.rebootRequired = true;
+                    root.rebootVerdict = true;
             }
         }
     }
@@ -599,7 +631,7 @@ ContentPage {
             // like the buttons beside it so the row reads as one set.
             Rectangle {
                 id: rebootChip
-                visible: root.rebootPredicted || root.rebootRequired
+                visible: (root.rebootPredicted || root.rebootRequired) && !root.bootBroken
                 // The tooltip treats a parent without a hover state as always
                 // hovered, so the chip reports its own.
                 property bool hovered: chipHover.hovered

@@ -132,6 +132,7 @@ print_limine_header() {
 timeout: 5
 remember_last_entry: yes
 default_entry: 1/1
+hash_mismatch_panic: no
 
 # ── Mainstream OS brand palette (see brand.html) ──────────────────────────
 # Background: Night (#191A1F, Surface/01).
@@ -183,7 +184,7 @@ ensure_limine_header() {
         BEGIN { in_header = 1 }
         in_header && /^[[:space:]]*$/ { next }
         in_header && /^#/ { next }
-        in_header && /^(timeout:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_colou?r:|interface_help_colou?r:|interface_help_colou?r_bright:|term_palette:|term_palette_bright:|backdrop:)/ { next }
+        in_header && /^(timeout:|remember_last_entry:|default_entry:|hash_mismatch_panic:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_colou?r:|interface_help_colou?r:|interface_help_colou?r_bright:|term_palette:|term_palette_bright:|backdrop:)/ { next }
         { in_header = 0; print }
     ' "$limine_conf" >> "$tmpfile"
     install -m 644 "$tmpfile" "$limine_conf"
@@ -232,6 +233,65 @@ prune_chainload_entries() {
         info "Removed boot entries that lead nowhere"
     fi
     rm -f "$tmpfile"
+}
+
+# The header and prune edits change limine.conf after limine-update saved it, so
+# an enrolled checksum must be renewed or Limine halts at boot.
+prune_and_enroll() {
+    prune_chainload_entries
+    command -v limine-enroll-config >/dev/null 2>&1 || return 0
+    limine-enroll-config >/dev/null || warn "limine-enroll-config failed; run it again before restarting."
+}
+
+# limine.conf edits hold the lock limine-entry-tool and limine-snapper-sync use,
+# so a snapshot sync never writes into a copy that is being replaced.
+with_boot_lock() {
+    mkdir -p /run/lock
+    ( flock -w 60 9 || error "The boot partition stayed busy; run this again in a minute."; "$@" ) 9>/run/lock/boot-partition.lock
+}
+
+# Prints "<file><TAB><value>" for the line limine-snapper-sync uses for a key: the
+# last one, reading /etc/default/limine after its own config, value trimmed and unquoted.
+lss_setting() {
+    local key="$1" file line value hit=""
+    for file in /etc/limine-snapper-sync.conf /etc/default/limine; do
+        [[ -f "$file" ]] || continue
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ "$line" =~ ^[[:space:]]*${key}[[:space:]]*=(.*)$ ]] || continue
+            value="${BASH_REMATCH[1]}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            [[ ${#value} -ge 2 && "$value" == \"*\" ]] && value="${value:1:${#value}-2}"
+            hit="$file"$'\t'"$value"
+        done < "$file"
+    done
+    [[ -z "$hit" ]] || printf '%s\n' "$hit"
+}
+
+# Snapshot entries stop where about 32 MiB of the ESP stays free. An unset value
+# or the package's default 85 is replaced; any other is only lowered.
+limit_snapshot_esp_usage() {
+    local blocks bsize esp_mib limit file conf="" current="" esp="$ESP" esp_path=""
+    IFS=$'\t' read -r file esp_path < <(lss_setting ESP_PATH) || true
+    [[ -n "$esp_path" && -d "$esp_path" ]] && esp="$esp_path"
+    read -r blocks bsize < <(stat -f -c '%b %S' "$esp" 2>/dev/null) || return 0
+    esp_mib=$(( blocks * bsize / 1048576 ))
+    (( esp_mib > 0 )) || return 0
+    limit=$(( 100 - (3200 + esp_mib - 1) / esp_mib ))
+    limit=$(( limit > 90 ? 90 : limit < 1 ? 1 : limit ))
+
+    IFS=$'\t' read -r conf current < <(lss_setting LIMIT_USAGE_PERCENT) || true
+    [[ "$current" == "$limit" ]] && return 0
+    if [[ -n "$conf" && ! ( "$conf" == "/etc/limine-snapper-sync.conf" && "$current" == 85 ) ]]; then
+        # Unreadable values count as 85, as limine-snapper-sync falls back to it.
+        awk -v c="$current" -v l="$limit" 'BEGIN {
+            gsub(/^[ \t]+|[ \t]+$/, "", c)
+            if (c !~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?[fFdD]?$/ || c + 0 <= 0 || c + 0 >= 100) c = 85
+            exit !(l < c + 0)
+        }' || return 0
+    fi
+    upsert_shell_setting "${conf:-/etc/limine-snapper-sync.conf}" "LIMIT_USAGE_PERCENT" "$limit"
+    info "Snapshot boot entries stop at ${limit}% of the ${esp_mib} MiB EFI partition"
 }
 
 # --- Checks ---
@@ -284,7 +344,7 @@ command -v limine-mkinitcpio >/dev/null 2>&1 || error "limine-mkinitcpio not fou
 command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not found after installation."
 
 info "Seeding Limine header and generator config..."
-write_limine_header
+with_boot_lock write_limine_header
 upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
 # Off. The probe reads this ESP only, so the entries it generated were the
 # systemd-boot this script had just superseded and an "EFI fallback" pointing at
@@ -307,7 +367,7 @@ cmdline_upsert "${_base_cmdline[@]}"
 
 info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
 limine-update
-ensure_limine_header
+with_boot_lock ensure_limine_header
 [[ -f "$ESP/limine.conf" ]] || error "Failed to generate $ESP/limine.conf"
 # This gate stands between a good menu and removing whatever bootloader was
 # here before, so it has to recognise our entry in either form it can take.
@@ -394,7 +454,7 @@ fi
 if [[ $_sdb_removed -eq 1 ]] && command -v limine-update >/dev/null 2>&1; then
     limine-update >/dev/null 2>&1 || warn "limine-update failed after removing systemd-boot."
 fi
-prune_chainload_entries
+with_boot_lock prune_and_enroll
 
 # --- Step 3: Install and configure snapper ---
 info "Installing snapper..."
@@ -443,6 +503,7 @@ systemctl enable --now snapper-cleanup.timer
 info "Snapper configured"
 
 # --- Step 4: Enable snapshot sync now that Limine is generator-managed ---
+limit_snapshot_esp_usage
 systemctl enable --now limine-snapper-sync.service
 
 # --- Step 5: Create initial snapshot ---

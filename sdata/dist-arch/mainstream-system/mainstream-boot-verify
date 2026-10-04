@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+# Keeps every file limine.conf pins matching its BLAKE2b hash, which Limine
+# checks before anything else can run.
+#   --check | --repair [--quick: never rebuild] | --preflight
+# As a post.d boot hook: --repair --quick, and 100 when an entry still would not start.
+# Exit: 0 starts, 1 would not, 2 too full to rebuild and no copy kept,
+#       3 starts from a copy put back or a kernel no longer installed,
+#       4 not checked: the boot partition stayed busy or could not be read.
+set -uo pipefail
+export LC_ALL=C
+HOOK=0
+if [[ ${0##*/} == [0-9][0-9]-* ]]; then
+    HOOK=1 MODE=--repair QUICK=1
+else
+    MODE=${1:---check}
+    QUICK=0; [[ ${2:-} == --quick ]] && QUICK=1
+fi
+# Outside the root snapshots, and root-only.
+BACKUP=${MAINSTREAM_BOOT_BACKUP:-/var/cache/mainstream/boot-backup}
+# The lock limine-entry-tool, limine-mkinitcpio and limine-snapper-sync take.
+LOCK=${MAINSTREAM_BOOT_LOCK:-/run/lock/boot-partition.lock}
+# Images already hashed this boot, so the hook after every snapshot stays cheap.
+CACHE=${MAINSTREAM_BOOT_CACHE:-/run/mainstream/boot-verify.cache}
+MODULES=${MAINSTREAM_MODULES:-/usr/lib/modules}
+# Until the LUKS fix has run an image can hold the disk key, and a copy put
+# back would return it to the unencrypted partition.
+LUKS_KEY=${MAINSTREAM_LUKS_KEY:-/crypto_keyfile.bin}
+LUKS_STAMP=${MAINSTREAM_LUKS_STAMP:-/var/lib/mainstream/luks-keyfile-fixed}
+# Room a normal kernel update's image needs to grow into.
+MIN_FREE=$((16 << 20))
+# Under Secure Boot the pins are what stops a changed image from starting, and
+# only an image's kernel is checked here, so nothing is pinned or put back then.
+SECURE_BOOT=0
+[[ $(od -An -t u1 -j 4 -N 1 -- "${MAINSTREAM_EFIVARS:-/sys/firmware/efi/efivars}/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c" 2>/dev/null | tr -d ' ') == 1 ]] && SECURE_BOOT=1
+log() { printf '[boot-verify] %s\n' "$*"; }
+# The partition and file names limine-mkinitcpio itself uses.
+ESP=${MAINSTREAM_ESP-} UKI_NAME=${MAINSTREAM_UKI_NAME-}
+[[ -n $ESP ]] || { IFS= read -r ESP; IFS= read -r UKI_NAME; } < <(
+    source /usr/lib/limine/limine-common-functions >/dev/null 2>&1 \
+        && load_config >/dev/null 2>&1 && printf '%s\n%s\n' "$ESP_PATH" "${CUSTOM_UKI_NAME-}")
+MACHINE_ID=${MAINSTREAM_MACHINE_ID:-$(cat /etc/machine-id 2>/dev/null)}
+MACHINE_ID=${MACHINE_ID,,}
+[[ $MACHINE_ID =~ ^[0-9a-f]{32}$ ]] || MACHINE_ID=
+[[ $UKI_NAME =~ ^[a-z0-9]+$ ]] || UKI_NAME=$MACHINE_ID
+CONF=$ESP/limine.conf
+[[ -n $ESP ]] || { log "Limine uses no EFI partition here; nothing to check."; exit 0; }
+[[ -r $ESP && -x $ESP ]] || { log "Cannot read $ESP; run as root."; exit 4; }
+[[ -f $CONF ]] || { log "No limine.conf; nothing to check."; exit 0; }
+
+# "<byte offset of the hash> <hash or -> <path>" for every boot():/ file. A path
+# with a ".." part could reach outside the partition, so it is never listed.
+pinned() {
+    awk '{
+        if (tolower($0) ~ /^[ \t]*(path|module_path|kernel_path|image_path)[ \t]*:[ \t]*\$?boot\(\):\//) {
+            p = $0; sub(/^[^:]*:[ \t]*\$?boot\(\):\/+/, "", p)
+            h = "-"; at = off
+            if (match($0, /#[^ \t\r#]*[ \t\r]*$/)) {
+                h = substr($0, RSTART + 1); sub(/[ \t\r]*$/, "", h)
+                at = off + RSTART; sub(/#.*/, "", p)
+            }
+            sub(/[ \t\r]*$/, "", p)
+            if (p !~ /(^|\/)\.\.(\/|$)/) print at, h, p
+        }
+        off += length($0) + 1
+    }' "$CONF"
+}
+# Sets the caller's n and sec: the section count and where the table starts.
+pe_table() {
+    local pe opt
+    pe=$(od -An -t u4 -j 60 -N 4 -- "$1" | tr -d ' ')
+    [[ $(od -An -c -j "$pe" -N 4 -- "$1" | tr -d ' ') == 'PE\0\0' ]] || return 1
+    n=$(od -An -t u2 -j $((pe + 6)) -N 2 -- "$1" | tr -d ' ')
+    opt=$(od -An -t u2 -j $((pe + 20)) -N 2 -- "$1" | tr -d ' ')
+    sec=$((pe + 24 + opt))
+}
+# A PE image whose sections all fit in the file: a copy cut short fails this.
+pe_complete() {
+    local f=$1 size n sec i raw ptr max=0
+    size=$(stat -c %s -- "$f") || return 1
+    [[ $(head -c 2 -- "$f") == MZ ]] || return 1
+    pe_table "$f" || return 1
+    for ((i = 0; i < n; i++)); do
+        read -r raw ptr < <(od -An -t u4 -j $((sec + i * 40 + 16)) -N 8 -- "$f")
+        ((raw + ptr > max)) && max=$((raw + ptr))
+    done
+    ((n > 0 && max <= size))
+}
+intact() {
+    [[ -s $1 ]] || return 1
+    [[ ${1,,} != *.efi ]] || pe_complete "$1"
+}
+# "<file offset> <length>" of one PE section.
+pe_section() {
+    local f=$1 want=$2 n sec i at vsize raw ptr
+    pe_table "$f" || return 1
+    for ((i = 0; i < n; i++)); do
+        at=$((sec + i * 40))
+        [[ $(dd if="$f" iflag=skip_bytes,count_bytes skip="$at" count=8 status=none | tr -d '\0') == "$want" ]] || continue
+        read -r vsize < <(od -An -t u4 -j $((at + 8)) -N 4 -- "$f")
+        read -r raw ptr < <(od -An -t u4 -j $((at + 16)) -N 8 -- "$f")
+        # The raw size is padded to the file alignment; the virtual one is not.
+        ((vsize > 0 && vsize < raw)) && raw=$vsize
+        echo "$ptr $raw"
+        return 0
+    done
+    return 1
+}
+# The kernel version mkinitcpio records in every image it builds.
+kernel_of() {
+    local at off len
+    intact "$1" || return 1
+    at=$(pe_section "$1" .uname) || return 1
+    read -r off len <<<"$at"
+    dd if="$1" iflag=skip_bytes,count_bytes skip="$off" count="$len" status=none | tr -d '\0\n'
+}
+# An image whose .linux section is an installed kernel byte for byte. What a
+# crash or a full partition leaves behind fails this, so it is never pinned.
+from_installed_kernel() {
+    local f=$1 ver k at off len size
+    ver=$(kernel_of "$f") || return 1
+    [[ -n $ver && $ver != */* ]] || return 1
+    k=$MODULES/$ver/vmlinuz
+    [[ -f $k ]] || return 1
+    at=$(pe_section "$f" .linux) || return 1
+    read -r off len <<<"$at"
+    size=$(stat -c %s -- "$k") || return 1
+    ((len >= size)) && cmp -s -n "$size" -i "$off:0" -- "$f" "$k"
+}
+# The entries that would not start: missing, or not matching their pin.
+problems() {
+    local off h rel f id l
+    local -A seen=()
+    mkdir -p -m 755 -- "${CACHE%/*}" 2>/dev/null
+    if [[ -r $CACHE ]]; then
+        while IFS= read -r l || [[ -n $l ]]; do
+            [[ -n $l ]] && seen[$l]=1
+        done <"$CACHE"
+    fi
+    : >"$CACHE.new" 2>/dev/null
+    while read -r off h rel; do
+        f=$ESP/$rel
+        if [[ ! -f $f ]]; then
+            echo "$off $h $rel"
+            continue
+        fi
+        [[ $h == - ]] && continue
+        id="$rel ${h,,} $(stat -c '%s %Y %i' -- "$f")"
+        if [[ -z ${seen[$id]-} ]]; then
+            if [[ ${#h} -ne 128 || $(b2sum <"$f" | cut -c1-128) != "${h,,}" ]]; then
+                echo "$off $h $rel"
+                continue
+            fi
+        fi
+        echo "$id" >>"$CACHE.new" 2>/dev/null
+    done < <(pinned)
+    mv -f -- "$CACHE.new" "$CACHE" 2>/dev/null
+}
+# This install's own entries, by the names limine-mkinitcpio gives them. Only
+# these decide whether the system starts: a snapshot entry, another system's
+# entry on a shared partition, or one left from an older layout is reported only.
+main_entry() {
+    local r=${1,,}
+    [[ $r != */limine_history/* ]] || return 1
+    [[ -n $UKI_NAME && $r == efi/linux/"$UKI_NAME"*.efi ]] && return 0
+    [[ -n $MACHINE_ID && $r == "$MACHINE_ID"/* ]]
+}
+mine() { [[ -n $MACHINE_ID && ${1,,} == "$MACHINE_ID"/limine_history/* ]] || main_entry "$1"; }
+# Main entries that start a kernel no longer installed: the copy put back
+# after the new image did not fit, which runs without its modules.
+old_kernels() {
+    local off h rel ver
+    while read -r off h rel; do
+        [[ ${rel,,} == efi/linux/*.efi && -f $ESP/$rel ]] && main_entry "$rel" || continue
+        ver=$(kernel_of "$ESP/$rel") || continue
+        [[ -n $ver && -f $MODULES/$ver/vmlinuz ]] || echo "$rel"
+    done < <(pinned)
+}
+fatal() {
+    local off h rel
+    while read -r off h rel; do
+        [[ -n $rel ]] && main_entry "$rel" && return 0
+    done <<<"$1"
+    return 1
+}
+names() { cut -d' ' -f3- <<<"$1" | sort -u | tr '\n' ' '; }
+free_bytes() { df --output=avail -B1 -- "$ESP" | tail -n 1 | tr -d ' '; }
+largest() { ( shopt -s nocaseglob; stat -c %s -- "$ESP"/EFI/[Ll]inux/"$UKI_NAME"*.efi 2>/dev/null | sort -n | tail -n 1 ); }
+# A new hash written over the pinned one in place. Same length, so a full
+# partition has nothing to allocate and the rest of the file stays put.
+repin() {
+    printf '%s' "$2" | dd of="$CONF" bs=1 seek="$1" conv=notrunc,fsync status=none
+}
+rebuild() {
+    local cmd=(limine-mkinitcpio)
+    [[ -n ${MAINSTREAM_BOOT_REBUILD:-} ]] && cmd=(bash -c "$MAINSTREAM_BOOT_REBUILD")
+    # Without a running systemd, as in a chroot, systemd-inhibit would not start it.
+    [[ -d /run/systemd/system ]] && command -v systemd-inhibit >/dev/null 2>&1 \
+        && cmd=(systemd-inhibit --what=shutdown:sleep --mode=block \
+            --who="Mainstream OS" --why="Repairing the boot menu" "${cmd[@]}")
+    "${cmd[@]}" </dev/null
+}
+# Copies the images this install's entries start from while they come from an
+# installed kernel. Fails unless every one has a whole copy to fall back on.
+backup() {
+    local off h rel f b same rc=0
+    [[ -e $LUKS_KEY && ! -e $LUKS_STAMP ]] && return 1
+    ((SECURE_BOOT)) && return 1
+    while read -r off h rel; do
+        main_entry "$rel" || continue
+        # A kernel and initramfs pair is never copied, so it has nothing to fall back on.
+        [[ ${rel,,} == efi/linux/*.efi ]] || { rc=1; continue; }
+        f=$ESP/$rel b=$BACKUP/$rel same=0
+        cmp -s -- "$f" "$b" && same=1
+        if ((!same)) && from_installed_kernel "$f"; then
+            { mkdir -p -m 700 -- "$BACKUP" && mkdir -p -- "${b%/*}" \
+                && cp -- "$f" "$b.tmp" && mv -f -- "$b.tmp" "$b" && same=1; } \
+                || { rm -f -- "$b.tmp"; log "Could not keep a copy of $rel."; }
+        fi
+        intact "$b" && { ((same)) || from_installed_kernel "$b"; } || rc=1
+    done < <(pinned)
+    return "$rc"
+}
+repair() {
+    local bad old= big off h rel f new restored=0 ok wrote=0
+    bad=$(problems)
+    ((QUICK)) || old=$(old_kernels)
+    [[ -z $bad && -z $old ]] && return 0
+    [[ -z $bad ]] || log "Boot menu entries that would not start: $(names "$bad")"
+    big=$(largest)
+    if ((!QUICK)) && { fatal "$bad" || [[ -n $old ]]; } \
+        && (($(free_bytes) >= ${big:-0} + MIN_FREE)); then
+        flock -u 9
+        log "Rebuilding the boot images..."
+        rebuild
+        flock -w 600 9 || { log "The boot partition stayed busy; not checked."; return 4; }
+        bad=$(problems) old=$(old_kernels)
+        [[ -z $bad && -z $old ]] && { log "Rebuilt; every entry starts the installed kernel again."; return 0; }
+    fi
+    [[ -z $bad ]] && return 0
+    ((SECURE_BOOT)) && log "Secure Boot is on, so only limine-mkinitcpio can rebuild these."
+    # The image on the partition, or the copy kept before, is pinned as it is:
+    # the write is 128 bytes, which a full partition still takes.
+    while read -r off h rel; do
+        mine "$rel" && ((!SECURE_BOOT)) || continue
+        f=$ESP/$rel ok=0
+        from_installed_kernel "$f" && ok=1
+        if ((!ok)) && intact "$BACKUP/$rel"; then
+            rm -f -- "$f"
+            if (($(stat -c %s -- "$BACKUP/$rel") < $(free_bytes))) \
+                && cp -- "$BACKUP/$rel" "$f" && sync -f -- "$f"; then
+                log "Put back the copy of $rel kept before this update."
+                restored=1 ok=1
+            else
+                rm -f -- "$f"
+            fi
+        fi
+        [[ ${#h} -eq 128 ]] && ((ok)) || continue
+        new=$(b2sum <"$f" | cut -c1-128)
+        if [[ $new != "${h,,}" ]] && repin "$off" "$new"; then
+            log "Pinned $rel to the image on the partition."
+            wrote=1
+        fi
+    done <<<"$bad"
+    # A config checksum enrolled in Limine has to follow the edit.
+    if ((wrote)) && command -v limine-enroll-config >/dev/null 2>&1 \
+        && ! limine-enroll-config >/dev/null; then
+        log "limine-enroll-config failed after the boot menu was edited; Limine may refuse it."
+        return 1
+    fi
+    bad=$(problems)
+    [[ -n $bad ]] && log "Still would not start: $(names "$bad")"
+    fatal "$bad" && return 1
+    ((restored)) && return 3
+    return 0
+}
+# A hook runs inside the lock its caller holds; taking it again would wait on itself.
+if ((!HOOK)); then
+    exec 9>"$LOCK" && flock -w $((QUICK ? 60 : 600)) 9 || { log "The boot partition stayed busy; not checked."; exit 4; }
+fi
+case $MODE in
+    --check)
+        bad=$(problems)
+        [[ -z $bad ]] || log "Would not start: $(names "$bad")"
+        fatal "$bad" && exit 1
+        old=$(old_kernels)
+        [[ -z $old ]] || { log "Starts a kernel that is no longer installed: $(tr '\n' ' ' <<<"$old")"; exit 3; }
+        exit 0 ;;
+    --repair|--preflight)
+        repair; rc=$?
+        if ((HOOK)); then
+            ((rc == 1)) && exit 100
+            [[ ${HOOK_CALLER:-} == limine-mkinitcpio-install ]] && backup
+            exit 0
+        fi
+        ((rc == 1 || rc == 4)) && exit "$rc"
+        kept=0
+        ((QUICK)) || { backup; kept=$?; }
+        if [[ $MODE == --preflight ]]; then
+            need=$((MIN_FREE + 2 * $(stat -c %s -- "$CONF")))
+            free=$(free_bytes)
+            if ((free < need)); then
+                log "The EFI partition has $((free >> 20)) MiB free; a boot image rebuild may need $((need >> 20)) MiB."
+                ((kept == 0)) || exit 2
+            fi
+        fi
+        old=$(old_kernels)
+        [[ -z $old ]] || { log "Starts a kernel that is no longer installed: $(tr '\n' ' ' <<<"$old")"; rc=3; }
+        exit "$rc" ;;
+    *) echo "usage: ${0##*/} --check | --repair [--quick] | --preflight" >&2; exit 64 ;;
+esac

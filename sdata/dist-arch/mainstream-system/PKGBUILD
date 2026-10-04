@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=14
+pkgrel=15
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -34,6 +34,7 @@ source=(
   limine-restore-auto
   limine-bios-sync
   61-limine-bios.hook
+  mainstream-boot-verify
   mainstream.preset
   hyprbars.conf
   scrolloverview.conf
@@ -72,7 +73,7 @@ sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -87,6 +88,9 @@ package() {
   install -Dm755 "$srcdir/scrolloverview-status-notify.sh" "$pkgdir/usr/bin/scrolloverview-status-notify"
   install -Dm755 "$srcdir/limine-restore-auto"           "$pkgdir/usr/bin/limine-restore-auto"
   install -Dm755 "$srcdir/limine-bios-sync"              "$pkgdir/usr/bin/limine-bios-sync"
+  install -Dm755 "$srcdir/mainstream-boot-verify"        "$pkgdir/usr/bin/mainstream-boot-verify"
+  install -d "$pkgdir/etc/boot/hooks/post.d"
+  ln -s /usr/bin/mainstream-boot-verify "$pkgdir/etc/boot/hooks/post.d/92-mainstream-boot-verify"
   install -Dm755 "$srcdir/mainstream-repair"            "$pkgdir/usr/bin/mainstream-repair"
   install -Dm644 "$srcdir/hyprbars-rebuild.service"      "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.service"
   install -Dm644 "$srcdir/hyprbars-rebuild.timer"        "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.timer"

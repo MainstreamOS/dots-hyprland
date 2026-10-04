@@ -60,6 +60,86 @@ _refresh_plugin_refs() {
     fi
 }
 
+_limine_esp() {
+    esp=$(bash -c '. /usr/lib/limine/limine-common-functions >/dev/null 2>&1 \
+        && load_config >/dev/null 2>&1 && printf %s "$ESP_PATH"' 2>/dev/null) || return 1
+    [ -n "$esp" ] && [ -f "$esp/limine.conf" ] || return 1
+    printf '%s\n' "$esp"
+}
+
+# limine-mkinitcpio builds and pins the UKI; a preset that writes it too lets a
+# plain mkinitcpio -P replace the image behind its pin.
+_drop_preset_uki() {
+    for p in /etc/mkinitcpio.d/*.preset; do
+        [ -f "$p" ] || continue
+        grep -q '^default_uki=.*/EFI/Linux/mainstream_' "$p" || continue
+        sed -i '\|^default_uki=.*/EFI/Linux/mainstream_|d' "$p"
+    done
+}
+
+# Limine asks before starting an image that does not match its pin, instead of
+# halting. An owner's own hash_mismatch_panic line is kept.
+_limine_hash_prompt() {
+    esp=$(_limine_esp) || return 0
+    conf=$esp/limine.conf
+    grep -qi '^[[:space:]]*hash_mismatch_panic:' "$conf" && return 0
+    mkdir -p /run/lock
+    (
+        flock -w 60 9 || exit 0
+        grep -qi '^[[:space:]]*hash_mismatch_panic:' "$conf" && exit 0
+        # The same reset and enroll limine-entry-tool runs around its own saves.
+        if ! command -v limine-reset-enroll >/dev/null 2>&1 \
+            || limine-reset-enroll >/dev/null 2>&1; then
+            tmp=$conf.mainstream-new
+            if { echo 'hash_mismatch_panic: no'; cat "$conf"; } >"$tmp" 2>/dev/null \
+                && tail -n +2 "$tmp" | cmp -s - "$conf" \
+                && sync -f "$tmp" && mv -f "$tmp" "$conf"; then
+                sync -f "$conf"
+            else
+                rm -f "$tmp"
+                echo "warning: could not add hash_mismatch_panic: no to $conf; the EFI partition may be full."
+            fi
+        fi
+        if command -v limine-enroll-config >/dev/null 2>&1; then
+            limine-enroll-config >/dev/null 2>&1 \
+                || echo "warning: limine-enroll-config failed; run it again before restarting."
+        fi
+    ) 9>/run/lock/boot-partition.lock
+}
+
+# Snapshot entries copy kernels onto the EFI partition up to LIMIT_USAGE_PERCENT;
+# about 32 MiB stays free for the next boot image. Only ever lowered.
+_esp_snapshot_room() {
+    [ -f /etc/limine-snapper-sync.conf ] || return 0
+    esp=$(_limine_esp) || return 0
+    mib=$(stat -f -c '%b %S' "$esp" 2>/dev/null | awk '{ printf "%d", $1 * $2 / 1048576 }')
+    case $mib in ''|*[!0-9]*) return 0 ;; esac
+    [ "$mib" -gt 0 ] || return 0
+    limit=$((100 - (3200 + mib - 1) / mib))
+    [ "$limit" -le 90 ] || limit=90
+    [ "$limit" -ge 1 ] || limit=1
+    found=0 lowered=0
+    for f in /etc/limine-snapper-sync.conf /etc/default/limine; do
+        grep -qE '^[[:space:]]*LIMIT_USAGE_PERCENT[[:space:]]*=' "$f" 2>/dev/null || continue
+        found=1
+        tmp=$(mktemp) || continue
+        awk -v max="$limit" '
+            match($0, /^[ \t]*LIMIT_USAGE_PERCENT[ \t]*=/) {
+                v = substr($0, RLENGTH + 1); gsub(/^[ \t"]+|[ \t"]+$/, "", v)
+                if (v ~ /^[0-9]+([.][0-9]*)?$/ && v + 0 > max + 0) $0 = "LIMIT_USAGE_PERCENT=" max
+            }
+            { print }' "$f" >"$tmp" \
+            && ! cmp -s "$tmp" "$f" && cat "$tmp" >"$f" && lowered=1
+        rm -f "$tmp"
+    done
+    # Unset, limine-snapper-sync uses 85.
+    if [ "$found" = 0 ] && [ "$limit" -lt 85 ]; then
+        [ -z "$(tail -c 1 /etc/limine-snapper-sync.conf)" ] || echo >>/etc/limine-snapper-sync.conf
+        echo "LIMIT_USAGE_PERCENT=$limit" >>/etc/limine-snapper-sync.conf && lowered=1
+    fi
+    [ "$lowered" = 0 ] || echo "Snapshot boot entries now stop at $limit% of the EFI partition, leaving room for the next boot image."
+}
+
 _migrate() {
     rm -f /etc/pacman.d/hooks/95-hyprbars-rebuild.hook \
           /etc/pacman.d/hooks/95-scrolloverview-rebuild.hook
@@ -74,6 +154,8 @@ _migrate() {
     done
     _fix_plugin_configs
     _refresh_plugin_refs
+    _drop_preset_uki
+    _limine_hash_prompt
     systemctl daemon-reload 2>/dev/null || true
     # The printer queue maker arrives as a udev rule, which only reaches a
     # running system once udev rereads its rules. Started once here as well,
@@ -142,6 +224,7 @@ post_install() {
     _migrate
     _mdns_arrived
     _sharing_arrived
+    _esp_snapshot_room
 }
 
 post_upgrade() {
@@ -149,6 +232,9 @@ post_upgrade() {
     if [ "$(vercmp "$2" 1.0-14)" -lt 0 ]; then
         _mdns_arrived
         _sharing_arrived
+    fi
+    if [ "$(vercmp "$2" 1.0-15)" -lt 0 ]; then
+        _esp_snapshot_room
     fi
 }
 
@@ -160,4 +246,5 @@ post_remove() {
     if grep -qF 'Written by Settings > Sharing' /etc/firewalld/zones/MainstreamHome.xml 2>/dev/null; then
         rm -f /etc/firewalld/zones/MainstreamHome.xml
     fi
+    rm -rf /var/cache/mainstream/boot-backup
 }
