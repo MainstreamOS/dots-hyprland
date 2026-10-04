@@ -4,6 +4,7 @@ import qs.modules.common
 import qs.services
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 
 /*
@@ -210,7 +211,7 @@ Singleton {
         const open = (HyprlandData.windowList || []).find(w => w["class"] === "org.quickshell" && w.title === title);
         if (open && open.pid > 0) {
             Quickshell.execDetached(["qs", "ipc", "--pid", String(open.pid), "call", "settings", "showPage", "UpdateConfig.qml"]);
-            Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.focus({window = "address:${open.address}"})`]);
+            Hyprland.dispatch(`hl.dsp.focus({window = "address:${open.address}"})`);
             return;
         }
         Quickshell.execDetached({

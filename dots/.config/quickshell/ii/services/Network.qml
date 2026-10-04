@@ -61,21 +61,22 @@ Singleton {
     property var scanRows: []
     // The list waits for the first status, which says which devices are Steam's.
     property bool devicesKnown: false
+    // Kept from the last sort: the rows' own active flags are already the new ones.
+    property string sortedActive: ""
 
     function reorderNetworks() {
         const before = root.friendlyWifiNetworks;
         // Only when the networks or the connected one change. Two networks a
         // few dBm apart swap on nearly every scan, and each swap cost a full
         // row rebuild. Signal bars still update live inside each row.
-        const namesNow = wifiNetworks.map(n => n.ssid).sort().join("\u0000");
-        const namesBefore = before.map(n => n.ssid).sort().join("\u0000");
-        const activeNow = (wifiNetworks.find(n => n.active) ?? null);
-        const activeBefore = (before.find(n => n.active) ?? null);
-        if (namesNow === namesBefore && activeNow === activeBefore)
+        const sameNetworks = before.length === wifiNetworks.length && before.every(n => wifiNetworks.includes(n));
+        const activeNow = wifiNetworks.filter(n => n.active).map(n => n.ssid).join("\u0000");
+        if (sameNetworks && activeNow === root.sortedActive)
             return;
         // A prompt is open, and the password being typed lives in a row.
         if (before.some(n => n.askingPassword))
             return;
+        root.sortedActive = activeNow;
         root.friendlyWifiNetworks = [...wifiNetworks].sort((a, b) => {
             if (a.active && !b.active)
                 return -1;
@@ -83,6 +84,10 @@ Singleton {
                 return 1;
             return b.strength - a.strength;
         });
+        for (const network of before) {
+            if (!wifiNetworks.includes(network))
+                network.destroy();
+        }
     }
     
     property string wifiStatus: "disconnected"
@@ -132,6 +137,8 @@ Singleton {
             return;
         accessPoint.askingPassword = false;
         root.wifiConnectTarget = accessPoint;
+        // exec() ends an attempt still running, and that one's exit arrives after this target is set.
+        connectProc.superseded = connectProc.running;
         // We use this instead of `nmcli connection up SSID` because this also creates a connection profile
         connectProc.exec(["nmcli", "dev", "wifi", "connect", accessPoint.ssid])
 
@@ -195,6 +202,7 @@ Singleton {
 
     Process {
         id: connectProc
+        property bool superseded: false
         environment: ({
             LANG: "C",
             LC_ALL: "C"
@@ -208,7 +216,7 @@ Singleton {
         stderr: SplitParser {
             onRead: line => {
                 // print("err:", line)
-                if (line.includes("Secrets were required") && root.wifiConnectTarget) {
+                if (line.includes("Secrets were required") && root.wifiConnectTarget && !connectProc.superseded) {
                     root.wifiConnectTarget.askingPassword = true
                 }
             }
@@ -216,6 +224,8 @@ Singleton {
         // Only for a network that plausibly wants one: a failure alone also
         // covers a network that is just out of range, which needs no password.
         onExited: (exitCode, exitStatus) => {
+            if (superseded)
+                return;
             const target = root.wifiConnectTarget;
             if (target && exitCode !== 0 && !target.askingPassword)
                 target.askingPassword = target.isSecure && !target.isSaved;
@@ -223,7 +233,11 @@ Singleton {
         }
         // onExited never fires if the command cannot start at all.
         onRunningChanged: {
-            if (!running && root.wifiConnectTarget)
+            if (running)
+                return;
+            if (superseded)
+                superseded = false;
+            else if (root.wifiConnectTarget)
                 root.wifiConnectTarget = null;
         }
     }
@@ -504,8 +518,12 @@ Singleton {
         const inUse = ap => ap.askingPassword || ap === root.wifiConnectTarget;
 
         const gone = rNetworks.filter(rn => !stillThere(rn.ssid) && !inUse(rn));
-        for (const network of gone)
-            rNetworks.splice(rNetworks.indexOf(network), 1).forEach(n => n.destroy());
+        for (const network of gone) {
+            rNetworks.splice(rNetworks.indexOf(network), 1);
+            // A list held still for a prompt keeps its rows; reorderNetworks frees them.
+            if (!root.friendlyWifiNetworks.includes(network))
+                network.destroy();
+        }
 
         for (const network of wifiNetworks) {
             const match = rNetworks.find(n => n.ssid === network.ssid);

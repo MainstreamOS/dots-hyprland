@@ -27,7 +27,13 @@ Singleton {
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
     property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
     property Component codexCliApiStrategy: CodexCliApiStrategy {}
-    property Component antigravityCliApiStrategy: AntigravityCliApiStrategy {}
+    // The texts are bound here: in apiStrategies, a translation load would
+    // rebuild every strategy and drop the CLI sessions.
+    property Component antigravityCliApiStrategy: AntigravityCliApiStrategy {
+        workDir: root.antigravityDir
+        exitText: Translation.tr("Antigravity stopped with code %1")
+        lapsedText: Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting.")
+    }
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -388,11 +394,7 @@ Singleton {
         "anthropic": anthropicApiStrategy.createObject(this),
         "claude-code": claudeCodeApiStrategy.createObject(this),
         "codex-cli": codexCliApiStrategy.createObject(this),
-        "antigravity-cli": antigravityCliApiStrategy.createObject(this, {
-            "workDir": root.antigravityDir,
-            "exitText": Translation.tr("Antigravity stopped with code %1"),
-            "lapsedText": Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."),
-        }),
+        "antigravity-cli": antigravityCliApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
 
@@ -457,6 +459,7 @@ Singleton {
             "loginCodePipe": root.antigravityDir + "/code.fifo",
             "loginInBackground": true,
             "loginFailedCheck": "f=\"" + root.antigravityDir + "/login.exit\"; [ -s \"$f\" ] && [ \"$(cat \"$f\")\" != 0 ]",
+            "loginDoneCheck": "[ -e \"" + root.antigravityDir + "/login.exit\" ]",
             // The full app, for a sign-in the hidden one could not finish: it
             // shows any first-run screens and takes a pasted code.
             "terminalLogin": "dir=\"" + root.antigravityDir + "\"; mkdir -p \"$dir\" && cd \"$dir\" && rm -f login.exit && agy",
@@ -612,17 +615,19 @@ Singleton {
         if (changed) root.models = next;
     }
 
-    // One detector serves every CLI; requests that arrive while it is busy
-    // wait their turn in the queue.
+    // One detector serves every CLI. Requests that arrive while it is busy queue up,
+    // except a sign-in poll waiting on its exit file: the next tick asks again.
     property var _detectQueue: []
-    function detectCli(fmt) {
+    function detectCli(fmt, waitForLogin = false) {
         const entry = root.cliSetup[fmt];
         if (!entry) return;
         if (cliDetectProc.running) {
-            if (!root._detectQueue.includes(fmt)) root._detectQueue.push(fmt);
+            if (!waitForLogin && !root._detectQueue.includes(fmt)) root._detectQueue.push(fmt);
             return;
         }
-        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${entry.readyCheck}; then echo ready; fi; fi < /dev/null`;
+        const readyCheck = waitForLogin && entry.loginDoneCheck
+            ? `${entry.loginDoneCheck} && ${entry.readyCheck}` : entry.readyCheck;
+        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${readyCheck}; then echo ready; fi; fi < /dev/null`;
         if (entry.loginFailedCheck) script += `; if ${entry.loginFailedCheck}; then echo loginfailed; fi`;
         cliDetectProc.format = fmt;
         cliDetectProc.command = ["bash", "-lc", script];
@@ -662,6 +667,7 @@ Singleton {
         if (!entry) return;
         root.loginCodeSent = false;
         root.setupState = "loggingIn";
+        loginWatch.hiddenLogin = entry.loginInBackground === true;
         if (entry.loginInBackground) {
             Quickshell.execDetached(["bash", "-c", root.cliPathPrefix + entry.login]);
             loginWatch.triesLeft = 150;
@@ -784,6 +790,7 @@ Singleton {
         // down, so the clipboard is left alone.
         root.loginCodeSent = true;
         root.setupState = "loggingIn";
+        loginWatch.hiddenLogin = false;
         const script = root.cliPathPrefix + entry.terminalLogin;
         Quickshell.execDetached(["bash", "-c",
             `${Config.options.apps.terminal} -e bash -c '${CF.StringUtils.shellSingleQuoteEscape(script)}'`]);
@@ -873,6 +880,7 @@ Singleton {
     Timer {
         id: loginWatch
         property int triesLeft: 0
+        property bool hiddenLogin: false
         interval: 2000
         repeat: true
         running: triesLeft > 0 && root.setupState === "loggingIn"
@@ -880,7 +888,9 @@ Singleton {
         onTriggered: {
             triesLeft--;
             const fmt = root.currentModel?.api_format;
-            if (fmt) root.detectCli(fmt);
+            // The CLI's own check is a large binary and a network request. Until
+            // the hidden sign-in writes its exit file, it runs only every 10 s.
+            if (fmt) root.detectCli(fmt, hiddenLogin && triesLeft % 5 !== 0);
             if (triesLeft <= 0) root.setupState = "error";
         }
     }
