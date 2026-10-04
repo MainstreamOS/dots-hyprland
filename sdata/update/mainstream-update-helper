@@ -127,6 +127,7 @@ rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
 
 cleanup() {
     rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS" "${REBOOT_SESSION_LIST:-}"
+    [[ -n "${TOPGRADE_SHIM:-}" ]] && rm -rf "$TOPGRADE_SHIM"
     # A user-stopped update may have killed pacman mid-transaction;
     # without this the next pacman invocation refuses to start until
     # the user manually removes the lock. Only clear it when no package
@@ -141,12 +142,98 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
-# A stop request ends the step under way too and leaves, instead of letting
-# the trap return into a script that then walks every remaining step with the
-# sudoers rule already gone. 143 is what the page reads as stopped.
+# The controlling terminal, not stdin, which can be redirected while one is attached.
+ON_TTY=0
+{ : </dev/tty; } 2>/dev/null && ON_TTY=1
+UNATTENDED=0
+(( ON_TTY )) || ! command -v timeout >/dev/null 2>&1 || UNATTENDED=1
+STEP_KILL_GRACE_SECS=10
+STEP_PACMAN_WAIT_SECS=1800
+STEP_PID=""
+STEP_TIMER=""
+STEP_LEAD=""
+STEP_TIMED_OUT=0
+
+# Unattended, a user step waits in the background so a stop trap fires at once.
+# $1 is a time limit in seconds, 0 for none; reaching it stops the step like Stop.
+user_step() {
+    local limit="$1" rc done_pid="" stop_asked=0; shift
+    STEP_TIMED_OUT=0
+    STEP_LEAD=""
+    if (( ! UNATTENDED )); then
+        runuser -u "$ORIG_USER" -- "$@" 9>&-
+        return
+    fi
+    # A stop is held until both pids are known.
+    trap 'stop_asked=1' INT TERM HUP
+    # timeout sets no limit here; it gives the step a process group of its own.
+    runuser -u "$ORIG_USER" -- timeout 0 "$@" 9>&- &
+    STEP_PID=$!
+    if (( limit > 0 )); then
+        sleep "$limit" 9>&- &
+        STEP_TIMER=$!
+    fi
+    trap on_stop INT TERM HUP
+    (( stop_asked )) && on_stop
+    wait -n -p done_pid "$STEP_PID" ${STEP_TIMER:+"$STEP_TIMER"}
+    rc=$?
+    if [[ -n "$STEP_TIMER" && "$done_pid" == "$STEP_TIMER" ]]; then
+        STEP_TIMER=""
+        STEP_TIMED_OUT=1
+        stop_user_step "$STEP_PID"
+        wait "$STEP_PID"
+        rc=124
+    elif [[ -n "$STEP_TIMER" ]]; then
+        kill "$STEP_TIMER" 2>/dev/null
+    fi
+    STEP_PID=""
+    STEP_TIMER=""
+    STEP_LEAD=""
+    return "$rc"
+}
+
+# TERMs the processes in group $1 that match the pgrep filters after it, and
+# KILLs whatever of them is left after the grace.
+end_group() {
+    local lead="$1" pids n; shift
+    for (( n = 0; n <= STEP_KILL_GRACE_SECS; n++ )); do
+        pids=$(pgrep -g "$lead" "$@" | grep -vx "$lead") || return 0
+        if (( n == 0 )); then
+            kill -TERM $pids 2>/dev/null
+        elif (( n == STEP_KILL_GRACE_SECS )); then
+            kill -KILL $pids 2>/dev/null
+        fi
+        sleep 1
+    done
+}
+
+# The user's processes go first. sudo relays any signal to its command, so a
+# root pacman is left to finish before the remaining root commands are ended.
+stop_user_step() {
+    local lead="$STEP_LEAD" n
+    while [[ -z "$lead" ]] && kill -0 "$1" 2>/dev/null; do
+        # timeout takes its own group before it forks the step.
+        lead=$(pgrep -P "$1" -x timeout) && pgrep -P "$lead" >/dev/null || { lead=""; sleep 0.1; }
+    done
+    [[ -n "$lead" ]] || return 0
+    STEP_LEAD=$lead
+    end_group "$lead" -u "$ORIG_USER"
+    for (( n = 0; n < STEP_PACMAN_WAIT_SECS; n++ )); do
+        pgrep -g "$lead" -u root -x pacman >/dev/null || break
+        sleep 1
+    done
+    pgrep -g "$lead" -u root -x pacman >/dev/null || end_group "$lead" -u root
+}
+
+# Stops instead of returning into the remaining steps with the sudoers rule
+# gone. 143 is what the page reads as stopped.
 on_stop() {
-    trap - INT TERM HUP
-    pkill -TERM -P $$ 2>/dev/null || true
+    trap '' INT TERM HUP
+    [[ -n "$STEP_TIMER" ]] && kill "$STEP_TIMER" 2>/dev/null
+    if [[ -n "$STEP_PID" ]]; then
+        stop_user_step "$STEP_PID"
+        wait "$STEP_PID" 2>/dev/null
+    fi
     exit 143
 }
 trap on_stop INT TERM HUP
@@ -234,7 +321,7 @@ chmod 0440 "$TEMP_SUDOERS"
 HELPER_STARTED_AT="$(date '+%Y-%m-%dT%H:%M:%S%z')"
 REBOOT_CHECK="$ORIG_HOME/.config/quickshell/ii/scripts/update/reboot-check.sh"
 _reboot_check_run() {  # stdin passes through
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" "$@" 2>/dev/null
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" "$@" 2>/dev/null 9>&-
 }
 reboot_check() {  # $1 = mode, rest = args
     [[ -r "$REBOOT_CHECK" ]] || { echo 0; return 0; }
@@ -500,14 +587,12 @@ elif [[ "$SKIP_AUR" -eq 0 ]]; then
     if command -v yay >/dev/null 2>&1; then
         echo "  $(t "AUR packages — yay -Sua")"
         echo "═══════════════════════════════════════════════════════════"
-        runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-            yay -Sua --noconfirm
+        user_step 0 env HOME="$ORIG_HOME" yay -Sua --noconfirm
         AUR_RC=$?
     elif command -v paru >/dev/null 2>&1; then
         echo "  $(t "AUR packages — paru -Sua")"
         echo "═══════════════════════════════════════════════════════════"
-        runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-            paru -Sua --noconfirm
+        user_step 0 env HOME="$ORIG_HOME" paru -Sua --noconfirm
         AUR_RC=$?
     else
         echo "  $(t "AUR: no helper (yay/paru) installed — skipping")"
@@ -550,7 +635,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
             # Per-user flatpaks need to run as the user (they live under
             # ~/.local/share/flatpak/) — runuser with HOME set.
             runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                flatpak update --noninteractive --user 2>&1 | tee "$FLATPAK_LOG"
+                flatpak update --noninteractive --user 9>&- 2>&1 | tee "$FLATPAK_LOG"
             rc=${PIPESTATUS[0]}
         fi
         if [[ "$rc" -ne 0 ]] && ! grep -qE "$FP_NO_RETRY" "$FLATPAK_LOG"; then
@@ -562,7 +647,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
                 rc=$?
             else
                 runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                    flatpak update --noninteractive --user
+                    flatpak update --noninteractive --user 9>&-
                 rc=$?
             fi
         fi
@@ -646,7 +731,7 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     _ums_args=()
     [[ "$EDGE" -eq 1 ]] && _ums_args+=(--edge)
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems "${_ums_args[@]}"
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems "${_ums_args[@]}" 9>&-
     DOTFILES_RC=$?
 
     # ── 5b. System-level dotfiles bits (updatems-system) ───────────────────
@@ -676,51 +761,38 @@ fi
 # Topgrade handles cargo, pipx, npm, nix, rustup, gem, JetBrains
 # Toolbox, VS Code extensions, github-cli extensions, and 100+ more.
 # Most users don't have all of these installed; topgrade only runs
-# the steps for tools it actually finds. We disable the steps already
-# covered by sections 1–4 (system, flatpak, snap) plus firmware
-# (default, tunable via --skip-firmware which here means "also
-# disable in extras") and lensfun (network step against
-# lensfun.sourceforge.net + wilson.bronger.org/lensfun-db; either
-# mirror going slow can hang topgrade indefinitely with no progress
-# output — observed 57+ minute stall in the wild. Users who want
-# lensfun updates can run `topgrade --only lensfun` manually).
+# the steps for tools it actually finds.
 
-# Time limit for the pass. The one stall seen in the wild (lensfun) ran past
-# 57 minutes with no output; an hour still leaves room for a long build.
-TOPGRADE_TIMEOUT_SECS=3600
-TOPGRADE_KILL_GRACE_SECS=30
+# Room for large Proton downloads without holding the sudo rule open all day.
+# Flatpak sandboxes (ProtonPlus) are outside its reach and finish on their own.
+TOPGRADE_TIMEOUT_SECS=7200
 
-# Environment for topgrade. runuser gives it no login session, and ProtonPlus's
-# flatpak-spawn --host check needs the caller's session bus. Only topgrade gets
-# it; updatems rebuilds its own paths. The address comes from the user's
-# systemd manager, falling back to the standard socket, and paths the user
-# controls are tested as that user, never as root. No live bus: HOME-only.
+# ProtonPlus refuses Proton updates unless flatpak-spawn --host reaches the
+# session bus, which runuser does not set up.
 topgrade_session_env() {
     TOPGRADE_USER_ENV=("HOME=$ORIG_HOME" "SUDO_ASKPASS=/bin/false")
-    local uid rtd addr="" sock probe=()
+    local uid rtd
     uid=$(id -u "$ORIG_USER" 2>/dev/null) || return 0
-    [[ "$uid" =~ ^[0-9]+$ ]] || return 0
     rtd="/run/user/$uid"
-    [[ -d "$rtd" ]] || return 0
+    runuser -u "$ORIG_USER" -- test -S "$rtd/bus" 2>/dev/null 9>&- || return 0
+    TOPGRADE_USER_ENV+=("XDG_RUNTIME_DIR=$rtd" "DBUS_SESSION_BUS_ADDRESS=unix:path=$rtd/bus")
+}
 
-    command -v timeout >/dev/null 2>&1 && probe=(timeout 5)
-    addr=$("${probe[@]}" runuser -u "$ORIG_USER" -- env XDG_RUNTIME_DIR="$rtd" \
-               systemctl --user show-environment 2>/dev/null \
-           | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -n 1)
-    case "$addr" in
-        unix:path=/*)
-            sock=${addr#unix:path=}
-            sock=${sock%%[,;]*}
-            runuser -u "$ORIG_USER" -- test -S "$sock" 2>/dev/null || addr=""
-            ;;
-        unix:abstract=*) ;;
-        *) addr="" ;;
-    esac
-    if [[ -z "$addr" ]] && runuser -u "$ORIG_USER" -- test -S "$rtd/bus" 2>/dev/null; then
-        addr="unix:path=$rtd/bus"
-    fi
-    [[ -n "$addr" ]] || return 0
-    TOPGRADE_USER_ENV+=("XDG_RUNTIME_DIR=$rtd" "DBUS_SESSION_BUS_ADDRESS=$addr")
+# topgrade's shipped config names pkexec, which asks polkit on the desktop for
+# each root step; this stand-in sends them through the update's sudo rule.
+TOPGRADE_SHIM=""
+topgrade_pkexec_shim() {
+    TOPGRADE_SHIM=$(mktemp -d /run/mainstream-update-shim.XXXXXX) || return 0
+    chmod 755 "$TOPGRADE_SHIM"
+    cat > "$TOPGRADE_SHIM/pkexec" <<'EOF'
+#!/bin/sh
+# pacman is the helper's own step, so a pkexec call to it still asks.
+case "${1##*/}" in pacman) exec /usr/bin/pkexec "$@" ;; esac
+if [ "$1" = --user ]; then u=$2; shift 2; exec sudo -n -u "$u" -- "$@"; fi
+exec sudo -n -- "$@"
+EOF
+    chmod 755 "$TOPGRADE_SHIM/pkexec"
+    TOPGRADE_USER_ENV+=("PATH=$TOPGRADE_SHIM:$PATH")
 }
 
 if [[ "$SKIP_EXTRAS" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
@@ -731,32 +803,34 @@ elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "Developer extras — topgrade (cargo, pipx, npm, nix, …)")"
     echo "═══════════════════════════════════════════════════════════"
-    TG_ARGS=(--cleanup --yes --disable system --disable flatpak --disable snap --disable lensfun)
+    # Sections 1 to 4 cover system, flatpak and snap. lensfun can hang for an hour
+    # on a slow mirror; `topgrade --only lensfun` runs it by hand.
+    TG_DISABLED=(system flatpak snap lensfun)
     if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
-        TG_ARGS+=(--disable firmware)
+        TG_DISABLED+=(firmware)
     fi
-    TG_ARGS+=("${TOPGRADE_EXTRA_ARGS[@]}")
+    # With its system step off, topgrade runs needrestart itself, which pacman's
+    # hook already did in section 1.
+    if [[ "$SKIP_SYSTEM" -eq 0 ]] && [[ -e /usr/share/libalpm/hooks/needrestart.hook || -e /etc/pacman.d/hooks/needrestart.hook ]]; then
+        TG_DISABLED+=(restarts)
+    fi
+    # The Advanced field's words go first: a bare word after --disable would join its list.
+    TG_ARGS=("${TOPGRADE_EXTRA_ARGS[@]}" --cleanup --yes)
+    for _step in "${TG_DISABLED[@]}"; do
+        TG_ARGS+=(--disable "$_step")
+    done
     topgrade_session_env
-    # timeout ends a stalled step (an unanswered polkit prompt, a dead mirror).
-    # On a terminal it stays in the foreground group so prompts can still read.
-    TG_GUARD=()
-    if command -v timeout >/dev/null 2>&1; then
-        TG_GUARD=(timeout --kill-after="${TOPGRADE_KILL_GRACE_SECS}s")
-        [[ -t 0 ]] && TG_GUARD+=(--foreground)
-        TG_GUARD+=("${TOPGRADE_TIMEOUT_SECS}s")
-    fi
-    TG_STARTED=$SECONDS
-    runuser -u "$ORIG_USER" -- \
-        "${TG_GUARD[@]}" \
+    topgrade_pkexec_shim
+    user_step "$TOPGRADE_TIMEOUT_SECS" \
         env -u XDG_RUNTIME_DIR -u DBUS_SESSION_BUS_ADDRESS \
         "${TOPGRADE_USER_ENV[@]}" \
         topgrade "${TG_ARGS[@]}"
     TOPGRADE_RC=$?
-    # 137 can also be an out-of-memory kill, so it counts only past the limit.
-    if [[ "$TOPGRADE_RC" -eq 124 ]] \
-        || { [[ "$TOPGRADE_RC" -eq 137 ]] && (( SECONDS - TG_STARTED >= TOPGRADE_TIMEOUT_SECS )); }; then
+    if (( STEP_TIMED_OUT )); then
+        # An argument, so a translation cannot alter the command.
+        printf -v TG_BY_HAND '%q ' topgrade "${TOPGRADE_EXTRA_ARGS[@]}" --cleanup --disable "${TG_DISABLED[@]}"
         echo ""
-        echo ">>> $(tf "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run topgrade in a terminal to see what it was waiting on." "$(( TOPGRADE_TIMEOUT_SECS / 60 ))")"
+        echo ">>> $(tf "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on." "$(( TOPGRADE_TIMEOUT_SECS / 60 ))" "${TG_BY_HAND% }")"
     fi
 elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo ""
@@ -770,7 +844,7 @@ fi
 # exit means mismatch.
 if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/quickshell ]]; then
     if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-            /usr/bin/quickshell --private-check-compat >/dev/null 2>&1; then
+            /usr/bin/quickshell --private-check-compat >/dev/null 2>&1 9>&-; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
         QS_PKGBUILD_DIR="$ORIG_HOME/.cache/dots-hyprland/sdata/dist-arch/mainstream-quickshell-git"
         if [[ -n "$QS_PKG" ]] && [[ -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
@@ -779,7 +853,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
             echo "═══════════════════════════════════════════════════════════"
             echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" makepkg)"
             echo "═══════════════════════════════════════════════════════════"
-            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            if user_step 0 env HOME="$ORIG_HOME" \
                 bash -c "cd '$QS_PKGBUILD_DIR' && makepkg -Afsi --noconfirm"; then
                 echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else
@@ -791,7 +865,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
             echo "═══════════════════════════════════════════════════════════"
             echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" yay)"
             echo "═══════════════════════════════════════════════════════════"
-            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            if user_step 0 env HOME="$ORIG_HOME" \
                 yay -S --rebuildtree --noconfirm "$QS_PKG"; then
                 echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else
@@ -802,7 +876,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
             echo "═══════════════════════════════════════════════════════════"
             echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" paru)"
             echo "═══════════════════════════════════════════════════════════"
-            if runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            if user_step 0 env HOME="$ORIG_HOME" \
                 paru -S --rebuildtree --noconfirm "$QS_PKG"; then
                 echo ">>> $(t "Restart Quickshell to pick up the new binary.")"
             else

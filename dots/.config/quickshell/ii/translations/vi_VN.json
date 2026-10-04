@@ -1063,7 +1063,7 @@
   "You cannot change the login name of the account you are currently signed in to.": "You cannot change the login name of the account you are currently signed in to.",
   "You cannot remove the account you are currently signed in to.": "You cannot remove the account you are currently signed in to.",
   "Your snapshot has been successfully restored!": "Your snapshot has been successfully restored!",
-  "e.g. --only system flatpak": "e.g. --only system flatpak",
+  "e.g. --only cargo node": "e.g. --only cargo node",
   "e.g. 󰘴  for Ctrl, 󰘵  for Alt, 󰘶  for Shift, etc": "e.g. 󰘴  for Ctrl, 󰘵  for Alt, 󰘶  for Shift, etc",
   "e.g. 󱊫 for F1, 󱊶  for F12": "e.g. 󱊫 for F1, 󱊶  for F12",
   "illogical-impulse Settings": "Cài đặt illogical-impulse",
@@ -2453,5 +2453,7 @@
   "Session Menu": "Session Menu",
   "Named workspaces": "Named workspaces",
   "Workspace title": "Workspace title",
-  "Workspace title (pill)": "Workspace title (pill)"
+  "Workspace title (pill)": "Workspace title (pill)",
+  "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
+  "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed."
 }

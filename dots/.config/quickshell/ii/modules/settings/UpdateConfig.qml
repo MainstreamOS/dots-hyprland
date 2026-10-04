@@ -250,7 +250,7 @@ ContentPage {
         root.outputText = root.outputText.replace(/\s+$/, "");
         // Whatever the run did, it may have finished what an earlier one left.
         leftoverCheck.running = true;
-        if (root.userStopped) {
+        if (root.userStopped || exitCode === 143 || exitCode === 130) {
             root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
             return;
         }
@@ -474,17 +474,17 @@ ContentPage {
         // The pid has to still be the session the launcher recorded: a pid
         // file left by a killed run names a number the kernel has since handed
         // to something else, and signalling its children hits a bystander.
-        // The leader's child is sudo, sudo's child the helper. The helper is
-        // told first, and then whatever step it is on, since the helper only
-        // acts on the signal once that step has ended.
+        // The leader's child is sudo, which passes it to the helper; the helper
+        // ends an AUR build or the extras at once and lets other steps finish.
         command: ["bash", "-c",
-            'p=$(bash "$0" "$1") || exit 1;'
-            + ' s=$(pgrep -P "$p" | head -n1); h=""; [ -n "$s" ] && h=$(pgrep -P "$s" | head -n1);'
-            + ' pkill -TERM -P "$p" || exit 1;'
-            + ' [ -n "$h" ] && pkill -TERM -P "$h"; exit 0',
+            'p=$(bash "$0" "$1") || exit 1; pkill -TERM -P "$p" || exit 1; exit 0',
             root.liveCheck, root.pidPath]
         onExited: (code) => {
             if (code === 0) {
+                if (!root.userStopped) {
+                    root.flushOutput();
+                    root.outputText += "\n" + Translation.tr("Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.");
+                }
                 root.userStopped = true;
             } else {
                 // Nothing was signalled, so the run is still going or has
@@ -1092,7 +1092,7 @@ ContentPage {
                     StyledText {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: customArgsField.text.length === 0 && !customArgsField.activeFocus
-                        text: Translation.tr("e.g. --only system flatpak")
+                        text: Translation.tr("e.g. --only cargo node")
                         color: Appearance.m3colors.m3outlineVariant
                         font: customArgsField.font
                     }
