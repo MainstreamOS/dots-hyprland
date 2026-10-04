@@ -22,13 +22,17 @@
 #       the same code path as create so the two cannot diverge.
 #
 #   set-password <user>       reads the new password from stdin
+#   set-password <user> verify
+#       Reads the current password first, on its own line, and changes
+#       nothing unless it matches.
 #   set-admin <user> yes|no   add to or remove from wheel
 #   rename <user> <new name>  change the full name (GECOS), not the login
 #   delete <user> keep-home|remove-home
 #   set-avatar <user> <path>  install a face icon for the login screen
 #
 # Every subcommand except list is invoked via pkexec and matches the polkit
-# action org.mainstreamos.user-manager.
+# action org.mainstreamos.user-manager. change-own-password also runs
+# set-password <user> verify, under its own action and with no administrator.
 
 set -euo pipefail
 # pkexec keeps the caller's umask.
@@ -51,7 +55,13 @@ log() {
     install -d -m 755 -o root -g root "${f%/*}" 2>/dev/null && [[ ! -L "$f" ]] \
         && printf '%s\n' "$line" >> "$f" 2>/dev/null || true
 }
-die() { log "ERROR: $*"; exit 22; }
+# Set while a verify run has not taken its account's lock: change-own-password
+# gets that far with no administrator, so refusals there must not fill the log.
+UNPROVEN=""
+die() {
+    if [[ -n "$UNPROVEN" ]]; then printf 'ERROR: %s\n' "$*" >&2; else log "ERROR: $*"; fi
+    exit 22
+}
 
 # useradd's own rule, plus its 32-character ceiling. Checked here as the last
 # stop rather than trusting the caller: this runs as root and the name reaches
@@ -190,7 +200,7 @@ _password_matches() {  # $1 = user  $2 = password
     hash="$(getent shadow "$1" 2>/dev/null | cut -d: -f2)"
     # A locked or empty entry has no password to match, so nothing can verify.
     case "$hash" in ''|'!'*|'*'*) return 1 ;; esac
-    HASH="$hash" PW="$2" python3 -c '
+    HASH="$hash" PW="$2" python3 -I -c '
 import ctypes, os, sys
 lib = ctypes.CDLL("libcrypt.so.2")
 lib.crypt.restype = ctypes.c_char_p
@@ -201,6 +211,32 @@ sys.exit(0 if got and got == h else 1)
 ' 2>/dev/null
 }
 
+# change-own-password reaches this without an administrator, and pam_faillock
+# never sees a crypt(3) check, so each account gets one check every 2s.
+_check_current_password() {  # $1 = user  $2 = password
+    local lock fd mask
+    # The caller's terminal can still signal this root process, and ending a
+    # wrong guess's wait early would release the lock for the next one.
+    trap '' INT QUIT HUP
+    lock="/run/lock/mainstream-password-check-$(id -u "$1").lock"
+    # Readable is enough to hold a flock, so anyone who could open it could
+    # keep an account from ever changing its password here.
+    mask="$(umask)"; umask 077
+    { exec {fd}>>"$lock"; } 2>/dev/null || die "could not open $lock"
+    umask "$mask"
+    flock -w 30 "$fd" || die "another password check for $1 is still running"
+    UNPROVEN=""
+    log "$INVOKED"
+    if ! _password_matches "$1" "$2"; then
+        sleep 2
+        die "the current password is not correct"
+    fi
+    # A match holds the lock 2s as well, through a sleep that inherits it, so
+    # repeated changes cannot fill the log and the caller is not kept waiting.
+    sleep 2 </dev/null >/dev/null 2>&1 &
+    exec {fd}>&-
+}
+
 cmd_set_password() {  # $1 = user  $2 = "verify" to require the current password first
     local u="${1:-}" mode="${2:-}" old="" pw
     require_human_user "$u"
@@ -208,7 +244,7 @@ cmd_set_password() {  # $1 = user  $2 = "verify" to require the current password
         # Two lines on stdin, current then new, so neither ever reaches argv.
         IFS= read -r old || true
         [[ -n "$old" ]] || die "no current password supplied"
-        _password_matches "$u" "$old" || die "the current password is not correct"
+        _check_current_password "$u" "$old"
     fi
     pw="$(cat)"
     pw="${pw%$'\n'}"
@@ -373,7 +409,13 @@ cmd_set_avatar() {  # $1 = user  $2 = source image
 
 # Every invocation is recorded before it runs, minus anything from stdin,
 # which is where passwords travel precisely so they never reach a log.
-[[ "${1:-}" == "list" ]] || log "invoked: $* (by uid ${PKEXEC_UID:-$(id -u)})"
+# A verify run is recorded once it holds its account's lock instead.
+INVOKED="invoked: $* (by uid ${PKEXEC_UID:-$EUID})"
+if [[ "${1:-}" == set-password && "${3:-}" == verify ]]; then
+    UNPROVEN=1
+elif [[ "${1:-}" != list ]]; then
+    log "$INVOKED"
+fi
 
 case "${1:-}" in
     list)          cmd_list ;;

@@ -8,7 +8,9 @@
     Listing accounts is a read-only pass over the passwd database and runs
     unprivileged, so it never reaches this action. Creating, provisioning,
     renaming, deleting an account, changing a password, and granting or
-    revoking administrator all go through pkexec and match here.
+    revoking administrator all go through pkexec and match here. Changing
+    your own password has its own action, org.mainstreamos.change-own-password,
+    which needs only that password.
 
     `allow_active = auth_admin_keep` means: in an active local session the
     user authenticates as an admin ONCE, then a short run of account edits

@@ -28,6 +28,9 @@ ContentPage {
     // that bring this page, and a command that cannot start never reports
     // back, so without this check the page would sit empty and say nothing.
     property bool helperMissing: false
+    // change-own-password arrives the same way. Until it has, your own
+    // password goes through user-manager, behind an administrator.
+    property bool ownPasswordHelper: false
 
     Component.onCompleted: {
         currentUserProc.running = true
@@ -41,9 +44,10 @@ ContentPage {
 
     Process {
         id: helperCheck
-        command: ["sh", "-c", "test -x /usr/local/bin/user-manager"]
+        command: ["sh", "-c", "test -x /usr/local/bin/user-manager || exit 1; test -x /usr/local/bin/change-own-password || exit 2"]
         onExited: (code) => {
-            root.helperMissing = (code !== 0)
+            root.helperMissing = (code !== 0 && code !== 2)
+            root.ownPasswordHelper = (code === 0)
             if (root.helperMissing) {
                 root.accounts = []
                 return
@@ -181,6 +185,7 @@ ContentPage {
                 }
             }
             onExited: (code) => {
+                const refusal = HelperUtils.pkexecRefusal(code)
                 if (code === 0) {
                     root.showStatus(Translation.tr("Done! Changes have been saved."), false)
                     item.showChangePassword = false
@@ -188,6 +193,8 @@ ContentPage {
                     item.showRemove = false
                     root.refresh()
                     item.expanded = false
+                } else if (refusal) {
+                    root.showStatus(refusal, true)
                 } else {
                     root.showStatus(root.helperReason(actionErr.text,
                         Translation.tr("Something went wrong. Please try again.")), true)
@@ -631,8 +638,11 @@ ContentPage {
                                     : newPassField.text
                                 oldPassField.text = ""; newPassField.text = ""; confirmPassField.text = ""
                                 actionProc.pendingPassword = pass
-                                actionProc.command = ["pkexec", "/usr/local/bin/user-manager",
-                                    "set-password", user].concat(account.isCurrent ? ["verify"] : [])
+                                actionProc.command = !account.isCurrent
+                                    ? ["pkexec", "/usr/local/bin/user-manager", "set-password", user]
+                                    : root.ownPasswordHelper
+                                        ? ["pkexec", "/usr/local/bin/change-own-password"]
+                                        : ["pkexec", "/usr/local/bin/user-manager", "set-password", user, "verify"]
                                 actionProc.stdinEnabled = true
                                 actionProc.running = true
                             }
