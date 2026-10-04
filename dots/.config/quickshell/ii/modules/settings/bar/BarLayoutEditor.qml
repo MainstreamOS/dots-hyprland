@@ -148,8 +148,8 @@ Item {
         const placed = root.placedIds();
         return root.moduleCatalog.filter(m => placed.indexOf(m.id) === -1 && !root.widgetHiddenHere(m.id));
     }
-    // A widget goes where the default layout keeps it, so one added to a bar
-    // saved before it existed lands in the same place as on a new install.
+    // A widget joins the section the default layout keeps it in, as a group of
+    // its own at the end: the same section as on a new install, not the same spot.
     function addWidget(id) {
         const section = root.sectionIds.find(s => (Config.defaultBarLayout[s] ?? [])
             .some(group => (group.widgets ?? []).some(w => w.id === id))) ?? "center";

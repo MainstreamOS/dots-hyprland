@@ -480,7 +480,11 @@ ContentPage {
             title: Translation.tr("Number style")
 
             ConfigSelectionArray {
-                currentValue: JSON.stringify(Config.options.bar.workspaces.numberMap)
+                // A map of plain numbers, the default ["1","2"] among them, shows as Normal.
+                currentValue: {
+                    const map = Array.from(Config.options.bar.workspaces.numberMap);
+                    return map.every((c, i) => c === String(i + 1)) ? '[]' : JSON.stringify(map);
+                }
                 onSelected: newValue => {
                     Config.options.bar.workspaces.numberMap = JSON.parse(newValue)
                 }
