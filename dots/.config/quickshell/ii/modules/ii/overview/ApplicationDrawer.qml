@@ -409,6 +409,7 @@ Item {
 
                     model: ScriptModel {
                         values: root.getFilteredApps()
+                        objectProp: "id"
                     }
 
                     // Show "no results" message
@@ -1114,6 +1115,7 @@ Item {
                         boundsBehavior: Flickable.StopAtBounds
 
                         model: ScriptModel {
+                            objectProp: "id"
                             values: {
                                 if (!root.openFolder || !root.openFolder.appIds) return [];
                                 const apps = [];
