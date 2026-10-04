@@ -2455,5 +2455,6 @@
   "Workspace title": "Workspace title",
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
-  "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed."
+  "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
+  "not installed": "not installed"
 }

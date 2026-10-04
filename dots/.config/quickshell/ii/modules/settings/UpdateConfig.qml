@@ -277,9 +277,17 @@ ContentPage {
         }
     }
 
+    // Some tools color their output even into a file; the codes would show as text.
+    function plainText(text) {
+        if (text.indexOf("\x1b") === -1)
+            return text;
+        return text.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
+    }
+
     // Usually one line. The exit sentinel is looked for anywhere in it, since the
     // parser can glue it to the blank line the launcher writes before it.
     function takeLine(line) {
+        line = root.plainText(line);
         const plan = line.indexOf(root.rebootPlanMarker);
         if (plan !== -1) {
             root.readRebootAnswer(line.substring(plan + root.rebootPlanMarker.length), "plan");
@@ -539,7 +547,7 @@ ContentPage {
         command: ["cat", root.logPath]
         stdout: StdioCollector {
             onStreamFinished: {
-                const whole = this.text.split("\n").filter(l => l.indexOf("@@MAINSTREAM-UPDATE") !== 0).join("\n");
+                const whole = root.plainText(this.text).split("\n").filter(l => l.indexOf("@@MAINSTREAM-UPDATE") !== 0).join("\n");
                 Quickshell.clipboardText = whole.trim().length > 0 ? whole : root.outputText;
             }
         }
