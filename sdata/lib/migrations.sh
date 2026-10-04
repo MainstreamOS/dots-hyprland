@@ -27,6 +27,11 @@ migrate_custom_general_plugin_block() {
     grep -q 'applyPluginConfig' "$target" 2>/dev/null || return 0
     [[ -f "$shipped" ]] || return 0
 
+    if [[ "${DRY_RUN:-false}" == true ]]; then
+        echo "[DRY-RUN] Would move $target aside, since plugin settings now ship in hyprland/plugins.lua"
+        return 0
+    fi
+
     local backup="$target.pre-plugins-move"
     [[ -e "$backup" ]] && backup="$backup.$(date +%Y%m%d%H%M%S)"
     if mv "$target" "$backup"; then

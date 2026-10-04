@@ -2505,5 +2505,7 @@
   "Settings was updated. Restart it to use the new version.": "Settings was updated. Restart it to use the new version.",
   "Something is still running or unsaved. Finish it, then restart Settings.": "Something is still running or unsaved. Finish it, then restart Settings.",
   "Restarting Settings…": "Restarting Settings…",
-  "Settings could not restart. You can keep using this window, or try again.": "Settings could not restart. You can keep using this window, or try again."
+  "Settings could not restart. You can keep using this window, or try again.": "Settings could not restart. You can keep using this window, or try again.",
+  "[DRY-RUN] Would fetch tags from origin/%s": "[DRY-RUN] Would fetch tags from origin/%s",
+  "[DRY-RUN] Could not read origin/%s": "[DRY-RUN] Could not read origin/%s"
 }

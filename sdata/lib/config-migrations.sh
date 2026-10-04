@@ -28,11 +28,12 @@ _CFGMIG_NOTES=()
 _cfgmig_note() {
   _CFGMIG_NOTES+=("$*")
 }
+_cfgmig_say() {
+  if declare -F log_info >/dev/null 2>&1; then log_info "$1"; else echo "$1"; fi
+}
 _cfgmig_say_notes() {
   local note
-  for note in "${_CFGMIG_NOTES[@]}"; do
-    if declare -F log_info >/dev/null 2>&1; then log_info "$note"; else echo "$note"; fi
-  done
+  for note in "${_CFGMIG_NOTES[@]}"; do _cfgmig_say "$note"; done
 }
 
 # Renamed into place, since Hyprland reads these files on every reload and a
@@ -264,7 +265,10 @@ config_migrations_run() {
   if [[ "${1:-}" == --hypr-only ]]; then hypr_only=1; shift; fi
   cfg="${1:-}"
   [[ -n "$cfg" && -e "$cfg" ]] || return 0
-  [[ "${DRY_RUN:-false}" != true ]] || return 0
+  if [[ "${DRY_RUN:-false}" == true ]]; then
+    _cfgmig_say "[DRY-RUN] Would update any settings a release renamed or reshaped"
+    return 0
+  fi
   # Run as root it would leave root-owned files in the user's home.
   [[ "$(id -u)" -ne 0 ]] || return 0
   # In a subshell with errexit, nounset and any ERR trap left behind, so

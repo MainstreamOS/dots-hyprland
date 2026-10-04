@@ -284,7 +284,7 @@ ensure_directory() {
       CREATED_DIRS[$dir]=1
     fi
   else
-    if [[ "$VERBOSE" == true ]] || [[ -z "${CREATED_DIRS[$dir]:-}" ]]; then
+    if [[ ! -d "$dir" ]]; then
       log_info "[DRY-RUN] Would create directory: $dir"
     fi
     CREATED_DIRS[$dir]=1
@@ -891,6 +891,12 @@ has_new_commits() {
   fi
 }
 
+exp_tree_dirty() {
+  local s
+  s=$(git status --porcelain --untracked-files=no 2>/dev/null) || return 0
+  [[ -n "$s" ]]
+}
+
 # Keeps the values a user changed in Settings > Decorations when a release
 # replaces general.lua. Without the library the update runs as it would
 # without the pass, so the calls below stay safe either way.
@@ -920,6 +926,7 @@ fi
 EXP_UPDATE_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/exp-update.log"
 EXP_RELOGIN_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed"
 EXP_DEFERRED_FILE="${REPO_ROOT}/.update-deferred"
+EXP_CONFIG_JSON="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
 EXP_DEFER=0
 EXP_SETTINGS_STALE=0
 EXP_DEFER_WAIT_PID=""
@@ -940,6 +947,7 @@ declare -gA EXP_RELOGIN_REASONS=()
 _exp_relay_pid=""
 _exp_inflight_tmp=""
 _exp_holds_taken=0
+_exp_lock_taken=0
 _exp_shell_released=0
 _exp_files_in=0
 
@@ -953,6 +961,8 @@ _exp_files_in=0
 exp_update_start_log() {
   local size
   [[ -t 1 || "${NON_INTERACTIVE:-false}" != true ]] && return 0
+  # A dry run copies nothing a closed pipe could cut short, and writes no log.
+  [[ "${DRY_RUN:-false}" == true ]] && return 0
   mkdir -p "${EXP_UPDATE_LOG%/*}" 2>/dev/null || return 0
   size=$(stat -c %s "$EXP_UPDATE_LOG" 2>/dev/null || echo 0)
   if (( size > 1048576 )); then
@@ -991,10 +1001,12 @@ exp_update_close_log() {
 exp_protect_clone_state() {
   local exclude p prev head tag=""
   exclude=$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null) || return 0
-  mkdir -p "${exclude%/*}" 2>/dev/null || true
-  for p in '.updatems-applied-tag' '.update-backups/' '.update-lock' '.update-deferred'; do
-    grep -qxF -- "$p" "$exclude" 2>/dev/null || printf '%s\n' "$p" >>"$exclude" 2>/dev/null || true
-  done
+  if [[ "$DRY_RUN" != true ]]; then
+    mkdir -p "${exclude%/*}" 2>/dev/null || true
+    for p in '.updatems-applied-tag' '.update-backups/' '.update-lock' '.update-deferred'; do
+      grep -qxF -- "$p" "$exclude" 2>/dev/null || printf '%s\n' "$p" >>"$exclude" 2>/dev/null || true
+    done
+  fi
   # Such an updatems has already stashed the marker by the time this runs,
   # and without it a retry after a stopped run compares the whole tree. The
   # hop it set up starts at the release it last applied, so that release is
@@ -1002,13 +1014,17 @@ exp_protect_clone_state() {
   # exactly a release tag: a retry that already lost the marker parks on the
   # target itself, and writing that would record the release as delivered,
   # as would a clone moved back to an older release.
-  [[ -e "${REPO_ROOT}/.updatems-applied-tag" || "$DRY_RUN" == true ]] && return 0
+  [[ -e "${REPO_ROOT}/.updatems-applied-tag" ]] && return 0
   prev=$(git -C "$REPO_ROOT" rev-parse -q --verify 'HEAD@{1}^{commit}' 2>/dev/null) || return 0
   head=$(git -C "$REPO_ROOT" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null) || return 0
   [[ "$prev" != "$head" ]] || return 0
   git -C "$REPO_ROOT" merge-base --is-ancestor "$prev" "$head" 2>/dev/null || return 0
   tag=$(git -C "$REPO_ROOT" tag --points-at "$prev" 2>/dev/null | grep -E '^[0-9]{1,2}\.[0-9]+\.[0-9]+$' | sort -V | tail -n1) || tag=""
   [[ -n "$tag" ]] || return 0
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "[DRY-RUN] Would record ${tag} as the last applied release"
+    return 0
+  fi
   printf '%s\n' "$tag" >"${REPO_ROOT}/.updatems-applied-tag" 2>/dev/null || return 0
   log_info "Recorded ${tag} as the last applied release, so a stopped run repeats only this update"
 }
@@ -1275,7 +1291,9 @@ exp_should_defer() {
   cmp -s "$repo_file" "$home_file" && return 1
   rel="${repo_file#"$REPO_ROOT"/}"
   exp_defer_add M "$rel"
-  if [[ "$DEFAULT_CHOICE" == 8 ]] && ! exp_home_is_stock "$home_file" "$rel"; then
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "[DRY-RUN] Would leave $home_file for after the update"
+  elif [[ "$DEFAULT_CHOICE" == 8 ]] && ! exp_home_is_stock "$home_file" "$rel"; then
     EXP_OWN_DEFERRED+=("$home_file")
   fi
   files_deferred=$((files_deferred + 1))
@@ -1549,27 +1567,32 @@ exp_write_relogin_note() {
 # sync that failed (no network, say) is tried again by the next update.
 exp_sync_venv() {
   local venv="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/.venv"
-  local req="${REPO_ROOT}/sdata/uv/requirements.txt" stamp old=""
-  [[ "$DRY_RUN" != true && -f "$req" && -x "${venv}/bin/python" ]] || return 0
+  local req="${REPO_ROOT}/sdata/uv/requirements.txt" stamp seed=""
+  [[ -f "$req" && -x "${venv}/bin/python" ]] || return 0
   declare -F sync_venv_requirements >/dev/null 2>&1 || return 0
   stamp="${venv}/.mainstream-requirements.txt"
   if [[ -f "$stamp" ]]; then
     cmp -s "$stamp" "$req" && return 0
-    old="$stamp"
   elif [[ -n "$EXP_RANGE_BASE" ]] \
        && ! git -C "$REPO_ROOT" diff --quiet "$EXP_RANGE_BASE" HEAD -- sdata/uv/requirements.txt 2>/dev/null; then
-    git -C "$REPO_ROOT" show "${EXP_RANGE_BASE}:sdata/uv/requirements.txt" >"$stamp" 2>/dev/null || : >"$stamp"
-    old="$stamp"
+    seed=range
   elif [[ "$FORCE_CHECK" == true && -z "$EXP_RANGE_BASE" ]]; then
     # A forced run has no earlier list to read, so what the venv holds now
     # stands in for it.
-    venv_installed_pins "$venv" >"$stamp" 2>/dev/null || : >"$stamp"
-    old="$stamp"
+    seed=venv
   else
     return 0
   fi
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "[DRY-RUN] Would bring the shell's Python packages in line with sdata/uv/requirements.txt"
+    return 0
+  fi
+  case "$seed" in
+    range) git -C "$REPO_ROOT" show "${EXP_RANGE_BASE}:sdata/uv/requirements.txt" >"$stamp" 2>/dev/null || : >"$stamp" ;;
+    venv) venv_installed_pins "$venv" >"$stamp" 2>/dev/null || : >"$stamp" ;;
+  esac
   log_header "Updating Python Packages"
-  if sync_venv_requirements "$venv" "$req" "$old"; then
+  if sync_venv_requirements "$venv" "$req" "$stamp"; then
     cp -f "$req" "$stamp" 2>/dev/null || true
     log_success "The shell's Python packages match this release"
   else
@@ -1648,13 +1671,34 @@ exp_reload_hypr() {
   hyprctl reload >/dev/null 2>&1 || true
 }
 
+# A run that was killed outright cannot have released anything, and both holds
+# outlive the script that took them. Clearing Hyprland's first costs nothing
+# and spares the next person a session where their settings quietly stop
+# applying. The shell's is not released here, since that reloads the whole
+# shell: this run holds it again below, and its own release clears it.
+exp_take_holds() {
+  if _hypr_live; then _hypr_set_disable_autoreload false >/dev/null 2>&1 || true; fi
+
+  # From here on the exit handler gives back what is taken below.
+  _exp_holds_taken=1
+  if _hypr_live && ! _hypr_set_disable_autoreload true; then
+    log_warning "Hyprland's autoreload could not be held off, so it may reload while the files are copied"
+  fi
+  if _qs_live && qs -c ii ipc call updates holdReload >/dev/null 2>&1; then
+    _qs_held=1
+    log_info "Shell reloading held until the new files are all in place"
+  fi
+}
+
+exp_files_left_for_later() { (( EXP_DEFER )) && [[ -s "$EXP_DEFERRED_FILE" ]]; }
+
 # Lets the shell reload onto the new files. When files were left for after
 # the update, the shell stays held until they are in, and releasing it is the
 # finisher's job; releasing it here would build it from a half-new tree.
 exp_release_shell() {
   (( _exp_shell_released )) && return 0
   _exp_shell_released=1
-  if (( EXP_DEFER )) && [[ -s "$EXP_DEFERRED_FILE" && "$DRY_RUN" != true ]]; then
+  if exp_files_left_for_later; then
     if exp_launch_finisher; then
       log_info "The files this Settings window is built from go in once the update has finished, and the desktop reloads then"
     else
@@ -1706,9 +1750,9 @@ _pkg_build_tmp=""
 cleanup_on_exit() {
   local exit_code=$?
   
-  # Remove lock file, when it is this run's: one that refused to start because
+  # Remove lock file, when this run took it: one that refused to start because
   # another update holds it leaves that update's lock alone.
-  if [[ "$(cat "${REPO_ROOT}/.update-lock" 2>/dev/null)" == "$$" ]]; then
+  if (( ${_exp_lock_taken:-0} )) && [[ "$(cat "${REPO_ROOT}/.update-lock" 2>/dev/null)" == "$$" ]]; then
     rm -f "${REPO_ROOT}/.update-lock" 2>/dev/null || true
   fi
   if [[ -n "${_pkg_build_tmp:-}" ]]; then
@@ -1725,6 +1769,8 @@ cleanup_on_exit() {
 
 # Set up signal handling and lock file
 if [[ "${SOURCE_ONLY:-false}" != true ]]; then
+# git status rewrites the index as it reads the tree unless told not to.
+if [[ "$DRY_RUN" == true ]]; then export GIT_OPTIONAL_LOCKS=0; fi
 exp_update_start_log
 trap '_exp_exit_handler "$?"' EXIT
 # A signal has to end the run. A handler that returns only stops the command
@@ -1742,6 +1788,8 @@ if [[ -f "${REPO_ROOT}/.update-lock" ]]; then
   # Check if the process is still running
   if exp_lock_owner_live "$(cat "${REPO_ROOT}/.update-lock" 2>/dev/null)"; then
     log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock"))"
+  elif [[ "$DRY_RUN" == true ]]; then
+    log_info "[DRY-RUN] Would remove stale lock file"
   else
     log_warning "Found stale lock file, removing..."
     rm -f "${REPO_ROOT}/.update-lock"
@@ -1751,8 +1799,11 @@ fi
 # Create lock file with current PID
 # Only when absent, so a run or finisher that found it free at the same moment
 # cannot take it as well.
-if [[ "$DRY_RUN" != true ]] && ! ( set -o noclobber; echo $$ > "${REPO_ROOT}/.update-lock" ) 2>/dev/null; then
-  log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock" 2>/dev/null))"
+if [[ "$DRY_RUN" != true ]]; then
+  if ! ( set -o noclobber; echo $$ > "${REPO_ROOT}/.update-lock" ) 2>/dev/null; then
+    log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock" 2>/dev/null))"
+  fi
+  _exp_lock_taken=1
 fi
 
 # Main script starts here
@@ -1811,19 +1862,22 @@ current_branch=$(git branch --show-current)
 if [[ -z "$current_branch" ]]; then
   log_warning "In detached HEAD state. Checking out main/master branch..."
   if git show-ref --verify --quiet refs/heads/main; then
-    git checkout main
     current_branch="main"
   elif git show-ref --verify --quiet refs/heads/master; then
-    git checkout master
     current_branch="master"
   else
     log_die "Could not find main or master branch"
+  fi
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "[DRY-RUN] Would run: git checkout $current_branch"
+  else
+    git checkout "$current_branch"
   fi
 fi
 
 log_info "Current branch: $current_branch"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
+if exp_tree_dirty; then
   log_warning "You have uncommitted changes:"
   git status --short
   echo
@@ -2000,21 +2054,10 @@ if [[ -r "${REPO_ROOT}/sdata/lib/migrations.sh" ]]; then
   migrate_custom_general_plugin_block "${REPO_ROOT}"
 fi
 
-# A run that was killed outright cannot have released anything, and both holds
-# outlive the script that took them. Clearing Hyprland's first costs nothing
-# and spares the next person a session where their settings quietly stop
-# applying. The shell's is not released here, since that reloads the whole
-# shell: this run holds it again below, and its own release clears it.
-if _hypr_live; then _hypr_set_disable_autoreload false >/dev/null 2>&1 || true; fi
-
-# From here on the exit handler gives back what is taken below.
-_exp_holds_taken=1
-if _hypr_live && ! _hypr_set_disable_autoreload true; then
-  log_warning "Hyprland's autoreload could not be held off, so it may reload while the files are copied"
-fi
-if _qs_live && qs -c ii ipc call updates holdReload >/dev/null 2>&1; then
-  _qs_held=1
-  log_info "Shell reloading held until the new files are all in place"
+if [[ "$DRY_RUN" == true ]]; then
+  log_info "[DRY-RUN] Would hold Hyprland's autoreload and the shell's reloading until the new files are all in place"
+else
+  exp_take_holds
 fi
 
 log_header "Updating Configuration Files"
@@ -2038,6 +2081,8 @@ if [[ "$process_files" == true || -s "$EXP_DEFERRED_FILE" ]]; then
 fi
 if (( EXP_DEFER )); then
   log_info "This update runs from a Settings window of an earlier release, which restarts when the files it is built from change and would stop the update. Those files go in once the update has finished."
+elif [[ -s "$EXP_DEFERRED_FILE" && "$DRY_RUN" == true ]]; then
+  log_info "[DRY-RUN] Would put in place the files an earlier update left for after it finished"
 elif [[ -s "$EXP_DEFERRED_FILE" ]]; then
   log_info "Putting in place the files an earlier update left for after it finished"
   exp_apply_deferred || true
@@ -2139,11 +2184,11 @@ fi
 # Settings a release renamed or reshaped, once the files that read them are in.
 # A run that left files for later leaves config.json to the finisher, since the
 # older shell it keeps would drop the new keys at its next save.
-if [[ "$DRY_RUN" != true ]] && declare -F config_migrations_run >/dev/null 2>&1; then
-  if (( EXP_DEFER )) && [[ -s "$EXP_DEFERRED_FILE" ]]; then
-    config_migrations_run --hypr-only "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+if declare -F config_migrations_run >/dev/null 2>&1; then
+  if exp_files_left_for_later; then
+    config_migrations_run --hypr-only "$EXP_CONFIG_JSON" || true
   else
-    config_migrations_run "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+    config_migrations_run "$EXP_CONFIG_JSON" || true
   fi
 fi
 
@@ -2155,8 +2200,12 @@ exp_sync_venv || true
 # Step 4: Update script permissions
 # The tree is consistent again, so hand Hyprland one reload of the finished
 # thing rather than the several it would have taken along the way.
-exp_reload_hypr
-exp_release_shell
+if [[ "$DRY_RUN" == true ]]; then
+  log_info "[DRY-RUN] Would reload Hyprland and let the shell reload onto the new files"
+else
+  exp_reload_hypr
+  exp_release_shell
+fi
 
 log_header "Updating Script Permissions"
 

@@ -199,25 +199,38 @@ _recover_corrupt_clone() {
 }
 
 # ── 2. Fetch tags from origin ───────────────────────────────────────────────
-say "$(tf "Fetching tags from origin/%s..." "$REPO_BRANCH")"
-_fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
-[[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
-if [[ $_fetch_rc -ne 0 ]]; then
-    # Only a damaged clone is rebuilt. A fetch that failed for want of a network
-    # is no reason to throw the clone away, so anything else still dies here.
-    if grep -qE 'is empty|bad object|did not send all necessary objects|corrupt|unable to read|could not read' <<<"$_fetch_out"; then
-        _recover_corrupt_clone
-        _fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
-        [[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+# A fetch moves the clone's tags and branches, so a dry run only asks the
+# remote, which is where the newest tag below is read from anyway.
+if [[ $DRY_RUN -eq 1 ]]; then
+    say "$(tf "[DRY-RUN] Would fetch tags from origin/%s" "$REPO_BRANCH")"
+    _remote_refs=$(git ls-remote origin "refs/heads/$REPO_BRANCH" 'refs/tags/*' 2>/dev/null) || _remote_refs=""
+    _remote_head=$(awk -v r="refs/heads/$REPO_BRANCH" '$2 == r {print $1; exit}' <<<"$_remote_refs")
+    [[ -n "$_remote_head" ]] || die "$(tf "[DRY-RUN] Could not read origin/%s" "$REPO_BRANCH")"
+    _remote_tags=$(awk '$2 ~ /^refs\/tags\//' <<<"$_remote_refs")
+    _edge_ref=$_remote_head
+else
+    say "$(tf "Fetching tags from origin/%s..." "$REPO_BRANCH")"
+    _fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
+    [[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+    if [[ $_fetch_rc -ne 0 ]]; then
+        # Only a damaged clone is rebuilt. A fetch that failed for want of a network
+        # is no reason to throw the clone away, so anything else still dies here.
+        if grep -qE 'is empty|bad object|did not send all necessary objects|corrupt|unable to read|could not read' <<<"$_fetch_out"; then
+            _recover_corrupt_clone
+            _fetch_out=$(git fetch --tags --force --prune origin "$REPO_BRANCH" 2>&1); _fetch_rc=$?
+            [[ -n "$_fetch_out" ]] && printf '%s\n' "$_fetch_out" | sed 's/^/    /'
+        fi
+        [[ $_fetch_rc -eq 0 ]] || die "git fetch failed"
     fi
-    [[ $_fetch_rc -eq 0 ]] || die "git fetch failed"
+    _remote_tags=$(git ls-remote --tags origin 2>/dev/null)
+    _edge_ref="origin/$REPO_BRANCH"
 fi
 
 # ── 3. Pick the latest release tag ─────────────────────────────────────────
 # Strip peeled-tag suffixes (^{}), keep release tags (excludes the retired
 # mainstream-* series and any upstream date tags), version-sort, take the
 # highest. sort -V orders semver correctly.
-LATEST_TAG=$(git ls-remote --tags origin 2>/dev/null \
+LATEST_TAG=$(printf '%s\n' "$_remote_tags" \
     | awk '{print $2}' \
     | grep -vE '\^\{\}$' \
     | sed -E 's|refs/tags/||' \
@@ -236,7 +249,7 @@ TARGET_REF="$LATEST_TAG"
 # would. Anything already released stays reachable: turning edge off puts the
 # machine back on the newest tag, which is the same comparison as always.
 if [[ $EDGE -eq 1 ]]; then
-    _edge_sha=$(git rev-parse --short "origin/$REPO_BRANCH" 2>/dev/null)
+    _edge_sha=$(git rev-parse --short "$_edge_ref" 2>/dev/null)
     if [[ -z "$_edge_sha" ]]; then
         die "$(tf "Edge asked for, but origin/%s could not be resolved." "$REPO_BRANCH")"
     fi
