@@ -104,7 +104,7 @@ Singleton {
         })
         // --rescan no reads what NetworkManager already knows; hovering must
         // never set off a Wi-Fi scan.
-        command: ["sh", "-c", "ip -j -4 route show default; echo ---; ip -j -6 route show default; echo ---; ip -j addr show scope global; echo ---; nmcli -t -f DEVICE,TYPE,NAME connection show --active; echo ---; nmcli -t -f IN-USE,SIGNAL device wifi list --rescan no"]
+        command: ["sh", "-c", "ip -j -4 route show default; echo ---; ip -j -6 route show default; echo ---; ip -j addr show scope global; echo ---; nmcli -t -f DEVICE,TYPE,NAME connection show --active; echo ---; nmcli -t -f IN-USE,SIGNAL,DEVICE device wifi list --rescan no"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const details = Rates.readDetails(text, root.physical);

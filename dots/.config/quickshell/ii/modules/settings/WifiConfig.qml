@@ -239,6 +239,12 @@ Item {
                 }
             }
 
+            WifiNotice {
+                visible: Network.frameAdapterPresent
+                materialIcon: "view_in_ar"
+                text: Translation.tr("Turning Wi-Fi off also turns off the wireless adapter for the Steam Frame (experimental), so the headset cannot stream through it until Wi-Fi is back on.")
+            }
+
             StyledIndeterminateProgressBar {
                 visible: Network.wifiScanning
                 Layout.fillWidth: true
@@ -271,6 +277,12 @@ Item {
                     wifiNetwork: modelData
                     Layout.fillWidth: true
                 }
+            }
+
+            WifiNotice {
+                visible: Network.frameProfile !== null
+                materialIcon: "view_in_ar"
+                text: Translation.tr("%1 is the link Steam makes to the Steam Frame (experimental), and Steam connects it by itself. If the headset will not pair, forgetting it and pairing again can help.").arg(Network.frameProfileName)
             }
         }
 

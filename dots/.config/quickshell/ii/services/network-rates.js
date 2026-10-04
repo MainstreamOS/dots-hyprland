@@ -134,20 +134,32 @@ function parseJson(text) {
     }
 }
 
-// nmcli's terse output escapes a colon inside a value as "\:", so only the
-// first two bare colons split DEVICE:TYPE:NAME and the name keeps the rest.
-function parseConnections(text) {
-    const unescape = value => value.replace(/\\(.)/g, "$1");
-    return lines(text).map(line => {
-        const fields = line.match(/^((?:[^:\\]|\\.)*):((?:[^:\\]|\\.)*):(.*)$/);
-        return fields ? { device: unescape(fields[1]), type: unescape(fields[2]), name: unescape(fields[3]) } : null;
-    }).filter(c => c);
+// nmcli -t and -g fields: split on ':', where '\:' and '\\' stand for the characters.
+function terseRows(text) {
+    return String(text ?? "").split("\n").filter(line => line.length > 0).map(line => {
+        const fields = [""];
+        for (let i = 0; i < line.length; i++) {
+            if (line[i] === "\\" && i + 1 < line.length)
+                fields[fields.length - 1] += line[++i];
+            else if (line[i] === ":")
+                fields.push("");
+            else
+                fields[fields.length - 1] += line[i];
+        }
+        return fields;
+    });
 }
 
-// The in-use row of `nmcli -t -f IN-USE,SIGNAL device wifi list`, or -1.
-function parseSignal(text) {
-    const row = lines(text).find(line => line.startsWith("*:"));
-    const signal = row ? parseInt(row.slice(2)) : NaN;
+// The rows of `nmcli -t -f DEVICE,TYPE,NAME connection show --active`.
+function parseConnections(text) {
+    return terseRows(text).filter(f => f.length >= 3)
+        .map(f => ({ device: f[0], type: f[1], name: f.slice(2).join(":") }));
+}
+
+// The in-use row for one device in `nmcli -t -f IN-USE,SIGNAL,DEVICE device wifi list`, or -1.
+function parseSignal(text, device) {
+    const row = lines(text).map(line => line.split(":")).find(f => f[0] === "*" && f[2] === device);
+    const signal = row ? parseInt(row[1]) : NaN;
     return Number.isFinite(signal) ? signal : -1;
 }
 
@@ -202,6 +214,6 @@ function readDetails(output, physical) {
         name: connection?.name ?? device,
         address: route?.prefsrc ?? addressOf(device),
         wifi: wifi,
-        signal: wifi ? parseSignal(sections[4]) : -1
+        signal: wifi ? parseSignal(sections[4], device) : -1
     };
 }

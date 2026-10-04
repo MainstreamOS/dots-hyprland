@@ -12,6 +12,8 @@ Rectangle {
     property bool isConnecting: Network.wifiConnectTarget === root.wifiNetwork && !wifiNetwork?.active
     property bool isActive: wifiNetwork?.active ?? false
     property bool isAskingPassword: wifiNetwork?.askingPassword ?? false
+    // Steam's link to the Steam Frame: only Steam joins it, and it cannot be shared.
+    readonly property bool isFrameProfile: !!wifiNetwork && wifiNetwork === Network.frameProfile
     // Leaving the page counts as Cancel: a prompt left open holds the whole
     // list still.
     Component.onDestruction: {
@@ -104,7 +106,7 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        enabled: !isConnecting && !isAskingPassword
+        enabled: !isConnecting && !isAskingPassword && !isFrameProfile
         
         onClicked: {
             if (isActive) {
@@ -409,7 +411,7 @@ Rectangle {
 
             // Share button (for saved networks, not active/connecting)
             QrShareButton {
-                visible: (root.wifiNetwork?.isSaved ?? false) && !root.isActive && !root.isConnecting && !root.isAskingPassword
+                visible: (root.wifiNetwork?.isSaved ?? false) && !root.isActive && !root.isConnecting && !root.isAskingPassword && !root.isFrameProfile
                 onClicked: shareLoader.active = true
             }
         }
