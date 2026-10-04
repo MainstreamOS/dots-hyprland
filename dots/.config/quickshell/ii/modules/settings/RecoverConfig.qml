@@ -251,7 +251,9 @@ ContentPage {
                 StyledText {
                     id: outputDisplay
                     width: outputFlickable.width
-                    text: root.outputText || Translation.tr("Enter your password and press \"Restore Snapshot\" to begin.")
+                    text: root.outputText || (root.snapshotsAvailable
+                        ? Translation.tr("Enter your password and press \"Restore Snapshot\" to begin.")
+                        : Translation.tr("Press \"Repair Install\" or \"Repair Package Keys\" to begin."))
                     font.family: Appearance.font.family.monospace
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: root.outputText ? Appearance.colors.colOnLayer0 : Appearance.m3colors.m3outlineVariant
@@ -291,12 +293,12 @@ ContentPage {
         }
 
         ConfigRow {
-            visible: root.snapshotsAvailable
             // Inline password field. Submitted via sudo -S stdin in
             // startRestore() \u2014 same UX as the Update panel. Visible
             // field clears the moment the user clicks Restore so the
             // password doesn't sit on screen during the restore.
             Rectangle {
+                visible: root.snapshotsAvailable
                 Layout.fillWidth: true
                 Layout.preferredHeight: 38
                 radius: Appearance.rounding.small
@@ -333,6 +335,7 @@ ContentPage {
                 }
             }
             RippleButtonWithIcon {
+                visible: root.snapshotsAvailable
                 materialIcon: root.isRunning ? "hourglass_top" : "play_arrow"
                 mainText: root.isRunning ? Translation.tr("Restoring\u2026") : Translation.tr("Restore Snapshot")
                 enabled: !root.isRunning && passwordField.text.length > 0
