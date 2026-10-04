@@ -2211,7 +2211,6 @@
   "A login name cannot contain spaces.": "A login name cannot contain spaces.",
   "A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit.": "A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit.",
   "Set a password so they can sign in.": "Set a password so they can sign in.",
-  "Choose a login name first.": "Choose a login name first.",
   "That login name is too long.": "That login name is too long.",
   "Creating %1 and setting up their desktop…": "Creating %1 and setting up their desktop…",
   "Could not change who administers this computer.": "Could not change who administers this computer.",
@@ -2498,12 +2497,12 @@
   "Turning Wi-Fi off also turns off the wireless adapter for the Steam Frame (experimental), so the headset cannot stream through it until Wi-Fi is back on.": "Turning Wi-Fi off also turns off the wireless adapter for the Steam Frame (experimental), so the headset cannot stream through it until Wi-Fi is back on.",
   "%1 is the link Steam makes to the Steam Frame (experimental), and Steam connects it by itself. If the headset will not pair, forgetting it and pairing again can help.": "%1 is the link Steam makes to the Steam Frame (experimental), and Steam connects it by itself. If the headset will not pair, forgetting it and pairing again can help.",
   "WiVRn": "WiVRn",
-  "Open-source VR streaming": "Open-source VR streaming",
-  "The open-source alternative to Steam Link. Streams your PC's VR games to standalone headsets like Quest, Pico and Vive Focus, without SteamVR. Wired headsets still use SteamVR.": "The open-source alternative to Steam Link. Streams your PC's VR games to standalone headsets like Quest, Pico and Vive Focus, without SteamVR. Wired headsets still use SteamVR.",
-  "SteamVR": "SteamVR",
-  "Steam Frame (experimental)": "Steam Frame (experimental)",
-  "Experimental. Installs Steam, which then installs SteamVR, for the Steam Frame and wired headsets. Quest, Pico and Vive Focus can connect through Steam Link. VR runs from the desktop, not Gaming Mode. The experimental legacy NVIDIA edition does not work with the Steam Frame or other Steam Link headsets yet.": "Experimental. Installs Steam, which then installs SteamVR, for the Steam Frame and wired headsets. Quest, Pico and Vive Focus can connect through Steam Link. VR runs from the desktop, not Gaming Mode. The experimental legacy NVIDIA edition does not work with the Steam Frame or other Steam Link headsets yet.",
   "Gaming Mode hands the whole screen to Steam Big Picture, like a console. A few things to know before your first launch:": "Gaming Mode hands the whole screen to Steam Big Picture, like a console. A few things to know before your first launch:",
   "VR runs from the desktop, not Gaming Mode. To play on a VR headset, including the Steam Frame (experimental), switch back to the desktop and start SteamVR or WiVRn before the game.": "VR runs from the desktop, not Gaming Mode. To play on a VR headset, including the Steam Frame (experimental), switch back to the desktop and start SteamVR or WiVRn before the game.",
-  "Wi-Fi turned off": "Wi-Fi turned off"
+  "Wi-Fi turned off": "Wi-Fi turned off",
+  "Press \"Repair Install\" or \"Repair Package Keys\" to begin.": "Press \"Repair Install\" or \"Repair Package Keys\" to begin.",
+  "Parts of the running desktop were already replaced. Reboot, then run the update again to finish it; until then some controls may not work.": "Parts of the running desktop were already replaced. Reboot, then run the update again to finish it; until then some controls may not work.",
+  "VR for Quest and Pico": "VR for Quest and Pico",
+  "Replaces SteamVR": "Replaces SteamVR",
+  "Streams your PC's VR games to Quest, Pico, Vive Focus and other standalone headsets, open source and without SteamVR. Installing it removes SteamVR, since the two cannot share a headset. Steam asks you first. On the experimental legacy NVIDIA edition, where SteamVR streaming does not work yet, WiVRn is the one to try. Steam Frame (experimental) or a wired Index, Vive or Bigscreen? Those use SteamVR, which is not on this page: see mainstreamos.org/#vr.": "Streams your PC's VR games to Quest, Pico, Vive Focus and other standalone headsets, open source and without SteamVR. Installing it removes SteamVR, since the two cannot share a headset. Steam asks you first. On the experimental legacy NVIDIA edition, where SteamVR streaming does not work yet, WiVRn is the one to try. Steam Frame (experimental) or a wired Index, Vive or Bigscreen? Those use SteamVR, which is not on this page: see mainstreamos.org/#vr."
 }
