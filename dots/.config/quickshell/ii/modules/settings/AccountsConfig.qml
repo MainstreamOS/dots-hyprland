@@ -33,8 +33,9 @@ ContentPage {
         currentUserProc.running = true
     }
 
+    // Setting running on a check or list in flight lets it finish, then runs
+    // it again. Stopping it first would report the SIGTERM as a failure.
     function refresh() {
-        helperCheck.running = false
         helperCheck.running = true
     }
 
@@ -47,7 +48,6 @@ ContentPage {
                 root.accounts = []
                 return
             }
-            accountListProc.running = false
             accountListProc.running = true
         }
     }
@@ -66,6 +66,18 @@ ContentPage {
         if (!all || all.length === 0) return fallback
         const last = all[all.length - 1].replace(/^ERROR:\s*/, "").trim()
         return last.length > 0 ? fallback + " (" + last + ")" : fallback
+    }
+
+    // What still stops Create, or "". One copy for the hint under the form
+    // and for the button, so the two cannot disagree.
+    function createProblem() {
+        const login = newUserField.text.trim()
+        if (login.length === 0) return Translation.tr("Choose a login name to continue.")
+        if (login.includes(" ")) return Translation.tr("A login name cannot contain spaces.")
+        if (!/^[a-z_][a-z0-9_-]*$/.test(login)) return Translation.tr("A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit.")
+        if (login.length > 31) return Translation.tr("That login name is too long.")
+        if (newUserPassField.text.length === 0) return Translation.tr("Set a password so they can sign in.")
+        return ""
     }
 
     function showStatus(msg, isError) {
@@ -786,6 +798,7 @@ ContentPage {
                 anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 10 }
                 spacing: 8
                 MaterialSymbol {
+                    id: statusIcon
                     text: root.busy ? "progress_activity" : (root.statusIsError ? "error" : "check_circle")
                     iconSize: 14
                     color: root.busy ? Appearance.m3colors.m3primary
@@ -794,6 +807,9 @@ ContentPage {
                         running: root.busy
                         loops: Animation.Infinite
                         from: 0; to: 360; duration: 1100
+                        // A stop keeps the angle it reached, which would tilt
+                        // the check or error icon that replaces the spinner.
+                        onStopped: statusIcon.rotation = 0
                     }
                 }
                 StyledText {
@@ -825,8 +841,13 @@ ContentPage {
             StyledText { Layout.alignment: Qt.AlignHCenter; text: Translation.tr("No accounts found"); font.pixelSize: Appearance.font.pixelSize.normal; color: Appearance.colors.colSubtext }
         }
 
+        // Keyed by login name: a reload updates cards in place, where a rebuild
+        // would kill their running commands and clear their open forms.
         Repeater {
-            model: root.accounts
+            model: ScriptModel {
+                values: root.accounts
+                objectProp: "name"
+            }
             AccountItem {
                 required property var modelData
                 account: modelData
@@ -844,6 +865,9 @@ ContentPage {
 
         ConfigRow {
             uniform: true
+            // Held while a create runs, because its success clears the form and
+            // would take anything typed in the meantime with it.
+            enabled: !createAccountProc.running
             MaterialTextField {
                 id: fullNameField
                 Layout.fillWidth: true
@@ -866,6 +890,7 @@ ContentPage {
 
         ConfigSwitch {
             id: makeAdminSwitch
+            enabled: !createAccountProc.running
             buttonIcon: "shield_person"
             text: Translation.tr("Let this person administer the computer")
             checked: false
@@ -876,15 +901,7 @@ ContentPage {
         StyledText {
             Layout.fillWidth: true
             visible: text.length > 0
-            text: {
-                if (createAccountProc.running) return ""
-                const login = newUserField.text.trim()
-                if (login.length === 0) return Translation.tr("Choose a login name to continue.")
-                if (newUserField.text.includes(" ")) return Translation.tr("A login name cannot contain spaces.")
-                if (!/^[a-z_][a-z0-9_-]*$/.test(login)) return Translation.tr("A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit.")
-                if (newUserPassField.text.length === 0) return Translation.tr("Set a password so they can sign in.")
-                return ""
-            }
+            text: createAccountProc.running ? "" : root.createProblem()
             font.pixelSize: Appearance.font.pixelSize.smaller
             color: Appearance.colors.colSubtext
             wrapMode: Text.WordWrap
@@ -900,28 +917,16 @@ ContentPage {
                 colBackground: Appearance.colors.colPrimary
                 colBackgroundHover: Appearance.colors.colPrimaryHover
                 onClicked: {
+                    const problem = root.createProblem()
+                    if (problem.length > 0) {
+                        root.showStatus(problem, true); return
+                    }
                     const username = newUserField.text.trim()
-                    const password = newUserPassField.text
-                    if (username.length === 0) {
-                        root.showStatus(Translation.tr("Choose a login name first."), true); return
-                    }
-                    if (!(new RegExp("^[a-z_][a-z0-9_-]*$")).test(username)) {
-                        root.showStatus(Translation.tr("A login name can use lowercase letters, digits, dashes and underscores, and cannot start with a digit."), true); return
-                    }
-                    if (username.length > 31) {
-                        root.showStatus(Translation.tr("That login name is too long."), true); return
-                    }
-                    if (password.length === 0) {
-                        root.showStatus(Translation.tr("Set a password so they can sign in."), true); return
-                    }
                     // Nothing is copied out of this account. useradd -m seeds the new
                     // home from /etc/skel, and the helper provisions it the same way
                     // the installer provisions the first user, so the person who
                     // signs in gets a fresh desktop rather than a copy of this one.
-                    createAccountProc.pendingPassword = password
-                    // Held on the process, because the fields below are cleared
-                    // the moment this returns and the result arrives later.
-                    createAccountProc.pendingUser = username
+                    createAccountProc.pendingPassword = newUserPassField.text
                     // Asked for as part of create, so there is no second
                     // authentication to dismiss and no window in which the
                     // account is usable but not an administrator.
@@ -931,12 +936,6 @@ ContentPage {
                     createAccountProc.stdinEnabled = true
                     createAccountProc.running = true
                     root.showStatus(Translation.tr("Creating %1 and setting up their desktop…").arg(username), false)
-                    newUserField.text = ""
-                    newUserPassField.text = ""
-                    fullNameField.text = ""
-                    // Cleared with the rest, or the next account made here
-                    // becomes an administrator without anyone choosing it.
-                    makeAdminSwitch.checked = false
                 }
                 contentItem: RowLayout {
                     anchors.centerIn: parent; spacing: 6
@@ -971,6 +970,8 @@ ContentPage {
             if (code !== 0)
                 root.showStatus(root.helperReason(adminErr.text,
                     Translation.tr("Could not change who administers this computer.")), true)
+            else
+                root.showStatus(Translation.tr("Done! Changes have been saved."), false)
             accountListProc.running = true
         }
     }
@@ -990,7 +991,6 @@ ContentPage {
     Process {
         id: createAccountProc
         property string pendingPassword: ""
-        property string pendingUser: ""
         stderr: StdioCollector { id: createErr }
         // stdinEnabled has to be on before running goes true, or the write
         // lands after the helper has already read. Closing the stream is what
@@ -1003,10 +1003,18 @@ ContentPage {
             }
         }
         onExited: (code) => {
+            const refusal = HelperUtils.pkexecRefusal(code)
             if (code === 0) {
-                createAccountProc.pendingUser = ""
                 root.showStatus(Translation.tr("Account created. They can sign in now, and the desktop finishes setting itself up the first time they do."), false)
+                // Cleared only once it worked, so a dismissed prompt or a taken name
+                // needs no retyping.
+                newUserField.text = ""
+                newUserPassField.text = ""
+                fullNameField.text = ""
+                makeAdminSwitch.checked = false
                 postCreateRefreshTimer.start()
+            } else if (refusal) {
+                root.showStatus(refusal, true)
             } else {
                 root.showStatus(root.helperReason(createErr.text,
                     Translation.tr("Could not create the account. That login name may already be taken, or it contained invalid characters.")), true)
