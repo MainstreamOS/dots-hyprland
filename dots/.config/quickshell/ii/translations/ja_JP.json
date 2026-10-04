@@ -265,7 +265,7 @@
   "Long break": "長い休憩",
   "Superpaste": "Superpaste",
   "Screen round corner": "Screen round corner",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "オンライン | Googleモデル\n旧モデルより低速ですが、より高品質な回答が期待できる新モデル",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "オンライン | Googleモデル\nこのモデルを利用したことのあるGoogleアカウント専用。無料でウェブ検索できる唯一のGeminiです。",
   "Rainbow": "レインボー",
   "Weeb": "アニメファン向け",
   "Large language models": "大規模言語モデル",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "オンライン | Googleモデル\nGoogleの現行Flashモデル。高速で高性能、無料枠もあります。",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "オンライン | Googleモデル\n最速・最軽量のGemini。手早い回答に。",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**料金**: 無料枠あり。データは学習に使用されます。ウェブ検索には課金の有効化が必要です。\n\n**手順**: Googleアカウントにログインし、AI StudioにGoogle Cloudプロジェクトの作成などを許可し、戻ってAPIキーを取得してください。",
+  "Set %1 to %2.": "%1 を %2 に設定しました。",
+  "This Google account can no longer use this model. Pick another one with %1.": "このGoogleアカウントでは、このモデルを利用できなくなりました。%1 で別のモデルを選択してください。",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3でウェブ検索を使うには、課金を有効にしたGoogle AI Studioプロジェクトが必要です。検索なしでもう一度質問するか、アカウントでまだ利用できる場合は %1 でGemini 2.5 Flashに切り替えてください。"
 }

@@ -15,7 +15,7 @@ TRANSLATIONS_TARGET_DIR="${SHELL_CONFIG_DIR}/translations"
 SOURCE_LOCALE="en_US"
 NOTIFICATION_APP_NAME="Shell"
 TARGET_LOCALE="$1"
-MODEL="${2:-${GEMINI_MODEL:-gemini-2.5-flash}}"
+MODEL="${2:-${GEMINI_MODEL:-gemini-3.8-flash}}"
 
 # Update the source keys for translation
 "${TRANSLATIONS_DIR}/tools/manage-translations.sh" update -l "$SOURCE_LOCALE" --yes
@@ -27,9 +27,9 @@ content=$(cat "${TRANSLATIONS_DIR}/en_US.json")
 prompt_json=$(jq -n --arg prompt_text "$instruction" --arg content "$content" '$prompt_text + "\n```\n" + $content + "\n```\n"')
 
 # Prepare request data using jq
+# Gemini 3 cannot turn thinking off; low leaves room in its output cap for the whole file.
 payload=$(jq -n \
     --arg prompt "$prompt_json" \
-    --arg temperature "0" \
     --arg model "$MODEL" \
     '{
         contents: [{
@@ -37,10 +37,8 @@ payload=$(jq -n \
                 {text: $prompt}
             ]
         }],
-        generationConfig: {
-            temperature: ($temperature | tonumber),
-            "responseMimeType": "application/json",
-        }
+        generationConfig: ({ responseMimeType: "application/json" }
+            + (if ($model | startswith("gemini-3")) then { thinkingConfig: { thinkingLevel: "low" } } else {} end))
     }'
 )
 # echo "$payload" | jq
@@ -59,7 +57,13 @@ response=$(curl "https://generativelanguage.googleapis.com/v1beta/models/${MODEL
 -d "$payload" 2> /dev/null)
 # echo "$response" | jq
 
-# Write the result
-echo "$response" | jq -r '.candidates[0].content.parts[0].text' > "${TRANSLATIONS_TARGET_DIR}/${TARGET_LOCALE}.json"
+# Only a complete JSON object replaces the language file and switches the language.
+result=$(printf '%s' "$response" | jq -r '.candidates[0].content.parts[0].text // empty' 2>/dev/null)
+if ! printf '%s' "$result" | jq -se 'length == 1 and (.[0] | type == "object" and length > 0)' >/dev/null 2>&1; then
+    reason=$(printf '%s' "$response" | jq -r '.error.message // (.candidates[0].finishReason | select(. != null and . != "STOP")) // empty' 2>/dev/null)
+    notify-send "Translation failed" "Nothing was changed. ${reason:-The answer was not a complete translation.}" -a "$NOTIFICATION_APP_NAME"
+    exit 1
+fi
+printf '%s\n' "$result" > "${TRANSLATIONS_TARGET_DIR}/${TARGET_LOCALE}.json"
 jq --arg locale "$TARGET_LOCALE" '.language.ui = $locale' "$SHELL_CONFIG_FILE" > "${SHELL_CONFIG_FILE}.tmp" && mv "${SHELL_CONFIG_FILE}.tmp" "$SHELL_CONFIG_FILE"
 notify-send "Translation complete" "Enjoy! In case you wanna refine it, the file is in ${TRANSLATIONS_TARGET_DIR}/${TARGET_LOCALE}.json" -a "$NOTIFICATION_APP_NAME"

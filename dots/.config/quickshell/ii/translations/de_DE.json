@@ -265,7 +265,7 @@
   "Long break": "Lange Pause",
   "Superpaste": "Superpaste",
   "Screen round corner": "Bildschirm abgerundete Ecke",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "Online | Googles Modell\nNeueres Modell, das langsamer ist als sein Vorgänger, aber höhere Qualität liefern sollte",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "Online | Googles Modell\nNur für Google-Konten, die es bereits genutzt haben. Das einzige Gemini mit kostenloser Websuche.",
   "Rainbow": "Regenbogen",
   "Weeb": "Weeb",
   "Large language models": "Große Sprachmodelle",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "Online | Googles Modell\nGoogles aktuelles Flash-Modell: schnell und leistungsfähig, mit kostenlosem Tarif.",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "Online | Googles Modell\nDas schnellste und leichteste Gemini für schnelle Antworten.",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**Preis**: kostenloser Tarif, Daten werden für Training verwendet. Die Websuche erfordert aktivierte Abrechnung.\n\n**Anleitung**: Bei Google-Konto anmelden, AI Studio erlauben, Google Cloud-Projekt zu erstellen oder was auch immer es fragt, zurückgehen und auf API-Schlüssel abrufen klicken",
+  "Set %1 to %2.": "%1 auf %2 gesetzt.",
+  "This Google account can no longer use this model. Pick another one with %1.": "Dieses Google-Konto kann dieses Modell nicht mehr verwenden. Wähle mit %1 ein anderes.",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Die Websuche mit Gemini 3 erfordert ein Google AI Studio-Projekt mit aktivierter Abrechnung. Frag erneut ohne Suche oder wechsle mit %1 zu Gemini 2.5 Flash, falls dein Konto es noch nutzen kann."
 }

@@ -276,26 +276,43 @@ Singleton {
     // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
     property var models: Config.options.policies.ai === 2 ? {} : {
-        "gemini-2.5-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 2.5 Flash",
+        // Gemini 3 deprecates temperature. 2.5 is limited to accounts that already used it,
+        // but is the only Gemini with free web search.
+        "gemini-3.8-flash": aiModelComponent.createObject(this, {
+            "name": "Gemini 3.8 Flash",
             "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers"),
+            "description": Translation.tr("Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier."),
             "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-            "model": "gemini-2.5-flash",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+            "model": "gemini-3.8-flash",
             "requires_key": true,
             "key_id": "gemini",
             "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
+            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
             "api_format": "gemini",
+            "sendTemperature": false,
         }),
-        "gemini-3-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 3 Flash",
+        "gemini-3.5-flash-lite": aiModelComponent.createObject(this, {
+            "name": "Gemini 3.5 Flash-Lite",
             "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nPro-level intelligence at the speed and pricing of Flash."),
+            "description": Translation.tr("Online | Google's model\nThe fastest, lightest Gemini, for quick answers."),
             "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:streamGenerateContent",
-            "model": "gemini-3-flash-preview",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent",
+            "model": "gemini-3.5-flash-lite",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+        }),
+        "gemini-2.5-flash": aiModelComponent.createObject(this, {
+            "name": "Gemini 2.5 Flash",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+            "model": "gemini-2.5-flash",
             "requires_key": true,
             "key_id": "gemini",
             "key_get_link": "https://aistudio.google.com/app/apikey",
@@ -346,7 +363,11 @@ Singleton {
     // Only ever a view of the map. Readonly so no fetch handler can hand it
     // a snapshot that stops following the models registered afterwards.
     readonly property var modelList: Object.keys(root.models)
-    readonly property var currentModelId: Persistent.states?.ai?.model || modelList[0]
+    readonly property var retiredModels: ({ "gemini-3-flash": "gemini-3.8-flash" })
+    readonly property var currentModelId: {
+        const id = Persistent.states?.ai?.model || modelList[0];
+        return retiredModels[id] ?? id;
+    }
     // Read by the input-box indicator. A plain getModel() call there never
     // re-evaluated, so the name sat on whatever was current when the chat was
     // built. Ollama's list arrives after that, so a saved local model showed as
@@ -1415,6 +1436,7 @@ Singleton {
     function setModel(modelId, feedback = true, setPersistentState = true) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
+        modelId = root.retiredModels[modelId] ?? modelId
         // The setup entry is a prompt wearing a model's clothes. Picking it
         // starts the walkthrough and leaves the working model in place, so a
         // user who was mid-conversation does not lose the model answering it.
@@ -1543,6 +1565,9 @@ Singleton {
 
     Process {
         id: requester
+        // Set when a function call starts the follow-up request mid-stream: the rest
+        // of this run, and its exit, belong to a message that is already answered.
+        property bool supersededExit: false
         property list<string> baseCommand: ["bash"]
         property AiMessageData message
         property ApiStrategy currentStrategy
@@ -1641,7 +1666,7 @@ Singleton {
 
         stdout: SplitParser {
             onRead: data => {
-                if (data.length === 0) return;
+                if (data.length === 0 || requester.supersededExit) return;
                 if (requester.message.thinking) requester.message.thinking = false;
                 // console.log("[Ai] Raw response line: ", data);
 
@@ -1651,8 +1676,14 @@ Singleton {
                     // console.log("[Ai] Parsed response result: ", JSON.stringify(result, null, 2));
 
                     if (result.functionCall) {
-                        requester.message.functionCall = result.functionCall;
-                        root.handleFunctionCall(result.functionCall.name, result.functionCall.args, requester.message);
+                        const callMessage = requester.message;
+                        callMessage.functionCall = result.functionCall;
+                        root.handleFunctionCall(result.functionCall.name, result.functionCall.args, callMessage);
+                        if (requester.message !== callMessage) {
+                            callMessage.done = true;
+                            requester.supersededExit = true;
+                            return;
+                        }
                     }
                     if (result.tokenUsage) {
                         root.tokenCount.input = result.tokenUsage.input;
@@ -1672,6 +1703,10 @@ Singleton {
         }
 
         onExited: (exitCode, exitStatus) => {
+            if (requester.supersededExit) {
+                requester.supersededExit = false;
+                return;
+            }
             const result = requester.currentStrategy.onRequestFinished(requester.message);
             
             if (result.finished) {
@@ -1692,6 +1727,13 @@ Singleton {
             // Handle error responses
             if (requester.message.content.includes("API key not valid")) {
                 root.addApiKeyAdvice(models[requester.message.model]);
+            }
+            if (/^\*\*Error \d+\*\*/.test(requester.message.content) && requester.message.content.includes("no longer available to new users")) {
+                root.addMessage(Translation.tr("This Google account can no longer use this model. Pick another one with %1.").arg("/model"), Ai.interfaceRole);
+            }
+            if (requester.currentStrategy.searchRefused) {
+                requester.currentStrategy.searchRefused = false;
+                root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
             }
         }
     }
@@ -1811,16 +1853,26 @@ Singleton {
             addFunctionOutputMessage(name, JSON.stringify(configJson));
             requester.makeRequest();
         } else if (name === "set_shell_config") {
-            if (!args.key || !args.value) {
+            if (!args.key || args.value == null) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `key` and `value`."));
+                requester.makeRequest();
                 return;
             }
             const key = args.key;
             const value = args.value;
-            Config.setNestedValue(key, value);
+            // Every call needs its answer, an unknown key included, or the next request
+            // is refused or comes back empty.
+            try {
+                Config.setNestedValue(key, value);
+                addFunctionOutputMessage(name, Translation.tr("Set %1 to %2.").arg(key).arg(JSON.stringify(value)));
+            } catch (e) {
+                addFunctionOutputMessage(name, `${e}`);
+            }
+            requester.makeRequest();
         } else if (name === "run_shell_command") {
             if (!args.command || args.command.length === 0) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `command`."));
+                requester.makeRequest();
                 return;
             }
             const contentToAppend = `\n\n**Command execution request**\n\n\`\`\`command\n${args.command}\n\`\`\``;
@@ -1901,7 +1953,7 @@ Singleton {
                     "fileMimeType": message.fileMimeType,
                     "fileUri": message.fileUri,
                     "localFilePath": message.localFilePath,
-                    "model": message.model,
+                    "model": root.retiredModels[message.model] ?? message.model,
                     "thinking": message.thinking,
                     "done": message.done,
                     "annotations": message.annotations,

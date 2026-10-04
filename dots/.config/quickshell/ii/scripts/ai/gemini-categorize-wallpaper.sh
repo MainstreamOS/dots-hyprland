@@ -8,10 +8,14 @@ fi
 
 # Variables
 SOURCE_IMG_PATH="$1"
-MODEL="${2:-${GEMINI_WALLPAPER_MODEL:-gemini-2.5-flash}}" # We use the flash variant so it's fast
+MODEL="${2:-${GEMINI_WALLPAPER_MODEL:-gemini-3.5-flash-lite}}"
 WALLPAPER_NAME="$(basename "$SOURCE_IMG_PATH")"
 PROMPT="${3:-${GEMINI_WALLPAPER_PROMPT:-Categorize the wallpaper. Its file name is $WALLPAPER_NAME}}"
 RESIZED_IMG_PATH="/tmp/quickshell/ai/wallpaper.jpg"
+
+# Without a key nothing is sent; nothing is cached either, so it asks again once one is set.
+API_KEY=$(secret-tool lookup 'application' 'illogical-impulse' | jq -r '.apiKeys.gemini // empty')
+[[ -n "$API_KEY" ]] || exit 0
 
 # Resize image for speed
 mkdir -p "$(dirname "$RESIZED_IMG_PATH")"
@@ -25,9 +29,6 @@ case "${SOURCE_IMG_PATH,,}" in
         magick "$SOURCE_IMG_PATH" -resize 200x -quality 50 "$RESIZED_IMG_PATH"
         ;;
 esac
-
-# Get API key
-API_KEY=$(secret-tool lookup 'application' 'illogical-impulse' | jq -r '.apiKeys.gemini')
 
 # Encode image to base64
 if [[ "$(base64 --version 2>&1)" = *"FreeBSD"* ]]; then
@@ -52,12 +53,11 @@ payload='{
         ]
     }],
     "generationConfig": {
-        "responseMimeType": "text/x.enum",
+        "responseMimeType": "application/json",
         "responseSchema": {
             "type": "string",
             "enum": [ "abstract", "anime", "city", "minimalist", "landscape", "plants", "person", "space" ]
-        },
-        "temperature": 0
+        }
     }
 }'
 # echo "$payload" | jq
@@ -70,5 +70,6 @@ response=$(curl "https://generativelanguage.googleapis.com/v1beta/models/${MODEL
 -d "$payload" 2> /dev/null)
 # echo "$response" | jq
 
-# Write the result
-echo "$response" | jq -r '.candidates[0].content.parts[0].text'
+# Prints nothing on an error, so switchwall.sh does not cache a bad category.
+echo "$response" | jq -r '.candidates[0].content.parts[0].text // empty | (fromjson? // .)
+    | select(IN("abstract", "anime", "city", "minimalist", "landscape", "plants", "person", "space"))'

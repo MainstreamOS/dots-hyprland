@@ -265,7 +265,7 @@
   "Long break": "Uzun mola",
   "Superpaste": "Süper yapıştır",
   "Screen round corner": "Ekran köşe yuvarlama",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "Çevrimiçi | Google'ın modeli\nÖncekinden daha yavaş ama daha kaliteli yanıtlar vermesi gereken yeni model",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "Çevrimiçi | Google'ın modeli\nYalnızca bu modeli daha önce kullanmış Google hesapları için. Ücretsiz web araması sunan tek Gemini.",
   "Rainbow": "Gökkuşağı",
   "Weeb": "Weeb",
   "Large language models": "Büyük dil modelleri",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "Çevrimiçi | Google'ın modeli\nGoogle'ın güncel Flash modeli: hızlı ve yetenekli, ücretsiz katmanı da var.",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "Çevrimiçi | Google'ın modeli\nHızlı yanıtlar için en hızlı ve en hafif Gemini.",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**Fiyatlandırma**: ücretsiz katman, veriler eğitim için kullanılır. Web araması için faturalandırmanın etkin olması gerekir.\n\n**Talimatlar**: Google hesabına giriş yapın, AI Studio'nun Google Cloud projesi oluşturmasına veya her ne istiyorsa izin verin, geri dönün ve Get API key'e tıklayın",
+  "Set %1 to %2.": "%1 değeri %2 olarak ayarlandı.",
+  "This Google account can no longer use this model. Pick another one with %1.": "Bu Google hesabı artık bu modeli kullanamıyor. %1 ile başka bir model seçin.",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 ile web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da hesabınız hâlâ kullanabiliyorsa %1 ile Gemini 2.5 Flash'a geçin."
 }

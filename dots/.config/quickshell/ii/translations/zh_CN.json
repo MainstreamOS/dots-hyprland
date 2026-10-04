@@ -265,7 +265,7 @@
   "Long break": "长休息",
   "Superpaste": "超级粘贴",
   "Screen round corner": "屏幕圆角",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "在线 | Google 的模型\n比前代模型更慢但应该提供更高质量答案的新模型",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "在线 | Google 的模型\n仅限曾使用过该模型的 Google 账户。唯一支持免费网页搜索的 Gemini。",
   "Rainbow": "彩虹",
   "Weeb": "二次元",
   "Large language models": "大语言模型",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "在线 | Google 的模型\nGoogle 当前的 Flash 模型：快速且强大，提供免费层级。",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "在线 | Google 的模型\n最快、最轻量的 Gemini，适合快速问答。",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**价格**：提供免费层级，数据用于训练。网页搜索需要启用结算。\n\n**说明**：登录 Google 账户，允许 AI Studio 创建 Google Cloud 项目或其他要求，然后返回并点击获取 API 密钥",
+  "Set %1 to %2.": "已将 %1 设置为 %2。",
+  "This Google account can no longer use this model. Pick another one with %1.": "此 Google 账户已无法使用该模型。请使用 %1 选择其他模型。",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 的网页搜索需要已启用结算的 Google AI Studio 项目。请在不搜索的情况下重新提问；如果你的账户仍可使用 Gemini 2.5 Flash，也可以用 %1 切换到该模型。"
 }

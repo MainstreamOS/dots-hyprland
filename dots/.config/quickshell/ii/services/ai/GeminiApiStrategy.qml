@@ -10,6 +10,8 @@ ApiStrategy {
     readonly property string fileUriSubstitutionString: "{{ fileUriVarName }}"
     readonly property string fileMimeTypeSubstitutionString: "{{ fileMimeTypeVarName }}"
     property string buffer: ""
+    property bool usedSearch: false
+    property bool searchRefused: false
     
     function buildEndpoint(model: AiModel): string {
         const result = model.endpoint + `?key=\$\{${root.apiKeyEnvVarName}\}`
@@ -18,17 +20,23 @@ ApiStrategy {
     }
 
     function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
+        const usingSearch = tools[0]?.google_search !== undefined;
+        // 2.5 searches on the free tier, so only a Gemini 3 refusal is about billing.
+        usedSearch = usingSearch && model.model.startsWith("gemini-3");
+        // Gemini 3 answers a functionResponse only when it carries its call's id.
+        let lastCallId = "";
         let contents = messages.map(message => {
             // console.log("[AI] Building request data for message:", JSON.stringify(message, null, 2));
             const geminiApiRoleName = (message.role === "assistant") ? "model" : message.role;
-            const usingSearch = tools[0]?.google_search !== undefined
             if (!usingSearch && message.functionCall != undefined && message.functionName.length > 0) {
+                lastCallId = message.functionCallId ?? "";
                 const callPart = {
                     functionCall: {
                         "name": message.functionName,
                         "args": message.functionArgs ?? {}
                     }
                 };
+                if (lastCallId.length > 0) callPart.functionCall.id = lastCallId;
                 if (message.functionThoughtSignature && message.functionThoughtSignature.length > 0) {
                     callPart.thoughtSignature = message.functionThoughtSignature;
                 }
@@ -38,14 +46,14 @@ ApiStrategy {
                 }
             }
             if (!usingSearch && message.functionResponse != undefined && message.functionName.length > 0) {
+                const responsePart = {
+                    "name": message.functionName,
+                    "response": { "content": message.functionResponse }
+                };
+                if (lastCallId.length > 0) responsePart.id = lastCallId;
                 return {
                     "role": geminiApiRoleName,
-                    "parts": [{ 
-                        functionResponse: {
-                            "name": message.functionName,
-                            "response": { "content": message.functionResponse }
-                        }
-                    }]
+                    "parts": [{ functionResponse: responsePart }]
                 }
             }
             return {
@@ -77,9 +85,7 @@ ApiStrategy {
             "system_instruction": {
                 "parts": [{ text: systemPrompt }]
             },
-            "generationConfig": {
-                "temperature": temperature,
-            },
+            "generationConfig": model.sendTemperature ? { "temperature": temperature } : {},
         };
         // print("Gemini API call payload:", JSON.stringify(baseData, null, 2));
         return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
@@ -120,6 +126,7 @@ ApiStrategy {
 
             // Error response handling
             if (dataJson.error) {
+                if (dataJson.error.code === 429 && usedSearch) searchRefused = true;
                 const errorMsg = `**Error ${dataJson.error.code}**: ${dataJson.error.message}`;
                 message.rawContent += errorMsg;
                 message.content += errorMsg;
@@ -142,6 +149,7 @@ ApiStrategy {
                 message.functionCall = functionCall.name;
                 message.functionArgs = functionCall.args;
                 message.functionThoughtSignature = responsePart.thoughtSignature ?? functionCall.thoughtSignature ?? "";
+                message.functionCallId = functionCall.id ?? "";
                 const newContent = `\n\n[[ Function: ${functionCall.name}(${JSON.stringify(functionCall.args, null, 2)}) ]]\n`
                 message.rawContent += newContent;
                 message.content += newContent;

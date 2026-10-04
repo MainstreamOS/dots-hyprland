@@ -265,7 +265,7 @@
   "Long break": "Long break",
   "Superpaste": "Superpaste",
   "Screen round corner": "Screen round corner",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "Trực tuyến | Model của Google\nMới hơn nhưng chậm hơn so với phiên bản trước nhưng nên cung cấp câu trả lời chất lượng cao hơn",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "Trực tuyến | Model của Google\nChỉ dành cho tài khoản Google đã từng dùng model này. Gemini duy nhất có tìm kiếm web miễn phí.",
   "Rainbow": "Cầu vồng",
   "Weeb": "Wibu",
   "Large language models": "Mô hình ngôn ngữ lớn",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "Trực tuyến | Model của Google\nModel Flash hiện tại của Google: nhanh, mạnh và có gói miễn phí.",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "Trực tuyến | Model của Google\nGemini nhanh và nhẹ nhất, phù hợp cho câu trả lời nhanh gọn.",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**Giá**: có gói miễn phí, dữ liệu được sử dụng cho mục đích huấn luyện. Tìm kiếm web yêu cầu bật thanh toán.\n\n**Hướng dẫn**: Đăng nhập vào tài khoản Google, cho phép AI Studio tạo dự án Google Cloud gì đó, quay lại rồi ấn Get API key",
+  "Set %1 to %2.": "Đã đặt %1 thành %2.",
+  "This Google account can no longer use this model. Pick another one with %1.": "Tài khoản Google này không còn dùng được model này. Hãy chọn model khác bằng %1.",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Tìm kiếm web với Gemini 3 yêu cầu một dự án Google AI Studio đã bật thanh toán. Hãy hỏi lại mà không dùng tìm kiếm, hoặc chuyển sang Gemini 2.5 Flash bằng %1 nếu tài khoản của bạn vẫn dùng được model đó."
 }

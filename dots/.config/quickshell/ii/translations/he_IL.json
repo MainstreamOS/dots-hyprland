@@ -265,7 +265,7 @@
   "Long break": "הפסקה ארוכה",
   "Superpaste": "Superpaste",
   "Screen round corner": "עיגול פינות מסך",
-  "Online | Google's model\nNewer model that's slower than its predecessor but should deliver higher quality answers": "מקוון | מודל של גוגל\nמודל חדש יותר, איטי יותר מקודמו אך אמור לספק תשובות איכותיות יותר",
+  "Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search.": "מקוון | מודל של גוגל\nרק לחשבונות Google שכבר השתמשו בו. ה-Gemini היחיד עם חיפוש חינמי באינטרנט.",
   "Rainbow": "קשת",
   "Weeb": "אנימה",
   "Large language models": "מודלי שפה גדולים",
@@ -2456,5 +2456,11 @@
   "Workspace title (pill)": "Workspace title (pill)",
   "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.": "Developer extras: stopped after %s minutes without finishing. Everything before this step is already installed. Run \"%s\" in a terminal to see what it was waiting on.",
   "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.": "Stopping. AUR builds and developer extras stop right away; any other step finishes first, so nothing is left half installed.",
-  "not installed": "not installed"
+  "not installed": "not installed",
+  "Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier.": "מקוון | מודל של גוגל\nמודל ה-Flash הנוכחי של Google: מהיר ועוצמתי, עם מסלול חינמי.",
+  "Online | Google's model\nThe fastest, lightest Gemini, for quick answers.": "מקוון | מודל של גוגל\nה-Gemini המהיר והקל ביותר, לתשובות זריזות.",
+  "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**מחיר**: מסלול חינמי, שבו הנתונים משמשים לאימון. חיפוש באינטרנט דורש הפעלת חיוב.\n\n**הוראות**: התחבר לחשבון Google, אפשר ל-AI Studio ליצור פרויקט Google Cloud או כל מה שיבקש, חזור ולחץ על Get API key",
+  "Set %1 to %2.": "הוגדר %1 ל-%2.",
+  "This Google account can no longer use this model. Pick another one with %1.": "חשבון Google זה כבר לא יכול להשתמש במודל הזה. בחר מודל אחר עם %1.",
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "חיפוש באינטרנט עם Gemini 3 דורש פרויקט Google AI Studio עם חיוב מופעל. שאל שוב בלי חיפוש, או עבור ל-Gemini 2.5 Flash עם %1 אם החשבון שלך עדיין יכול להשתמש בו."
 }
