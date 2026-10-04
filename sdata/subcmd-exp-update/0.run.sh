@@ -921,6 +921,7 @@ EXP_UPDATE_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/exp-update.log"
 EXP_RELOGIN_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed"
 EXP_DEFERRED_FILE="${REPO_ROOT}/.update-deferred"
 EXP_DEFER=0
+EXP_SETTINGS_STALE=0
 EXP_DEFER_WAIT_PID=""
 EXP_DEFER_WAIT_START=""
 EXP_BASE_SPEC=""
@@ -1132,7 +1133,12 @@ exp_detect_old_settings() {
   local -a argv
   EXP_DEFER=0
   [[ -f "$settings" ]] || return 0
-  grep -q 'Quickshell.watchFiles = false' "$settings" 2>/dev/null && return 0
+  if grep -q 'Quickshell.watchFiles = false' "$settings" 2>/dev/null; then
+    # A 3.0.0 window cannot restart onto the new files, and the pages it has
+    # not opened yet fail to load against them.
+    grep -q 'id: filesCheck' "$settings" 2>/dev/null || EXP_SETTINGS_STALE=1
+    return 0
+  fi
   while (( pid > 1 && hops++ < 64 )); do
     _exp_proc_stat "$pid" || break
     ppid="$_exp_ppid" start="$_exp_start"
@@ -2169,6 +2175,9 @@ if [[ "$DRY_RUN" == true ]]; then
   log_info "Run without -n/--dry-run to apply changes"
 else
   log_success "Dotfiles update completed successfully!"
+  if (( EXP_SETTINGS_STALE )); then
+    log_warning "If Settings is open, close it and open it again to use the new version"
+  fi
 fi
 
 echo
