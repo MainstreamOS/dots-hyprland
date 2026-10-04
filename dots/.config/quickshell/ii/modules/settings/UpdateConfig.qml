@@ -187,6 +187,13 @@ ContentPage {
         stopProc.running = true;
     }
 
+    // The run lives apart from this page, so the guard asks again whether anything is installing.
+    function requestReboot() {
+        if (!root.awaitingReboot || rebootGuard.running)
+            return;
+        rebootGuard.running = true;
+    }
+
     function bootBrokenText() {
         if (root.recordPredatesBoot)
             return Translation.tr("The last update found that the boot menu could not start the system. Run the update again to check it.");
@@ -440,6 +447,25 @@ ContentPage {
         }
     }
 
+    // Exits 1 while this page's update, a pacman transaction or a dotfiles
+    // update is running; a lock file alone may be left from a crash.
+    Process {
+        id: rebootGuard
+        command: ["bash", "-c",
+            'bash "$0" "$1" "$2" && exit 1; [ -e /var/lib/pacman/db.lck ] && pidof pacman >/dev/null && exit 1; exit 0',
+            Quickshell.shellPath("scripts/update/update-busy.sh"), root.pidPath, Directories.dotfilesClone + "/.update-lock"]
+        onExited: (code) => {
+            if (code !== 0) {
+                root.flushOutput();
+                root.outputText += "\n\n" + Translation.tr("An update or package install is still running, so the computer was not restarted. Reboot once it finishes.");
+                return;
+            }
+            // The page may have learned more while the check ran.
+            if (root.awaitingReboot)
+                Session.reboot();
+        }
+    }
+
     // Runs before a finished record is replayed, since reading its end depends
     // on this, and again as each run starts.
     property bool markChecked: false
@@ -630,40 +656,55 @@ ContentPage {
         title: Translation.tr("System Update")
 
         headerExtra: [
-            // Shown before a run starts when the pending list can be read. Sized
-            // like the buttons beside it so the row reads as one set.
-            Rectangle {
+            // Shown before a run starts when the pending list can be read. Red once
+            // a finished run asks for it; then a second click restarts, so a stray one cannot.
+            RippleButtonWithIcon {
                 id: rebootChip
                 visible: (root.rebootPredicted || root.rebootRequired) && !root.bootBroken
-                // The tooltip treats a parent without a hover state as always
-                // hovered, so the chip reports its own.
-                property bool hovered: chipHover.hovered
-                implicitWidth: rebootChipRow.implicitWidth + 20
-                implicitHeight: 35
-                radius: Appearance.rounding.small
-                color: root.rebootRequired ? Appearance.m3colors.m3errorContainer : Appearance.m3colors.m3tertiaryContainer
-                RowLayout {
-                    id: rebootChipRow
-                    anchors.centerIn: parent
+                readonly property bool canReboot: root.awaitingReboot
+                property bool armed: false
+                onCanRebootChanged: if (!canReboot) armed = false
+                readonly property color colOnChip: root.rebootRequired ? Appearance.m3colors.m3onErrorContainer : Appearance.m3colors.m3onTertiaryContainer
+                colBackground: root.rebootRequired ? Appearance.m3colors.m3errorContainer : Appearance.m3colors.m3tertiaryContainer
+                colBackgroundHover: rebootChip.canReboot ? Appearance.colors.colErrorContainerHover : rebootChip.colBackground
+                colRipple: Appearance.colors.colErrorContainerActive
+                pointingHandCursor: rebootChip.canReboot
+                rippleEnabled: rebootChip.canReboot
+                contentItem: RowLayout {
                     spacing: 5
                     MaterialSymbol {
                         text: "restart_alt"
                         iconSize: Appearance.font.pixelSize.larger
                         fill: 1
-                        color: root.rebootRequired ? Appearance.m3colors.m3onErrorContainer : Appearance.m3colors.m3onTertiaryContainer
+                        color: rebootChip.colOnChip
                     }
                     StyledText {
-                        text: Translation.tr("Reboot required")
+                        text: rebootChip.armed ? Translation.tr("Click again to reboot") : Translation.tr("Reboot required")
                         font.pixelSize: Appearance.font.pixelSize.small
-                        color: root.rebootRequired ? Appearance.m3colors.m3onErrorContainer : Appearance.m3colors.m3onTertiaryContainer
+                        color: rebootChip.colOnChip
                     }
                 }
-                HoverHandler {
-                    id: chipHover
+                onClicked: {
+                    if (!rebootChip.canReboot)
+                        return;
+                    if (!rebootChip.armed) {
+                        rebootChip.armed = true;
+                        chipDisarmTimer.restart();
+                        return;
+                    }
+                    rebootChip.armed = false;
+                    root.requestReboot();
+                }
+                Timer {
+                    id: chipDisarmTimer
+                    interval: 4000
+                    onTriggered: rebootChip.armed = false
                 }
                 StyledToolTip {
                     extraVisibleCondition: rebootChip.visible
-                    text: Translation.tr("This update replaces parts of the running desktop.")
+                    text: rebootChip.canReboot
+                        ? Translation.tr("Reboot to finish the update. Open apps are asked to close first.")
+                        : Translation.tr("This update replaces parts of the running desktop.")
                 }
             },
             RippleButtonWithIcon {
@@ -796,7 +837,7 @@ ContentPage {
             RippleButtonWithIcon {
                 materialIcon: "restart_alt"
                 mainText: Translation.tr("Reboot Now")
-                onClicked: Session.reboot()
+                onClicked: root.requestReboot()
             }
         }
 
