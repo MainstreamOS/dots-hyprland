@@ -261,12 +261,18 @@ ButtonMouseArea {
         WorkspaceLayout {
             id: numbersGrid
             z: 4
-            layer.enabled: true // For the masking
 
             Repeater {
                 model: wsModel.shownCount
                 delegate: NumberWorkspaceItem {}
             }
+        }
+        // Only the mask reads the numbers as a texture. Shown from one, they are
+        // resampled off the pixel grid at fractional scales and break up.
+        ShaderEffectSource {
+            id: numbersMask
+            sourceItem: numbersGrid
+            visible: false
         }
         Colorizer {
             z: 5
@@ -276,7 +282,7 @@ ButtonMouseArea {
 
             source: activeIndicator
             maskEnabled: true
-            maskSource: numbersGrid
+            maskSource: numbersMask
 
             maskThresholdMin: 0.5
             maskSpreadAtMin: 1
