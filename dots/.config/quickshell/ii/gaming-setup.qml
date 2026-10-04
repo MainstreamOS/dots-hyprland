@@ -6,10 +6,9 @@
 // Gaming Mode Setup. Launched on the first Super+G (before the session switch) and
 // re-openable with Ctrl+Super+G, both via `gaming-mode`:
 //   GAMING_SETUP_MODE=firstrun|reconfig qs -p $HOME/.config/quickshell/ii/gaming-setup.qml
-// Card 1 introduces the slow first launch and the Steam display tweaks; card 2 writes
-// the three Gaming Mode preferences (return-to-desktop target, boot target, and when
-// to open this menu) through the privileged `gaming-mode-switch set` path, where
-// os-session-select and gaming-mode-arm-check read them back.
+// Card 0 holds first-launch notes; card 1 writes the three Gaming Mode preferences
+// through the privileged `gaming-mode-switch set` path, where os-session-select and
+// gaming-mode-arm-check read them back.
 
 import QtQuick
 import QtQuick.Controls
@@ -171,7 +170,7 @@ ApplicationWindow {
                         wrapMode: Text.WordWrap
                         color: Appearance.colors.colOnLayer0
                         font.pixelSize: Appearance.font.pixelSize.larger
-                        text: Translation.tr("Gaming Mode hands the whole screen to Steam Big Picture, like a console. Two things to know before your first launch:")
+                        text: Translation.tr("Gaming Mode hands the whole screen to Steam Big Picture, like a console. A few things to know before your first launch:")
                     }
 
                     NoticeBox {
@@ -184,6 +183,12 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         materialIcon: "display_settings"
                         text: Translation.tr("For a correct picture, open Steam → Settings → Display and turn OFF \"Enable HDR\". \"Automatically Set Resolution\" starts off, so Steam uses your desktop's resolution.")
+                    }
+
+                    NoticeBox {
+                        Layout.fillWidth: true
+                        materialIcon: "view_in_ar"
+                        text: Translation.tr("VR runs from the desktop, not Gaming Mode. To play on a VR headset, including the Steam Frame (experimental), switch back to the desktop and start SteamVR or WiVRn before the game.")
                     }
 
                     Item { Layout.fillHeight: true }
