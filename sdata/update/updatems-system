@@ -47,6 +47,9 @@ ROOT_FILES=(
     "0644|sdata/lib/tr.sh|/usr/local/lib/mainstream-tr.sh"
     "0644|sdata/lib/provision-user.sh|/usr/local/lib/mainstream-provision-user.sh"
     "0644|sdata/lib/venv-common.sh|/usr/local/lib/mainstream-venv-common.sh"
+    "0644|sdata/lib/mac-config.sh|/usr/local/lib/mac-config.sh"
+    "0644|sdata/lib/gpu-config.sh|/usr/local/lib/gpu-config.sh"
+    "0755|scripts/gpu-drivers/gpu-drivers|/usr/local/bin/gpu-drivers"
     "0755|sdata/provision/dotfiles-first-login|/usr/local/bin/dotfiles-first-login"
     "0755|sdata/polkit/user-manager|/usr/local/bin/user-manager"
     "0644|sdata/polkit/org.mainstreamos.user-manager.policy|/usr/share/polkit-1/actions/org.mainstreamos.user-manager.policy"
@@ -449,7 +452,6 @@ if [[ -f /etc/cups/cups-browsed.conf ]] \
     rm -f /etc/cups/cups-browsed.conf
 fi
 udevadm control --reload 2>/dev/null || true
-systemctl daemon-reload 2>/dev/null || true
 # A printer already plugged in gets its permanent queue on this run rather
 # than at the next replug; with no printer this is a quiet no-op.
 systemctl start mainstream-printer-setup.service 2>/dev/null || true
@@ -696,8 +698,17 @@ if [[ ! -e "$HIB_STAMP" && ! -e "$HIB_DROPIN" && -f /etc/kernel/cmdline ]] \
                 > "$HIB_DROPIN"; then
             ok "$(t "Hibernation is off, so memory is no longer written to that swap unencrypted.")"
             mkdir -p "${HIB_STAMP%/*}" && : > "$HIB_STAMP"
-            GPU_SUDO='' KERNEL_CMDLINE=/etc/kernel/cmdline cmdline_remove resume
-            if grep -Eq '(^|[[:space:]])resume=' /etc/kernel/cmdline; then
+            # Built beside the file and checked before it takes its place, so a
+            # short write cannot reach the boot entries.
+            _hib_new=/etc/kernel/cmdline.mainstream-new
+            _hib_want="$(awk '{ for (i = 1; i <= NF; i++) { k = $i; sub(/=.*/, "", k)
+                                 if (k != "resume") o = o (o == "" ? "" : " ") $i } }
+                              END { print o }' /etc/kernel/cmdline)"
+            if ! { cp /etc/kernel/cmdline "$_hib_new" \
+                   && GPU_SUDO='' KERNEL_CMDLINE="$_hib_new" cmdline_remove resume \
+                   && [[ -n "$_hib_want" && "$(cat "$_hib_new")" == "$_hib_want" ]] \
+                   && mv -f "$_hib_new" /etc/kernel/cmdline; }; then
+                rm -f "$_hib_new"
                 warn "$(t "Could not take resume= out of /etc/kernel/cmdline.")"
                 RC=1
             elif [[ " $(cat /proc/cmdline 2>/dev/null) " == *" $_hib_tok "* ]] \

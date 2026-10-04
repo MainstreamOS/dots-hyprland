@@ -14,8 +14,8 @@
 #               given more than once (the SourceForge mirror, a file:// copy)
 #
 # Exit: 0 when every package is served at its PKGBUILD version or newer,
-#       1 when any is missing, older or unpinned, 2 when a database could not
-#       be read.
+#       1 when any is missing, older or unpinned, 2 when a database or a
+#       PKGBUILD could not be read.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,11 +51,14 @@ trap 'rm -rf "$work"' EXIT
 pkgbuild_versions() {
     local pb
     for pb in "$DIST_ARCH"/*/PKGBUILD; do
+        [[ -e "$pb" ]] || continue
         (
             set +u
-            cd "$(dirname "$pb")" || exit 0
+            # An unreadable one fails the gate instead of dropping out of it.
             # shellcheck source=/dev/null
-            source ./PKGBUILD >/dev/null 2>&1 || exit 0
+            cd "$(dirname "$pb")" && source ./PKGBUILD >/dev/null 2>&1 \
+                && [[ -n "$pkgver" && -n "$pkgrel" && -n "${pkgname[*]}" ]] \
+                || { printf '%s\n' "$pb" >> "$work/unreadable"; exit 0; }
             v="$pkgver-$pkgrel"
             [[ -n "${epoch:-}" && "$epoch" != 0 ]] && v="$epoch:$v"
             for n in "${pkgname[@]}"; do printf '%s %s\n' "$n" "$v"; done
@@ -64,6 +67,10 @@ pkgbuild_versions() {
 }
 
 mapfile -t wanted < <(pkgbuild_versions | sort)
+if [[ -s "$work/unreadable" ]]; then
+    sed 's/^/Could not read the version from /' "$work/unreadable" >&2
+    exit 2
+fi
 if [[ ${#wanted[@]} -eq 0 ]]; then
     echo "No PKGBUILDs found under $DIST_ARCH" >&2
     exit 2

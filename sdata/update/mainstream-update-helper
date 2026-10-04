@@ -29,6 +29,9 @@
 #   N    pacman, AUR or flatpak exit code on a primary failure
 
 set -u
+# sudo -S reads the password line only when it asks for one, so no step may
+# inherit a line it left unread.
+[[ -t 0 ]] || exec </dev/null
 
 # ── Resolve calling user ────────────────────────────────────────────────────
 ORIG_USER="${SUDO_USER:-}"
@@ -67,6 +70,9 @@ if ! flock -n 9; then
     echo ">>> $(t "Another update is already running. Let it finish, then try again.")"
     exit 3
 fi
+# Held by this shell alone: a child that outlives it, such as a git gc that
+# detached, would otherwise keep every later update out.
+{ enable -f /usr/lib/bash/fdflags fdflags && fdflags -s +cloexec 9; } 2>/dev/null
 
 # ── Temp NOPASSWD + cleanup trap ────────────────────────────────────────────
 # The name has no dots (sudoers.d skips files containing ".") and sorts after
@@ -186,6 +192,9 @@ on_stop() {
     if (( ${BOOT_TOUCHED:-0} )) && [[ -z "${BOOT_RC:-}" ]]; then
         boot_postcheck
     fi
+    # A stopped run may already have installed what needs a reboot.
+    [[ -n "${REBOOT_SESSION_LIST:-}" ]] \
+        && reboot_marker "" "$(reboot_check verdict "$HELPER_STARTED_AT" "$REBOOT_SESSION_LIST")"
     exit 143
 }
 trap on_stop INT TERM HUP
@@ -248,13 +257,6 @@ reboot_check() {  # $1 = mode, rest = args
     [[ -r "$REBOOT_CHECK" ]] || { echo 0; return 0; }
     _reboot_check_run "$@" || echo 0
 }
-# Recorded before anything is replaced: afterwards the files the session still
-# holds are gone from disk and from the package database.
-REBOOT_SESSION_LIST="$(mktemp)"
-if [[ -r "$REBOOT_CHECK" ]]; then
-    _reboot_check_run session > "$REBOOT_SESSION_LIST" || true
-    chmod 0644 "$REBOOT_SESSION_LIST" 2>/dev/null || true
-fi
 # The two markers the Settings page reads: PLAN before anything is replaced,
 # then the verdict at the end.
 reboot_marker() {  # $1 = PLAN|""  $2 = the check's output
@@ -263,6 +265,13 @@ reboot_marker() {  # $1 = PLAN|""  $2 = the check's output
     reasons="${reasons% }"
     printf '@@MAINSTREAM-UPDATE-REBOOT%s %s%s\n' "${1:+-$1}" "${flag:-0}" "${reasons:+ $reasons}"
 }
+# Recorded before anything is replaced: afterwards the files the session still
+# holds are gone from disk and from the package database.
+REBOOT_SESSION_LIST="$(mktemp)"
+if [[ -r "$REBOOT_CHECK" ]]; then
+    _reboot_check_run session > "$REBOOT_SESSION_LIST" || true
+    chmod 0644 "$REBOOT_SESSION_LIST" 2>/dev/null || true
+fi
 
 # ── Parse flags ─────────────────────────────────────────────────────────────
 SKIP_SYSTEM=0

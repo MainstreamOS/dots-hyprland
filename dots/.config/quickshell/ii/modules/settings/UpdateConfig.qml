@@ -211,6 +211,8 @@ ContentPage {
             root.outputText += "\n\n" + Translation.tr("Update stopped by user.");
             if (root.bootBroken)
                 root.outputText += "\n" + root.bootBrokenText();
+            if (root.rebootRequired)
+                root.outputText += "\n" + Translation.tr("Parts of the running desktop were already replaced. Reboot, then run the update again to finish it; until then some controls may not work.");
             return;
         }
         if (exitCode < 0) {
@@ -245,7 +247,8 @@ ContentPage {
         } else if (exitCode === 101) {
             root.outputText += "\n\n" + Translation.tr("Update finished, but the Mainstream dotfiles did not update. See the Dotfiles line in the summary above.");
         } else if (exitCode === 102) {
-            // The root half did not finish; the Finish update notice offers to complete it.
+            // The root half ran but failed partway. It installs the update tools first, so
+            // usually no Finish update notice follows; the next update runs it again.
             root.outputText += "\n\n" + Translation.tr("Update finished, but the system part of the Mainstream update did not finish. See the System bits line in the summary above.");
         } else if (exitCode === 105) {
             root.outputText += "\n\n" + Translation.tr("System packages were held back: the EFI partition, which holds the boot menu, is too full to rebuild the boot image safely. No system package was changed. Free some space on the EFI partition, then run the update again.");
