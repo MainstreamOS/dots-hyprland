@@ -448,7 +448,12 @@ ContentPage {
             // apply-theme.sh ALSO preserves these from the live config when
             // applying, so older themes that still carry these keys won't
             // poison the user's settings either.
-            `jq --slurpfile user '${root.userSettingsPath}' 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates) | del(.background.widgetsLocked) | reduce $user[0][] as $p (.; delpaths([$p]))' '${root.shellConfigPath}' > "$DIR/config.json"\n` +
+            // An unreadable list reads as empty, as it does for the apply, which
+            // keeps those settings live anyway. A failed write keeps the old file.
+            `USER_PATHS='[]'\n` +
+            `[ -r '${root.userSettingsPath}' ] && USER_PATHS="$(<'${root.userSettingsPath}')"\n` +
+            `jq --argjson user "$USER_PATHS" 'del(.appearance.themeSchedule) | del(.light.night) | del(.cursor) | del(.bar.seededWidgets) | del(.bar.weather) | del(.dock.pinnedApps) | del(.apps) | del(.updates) | del(.background.widgetsLocked) | reduce $user[] as $p (.; delpaths([$p]))' '${root.shellConfigPath}' > "$DIR/config.json.tmp" || { rm -f "$DIR/config.json.tmp"; exit 1; }\n` +
+            `mv -f "$DIR/config.json.tmp" "$DIR/config.json"\n` +
             // Snapshot the four interface-look gsettings (App style / Icons /
             // Mouse cursor / cursor size) so a saved theme carries the whole
             // look. Shake-to-locate is user behavior, stripped above.
