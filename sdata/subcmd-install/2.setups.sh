@@ -966,26 +966,84 @@ function _mkinitcpio_ensure_systemd_stack(){
   sudo pacman -S --needed --noconfirm systemd plymouth
 }
 
+: "${MKINITCPIO_CONF:=/etc/mkinitcpio.conf}"
+
+function _mkinitcpio_has(){
+  local want="$1" h; shift
+  for h in "$@"; do [[ "$h" == "$want" ]] && return 0; done
+  return 1
+}
+
+function _mkinitcpio_convertible(){
+  local h
+  for h in "$@"; do
+    case "$h" in
+      base|udev|autodetect|microcode|modconf|kms|keyboard|keymap|consolefont|block|filesystems|fsck|plymouth|lvm2|mdadm_udev|btrfs|resume|usr) ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
+# Extra hooks such as sd-encrypt or lvm2 stay after the hook they followed. A busybox line
+# with a hook that has no systemd form, such as encrypt, is kept as it is, plus plymouth.
+function _mkinitcpio_target_hooks(){
+  local -a cur=("$@") out=("${MKINITCPIO_SYSTEMD_HOOKS[@]}") conv=()
+  local h prev="" i
+  if (( ${#cur[@]} == 0 )); then printf '%s\n' "${out[@]}"; return; fi
+  if ! _mkinitcpio_has systemd "${cur[@]}" && ! _mkinitcpio_convertible "${cur[@]}"; then
+    for h in "${cur[@]}"; do
+      printf '%s\n' "$h"
+      [[ "$h" == udev ]] && ! _mkinitcpio_has plymouth "${cur[@]}" && echo plymouth
+    done
+    return 0
+  fi
+  for h in "${cur[@]}"; do
+    case "$h" in
+      udev) h=systemd ;;
+      keymap|consolefont) h=sd-vconsole ;;
+      usr|resume) continue ;;
+    esac
+    _mkinitcpio_has "$h" "${conv[@]}" || conv+=("$h")
+  done
+  for h in "${conv[@]}"; do
+    if ! _mkinitcpio_has "$h" "${out[@]}"; then
+      for i in "${!out[@]}"; do
+        [[ "${out[$i]}" == "${prev:-base}" ]] && { out=("${out[@]:0:$((i + 1))}" "$h" "${out[@]:$((i + 1))}"); break; }
+      done
+    fi
+    prev="$h"
+  done
+  printf '%s\n' "${out[@]}"
+}
+
 function _mkinitcpio_enforce_systemd_hooks(){
   [[ "$OS_GROUP_ID" == "arch" ]] || return 0
-  local hook_line="HOOKS=(${MKINITCPIO_SYSTEMD_HOOKS[*]})"
+  local conf="$MKINITCPIO_CONF" hook_line
+  local -a cur target
 
-  if [[ ! -f /etc/mkinitcpio.conf ]]; then
-    echo -e "${STY_YELLOW}[$0]: /etc/mkinitcpio.conf not found — cannot set systemd initramfs hooks.${STY_RST}"
+  if [[ ! -f "$conf" ]]; then
+    echo -e "${STY_YELLOW}[$0]: ${conf} not found, so the systemd initramfs hooks cannot be set.${STY_RST}"
     return 1
   fi
 
-  if grep -qxF "$hook_line" /etc/mkinitcpio.conf; then
-    echo -e "${STY_BLUE}[$0]: systemd mkinitcpio hooks already configured.${STY_RST}"
+  mapfile -t cur < <(env -i bash --noprofile --norc -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${HOOKS[@]}"' _ "$conf" | grep .)
+  mapfile -t target < <(_mkinitcpio_target_hooks "${cur[@]}")
+  hook_line="HOOKS=(${target[*]})"
+
+  if grep -qxF "$hook_line" "$conf"; then
+    echo -e "${STY_BLUE}[$0]: mkinitcpio hooks already configured.${STY_RST}"
     return 0
   fi
 
-  if grep -qE '^HOOKS=\(' /etc/mkinitcpio.conf; then
-    sudo sed -i -E "s|^HOOKS=\([^)]*\).*|${hook_line}|" /etc/mkinitcpio.conf
+  if grep -qE '^HOOKS=\([^)]*\)' "$conf"; then
+    sudo sed -i -E "s|^HOOKS=\([^)]*\).*|${hook_line}|" "$conf"
+  elif grep -qE '^HOOKS=\(' "$conf"; then
+    echo -e "${STY_YELLOW}[$0]: HOOKS in ${conf} spans several lines, so it was left alone.${STY_RST}"
+    return 0
   else
-    printf '%s\n' "$hook_line" | sudo tee -a /etc/mkinitcpio.conf > /dev/null
+    printf '%s\n' "$hook_line" | sudo tee -a "$conf" > /dev/null
   fi
-  echo -e "${STY_CYAN}[$0]: Set mkinitcpio hooks to: ${MKINITCPIO_SYSTEMD_HOOKS[*]}${STY_RST}"
+  echo -e "${STY_CYAN}[$0]: Set mkinitcpio hooks to: ${target[*]}${STY_RST}"
 }
 
 # Rebuild initramfs. On systems with limine-mkinitcpio-hook installed, prefers
