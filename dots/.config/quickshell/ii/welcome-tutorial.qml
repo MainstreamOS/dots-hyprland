@@ -895,7 +895,7 @@ ApplicationWindow {
                 { apps: [
                     { key: "vr", icon: "steamvr", name: Translation.tr("Extra VR Headset Support"),
                       blurb: Translation.tr("Quest, Pico and Vive Focus"),
-                      desc: Translation.tr("Adds headsets SteamVR cannot reach on its own: standalone ones like Quest, Pico and Vive Focus. Wired headsets still use SteamVR.") }
+                      desc: Translation.tr("Streams to standalone headsets like Quest, Pico and Vive Focus, open source and without SteamVR. Wired headsets use SteamVR.") }
                 ] }
             ] },
             { title: Translation.tr("Create"), items: [
