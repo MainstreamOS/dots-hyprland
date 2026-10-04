@@ -155,8 +155,13 @@ case "$action" in
     # displays leave it only now that the switch is going ahead, and come
     # back if the switch is refused.
     gaming)   systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null
-              sudo -n /usr/bin/gaming-mode-switch gaming || {
+              if sudo -n /usr/bin/gaming-mode-switch gaming; then
+                  # The switch ends Hyprland without its shutdown hook, so the
+                  # session target is stopped here, as for a log out.
+                  systemctl --user stop --no-block hyprland-session.target 2>/dev/null || true
+              else
                   systemctl --user import-environment WAYLAND_DISPLAY DISPLAY 2>/dev/null
                   notify-send -a "Mainstream" "$summary_cancel" "Couldn't switch sessions. A system update may be needed." 2>/dev/null
-                  false; } ;;
+                  false
+              fi ;;
 esac || rm -f "$ENDING"
