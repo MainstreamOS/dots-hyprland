@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
@@ -74,6 +75,7 @@ ContentPage {
         property string value
         property string shownValue: value
         property string hint: ""
+        property bool sensitive: false
         property bool justCopied: false
         default property alias buttons: buttonRow.data
 
@@ -148,7 +150,12 @@ ContentPage {
                 tip: Translation.tr("Copy")
                 enabled: copyRow.value.length > 0
                 onClicked: {
-                    Quickshell.clipboardText = copyRow.value;
+                    if (copyRow.sensitive) {
+                        sensitiveCopy.stdinEnabled = true;
+                        sensitiveCopy.running = true;
+                    } else {
+                        Quickshell.clipboardText = copyRow.value;
+                    }
                     copyRow.justCopied = true;
                     copiedTimer.restart();
                 }
@@ -157,6 +164,23 @@ ContentPage {
                     interval: 1500
                     onTriggered: copyRow.justCopied = false
                 }
+            }
+        }
+
+        // The clipboard history skips what wl-copy marks sensitive, and stdin
+        // keeps the value out of the process list while wl-copy serves it.
+        Process {
+            id: sensitiveCopy
+            command: ["wl-copy", "--sensitive"]
+            onRunningChanged: {
+                if (running) {
+                    write(copyRow.value);
+                    stdinEnabled = false;
+                }
+            }
+            onExited: code => {
+                if (code !== 0)
+                    copyRow.justCopied = false;
             }
         }
     }
@@ -278,9 +302,9 @@ ContentPage {
             // saved password that was only out of reach. Turning it on is
             // held on a network the helper would refuse too, whose notice
             // below says why. Turning it off needs none of these.
-            enabled: root.canManage && !FileSharing.busy && !FileSharing.keyringPending
-                && (FileSharing.isOn || (!FileSharing.passwordLocked && FileSharing.firewall
-                    && root.currentNetwork?.eligible !== false))
+            enabled: root.canManage && !FileSharing.busy
+                && (FileSharing.isOn || (!FileSharing.keyringPending && !FileSharing.passwordLocked
+                    && FileSharing.firewall && root.currentNetwork?.eligible !== false))
             // Held still until the first read, so a restored switch snaps into
             // place instead of sliding across every time the page opens.
             animateChanges: FileSharing.loaded
@@ -485,6 +509,7 @@ ContentPage {
             iconName: "password"
             label: Translation.tr("Password")
             value: FileSharing.password
+            sensitive: true
             // A password shown once because there is no keyring to keep it is
             // shown plainly: dots would hide the only chance to read it.
             shownValue: {
