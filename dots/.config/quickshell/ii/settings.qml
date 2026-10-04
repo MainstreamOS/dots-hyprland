@@ -314,7 +314,8 @@ ApplicationWindow {
         // this very tree in, so the window used to restart part way through
         // an update and, since a reload kills the objects' child processes,
         // took the running update with it. The next launch loads the new
-        // files; this one keeps what it started with.
+        // files, though a page first opened after an update already loads its
+        // new file here, against the singletons this window started with.
         Quickshell.watchFiles = false
         MaterialThemeLoader.reapplyTheme()
         ThemeLibrary.load()
