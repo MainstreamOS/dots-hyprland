@@ -46,7 +46,9 @@ Popup {
         root.psk = "";
         secretsProc.running = true;
     }
-    onClosed: cleanupProc.running = true
+    // Detached and on destruction: the popup can go without closing when its
+    // row is rebuilt, and a child Process is killed along with it.
+    Component.onDestruction: Quickshell.execDetached(["rm", "-f", root.imagePath])
 
     // The characters the format gives meaning to are escaped in both fields.
     function esc(s) {
@@ -57,7 +59,7 @@ Popup {
         const mgmt = root.keyMgmt.toLowerCase();
         let type = "nopass";
         if (mgmt.indexOf("psk") !== -1 || mgmt.indexOf("sae") !== -1) type = "WPA";
-        else if (mgmt.indexOf("wep") !== -1) type = "WEP";
+        else if (mgmt === "none") type = "WEP";
         let out = "WIFI:T:" + type + ";S:" + root.esc(root.ssid) + ";";
         if (type !== "nopass") out += "P:" + root.esc(root.psk) + ";";
         if (root.hidden) out += "H:true;";
@@ -78,8 +80,14 @@ Popup {
             // character would reach the phone wrong.
             + '   ssid="$(nmcli -e no -g 802-11-wireless.ssid connection show "$name" 2>/dev/null)";'
             + '   [ "$ssid" = "$target" ] || continue;'
-            + '   printf "keymgmt=%s\\n" "$(nmcli -e no -s -g 802-11-wireless-security.key-mgmt connection show "$name" 2>/dev/null)";'
+            + '   km="$(nmcli -e no -s -g 802-11-wireless-security.key-mgmt connection show "$name" 2>/dev/null)";'
+            + '   printf "keymgmt=%s\\n" "$km";'
             + '   printf "psk=%s\\n" "$(nmcli -e no -s -g 802-11-wireless-security.psk connection show "$name" 2>/dev/null)";'
+            // Static WEP is key-mgmt "none", with the key in the slot it sends with.
+            + '   if [ "$km" = none ]; then'
+            + '     idx="$(nmcli -e no -g 802-11-wireless-security.wep-tx-keyidx connection show "$name" 2>/dev/null)";'
+            + '     printf "wepkey=%s\\n" "$(nmcli -e no -s -g "802-11-wireless-security.wep-key${idx:-0}" connection show "$name" 2>/dev/null)";'
+            + '   fi;'
             + '   printf "hidden=%s\\n" "$(nmcli -e no -g 802-11-wireless.hidden connection show "$name" 2>/dev/null)";'
             + '   echo found=1; exit 0;'
             + ' done',
@@ -93,9 +101,9 @@ Popup {
                     return;
                 }
                 root.keyMgmt = val("keymgmt");
-                root.psk = val("psk");
+                root.psk = root.keyMgmt === "none" ? val("wepkey") : val("psk");
                 root.hidden = val("hidden") === "yes";
-                if (root.keyMgmt.length > 0 && root.keyMgmt !== "none" && root.psk.length === 0) {
+                if (root.keyMgmt.length > 0 && root.psk.length === 0) {
                     root.error = Translation.tr("The password for this network is not stored where it can be read.");
                     return;
                 }
@@ -124,11 +132,6 @@ Popup {
                 root.ready = true;
             }
         }
-    }
-
-    Process {
-        id: cleanupProc
-        command: ["rm", "-f", root.imagePath]
     }
 
     contentItem: ColumnLayout {
