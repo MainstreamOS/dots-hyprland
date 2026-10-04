@@ -2462,5 +2462,7 @@
   "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**Fiyatlandırma**: ücretsiz katman, veriler eğitim için kullanılır. Web araması için faturalandırmanın etkin olması gerekir.\n\n**Talimatlar**: Google hesabına giriş yapın, AI Studio'nun Google Cloud projesi oluşturmasına veya her ne istiyorsa izin verin, geri dönün ve Get API key'e tıklayın",
   "Set %1 to %2.": "%1 değeri %2 olarak ayarlandı.",
   "This Google account can no longer use this model. Pick another one with %1.": "Bu Google hesabı artık bu modeli kullanamıyor. %1 ile başka bir model seçin.",
-  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 ile web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da hesabınız hâlâ kullanabiliyorsa %1 ile Gemini 2.5 Flash'a geçin."
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 ile web araması, faturalandırması etkin bir Google AI Studio projesi gerektirir. Arama yapmadan tekrar sorun ya da hesabınız hâlâ kullanabiliyorsa %1 ile Gemini 2.5 Flash'a geçin.",
+  "NVIDIA monitoring library installed": "NVIDIA monitoring library installed",
+  "Could not install the NVIDIA monitoring library": "Could not install the NVIDIA monitoring library"
 }

@@ -2462,5 +2462,7 @@
   "**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key": "**价格**：提供免费层级，数据用于训练。网页搜索需要启用结算。\n\n**说明**：登录 Google 账户，允许 AI Studio 创建 Google Cloud 项目或其他要求，然后返回并点击获取 API 密钥",
   "Set %1 to %2.": "已将 %1 设置为 %2。",
   "This Google account can no longer use this model. Pick another one with %1.": "此 Google 账户已无法使用该模型。请使用 %1 选择其他模型。",
-  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 的网页搜索需要已启用结算的 Google AI Studio 项目。请在不搜索的情况下重新提问；如果你的账户仍可使用 Gemini 2.5 Flash，也可以用 %1 切换到该模型。"
+  "Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.": "Gemini 3 的网页搜索需要已启用结算的 Google AI Studio 项目。请在不搜索的情况下重新提问；如果你的账户仍可使用 Gemini 2.5 Flash，也可以用 %1 切换到该模型。",
+  "NVIDIA monitoring library installed": "NVIDIA monitoring library installed",
+  "Could not install the NVIDIA monitoring library": "Could not install the NVIDIA monitoring library"
 }

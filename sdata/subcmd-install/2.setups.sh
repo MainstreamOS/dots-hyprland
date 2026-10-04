@@ -315,6 +315,10 @@ function setup_gpu_drivers(){
                 fi
               fi
             fi
+            mapfile -t _nv_extra < <(nvidia_extra_pkgs)
+            if [[ ${#_nv_extra[@]} -gt 0 ]]; then
+              try sudo pacman -S --needed --noconfirm "${_nv_extra[@]}"
+            fi
             ;;
           fedora)
             # Use RPM Fusion for NVIDIA on Fedora

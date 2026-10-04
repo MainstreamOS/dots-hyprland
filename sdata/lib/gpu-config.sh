@@ -483,6 +483,14 @@ _gpu_nvidia_has_driver() {
 # installed, and these branches conflict with each other.
 _gpu_pacman_has() { pacman -Qq "$1" >/dev/null 2>&1; }
 
+# Extras such as the NVML bindings GPU monitors use. They depend on nvidia-utils by
+# name, so without a provider installed they would pull in the mainline userspace.
+nvidia_extra_pkgs() {
+    [[ ${HAS_NVIDIA:-false} == true ]] || return 0
+    pacman -T nvidia-utils >/dev/null 2>&1 || return 0
+    printf '%s\n' python-nvidia-ml-py
+}
+
 # ── gpu_target_kernel ───────────────────────────────────────────────────────
 # The kernel release the target will boot. Inside a chroot $(uname -r) names
 # the build host's kernel, which is never the one being installed, so read the

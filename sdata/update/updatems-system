@@ -184,6 +184,12 @@ _install_file() {
         RC=1
     fi
 }
+# Without pipefail a pipeline's status is sed's, which succeeds on any input,
+# so a pacman that could not install anything would read as a success.
+_pacman_needed() {
+    pacman -S --noconfirm --needed "$@" 2>&1 | sed 's/^/    /'
+    return "${PIPESTATUS[0]}"
+}
 
 for _entry in "${ROOT_FILES[@]}"; do
     IFS='|' read -r _mode _src _dst <<<"$_entry"
@@ -584,6 +590,24 @@ if [[ -r "$MAC_LIB_SRC" && -r "$GPU_LIB_SRC" ]] && [[ "$(cat /sys/class/dmi/id/s
     fi
     systemctl daemon-reload 2>/dev/null || true
     mac_fetch_firmware_now 2>&1 | sed 's/^/    /' || true
+fi
+
+# NVML bindings for GPU monitors such as TRCC, on NVIDIA machines. Seeded once per
+# machine, so a user who removes the package keeps it removed.
+NVML_STAMP=/var/lib/mainstream/nvml-seeded
+if [[ -r "$GPU_LIB_SRC" && ! -e "$NVML_STAMP" ]]; then
+    # shellcheck source=/dev/null
+    source "$GPU_LIB_SRC"
+    gpu_detect >/dev/null 2>&1 || true
+    mapfile -t _nv_extra < <(nvidia_extra_pkgs)
+    if (( ${#_nv_extra[@]} )); then
+        if _pacman_needed "${_nv_extra[@]}"; then
+            mkdir -p "${NVML_STAMP%/*}" && : > "$NVML_STAMP"
+            ok "$(t "NVIDIA monitoring library installed")"
+        else
+            warn "$(t "Could not install the NVIDIA monitoring library")"
+        fi
+    fi
 fi
 
 # A machine that gained a Windows install after the first boot never had
