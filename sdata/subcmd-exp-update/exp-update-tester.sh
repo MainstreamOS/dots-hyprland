@@ -14,6 +14,15 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 TEST_DIR=""
 ORIGINAL_DIR="$PWD"
+ORIGINAL_HOME="${HOME:-}"
+TEST_ROOT=""
+SANDBOX=""
+STUB_DIR=""
+STUB_LOG=""
+# Commands that reach the running session or ask for root. Each one is
+# replaced by a stub that logs the call and fails.
+SESSION_COMMANDS=(hyprctl qs quickshell systemctl systemd-run run0 loginctl notify-send sudo pkexec su pacman)
+SESSION_VARS=(HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY DISPLAY DBUS_SESSION_BUS_ADDRESS BASH_ENV ENV)
 
 # Helper functions
 log_test() {
@@ -34,10 +43,108 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
+refuse() {
+  log_error "$1"
+  log_error "Refusing to run: the tests must never reach the real home or the running session"
+  exit 99
+}
+
+# /tmp is often held in memory, and the dry-run test copies the repository,
+# so a disk-backed location comes first.
+scratch_base() {
+  local d
+  for d in "${TMPDIR:-}" /var/tmp "${XDG_CACHE_HOME:-$HOME/.cache}"; do
+    if [[ -n "$d" && -d "$d" && -w "$d" && "$(stat -f -c %T "$d" 2>/dev/null)" != tmpfs ]]; then
+      echo "$d"
+      return 0
+    fi
+  done
+  echo "${TMPDIR:-/tmp}"
+}
+
+sandbox_init() {
+  local base cmd v
+  base=$(scratch_base)
+  TEST_ROOT=$(mktemp -d "${base%/}/exp-update-tester.XXXXXX") || refuse "Could not create a test directory in $base"
+  STUB_DIR="$TEST_ROOT/stubs"
+  STUB_LOG="$TEST_ROOT/stub-calls.log"
+  mkdir -p "$STUB_DIR"
+  : >"$STUB_LOG"
+  printf '#!/bin/bash\necho "${0##*/} $*" >>%q\nexit 1\n' "$STUB_LOG" >"$STUB_DIR/.stub"
+  chmod +x "$STUB_DIR/.stub"
+  for cmd in "${SESSION_COMMANDS[@]}"; do
+    ln -s .stub "$STUB_DIR/$cmd"
+  done
+  export PATH="$STUB_DIR:$PATH"
+  # GIT_DIR and friends would point the test repos at a real repository, and
+  # BASH_ENV would let every child shell put PATH and the session back.
+  unset "${SESSION_VARS[@]}"
+  for v in $(compgen -v XDG_ || true) $(compgen -v GIT_ || true); do
+    unset "$v"
+  done
+}
+
+sandbox_guard() {
+  local v cmd real_home
+  real_home=$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6) || real_home=""
+  [[ -n "$TEST_ROOT" && -d "$TEST_ROOT" ]] || refuse "The test directory is missing"
+  [[ "$HOME" == "$TEST_ROOT"/* ]] || refuse "HOME is outside the test directory: $HOME"
+  for v in "$real_home" "$ORIGINAL_HOME"; do
+    if [[ -n "$v" && "$(realpath -m -- "$HOME")" == "$(realpath -m -- "$v")" ]]; then
+      refuse "HOME is the real home: $HOME"
+    fi
+  done
+  for v in $(compgen -v XDG_ || true); do
+    [[ "${!v}" == "$TEST_ROOT"/* ]] || refuse "$v points outside the test directory: ${!v}"
+  done
+  for v in "${SESSION_VARS[@]}" $(compgen -v GIT_ || true); do
+    [[ -z "${!v+set}" ]] || refuse "$v is still set"
+  done
+  for cmd in "${SESSION_COMMANDS[@]}"; do
+    [[ "$(command -v "$cmd")" == "$STUB_DIR/$cmd" ]] || refuse "$cmd does not resolve to its stub"
+  done
+}
+
+# Each test gets its own home and runtime directory, so nothing it does lands
+# in the real ones or carries over to the next test.
+sandbox_enter() {
+  SANDBOX="$TEST_ROOT/$1"
+  mkdir -p "$SANDBOX/home" "$SANDBOX/runtime"
+  chmod 700 "$SANDBOX/runtime"
+  export HOME="$SANDBOX/home"
+  export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share" \
+    XDG_STATE_HOME="$HOME/.local/state" XDG_CACHE_HOME="$HOME/.cache" \
+    XDG_BIN_HOME="$HOME/.local/bin" XDG_RUNTIME_DIR="$SANDBOX/runtime"
+  sandbox_guard
+}
+
+sandbox_leave() {
+  cd "$ORIGINAL_DIR"
+  rm -rf -- "$SANDBOX"
+  SANDBOX=""
+}
+
+# Copies only what git tracks or would track, so build output under
+# sdata/dist-arch (gigabytes) stays behind.
+copy_repo_files() {
+  local dest="$1"
+  shift
+  if git -C "$ORIGINAL_DIR" rev-parse --is-inside-work-tree &>/dev/null; then
+    git -C "$ORIGINAL_DIR" ls-files -z --cached --others --exclude-standard -- "$@" |
+      tar -C "$ORIGINAL_DIR" --null --ignore-failed-read --exclude=.git -T - -cf - 2>/dev/null |
+      tar -C "$dest" -xf -
+  else
+    local p
+    for p in "$@"; do
+      cp -r "$ORIGINAL_DIR/$p" "$dest/"
+    done
+  fi
+}
+
 # Setup test environment
 setup_test_env() {
   local temp_dir
-  temp_dir=$(mktemp -d -t dotfiles-test.XXXXXX)
+  temp_dir=$(mktemp -d "$SANDBOX/dotfiles-test.XXXXXX")
 
   cd "$temp_dir" || { echo "Failed to cd to test directory"; return 1; }
   git init -q
@@ -287,6 +394,7 @@ DRY_RUN=false
 FORCE_CHECK=false
 VERBOSE=false
 NON_INTERACTIVE=true
+SOURCE_ONLY=true
 
 UPDATE_IGNORE_FILE="\${REPO_ROOT}/.updateignore"
 HOME_UPDATE_IGNORE_FILE="/dev/null"
@@ -294,6 +402,9 @@ HOME_UPDATE_IGNORE_FILE="/dev/null"
 # Source the production script to use the real should_ignore function
 # Redirect all unwanted output to stderr, then to /dev/null
 source "$ORIGINAL_DIR/sdata/subcmd-exp-update/0.run.sh" 2>/dev/null
+
+# Load patterns into cache
+load_ignore_patterns
 
 test_cases=(
   "\$REPO_ROOT/app.log:0"
@@ -394,9 +505,11 @@ test_dry_run() {
   cd "$test_repo" || { log_fail "Failed to cd to test directory"; return 1; }
 
   # Copy necessary files for setup to run
-  cp "$ORIGINAL_DIR/setup" .
-  cp -r "$ORIGINAL_DIR/sdata" .
-  cp -r "$ORIGINAL_DIR/dots" .
+  if ! copy_repo_files . setup sdata dots; then
+    log_fail "Failed to copy the repository files"
+    cd "$ORIGINAL_DIR"
+    return 1
+  fi
   chmod +x setup
 
   # Create a test config file in repo
@@ -405,9 +518,6 @@ test_dry_run() {
 
   git add .
   git commit -m "Add test config" -q
-
-  # FIXED: Clean up any existing test files before running test
-  rm -rf "${HOME}/.config/test-app" 2>/dev/null || true
 
   # Use non-interactive mode and check for DRY-RUN marker
   ./setup exp-update -n --skip-notice --non-interactive 2>&1 | tee dry_run_output.txt
@@ -423,7 +533,6 @@ test_dry_run() {
   # FIXED: Check if files were created (they shouldn't be in dry-run)
   if [[ -f "${HOME}/.config/test-app/config.conf" ]]; then
     log_fail "Files were created in home during dry-run"
-    rm -rf "${HOME}/.config/test-app"
     cd "$ORIGINAL_DIR"
     return 1
   else
@@ -489,8 +598,11 @@ test_lock_file() {
   cd "$test_repo" || { log_fail "Failed to cd to test directory"; return 1; }
   
   # Copy necessary files
-  cp "$ORIGINAL_DIR/setup" .
-  cp -r "$ORIGINAL_DIR/sdata" .
+  if ! copy_repo_files . setup sdata; then
+    log_fail "Failed to copy the repository files"
+    cd "$ORIGINAL_DIR"
+    return 1
+  fi
   mkdir -p dots/.config
   chmod +x setup
   
@@ -558,6 +670,7 @@ DRY_RUN=false
 FORCE_CHECK=false
 VERBOSE=false
 NON_INTERACTIVE=true
+SOURCE_ONLY=true
 
 UPDATE_IGNORE_FILE="\${REPO_ROOT}/.updateignore"
 HOME_UPDATE_IGNORE_FILE="/dev/null"
@@ -651,7 +764,7 @@ SOURCE_ONLY=true
 
 source "$ORIGINAL_DIR/sdata/subcmd-exp-update/0.run.sh" 2>/dev/null
 
-test_dir="/tmp/test-ensure-dir-\$\$"
+test_dir="\$1/test-ensure-dir-\$\$"
 
 # First call should create
 ensure_directory "\$test_dir"
@@ -688,7 +801,8 @@ EOF
 test_safe_read_noninteractive() {
   log_test "Testing safe_read in non-interactive mode"
   
-  cat > test_safe_read.sh << 'EOF'
+  local script="$SANDBOX/test_safe_read.sh"
+  cat > "$script" << 'EOF'
 #!/bin/bash
 source "$ORIGINAL_DIR/sdata/lib/environment-variables.sh"
 source "$ORIGINAL_DIR/sdata/lib/functions.sh"
@@ -738,23 +852,32 @@ else
 fi
 EOF
   
-  chmod +x test_safe_read.sh
-  result=$(./test_safe_read.sh 2>&1)
+  chmod +x "$script"
+  result=$(ORIGINAL_DIR="$ORIGINAL_DIR" "$script" 2>&1)
   
   if echo "$result" | grep -q "TEST1: PASS" && echo "$result" | grep -q "TEST2: PASS"; then
     log_pass "Enhanced safe_read handles non-interactive mode correctly"
-    rm -f test_safe_read.sh
+    rm -f "$script"
     return 0
   else
     log_fail "Enhanced safe_read non-interactive mode failed"
     echo "$result"
-    rm -f test_safe_read.sh
+    rm -f "$script"
     return 1
   fi
 }
 
 # Main test runner
 main() {
+  # A trapped signal waits for the running child, so the EXIT trap removes the
+  # test directory only once nothing is writing to it.
+  trap cleanup EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 131' QUIT
+  trap 'exit 143' TERM
+  sandbox_init
+
   echo -e "${BLUE}================================${NC}"
   echo -e "${BLUE}  Update.sh Test Suite (Enhanced)${NC}"
   echo -e "${BLUE}================================${NC}\n"
@@ -786,11 +909,13 @@ main() {
 
   # Run tests
   for test in "${tests[@]}"; do
+    sandbox_enter "$test"
     if $test; then
       echo "✓ $test passed"
     else
       echo "✗ $test failed"
     fi
+    sandbox_leave
     echo
   done
 
@@ -801,6 +926,9 @@ main() {
   echo -e "${GREEN}Passed: $TESTS_PASSED${NC}"
   echo -e "${RED}Failed: $TESTS_FAILED${NC}"
   echo -e "${BLUE}Total:  ${#tests[@]}${NC}\n"
+  if [[ -s "$STUB_LOG" ]]; then
+    echo -e "${BLUE}Stubbed session calls: $(wc -l <"$STUB_LOG") ($(cut -d' ' -f1 "$STUB_LOG" | sort -u | paste -sd' ' -))${NC}\n"
+  fi
 
   if [[ $TESTS_FAILED -eq 0 ]]; then
     echo -e "${GREEN}All tests passed! 🎉${NC}\n"
@@ -814,14 +942,11 @@ main() {
 # Global cleanup
 cleanup() {
   echo "Cleaning up test files..."
-  cleanup_test_env
-  rm -f test_detection.sh test_ignore.sh test_safe_read.sh test_fresh_clone.sh test_substring_ignore.sh dry_run_output.txt 2>/dev/null || true
-  rm -f test_caching.sh test_dir_cache.sh 2>/dev/null || true
-  rm -f lock_test_output.txt 2>/dev/null || true
-  rm -rf "${HOME}/.config/test-app" 2>/dev/null || true
+  cd "$ORIGINAL_DIR" 2>/dev/null || cd /
+  if [[ -n "$TEST_ROOT" && -d "$TEST_ROOT" ]]; then
+    rm -rf -- "$TEST_ROOT"
+  fi
 }
-
-trap cleanup EXIT INT TERM
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   main "$@"
