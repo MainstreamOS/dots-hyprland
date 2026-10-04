@@ -1,68 +1,30 @@
 #!/usr/bin/env bash
-# Mainstream OS — privileged system-update helper.
+# Mainstream OS privileged system-update helper.
 #
 # Invoked via:  sudo -S /usr/local/bin/mainstream-update-helper [args]
 # Driven by:    ~/.config/quickshell/ii/modules/settings/UpdateConfig.qml
 #
-# Runs the primary update path (pacman + AUR + flatpak) by invoking
-# each tool directly. Optionally runs topgrade afterwards to catch the
-# 100+ developer-tool ecosystems topgrade knows about (cargo, pipx, npm,
-# nix, JetBrains, VS Code, …). This avoids the layer-of-indirection
-# fragility we hit with topgrade-as-primary while preserving its
-# "update everything-ish" coverage as an opt-out tier.
+# Runs pacman, AUR, flatpak, snap and the dotfiles update directly, then
+# optionally topgrade for developer tools (cargo, pipx, npm, ...).
 #
-# Authentication: the calling user authenticates once via sudo -S
-# (password from the QML inline field). This helper runs as root for
-# just long enough to write a temporary, narrow NOPASSWD rule scoped
-# to the caller. Everything downstream that needs root invokes
-# sudo and hits that rule; everything that needs user context runs
-# under `runuser -u $SUDO_USER`. The temp rule lives at
-# /etc/sudoers.d/99-mainstream-update-active. Two constraints on the
-# filename: (1) no dots — sudoers.d silently skips files whose names
-# contain "." (man sudoers, @includedir); (2) it must sort LAST in
-# /etc/sudoers.d/ so sudoers' last-match-wins evaluation lands on
-# our NOPASSWD rule, not on g_wheel's password-required `%wheel
-# ALL=(ALL:ALL) ALL`. The earlier `00-` prefix sorted FIRST and was
-# silently overridden by g_wheel for every sudo invocation after
-# the helper's initial sudo -S, causing yay's `sudo pacman -U`
-# install step to prompt and time out. The rule is removed on every
-# exit path (trap on EXIT, INT, TERM, HUP) and the legacy `00-`
-# filename is wiped defensively at startup in case a stale file
-# lingered from a kill -9'd previous run.
-#
-# Skip flags (any combination):
-#   --skip-system            skip pacman -Syu
-#   --skip-aur               skip yay/paru AUR update
-#   --skip-flatpak           skip flatpak update (system + user)
-#   --skip-snap              skip snap refresh
-#   --skip-dotfiles          skip the updatems Mainstream-dotfiles refresh
-#   --skip-extras            skip the topgrade developer-tool pass
-#   --skip-firmware          when extras runs, pass --disable firmware
-#                            to topgrade (firmware updates can prompt
-#                            polkit and time out non-interactively)
-#   --edge                   hand updatems the branch instead of the newest
-#                            release, so pushed work arrives before it is
-#                            tagged. For trying a fix early, and for watching
-#                            a release land on a real machine before tagging.
-#   --auto-rebuild-quickshell  opt-in: after all other steps, run
-#                            `quickshell --private-check-compat` and rebuild
-#                            the owning package on mismatch (makepkg for the
-#                            [mainstream] build, else yay/paru).
+# Flags (any combination):
+#   --skip-system              skip pacman -Syu
+#   --skip-aur                 skip the yay/paru AUR update
+#   --skip-flatpak             skip flatpak update (system + user)
+#   --skip-snap                skip snap refresh
+#   --skip-dotfiles            skip the updatems dotfiles refresh
+#   --skip-extras              skip the topgrade pass
+#   --skip-firmware            pass --disable firmware to topgrade (polkit prompts time out)
+#   --edge                     updatems takes the branch instead of the newest release
+#   --auto-rebuild-quickshell  after all steps, rebuild Quickshell on an ABI mismatch
 #
 # Exit codes:
-#   0    everything succeeded (or was skipped)
-#   101  primary succeeded, but the Mainstream dotfiles did not update. Not
-#        soft: the machine is still on its old release and the QML says so.
-#   102  the dotfiles updated, but updatems-system did not finish, so the
-#        root-owned half of the release is still pending.
-#   100  primary succeeded (or partial), extras failed — the QML banner
-#        renders this as "completed with errors" so users notice the
-#        non-fatal failure
-#   4    pacman refused the upgrade because Arch's Qt moved past the release
-#        mainstream-quickshell-git is pinned to. No package changed; Flatpak,
-#        Snap and the system half still ran, and the rest waits for the
-#        rebuilt desktop.
-#   N    pacman / aur / flatpak exit code on a primary failure
+#   0    everything succeeded or was skipped
+#   101  the dotfiles did not update; the machine is still on its old release
+#   102  the dotfiles updated, but updatems-system did not finish
+#   100  completed with errors: snap or extras failed, or [mainstream] was switched off
+#   4    pacman refused: Arch's Qt moved past the desktop's pin; no package changed
+#   N    pacman, AUR or flatpak exit code on a primary failure
 
 set -u
 
@@ -81,28 +43,23 @@ if [[ -z "$ORIG_HOME" || ! -d "$ORIG_HOME" ]]; then
     echo "mainstream-update-helper: could not resolve home directory for $ORIG_USER" >&2
     exit 1
 fi
-# Said first, so the page can tell a run that got this far from one sudo
-# turned away, whatever language sudo complained in.
+# Lets the page tell a run that got this far from one sudo refused, in any locale.
 echo "@@MAINSTREAM-UPDATE-HELPER-START"
 
-# Messages come out in the caller's language, through the same files the
-# shell reads. Picked before the locale below is forced, since that one is
-# for pacman's messages, not the user's.
+# The caller's language, picked before LC_ALL is forced below for pacman.
 if [[ -r /usr/local/lib/mainstream-tr.sh ]]; then
     # shellcheck source=/dev/null
     source /usr/local/lib/mainstream-tr.sh
     tr_init "$ORIG_USER"
-    # The scripts run from here inherit the locale forced below for pacman's
-    # sake; this carries the language the user reads past it.
+    # Child scripts inherit the forced LC_ALL; this carries the user's language past it.
     export MAINSTREAM_UI_LANG="$MAINSTREAM_TR_LANG"
 else
     t()  { printf '%s' "$1"; }
     tf() { local fmt="$1"; shift; printf -- "$fmt" "$@"; }
 fi
 
-# One run at a time, settled before anything below touches the sudoers rule:
-# a second helper would remove the rule the first is relying on, and two
-# package managers would contend for the database.
+# One run at a time: a second helper would remove the sudoers rule the first
+# relies on, and two package managers would contend for the database.
 exec 9>/run/lock/mainstream-update.lock
 if ! flock -n 9; then
     echo ">>> $(t "Another update is already running. Let it finish, then try again.")"
@@ -110,17 +67,8 @@ if ! flock -n 9; then
 fi
 
 # ── Temp NOPASSWD + cleanup trap ────────────────────────────────────────────
-# Filename rules:
-#   (a) no dots — sudoers.d silently skips files whose names contain "."
-#       (man sudoers, @includedir).
-#   (b) must sort LAST in /etc/sudoers.d/. sudoers is last-match-wins,
-#       so a NOPASSWD rule must parse AFTER any matching password-required
-#       rule it intends to override. /etc/sudoers.d/g_wheel ships the
-#       standard `%wheel ALL=(ALL:ALL) ALL` (no NOPASSWD); with the old
-#       `00-` prefix our rule parsed first, g_wheel parsed later, and
-#       the wheel rule won — yay's `sudo pacman -U` would then prompt
-#       and time out. The `99-` prefix puts us after g_wheel, so the
-#       NOPASSWD rule wins the last-match race.
+# The name has no dots (sudoers.d skips files containing ".") and sorts after
+# g_wheel: sudoers is last-match-wins, and its password rule must not win.
 TEMP_SUDOERS="/etc/sudoers.d/99-mainstream-update-active"
 LEGACY_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
 rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
@@ -128,13 +76,8 @@ rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
 cleanup() {
     rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS" "${REBOOT_SESSION_LIST:-}"
     [[ -n "${TOPGRADE_SHIM:-}" ]] && rm -rf "$TOPGRADE_SHIM"
-    # A user-stopped update may have killed pacman mid-transaction;
-    # without this the next pacman invocation refuses to start until
-    # the user manually removes the lock. Only clear it when no package
-    # manager is still alive — the lock may belong to another running
-    # pacman, and deleting it under a live transaction risks concurrent
-    # database writes. libalpm keeps the lock open while it holds it, so
-    # nothing having it open is the test, whichever front end took it.
+    # A stopped update can leave pacman's lock behind. Clear it only when nothing
+    # holds it open, since libalpm keeps it open while a transaction owns it.
     local rc=0
     fuser -s /var/lib/pacman/db.lck 2>/dev/null || rc=$?
     if (( rc == 1 )); then
@@ -237,35 +180,27 @@ on_stop() {
     exit 143
 }
 trap on_stop INT TERM HUP
-# The trap cannot run after SIGKILL or an OOM kill, and that is exactly when a
-# NOPASSWD rule must not be left behind. A separate unit outlives this process
-# and sweeps the file the moment it is gone.
+# The trap cannot run after SIGKILL or an OOM kill, so a separate unit sweeps
+# the NOPASSWD rule once this process is gone.
 if command -v systemd-run >/dev/null 2>&1; then
     systemd-run --quiet --collect --unit="mainstream-update-sudoers-sweep-$$" \
         /bin/bash -c "while kill -0 $$ 2>/dev/null; do sleep 2; done; rm -f '$TEMP_SUDOERS' '$LEGACY_SUDOERS'" \
         2>/dev/null || true
 fi
 
-# The conflict-adoption path below reads pacman's messages; they are only
-# stable in one language.
+# pacman's messages are parsed below, and they are only stable in one language.
 export LC_ALL=C.UTF-8
 
-# A transaction cut short by a shutdown or a suspend can leave the kernel, its
-# modules and the boot image from different releases. The page says an update
-# can be left to run on its own, so the machine is held until pacman is done
-# rather than trusting that nobody reaches for the power menu meanwhile.
+# A transaction cut short by shutdown or suspend can leave the kernel, modules
+# and boot image from different releases, so both are blocked while pacman runs.
 PACMAN_INHIBIT=()
 if command -v systemd-inhibit >/dev/null 2>&1 && systemd-inhibit --list >/dev/null 2>&1; then
     PACMAN_INHIBIT=(systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" --why="Installing updates")
 fi
 pacman_tx() { "${PACMAN_INHIBIT[@]}" pacman "$@"; }
 
-# A root filesystem mounted read-only fails every step below in its own
-# words: the sudoers rule cannot be written, pacman cannot take its lock,
-# flatpak warns on every ref it holds. Said once here instead, with the
-# reason, which is one of two things: the machine was started from a
-# snapshot in the boot menu, which is read-only by design, or the
-# filesystem hit an error and the kernel took it read-only to protect it.
+# A read-only root fails every step below in its own words, so say why once:
+# a snapshot booted from the boot menu, or the kernel remounted it after an error.
 root_mount="$(findmnt -no OPTIONS,SOURCE / 2>/dev/null || true)"
 if [[ ",${root_mount%% *}," == *,ro,* ]]; then
     echo ">>> $(t "The system is mounted read-only, so nothing can be updated.")"
@@ -277,47 +212,24 @@ if [[ ",${root_mount%% *}," == *,ro,* ]]; then
     exit 1
 fi
 
-# Bail out early when another package manager already holds the database
-# lock — every pacman step below would fail against it, and the exit trap
-# must never clear a lock owned by a live foreign process.
+# Every pacman step would fail against another package manager's lock, and the
+# exit trap must never clear a lock a live process owns.
 if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
     echo ">>> $(t "Another package manager is running (pacman database is locked). Let it finish or stop it, then run the update again.")"
     exit 1
 fi
 
-# Broad NOPASSWD scoped to the calling user, active only while this
-# helper is running. The narrow alternative (NOPASSWD on /usr/bin/pacman
-# and /usr/bin/makepkg only) covered the primary update path but missed
-# sub-sudo calls topgrade's extras pass can make — `sudo needrestart`,
-# `sudo pacdiff`, `sudo docker pull` for rootful Docker, `sudo tldr -u`
-# for the system-wide tldr cache, etc. — which would each prompt on
-# a TTY-less invocation and hang. NOPASSWD: ALL covers everything the
-# helper or any sub-process might invoke. The trade-off: during the
-# update window (typically minutes), any process running as the
-# calling user can sudo anything without auth. Off the moment the
-# helper exits — trap removes the file. At-rest security
-# (/etc/sudoers.d/wheel = standard `%wheel ALL=(ALL:ALL) ALL`, password
-# required) is unchanged. This matches what Pamac / mintupdate / other
-# distro GUI updaters effectively do during their run.
-#
-# `Defaults:USER verifypw=any` covers a subtle case: yay (and other
-# AUR helpers) call `sudo -v` to refresh the credential cache before
-# install. The default `verifypw=all` requires EVERY matching sudoers
-# entry to have NOPASSWD for `sudo -v` to skip the prompt — our
-# NOPASSWD rule has it, but g_wheel doesn't, so the default would
-# prompt. `verifypw=any` flips the policy to "if ANY matching entry
-# has NOPASSWD, skip the prompt", which our rule satisfies. Scoped
-# per-user so other accounts on the system are unaffected.
+# NOPASSWD: ALL, not just pacman and makepkg: topgrade's extras sudo many tools,
+# and a prompt with no TTY hangs. The rule exists only while the helper runs.
+# verifypw=any: yay's `sudo -v` skips the prompt when any matching rule is NOPASSWD.
 cat > "$TEMP_SUDOERS" << EOF
 Defaults:$ORIG_USER verifypw = any
 $ORIG_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 "$TEMP_SUDOERS"
 
-# When this run began, in the form pacman.log records, so the verdict at the
-# end can pick out exactly what this run installed. The check itself runs as
-# the calling user: it reads that user's own processes, and nothing it needs
-# is root's to give.
+# In pacman.log's format, so the verdict can pick out what this run installed.
+# The check runs as the caller: it reads that user's own processes.
 HELPER_STARTED_AT="$(date '+%Y-%m-%dT%H:%M:%S%z')"
 REBOOT_CHECK="$ORIG_HOME/.config/quickshell/ii/scripts/update/reboot-check.sh"
 _reboot_check_run() {  # stdin passes through
@@ -327,18 +239,15 @@ reboot_check() {  # $1 = mode, rest = args
     [[ -r "$REBOOT_CHECK" ]] || { echo 0; return 0; }
     _reboot_check_run "$@" || echo 0
 }
-# Which packages the running desktop has loaded, recorded BEFORE anything is
-# replaced. Afterwards the question cannot be answered at all: the file the
-# session still holds is gone from the disk and from the package database,
-# which by then lists the new name, and most of what a desktop maps carries
-# its version in the filename.
+# Recorded before anything is replaced: afterwards the files the session still
+# holds are gone from disk and from the package database.
 REBOOT_SESSION_LIST="$(mktemp)"
 if [[ -r "$REBOOT_CHECK" ]]; then
     _reboot_check_run session > "$REBOOT_SESSION_LIST" || true
     chmod 0644 "$REBOOT_SESSION_LIST" 2>/dev/null || true
 fi
-# The two lines the Settings page reads. The first says what this run is
-# about to replace, before anything is; the second says what it did.
+# The two markers the Settings page reads: PLAN before anything is replaced,
+# then the verdict at the end.
 reboot_marker() {  # $1 = PLAN|""  $2 = the check's output
     local flag="${2%%$'\n'*}" reasons
     reasons="$(printf '%s\n' "$2" | tail -n +2 | tr '\n' ' ')"
@@ -357,9 +266,8 @@ SKIP_EXTRAS=0
 SKIP_FIRMWARE=0
 AUTO_REBUILD_QS=0
 TOPGRADE_EXTRA_ARGS=()
-# Everything after a bare -- is for topgrade, whatever it looks like: the page
-# sends the Advanced field's words there, and topgrade's own options start
-# with -- too.
+# Everything after a bare -- goes to topgrade as is: the page sends the Advanced
+# field's words there, and topgrade's own options start with -- too.
 _topgrade_rest=0
 for arg in "$@"; do
     if (( _topgrade_rest )); then
@@ -378,15 +286,9 @@ for arg in "$@"; do
         --edge)                     EDGE=1 ;;
         --auto-rebuild-quickshell)  AUTO_REBUILD_QS=1 ;;
         --*)
-            # An unrecognized flag is almost always a newer Settings page talking
-            # to an older helper. The ISO bakes its own copy of this script, and
-            # that copy only catches up when updatems-system runs partway through
-            # the first update, so a fresh install can be a release behind for
-            # exactly one run. No topgrade flag passthrough is documented above,
-            # so a flag arriving here was never meant to be forwarded: doing so
-            # reported the skew as an "unexpected argument" from a tool that had
-            # nothing to do with it, and left the flag's own work undone without
-            # saying so.
+            # Usually a newer Settings page and an older helper: the ISO's copy only
+            # catches up when updatems-system runs during the first update. Never
+            # forward it to topgrade, which would hide the skew.
             echo "$(t "Unknown option:") $arg" >&2
             echo "$(t "This build of the update helper does not support it. Run an update without it once to refresh the helper, then try again.")" >&2
             exit 2
@@ -395,18 +297,11 @@ for arg in "$@"; do
     esac
 done
 
-# Defensive — if any sub-process unexpectedly tries to use a graphical
-# askpass, point it at /bin/false so it fails fast instead of hanging
-# on a TTY prompt the QML can't service. Empty SUDO_PROMPT suppresses
-# the "[sudo] password for USER:" header — with NOPASSWD active any
-# child sudo authorizes without input, but sudo still prints the
-# prompt header by default and yay's interleaved output makes that
-# look like a blocking prompt to the user.
+# A graphical askpass fails fast instead of hanging. An empty SUDO_PROMPT drops
+# sudo's password header, which amid yay's output looks like a blocking prompt.
 export SUDO_ASKPASS=/bin/false
 export SUDO_PROMPT=""
 
-# Per-step return codes, defaulted to "skipped/ok" (0). Updated below
-# only when the step actually runs.
 PACMAN_RC=0
 AUR_RC=0
 FLATPAK_RC=0
@@ -418,25 +313,15 @@ TOPGRADE_RC=0
 MAINSTREAM_REPO_OFFLINE=0
 
 # ── 1. System + [mainstream] packages (pacman) ──────────────────────────────
-# pacman -Syu refreshes every configured repo, so the signed [mainstream] repo
-# (the prebuilt packages that used to come from the AUR) updates here too.
 if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "System & [mainstream] packages — pacman -Syu")"
     echo "═══════════════════════════════════════════════════════════"
     PACMAN_LOG=$(mktemp)
-    # Asked before anything changes: which of the packages about to arrive
-    # own something the running desktop has loaded. The answer goes to the
-    # page as a marker and to the person as a sentence, so nobody is surprised
-    # by a reboot at the end of a run they could see coming at the start.
-    # --noconfirm because this shares the helper's stdin with sudo, which has
-    # already drained it: a provider or replacement prompt would read end of
-    # file, take no for an answer and print nothing, so the plan would come
-    # back empty on exactly the large transactions that need one. The database
-    # refresh this does is repeated by the upgrade below, which is a fetch
-    # worth paying for a list of what is actually about to happen rather than
-    # a guess from the last sync.
+    # Says up front whether arriving packages replace parts of the running desktop.
+    # --noconfirm: stdin is /dev/null, so a provider prompt would read EOF and empty
+    # the plan. The repeated database refresh is deliberate.
     PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm </dev/null 2>/dev/null | reboot_check plan "$REBOOT_SESSION_LIST")"
     reboot_marker PLAN "$PLAN_OUT"
     if [[ "${PLAN_OUT%%$'\n'*}" == 1 ]]; then
@@ -445,10 +330,8 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
     pacman_tx -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
     PACMAN_RC=${PIPESTATUS[0]}
     if [[ "$PACMAN_RC" -ne 0 ]]; then
-        # An untrusted [mainstream] signing key aborts the whole transaction,
-        # so core, extra and multilib do not update either. The key material
-        # is already on disk, so this is recoverable in place rather than a
-        # failure worth reporting.
+        # An untrusted [mainstream] key aborts the whole transaction, core and extra
+        # included. The key is already on disk, so repair it in place and retry.
         if grep -qE 'key "[^"]*" is unknown|missing required signature|could not be looked up remotely|GPGME error|invalid or corrupted database \(PGP signature\)|signature from .* is (unknown|marginal) trust' "$PACMAN_LOG"; then
             echo ""
             echo "── $(t "The [mainstream] signing key is not trusted here, which blocks every repository. Repairing the keyring and retrying...")"
@@ -457,8 +340,6 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
             elif [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
                 /usr/local/bin/mainstream-keyring-init
             else
-                # Older installs predate the repair tool; the key file and the
-                # fingerprint are enough to re-establish trust by hand.
                 echo "   $(t "No repair tool on this machine, importing the key directly.")"
                 pacman-key --add /usr/local/share/mainstream.pub \
                     && pacman-key --lsign-key D644BEB9C1B7668E3A6C16DA8D567345B265848E \
@@ -469,9 +350,8 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
             PACMAN_RC=${PIPESTATUS[0]}
             if [[ "$PACMAN_RC" -ne 0 ]] \
                && grep -qE 'key "[^"]*" is unknown|missing required signature|invalid or corrupted database \(PGP signature\)' "$PACMAN_LOG"; then
-                # Dropping the repo to SigLevel = Never would trade a broken
-                # update for an unverified one. Taking it out of the run
-                # instead keeps the rest of the system updating.
+                # Never fall back to SigLevel = Never. Switching the repo off until
+                # mainstream-keyring-repair keeps the rest of the system updating.
                 echo ""
                 echo "── $(t "Still unverified. Taking [mainstream] out of this run so the rest of the system can still update.")"
                 if [[ -x /usr/local/bin/mainstream-keyring-init ]]; then
@@ -492,11 +372,9 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
             fi
         fi
     fi
-    # The desktop is built against one Qt minor release and pinned to it, so
-    # once Arch moves past it pacman refuses the whole transaction, before
-    # changing anything, and keeps refusing until the rebuilt desktop is
-    # published. A retry only repeats that, and the generic failure reads as
-    # something broken on this machine.
+    # The desktop is pinned to one Qt minor release. Once Arch moves past it, pacman
+    # refuses the whole transaction, changing nothing, until the rebuilt desktop is
+    # published, so a retry would only repeat that.
     if [[ "$PACMAN_RC" -ne 0 && "$MAINSTREAM_REPO_OFFLINE" -eq 0 ]] \
        && grep -qE "(breaks dependency|unable to satisfy dependency) 'qt6-base<[^']*' required by mainstream-quickshell-git" "$PACMAN_LOG"; then
         echo ""
@@ -505,13 +383,9 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
         # still run; what builds on the package set waits with it.
         QT_PIN_HELD=1
     elif [[ "$PACMAN_RC" -ne 0 ]]; then
-        # When one of our own packages starts shipping a file an older install
-        # or ISO wrote directly, pacman refuses the upgrade with "exists in
-        # filesystem" and no scriptlet can help, because the conflict check
-        # runs before anything installs. That stranding is ours to absorb:
-        # if every conflict names a mainstream package and every path is
-        # unowned on disk, retry once overwriting exactly those paths.
-        # Anything outside those bounds keeps pacman's refusal.
+        # When one of our packages starts shipping a file an older install wrote directly,
+        # pacman refuses before any scriptlet runs. If every conflict is a mainstream
+        # package on an unowned path, retry overwriting exactly those.
         mapfile -t _conflicts < <(grep -E '^[[:alnum:]@._+-]+: /.+ exists in filesystem$' "$PACMAN_LOG")
         _ow_args=()
         if [[ ${#_conflicts[@]} -gt 0 ]]; then
@@ -532,12 +406,9 @@ if [[ "$SKIP_SYSTEM" -eq 0 ]]; then
                 pacman_tx -Syu --noconfirm "${_ow_args[@]}"
                 PACMAN_RC=$?
             else
-                # Someone else's package wants a path that is already on disk and
-                # owned by nobody, which usually means it was put there by a vendor
-                # installer before the software was packaged here. Taking it over
-                # unasked could throw away whatever is inside, so the choice stays
-                # with the person. Naming the path and the command is the difference
-                # between a dead end and a next step.
+                # Someone else's package wants an unowned path, often left by a vendor
+                # installer. Overwriting could lose what is there, so the choice stays
+                # with the person: name the paths and the command.
                 echo ""
                 echo "── $(t "Update stopped: a package wants files that are already on disk and belong to no package. That usually means the software was installed by its own installer before it was packaged here.")"
                 echo ""
@@ -573,9 +444,8 @@ else
 fi
 
 # ── 2. AUR (yay or paru) ────────────────────────────────────────────────────
-# Anything built or installed against the package set has to wait for it: a
-# failed -Syu already refreshed the databases, so building on top of it is a
-# partial upgrade with a fresh coat of paint.
+# Anything built on the package set waits for it: a failed -Syu already refreshed
+# the databases, so building now would be a partial upgrade.
 PKG_STEP_FAILED=0
 [[ "$SKIP_SYSTEM" -eq 0 && "${PACMAN_RC:-0}" -ne 0 ]] && PKG_STEP_FAILED=1
 if [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
@@ -609,31 +479,21 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     echo "  $(t "Flatpak — flatpak update (system + user)")"
     echo "═══════════════════════════════════════════════════════════"
-    # flatpak gives up on a dropped download without trying again: it files a
-    # connection reset under an error code its own retry list does not carry,
-    # so one interrupted transfer of the remote's index ends the whole run.
-    # The retry it does not do is done here, the way the pacman step above
-    # does it. A connect or resolve failure is the exception, because flatpak
-    # does spend five attempts of its own on those and a sixth would only
-    # make a dead network take longer to say so.
+    # flatpak does not retry a reset download, so one dropped transfer ends the run;
+    # retry once here. Connect and resolve failures are excluded: flatpak already
+    # tries those five times.
     FLATPAK_LOG=$(mktemp)
     FP_NO_RETRY='While fetching .*: \[(5|6|7)\]|Could not resolve host|Could not connect to server'
 
-    # Runs one half of the step, once more after a pause if it did not
-    # finish. What is read out of the output decides whether to try again and
-    # nothing else: the code this returns is the update's own, so a fetch
-    # error that flatpak itself prints as a passing warning can never turn a
-    # real failure into a success.
+    # The output only decides whether to retry. The code returned is the update's
+    # own, so a fetch warning can never turn a failure into a success.
     flatpak_leg() {
         local scope="$1" rc
         : > "$FLATPAK_LOG"
         if [[ "$scope" == system ]]; then
-            # System-wide flatpaks update as root (no sudo needed; we are root).
             flatpak update --noninteractive --system 2>&1 | tee "$FLATPAK_LOG"
             rc=${PIPESTATUS[0]}
         else
-            # Per-user flatpaks need to run as the user (they live under
-            # ~/.local/share/flatpak/) — runuser with HOME set.
             runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
                 flatpak update --noninteractive --user 9>&- 2>&1 | tee "$FLATPAK_LOG"
             rc=${PIPESTATUS[0]}
@@ -654,9 +514,8 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
         return "$rc"
     }
 
-    # Named, because the two halves are separate processes whose output runs
-    # together: an error from the first sitting next to "Nothing to update."
-    # from the second reads as one run contradicting itself.
+    # Each half is labeled: their outputs run together, and an error beside the
+    # other's "Nothing to update." reads as one run contradicting itself.
     echo ""
     echo "── $(t "Flatpak: apps installed for everyone")"
     flatpak_leg system
@@ -666,7 +525,6 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     flatpak_leg user
     FP_USR_RC=$?
     rm -f "$FLATPAK_LOG"
-    # Either non-zero counts as a flatpak failure.
     if [[ "$FP_SYS_RC" -ne 0 ]]; then
         FLATPAK_RC="$FP_SYS_RC"
     elif [[ "$FP_USR_RC" -ne 0 ]]; then
@@ -678,14 +536,9 @@ elif [[ "$SKIP_FLATPAK" -ne 0 ]]; then
 fi
 
 # ── 4. Snap (refresh as root, bypasses polkit) ──────────────────────────────
-# `snap refresh` talks to snapd over D-Bus, which gates the
-# io.snapcraft.snapd.manage action behind polkit. Polkit is a separate
-# auth path from sudoers — our NOPASSWD rule does NOT apply, so when
-# topgrade runs `snap refresh` as the calling user a polkit prompt
-# pops up and blocks the unattended flow. Running it here from the
-# helper (which is root) skips polkit entirely: root is implicitly
-# authorized for any action. Topgrade gets --disable snap below so
-# it doesn't redundantly try.
+# Run here as root: snapd gates refresh behind polkit, which the sudoers rule does
+# not cover, so a user-level refresh would hang on a prompt. topgrade gets
+# --disable snap below.
 if [[ "$SKIP_SNAP" -eq 0 ]] && command -v snap >/dev/null 2>&1; then
     echo ""
     echo "═══════════════════════════════════════════════════════════"
@@ -699,18 +552,9 @@ elif [[ "$SKIP_SNAP" -ne 0 ]]; then
 fi
 
 # ── 5. Mainstream dotfiles (updatems) ───────────────────────────────────────
-# /usr/local/bin/updatems is a per-user command that checks for a new
-# release tag (plain version numbers) on the upstream MainstreamOS/dots-hyprland
-# repo and, when one is detected, runs `./setup exp-update` against the
-# clone at ~/.cache/dots-hyprland with --non-interactive
-# --default-choice backup so file conflicts back up to
-# .update-backups/ rather than blocking on a prompt. No-op when
-# already at the latest tag. Auto-clones the repo on first run.
-# Runs as the calling user (updatems refuses root).
 if [[ "$SKIP_DOTFILES" -eq 0 && "$QT_PIN_HELD" -eq 1 ]]; then
-    # The dotfiles wait for the rebuilt desktop, but the root files the clone
-    # already holds are the ones that match the desktop in place, and putting
-    # them in is what finishes an update whose system half did not run.
+    # The root files the clone already holds match the desktop in place, so
+    # installing them still finishes an update whose system half did not run.
     echo ""
     echo "── $(t "Dotfiles: waiting for the desktop update that matches the new Qt.")"
     DOTFILES_DEFERRED=1
@@ -735,13 +579,6 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     DOTFILES_RC=$?
 
     # ── 5b. System-level dotfiles bits (updatems-system) ───────────────────
-    # updatems handles user-level files (~/.config etc.); updatems-system
-    # refreshes the corresponding system-level files that live in
-    # /usr/share, /usr/share/polkit-1, and /usr/local/bin (Plymouth theme,
-    # SDDM polkit + bg helper, the update tooling itself). File copies
-    # only — no initramfs rebuild, no kernel-cmdline rewrite. Tracked as
-    # a separate Summary line so users can see which half (user-level
-    # vs system-bits) failed if one does.
     if [[ "$DOTFILES_RC" -ne 0 ]]; then
         echo ""
         echo "── $(t "Mainstream system bits: skipped — updatems did not finish, so the release's root-owned files stay at the version that matches the desktop.")"
@@ -758,11 +595,6 @@ elif [[ "$SKIP_DOTFILES" -ne 0 ]]; then
 fi
 
 # ── 6. Extras (topgrade for developer ecosystems) ───────────────────────────
-# Topgrade handles cargo, pipx, npm, nix, rustup, gem, JetBrains
-# Toolbox, VS Code extensions, github-cli extensions, and 100+ more.
-# Most users don't have all of these installed; topgrade only runs
-# the steps for tools it actually finds.
-
 # Room for large Proton downloads without holding the sudo rule open all day.
 # Flatpak sandboxes (ProtonPlus) are outside its reach and finish on their own.
 TOPGRADE_TIMEOUT_SECS=7200
@@ -838,17 +670,14 @@ elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
 fi
 
 # ── 7. Quickshell ABI mismatch follow-up ────────────────────────────────────
-# Pacman's quickshell-check.hook fires when Qt is updated but
-# Quickshell wasn't rebuilt against the new Qt. The same ABI test
-# the hook runs is `quickshell --private-check-compat`; non-zero
-# exit means mismatch.
+# Same ABI test pacman's quickshell-check.hook runs; non-zero means Quickshell
+# needs a rebuild against the new Qt.
 if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/quickshell ]]; then
     if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
             /usr/bin/quickshell --private-check-compat >/dev/null 2>&1 9>&-; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
         QS_PKGBUILD_DIR="$ORIG_HOME/.cache/dots-hyprland/sdata/dist-arch/mainstream-quickshell-git"
         if [[ -n "$QS_PKG" ]] && [[ -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
-            # [mainstream] build — rebuild from the dotfiles PKGBUILD with makepkg.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
             echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" makepkg)"
@@ -860,7 +689,6 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
                 echo ">>> $(t "Quickshell rebuild failed; the running binary is unchanged. Re-run the update after fixing the build.")"
             fi
         elif [[ -n "$QS_PKG" ]] && command -v yay >/dev/null 2>&1; then
-            # AUR-sourced Quickshell (user installed a helper) — let yay rebuild it.
             echo ""
             echo "═══════════════════════════════════════════════════════════"
             echo "  $(tf "Quickshell ABI mismatch — rebuilding %s (%s)" "$QS_PKG" yay)"
@@ -890,10 +718,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
 fi
 
 # ── 8. Summary + exit code ──────────────────────────────────────────────────
-# Helper outputs a human-readable summary that the QML banner doesn't
-# rely on, plus chooses an exit code that lets the QML differentiate
-# "everything ok" from "primary ok but extras failed" from "primary
-# failed". The status_for() helper renders the per-step state.
+# The summary is for reading; the page relies on the exit code and markers.
 status_for() {
     local skip="$1" rc="$2"
     if [[ "$skip" -eq 1 ]]; then
@@ -941,16 +766,9 @@ if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then
     echo ">>>     sudo mainstream-keyring-repair"
 fi
 
-# Exit-code priority. Primary failures (pacman, aur, flatpak) override
-# everything else and propagate their own RC for the QML to surface.
-# Snap, dotfiles, and extras are treated as SOFT — they fail to exit
-# 100 ("completed with errors") rather than a hard failure code. They
-# are soft because each is a non-critical augmentation: snap-server
-# timeouts, transient git-fetch failures, and topgrade quirks
-# shouldn't turn the whole update banner red for a regular user. The
-# log still shows the failure for the power-user case.
-# The Qt pin hold is its own answer, whatever else ran, so the page can say
-# why the desktop did not update.
+# Primary failures (pacman, AUR, flatpak) return their own code. Snap and extras
+# are soft: 100, which the page shows as success while the summary marks the step.
+# The Qt pin hold comes first so the page can say why the desktop did not update.
 if [[ "$QT_PIN_HELD" -eq 1 ]]; then exit 4; fi
 if [[ "$SKIP_SYSTEM"   -ne 1 ]] && [[ "$PACMAN_RC"       -ne 0 ]]; then exit "$PACMAN_RC";   fi
 if [[ "$SKIP_AUR"      -ne 1 ]] && [[ "$AUR_RC"          -ne 0 ]]; then exit "$AUR_RC";      fi
