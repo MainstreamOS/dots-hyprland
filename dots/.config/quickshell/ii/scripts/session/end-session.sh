@@ -110,6 +110,65 @@ wait_gone() {
     done
 }
 
+# The processes behind the tray's icons, one per line. Read through a call,
+# since get-property ignores --timeout and waits 25 s on a stuck shell.
+tray_pids() {
+    local name
+    busctl --user --auto-start=no --timeout=0.3 --json=short call org.kde.StatusNotifierWatcher \
+        /StatusNotifierWatcher org.freedesktop.DBus.Properties Get ss \
+        org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems 2>/dev/null \
+        | jq -r '.data[0].data[] | sub("/.*"; "")' 2>/dev/null \
+        | while IFS= read -r name; do
+            busctl --user --auto-start=no --timeout=0.3 --json=short call org.freedesktop.DBus /org/freedesktop/DBus \
+                org.freedesktop.DBus GetConnectionUnixProcessID s "$name" 2>/dev/null | jq -r '.data[0]' 2>/dev/null
+        done
+}
+
+# The CPU time a process has used, in hundredths of a second, set in REPLY so
+# the poll forks nothing. Fails while any of its threads is waiting on the disk.
+cpu_used() {
+    local stat line t
+    local -a f
+    { read -r stat <"/proc/$1/stat"; } 2>/dev/null || return 1
+    for t in /proc/"$1"/task/*/stat; do
+        { read -r line <"$t"; } 2>/dev/null && [[ "${line##*) }" == D* ]] && return 1
+    done
+    read -r -a f <<<"${stat##*) }"
+    REPLY=$(( f[11] + f[12] ))
+}
+
+# Like wait_gone, but an app in the tray is also let go after about half a
+# second at no more than a tenth of a CPU, since one still quitting is busy.
+wait_settled() {
+    local until="$1" tray="" pid now pass=0
+    shift
+    local -A base=() polls=()
+    local left=("$@") next
+    while (( ${#left[@]} && SECONDS < until )); do
+        next=()
+        for pid in "${left[@]}"; do
+            kill -0 "$pid" 2>/dev/null || continue
+            # The tray is asked only about an app still running after the
+            # first look, which just notes each app's CPU time.
+            (( pass )) && [[ -z "$tray" ]] && tray=" $(tray_pids | tr '\n' ' ') "
+            if [[ -z "$tray" || "$tray" == *" $pid "* ]] && cpu_used "$pid"; then
+                now=$REPLY
+                if [[ -z "${base[$pid]:-}" ]]; then
+                    base[$pid]=$now polls[$pid]=0
+                elif (( ++polls[$pid] >= 3 )); then
+                    (( now - base[$pid] <= 6 )) && continue
+                    base[$pid]=$now polls[$pid]=0
+                fi
+            else
+                unset "base[$pid]"
+            fi
+            next+=("$pid")
+        done
+        left=("${next[@]}")
+        (( ${#left[@]} )) && sleep 0.2 && pass=1
+    done
+}
+
 deadline=$((SECONDS + TIMEOUT))
 notice_at=$((SECONDS + 3))
 notice=""
@@ -134,10 +193,10 @@ done
 # down its tabs after its windows close, and the session ending under it
 # makes it offer to recover them next time, the very thing closing apps
 # first is for. The apps asked to quit get until the deadline. The rest get a
-# moment, since an app that keeps running in the tray after its window closes
-# would otherwise hold everything up.
+# moment, since an app that keeps running after its window closes would
+# otherwise hold everything up, and one resting in the tray is let go sooner.
 wait_gone "$deadline" "${quit_pids[@]}"
-wait_gone $((SECONDS + 3)) "${rest_pids[@]}"
+wait_settled $((SECONDS + 3)) "${rest_pids[@]}"
 
 # From here the session ends, and the watcher has to stay quiet while it does,
 # so the file outlasts this run unless ending the session fails.
