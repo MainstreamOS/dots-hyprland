@@ -194,27 +194,35 @@ cmd_provision() {  # $1 = user
 
 # The stored hash is checked with the same crypt(3) the login stack uses, so
 # whatever scheme /etc/login.defs picked (yescrypt here) is handled by libcrypt
-# rather than reimplemented.
+# rather than reimplemented. Returns 1 only when the password does not match;
+# any other failure means there was nothing to check against or no way to check.
 _password_matches() {  # $1 = user  $2 = password
     local hash
     hash="$(getent shadow "$1" 2>/dev/null | cut -d: -f2)"
     # A locked or empty entry has no password to match, so nothing can verify.
-    case "$hash" in ''|'!'*|'*'*) return 1 ;; esac
+    case "$hash" in ''|'!'*|'*'*) return 2 ;; esac
     HASH="$hash" PW="$2" python3 -I -c '
-import ctypes, os, sys
-lib = ctypes.CDLL("libcrypt.so.2")
-lib.crypt.restype = ctypes.c_char_p
-lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-h = os.environ["HASH"].encode()
-got = lib.crypt(os.environ["PW"].encode(), h)
-sys.exit(0 if got and got == h else 1)
+import os, sys
+try:
+    import ctypes
+    lib = ctypes.CDLL("libcrypt.so.2")
+    lib.crypt.restype = ctypes.c_char_p
+    lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    h = os.environb[b"HASH"]
+    got = lib.crypt(os.environb[b"PW"], h)
+except Exception:
+    sys.exit(2)
+# libcrypt answers a hash it cannot read with a token starting with "*".
+if not got or got.startswith(b"*"):
+    sys.exit(2)
+sys.exit(0 if got == h else 1)
 ' 2>/dev/null
 }
 
 # change-own-password reaches this without an administrator, and pam_faillock
 # never sees a crypt(3) check, so each account gets one check every 2s.
 _check_current_password() {  # $1 = user  $2 = password
-    local lock fd mask
+    local lock fd mask rc=0
     # The caller's terminal can still signal this root process, and ending a
     # wrong guess's wait early would release the lock for the next one.
     trap '' INT QUIT HUP
@@ -227,8 +235,10 @@ _check_current_password() {  # $1 = user  $2 = password
     flock -w 30 "$fd" || die "another password check for $1 is still running"
     UNPROVEN=""
     log "$INVOKED"
-    if ! _password_matches "$1" "$2"; then
+    _password_matches "$1" "$2" || rc=$?
+    if (( rc != 0 )); then
         sleep 2
+        (( rc == 1 )) || die "the current password could not be checked"
         die "the current password is not correct"
     fi
     # A match holds the lock 2s as well, through a sleep that inherits it, so

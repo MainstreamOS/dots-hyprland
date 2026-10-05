@@ -62,13 +62,17 @@ ContentPage {
     //
     // The LAST such line is the one that ended the run: the provisioning
     // library logs to the same stream, so an earlier warning would otherwise
-    // win. The reason is shown beside the translated sentence rather than in
-    // place of it, because it comes back in English whatever the locale.
+    // win.
+    function helperError(raw) {
+        const all = String(raw ?? "").match(/ERROR:\s*([^\n]+)/g)
+        if (!all || all.length === 0) return ""
+        return all[all.length - 1].replace(/^ERROR:\s*/, "").trim()
+    }
+
+    // The reason is shown beside the translated sentence rather than in place
+    // of it, because it comes back in English whatever the locale.
     function helperReason(raw, fallback) {
-        if (!raw) return fallback
-        const all = String(raw).match(/ERROR:\s*([^\n]+)/g)
-        if (!all || all.length === 0) return fallback
-        const last = all[all.length - 1].replace(/^ERROR:\s*/, "").trim()
+        const last = root.helperError(raw)
         return last.length > 0 ? fallback + " (" + last + ")" : fallback
     }
 
@@ -195,6 +199,10 @@ ContentPage {
                     item.expanded = false
                 } else if (refusal) {
                     root.showStatus(refusal, true)
+                } else if (root.helperError(actionErr.text) === "the current password is not correct") {
+                    // user-manager exits 22 for every refusal, so its reason is
+                    // the only thing that tells a mistyped password apart.
+                    root.showStatus(Translation.tr("Incorrect password"), true)
                 } else {
                     root.showStatus(root.helperReason(actionErr.text,
                         Translation.tr("Something went wrong. Please try again.")), true)
