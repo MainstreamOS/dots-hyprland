@@ -176,6 +176,12 @@ ApplicationWindow {
     function pageIndex(name) {
         return root.pages.findIndex(page => page.component.endsWith(name));
     }
+    // By file or by position, so a new window and one already open read a page alike.
+    function resolvePage(name) {
+        const named = root.pageIndex(name);
+        const position = parseInt(name);
+        return named !== -1 ? named : (position >= 0 && position < root.pages.length ? position : -1);
+    }
     function showPage(name) {
         root.requestPage(root.pageIndex(name));
     }
@@ -305,11 +311,10 @@ ApplicationWindow {
         const signalPath = `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/mainstream-settings-restart-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
         Quickshell.execDetached({
             command: ["qs", "-p", Quickshell.shellPath("settings.qml")],
-            // The new window opens on this page alone, not on whatever this
-            // one was opened for, and at this one's size.
+            // Of what this window was opened for, only a section not yet shown goes with it.
             environment: ({
                 "QS_SETTINGS_PAGE": root.pages[index].component.split("/").pop(),
-                "QS_SETTINGS_SECTION": null,
+                "QS_SETTINGS_SECTION": root.pendingSettingsSection || null,
                 "QS_SETTINGS_TAB": null,
                 "QS_SHARING_FOLDER": null,
                 "QS_SETTINGS_SIZE": `${Math.round(root.width)}x${Math.round(root.height)}`,
@@ -408,16 +413,14 @@ ApplicationWindow {
     // its position, so callers don't have to track this list's ordering.
     property int initialPage: {
         const envPage = Quickshell.env("QS_SETTINGS_PAGE");
-        if (!envPage) return 0;
-        const named = root.pageIndex(envPage);
-        return named !== -1 ? named : (parseInt(envPage) || 0);
+        return envPage ? Math.max(root.resolvePage(envPage), 0) : 0;
     }
     property int initialTab: {
         const envTab = Quickshell.env("QS_SETTINGS_TAB");
         return envTab ? parseInt(envTab) : 0;
     }
-    // Handed to the loaded page below and cleared once a page reports the
-    // section found, so later page visits start at the top as usual.
+    // Handed to the next page loaded and cleared once it has looked, so later
+    // page visits start at the top as usual.
     property string pendingSettingsSection: Quickshell.env("QS_SETTINGS_SECTION") || ""
     property int currentPage: initialPage
 
@@ -548,10 +551,35 @@ ApplicationWindow {
             FileSharing.requestFolder(sharingFolder)
     }
 
-    // A second launch hands its page to this window rather than opening
-    // another: qs ipc --pid <pid> call settings showPage UpdateConfig.qml
+    // By pid, since a restart's two windows share the title until the old one goes.
+    function bringForward() {
+        Quickshell.execDetached(["hyprctl", "dispatch",
+            `hl.dsp.focus({ window = "pid:${Quickshell.processId}" })`]);
+    }
+
     IpcHandler {
         target: "settings"
+        // QS_SETTINGS_PAGE and QS_SETTINGS_SECTION for a window already open.
+        // "restarting" has the caller ask again, reaching the window that stays.
+        function openPage(page: string, section: string): string {
+            if (root.restarting)
+                return "restarting";
+            const index = page ? root.resolvePage(page) : -1;
+            if (index !== -1) {
+                root.pendingSettingsSection = section;
+                // Even for the page shown, so it overrides an earlier request still being checked.
+                root.requestPage(index);
+                if (index === root.currentPage && pageLoader.status === Loader.Ready) {
+                    // A page still loading takes the section in onLoaded instead.
+                    if (section && pageLoader.item.scrollToSection)
+                        pageLoader.item.scrollToSection(section);
+                    root.pendingSettingsSection = "";
+                }
+            }
+            root.bringForward();
+            return "ok";
+        }
+        // For callers that bring the window forward themselves, such as the welcome installer.
         function showPage(name: string): void {
             root.showPage(name);
         }
@@ -565,10 +593,7 @@ ApplicationWindow {
             root.sharingUsed = true;
             FileSharing.requestFolder(path);
             root.showPage("SharingConfig.qml");
-            const titleRegex = (root.title || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            if (titleRegex)
-                Quickshell.execDetached(["hyprctl", "dispatch",
-                    `hl.dsp.focus({ window = [[title:^${titleRegex}$]] })`]);
+            root.bringForward();
         }
     }
 
@@ -777,12 +802,20 @@ ApplicationWindow {
                             root.sharingUsed = true;
                         else if (loadedPage.endsWith("ManageAppsConfig.qml"))
                             root.appsUsed = true;
-                        if (!root.pendingSettingsSection || !item?.scrollToSection) return;
+                        if (!root.pendingSettingsSection) return;
+                        if (!item?.scrollToSection) {
+                            root.pendingSettingsSection = "";
+                            return;
+                        }
                         const name = root.pendingSettingsSection;
                         const page = item;
                         // After layout: section positions are not final inside onLoaded.
                         Qt.callLater(() => {
-                            if (page === pageLoader.item && page.scrollToSection(name))
+                            if (page !== pageLoader.item)
+                                return;
+                            page.scrollToSection(name);
+                            // A request that came in meanwhile keeps its own section.
+                            if (root.pendingSettingsSection === name)
                                 root.pendingSettingsSection = "";
                         });
                     }

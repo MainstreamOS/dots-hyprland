@@ -13,6 +13,11 @@ Singleton {
         Quickshell.execDetached(["bash", Quickshell.shellPath("scripts/session/end-session.sh"), action]);
     }
 
+    // A page is named by its file (WifiConfig.qml), a section by its objectName.
+    function openSettings(page = "", section = "") {
+        Quickshell.execDetached(["bash", Quickshell.shellPath("scripts/settings/open-settings.sh"), page, section]);
+    }
+
     function changePassword() {
         Quickshell.execDetached(["bash", "-c", `${Config.options.apps.changePassword}`]);
     }

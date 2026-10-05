@@ -383,7 +383,11 @@ await_update_click() {  # title  body
 # Through Settings' own opener, run by the compositor so it has the session's environment.
 open_update_page() {
   local qs_dir="$HOME/.config/quickshell/ii" pid
-  # An open window takes the page and comes forward.
+  if [[ -f $qs_dir/scripts/settings/open-settings.sh ]]; then
+    hyprctl -i 0 eval 'hl.exec_cmd("bash \"$HOME/.config/quickshell/ii/scripts/settings/open-settings.sh\" UpdateConfig.qml")' >/dev/null 2>&1
+    return
+  fi
+  # Dots from before that opener (3.0.0): an open window takes the page and comes forward.
   # Without the session's WAYLAND_DISPLAY, qs lists nothing unless told any display will do.
   pid=$(qs list --any-display -p "$qs_dir/settings.qml" -j 2>/dev/null | jq -r 'max_by(.launch_time) | .pid // empty' 2>/dev/null)
   if [[ -n $pid ]] && qs ipc --pid "$pid" call settings showPage UpdateConfig.qml >/dev/null 2>&1; then

@@ -177,9 +177,7 @@ Scope {
 
             function openSettingsPage(page) {
                 GlobalStates.desktopMenuOpen = false;
-                Quickshell.execDetached(["sh", "-c",
-                    `QS_SETTINGS_PAGE=${page} quickshell -p '`
-                    + StringUtils.shellSingleQuoteEscape(Directories.settingsAppPath) + "'"]);
+                Session.openSettings(page);
             }
         }
     }
