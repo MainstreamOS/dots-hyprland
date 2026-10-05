@@ -172,6 +172,8 @@ ColumnLayout {
             // the ScrollView, whose wheelEnabled: false blocks its children.
             WheelHandler {
                 orientation: Qt.Horizontal
+                // A touchpad swipe is rarely straight, so its vertical part still has to reach the chat.
+                blocking: false
                 onWheel: (event) => {
                     const flick = codeScrollView.contentItem
                     const maxX = Math.max(0, flick.contentWidth - flick.width)
