@@ -366,15 +366,33 @@ ApplicationWindow {
                     }
 
                     // ── Internet notice ──
-                    NoticeBox {
-                        // From the Wi-Fi list below, held still while a password is typed there,
-                        // so it agrees with the Connected row and cannot resize and move the list.
-                        readonly property bool online: Network.ethernet || shownNetworks.active !== null
+                    // As tall as the taller message, so a change of connection during a password prompt cannot
+                    // move the Wi-Fi list below.
+                    Item {
+                        id: internetNotice
+                        // Limited counts, as it does for Ethernet: NetworkManager's check can fail on a working network.
+                        readonly property bool online: Network.ethernet || Network.wifiStatus === "connected" || Network.wifiStatus === "limited"
                         Layout.fillWidth: true
-                        materialIcon: online ? "check_circle" : "wifi"
-                        text: online
-                            ? Translation.tr("Internet connected — you're ready to install.")
-                            : Translation.tr("An internet connection is required for full installation. Please connect to Wi-Fi below before starting the installer.")
+                        implicitHeight: Math.max(onlineNotice.implicitHeight, offlineNotice.implicitHeight)
+
+                        NoticeBox {
+                            id: onlineNotice
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: internetNotice.online
+                            materialIcon: "check_circle"
+                            text: Translation.tr("Internet connected — you're ready to install.")
+                        }
+                        NoticeBox {
+                            id: offlineNotice
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !internetNotice.online
+                            materialIcon: "wifi"
+                            text: Translation.tr("An internet connection is required for full installation. Please connect to Wi-Fi below before starting the installer.")
+                        }
                     }
 
                     // ── Display section ──

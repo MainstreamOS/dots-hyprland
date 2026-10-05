@@ -387,9 +387,16 @@ Singleton {
         let wifiStatus = best >= 0 ? rank[best] : "disconnected";
         if (wifiStatus === "connected" && connectivity === "limited")
             wifiStatus = "limited";
+        // A join or drop re-reads the list for its ACTIVE flags now rather than at the
+        // next scan. NetworkManager already knows them, so this run starts no scan.
+        if (wifiStatus !== root.wifiStatus) {
+            getNetworks.rescan = "no";
+            getNetworks.running = true;
+        }
         root.wifiStatus = wifiStatus;
         root.wifi = wifiStatus === "connected";
-        root.ethernet = devices.some(d => d.type === "ethernet" && d.state.includes("connected"));
+        // Not includes(): "disconnected" contains "connected".
+        root.ethernet = devices.some(d => d.type === "ethernet" && d.state.startsWith("connected"));
 
         const connections = Rates.parseConnections(parts[2])
             .filter(c => c.name !== root.frameProfileName && !ignored(c.device));
@@ -563,6 +570,10 @@ Singleton {
             LANG: "C",
             LC_ALL: "C"
         })
+        onRunningChanged: {
+            if (!running)
+                getNetworks.rescan = "auto";
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 const PLACEHOLDER = "STRINGWHICHHOPEFULLYWONTBEUSED";
