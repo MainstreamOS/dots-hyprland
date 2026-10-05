@@ -1256,6 +1256,20 @@ Singleton {
                 property int adviseUpdateThreshold: 75 // packages
                 property int stronglyAdviseUpdateThreshold: 200 // packages
 
+                // The Update page's advanced switches, kept from one update to the next.
+                property JsonObject advanced: JsonObject {
+                    property bool skipSystem: false
+                    // AUR skipped by default: Mainstream avoids the AUR over supply-chain concerns.
+                    property bool skipAur: true
+                    property bool skipFlatpak: false
+                    property bool skipDotfiles: false
+                    property bool skipExtras: false
+                    // Firmware updates can prompt polkit and time out unattended.
+                    property bool skipFirmware: true
+                    property bool autoRebuildQuickshell: true
+                    property bool edge: false
+                }
+
                 property JsonObject release: JsonObject {
                     // Set from the bar widget's right-click menu; the bar layout decides if it shows.
                     property string notify: "both" // both | tray | notification

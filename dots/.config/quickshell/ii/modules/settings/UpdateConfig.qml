@@ -79,16 +79,14 @@ ContentPage {
     // Mainstream ships no AUR helper, so the AUR switch only shows when yay or paru is installed.
     property bool aurHelperPresent: false
 
-    property bool flagSkipSystem: false
-    // AUR skipped by default: Mainstream avoids the AUR over supply-chain concerns.
-    property bool flagSkipAur: true
-    property bool flagSkipFlatpak: false
-    property bool flagSkipDotfiles: false
-    property bool flagSkipExtras: false
-    // Firmware updates can prompt polkit and time out unattended.
-    property bool flagSkipFirmware: true
-    property bool flagAutoRebuildQuickshell: true
-    property bool flagEdge: false
+    readonly property bool flagSkipSystem: Config.options.updates.advanced.skipSystem
+    readonly property bool flagSkipAur: Config.options.updates.advanced.skipAur
+    readonly property bool flagSkipFlatpak: Config.options.updates.advanced.skipFlatpak
+    readonly property bool flagSkipDotfiles: Config.options.updates.advanced.skipDotfiles
+    readonly property bool flagSkipExtras: Config.options.updates.advanced.skipExtras
+    readonly property bool flagSkipFirmware: Config.options.updates.advanced.skipFirmware
+    readonly property bool flagAutoRebuildQuickshell: Config.options.updates.advanced.autoRebuildQuickshell
+    readonly property bool flagEdge: Config.options.updates.advanced.edge
     property string customArgs: ""
 
     // Cleared as soon as it is written to the launcher's stdin.
@@ -921,7 +919,7 @@ ContentPage {
                     buttonIcon: "desktop_windows"
                     text: Translation.tr("Skip system packages")
                     checked: root.flagSkipSystem
-                    onCheckedChanged: root.flagSkipSystem = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipSystem = checked
                     StyledToolTip {
                         text: Translation.tr("Skip the pacman -Syu step.")
                     }
@@ -930,7 +928,7 @@ ContentPage {
                     buttonIcon: "deployed_code"
                     text: Translation.tr("Skip Flatpak apps")
                     checked: root.flagSkipFlatpak
-                    onCheckedChanged: root.flagSkipFlatpak = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipFlatpak = checked
                 }
             }
             ConfigRow {
@@ -939,7 +937,7 @@ ContentPage {
                     buttonIcon: "developer_mode"
                     text: Translation.tr("Skip extras (topgrade)")
                     checked: root.flagSkipExtras
-                    onCheckedChanged: root.flagSkipExtras = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipExtras = checked
                     StyledToolTip {
                         text: Translation.tr("After the primary update, topgrade catches developer-tool ecosystems (cargo, pipx, npm, nix, JetBrains, VS Code, ...). Turn this on to skip that pass — useful if you don't use those tools or topgrade itself is failing for you.")
                     }
@@ -948,7 +946,7 @@ ContentPage {
                     buttonIcon: "memory"
                     text: Translation.tr("Skip firmware updates")
                     checked: root.flagSkipFirmware
-                    onCheckedChanged: root.flagSkipFirmware = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipFirmware = checked
                     StyledToolTip {
                         text: Translation.tr("Only applies when developer extras runs. Firmware updates (fwupd) can prompt polkit and time out non-interactively.")
                     }
@@ -960,7 +958,7 @@ ContentPage {
                     buttonIcon: "code"
                     text: Translation.tr("Skip dotfiles")
                     checked: root.flagSkipDotfiles
-                    onCheckedChanged: root.flagSkipDotfiles = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipDotfiles = checked
                     StyledToolTip {
                         text: Translation.tr("Skip the Mainstream dotfiles refresh step (updatems). Dotfiles update only when a new release tag is published upstream; turn this on to manage them manually.")
                     }
@@ -969,7 +967,7 @@ ContentPage {
                     buttonIcon: "build"
                     text: Translation.tr("Auto-rebuild Quickshell")
                     checked: root.flagAutoRebuildQuickshell
-                    onCheckedChanged: root.flagAutoRebuildQuickshell = checked
+                    onCheckedChanged: Config.options.updates.advanced.autoRebuildQuickshell = checked
                     StyledToolTip {
                         text: Translation.tr("If a Qt update breaks Quickshell's ABI, rebuild the owning package automatically after all other update steps finish.")
                     }
@@ -981,7 +979,7 @@ ContentPage {
                     buttonIcon: "science"
                     text: Translation.tr("Edge updates")
                     checked: root.flagEdge
-                    onCheckedChanged: root.flagEdge = checked
+                    onCheckedChanged: Config.options.updates.advanced.edge = checked
                     StyledToolTip {
                         text: Translation.tr("Follow the newest pushed work instead of the newest release. Fixes reach you before they are released, and so does anything still being worked on. Turning it off puts you back on the latest release.")
                     }
@@ -1003,7 +1001,7 @@ ContentPage {
                     buttonIcon: "block"
                     text: Translation.tr("Disable AUR (yay/paru)")
                     checked: root.flagSkipAur
-                    onCheckedChanged: root.flagSkipAur = checked
+                    onCheckedChanged: Config.options.updates.advanced.skipAur = checked
                     StyledToolTip {
                         text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
                     }
