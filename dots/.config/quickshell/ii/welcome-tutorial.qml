@@ -4190,7 +4190,7 @@ ApplicationWindow {
                     RippleButtonWithIcon {
                         materialIcon: "translate"
                         mainText: Translation.tr("Translate Mainstream")
-                        onClicked: Qt.openUrlExternally("https://crowdin.com/project/mainstream-os")
+                        onClicked: Qt.openUrlExternally("https://github.com/MainstreamOS/dots-hyprland/tree/mainstream/dots/.config/quickshell/ii/translations")
                     }
                     RippleButtonWithIcon {
                         nerdIcon: "󰊤"
