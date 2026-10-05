@@ -43,12 +43,16 @@ LOGFILE=/var/log/mainstream-welcome-install.log
 exec > >(tee -a "$LOGFILE") 2>&1
 log() { printf '%s :: %s\n' "$(date '+%F %T')" "$*"; }
 
-# Fire a notification in the caller's session bus.
-notify() {  # title  body  [urgency]
+as_user() {  # command...
   runuser -u "$RUSER" -- env \
     XDG_RUNTIME_DIR="/run/user/$RUID" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$RUID/bus" \
-    notify-send -a "Mainstream" -u "${3:-normal}" "$1" "${2:-}" 2>/dev/null || true
+    "$@"
+}
+
+# Fire a notification in the caller's session bus.
+notify() {  # title  body  [urgency]
+  as_user notify-send -a "Mainstream" -u "${3:-normal}" "$1" "${2:-}" 2>/dev/null || true
 }
 
 # Locate install-davinci-resolve (system path first, then the caller's ~/.local/bin).
@@ -132,6 +136,19 @@ wait_for_pacman_lock() {
   log "pacman database lock cleared after ${waited}s"
 }
 
+readonly NEEDS_UPDATE=100
+
+# True when every error pacman reported was a 404 download: the package list
+# names a build the mirrors have since replaced.
+stale_package_list() {  # pacman output
+  local not_found="failed retrieving file '.*: The requested URL returned error: 404[[:space:]]*\$"
+  local gave_up='failed to commit transaction \(failed to retrieve some files\)'
+  local errors
+  grep -qE "$not_found" <<<"$1" && grep -qE "$gave_up" <<<"$1" || return 1
+  errors=$(grep 'error: ' <<<"$1")
+  ! grep -qvE "$not_found|$gave_up" <<<"$errors"
+}
+
 pac() {
   # The ISO leaves a package out of its bundled repo when the live image
   # already has it installed, so until the online repo takes over, no repo lists
@@ -149,7 +166,18 @@ pac() {
   pacman -Sp "${targets[@]}" >/dev/null 2>&1 || wait_for_repo
   wait_for_pacman_lock || { log "could not get the pacman lock"; return 1; }
   log "run: pacman -S --needed --noconfirm ${targets[*]}"
-  pacman -S --needed --noconfirm "${targets[@]}"
+  # English messages whatever the user's language, so the check below can read them.
+  local out rc=0
+  out=$(LC_ALL=C.UTF-8 pacman -S --needed --noconfirm "${targets[@]}" 2>&1 | tee /dev/stderr) || rc=$?
+  (( rc == 0 )) && return 0
+  # Refreshing or upgrading here would be a partial upgrade, or a full one that
+  # skips the Update page's snapshot, boot checks and Qt pin, so stop instead.
+  if stale_package_list "$out"; then
+    log "the mirrors answered 404 for: $(sed -n "s/.*failed retrieving file '\([^']*\)'.*/\1/p" <<<"$out" | sort -u | paste -sd ' ')"
+    log "the package list is older than the mirrors; a system update is needed first"
+    return "$NEEDS_UPDATE"
+  fi
+  return "$rc"
 }
 
 flat() {  # flathub ref
@@ -161,11 +189,18 @@ flat() {  # flathub ref
     || { log "flatpak install failed once, retrying"; flatpak install --system --noninteractive -y flathub "$1"; }
 }
 
+# Apps waiting on a system update are told about together, once, by notify_needs_update.
+report_failure() {  # status  title
+  (( $1 == NEEDS_UPDATE )) && return "$NEEDS_UPDATE"
+  notify "$2" "See $LOGFILE." critical
+  return 1
+}
+
 install_with() {  # pac|flat  label  target...
   local via=$1 label=$2; shift 2
   notify "Installing $label…" "$*"
   if "$via" "$@"; then notify "$label installed" "Find it in your apps."
-  else notify "$label install failed" "See $LOGFILE." critical; return 1; fi
+  else report_failure $? "$label install failed"; fi
 }
 
 install_libreoffice() {
@@ -207,7 +242,7 @@ install_gaming() {
   log "detected GPU line: ${gpu:-<none>}"
   log "packages: ${pkgs[*]}"
   if pac "${pkgs[@]}"; then notify "Desktop Gaming installed" "Steam and the gaming stack are ready."
-  else notify "Desktop Gaming install failed" "See $LOGFILE." critical; return 1; fi
+  else report_failure $? "Desktop Gaming install failed"; fi
 }
 
 # WiVRn is the one OpenXR runtime we ship, and streaming to a standalone
@@ -227,18 +262,21 @@ install_vr_stack() {
   if pac "${pkgs[@]}"; then
     notify "$what installed" "Open WiVRn to pair your headset, then start it before your VR app."
   else
-    notify "$what install failed" "See $LOGFILE." critical
-    return 1
+    report_failure $? "$what install failed"
   fi
 }
 
 install_gamescope() {
   notify "Setting up Steam Big Picture…" "gamescope session (Super + G)"
-  if ! pac mainstream-gaming; then
+  pac mainstream-gaming || {
+    local rc=$?
     log "pac mainstream-gaming FAILED"
-    notify "Steam Big Picture setup failed" "See $LOGFILE." critical
-    return 1
-  fi
+    report_failure "$rc" "Steam Big Picture setup failed"
+    return
+  }
+  # This runs after every other pacman install, so the notice can go now
+  # rather than wait on the Steam downloads below.
+  notify_needs_update
   if [[ -x /usr/bin/gaming-mode-install ]]; then
     log "running gaming-mode-install (pulls Steam + the 32-bit stack)"
     if gaming-mode-install; then
@@ -314,7 +352,7 @@ update_resolve() {
   esac
 }
 
-failed_items=()
+failed_items=(); needs_update_items=(); needs_update_told=0
 
 run_item() {  # label  fn...
   local label=$1; shift
@@ -322,7 +360,56 @@ run_item() {  # label  fn...
   local t0=$SECONDS rc=0
   "$@" || rc=$?
   log "════════ END: $label — exit $rc, $((SECONDS - t0))s ════════"
-  (( rc == 0 )) || failed_items+=("$label")
+  if (( rc == NEEDS_UPDATE )); then needs_update_items+=("$label")
+  elif (( rc )); then failed_items+=("$label"); fi
+}
+
+join_names() {  # name...  ->  "A", "A and B", "A, B and C"
+  local out=$1; shift
+  while (( $# > 1 )); do out+=", $1"; shift; done
+  (( $# )) && out+=" and $1"
+  printf '%s' "$out"
+}
+
+# These two run as the user, detached: notify-send -A returns only once the
+# notification is answered, and the button reaches only a sender still running.
+await_update_click() {  # title  body
+  local action
+  action=$(timeout 1d notify-send -a Mainstream -u critical -i mainstream-update \
+    -A "update=Open updates" -- "$1" "$2" 2>/dev/null) || return 0
+  [[ $action == update ]] && open_update_page
+}
+
+# Through Settings' own opener, run by the compositor so it has the session's environment.
+open_update_page() {
+  local qs_dir="$HOME/.config/quickshell/ii" pid
+  # An open window takes the page and comes forward.
+  # Without the session's WAYLAND_DISPLAY, qs lists nothing unless told any display will do.
+  pid=$(qs list --any-display -p "$qs_dir/settings.qml" -j 2>/dev/null | jq -r 'max_by(.launch_time) | .pid // empty' 2>/dev/null)
+  if [[ -n $pid ]] && qs ipc --pid "$pid" call settings showPage UpdateConfig.qml >/dev/null 2>&1; then
+    hyprctl -i 0 dispatch "hl.dsp.focus({ window = \"pid:$pid\" })" >/dev/null 2>&1
+    return 0
+  fi
+  hyprctl -i 0 eval 'hl.exec_cmd("QS_SETTINGS_PAGE=UpdateConfig.qml qs -p \"$HOME/.config/quickshell/ii/settings.qml\"")' >/dev/null 2>&1
+}
+
+# Names only the apps no earlier notice named.
+notify_needs_update() {
+  local items=("${needs_update_items[@]:needs_update_told}") n names title body
+  local prefix="" what="versions it asked for are" them=them
+  n=${#items[@]}
+  (( n )) || return 0
+  needs_update_told=${#needs_update_items[@]}
+  names=$(join_names "${items[@]}")
+  case $n in
+    1) title="$names needs a system update first"; what="version it asked for is"; them=it ;;
+    2) title="$names need a system update first" ;;
+    *) title="$n apps need a system update first"; prefix="Not installed: $names. " ;;
+  esac
+  body="${prefix}This system's package list is out of date, so the $what no longer on the download servers. Update the system, then install $them again."
+  log "needs a system update first: $names; sending the notice with an Open updates button"
+  as_user setsid -f bash -c "$(declare -f await_update_click open_update_page); await_update_click \"\$1\" \"\$2\"" \
+    bash "$title" "$body" </dev/null >/dev/null 2>&1 || log "could not send the system update notice"
 }
 
 run_app() {  # label  pac|flat  target...
@@ -339,16 +426,18 @@ log "  log file: $LOGFILE"
 
 notify "Setting up your apps" "Installing your selections in the background — you'll get a notification as each one finishes."
 
-tasks=(); resolve_tasks=()
+tasks=(); last=(); resolve_tasks=()
 for opt in "$@"; do
   case $opt in
     resolve|resolve-studio|resolve-update) resolve_tasks+=("$opt") ;;
+    # gaming-mode-install refreshes the package databases, so the other pacman installs go first.
+    gamescope)                             last=(gamescope) ;;
     *)                                     tasks+=("$opt") ;;
   esac
 done
 
-for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
-  case $opt in
+run_opt() {
+  case $1 in
     gaming)          run_item "Desktop Gaming"          install_gaming ;;
     gamescope)       run_item "Steam Big Picture"       install_gamescope ;;
     vr)              run_item "VR headset support"      install_vr_stack ;;
@@ -363,16 +452,23 @@ for opt in "${tasks[@]}" "${resolve_tasks[@]}"; do
     resolve)         run_item "DaVinci Resolve"         install_resolve "" ;;
     resolve-studio)  run_item "DaVinci Resolve Studio"  install_resolve --studio ;;
     resolve-update)  run_item "DaVinci Resolve update"  update_resolve ;;
-    *) log "unknown option: $opt" ;;
+    *) log "unknown option: $1" ;;
   esac
-done
+}
+
+for opt in "${tasks[@]}" "${last[@]}"; do run_opt "$opt"; done
+# Before Resolve's long build, so the notice is not held behind it.
+notify_needs_update
+for opt in "${resolve_tasks[@]}"; do run_opt "$opt"; done
 
 log "all install tasks finished"
 
+(( ${#needs_update_items[@]} )) && log "NEEDS A SYSTEM UPDATE: $(join_names "${needs_update_items[@]}")"
 if (( ${#failed_items[@]} )); then
   log "FAILED: ${failed_items[*]}"
   notify "Some installs did not finish" "Not finished: ${failed_items[*]}. See $LOGFILE." critical
   exit 1
 fi
+(( ${#needs_update_items[@]} )) && exit 1
 
 notify "Installs finished" "All selected items are done."
