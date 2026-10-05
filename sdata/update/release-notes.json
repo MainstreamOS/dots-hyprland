@@ -342,6 +342,7 @@
       "Bluetooth stays on in Gaming Mode, so your devices still connect there and reconnect when you return to the desktop",
       "The Welcome app's Translate button now opens Mainstream's translations on GitHub",
       "You can now reboot from the Update settings Reboot required pill",
+      "The Update page's advanced options now keep their settings from one update to the next",
       "Settings > Bar adds a day-first date with periods, like 05.10.2026",
       "Gemini 3.8 Flash is now the default AI model"
     ]
