@@ -83,15 +83,14 @@ fi
 # before these rather than around them.
 printf '\n== %s finish-deferred%s ==\n' "$(date '+%F %T')" "$( (( login )) && echo ' (login)')"
 
-lock="${REPO_ROOT}/.update-lock"
 for (( i = 0; i < 1800; i++ )); do
-  [[ -f "$lock" ]] && exp_lock_owner_live "$(cat "$lock" 2>/dev/null)" || break
+  [[ -f "$EXP_LOCK_FILE" ]] && exp_lock_owner_live "$(cat "$EXP_LOCK_FILE" 2>/dev/null)" || break
   # An update is running and applies the list itself before it copies, and
   # the shell must not wait on it at login.
   (( login )) && exit 0
   sleep 1
 done
-if [[ -f "$lock" ]] && exp_lock_owner_live "$(cat "$lock" 2>/dev/null)"; then
+if [[ -f "$EXP_LOCK_FILE" ]] && exp_lock_owner_live "$(cat "$EXP_LOCK_FILE" 2>/dev/null)"; then
   exit 0
 fi
 # A later run got to the list first. The shell it held is still the old one in
@@ -106,13 +105,8 @@ if [[ ! -s "$EXP_DEFERRED_FILE" ]]; then
   fi
   exit 0
 fi
-# Created only when absent, so a run that found the lock free at the same
-# moment cannot take it as well.
-if [[ -f "$lock" ]] && ! exp_lock_owner_live "$(cat "$lock" 2>/dev/null)"; then
-  rm -f "$lock"
-fi
-( set -o noclobber; echo $$ >"$lock" ) 2>/dev/null || exit 0
-trap '[[ "$(cat "$lock" 2>/dev/null)" == "$$" ]] && rm -f "$lock"; exp_discard_staged' EXIT
+exp_lock_take || exit 0
+trap 'exp_lock_release; exp_discard_staged' EXIT
 
 # The shell is normally still held by the update that left the list. Holding
 # it again covers one that was released since, so it reloads once, onto the
@@ -124,7 +118,7 @@ fi
 # Migrated before the files that read the new layout go in, so what loads
 # them reads it straight away.
 if declare -F config_migrations_run >/dev/null 2>&1; then
-  config_migrations_run "${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json" || true
+  config_migrations_run "$EXP_CONFIG_JSON" || true
 fi
 
 load_ignore_patterns

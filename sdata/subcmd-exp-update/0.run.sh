@@ -926,6 +926,7 @@ fi
 EXP_UPDATE_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/exp-update.log"
 EXP_RELOGIN_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream/relogin-needed"
 EXP_DEFERRED_FILE="${REPO_ROOT}/.update-deferred"
+EXP_LOCK_FILE="${REPO_ROOT}/.update-lock"
 EXP_CONFIG_JSON="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
 EXP_DEFER=0
 EXP_SETTINGS_STALE=0
@@ -1038,6 +1039,31 @@ exp_lock_owner_live() {
   kill -0 "$pid" 2>/dev/null || return 1
   cmd=$(tr '\0' ' ' 2>/dev/null <"/proc/${pid}/cmdline") || return 1
   [[ "$cmd" == *exp-update* || "$cmd" == *finish-deferred* ]]
+}
+
+# Created only when absent, so a run or finisher that found the lock free at
+# the same moment cannot take it as well. Returns 1 while a live update holds it.
+exp_lock_take() {
+  if [[ -f "$EXP_LOCK_FILE" ]]; then
+    exp_lock_owner_live "$(cat "$EXP_LOCK_FILE" 2>/dev/null)" && return 1
+    if [[ "$DRY_RUN" == true ]]; then
+      log_info "[DRY-RUN] Would remove stale lock file"
+    else
+      log_warning "Found stale lock file, removing..."
+      rm -f "$EXP_LOCK_FILE"
+    fi
+  fi
+  [[ "$DRY_RUN" != true ]] || return 0
+  ( set -o noclobber; echo $$ >"$EXP_LOCK_FILE" ) 2>/dev/null || return 1
+  _exp_lock_taken=1
+}
+
+# Only a lock this process took: one that refused to start because another
+# update holds it leaves that update's lock alone.
+exp_lock_release() {
+  if (( ${_exp_lock_taken:-0} )) && [[ "$(cat "$EXP_LOCK_FILE" 2>/dev/null)" == "$$" ]]; then
+    rm -f "$EXP_LOCK_FILE" 2>/dev/null || true
+  fi
 }
 
 # Reads a process's parent, state and start time (clock ticks since boot).
@@ -1770,12 +1796,8 @@ _pkg_build_tmp=""
 # Cleanup function for signal handling
 cleanup_on_exit() {
   local exit_code=$?
-  
-  # Remove lock file, when this run took it: one that refused to start because
-  # another update holds it leaves that update's lock alone.
-  if (( ${_exp_lock_taken:-0} )) && [[ "$(cat "${REPO_ROOT}/.update-lock" 2>/dev/null)" == "$$" ]]; then
-    rm -f "${REPO_ROOT}/.update-lock" 2>/dev/null || true
-  fi
+
+  exp_lock_release
   if [[ -n "${_pkg_build_tmp:-}" ]]; then
     rm -rf "$_pkg_build_tmp" 2>/dev/null || true
   fi
@@ -1805,26 +1827,8 @@ trap 'exit 129' HUP
 exp_protect_clone_state || true
 
 # Check for concurrent runs
-if [[ -f "${REPO_ROOT}/.update-lock" ]]; then
-  # Check if the process is still running
-  if exp_lock_owner_live "$(cat "${REPO_ROOT}/.update-lock" 2>/dev/null)"; then
-    log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock"))"
-  elif [[ "$DRY_RUN" == true ]]; then
-    log_info "[DRY-RUN] Would remove stale lock file"
-  else
-    log_warning "Found stale lock file, removing..."
-    rm -f "${REPO_ROOT}/.update-lock"
-  fi
-fi
-
-# Create lock file with current PID
-# Only when absent, so a run or finisher that found it free at the same moment
-# cannot take it as well.
-if [[ "$DRY_RUN" != true ]]; then
-  if ! ( set -o noclobber; echo $$ > "${REPO_ROOT}/.update-lock" ) 2>/dev/null; then
-    log_die "Another update is already running (PID: $(cat "${REPO_ROOT}/.update-lock" 2>/dev/null))"
-  fi
-  _exp_lock_taken=1
+if ! exp_lock_take; then
+  log_die "Another update is already running (PID: $(cat "$EXP_LOCK_FILE" 2>/dev/null))"
 fi
 
 # Main script starts here
