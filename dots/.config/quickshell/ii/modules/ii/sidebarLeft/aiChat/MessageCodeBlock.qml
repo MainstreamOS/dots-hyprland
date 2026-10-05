@@ -168,6 +168,18 @@ ColumnLayout {
             color: Appearance.colors.colLayer2
             implicitHeight: codeColumnLayout.implicitHeight
 
+            // Sideways wheel/touchpad scrolling for long lines. Lives outside
+            // the ScrollView, whose wheelEnabled: false blocks its children.
+            WheelHandler {
+                orientation: Qt.Horizontal
+                onWheel: (event) => {
+                    const flick = codeScrollView.contentItem
+                    const maxX = Math.max(0, flick.contentWidth - flick.width)
+                    const delta = event.pixelDelta.x !== 0 ? event.pixelDelta.x : event.angleDelta.x / 2
+                    flick.contentX = Math.max(0, Math.min(maxX, flick.contentX - delta))
+                }
+            }
+
             ColumnLayout {
                 id: codeColumnLayout
                 anchors.fill: parent
@@ -182,7 +194,14 @@ ColumnLayout {
                     // contentHeight: codeTextArea.contentHeight
                     clip: true
                     ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                    
+
+                    // ScrollView enables wheelEnabled by default, which accepts
+                    // every wheel event, so the chat stopped scrolling with the
+                    // cursor over code. Turn it off so vertical wheel events
+                    // reach the chat. Horizontal scrolling is handled by the
+                    // WheelHandler on the code background above.
+                    wheelEnabled: false
+
                     ScrollBar.horizontal: ScrollBar {
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
