@@ -102,7 +102,7 @@ Item {
     // win.floating themselves since tiled windows have no z-order to alter.
     function raiseToplevel(fullAddr) {
         Hyprland.dispatch(
-            `hl.dsp.window.alter_zorder({mode = "top", window = "address:${fullAddr}"})`
+            `MainstreamRaiseFloat("address:${fullAddr}")`
         );
     }
 

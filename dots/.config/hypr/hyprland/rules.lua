@@ -172,19 +172,23 @@ local function keepFloatingWindowWithinReach(window)
     end
 end
 
+-- Some events are announced before Hyprland acts on them. The next turn of the loop
+-- comes after that and before anything is drawn.
+local function nextTurn(fn)
+    hl.timer(fn, { timeout = 1, type = "oneshot" })
+end
+
 -- `window.open` fires once the floating layout has given the window its
 -- initial geometry.
 hl.on("window.open", keepFloatingWindowWithinReach)
 
 -- A float can end up under a panel later as well: moved to a workspace on a
 -- monitor whose panels sit elsewhere, or dropped there by an overview. Both
--- announce the move before the window is put in its new place, so the check
--- waits for the next turn of the loop, which is after the placement and
--- before anything is drawn.
+-- announce the move before the window is put in its new place.
 hl.on("window.move_to_workspace", function(window)
-    hl.timer(function()
+    nextTurn(function()
         keepFloatingWindowWithinReach(window)
-    end, { timeout = 1, type = "oneshot" })
+    end)
 end)
 
 -- The launcher's overview drops a floating window where the pointer let go
@@ -204,6 +208,119 @@ function MainstreamFloatMoveWithinReach(selector, x, y)
         gx, gy = withinReach(room, gx, gy, window.size)
     end
     return hl.dsp.window.move({ x = gx, y = gy, window = selector })
+end
+
+-- Hyprland draws every float allowed over a floating fullscreen window on top of it, but clicks
+-- follow the stack. One stacked below it is raised if it has focus or belongs with it, else sent behind.
+local settlePending = false
+local settleWatch = nil
+
+-- X11 menus and tooltips have no title and close on their own, so they are left alone.
+local function shownOverFullscreen(window)
+    return window.allowed_over_fullscreen and not window.pinned and not window.hidden
+        and not (window.xwayland and window.title == "")
+end
+
+-- Lua cannot see a dialog's parent, so the app's own windows and portal file choosers stay up;
+-- hiding a modal dialog would leave its parent looking frozen.
+local function staysWith(window, fullscreen)
+    local pid, class = fullscreen.pid, window.class or ""
+    return (pid ~= nil and pid > 1 and window.pid == pid)
+        or class:find("^xdg%-desktop%-portal") ~= nil or class:find("^org%.freedesktop%.impl%.portal%.") ~= nil
+end
+
+local function settleWorkspace(workspace, activeWindow)
+    local fullscreen = workspace and workspace.fullscreen_window
+    if not fullscreen or not fullscreen.floating then
+        return false
+    end
+
+    local active = activeWindow()
+    local below, shownOver, focused, raise, hide = true, false, nil, {}, {}
+    for _, window in ipairs(hl.get_windows({ workspace = workspace, floating = true })) do
+        if window == fullscreen then
+            below = false
+        elseif shownOverFullscreen(window) then
+            if not below then
+                shownOver = true
+            elseif window == active then
+                focused = window
+            elseif staysWith(window, fullscreen) then
+                raise[#raise + 1] = window
+            else
+                hide[#hide + 1] = window
+            end
+        end
+    end
+    if focused then
+        raise[#raise + 1] = focused
+    end
+
+    -- Each one lowered lands at the very bottom, so the topmost goes first to keep their order.
+    for i = #hide, 1, -1 do
+        hl.dispatch(hl.dsp.window.alter_zorder({ mode = "bottom", window = hide[i] }))
+    end
+    for _, window in ipairs(raise) do
+        hl.dispatch(hl.dsp.window.alter_zorder({ mode = "top", window = window }))
+    end
+
+    return shownOver or #raise > 0
+end
+
+local function settleFloatsOverFullscreen()
+    -- Focus is looked up only once a floating fullscreen window turns up, and only once
+    -- per pass, as a raise can move it.
+    local active
+    local function activeWindow()
+        if active == nil then
+            active = hl.get_active_window() or false
+        end
+        return active
+    end
+
+    local shownOver = false
+    for _, monitor in ipairs(hl.get_monitors()) do
+        shownOver = settleWorkspace(monitor.active_workspace, activeWindow) or shownOver
+        shownOver = settleWorkspace(monitor.active_special_workspace, activeWindow) or shownOver
+    end
+
+    -- While a float shows over one, this also catches raises no event reports, such as a title bar click.
+    if shownOver and not settleWatch then
+        settleWatch = hl.timer(settleFloatsOverFullscreen, { timeout = 250, type = "repeat" })
+    elseif settleWatch and settleWatch:is_enabled() ~= shownOver then
+        settleWatch:set_enabled(shownOver)
+    end
+end
+
+local function settleQueued()
+    settlePending = false
+    settleFloatsOverFullscreen()
+end
+
+-- Binds run before a click raises its window, and focus can come before a raise.
+local function settleSoon()
+    if settlePending then
+        return
+    end
+    settlePending = true
+    nextTurn(settleQueued)
+end
+
+-- A reload drops the watch, so it is checked again after one.
+for _, event in ipairs({
+    "window.active", "window.open", "window.fullscreen", "window.move_to_workspace", "window.pin",
+    "workspace.active", "workspace.special_active", "workspace.move_to_monitor", "monitor.added", "config.reloaded",
+}) do
+    hl.on(event, settleSoon)
+end
+for button = 272, 276 do
+    hl.bind("mouse:" .. button, settleSoon, { non_consuming = true, ignore_mods = true, dont_inhibit = true, submap_universal = true })
+end
+
+-- The dock's raise can cover a float shown over a fullscreen one, so it settles after.
+function MainstreamRaiseFloat(selector)
+    settleSoon()
+    return hl.dsp.window.alter_zorder({ mode = "top", window = selector })
 end
 
 -- ######## Workspace rules ########
