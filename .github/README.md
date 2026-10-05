@@ -19,7 +19,7 @@ The shell — the bar, the side panels, the search box — is a lean, heavily mo
 
 ## Install
 
-- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 3.4 GB), flash it to a USB drive, boot and click through. Dual-boot and full-disk encryption are set up during the install itself. An experimental legacy-NVIDIA edition (4.8 GB) covers older NVIDIA cards, back to the GeForce 400 series.
+- **The OS (recommended)** — [Download the ISO](https://mainstreamos.org/download) (x86_64 · 3.1 GB), flash it to a USB drive, boot and click through. Dual-boot, full-disk encryption and your own partition layout are all set up during the install itself. An experimental [legacy-NVIDIA edition](https://mainstreamos.org/#legacy-nvidia) (4.5 GB) covers older NVIDIA cards, back to the GeForce 400 series, and an experimental [MacBook edition](https://mainstreamos.org/#intel-macs) (3.0 GB) covers Intel Macs with Apple's T2 chip.
 - **On an existing Arch install** — one command, about 10 minutes:
 
   ```bash
@@ -36,7 +36,7 @@ The shell — the bar, the side panels, the search box — is a lean, heavily mo
   ```
 
   See [all the options](https://mainstreamos.org/#install-script).
-- Once you're in: `Super` + `Tab` opens the keybind list, `Super` + `T` opens a terminal.
+- Once you're in, the Welcome app walks you through setting up your desktop and apps. `Super` + `Tab` opens the keybind list and `Super` + `T` opens a terminal.
 
 See the [install guides](https://mainstreamos.org/#install-iso) for details.
 
@@ -50,26 +50,29 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
     - **App management** — install and remove native packages and Flatpaks, no terminal.
     - **Default apps and startup.** Choose which app opens which kind of file across ten roles, and what starts up when you log in, from one page. Every role arrives already set on a fresh install.
     - **Auto drive mounting** — set a drive up once and it's ready every login; format blank disks and unlock encrypted ones in the app.
-- **Whole-desktop Material You** — pick a wallpaper, a still image or a video, and the shell, the settings app, your terminal, your apps, your folder icons, and the lock screen all recolor to match it.
+    - **Folder sharing.** Turn it on once, then right-click a folder in Files to share it with Windows, Mac and Linux computers on networks you trust.
+- **Whole-desktop Material You** — pick a wallpaper, a still image or a video, and the shell, the settings app, your terminal, your apps, your folder icons, and the lock screen all recolor to match it. A video keeps moving on the login and lock screens too.
 - **Themes you can save, schedule, and share** — your whole look — wallpaper, colors, app style, icons, interface changes, window styling, and which edge the dock sits on — saves under a name with a preview and switches back in one tap. Pair a Day and Night theme that follow Night Light or your own set hours, or export a theme to a single file and import it on another computer.
-- **A bar you arrange, and paint.** Show, hide, and reorder every piece by dragging, move them between the left, middle, and right, and drop two together to join them into a single rounded group. Then set the shape, transparency, color and width of the bar and of each widget on it. Four styles to start from: Hug, Float, Rect, or Notch. Float and Notch can each be split into three separate strips.
-- **A dock you position, style and tune.** Put it along the top, bottom, left, or right of the screen, and the bar steps aside when you give the dock the edge it was using. One page holds its size, shape, corner roundness, transparency and color, in Float, Rect or Notch. Set how far an icon grows on hover and whether hovering magnifies or glows, mark open windows with dashes, dots or a count badge, choose the animation when you click an app, and turn the buttons on either side on or off.
-- **Title bars, on or off.** On for a familiar desktop, off for a clean one, switched instantly. Set their color and opacity, and return to stock in one press.
+- **A bar you arrange, and paint.** Show, hide, and reorder every piece by dragging, move them between the left, middle, and right, and drop two together to join them into a single rounded group. Then set the shape, transparency, color and width of the bar and of each widget on it. Four styles to start from: Float, Notch, Hug, or Rect. Float and Notch can each be split into three separate strips.
+- **A dock you position, style and tune.** Put it along the top, bottom, left, or right of the screen, and the bar steps aside when you give the dock the edge it was using. One page holds its size, shape, corner roundness, transparency and color, in Float, Notch, Hug or Rect. Hug runs end to end along the edge opposite the bar, like a taskbar. Set how far an icon grows on hover and whether hovering magnifies or glows, mark open windows with dashes or dots, a count badge, or both together, choose the animation when you click an app, and turn the buttons on either side on or off.
+- **Name your workspaces.** Add the Workspace title widget to the bar to name the workspace you're on and jump between named ones, then send apps straight to one from the dock.
+- **Title bars, on or off.** On for a familiar desktop, off for a clean one, switched instantly. Double-click to maximize, middle-click to close, or scroll to minimize and maximize. Set their color and opacity, separately for dark and light mode, give the buttons their own size and colors or hide them until the pointer arrives, and return to stock in one press.
 - **Windows drawn the way you want** — corner radius, border thickness, the gaps between windows and around the screen, how see-through focused and unfocused windows are, the blur behind them, the shadow beneath them, and how they animate. Give the borders a gradient of your own, or leave them following the wallpaper. One press puts it all back.
 - **A built-in window rule editor** — most desktops leave per-app rules to a config file you edit by hand. Here it is a page in Settings: teach one app where to open, whether it floats, how see-through it is, and what it is allowed to do. Rules save into a theme, so sharing a theme shares the behavior too.
 - **Widgets on your desktop.** Eleven of them: the clock, weather, a calendar, world clocks, notes, a to do list, timers, system resources, a music visualizer, media controls and a picture of your own. Drag each where you want it, and give them frosted glass that samples the wallpaper behind. A theme remembers which are on and where they sit, and the clock gains a third style, a chunky pixel readout.
-- **A menu on the wallpaper.** Right click the desktop to change the wallpaper, switch theme, and reach the bar and dock settings without opening Settings first.
+- **A menu on the wallpaper.** Right click the desktop to change the wallpaper, switch theme, and reach the bar and dock settings without opening Settings first. Each monitor can have its own wallpaper, set from that screen's menu, while the colors follow your main one.
 - **A wallpaper that changes with style.** Ten ways for one picture to transition to the next: crossfade, slide, zoom, wipe, circle, ripple, peel, glitch, CRT and shatter, or let it pick at random.
 - **A wallpaper that rotates** — point it at a folder and set a timer; the colors follow along with every picture.
 - **App style, icons, pointer, and fonts** — all pickers in Settings, with a font list that shows each font in its own lettering. Your choice carries into your apps, not just the shell.
-- **Gaming and Console Mode.** `Super` + `G` puts the desktop away and hands the machine to a full-screen gamescope Steam session, the same session model a Steam Deck runs, then gives the desktop back. AMD, Intel, and NVIDIA alike. Proton GE is installed and set as Steam's default, so Windows titles run the first time you open them. Install with Console Mode and it starts there instead: straight into that session with game controllers already set up, which turns a computer under the TV into a console, with the full desktop still there whenever you want it.
+- **Gaming and Console Mode.** `Super` + `G` puts the desktop away and hands the machine to a full-screen gamescope Steam session, the same session model a Steam Deck runs, then gives the desktop back. AMD, Intel, and NVIDIA alike. Proton GE is installed and set as Steam's default, so Windows titles run the first time you open them. GameMode and MangoHud come installed, and one switch on the Gaming page keeps games smooth while something heavy runs in the background. Install with Console Mode and it starts there instead: straight into that session with game controllers already set up, which turns a computer under the TV into a console, with the full desktop still there whenever you want it.
 - **A launcher that finds everything** — apps, folders, files, quick math, and your clipboard history.
 - **Overviews** — a hot corner or `Super` + `F10` opens a map of every workspace; drag windows between them and drop files and folders in. The scrolling layout has its own panning view on `Super` + `O`.
 - **Session restore** — log out or reboot and your windows come back on the workspaces they were on.
-- **AI in the sidebar.** Sign in to Claude or ChatGPT with a subscription you already have and no API key to paste, or follow a guided setup for free local AI with Ollama, where nothing you type leaves the computer.
+- **A Media tab with synced lyrics.** The left sidebar shows album art, playback controls and lyrics that follow the song, colored from the album.
+- **AI in the sidebar.** Sign in with a Claude or ChatGPT subscription you already have, or a free or paid Google account for Gemini, with no API key to paste. Or follow a guided setup for free local AI with Ollama, where nothing you type leaves the computer.
 - **Made with creators in mind** — one-click install for DaVinci Resolve and OBS, with GPU encoding on Wayland.
 - **LocalSend built in** — drag files onto the bar's media widget to send them to any phone, tablet, or computer on your network running [LocalSend](https://localsend.org), and right-click to receive, with live progress and no cloud in the middle. Built into the desktop rather than bundled as a separate app.
-- **Graphics sorted out during the install** — your card is recognized and given drivers that match the model you actually have, across AMD, Intel, and NVIDIA, laptops with two included. The experimental legacy-NVIDIA edition covers older NVIDIA cards, back to the GeForce 400 series.
+- **Graphics sorted out during the install** — your card is recognized and given drivers that match the model you actually have, across AMD, Intel, and NVIDIA, laptops with two included.
 - **Your language from the start.** Pick a language and keyboard layout during installation and both are waiting at the login screen and in the desktop. Choosing Chinese, Japanese or Korean installs the matching fonts and input method.
 - **Updates with a safety net** — system packages, Flatpaks, and the desktop update together from a single button, with a restore point taken before and after. A bad update is one boot-menu entry away from being undone, and a marker on the bar tells you when a new release is out.
 - **Repair Install** — one button re-runs the desktop setup and rebuilds its components.
@@ -128,7 +131,7 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 
 Contributions are welcome — code, docs, bug reports, or ideas. Two are especially wanted:
 
-- **Translations.** Mainstream should feel native well beyond English. If you speak another language, help is genuinely appreciated: [translate on Crowdin](https://crowdin.com/project/mainstreamos), no git or JSON editing required.
+- **Translations.** Mainstream should feel native well beyond English. If you speak another language, help is genuinely appreciated: [open an issue](https://github.com/MainstreamOS/dots-hyprland/issues) saying which language you can help with, no git required.
 - **Honest feedback.** Nobody working on Mainstream is above reproach — if a decision looks off or something needs addressing, open an issue or a discussion. Questions and criticism are how it gets better.
 
 Fixes to the upstream shell go back to [illogical-impulse](https://github.com/end-4/dots-hyprland) as pull requests.
@@ -143,6 +146,7 @@ Mainstream is free and stays that way. If it saved you an afternoon, any of thes
 ## Thank you
 
 - [end-4](https://github.com/end-4) ([sponsor](https://github.com/sponsors/end-4)), for [illogical-impulse](https://github.com/end-4/dots-hyprland) — the starting point for Mainstream's shell
+- [@pctrade](https://github.com/pctrade) for [end4-pC](https://github.com/pctrade/end4-pC), the source of most of the desktop widgets and the pixel clock, several of the wallpaper transitions and the left sidebar's Media tab
 - [@clsty](https://github.com/clsty) for the original install tooling
 - [@midn8hustlr](https://github.com/midn8hustlr) for the color generation system
 - [@outfoxxed](https://github.com/outfoxxed/) for [Quickshell](https://quickshell.outfoxxed.me/)
