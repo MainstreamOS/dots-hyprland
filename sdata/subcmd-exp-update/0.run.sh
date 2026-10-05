@@ -1697,14 +1697,9 @@ exp_reload_hypr() {
   hyprctl reload >/dev/null 2>&1 || true
 }
 
-# A run that was killed outright cannot have released anything, and both holds
-# outlive the script that took them. Clearing Hyprland's first costs nothing
-# and spares the next person a session where their settings quietly stop
-# applying. The shell's is not released here, since that reloads the whole
-# shell: this run holds it again below, and its own release clears it.
+# Both holds outlive the script that took them, so one a killed run left
+# behind is cleared by this run's own release.
 exp_take_holds() {
-  if _hypr_live; then _hypr_set_disable_autoreload false >/dev/null 2>&1 || true; fi
-
   # From here on the exit handler gives back what is taken below.
   _exp_holds_taken=1
   if _hypr_live && ! _hypr_set_disable_autoreload true; then
