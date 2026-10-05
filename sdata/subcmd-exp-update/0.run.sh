@@ -1497,28 +1497,34 @@ exp_apply_deferred() {
   return 0
 }
 
-# Starts finish-deferred.sh outside this update's process tree, so it
-# outlives the Settings window and all under it, and waits there for the
-# update to end.
-exp_launch_finisher() {
-  local script="${REPO_ROOT}/sdata/subcmd-exp-update/finish-deferred.sh" bash_bin v
-  local -a args=(--wait-pid "$EXP_DEFER_WAIT_PID" --wait-start "$EXP_DEFER_WAIT_START") env=()
-  [[ -f "$script" ]] || return 1
-  bash_bin=$(command -v bash 2>/dev/null) || bash_bin=/usr/bin/bash
+# Runs a command outside this update's process tree, so it outlives the
+# Settings window and all under it.
+exp_run_detached() {  # unit name, command...
+  local unit=$1 v
+  local -a env=()
+  shift
   for v in HOME PATH XDG_RUNTIME_DIR XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE DBUS_SESSION_BUS_ADDRESS; do
     if [[ -n "${!v:-}" ]]; then env+=("--setenv=${v}=${!v}"); fi
   done
   if command -v systemd-run >/dev/null 2>&1 \
-     && systemd-run --user --collect --quiet --unit="mainstream-update-finish-$$" \
-          ${env[@]+"${env[@]}"} "$bash_bin" "$script" "${args[@]}" </dev/null >/dev/null 2>&1; then
+     && systemd-run --user --collect --quiet --unit="$unit" \
+          ${env[@]+"${env[@]}"} "$@" </dev/null >/dev/null 2>&1; then
     return 0
   fi
   mkdir -p "${EXP_UPDATE_LOG%/*}" 2>/dev/null || true
   if command -v setsid >/dev/null 2>&1 \
-     && setsid -f "$bash_bin" "$script" "${args[@]}" </dev/null >>"$EXP_UPDATE_LOG" 2>&1; then
+     && setsid -f "$@" </dev/null >>"$EXP_UPDATE_LOG" 2>&1; then
     return 0
   fi
   return 1
+}
+
+exp_launch_finisher() {
+  local script="${REPO_ROOT}/sdata/subcmd-exp-update/finish-deferred.sh" bash_bin
+  [[ -f "$script" ]] || return 1
+  bash_bin=$(command -v bash 2>/dev/null) || bash_bin=/usr/bin/bash
+  exp_run_detached "mainstream-update-finish-$$" "$bash_bin" "$script" \
+    --wait-pid "$EXP_DEFER_WAIT_PID" --wait-start "$EXP_DEFER_WAIT_START"
 }
 
 # Changes that only take effect when a session starts. Each gets one line in
@@ -1655,6 +1661,26 @@ _qs_held=0
 resume_qs_reload() {
   [[ "$_qs_held" -eq 0 ]] && return 0
   _qs_held=0
+  qs_release
+}
+# A shell too old to answer held reloads even under the lock screen, which
+# leaves a lock nothing can unlock, so it is let go 2s after the unlock.
+_QS_RELEASE_AFTER_UNLOCK='while :; do
+  while [[ $(hyprctl locked 2>/dev/null) == true ]]; do sleep 2; done
+  sleep 2
+  [[ $(hyprctl locked 2>/dev/null) == true ]] || break
+done
+qs -c ii ipc call updates resumeReload >/dev/null 2>&1'
+qs_release() {
+  local bash_bin
+  if ! qs -c ii ipc call updates held >/dev/null 2>&1 \
+     && [[ "$(hyprctl locked 2>/dev/null)" == true ]]; then
+    log_info "The desktop reloads onto the update once the screen is unlocked"
+    bash_bin=$(command -v bash 2>/dev/null) || bash_bin=/usr/bin/bash
+    exp_run_detached "mainstream-update-release-$$" "$bash_bin" -c "$_QS_RELEASE_AFTER_UNLOCK" \
+      || "$bash_bin" -c "$_QS_RELEASE_AFTER_UNLOCK" || true
+    return 0
+  fi
   qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
 }
 _hypr_autoreload_restored=0

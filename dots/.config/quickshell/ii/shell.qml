@@ -95,14 +95,46 @@ ShellRoot {
     // The updater holds reloading for the copying and releases it afterwards.
     // Held is never a resting state: releasing always reloads, so the shell ends
     // on the finished tree whether or not anything changed while it waited.
+    // A reload under the lock screen leaves the session locked with nothing to
+    // unlock it, so a release while locked waits for the unlock.
+    property bool reloadPending: false
+
+    Connections {
+        target: GlobalStates
+        function onScreenLockedChanged() {
+            if (GlobalStates.screenLocked) unlockedReloadTimer.stop()
+            else unlockedReloadTimer.restart()
+        }
+    }
+
+    // Started by every unlock, and a release meanwhile waits for it, so the unlock
+    // can let go of the lock, put the workspaces back and unlock the keyring.
+    Timer {
+        id: unlockedReloadTimer
+        interval: 2000
+        onTriggered: {
+            if (!root.reloadPending || GlobalStates.screenLocked) return
+            root.reloadPending = false
+            Quickshell.watchFiles = true
+            Quickshell.reload(true)
+        }
+    }
+
     IpcHandler {
         target: "updates"
 
         function holdReload(): void {
+            root.reloadPending = false
             Quickshell.watchFiles = false
         }
 
         function resumeReload(): void {
+            if (GlobalStates.screenLocked || unlockedReloadTimer.running) {
+                root.reloadPending = true
+                // Still held, so held() says so and no file change reloads it first.
+                Quickshell.watchFiles = false
+                return
+            }
             Quickshell.watchFiles = true
             Quickshell.reload(true)
         }

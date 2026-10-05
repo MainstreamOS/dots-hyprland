@@ -293,6 +293,8 @@ Singleton {
         }
     }
 
+    // No blockLoading: ready must be false while a soft reload matches objects, or
+    // the new shell, which starts unlocked, takes over the session lock and unlocks it.
     FileView {
         id: configFileView
         path: root.filePath

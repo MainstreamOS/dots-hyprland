@@ -95,10 +95,14 @@ if [[ -f "$lock" ]] && exp_lock_owner_live "$(cat "$lock" 2>/dev/null)"; then
   exit 0
 fi
 # A later run got to the list first. The shell it held is still the old one in
-# memory until let go; one that reports itself not held was started since.
+# memory until let go; one that reports itself not held was started since, and
+# one too old to answer is asked only whether it is running.
 if [[ ! -s "$EXP_DEFERRED_FILE" ]]; then
-  if (( ! login )) && _qs_live && [[ "$(qs -c ii ipc call updates held 2>/dev/null)" != false ]]; then
-    qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
+  if (( ! login )); then
+    _held=$(qs -c ii ipc call updates held 2>/dev/null)
+    if [[ "$_held" == true ]] || { [[ "$_held" != false ]] && _qs_live; }; then
+      qs_release
+    fi
   fi
   exit 0
 fi
@@ -128,7 +132,7 @@ exp_apply_deferred
 exp_print_own_changes
 
 if (( ! login )) && _qs_live; then
-  qs -c ii ipc call updates resumeReload >/dev/null 2>&1 || true
+  qs_release
   _qs_held=0
 fi
 exit 0
