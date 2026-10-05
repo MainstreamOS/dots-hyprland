@@ -38,6 +38,83 @@ if [[ "${1:-}" == "--tips" ]]; then
     exit 0
 fi
 
+# Steam powers Bluetooth off at every start until its own toggle has been set, and the desktop
+# then keeps it off. An unset toggle is turned on; one switched off in Steam is left alone.
+seed_steam_bluetooth() {
+    local data_steam="${XDG_DATA_HOME:-$HOME/.local/share}/Steam" steam="" d
+    # The folder Steam's own launcher settles on.
+    for d in "$(readlink -e "$HOME/.steam/steam" 2>/dev/null)" "$data_steam" "$HOME/Steam"; do
+        [[ -n "$d" && -x "$d/steam.sh" ]] && { steam=$d; break; }
+    done
+    # Exits 0 when the toggle is on, so a soft block left by an earlier session can lift.
+    python3 - "${steam:-$data_steam}/config/config.vdf" <<'EOF' || return 0
+import os, re, sys, tempfile
+
+path = sys.argv[1]
+want = ("InstallConfigStore", "System", "Bluetooth", "Enabled")
+try:
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    mode = os.stat(path).st_mode & 0o777
+except FileNotFoundError:
+    text, mode = '"InstallConfigStore"\n{\n}\n', 0o644
+
+stack, key, blocks, values = [], None, {}, {}
+for m in re.finditer(r'"((?:[^"\\]|\\.)*)"|([{}])|//[^\n]*|[^\s{}"]+', text):
+    if m.group(2) == "{":
+        stack.append((key or "").lower())
+        key = None
+    elif m.group(2) == "}":
+        if not stack:
+            sys.exit(2)
+        blocks[tuple(stack)] = m.start()
+        stack.pop()
+        key = None
+    elif not m.group(0).startswith("//"):
+        word = m.group(1) if m.group(1) is not None else m.group(0)
+        if key is None:
+            key = word
+        else:
+            values[tuple(stack) + (key.lower(),)] = word
+            key = None
+if stack:
+    sys.exit(2)
+
+lower = tuple(k.lower() for k in want)
+if lower in values:
+    sys.exit(0 if values[lower] != "0" else 1)
+depth = next((n for n in (3, 2, 1) if lower[:n] in blocks), 0)
+if not depth:
+    sys.exit(2)
+
+def block(keys, indent):
+    tab = "\t" * indent
+    if len(keys) == 1:
+        return f'{tab}"{keys[0]}"\t\t"1"\n'
+    return f'{tab}"{keys[0]}"\n{tab}{{\n{block(keys[1:], indent + 1)}{tab}}}\n'
+
+close = blocks[lower[:depth]]
+start = text.rfind("\n", 0, close) + 1
+insert = block(want[depth:], depth)
+if text[start:close].strip():
+    start, insert = close, "\n" + insert
+os.makedirs(os.path.dirname(path), exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".config.vdf.")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.write(text[:start] + insert + text[start:])
+os.chmod(tmp, mode)
+os.replace(tmp, path)
+EOF
+    rfkill unblock bluetooth 2>/dev/null
+    return 0
+}
+
+# --seed-bluetooth: run by the gamescope-session-plus@steam drop-in before Steam starts.
+if [[ "${1:-}" == "--seed-bluetooth" ]]; then
+    seed_steam_bluetooth
+    exit 0
+fi
+
 # --setup: (re)open Gaming Mode Setup without switching sessions. Bound to Ctrl+Super+G
 # so the user can revisit their choices any time.
 if [[ "${1:-}" == "--setup" ]]; then
