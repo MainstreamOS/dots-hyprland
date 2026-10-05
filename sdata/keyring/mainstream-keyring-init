@@ -207,17 +207,29 @@ ensure_mirror() {
 
 point_at_github() {
     cp -a "$PACMAN_CONF" "$PACMAN_CONF_BAK" || return 1
+    # Only [mainstream]: the MacBook edition's [arch-mact2] is unsigned.
     sed -i \
         -e "s|^Server = file://.*pkgs|Server = $REPO_URL|" \
-        -e "s|^SigLevel = Never|SigLevel = Required|" \
+        -e "/^\[mainstream\]/,/^\[/ s|^SigLevel = Never|SigLevel = Required|" \
         "$PACMAN_CONF"
     # sed succeeds whether or not the lines it was aimed at existed, and the
     # offline repository is deleted on the strength of this rewrite.
-    if ! grep -qF "Server = $REPO_URL" "$PACMAN_CONF" || ! grep -q '^SigLevel = Required' "$PACMAN_CONF"; then
+    if ! grep -qF "Server = $REPO_URL" "$PACMAN_CONF" || ! repo_is_signed_github; then
         warn "pacman.conf did not take the GitHub repository settings; restoring it."
         cp -a "$PACMAN_CONF_BAK" "$PACMAN_CONF"
         return 1
     fi
+}
+
+# [arch-mact2] publishes no valid signatures, so a SigLevel = Required there,
+# which the switch above once wrote into every block, makes pacman refuse every
+# transaction on a MacBook edition install.
+restore_unsigned_t2_repo() {
+    awk '/^\[arch-mact2\]/ { b = 1; next } /^\[/ { b = 0 }
+         b && /^SigLevel[[:space:]]*=[[:space:]]*Required[[:space:]]*$/ { f = 1 }
+         END { exit !f }' "$PACMAN_CONF" || return 0
+    sed -i '/^\[arch-mact2\]/,/^\[/ s|^SigLevel[[:space:]]*=[[:space:]]*Required[[:space:]]*$|SigLevel = Never|' "$PACMAN_CONF" \
+        && log "put [arch-mact2] back to SigLevel = Never."
 }
 
 signed_sync_works() {
@@ -261,6 +273,7 @@ if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
     exit 0
 fi
 
+restore_unsigned_t2_repo
 ensure_mirror
 
 if key_is_trusted && arch_keyring_populated && repo_is_signed_github && signed_sync_works; then
