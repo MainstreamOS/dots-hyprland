@@ -15,60 +15,24 @@ MouseArea {
     property bool targetMenuOpen: false
     // The color the icon sits on, as drawn: its bar group, or the overflow popup.
     property color backdrop: Appearance.barContent.backdrops[0]
+    readonly property real backdropLuminance: ColorUtils.relativeLuminance(root.backdrop)
     // Read once per image, so a new backdrop is judged without a new read.
-    property var iconPixels: []
-    // True when almost nothing stands off the backdrop (a white glyph on a light
-    // group). An outline or a color of its own keeps the icon as the app drew it.
-    readonly property bool iconLost: {
-        if (!Appearance.autoIconContrast || iconPixels.length === 0)
-            return false;
-        const bg = Qt.color(root.backdrop);
-        const lbg = ColorUtils.luminanceOfRgb(bg.r, bg.g, bg.b);
-        let total = 0;
-        let standing = 0;
-        for (let i = 0; i < iconPixels.length; i += 4) {
-            const a = iconPixels[i + 3] / 255;
-            if (a < 0.1)
-                continue;
-            const r = iconPixels[i] / 255 * a + bg.r * (1 - a);
-            const g = iconPixels[i + 1] / 255 * a + bg.g * (1 - a);
-            const b = iconPixels[i + 2] / 255 * a + bg.b * (1 - a);
-            const l = ColorUtils.luminanceOfRgb(r, g, b);
-            total += a;
-            if (ColorUtils.contrastOfLuminances(l, lbg) >= 1.5
-                    || Math.hypot(r - bg.r, g - bg.g, b - bg.b) >= 0.35)
-                standing += a;
-        }
-        return total > 0 && standing / total < 0.1;
-    }
-    // The color a lost icon is drawn toward.
-    readonly property color ink: {
-        const own = Appearance.barContent.colOnLayer0;
-        if (ColorUtils.contrastRatio(own, root.backdrop) >= 3)
-            return own;
-        const lbg = ColorUtils.relativeLuminance(root.backdrop);
-        return ColorUtils.contrastOfLuminances(lbg, 0) >= ColorUtils.contrastOfLuminances(lbg, 1) ? "black" : "white";
-    }
-    // A plain white or gray glyph takes the ink outright. A colored icon moves
-    // only until most of it stands off the surface, so it keeps its hue.
-    readonly property real inkShare: {
-        if (!iconLost)
-            return 0;
-        const bg = Qt.color(root.backdrop);
-        const lbg = ColorUtils.luminanceOfRgb(bg.r, bg.g, bg.b);
-        const ink = Qt.color(root.ink);
+    property var iconSample: null
+    // Each pixel that shows, as r, g, b, a in 0..1, their summed alpha, and
+    // whether the icon is one plain white or gray.
+    function sampleOf(data) {
         const px = [];
         let total = 0;
         let mr = 0;
         let mg = 0;
         let mb = 0;
-        for (let i = 0; i < iconPixels.length; i += 4) {
-            const a = iconPixels[i + 3] / 255;
+        for (let i = 0; i < data.length; i += 4) {
+            const a = data[i + 3] / 255;
             if (a < 0.1)
                 continue;
-            const r = iconPixels[i] / 255;
-            const g = iconPixels[i + 1] / 255;
-            const b = iconPixels[i + 2] / 255;
+            const r = data[i] / 255;
+            const g = data[i + 1] / 255;
+            const b = data[i + 2] / 255;
             px.push(r, g, b, a);
             total += a;
             mr += r * a;
@@ -83,21 +47,73 @@ MouseArea {
             if (Math.hypot(px[i] - mr, px[i + 1] - mg, px[i + 2] - mb) < 0.15)
                 oneColor += px[i + 3];
         }
-        if (oneColor / total >= 0.85 && Math.max(mr, mg, mb) - Math.min(mr, mg, mb) < 0.15)
+        const plain = oneColor / total >= 0.85 && Math.max(mr, mg, mb) - Math.min(mr, mg, mb) < 0.15;
+        return { px, total, plain };
+    }
+    // True when almost nothing stands off the backdrop (a white glyph on a light
+    // group). An outline or a color of its own keeps the icon as the app drew it.
+    readonly property bool iconLost: {
+        const sample = root.iconSample;
+        if (!Appearance.autoIconContrast || !sample)
+            return false;
+        const bg = Qt.color(root.backdrop);
+        const lbg = root.backdropLuminance;
+        const px = sample.px;
+        let standing = 0;
+        for (let i = 0; i < px.length; i += 4) {
+            const a = px[i + 3];
+            const r = px[i] * a + bg.r * (1 - a);
+            const g = px[i + 1] * a + bg.g * (1 - a);
+            const b = px[i + 2] * a + bg.b * (1 - a);
+            const l = ColorUtils.luminanceOfRgb(r, g, b);
+            if (ColorUtils.contrastOfLuminances(l, lbg) >= 1.5
+                    || Math.hypot(r - bg.r, g - bg.g, b - bg.b) >= 0.35)
+                standing += a;
+        }
+        return sample.total > 0 && standing / sample.total < 0.1;
+    }
+    // The color a lost icon is drawn toward.
+    readonly property color ink: {
+        const own = Appearance.barContent.colOnLayer0;
+        if (ColorUtils.contrastRatio(own, root.backdrop) >= Appearance.barContent.markContrast)
+            return own;
+        const lbg = root.backdropLuminance;
+        return ColorUtils.contrastOfLuminances(lbg, 0) >= ColorUtils.contrastOfLuminances(lbg, 1) ? "black" : "white";
+    }
+    // A plain white or gray glyph takes the ink outright. A colored icon moves
+    // only until most of it stands off the surface, so it keeps its hue.
+    readonly property real inkShare: {
+        const sample = root.iconSample;
+        if (!iconLost || !sample)
+            return 0;
+        if (sample.plain)
             return 1;
+        const px = sample.px;
+        const bg = Qt.color(root.backdrop);
+        const lbg = root.backdropLuminance;
+        const ink = Qt.color(root.ink);
+        const need = Appearance.barContent.markContrast;
+        const toInk = [];
+        const under = [];
+        for (let i = 0; i < px.length; i += 4) {
+            const a = px[i + 3];
+            toInk.push(ink.r - px[i], ink.g - px[i + 1], ink.b - px[i + 2]);
+            under.push(bg.r * (1 - a), bg.g * (1 - a), bg.b * (1 - a));
+        }
         for (let step = 1; step < 20; step++) {
             const k = step / 20;
             let standing = 0;
-            for (let i = 0; i < px.length; i += 4) {
+            for (let i = 0, j = 0; i < px.length; i += 4, j += 3) {
                 const a = px[i + 3];
-                const r = (px[i] + (ink.r - px[i]) * k) * a + bg.r * (1 - a);
-                const g = (px[i + 1] + (ink.g - px[i + 1]) * k) * a + bg.g * (1 - a);
-                const b = (px[i + 2] + (ink.b - px[i + 2]) * k) * a + bg.b * (1 - a);
-                if (ColorUtils.contrastOfLuminances(ColorUtils.luminanceOfRgb(r, g, b), lbg) >= 3)
+                const r = (px[i] + toInk[j] * k) * a + under[j];
+                const g = (px[i + 1] + toInk[j + 1] * k) * a + under[j + 1];
+                const b = (px[i + 2] + toInk[j + 2] * k) * a + under[j + 2];
+                if (ColorUtils.contrastOfLuminances(ColorUtils.luminanceOfRgb(r, g, b), lbg) >= need) {
                     standing += a;
+                    if (standing / sample.total >= 0.6)
+                        return k;
+                }
             }
-            if (standing / total >= 0.6)
-                return k;
         }
         return 1;
     }
@@ -167,14 +183,14 @@ MouseArea {
     // A grab cannot be cancelled, so its callback drops stale generations.
     property int grabGeneration: 0
     property bool grabPending: false
-    function capture(retrying) {
+    function capture(retrying = false) {
         const g = ++grabGeneration;
         if (!retrying)
             captureRetry.left = 20;
         if (!sampling || trayIcon.status === Image.Null || trayIcon.status === Image.Error) {
             grabPending = false;
             grab = null;
-            iconPixels = [];
+            iconSample = null;
             return;
         }
         // Old pixels stand until the new image is read, so a state change
@@ -188,23 +204,18 @@ MouseArea {
             root.grabPending = false;
             root.grab = result;
             iconReader.requestPaint();
-        }, Qt.size(24, 24));
+        }, Qt.size(iconReader.width, iconReader.height));
         // Refused while the window is not yet shown to the compositor.
         if (!started && captureRetry.left-- > 0)
             captureRetry.restart();
     }
-    onSamplingChanged: capture(false)
-    Component.onCompleted: capture(false)
-    Connections {
-        target: trayIcon
-        function onStatusChanged() { root.capture(false); }
-        function onSourceChanged() { root.capture(false); }
-    }
+    onSamplingChanged: capture()
+    Component.onCompleted: capture()
     Connections {
         target: root.QsWindow.window
         function onVisibleChanged() {
             if (root.grabPending)
-                root.capture(false);
+                root.capture();
         }
     }
     Timer {
@@ -228,7 +239,11 @@ MouseArea {
             const ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
             ctx.drawImage(src, 0, 0, width, height);
-            root.iconPixels = Array.from(ctx.getImageData(0, 0, width, height).data);
+            const sample = root.sampleOf(ctx.getImageData(0, 0, width, height).data);
+            // An unchanged image keeps the judgment made for it.
+            const old = root.iconSample?.px;
+            if (!old || old.length !== sample.px.length || sample.px.some((v, i) => v !== old[i]))
+                root.iconSample = sample;
             unloadImage(src);
             root.grab = null;
         }
@@ -248,6 +263,8 @@ MouseArea {
             anchors.centerIn: parent
             width: parent.width
             height: parent.height
+            onStatusChanged: root.capture()
+            onSourceChanged: root.capture()
         }
 
         Loader {
