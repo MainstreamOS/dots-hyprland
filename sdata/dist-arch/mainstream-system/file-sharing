@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # file-sharing: the privileged half of Settings > Sharing
 # (modules/settings/SharingConfig.qml). Installed at
-# /usr/lib/mainstream/file-sharing and run only through pkexec, which matches
-# the polkit action org.mainstreamos.file-sharing.
+# /usr/lib/mainstream/file-sharing and run through pkexec, which matches the
+# polkit action org.mainstreamos.file-sharing. keep runs from its own unit, and
+# disable also from the package's pre_remove.
 #
 #   enable <connection uuid>        first-time setup; sharing password on stdin
 #   account                         set up the calling account; password on stdin
@@ -10,6 +11,7 @@
 #   trust <connection uuid> on|off  share, or stop sharing, on one network
 #   disable                         stop sharing; config, shares and passwords stay
 #   rename <name>                   rename the computer
+#   keep                            mark samba and wsdd as explicitly installed
 #
 # The account acted on is always the one pkexec names in PKEXEC_UID, never an
 # argument, and a password only ever arrives on stdin, so neither a command
@@ -43,6 +45,7 @@ ZONES_ETC=/etc/firewalld/zones
 GROUP=sambashare
 PACKAGES=(samba wsdd)
 INSTALL_UNIT=mainstream-file-sharing-install.service
+KEEP_UNIT=mainstream-file-sharing-keep.service
 PACMAN_LOCK=/var/lib/pacman/db.lck
 LOG=/var/log/mainstream/file-sharing.log
 
@@ -416,17 +419,19 @@ wait_for_databases() {  # $@ = packages
     return 2
 }
 
-# From mainstream-welcome-install: someone who just flipped a switch has no
-# next tick to retry on, so another package manager is waited for, and a lock
-# that no pacman holds is debris from a killed transaction that would
-# otherwise block every install on this machine.
+# Derived from the copy in mainstream-welcome-install: someone who just flipped
+# a switch has no next tick to retry on, so another package manager is waited
+# for, and a lock that no pacman holds is debris from a killed transaction that
+# would otherwise block every install on this machine.
 wait_for_pacman_lock() {
-    local waited=0 rc
-    while [[ -e $PACMAN_LOCK ]]; do
+    local waited=0 rc id
+    while id=$(stat -c '%i %.9Z' "$PACMAN_LOCK" 2>/dev/null); do
         # libalpm keeps the lock open for as long as it holds it, whichever
         # front end that is, so only a lock nothing has open is a leftover.
+        # fuser says the same of one that just went, and the next pacman may
+        # have made a new one meanwhile, so it must still be the same file.
         rc=0; fuser -s "$PACMAN_LOCK" 2>/dev/null || rc=$?
-        if (( rc == 1 )); then
+        if (( rc == 1 )) && [[ $(stat -c '%i %.9Z' "$PACMAN_LOCK" 2>/dev/null) == "$id" ]]; then
             log "the pacman lock is stale (nothing has it open); removing it"
             rm -f "$PACMAN_LOCK"
             return 0
@@ -469,6 +474,22 @@ install_packages() {
     mapfile -t targets < <(missing_packages)
     (( ${#targets[@]} == 0 )) || die 4 "pacman exited with $rc and ${targets[*]} is still missing"
     log "installed"
+}
+
+# pacman -Q also answers for a package that only provides the name asked for.
+dependency_packages() {
+    local p
+    local -a names=()
+    for p in "${PACKAGES[@]}"; do names+=(-e "$p"); done
+    pacman -Qqd "${PACKAGES[@]}" 2>/dev/null | grep -xF "${names[@]}"
+}
+
+# A dependency would go with orphan cleanup; turning sharing off keeps it, like
+# the config. The unit marks it, so setup never waits on pacman.
+keep_packages() {
+    [[ -n $(dependency_packages) ]] || return 0
+    systemctl start --no-block "$KEEP_UNIT" >>"$LOG" 2>&1 \
+        || log "warning: $KEEP_UNIT did not start, so the sharing packages stay dependencies"
 }
 
 # NetBIOS names stop at 15 characters. NetBIOS itself is off, but Samba still
@@ -711,6 +732,7 @@ cmd_enable() {  # $1 = uuid
     set_zone "$CONN" "$ZONE"
     record_trust "$CONN"
     write_state on
+    keep_packages
     # A home network that is not up yet is left to the network hook, which
     # starts the services when it connects.
     if home_up; then
@@ -737,6 +759,7 @@ cmd_account() {
     read_password
     log "account: $CALLER"
     setup_account
+    keep_packages
 }
 
 cmd_password() {
@@ -759,6 +782,7 @@ cmd_trust() {  # $1 = uuid, $2 = on|off
         ensure_zone_loaded
         set_zone "$CONN" "$ZONE"
         record_trust "$CONN"
+        keep_packages
         if [[ $(read_state) == on ]] && home_up; then
             start_services
         fi
@@ -824,6 +848,27 @@ cmd_rename() {  # $1 = new host name
     systemctl try-restart wsdd.service >>"$LOG" 2>&1 || log "restarting wsdd.service reported a problem"
 }
 
+# Run by its unit, often while an upgrade still holds pacman's lock. Nobody
+# waits on it, so it waits out any lock rather than judge one stale.
+cmd_keep() {
+    (( $# == 0 )) || die 2 "usage: keep"
+    local deps=() tries=3
+    [[ $(read_state) != unset ]] || return 0
+    [[ -n $(dependency_packages) ]] || return 0
+    while (( tries-- )); do
+        if [[ -e $PACMAN_LOCK ]]; then
+            log "the package database is locked; waiting for it"
+            while [[ -e $PACMAN_LOCK ]]; do sleep 3; done
+        fi
+        # Whatever held the lock may have removed or marked one meanwhile.
+        mapfile -t deps < <(dependency_packages)
+        (( ${#deps[@]} )) || return 0
+        log "marking ${deps[*]} as explicitly installed"
+        pacman -D --asexplicit "${deps[@]}" </dev/null >>"$LOG" 2>&1 && return 0
+    done
+    log "warning: pacman could not mark ${deps[*]} as explicitly installed"
+}
+
 main() {
     local verb=${1:-}
     (( $# )) && shift
@@ -838,9 +883,11 @@ main() {
     # One change at a time, or two runs would interleave their writes to
     # smb.conf, the state file and the network zones. The network hook takes
     # the same lock. The wait covers an enable that is still downloading.
+    # keep writes none of them, and its wait on pacman would hold up the hook.
     case $verb in
         enable|account|password|trust|disable|rename) ;;
-        *) die 2 "usage: file-sharing enable|account|password|trust|disable|rename" ;;
+        keep) cmd_keep "$@"; exit 0 ;;
+        *) die 2 "usage: file-sharing enable|account|password|trust|disable|rename|keep" ;;
     esac
     { exec 9>"$LOCK" && flock -w 900 9; } 2>/dev/null || die 1 "another sharing change is still running"
     prune_trust

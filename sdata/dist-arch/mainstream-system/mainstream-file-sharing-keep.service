@@ -1,0 +1,6 @@
+[Unit]
+Description=Mark the packages Settings > Sharing uses as explicitly installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mainstream/file-sharing keep

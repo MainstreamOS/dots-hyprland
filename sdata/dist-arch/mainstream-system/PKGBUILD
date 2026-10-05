@@ -68,12 +68,13 @@ source=(
   50-mainstream-sharing
   wsdd-sharing.conf
   sharing-ipsec.nft
+  mainstream-file-sharing-keep.service
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -149,4 +150,6 @@ package() {
   install -Dm644 "$srcdir/wsdd-sharing.conf" \
       "$pkgdir/usr/lib/systemd/system/wsdd.service.d/mainstream-sharing.conf"
   install -Dm644 "$srcdir/sharing-ipsec.nft"             "$pkgdir/usr/lib/mainstream/sharing-ipsec.nft"
+  install -Dm644 "$srcdir/mainstream-file-sharing-keep.service" \
+      "$pkgdir/usr/lib/systemd/system/mainstream-file-sharing-keep.service"
 }

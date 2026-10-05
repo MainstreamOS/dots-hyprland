@@ -227,6 +227,14 @@ _sharing_arrived() {
     fi
 }
 
+# Sharing set up before 1.0-15 left samba or wsdd a dependency if it already
+# was one. The helper marks them once this upgrade lets go of the database.
+_sharing_keep_packages() {
+    [ -d /run/systemd/system ] && [ -f /var/lib/mainstream/sharing/state ] || return 0
+    systemctl start --no-block mainstream-file-sharing-keep.service 2>/dev/null \
+        || echo "warning: samba and wsdd could not be marked as explicitly installed; \"pacman -D --asexplicit samba wsdd\" as root does it."
+}
+
 post_install() {
     _migrate
     _mdns_arrived
@@ -242,6 +250,7 @@ post_upgrade() {
     fi
     if [ "$(vercmp "$2" 1.0-15)" -lt 0 ]; then
         _esp_snapshot_room
+        _sharing_keep_packages
     fi
 }
 
