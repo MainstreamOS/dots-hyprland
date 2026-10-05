@@ -61,6 +61,9 @@ ContentPage {
                         if (newValue === "ddd, dd/MM") {
                             Config.options.time.shortDateFormat = "dd/MM";
                             Config.options.time.dateWithYearFormat = "dd/MM/yyyy";
+                        } else if (newValue === "ddd, dd.MM") {
+                            Config.options.time.shortDateFormat = "dd.MM";
+                            Config.options.time.dateWithYearFormat = "dd.MM.yyyy";
                         } else {
                             Config.options.time.shortDateFormat = "MM/dd";
                             Config.options.time.dateWithYearFormat = "MM/dd/yyyy";
@@ -70,6 +73,7 @@ ContentPage {
                     }
                     options: [
                         { displayName: Translation.tr("Date First dd/MM"),  value: "ddd, dd/MM" },
+                        { displayName: Translation.tr("Date First dd.MM"),  value: "ddd, dd.MM" },
                         { displayName: Translation.tr("Month First MM/dd"), value: "ddd, MM/dd" },
                     ]
                 }
