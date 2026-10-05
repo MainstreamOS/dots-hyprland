@@ -223,6 +223,9 @@ ColumnLayout {
 
                         text: segmentContent
                         onTextChanged: {
+                            // Only write back user edits: assigning here breaks
+                            // the segmentContent binding, freezing streamed code.
+                            if (!root.editing) return
                             segmentContent = text
                         }
 
