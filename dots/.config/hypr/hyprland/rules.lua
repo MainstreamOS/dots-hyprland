@@ -91,8 +91,7 @@ hl.window_rule({match = {float = 0 }, no_shadow = true})
 -- title bar is the only handle it has, and a client may ask to open at an
 -- absolute position, so one can arrive with that bar beneath the bar or the
 -- dock. The panels' own reservations are already in monitor.reserved; this
--- moves a float to the near edge of the room they leave, and moves nothing
--- else. What size a window opens at is left to it, and where a window is
+-- moves a float to the near edge of the room they leave. Where a window is
 -- deliberately placed is left alone unless its title bar would land
 -- somewhere it cannot be grabbed.
 --
@@ -142,11 +141,8 @@ local function reachableRoom(monitor)
 end
 
 -- Held inside the room, a window wears its title bar inside it too, however
--- big the window is, and that bar is the one handle a float has. So moving
--- is all it takes: what a window asked to be is its own business once it
--- can be reached, and one larger than the room keeps that size and
--- overhangs the far edge rather than being cut down to fit. The floors are
--- what make this hold: without them a window too big for the room is
+-- big the window is, and that bar is the one handle a float has. The floors
+-- are what make this hold: without them a window too big for the room is
 -- pushed past the near edge instead of resting against it, which is the
 -- one way the title bar still gets away.
 local function withinReach(room, x, y, size)
@@ -154,7 +150,7 @@ local function withinReach(room, x, y, size)
            math.min(math.max(y, room.top), math.max(room.top, room.bottom - size.y))
 end
 
-local function keepFloatingWindowWithinReach(window)
+local function keepFloatingWindowWithinReach(window, fitOnOpen)
     if not window or not window.floating or window.fullscreen ~= 0 then
         return
     end
@@ -164,6 +160,17 @@ local function keepFloatingWindowWithinReach(window)
     local room = reachableRoom(window.monitor)
     if not at or not size or not room then
         return
+    end
+
+    -- Apps that remember being maximized reopen at the whole screen's size,
+    -- which overhangs the dock, so they open fitted to the room instead.
+    if fitOnOpen then
+        local w = math.min(size.x, room.right - room.left)
+        local h = math.min(size.y, room.bottom - room.top)
+        if w ~= size.x or h ~= size.y then
+            hl.dispatch(hl.dsp.window.resize({ x = w, y = h, window = window }))
+            size = { x = w, y = h }
+        end
     end
 
     local x, y = withinReach(room, at.x, at.y, size)
@@ -180,7 +187,9 @@ end
 
 -- `window.open` fires once the floating layout has given the window its
 -- initial geometry.
-hl.on("window.open", keepFloatingWindowWithinReach)
+hl.on("window.open", function(window)
+    keepFloatingWindowWithinReach(window, true)
+end)
 
 -- A float can end up under a panel later as well: moved to a workspace on a
 -- monitor whose panels sit elsewhere, or dropped there by an overview. Both
