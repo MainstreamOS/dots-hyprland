@@ -321,5 +321,28 @@
       "Brazilian Portuguese gains another 149 translated strings (thanks @douglasboardman)",
       "Plus many smaller fixes and polish, including sharper icons on scaled displays"
     ]
+  },
+  "3.0.1": {
+    "date": "2026-10-05",
+    "kind": "fix",
+    "summary": "A polish release: tray icons that keep their colors, faster logouts and switches to Gaming Mode, Wi-Fi channels set for your country, and fixes across boot, windows, sharing and the AI sidebar",
+    "changes": [
+      "Tray icons keep their own colors: auto contrast no longer turns colorful icons into one flat color, and only shifts an icon as far as it needs to stand out from the bar.",
+      "Logging out and switching to Gaming Mode are faster: apps that close to the tray, like Discord, no longer hold them up, and startup apps come back after a crashed session",
+      "Wi-Fi now picks your country from your time zone so every channel your router uses is available, and you can change it in Settings",
+      "Encrypted installs no longer show an Early TPM SRK Setup failure at startup, and Repair Install keeps the disk unlock step in place",
+      "A boot image that fails its checksum now asks before starting instead of stopping the machine",
+      "Early work on Steam Frame support (experimental): the bar stays on your own network while the Steam Frame adapter is plugged in, the PC stays awake while SteamVR's status window is open, and the sidebar warns before turning Wi-Fi off with the adapter plugged in",
+      "A floating window you can see is now always a window you can click, even over a maximized window",
+      "In the AI sidebar, code blocks fill in completely while a reply streams, and the chat keeps scrolling with the pointer over them (thanks @benoitjadinon)",
+      "NVIDIA installs include the NVML Python bindings, so GPU monitors such as TRCC can show GPU use and temperatures",
+      "Folder sharing keeps Samba installed while it is on, copies the password as sensitive, and turns off without waiting for the keyring",
+      "On the MacBook edition, system updates no longer stop with an invalid signature from the T2 kernel's repository",
+      "Every account can now change its own password with just the current one, and a wrong password says so",
+      "Bluetooth stays on in Gaming Mode, so your devices still connect there and reconnect when you return to the desktop",
+      "The Welcome app's Translate button now opens Mainstream's translations on GitHub",
+      "You can now reboot from the Update settings Reboot required pill",
+      "Gemini 3.8 Flash is now the default AI model"
+    ]
   }
 }
