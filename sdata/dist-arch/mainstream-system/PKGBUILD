@@ -69,12 +69,13 @@ source=(
   wsdd-sharing.conf
   sharing-ipsec.nft
   mainstream-file-sharing-keep.service
+  50-mainstream-nvpcr.conf
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -152,4 +153,9 @@ package() {
   install -Dm644 "$srcdir/sharing-ipsec.nft"             "$pkgdir/usr/lib/mainstream/sharing-ipsec.nft"
   install -Dm644 "$srcdir/mainstream-file-sharing-keep.service" \
       "$pkgdir/usr/lib/systemd/system/mainstream-file-sharing-keep.service"
+
+  for unit in systemd-tpm2-setup-early.service systemd-pcrproduct.service systemd-pcrlogin@.service; do
+    install -Dm644 "$srcdir/50-mainstream-nvpcr.conf" \
+        "$pkgdir/usr/lib/systemd/system/$unit.d/50-mainstream-nvpcr.conf"
+  done
 }

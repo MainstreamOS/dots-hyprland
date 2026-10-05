@@ -2511,5 +2511,8 @@
   "Click again to reboot": "Click again to reboot",
   "Reboot to finish the update. Open apps are asked to close first.": "Reboot to finish the update. Open apps are asked to close first.",
   "An update or package install is still running, so the computer was not restarted. Reboot once it finishes.": "An update or package install is still running, so the computer was not restarted. Reboot once it finishes.",
-  "Show in Files": "Show in Files"
+  "Show in Files": "Show in Files",
+  "Rebuilding the boot images so the Early TPM SRK Setup error stops showing at startup...": "Rebuilding the boot images so the Early TPM SRK Setup error stops showing at startup...",
+  "Boot images rebuilt; the Early TPM SRK Setup error no longer shows at startup.": "Boot images rebuilt; the Early TPM SRK Setup error no longer shows at startup.",
+  "The boot images were not rebuilt; the next kernel update rebuilds them without the Early TPM SRK Setup error.": "The boot images were not rebuilt; the next kernel update rebuilds them without the Early TPM SRK Setup error."
 }

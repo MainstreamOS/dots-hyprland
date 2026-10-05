@@ -12,9 +12,10 @@
 # Deliberately NOT done here:
 #   - mkinitcpio rebuild (1–2 min per kernel × N kernels). Plymouth
 #     reads its theme dir at boot, so a refreshed theme becomes active
-#     on the next mkinitcpio run that the user triggers anyway. The one
-#     exception is a boot image that would hibernate memory, disk key
-#     included, onto an unencrypted swap; see that step below.
+#     on the next mkinitcpio run that the user triggers anyway. The
+#     exceptions are a boot image that would hibernate memory, disk key
+#     included, onto an unencrypted swap, and one that still prints the TPM
+#     setup error at startup; see those steps below.
 #   - plymouth-set-default-theme (one-time install-time concern; already
 #     pointing at "mainstream").
 #   - /etc/kernel/cmdline rewrites for splash/quiet flags (set once at
@@ -643,6 +644,20 @@ if [[ -x /usr/local/bin/mainstream-limine-windows ]]; then
     /usr/local/bin/mainstream-limine-windows || true
 fi
 
+# Held against shutdown and sleep, its output kept in a file until it ends: a Settings
+# window closed mid-build would otherwise cut the pipe and stop it halfway.
+_rebuild_boot_images() {
+    local inhibit=() log rc
+    command -v systemd-inhibit >/dev/null 2>&1 \
+        && inhibit=(systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" --why="Rebuilding the boot image")
+    log="$(mktemp)" || log=/dev/null
+    "${inhibit[@]}" limine-mkinitcpio </dev/null >"$log" 2>&1
+    rc=$?
+    [[ "$log" == /dev/null ]] || { sed 's/^/    /' "$log"; rm -f "$log"; }
+    (( rc == 0 )) || _BOOT_REBUILD_FAILED=1
+    return "$rc"
+}
+
 # ── Hibernation beside an encrypted root ──────────────────────────────────
 # Installs before 3.0.0 could name a plain swap partition in resume= beside an
 # encrypted root, so hibernating wrote all of memory, the disk key included,
@@ -718,17 +733,7 @@ if [[ ! -e "$HIB_STAMP" && ! -e "$HIB_DROPIN" && -f /etc/kernel/cmdline ]] \
                 # The boot images carry their command line, so they would keep
                 # looking for an image on that swap until the next kernel update.
                 say "$(t "Rebuilding the boot images without resume=...")"
-                _inhibit=()
-                command -v systemd-inhibit >/dev/null 2>&1 \
-                    && _inhibit=(systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" --why="Rebuilding the boot image")
-                # Into a file, and shown once it is done: straight into the
-                # page's pipe, a Settings window closed partway through would
-                # end the build halfway through writing a boot image.
-                _hib_log="$(mktemp)" || _hib_log=/dev/null
-                "${_inhibit[@]}" limine-mkinitcpio </dev/null >"$_hib_log" 2>&1
-                _hib_rc=$?
-                [[ "$_hib_log" == /dev/null ]] || { sed 's/^/    /' "$_hib_log"; rm -f "$_hib_log"; }
-                if [[ $_hib_rc -eq 0 ]]; then
+                if _rebuild_boot_images; then
                     ok "$(t "Boot images rebuilt without resume=.")"
                 else
                     warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them without resume=.")"
@@ -739,6 +744,62 @@ if [[ ! -e "$HIB_STAMP" && ! -e "$HIB_DROPIN" && -f /etc/kernel/cmdline ]] \
             warn "$(tf "Could not write %s; hibernation stays on." "$HIB_DROPIN")"
             RC=1
         fi
+    fi
+fi
+
+# ── TPM setup error at startup ─────────────────────────────────────────────
+# mainstream-system's drop-in keeps "Failed to start Early TPM SRK Setup" off the
+# screen, but a boot image built before it lands still prints it; rebuilt once.
+TPM_UNIT=systemd-tpm2-setup-early.service
+TPM_DROPIN=50-mainstream-nvpcr.conf
+TPM_STAMP=/var/lib/mainstream/tpm2-early-setup-rebuilt
+_tpm_stale_image() {  # 0 when an image limine-mkinitcpio builds runs the unit without the drop-in
+    local esp name f kernel img list
+    { IFS= read -r esp; IFS= read -r name; } < <(
+        source /usr/lib/limine/limine-common-functions >/dev/null 2>&1 \
+            && load_config >/dev/null 2>&1 && printf '%s\n%s\n' "$ESP_PATH" "${CUSTOM_UKI_NAME-}")
+    [[ "$name" =~ ^[a-z0-9]+$ ]] || name="$(cat /etc/machine-id 2>/dev/null)"
+    [[ -n "$esp" && -n "$name" ]] || return 1
+    for f in /usr/lib/modules/*/pkgbase; do
+        kernel="$(tr -d '[:space:]' <"$f" 2>/dev/null)"
+        [[ -n "$kernel" ]] || continue
+        for img in "$esp/EFI/Linux/${name}_$kernel.efi" "$esp/EFI/Linux/${name}_$kernel-fallback.efi"; do
+            [[ -f "$img" ]] && list="$(lsinitcpio "$img" 2>/dev/null)" || continue
+            grep -qxF -e "usr/lib/systemd/system/$TPM_UNIT" -e "./usr/lib/systemd/system/$TPM_UNIT" <<<"$list" \
+                && ! grep -qxF -e "usr/lib/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" \
+                               -e "./usr/lib/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" <<<"$list" \
+                && return 0
+        done
+    done
+    return 1
+}
+# mainstream-luks-keyfile.service can still be rebuilding after the package update, and
+# limine-mkinitcpio's lock gives up after 10 s, so two builds would write the same images.
+_luks_keyfile_idle() {
+    local i
+    for (( i = 0; i < 120; i++ )); do
+        [[ "$(systemctl is-active mainstream-luks-keyfile.service 2>/dev/null)" == activating ]] || return 0
+        sleep 5
+    done
+    return 1
+}
+# A file of the same name in /etc overrides the drop-in, so the user has taken it over.
+# After a failed rebuild this run, the next update tries instead of spending the stamp.
+if [[ ! -e "$TPM_STAMP" && -f "/usr/lib/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" ]] \
+   && [[ ! -e "/etc/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" && ! -L "/etc/systemd/system/$TPM_UNIT.d/$TPM_DROPIN" ]] \
+   && [[ -z "${_BOOT_REBUILD_FAILED-}" ]] \
+   && command -v limine-mkinitcpio >/dev/null 2>&1 \
+   && journalctl -b -q -n 1 -o cat --no-pager "UNIT=$TPM_UNIT" EXIT_CODE=exited EXIT_STATUS=1 PRIORITY=5 2>/dev/null | grep -q . \
+   && _luks_keyfile_idle \
+   && _tpm_stale_image; then
+    say "$(t "Rebuilding the boot images so the Early TPM SRK Setup error stops showing at startup...")"
+    mkdir -p "${TPM_STAMP%/*}" && : > "$TPM_STAMP"
+    # limine-mkinitcpio exits 0 even when a kernel's image failed, so the images decide.
+    if _rebuild_boot_images && ! _tpm_stale_image; then
+        ok "$(t "Boot images rebuilt; the Early TPM SRK Setup error no longer shows at startup.")"
+    else
+        warn "$(t "The boot images were not rebuilt; the next kernel update rebuilds them without the Early TPM SRK Setup error.")"
+        RC=1
     fi
 fi
 
