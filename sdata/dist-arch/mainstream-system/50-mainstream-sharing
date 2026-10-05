@@ -30,7 +30,7 @@ case $action in up|down) ;; *) exit 0 ;; esac
 # A start queued here before it stops the services is replaced by that stop.
 # An enable holds the lock through its download, so the wait is short, and
 # past it the hook carries on as it would have without the lock.
-{ exec 9>"$LOCK" && flock -w 10 9; } 2>/dev/null
+{ open_lock && flock -w 10 9; } 2>/dev/null
 
 # Samba listens on every interface and lets in every private address; only
 # the firewall keeps it to trusted networks, so without one it stays off. At

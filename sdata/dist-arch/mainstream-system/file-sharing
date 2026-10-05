@@ -889,7 +889,7 @@ main() {
         keep) cmd_keep "$@"; exit 0 ;;
         *) die 2 "usage: file-sharing enable|account|password|trust|disable|rename|keep" ;;
     esac
-    { exec 9>"$LOCK" && flock -w 900 9; } 2>/dev/null || die 1 "another sharing change is still running"
+    { open_lock && flock -w 900 9; } 2>/dev/null || die 1 "another sharing change is still running"
     prune_trust
     "cmd_$verb" "$@"
     exit 0

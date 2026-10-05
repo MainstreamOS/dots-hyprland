@@ -15,7 +15,12 @@ SERVICES=(smb.service wsdd.service)
 WSDD_ENV=/run/mainstream/sharing/wsdd.env
 IPSEC_GUARD=/usr/lib/mainstream/sharing-ipsec.nft
 IPSEC_TABLE=mainstream_sharing
-LOCK=/run/lock/mainstream-file-sharing.lock
+LOCK=/run/mainstream/file-sharing.lock
+
+# Root-only, since anyone who can open a lock file can hold its lock.
+open_lock() {
+    mkdir -p "${LOCK%/*}" && (umask 077; : >>"$LOCK") && exec 9>>"$LOCK"
+}
 
 valid_uuid() { [[ $1 =~ ^[0-9a-fA-F-]{36}$ ]]; }
 
