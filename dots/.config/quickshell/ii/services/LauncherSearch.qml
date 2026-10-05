@@ -175,13 +175,14 @@ Singleton {
             return resultComp.createObject(null, {
                 rawValue: trimmed,
                 name: displayName || trimmed,
-                verb: Translation.tr("Open"),
+                verb: !isDir && FileSearch.isAppImagePath(trimmed) ? Translation.tr("Show in Files") : Translation.tr("Open"),
                 type: isDir ? Translation.tr("Folder") : Translation.tr("File"),
                 iconName: r.iconName,
                 iconType: LauncherSearchResult.IconType.System,
                 execute: () => {
                     GlobalStates.overviewOpen = false;
-                    Qt.openUrlExternally(`file://${trimmed}`);
+                    if (isDir) Qt.openUrlExternally(`file://${trimmed}`);
+                    else FileSearch.openFile(trimmed);
                 },
                 actions: [resultComp.createObject(null, {
                     name: Translation.tr("Open Parent folder"),

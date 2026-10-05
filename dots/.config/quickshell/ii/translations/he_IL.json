@@ -2510,5 +2510,6 @@
   "[DRY-RUN] Could not read origin/%s": "[DRY-RUN] Could not read origin/%s",
   "Click again to reboot": "Click again to reboot",
   "Reboot to finish the update. Open apps are asked to close first.": "Reboot to finish the update. Open apps are asked to close first.",
-  "An update or package install is still running, so the computer was not restarted. Reboot once it finishes.": "An update or package install is still running, so the computer was not restarted. Reboot once it finishes."
+  "An update or package install is still running, so the computer was not restarted. Reboot once it finishes.": "An update or package install is still running, so the computer was not restarted. Reboot once it finishes.",
+  "Show in Files": "Show in Files"
 }

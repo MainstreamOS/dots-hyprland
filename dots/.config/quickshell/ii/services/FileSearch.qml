@@ -185,6 +185,65 @@ Singleton {
         return root.xdgIconByExt[ext] || "text-x-generic";
     }
 
+    // xdg-open has no handler for AppImages and hands them to the browser,
+    // so they are shown selected in Files instead.
+    function isAppImagePath(path) {
+        return /\.appimage$/i.test(String(path || ""));
+    }
+
+    // shared-mime-info's AppImage magic: "ELF" at 1, then "AI" and type 1 or 2 at 8.
+    function isAppImageHeader(hex) {
+        const b = String(hex || "").trim().split(/\s+/);
+        return b.length >= 11 && b.slice(1, 4).join("") === "454c46"
+            && b[8] === "41" && b[9] === "49" && (b[10] === "01" || b[10] === "02");
+    }
+
+    // Known document and media types open at once; any other file may be a renamed AppImage.
+    function openFile(path) {
+        if (root.isAppImagePath(path)) root.showInFiles(path);
+        else if (root.iconForPath(path, false) !== "text-x-generic") Qt.openUrlExternally(`file://${path}`);
+        else appImageProbe.createObject(root, { path: path });
+    }
+
+    function showInFiles(path) {
+        revealInFiles.createObject(root, { path: path });
+    }
+
+    Component {
+        id: appImageProbe
+        Process {
+            id: probe
+            required property string path
+            command: ["od", "-An", "-tx1", "-N11", "--", probe.path]
+            stdout: StdioCollector {
+                id: probeOutput
+            }
+            Component.onCompleted: probe.running = true
+            onExited: {
+                if (root.isAppImageHeader(probeOutput.text)) root.showInFiles(probe.path);
+                else Qt.openUrlExternally(`file://${probe.path}`);
+                probe.destroy();
+            }
+        }
+    }
+
+    Component {
+        id: revealInFiles
+        Process {
+            id: reveal
+            required property string path
+            command: ["busctl", "--user", "call",
+                "org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1", "ShowItems", "ass", "1",
+                FileUtils.fileUrl(reveal.path), ""]
+            Component.onCompleted: reveal.running = true
+            onExited: exitCode => {
+                if (exitCode !== 0) Qt.openUrlExternally(FileUtils.fileUrl(FileUtils.parentDirectory(reveal.path)));
+                reveal.destroy();
+            }
+        }
+    }
+
     Process {
         id: fdProc
         property int runId: 0

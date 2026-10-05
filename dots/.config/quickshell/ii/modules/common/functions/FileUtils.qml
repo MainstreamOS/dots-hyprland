@@ -68,4 +68,13 @@ Singleton {
         parts.pop();
         return parts.join("/");
     }
+
+    /**
+     * A file:// URL for a path, each segment percent-encoded so a name holding '#', '?' or '%' stays part of the path
+     * @param {string} path
+     * @returns {string}
+     */
+    function fileUrl(path) {
+        return "file://" + String(path).split("/").map(encodeURIComponent).join("/");
+    }
 }
