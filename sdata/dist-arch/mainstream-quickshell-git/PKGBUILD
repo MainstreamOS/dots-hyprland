@@ -10,8 +10,8 @@ replaces=('illogical-impulse-quickshell-git')
 
 _pkgname=quickshell
 pkgname="$_prefix-$_pkgname-git"
-pkgver=0.3.1.r1
-pkgrel=3
+pkgver=0.3.1.r19
+pkgrel=1
 pkgdesc="$_pkgname-git pinned commit and extra deps for $_prefix"
 arch=(x86_64 aarch64)
 url='https://git.outfoxxed.me/quickshell/quickshell'
@@ -38,7 +38,6 @@ depends=(
   qt6-positioning
   qt6-quicktimeline
   qt6-sensors
-  qt6-svg
   qt6-tools
   qt6-translations
   qt6-virtualkeyboard
@@ -72,7 +71,7 @@ build() {
   cmake -GNinja -B build \
     -DCMAKE_BUILD_TYPE="RelWithDebInfo" \
     -DCMAKE_INSTALL_PREFIX=/usr \
-    -DDISTRIBUTOR="AUR (package: quickshell-git)" \
+    -DDISTRIBUTOR="MainstreamOS (package: mainstream-quickshell-git)" \
     -DINSTALL_QML_PREFIX=lib/qt6/qml
 
   cmake --build build
