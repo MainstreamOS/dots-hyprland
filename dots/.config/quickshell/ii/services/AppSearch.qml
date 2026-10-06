@@ -4,6 +4,7 @@ import qs.modules.common
 import qs.modules.common.functions
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 /**
  * - Eases fuzzy searching for applications by name
@@ -59,15 +60,80 @@ Singleton {
     property var preppedNames: []
     property var preppedIcons: []
     property var pendingEntries: []
+    // Ids of entries kept from this desktop by OnlyShowIn or NotShowIn, such
+    // as KDE's copy of Web Apps. Quickshell lists them anyway, beside the
+    // real app, so the files are read for those keys once per scan.
+    property var hiddenHere: ({})
 
     Connections {
         target: DesktopEntries
         function onApplicationsChanged() {
             root.refresh();
+            root.scanShowIn();
         }
     }
 
-    Component.onCompleted: refresh()
+    Component.onCompleted: {
+        refresh();
+        scanShowIn();
+    }
+
+    function scanShowIn() {
+        showInScan.running = false;
+        showInScan.running = true;
+    }
+
+    // One "@@" line per data dir, in the order a dir's entry shadows the
+    // next one's, then grep's "./sub/name.desktop:line" for each group
+    // header and show-in key.
+    Process {
+        id: showInScan
+        command: ["bash", "-c", "IFS=:; for d in \"${XDG_DATA_HOME:-$HOME/.local/share}\" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do cd \"$d/applications\" 2>/dev/null || continue; echo @@; grep -rHE '^\\[|^(OnlyShowIn|NotShowIn)=' --include='*.desktop' .; done"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const hidden = root.parseShowIn(text);
+                if (JSON.stringify(hidden) === JSON.stringify(root.hiddenHere)) return;
+                root.hiddenHere = hidden;
+                root.refresh();
+            }
+        }
+    }
+
+    function parseShowIn(text) {
+        const current = (Quickshell.env("XDG_CURRENT_DESKTOP") ?? "").split(":").filter(d => d.length > 0);
+        const here = list => list.some(d => current.includes(d));
+        const decided = {};
+        const hidden = {};
+        let dir = {};
+        const flush = () => {
+            for (const id of Object.keys(dir)) {
+                if (decided[id]) continue;
+                decided[id] = true;
+                const keys = dir[id];
+                if ((keys.only && !here(keys.only)) || (keys.not && here(keys.not)))
+                    hidden[id] = true;
+            }
+            dir = {};
+        };
+        for (const line of text.split("\n")) {
+            if (line === "@@") { flush(); continue; }
+            const at = line.indexOf(".desktop:");
+            if (!line.startsWith("./") || at < 0) continue;
+            const id = line.slice(2, at).replace(/\//g, "-");
+            const value = line.slice(at + 9).trim();
+            const keys = dir[id] ?? (dir[id] = { main: false });
+            if (value.startsWith("[")) {
+                keys.main = value === "[Desktop Entry]";
+                continue;
+            }
+            if (!keys.main) continue;
+            const list = value.slice(value.indexOf("=") + 1).split(";").filter(d => d.length > 0);
+            if (value.startsWith("OnlyShowIn")) keys.only = list;
+            else keys.not = list;
+        }
+        flush();
+        return hidden;
+    }
 
     function copyOf(entry) {
         const id = entry.id;
@@ -109,7 +175,7 @@ Singleton {
         const records = {};
         const list = [];
         for (const entry of DesktopEntries.applications.values) {
-            if (records[entry.id]) continue;
+            if (records[entry.id] || root.hiddenHere[entry.id]) continue;
             const record = root.copyOf(entry);
             records[entry.id] = record;
             list.push(record);
