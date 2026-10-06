@@ -200,6 +200,31 @@ hl.on("window.move_to_workspace", function(window)
     end)
 end)
 
+-- A float restored from maximized that still fills the room would look as if
+-- nothing happened, so the title bar's scroll down hands it a quarter of the
+-- room, centered. A float with a smaller size of its own keeps it.
+function MainstreamShrinkRoomFillingFloat(window)
+    if not window or not window.floating or window.fullscreen ~= 0 then
+        return
+    end
+    local size = window.size
+    local room = reachableRoom(window.monitor)
+    if not size or not room then
+        return
+    end
+    local roomW, roomH = room.right - room.left, room.bottom - room.top
+    if size.x < roomW - 1 or size.y < roomH - 1 then
+        return
+    end
+    local w, h = math.floor(roomW / 2), math.floor(roomH / 2)
+    hl.dispatch(hl.dsp.window.resize({ x = w, y = h, window = window }))
+    hl.dispatch(hl.dsp.window.move({
+        x = math.floor(room.left + (roomW - w) / 2),
+        y = math.floor(room.top + (roomH - h) / 2),
+        window = window,
+    }))
+end
+
 -- The launcher's overview drops a floating window where the pointer let go
 -- and asks here for the move to make, so the drop lands within reach. x and
 -- y are relative to the window's monitor; the answer is the move in global

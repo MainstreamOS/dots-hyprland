@@ -260,6 +260,16 @@ end
 -- the minimize button would bring it back to the desktop instead.
 local FULLSCREEN_NONE, FULLSCREEN_MAXIMIZED = 0, 1
 
+-- Every title bar restore goes through here, so a float that would come back
+-- filling the room gets a quarter of it instead (rules.lua). Its restored
+-- size is only known once the unset has run.
+local function unmaximize(w)
+    if w.floating and MainstreamShrinkRoomFillingFloat then
+        hl.timer(function() MainstreamShrinkRoomFillingFloat(w) end, { timeout = 1, type = "oneshot" })
+    end
+    return hl.dsp.window.fullscreen({ mode = "maximized", action = "unset" })
+end
+
 function MainstreamTitleBarStep(direction)
     local w = hl.get_active_window()
     if not w or (direction ~= "up" and direction ~= "down") then
@@ -280,9 +290,19 @@ function MainstreamTitleBarStep(direction)
     if mode == FULLSCREEN_NONE then
         return toScratchpad()
     elseif mode == FULLSCREEN_MAXIMIZED then
-        return hl.dsp.window.fullscreen({ mode = "maximized", action = "unset" })
+        return unmaximize(w)
     end
     return hl.dsp.window.fullscreen({ mode = "maximized", action = "set" })
+end
+
+-- The maximize button, a double-click and Super+D toggle maximized, and
+-- restore the way scrolling down does.
+function MainstreamToggleMaximize()
+    local w = hl.get_active_window()
+    if w and (w.fullscreen or FULLSCREEN_NONE) == FULLSCREEN_MAXIMIZED then
+        return unmaximize(w)
+    end
+    return hl.dsp.window.fullscreen({ mode = "maximized" })
 end
 
 -- What the title bar's buttons and gestures run. Each is a shell command, and
@@ -292,7 +312,7 @@ end
 -- lets an app ask about unsaved work first, and a double-click maximizes and
 -- restores the way the maximize button does.
 local TITLE_BAR_CLOSE = [[hyprctl dispatch 'hl.dsp.window.close()']]
-local TITLE_BAR_MAXIMIZE = [[hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "maximized"})']]
+local TITLE_BAR_MAXIMIZE = [[hyprctl dispatch 'MainstreamToggleMaximize()']]
 local TITLE_BAR_MINIMIZE = [[hyprctl dispatch 'MainstreamTitleBarMinimize()']]
 local TITLE_BAR_SCROLL_UP = [[hyprctl dispatch 'MainstreamTitleBarStep("up")']]
 local TITLE_BAR_SCROLL_DOWN = [[hyprctl dispatch 'MainstreamTitleBarStep("down")']]
