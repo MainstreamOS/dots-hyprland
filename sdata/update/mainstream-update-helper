@@ -600,10 +600,17 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     echo "── $(t "Flatpak: apps installed for everyone")"
     flatpak_leg system
     FP_SYS_RC=$?
+    if [[ "$FP_SYS_RC" -eq 0 ]]; then
+        flatpak uninstall --unused --noninteractive --system || true
+    fi
     echo ""
     echo "── $(t "Flatpak: apps installed for you only")"
     flatpak_leg user
     FP_USR_RC=$?
+    if [[ "$FP_USR_RC" -eq 0 ]]; then
+        runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
+            flatpak uninstall --unused --noninteractive --user 9>&- || true
+    fi
     rm -f "$FLATPAK_LOG"
     if [[ "$FP_SYS_RC" -ne 0 ]]; then
         FLATPAK_RC="$FP_SYS_RC"
