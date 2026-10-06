@@ -19,7 +19,7 @@ Item { // Bar content region
 
     // Modules that render without a surrounding pill (they carry their own
     // background or fill the available width).
-    readonly property var chromelessModules: ["sidebarButton", "activeWindow", "timers", "releaseUpdates"]
+    readonly property var chromelessModules: ["activeWindow", "timers", "releaseUpdates"]
     readonly property bool sidebarButtonInLeft: Array.from(Config.options.bar.layout.left ?? [])
         .some(g => ObjectUtils.layoutGroupWidgets(g).some(w => w.id === "sidebarButton"))
 
@@ -347,7 +347,6 @@ Item { // Bar content region
     Component {
         id: comp_sidebarButton
         LeftSidebarButton {
-            tones: (parent?.onStrip ?? false) ? Appearance.barStripContent : Appearance.barContent
             colBackground: root.sidebarButtonInLeft && barLeftSideMouseArea.hovered ? tones.colLayer1Hover : ColorUtils.transparentize(tones.colLayer1Hover, 1)
         }
     }

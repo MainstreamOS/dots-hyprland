@@ -107,7 +107,6 @@ Item { // Bar content region
     }
 
     // Modules that render without a surrounding pill.
-    readonly property var chromelessModules: ["sidebarButton"]
     readonly property bool sidebarButtonInTop: Array.from(Config.options.bar.layout.left ?? [])
         .some(g => ObjectUtils.layoutGroupWidgets(g).some(w => w.id === "sidebarButton"))
 
@@ -158,10 +157,6 @@ Item { // Bar content region
             return g.items.map(x => (typeof x === "string") ? ({ id: x, enabled: true }) : x);
         return [];
     }
-    function groupChromeless(g) {
-        const ws = root.groupWidgets(g).filter(w => root.moduleActive(w.id));
-        return ws.length > 0 && ws.every(w => root.chromelessModules.indexOf(w.id) !== -1);
-    }
     function entryActive(w) {
         return w.enabled !== false && root.moduleActive(w.id);
     }
@@ -173,67 +168,35 @@ Item { // Bar content region
     component BarModule: Loader {
         required property string moduleName
         property bool entryEnabled: true
-        // A module in a group with no pill sits bare on the strip.
-        property bool onStrip: false
         Layout.alignment: Qt.AlignHCenter
-        // The button used to be inset from the top by half the room left over
-        // beside it, so the gap above matched the gaps either side. Sitting
-        // flush against the top instead puts its round highlight over the
-        // bar's rounded corner.
-        Layout.topMargin: moduleName === "sidebarButton"
-            ? (Appearance.sizes.baseVerticalBarWidth - implicitWidth) / 2 : 0
         Layout.fillWidth: root.moduleFillWidth(moduleName)
         active: entryEnabled && root.moduleActive(moduleName)
         visible: active && root.moduleVisible(moduleName)
         sourceComponent: root.moduleComponent(moduleName)
     }
 
-    // One group = one vertical pill (or a bare column for chromeless-only groups).
+    // One group = one vertical pill.
     component GroupPill: Item {
         id: pill
         required property var group
         readonly property var gw: root.groupWidgets(group)
-        readonly property bool chromeless: root.groupChromeless(group)
         visible: root.groupHasVisible(group)
         implicitWidth: Appearance.sizes.baseVerticalBarWidth
-        implicitHeight: pillLoader.implicitHeight
+        implicitHeight: pillGroup.implicitHeight
         Layout.alignment: Qt.AlignHCenter
         Layout.fillWidth: true
 
-        Loader {
-            id: pillLoader
+        Bar.BarGroup {
+            id: pillGroup
             anchors.fill: parent
-            sourceComponent: pill.chromeless ? chromelessColumn : normalPill
-        }
-
-        Component {
-            id: chromelessColumn
-            ColumnLayout {
-                spacing: 8
-                Repeater {
-                    model: pill.gw
-                    delegate: BarModule {
-                        required property var modelData
-                        moduleName: modelData.id
-                        entryEnabled: modelData.enabled
-                        onStrip: true
-                    }
-                }
-            }
-        }
-
-        Component {
-            id: normalPill
-            Bar.BarGroup {
-                vertical: true
-                padding: 8
-                Repeater {
-                    model: pill.gw
-                    delegate: BarModule {
-                        required property var modelData
-                        moduleName: modelData.id
-                        entryEnabled: modelData.enabled
-                    }
+            vertical: true
+            padding: 8
+            Repeater {
+                model: pill.gw
+                delegate: BarModule {
+                    required property var modelData
+                    moduleName: modelData.id
+                    entryEnabled: modelData.enabled
                 }
             }
         }
@@ -244,7 +207,6 @@ Item { // Bar content region
         id: comp_sidebarButton
         Bar.LeftSidebarButton {
             Layout.alignment: Qt.AlignHCenter
-            tones: (parent?.onStrip ?? false) ? Appearance.barStripContent : Appearance.barContent
             colBackground: root.sidebarButtonInTop && barTopSectionMouseArea.hovered ? tones.colLayer1Hover : ColorUtils.transparentize(tones.colLayer1Hover, 1)
         }
     }
