@@ -785,6 +785,20 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
             /usr/bin/quickshell --private-check-compat >/dev/null 2>&1 9>&-; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
         QS_PKGBUILD_DIR="$ORIG_HOME/.cache/dots-hyprland/sdata/dist-arch/mainstream-quickshell-git"
+        # Building a recipe older than the installed package would downgrade it,
+        # and the next update would bring the newer one back to fail this check.
+        if [[ "$QS_PKG" == "${QS_PKGBUILD_DIR##*/}" && -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
+            QS_RECIPE_VER=$(runuser -u "$ORIG_USER" -- bash -c \
+                'cd "$1" && source ./PKGBUILD >/dev/null 2>&1 && echo "${epoch:+$epoch:}$pkgver-$pkgrel"' \
+                _ "$QS_PKGBUILD_DIR" 2>/dev/null 9>&-)
+            QS_INSTALLED_VER=$(pacman -Q "$QS_PKG" 2>/dev/null | awk '{print $2}')
+            if [[ -n "$QS_RECIPE_VER" && -n "$QS_INSTALLED_VER" ]] \
+                    && (( $(vercmp "$QS_RECIPE_VER" "$QS_INSTALLED_VER") < 0 )); then
+                echo ""
+                echo ">>> $(tf "Quickshell ABI mismatch detected. Run a full update (or pacman -Syu) once the [mainstream] repo ships a rebuilt %s." "$QS_PKG")"
+                QS_PKG=""
+            fi
+        fi
         if [[ -n "$QS_PKG" ]] && [[ -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
             echo ""
             echo "═══════════════════════════════════════════════════════════"
