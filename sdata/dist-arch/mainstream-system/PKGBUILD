@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=15
+pkgrel=16
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -17,6 +17,7 @@ depends=(
   cups
   ipp-usb
   libdrm
+  pacman-contrib
 )
 options=(!debug)
 install=mainstream-system.install
@@ -70,12 +71,13 @@ source=(
   sharing-ipsec.nft
   mainstream-file-sharing-keep.service
   50-mainstream-nvpcr.conf
+  paccache-uninstalled.conf
 )
 sha256sums=(
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -158,4 +160,6 @@ package() {
     install -Dm644 "$srcdir/50-mainstream-nvpcr.conf" \
         "$pkgdir/usr/lib/systemd/system/$unit.d/50-mainstream-nvpcr.conf"
   done
+  install -Dm644 "$srcdir/paccache-uninstalled.conf" \
+      "$pkgdir/usr/lib/systemd/system/paccache.service.d/50-mainstream-uninstalled.conf"
 }

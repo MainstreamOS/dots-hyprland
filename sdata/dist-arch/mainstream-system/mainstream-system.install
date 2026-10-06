@@ -186,6 +186,14 @@ _migrate() {  # $1 = the version upgraded from, or nothing on an install
     if systemctl -q is-enabled mainstream-vmwgfx-greeter.service 2>/dev/null; then
         /usr/lib/mainstream/vmwgfx/greeter-setup 2>/dev/null || true
     fi
+    # Every update leaves the old package files in pacman's cache. Its weekly
+    # cleanup is enabled once, by the release that brings it, so a disable sticks.
+    if [ -z "$1" ] || [ "$(vercmp "$1" 1.0-16)" -lt 0 ]; then
+        systemctl preset paccache.timer 2>/dev/null || true
+        if [ -d /run/systemd/system ]; then
+            systemctl start --no-block paccache.timer 2>/dev/null || true
+        fi
+    fi
     systemctl preset hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
     if [ -d /run/systemd/system ]; then
         systemctl start --no-block hyprbars-rebuild.timer scrolloverview-rebuild.timer 2>/dev/null || true
