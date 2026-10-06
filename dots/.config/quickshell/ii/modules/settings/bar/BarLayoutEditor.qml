@@ -39,12 +39,6 @@ Item {
     // retired is dropped — unknown ids pass through, though every entry
     // written back is normalized to id + enabled.
     readonly property var retiredModules: Config.retiredBarModules
-    // Arranged by the bar rather than the user: the editor hides these
-    // while they are placed, preserves their entries in the layout it
-    // writes back, and offers the widget again if a layout arrives
-    // without it.
-    readonly property var barManagedModules: ["sidebarButton"]
-
     // Widgets with no vertical rendering — hidden from the editor while the bar is vertical.
     readonly property var verticalUnsupported: ["activeWindow", "activeWindowPill", "utilButtons", "weather", "timers", "releaseUpdates"]
 
@@ -76,8 +70,6 @@ Item {
             .filter(w => root.retiredModules.indexOf(w.id) === -1);
     }
     function widgetHiddenHere(id) {
-        if (root.barManagedModules.indexOf(id) !== -1)
-            return root.findWidget(id) !== null;
         return Config.options.bar.vertical && root.verticalUnsupported.indexOf(id) !== -1;
     }
     function shownWidgetsOf(g) {
@@ -99,13 +91,6 @@ Item {
         return Array.prototype.slice.call(a).map(g => ({ widgets: root.widgetsOf(g) }));
     }
     function commit(s, groups) {
-        // Bar-managed entries float to the front of their group: drops index
-        // around hidden entries, and without a canonical spot the bar could
-        // render one somewhere the editor cannot show.
-        for (const g of groups) {
-            g.widgets = g.widgets.filter(w => root.barManagedModules.indexOf(w.id) !== -1)
-                .concat(g.widgets.filter(w => root.barManagedModules.indexOf(w.id) === -1));
-        }
         const cleaned = groups.filter(g => g.widgets.length > 0);
         Config.options.bar.layout[s] = cleaned;
     }

@@ -108,6 +108,8 @@ Item { // Bar content region
 
     // Modules that render without a surrounding pill.
     readonly property var chromelessModules: ["sidebarButton"]
+    readonly property bool sidebarButtonInTop: Array.from(Config.options.bar.layout.left ?? [])
+        .some(g => ObjectUtils.layoutGroupWidgets(g).some(w => w.id === "sidebarButton"))
 
     function moduleComponent(name) {
         switch (name) {
@@ -243,7 +245,7 @@ Item { // Bar content region
         Bar.LeftSidebarButton {
             Layout.alignment: Qt.AlignHCenter
             tones: (parent?.onStrip ?? false) ? Appearance.barStripContent : Appearance.barContent
-            colBackground: barTopSectionMouseArea.hovered ? tones.colLayer1Hover : ColorUtils.transparentize(tones.colLayer1Hover, 1)
+            colBackground: root.sidebarButtonInTop && barTopSectionMouseArea.hovered ? tones.colLayer1Hover : ColorUtils.transparentize(tones.colLayer1Hover, 1)
         }
     }
 
