@@ -335,13 +335,13 @@ Singleton {
             "sendTemperature": false,
             "thinkingLevel": "",
         }),
-        "mistral-medium-3": aiModelComponent.createObject(this, {
-            "name": "Mistral Medium 3",
+        "mistral-4": aiModelComponent.createObject(this, {
+            "name": "Mistral 4",
             "icon": "mistral-symbolic",
-            "description": Translation.tr("Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls").arg("Mistral"),
-            "homepage": "https://mistral.ai/news/mistral-medium-3",
+            "description": Translation.tr("Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose").arg("Mistral"),
+            "homepage": "https://mistral.ai/news/mistral-large-4",
             "endpoint": "https://api.mistral.ai/v1/chat/completions",
-            "model": "mistral-medium-2505",
+            "model": "mistral-large-latest",
             "requires_key": true,
             "key_id": "mistral",
             "key_get_link": "https://console.mistral.ai/api-keys",
@@ -381,6 +381,10 @@ Singleton {
     readonly property var modelList: Object.keys(root.models)
     readonly property var retiredModels: ({
         "claude-opus-4-8": "claude",
+        "mistral-medium-3": "mistral-4",
+        "mistral-3": "mistral-4",
+        "mistral-medium": "mistral-4",
+        "mistral": "mistral-4",
         "gemini-3-flash": "gemini-flash-latest",
         "gemini-2.5-flash": "gemini-flash-latest",
         "gemini-3.5-flash-lite": "gemini-flash-latest",

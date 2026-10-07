@@ -78,7 +78,7 @@
   "Corner style": "Gaya sudut",
   "No media": "Tidak ada media",
   "Unknown function call: %1": "Panggilan fungsi tidak dikenal: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "Online | Model %1 | Memberikan jawaban cepat, responsif dan terformat dengan baik. Kekurangan: tidak terlalu bersemangat melakukan hal-hal; mungkin membuat panggilan fungsi yang tidak dikenal",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "Online | Model unggulan 1T parameter %1. Kuat dalam pengkodean, alur kerja agen, dan penggunaan alat terstruktur. Kekurangan: latensi awal lebih tinggi dan cenderung panjang lebar",
   "Volume": "Volume",
   "Gamma": "Gamma",
   "Medium": "Sedang",

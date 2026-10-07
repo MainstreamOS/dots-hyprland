@@ -78,7 +78,7 @@
   "Corner style": "Estilo do canto",
   "No media": "Sem mídia",
   "Unknown function call: %1": "Chamada de função desconhecida: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "Online | Modelo da %1 | Respostas rápidas e bem formatadas. Desvantagens: não muito proativo; pode inventar chamadas de função inexistentes",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "Online | Modelo principal de 1T de parâmetros da %1. Forte em programação, fluxos agênticos e uso de ferramentas estruturadas. Desventagens: maior latência inicial e tende a ser prolixo",
   "Volume": "Volume",
   "Gamma": "Gama",
   "Medium": "Médio",

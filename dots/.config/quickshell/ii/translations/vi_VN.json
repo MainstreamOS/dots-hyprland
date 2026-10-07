@@ -78,7 +78,7 @@
   "Corner style": "Corner style",
   "No media": "Không có media",
   "Unknown function call: %1": "Hàm không xác định: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "Trực tuyến | Mô hình đầu bảng 1T tham số của %1. Mạnh về lập trình, quy trình làm việc tác tử và sử dụng công cụ có cấu trúc. Nhược điểm: độ trễ ban đầu cao hơn và có xu hướng dài dòng",
   "Volume": "Âm lượng",
   "Gamma": "Gamma",
   "Medium": "Medium",

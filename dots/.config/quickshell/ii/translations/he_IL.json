@@ -78,7 +78,7 @@
   "Corner style": "סגנון פינות",
   "No media": "אין מדיה",
   "Unknown function call: %1": "קריאת פונקציה לא ידועה: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "מקוון | מודל של %1 | מספק תשובות מהירות, מגיבות ומעוצבות היטב. חסרונות: לא תמיד יוזם פעולות; עלול להמציא קריאות פונקציה לא מוכרות",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "מקוון | דגם הדגל של %1 עם 1T פרמטרים. חזק בתכנות, תהליכי סוכן ושימוש מובנה בכלים. חסרונות: השהיה ראשונית גבוהה יותר ונוטה לאריכות דברים",
   "Volume": "עוצמה",
   "Gamma": "Gamma",
   "Medium": "בינוני",

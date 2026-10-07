@@ -78,7 +78,7 @@
   "Corner style": "Corner style",
   "No media": "Немає медіа",
   "Unknown function call: %1": "Невідомий виклик функції: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "Онлайн | %1's модель | Надає швидкі, чуйні та добре відформатовані відповіді. Недоліки: не дуже охоче виконує завдання; може вигадувати виклики невідомих функцій",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "Онлайн | Флагман %1 на 1T параметрів. Чудовий у кодуванні, агентних процесах та виклику інструментів. Недоліки: вища початкова затримка та схильність до багатослівності",
   "Volume": "Гучність",
   "Gamma": "Gamma",
   "Medium": "Medium",

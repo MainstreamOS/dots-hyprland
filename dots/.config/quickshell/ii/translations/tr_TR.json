@@ -78,7 +78,7 @@
   "Corner style": "Köşe stili",
   "No media": "Medya yok",
   "Unknown function call: %1": "Bilinmeyen fonksiyon çağrısı: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "Çevrimiçi | %1'in modeli | Hızlı, duyarlı ve iyi biçimlendirilmiş yanıtlar verir. Dezavantajlar: işleri yapmaya pek istekli değil; bilinmeyen fonksiyon çağrıları yapabilir",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "Çevrimiçi | %1'in 1T parametreli amiral gemisi. Kodlama, ajan iş akışları ve yapılandırılmış araç kullanımında güçlü. Dezavantajları: daha yüksek başlangıç gecikmesi ve ayrıntılı olma eğilimi",
   "Volume": "Ses",
   "Gamma": "Gamma",
   "Medium": "Orta",

@@ -78,7 +78,7 @@
   "Corner style": "角のスタイル",
   "No media": "メディアなし",
   "Unknown function call: %1": "不明な関数呼び出し: %1",
-  "Online | %1's model | Delivers fast, responsive and well-formatted answers. Disadvantages: not very eager to do stuff; might make up unknown function calls": "オンライン | %1のモデル | 高速で反応が良く、整形された回答が得られます。欠点: あまり積極的でない場合があり、存在しない関数を提案することがあります",
+  "Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose": "オンライン | %1の1Tパラメータ旗艦モデル。コーディング、エージェントワークフロー、構造化ツール呼び出しに優れます。欠点：初期レイテンシが長めで冗長になりがち",
   "Volume": "音量",
   "Gamma": "Gamma",
   "Medium": "中",
