@@ -62,6 +62,8 @@ Singleton {
     }
     property var postResponseHook
     property real temperature: Persistent.states?.ai?.temperature ?? 0.5
+    property string thinkingLevel: Persistent.states?.ai?.thinkingLevel ?? ""
+    readonly property var thinkingLevels: ["minimal", "low", "medium", "high"]
     property QtObject tokenCount: QtObject {
         property int input: -1
         property int output: -1
@@ -282,48 +284,37 @@ Singleton {
     // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
     property var models: Config.options.policies.ai === 2 ? {} : {
-        // Gemini 3 deprecates temperature. 2.5 is limited to accounts that already used it,
-        // but is the only Gemini with free web search.
-        "gemini-3.8-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 3.8 Flash",
+        // Gemini 3 series deprecates sampling parameters (temperature, top_p, top_k)
+        // and thinking_budget in favor of thinking_level.
+        "gemini-flash-latest": aiModelComponent.createObject(this, {
+            "name": "Gemini Flash",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier."),
             "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
-            "model": "gemini-3.8-flash",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
+            "model": "gemini-flash-latest",
             "requires_key": true,
             "key_id": "gemini",
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
             "api_format": "gemini",
             "sendTemperature": false,
+            "thinkingLevel": "",
         }),
-        "gemini-3.5-flash-lite": aiModelComponent.createObject(this, {
-            "name": "Gemini 3.5 Flash-Lite",
+        "gemini-pro-latest": aiModelComponent.createObject(this, {
+            "name": "Gemini Pro",
             "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nThe fastest, lightest Gemini, for quick answers."),
+            "description": Translation.tr("Online | Google's model\nGoogle's flagship Pro reasoning model: complex coding, mathematics, and research."),
             "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent",
-            "model": "gemini-3.5-flash-lite",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:streamGenerateContent",
+            "model": "gemini-pro-latest",
             "requires_key": true,
             "key_id": "gemini",
             "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
+            "key_get_description": Translation.tr("**Pricing**: free tier and pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
             "api_format": "gemini",
             "sendTemperature": false,
-        }),
-        "gemini-2.5-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 2.5 Flash",
-            "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nOnly for Google accounts that already used it. The one Gemini with free web search."),
-            "homepage": "https://aistudio.google.com",
-            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-            "model": "gemini-2.5-flash",
-            "requires_key": true,
-            "key_id": "gemini",
-            "key_get_link": "https://aistudio.google.com/app/apikey",
-            "key_get_description": Translation.tr("**Pricing**: free. Data used for training.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
-            "api_format": "gemini",
+            "thinkingLevel": "",
         }),
         "mistral-medium-3": aiModelComponent.createObject(this, {
             "name": "Mistral Medium 3",
@@ -369,7 +360,17 @@ Singleton {
     // Only ever a view of the map. Readonly so no fetch handler can hand it
     // a snapshot that stops following the models registered afterwards.
     readonly property var modelList: Object.keys(root.models)
-    readonly property var retiredModels: ({ "gemini-3-flash": "gemini-3.8-flash" })
+    readonly property var retiredModels: ({
+        "gemini-3-flash": "gemini-flash-latest",
+        "gemini-2.5-flash": "gemini-flash-latest",
+        "gemini-3.5-flash-lite": "gemini-flash-latest",
+        "gemini-3.8-flash": "gemini-flash-latest",
+        "gemini-flash": "gemini-flash-latest",
+        "gemini": "gemini-flash-latest",
+        "gemini-pro": "gemini-pro-latest",
+        "gemini-3.1-pro": "gemini-pro-latest",
+        "gemini-3.1-pro-preview": "gemini-pro-latest",
+    })
     readonly property var currentModelId: {
         const id = Persistent.states?.ai?.model || modelList[0];
         return retiredModels[id] ?? id;
@@ -1519,7 +1520,11 @@ Singleton {
         }
         Persistent.states.ai.temperature = value;
         root.temperature = value;
-        root.addMessage(Translation.tr("Temperature set to %1").arg(value), Ai.interfaceRole);
+        if (root.currentModel?.sendTemperature === false) {
+            root.addMessage(Translation.tr("Temperature set to %1. (Note: %2 uses default sampling; adjust thinking level with /think instead)").arg(value).arg(root.currentModel.name), Ai.interfaceRole);
+        } else {
+            root.addMessage(Translation.tr("Temperature set to %1").arg(value), Ai.interfaceRole);
+        }
     }
 
     function setApiKey(key) {
@@ -1552,7 +1557,36 @@ Singleton {
     }
 
     function printTemperature() {
-        root.addMessage(Translation.tr("Temperature: %1").arg(root.temperature), Ai.interfaceRole);
+        if (root.currentModel?.sendTemperature === false) {
+            root.addMessage(Translation.tr("Temperature: %1 (Not used by %2; adjust thinking level with /think instead)").arg(root.temperature).arg(root.currentModel.name), Ai.interfaceRole);
+        } else {
+            root.addMessage(Translation.tr("Temperature: %1").arg(root.temperature), Ai.interfaceRole);
+        }
+    }
+
+    function setThinkingLevel(value) {
+        const norm = (value || "").toString().trim().toLowerCase();
+        if (root.thinkingLevels.includes(norm)) {
+            Persistent.states.ai.thinkingLevel = norm;
+            root.thinkingLevel = norm;
+            root.addMessage(Translation.tr("Thinking level set to %1").arg(norm), Ai.interfaceRole);
+        } else if (norm === "off" || norm === "default" || norm === "auto" || norm === "") {
+            Persistent.states.ai.thinkingLevel = "";
+            root.thinkingLevel = "";
+            root.addMessage(Translation.tr("Thinking level set to default (%1)").arg(root.defaultThinkingLevelLabel()), Ai.interfaceRole);
+        } else {
+            root.addMessage(Translation.tr("Invalid thinking level '%1'. Valid levels: minimal, low, medium, high, auto").arg(value), Ai.interfaceRole);
+        }
+    }
+
+    function defaultThinkingLevelLabel() {
+        const level = root.currentModel?.thinkingLevel;
+        return level ? `${level} (model default)` : "model default";
+    }
+
+    function printThinkingLevel() {
+        const current = root.thinkingLevel || root.defaultThinkingLevelLabel();
+        root.addMessage(Translation.tr("Thinking level: %1").arg(current), Ai.interfaceRole);
     }
 
     function clearMessages() {

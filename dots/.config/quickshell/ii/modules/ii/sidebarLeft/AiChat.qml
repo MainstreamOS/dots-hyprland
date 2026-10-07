@@ -165,7 +165,7 @@ Item {
         },
         {
             name: "temp",
-            description: Translation.tr("Set temperature (randomness) of the model. Values range between 0 to 2 for Gemini, 0 to 1 for other models. Default is 0.5."),
+            description: Translation.tr("Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level."),
             execute: args => {
                 // console.log(args)
                 if (args.length == 0 || args[0] == "get") {
@@ -173,6 +173,17 @@ Item {
                 } else {
                     const temp = parseFloat(args[0]);
                     Ai.setTemperature(temp);
+                }
+            }
+        },
+        {
+            name: "think",
+            description: Translation.tr("Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget."),
+            execute: args => {
+                if (args.length == 0 || args[0] == "get") {
+                    Ai.printThinkingLevel();
+                } else {
+                    Ai.setThinkingLevel(args[0]);
                 }
             }
         },

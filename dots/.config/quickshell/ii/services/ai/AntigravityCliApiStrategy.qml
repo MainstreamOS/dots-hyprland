@@ -1,4 +1,5 @@
 import QtQuick
+import qs.services
 import qs.modules.common.functions as CF
 
 ApiStrategy {
@@ -45,7 +46,16 @@ ApiStrategy {
         // the CLI no longer has only draws a warning and starts a new one.
         let command = "agy --output-format=stream-json --disable-slash-commands";
         if (root.sessionId.length > 0) command += ` --conversation=${root.quote(root.sessionId)}`;
-        if (model.model && model.model !== "gemini-plan") command += ` --model=${root.quote(model.model)}`;
+        if (model.model && model.model !== "gemini-plan") {
+            command += ` --model=${root.quote(model.model)}`;
+            if (model.model.startsWith("gemini-")) {
+                let effort = (Ai.thinkingLevel || model.thinkingLevel || "medium").toLowerCase();
+                if (effort === "minimal") effort = "low";
+                if (!["low", "medium", "high"].includes(effort)) effort = "medium";
+                if (model.model.includes("3.1-pro") && effort === "medium") effort = "high";
+                command += ` --effort=${root.quote(effort)}`;
+            }
+        }
         command += ` --print=${root.quote(userMessage)}`;
 
         // Kept off stdout so the chat reads only the event stream, and shown
@@ -79,7 +89,7 @@ ApiStrategy {
         return /authenticat|sign in|signed out|log ?in/i.test(text);
     }
 
-    function parseResponseLine(line: string, message: AiMessageData) {
+    function parseResponseLine(line: string, message: AiMessageData): var {
         const cleanData = line.trim();
         if (cleanData.length === 0) return {};
 

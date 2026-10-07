@@ -1,4 +1,5 @@
 import QtQuick
+import qs.services
 import qs.modules.common.functions as CF
 
 ApiStrategy {
@@ -22,7 +23,7 @@ ApiStrategy {
     function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
         const usingSearch = tools[0]?.google_search !== undefined;
         // 2.5 searches on the free tier, so only a Gemini 3 refusal is about billing.
-        usedSearch = usingSearch && model.model.startsWith("gemini-3");
+        usedSearch = usingSearch && (model.model.startsWith("gemini-3") || model.model.endsWith("-latest"));
         // Gemini 3 answers a functionResponse only when it carries its call's id.
         let lastCallId = "";
         let contents = messages.map(message => {
@@ -79,16 +80,48 @@ ApiStrategy {
                 }
             });
         }
+        // Gemini 3 series deprecates sampling parameters (temperature, top_p, top_k)
+        // and thinking_budget in favor of thinking_level ("minimal", "low", "medium", "high").
+        let generationConfig = {};
+        let chosenThinkingLevel = (Ai.thinkingLevel || model.thinkingLevel || "").toLowerCase();
+        if (Ai.thinkingLevels.includes(chosenThinkingLevel)) {
+            // Models like Pro and latest series support low, medium, high. Clamp minimal to low.
+            if (chosenThinkingLevel === "minimal" && (model.model.includes("pro") || model.model.includes("3.8") || model.model.endsWith("-latest"))) {
+                chosenThinkingLevel = "low";
+            }
+            generationConfig.thinkingConfig = {
+                thinkingLevel: chosenThinkingLevel
+            };
+        }
+
+        // Sanitize any extraParams so deprecated parameters are never passed
+        const budgetKeys = ["thinking_budget", "thinkingBudget"];
+        const retiredKeys = ["temperature", "top_p", "top_k"].concat(budgetKeys);
+        const without = (obj, keys) => {
+            const copy = Object.assign({}, obj);
+            for (const key of keys) delete copy[key];
+            return copy;
+        };
+        const extra = without(model.extraParams ?? {}, retiredKeys);
+        if (extra.generationConfig) {
+            const extraGen = without(extra.generationConfig, retiredKeys);
+            if (extraGen.thinkingConfig) extraGen.thinkingConfig = without(extraGen.thinkingConfig, budgetKeys);
+            generationConfig = Object.assign(generationConfig, extraGen);
+            delete extra.generationConfig;
+        }
+
         let baseData = {
             "contents": contents,
             "tools": tools,
             "system_instruction": {
                 "parts": [{ text: systemPrompt }]
-            },
-            "generationConfig": model.sendTemperature ? { "temperature": temperature } : {},
+            }
         };
+        if (Object.keys(generationConfig).length > 0) {
+            baseData.generationConfig = generationConfig;
+        }
         // print("Gemini API call payload:", JSON.stringify(baseData, null, 2));
-        return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
+        return Object.assign({}, baseData, extra);
     }
 
     function buildAuthorizationHeader(apiKeyEnvVarName: string): string {
@@ -96,7 +129,7 @@ ApiStrategy {
         return "";
     }
 
-    function parseResponseLine(line, message) {
+    function parseResponseLine(line: string, message: AiMessageData): var {
         if (line.startsWith("[")) {
             buffer += line.slice(1).trim();
         } else if (line === "]") {
@@ -142,24 +175,26 @@ ApiStrategy {
             }
             
             // Function call handling
-            if (dataJson.candidates[0]?.content?.parts[0]?.functionCall) {
-                const responsePart = dataJson.candidates[0].content.parts[0];
-                const functionCall = responsePart.functionCall;
-                message.functionName = functionCall.name;
-                message.functionCall = functionCall.name;
-                message.functionArgs = functionCall.args;
-                message.functionThoughtSignature = responsePart.thoughtSignature ?? functionCall.thoughtSignature ?? "";
-                message.functionCallId = functionCall.id ?? "";
-                const newContent = `\n\n[[ Function: ${functionCall.name}(${JSON.stringify(functionCall.args, null, 2)}) ]]\n`
-                message.rawContent += newContent;
-                message.content += newContent;
-                return { functionCall: { name: functionCall.name, args: functionCall.args }, finished: finished };
-            }
+            const parts = dataJson.candidates[0]?.content?.parts ?? [];
+            for (const part of parts) {
+                if (part.functionCall) {
+                    const functionCall = part.functionCall;
+                    message.functionName = functionCall.name;
+                    message.functionCall = functionCall.name;
+                    message.functionArgs = functionCall.args;
+                    message.functionThoughtSignature = part.thoughtSignature ?? functionCall.thoughtSignature ?? "";
+                    message.functionCallId = functionCall.id ?? "";
+                    const newContent = `\n\n[[ Function: ${functionCall.name}(${JSON.stringify(functionCall.args, null, 2)}) ]]\n`
+                    message.rawContent += newContent;
+                    message.content += newContent;
+                    return { functionCall: { name: functionCall.name, args: functionCall.args }, finished: finished };
+                }
 
-            // Normal text response
-            const responseContent = dataJson.candidates[0]?.content?.parts[0]?.text
-            message.rawContent += responseContent;
-            message.content += responseContent;
+                if (part.text) {
+                    message.rawContent += part.text;
+                    message.content += part.text;
+                }
+            }
             
             // Handle annotations and metadata
             const annotationSources = dataJson.candidates[0]?.groundingMetadata?.groundingChunks?.map(chunk => {
@@ -206,7 +241,7 @@ ApiStrategy {
         return { finished: finished };
     }
 
-    function onRequestFinished(message) {
+    function onRequestFinished(message: AiMessageData): var {
         return parseBuffer(message);
     }
     
