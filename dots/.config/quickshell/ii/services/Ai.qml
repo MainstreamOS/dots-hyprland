@@ -351,10 +351,10 @@ Singleton {
         "claude": aiModelComponent.createObject(this, {
             "name": "Claude",
             "icon": "claude-symbolic",
-            "description": Translation.tr("Online | Anthropic's Claude Opus 4.8 over the Messages API"),
+            "description": Translation.tr("Online | Anthropic's Claude Opus 5.5 over the Messages API"),
             "homepage": "https://www.anthropic.com/claude",
             "endpoint": "https://api.anthropic.com/v1/messages",
-            "model": "claude-opus-4-8",
+            "model": "claude-opus-5-5",
             "requires_key": true,
             "key_id": "anthropic",
             "key_get_link": "https://console.anthropic.com/settings/keys",
@@ -380,6 +380,7 @@ Singleton {
     // a snapshot that stops following the models registered afterwards.
     readonly property var modelList: Object.keys(root.models)
     readonly property var retiredModels: ({
+        "claude-opus-4-8": "claude",
         "gemini-3-flash": "gemini-flash-latest",
         "gemini-2.5-flash": "gemini-flash-latest",
         "gemini-3.5-flash-lite": "gemini-flash-latest",
