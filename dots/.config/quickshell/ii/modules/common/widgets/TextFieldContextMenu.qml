@@ -19,12 +19,6 @@ ContextMenuPopup {
     readonly property bool secret: root.target.echoMode !== undefined
         && root.target.echoMode !== TextInput.Normal
 
-    function openAt(px, py) {
-        root.x = px
-        root.y = py
-        root.open()
-    }
-
     contentItem: ColumnLayout {
         spacing: 0
 

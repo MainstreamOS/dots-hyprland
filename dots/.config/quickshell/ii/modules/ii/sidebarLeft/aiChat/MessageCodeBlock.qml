@@ -228,7 +228,7 @@ ColumnLayout {
                         }
                     }
 
-                    TextArea { // Code
+                    StyledTextArea { // Code
                         id: codeTextArea
                         Layout.fillWidth: true
                         readOnly: !editing

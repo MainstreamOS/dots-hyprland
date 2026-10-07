@@ -225,6 +225,10 @@ Item {
                         color: todoInput.activeFocus ? Appearance.colors.colPrimary : "transparent"
                         radius: 1
                     }
+
+                    ContextMenu.menu: null
+
+                    TextFieldContextMenuArea {}
                 }
 
                 // Due date checkbox row
@@ -400,6 +404,10 @@ Item {
                         color: editInput.activeFocus ? Appearance.colors.colPrimary : "transparent"
                         radius: 1
                     }
+
+                    ContextMenu.menu: null
+
+                    TextFieldContextMenuArea {}
                 }
 
                 // Due date checkbox row

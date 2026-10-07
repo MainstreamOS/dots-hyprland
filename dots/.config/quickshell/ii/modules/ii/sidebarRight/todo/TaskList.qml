@@ -101,10 +101,8 @@ Item {
                         taskContextMenu.taskContent = todoItem.modelData.content
                         taskContextMenu.taskDate = todoItem.modelData.date || null
                         taskContextMenu.taskDone = todoItem.modelData.done || false
-                        let pos = mapToItem(root, mouse.x, mouse.y)
-                        taskContextMenu.x = pos.x
-                        taskContextMenu.y = pos.y
-                        taskContextMenu.open()
+                        const pos = mapToItem(root, mouse.x, mouse.y)
+                        taskContextMenu.openAt(pos.x, pos.y)
                     }
                 }
 

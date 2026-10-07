@@ -2274,6 +2274,10 @@ finally:
                         text: root.saveThemeName
                         onTextChanged: root.saveThemeName = text
                         enabled: !root.countingDown
+
+                        ContextMenu.menu: null
+
+                        TextFieldContextMenuArea {}
                     }
                 }
 

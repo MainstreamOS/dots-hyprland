@@ -593,6 +593,10 @@ Item {
                                 folderColumn.renaming = false;
                             }
                             Keys.onEscapePressed: folderColumn.renaming = false
+
+                            ContextMenu.menu: null
+
+                            TextFieldContextMenuArea {}
                         }
 
                         // Confirm button (only visible when renaming)

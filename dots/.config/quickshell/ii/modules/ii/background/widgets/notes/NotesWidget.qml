@@ -245,7 +245,7 @@ AbstractBackgroundWidget {
                     radius: Appearance.rounding.normal
                     color: Appearance.colors.colSurfaceContainerLow
 
-                    TextArea {
+                    StyledTextArea {
                         id: editTextArea
                         anchors.fill: parent
                         anchors.margins: 8

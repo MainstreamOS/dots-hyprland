@@ -366,6 +366,10 @@ Item {
                         }
                     }
                 }
+
+                ContextMenu.menu: null
+
+                TextFieldContextMenuArea {}
             }
 
             // App Grid — no ScrollView wrapper.
@@ -937,6 +941,10 @@ Item {
                     Keys.onReturnPressed: folderNameOverlay.confirm()
                     Keys.onEnterPressed: folderNameOverlay.confirm()
                     Keys.onEscapePressed: folderNameOverlay.dismiss()
+
+                    ContextMenu.menu: null
+
+                    TextFieldContextMenuArea {}
                 }
 
                 RowLayout {

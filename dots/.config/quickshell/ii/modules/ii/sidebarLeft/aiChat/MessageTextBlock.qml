@@ -121,7 +121,7 @@ ColumnLayout {
                 }
             }
         }
-        delegate: TextArea {
+        delegate: StyledTextArea {
             id: textArea
             required property int index
             required property string modelData

@@ -253,6 +253,10 @@ ComboBox {
                                 root.popup.close()
                             }
                         }
+
+                        ContextMenu.menu: null
+
+                        TextFieldContextMenuArea {}
                     }
 
                     MaterialSymbol {
