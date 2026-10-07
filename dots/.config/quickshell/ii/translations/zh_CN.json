@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "设置采样模型的温度（随机性）（0-1）。注意：Gemini 3 系列模型已弃用温度参数，改用默认采样和思考级别。",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "设置思考级别（推理努力程度）。取值：minimal、low、medium、high、auto。取代已弃用的 thinking budget。",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "思考级别\n使用 /think [minimal|low|medium|high|auto] 进行修改",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "已登录。Gemini 3.8 Flash 和 Gemini 3.1 Pro 现已加入选择器。可通过点击思考药丸或使用 /think 调整思考级别。",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "已登录。Gemini Flash 和 Gemini Pro 现已加入选择器。可通过点击思考药丸或使用 /think 调整思考级别。",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "思考级别：%1\n点击切换（minimal → low → medium → high → auto）",
   "Signed in via %1\nNo API key needed": "已通过 %1 登录\n无需 API 密钥",
   "Thinking Level: %1\nClick to choose reasoning depth": "思考级别：%1\n点击选择推理深度",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "较低 — 日常任务与快速编程",
   "Medium — Balanced reasoning": "中等 — 平衡推理",
   "High — Deep thinking & complex math": "最高 — 深度思考与复杂数学",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "在线 | Google 模型\n含免费层级的 Google Gemini 模型：Gemini 3.8 Flash 和 Gemini 3.1 Pro。",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "已登录。Gemini 3.8 Flash 和 Gemini 3.1 Pro 现已加入选择器。可使用 /think 调整思考深度。"
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "在线 | Google 模型\n含免费层级的 Google Gemini 模型：Gemini Flash 和 Gemini Pro。",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "已登录。Gemini Flash 和 Gemini Pro 现已加入选择器。可使用 /think 调整思考深度。"
 }

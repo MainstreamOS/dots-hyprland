@@ -283,10 +283,8 @@ Singleton {
     // - key_get_description: Description of pricing and how to get an API key
     // - api_format: The API format of the model. Can be "openai" or "gemini". Default is "openai".
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
-    property var models: Config.options.policies.ai === 2 ? {} : {
-        // Gemini 3 series deprecates sampling parameters (temperature, top_p, top_k)
-        // and thinking_budget in favor of thinking_level.
-        "gemini-flash-latest": aiModelComponent.createObject(this, {
+    readonly property var geminiApiCatalog: ({
+        "gemini-flash-latest": {
             "name": "Gemini Flash",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nGoogle's current Flash model: fast and capable, with a free tier."),
@@ -300,8 +298,8 @@ Singleton {
             "api_format": "gemini",
             "sendTemperature": false,
             "thinkingLevel": "",
-        }),
-        "gemini-pro-latest": aiModelComponent.createObject(this, {
+        },
+        "gemini-pro-latest": {
             "name": "Gemini Pro",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nGoogle's flagship Pro reasoning model: complex coding, mathematics, and research."),
@@ -312,6 +310,27 @@ Singleton {
             "key_id": "gemini",
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: free tier and pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
+        }
+    })
+    function isGeminiApiModel(id) {
+        return root.geminiApiCatalog[id] !== undefined;
+    }
+
+    property var models: Config.options.policies.ai === 2 ? {} : {
+        "gemini": aiModelComponent.createObject(this, {
+            "name": "Gemini",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
+            "model": "gemini-flash-latest",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
             "api_format": "gemini",
             "sendTemperature": false,
             "thinkingLevel": "",
@@ -365,11 +384,17 @@ Singleton {
         "gemini-2.5-flash": "gemini-flash-latest",
         "gemini-3.5-flash-lite": "gemini-flash-latest",
         "gemini-3.8-flash": "gemini-flash-latest",
-        "gemini-flash": "gemini-flash-latest",
         "gemini": "gemini-flash-latest",
+        "gemini-flash": "gemini-flash-latest",
         "gemini-pro": "gemini-pro-latest",
         "gemini-3.1-pro": "gemini-pro-latest",
         "gemini-3.1-pro-preview": "gemini-pro-latest",
+        "gemini-plan-default": "gemini-plan-3-8-flash",
+        "gemini-plan-3-8-flash-high": "gemini-plan-3-8-flash",
+        "gemini-plan-3-8-flash-medium": "gemini-plan-3-8-flash",
+        "gemini-plan-3-8-flash-low": "gemini-plan-3-8-flash",
+        "gemini-plan-3-1-pro-high": "gemini-plan-3-1-pro",
+        "gemini-plan-3-1-pro-low": "gemini-plan-3-1-pro",
     })
     readonly property var currentModelId: {
         const id = Persistent.states?.ai?.model || modelList[0];
@@ -386,7 +411,7 @@ Singleton {
     // being looked up, which is the truth of that moment. Readonly: every
     // selection writes Persistent, and both id and object derive from it, so
     // no imperative write can strand the id and the object apart again.
-    readonly property var currentModel: models[currentModelId] ?? null
+    readonly property var currentModel: models[currentModelId] ?? (root.isGeminiApiModel(currentModelId) ? models["gemini"] : null)
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
@@ -488,10 +513,11 @@ Singleton {
             "codex-luna": { alias: "gpt-5.6-luna", name: "Codex Luna" },
             "codex-gpt-5-5": { alias: "gpt-5.5", name: "Codex GPT-5.5" },
         },
-        // No alias: the CLI answers with the model the account uses by
-        // default until the list the signed-in account offers is known.
+        // Google serves personal accounts through Antigravity; supports Gemini 3
+        // with dynamic reasoning effort.
         "antigravity-cli": {
-            "gemini-plan-default": { alias: "", name: "Gemini" },
+            "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini Flash", thinkingLevel: "" },
+            "gemini-plan-3-1-pro": { alias: "gemini-3.1-pro", name: "Gemini Pro", thinkingLevel: "" },
         }
     })
     readonly property var cliPlans: ({
@@ -533,11 +559,11 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
             setupHomepage: "https://antigravity.google/product/antigravity-cli",
             modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
-            signedIn: Translation.tr("Signed in. Gemini is in the picker now and answers through your Google account."),
+            signedIn: Translation.tr("Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think."),
             icon: "antigravity-symbolic",
             endpoint: "https://antigravity.google",
             homepage: "https://antigravity.google",
-            firstPick: "gemini-plan-default",
+            firstPick: "gemini-plan-3-8-flash",
             idPrefix: "gemini-plan",
         }
     })
@@ -563,6 +589,54 @@ Singleton {
         ? (cliSetup[currentModel.api_format] ?? null) : null
     readonly property bool currentModelNeedsSetup: currentCliSetup !== null
         && (!cliReady(currentModel.api_format) || setupState !== "")
+
+    function syncGeminiApiModels(targetId) {
+        if (Config.options?.policies?.ai === 2) return;
+        const current = targetId || root.currentModelId;
+        const isGeminiActive = root.isGeminiApiModel(current);
+        let next = Object.assign({}, root.models);
+        let changed = false;
+
+        if (isGeminiActive) {
+            if (next["gemini"]) {
+                if (next["gemini"].destroy) next["gemini"].destroy();
+                delete next["gemini"];
+                changed = true;
+            }
+            for (const id of Object.keys(root.geminiApiCatalog)) {
+                if (next[id]) continue;
+                next[id] = aiModelComponent.createObject(this, root.geminiApiCatalog[id]);
+                changed = true;
+            }
+        } else {
+            for (const id of Object.keys(root.geminiApiCatalog)) {
+                if (next[id]) {
+                    if (next[id].destroy) next[id].destroy();
+                    delete next[id];
+                    changed = true;
+                }
+            }
+            if (!next["gemini"]) {
+                next["gemini"] = aiModelComponent.createObject(this, {
+                    "name": "Gemini",
+                    "icon": "google-gemini-symbolic",
+                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
+                    "homepage": "https://aistudio.google.com",
+                    "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
+                    "model": "gemini-flash-latest",
+                    "requires_key": true,
+                    "key_id": "gemini",
+                    "key_get_link": "https://aistudio.google.com/app/apikey",
+                    "key_get_description": Translation.tr("**Pricing**: free tier, with data used for training. Web search needs billing turned on.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project or whatever it asks, go back and click Get API key"),
+                    "api_format": "gemini",
+                    "sendTemperature": false,
+                    "thinkingLevel": "",
+                });
+                changed = true;
+            }
+        }
+        if (changed) root.models = next;
+    }
 
     function syncCliPlanModels(fmt) {
         if (Config.options?.policies?.ai === 2) return;
@@ -591,6 +665,8 @@ Singleton {
                     "model": planEntry.alias,
                     "requires_key": false,
                     "api_format": fmt,
+                    "sendTemperature": fmt !== "antigravity-cli",
+                    "thinkingLevel": planEntry.thinkingLevel ?? "",
                 });
                 changed = true;
             }
@@ -908,6 +984,7 @@ Singleton {
     onCurrentModelIdChanged: {
         if (!root._startupDone) return;
         root.setupState = "";
+        root.syncGeminiApiModels();
         // Both plans re-read the selection: the one just entered brings its
         // models in, and the one just left puts its own away.
         for (const fmt of Object.keys(root.cliSetup)) root.syncCliPlanModels(fmt);
@@ -928,6 +1005,7 @@ Singleton {
     property string pendingFilePath: ""
 
     Component.onCompleted: {
+        root.syncGeminiApiModels();
         // The default model is local AI, whose setup entry does not exist
         // until the first status answer arrives. Running it through setModel
         // here would start the walkthrough unprompted at every shell start;
@@ -1447,6 +1525,9 @@ Singleton {
     function setModel(modelId, feedback = true, setPersistentState = true) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
+        if (modelId === "gemini") {
+            modelId = "gemini-flash-latest";
+        }
         modelId = root.retiredModels[modelId] ?? modelId
         // The setup entry is a prompt wearing a model's clothes. Picking it
         // starts the walkthrough and leaves the working model in place, so a
@@ -1473,7 +1554,10 @@ Singleton {
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(root.cliPlanModels[wantedPlan][modelId].name), root.interfaceRole);
             return;
         }
-        if (modelList.indexOf(modelId) !== -1) {
+        if (root.isGeminiApiModel(modelId)) {
+            root.syncGeminiApiModels(modelId);
+        }
+        if (models[modelId] !== undefined) {
             const model = models[modelId]
             // See if policy prevents online models
             if (Config.options.policies.ai === 2 && !model.endpoint.includes("localhost")) {

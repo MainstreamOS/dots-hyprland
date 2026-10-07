@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "Đặt nhiệt độ (tính ngẫu nhiên) cho các model lấy mẫu (0-1). Lưu ý: Dòng model Gemini 3 ngừng hỗ trợ nhiệt độ để chuyển sang lấy mẫu mặc định và mức độ suy nghĩ.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "Đặt mức độ suy nghĩ (nỗ lực suy luận). Giá trị: minimal, low, medium, high, auto. Thay thế cho thinking budget đã lỗi thời.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "Mức độ suy nghĩ\nThay đổi bằng /think [minimal|low|medium|high|auto]",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Đã đăng nhập. Gemini 3.8 Flash và Gemini 3.1 Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng biểu tượng trạng thái hoặc /think.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Đã đăng nhập. Gemini Flash và Gemini Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng biểu tượng trạng thái hoặc /think.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "Mức độ suy nghĩ: %1\nNhấn để chuyển đổi (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "Đã đăng nhập qua %1\nKhông cần khóa API",
   "Thinking Level: %1\nClick to choose reasoning depth": "Mức độ suy nghĩ: %1\nNhấn để chọn độ sâu suy luận",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "Thấp — Tác vụ hằng ngày & lập trình nhanh",
   "Medium — Balanced reasoning": "Vừa — Suy luận cân bằng",
   "High — Deep thinking & complex math": "Cao — Suy nghĩ sâu & toán học phức tạp",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "Trực tuyến | Mô hình của Google\nCác mô hình Gemini của Google có gói miễn phí: Gemini 3.8 Flash và Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. Gemini 3.8 Flash và Gemini 3.1 Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Trực tuyến | Mô hình của Google\nCác mô hình Gemini của Google có gói miễn phí: Gemini Flash và Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. Gemini Flash và Gemini Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think."
 }

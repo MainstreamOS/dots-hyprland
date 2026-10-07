@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "Örnekleme modellerinin sıcaklığını (rastgeleliğini) ayarlayın (0-1). Not: Gemini 3 serisi modeller sıcaklık yerine varsayılan örnekleme ve düşünme düzeyini kullanır.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "Düşünme düzeyini (akıl yürütme çabasını) ayarlayın. Değerler: minimal, low, medium, high, auto. Kullanımdan kaldırılan thinking budget yerine geçer.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "Düşünme Düzeyi\n/think [minimal|low|medium|high|auto] ile değiştirin",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Giriş yapıldı. Gemini 3.8 Flash ve Gemini 3.1 Pro artık seçicide. Düşünme düzeyini durum göstergesine tıklayarak veya /think ile ayarlayın.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Giriş yapıldı. Gemini Flash ve Gemini Pro artık seçicide. Düşünme düzeyini durum göstergesine tıklayarak veya /think ile ayarlayın.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "Düşünme düzeyi: %1\nDeğiştirmek için tıklayın (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "%1 ile giriş yapıldı\nAPI anahtarı gerekmez",
   "Thinking Level: %1\nClick to choose reasoning depth": "Düşünme düzeyi: %1\nAkıl yürütme derinliğini seçmek için tıklayın",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "Düşük — Günlük görevler ve hızlı kodlama",
   "Medium — Balanced reasoning": "Orta — Dengeli akıl yürütme",
   "High — Deep thinking & complex math": "Yüksek — Derin düşünme ve karmaşık matematik",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "Çevrimiçi | Google modeli\nÜcretsiz katmana sahip Google Gemini modelleri: Gemini 3.8 Flash ve Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. Gemini 3.8 Flash ve Gemini 3.1 Pro artık seçicide. Düşünme seviyesini /think ile ayarlayın."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Çevrimiçi | Google modeli\nÜcretsiz katmana sahip Google Gemini modelleri: Gemini Flash ve Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Oturum açıldı. Gemini Flash ve Gemini Pro artık seçicide. Düşünme seviyesini /think ile ayarlayın."
 }

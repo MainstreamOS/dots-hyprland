@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "Imposta la temperatura (casualità) per i modelli di campionamento (0-1). Nota: I modelli Gemini serie 3 deprecano la temperatura a favore del campionamento predefinito e del livello di ragionamento.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "Imposta il livello di ragionamento (sforzo logico). Valori: minimal, low, medium, high, auto. Sostituisce il budget di pensiero deprecato.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "Livello di ragionamento\nModifica con /think [minimal|low|medium|high|auto]",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Accesso effettuato. Gemini 3.8 Flash e Gemini 3.1 Pro sono ora nel selettore. Regola il livello di ragionamento con la pillola o con /think.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Accesso effettuato. Gemini Flash e Gemini Pro sono ora nel selettore. Regola il livello di ragionamento con la pillola o con /think.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "Livello di ragionamento: %1\nFai clic per cambiare (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "Accesso effettuato tramite %1\nNessuna chiave API necessaria",
   "Thinking Level: %1\nClick to choose reasoning depth": "Livello di ragionamento: %1\nFai clic per scegliere la profondità",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "Basso — Attività quotidiane e codice veloce",
   "Medium — Balanced reasoning": "Medio — Ragionamento bilanciato",
   "High — Deep thinking & complex math": "Alto — Riflessione profonda e matematica complessa",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "Online | Modello di Google\nModelli Gemini di Google con piano gratuito: Gemini 3.8 Flash e Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "Accesso effettuato. Gemini 3.8 Flash e Gemini 3.1 Pro sono ora nel selettore. Regola il livello di pensiero con /think."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Online | Modello di Google\nModelli Gemini di Google con piano gratuito: Gemini Flash e Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Accesso effettuato. Gemini Flash e Gemini Pro sono ora nel selettore. Regola il livello di pensiero con /think."
 }

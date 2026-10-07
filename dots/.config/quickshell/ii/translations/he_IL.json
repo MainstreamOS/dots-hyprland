@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "הגדרת טמפרטורה (אקראיות) עבור מודלי דגימה (0-1). הערה: סדרת Gemini 3 הוציאה משימוש את הטמפרטורה לטובת דגימת ברירת מחדל ורמת חשיבה.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "הגדרת רמת חשיבה (מאמץ הסקה). ערכים: minimal, low, medium, high, auto. מחליף את ה-thinking budget שהוצא משימוש.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "רמת חשיבה\nשנה באמצעות /think [minimal|low|medium|high|auto]",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "מחובר. Gemini 3.8 Flash ו-Gemini 3.1 Pro זמינים כעת בבורר. ניתן לכוונן את רמת החשיבה בלחיצה על המחוון או באמצעות /think.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "מחובר. Gemini Flash ו-Gemini Pro זמינים כעת בבורר. ניתן לכוונן את רמת החשיבה בלחיצה על המחוון או באמצעות /think.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "רמת חשיבה: %1\nלחץ להחלפה (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "מחובר באמצעות %1\nאין צורך במפתח API",
   "Thinking Level: %1\nClick to choose reasoning depth": "רמת חשיבה: %1\nלחץ לבחירת עומק ההסקה",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "נמוך — משימות יומיומיות ותכנות מהיר",
   "Medium — Balanced reasoning": "בינוני — הסקה מאוזנת",
   "High — Deep thinking & complex math": "גבוה — חשיבה מעמיקה ומתמטיקה מורכבת",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "מקוון | המודל של Google\nמודלי Gemini של Google עם מסלול חינמי: Gemini 3.8 Flash ו-Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "מחובר. Gemini 3.8 Flash ו-Gemini 3.1 Pro זמינים כעת בבורר. שנה את רמת החשיבה בעזרת /think."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "מקוון | המודל של Google\nמודלי Gemini של Google עם מסלול חינמי: Gemini Flash ו-Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "מחובר. Gemini Flash ו-Gemini Pro זמינים כעת בבורר. שנה את רמת החשיבה בעזרת /think."
 }

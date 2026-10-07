@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "Atur temperatur (keacakan) model pengambilan sampel (0-1). Catatan: Model seri Gemini 3 menghentikan parameter temperatur demi pengambilan sampel default dan tingkat pemikiran.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "Atur tingkat pemikiran (upaya penalaran). Nilai: minimal, low, medium, high, auto. Menggantikan thinking budget yang sudah usang.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "Tingkat Pemikiran\nUbah dengan /think [minimal|low|medium|high|auto]",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Sudah masuk. Gemini 3.8 Flash dan Gemini 3.1 Pro kini ada di pemilih. Sesuaikan tingkat pemikiran melalui pil status atau /think.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Sudah masuk. Gemini Flash dan Gemini Pro kini ada di pemilih. Sesuaikan tingkat pemikiran melalui pil status atau /think.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "Tingkat pemikiran: %1\nKlik untuk beralih (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "Masuk melalui %1\nTidak memerlukan kunci API",
   "Thinking Level: %1\nClick to choose reasoning depth": "Tingkat pemikiran: %1\nKlik untuk memilih kedalaman penalaran",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "Rendah — Tugas sehari-hari & coding cepat",
   "Medium — Balanced reasoning": "Sedang — Penalaran seimbang",
   "High — Deep thinking & complex math": "Tinggi — Pemikiran mendalam & matematika rumit",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "Online | Model Google\nModel Gemini Google dengan paket gratis: Gemini 3.8 Flash dan Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini 3.8 Flash dan Gemini 3.1 Pro sekarang ada di pemilih. Sesuaikan tingkat berpikir dengan /think."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Online | Model Google\nModel Gemini Google dengan paket gratis: Gemini Flash dan Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini Flash dan Gemini Pro sekarang ada di pemilih. Sesuaikan tingkat berpikir dengan /think."
 }

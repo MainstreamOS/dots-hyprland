@@ -2528,7 +2528,7 @@
   "Set temperature (randomness) of sampling models (0-1). Note: Gemini 3 series models deprecate temperature in favor of default sampling and thinking level.": "Встановити температуру (випадковість) моделей вибірки (0-1). Примітка: моделі серії Gemini 3 замінюють температуру вибіркою за замовчуванням і рівнем міркувань.",
   "Set thinking level (reasoning effort). Values: minimal, low, medium, high, auto. Replaces deprecated thinking budget.": "Встановити рівень міркувань (глибину роздумів). Значення: minimal, low, medium, high, auto. Замінює застарілий thinking budget.",
   "Thinking Level\nChange with /think [minimal|low|medium|high|auto]": "Рівень міркувань\nЗмінити за допомогою /think [minimal|low|medium|high|auto]",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Вхід виконано. Gemini 3.8 Flash та Gemini 3.1 Pro тепер у списку вибору. Змінюйте рівень міркувань за допомогою кнопки або /think.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with the reasoning pill or /think.": "Вхід виконано. Gemini Flash та Gemini Pro тепер у списку вибору. Змінюйте рівень міркувань за допомогою кнопки або /think.",
   "Thinking Level: %1\nClick to cycle (minimal → low → medium → high → auto)": "Рівень міркувань: %1\nНатисніть для перемикання (minimal → low → medium → high → auto)",
   "Signed in via %1\nNo API key needed": "Вхід виконано через %1\nКлюч API не потрібен",
   "Thinking Level: %1\nClick to choose reasoning depth": "Рівень міркувань: %1\nНатисніть для вибору глибини",
@@ -2537,6 +2537,6 @@
   "Low — Everyday tasks & quick coding": "Низький — повсякденні завдання та швидкий код",
   "Medium — Balanced reasoning": "Середній — збалансовані міркування",
   "High — Deep thinking & complex math": "Високий — глибокі роздуми та складна математика",
-  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini 3.8 Flash and Gemini 3.1 Pro.": "Онлайн | Модель Google\nМоделі Google Gemini з безкоштовним рівнем: Gemini 3.8 Flash та Gemini 3.1 Pro.",
-  "Signed in. Gemini 3.8 Flash and Gemini 3.1 Pro are in the picker now. Adjust thinking level with /think.": "Увійшли. Gemini 3.8 Flash та Gemini 3.1 Pro тепер доступні у виборі. Налаштуйте рівень мислення за допомогою /think."
+  "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Онлайн | Модель Google\nМоделі Google Gemini з безкоштовним рівнем: Gemini Flash та Gemini Pro.",
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Увійшли. Gemini Flash та Gemini Pro тепер доступні у виборі. Налаштуйте рівень мислення за допомогою /think."
 }
