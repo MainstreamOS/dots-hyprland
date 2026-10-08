@@ -346,5 +346,18 @@
       "Settings > Bar adds a day-first date with periods, like 05.10.2026",
       "Gemini 3.8 Flash is now the default AI model"
     ]
+  },
+  "3.0.2": {
+    "date": "2026-10-07",
+    "kind": "patch",
+    "summary": "A maintenance release: smarter floating window sizing, automatic cleanup to free up disk space, and a refreshed AI sidebar with Gemini latest models and thinking levels, Claude Opus 5.5 and Mistral 4",
+    "changes": [
+      "Floating windows that open larger than the screen (like Discord) are now fitted between the bar and dock instead of spilling over the edges",
+      "Restoring a maximized window that was originally full-screen now scales it to a quarter of the screen centered, rather than snapping back to full-size",
+      "Updates now automatically clear older package downloads and unused app runtimes to free up disk space",
+      "The AI sidebar upgrades to Claude Opus 5.5 and Mistral 4, with Gemini now always using the latest models",
+      "Gemini models adopt thinking levels (minimal, low, medium, high) with a new /think command",
+      "In the AI sidebar, Gemini models fold into a single picker entry until chosen to keep the list clean"
+    ]
   }
 }
