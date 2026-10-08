@@ -2538,5 +2538,9 @@
   "Medium — Balanced reasoning": "Sedang — Penalaran seimbang",
   "High — Deep thinking & complex math": "Tinggi — Pemikiran mendalam & matematika rumit",
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Online | Model Google\nModel Gemini Google dengan paket gratis: Gemini Flash dan Gemini Pro.",
-  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini Flash dan Gemini Pro sekarang ada di pemilih. Sesuaikan tingkat berpikir dengan /think."
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Sudah masuk. Gemini Flash dan Gemini Pro sekarang ada di pemilih. Sesuaikan tingkat berpikir dengan /think.",
+  "Antigravity CLI — agy update": "Antigravity CLI — agy update",
+  "Antigravity CLI update failed. Continuing with remaining steps.": "Antigravity CLI update failed. Continuing with remaining steps.",
+  "managed via AUR": "managed via AUR",
+  "Antigravity:": "Antigravity:"
 }

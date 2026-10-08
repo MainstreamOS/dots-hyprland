@@ -2538,5 +2538,9 @@
   "Medium — Balanced reasoning": "בינוני — הסקה מאוזנת",
   "High — Deep thinking & complex math": "גבוה — חשיבה מעמיקה ומתמטיקה מורכבת",
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "מקוון | המודל של Google\nמודלי Gemini של Google עם מסלול חינמי: Gemini Flash ו-Gemini Pro.",
-  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "מחובר. Gemini Flash ו-Gemini Pro זמינים כעת בבורר. שנה את רמת החשיבה בעזרת /think."
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "מחובר. Gemini Flash ו-Gemini Pro זמינים כעת בבורר. שנה את רמת החשיבה בעזרת /think.",
+  "Antigravity CLI — agy update": "Antigravity CLI — agy update",
+  "Antigravity CLI update failed. Continuing with remaining steps.": "Antigravity CLI update failed. Continuing with remaining steps.",
+  "managed via AUR": "managed via AUR",
+  "Antigravity:": "Antigravity:"
 }

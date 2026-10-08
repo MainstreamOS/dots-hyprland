@@ -4,6 +4,6 @@ sudo_command = "pkexec"
 # `hyprpm update` exits 1, which topgrade treats as a failure.
 # uv: only builds the color venv at install, and the install deletes its cache.
 # A permission error in `uv cache prune` could fail the whole extras pass.
-# antigravity: the Linux package is an Electron app whose version check fails
-# Topgrade's VS Code extension updater; the app itself is updated via yay.
-disable = ["hyprpm", "uv", "antigravity"]
+# antigravity / antigravity_cli: Antigravity's update is handled directly by
+# mainstream-update-helper (via yay for the desktop app and agy update for the CLI).
+disable = ["hyprpm", "uv", "antigravity", "antigravity_cli"]

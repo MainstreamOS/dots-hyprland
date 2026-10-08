@@ -328,11 +328,15 @@ DOTFILES_RC=0
 DOTFILES_SYS_RC=0
 QT_PIN_HELD=0
 TOPGRADE_RC=0
+ANTIGRAVITY_RC=0
 AUR_NOTE=""
 FLATPAK_NOTE=""
 SNAP_NOTE=""
 DOTFILES_NOTE=""
 TOPGRADE_NOTE=""
+ANTIGRAVITY_NOTE=""
+AGY_BIN=""
+AG_DESKTOP_INSTALLED=0
 MAINSTREAM_REPO_OFFLINE=0
 BOOT_HELD=0
 # Set once a step that can rebuild the boot image has started.
@@ -742,8 +746,10 @@ elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     echo "  $(t "Developer extras — topgrade (cargo, pipx, npm, nix, …)")"
     echo "═══════════════════════════════════════════════════════════"
     # Sections 1 to 4 cover system, flatpak and snap. lensfun can hang for an hour
-    # on a slow mirror; `topgrade --only lensfun` runs it by hand.
-    TG_DISABLED=(system flatpak snap lensfun)
+    # on a slow mirror; `topgrade --only lensfun` runs it by hand. Antigravity's
+    # VS Code extension step fails because the Linux build is a standalone app;
+    # its updates are handled directly in section 6b below.
+    TG_DISABLED=(system flatpak snap lensfun antigravity antigravity_cli)
     if [[ "$SKIP_FIRMWARE" -eq 1 ]]; then
         TG_DISABLED+=(firmware)
     fi
@@ -775,6 +781,46 @@ elif [[ "$SKIP_EXTRAS" -ne 0 ]]; then
     echo "── $(t "Developer extras: skipped (per --skip-extras)")"
 else
     TOPGRADE_NOTE=absent
+fi
+
+# ── 6b. Antigravity (CLI & desktop check) ───────────────────────────────────
+for _agy_cand in \
+    "$(command -v agy 2>/dev/null || true)" \
+    "$ORIG_HOME/.local/bin/agy" \
+    "$ORIG_HOME/.gemini/antigravity/bin/agy" \
+    "/usr/local/bin/agy" \
+    "/usr/bin/agy"; do
+    if [[ -n "$_agy_cand" && -x "$_agy_cand" ]]; then
+        AGY_BIN="$_agy_cand"
+        break
+    fi
+done
+
+if pacman -Q antigravity >/dev/null 2>&1 || [[ -x /usr/bin/antigravity ]]; then
+    AG_DESKTOP_INSTALLED=1
+fi
+
+if [[ "$SKIP_EXTRAS" -ne 0 ]]; then
+    if [[ -n "$AGY_BIN" || "$AG_DESKTOP_INSTALLED" -eq 1 ]]; then
+        ANTIGRAVITY_NOTE=skipped
+    else
+        ANTIGRAVITY_NOTE=absent
+    fi
+elif [[ -n "$AGY_BIN" ]]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  $(t "Antigravity CLI — agy update")"
+    echo "═══════════════════════════════════════════════════════════"
+    user_step 120 env HOME="$ORIG_HOME" "$AGY_BIN" update
+    ANTIGRAVITY_RC=$?
+    if [[ "$ANTIGRAVITY_RC" -ne 0 ]]; then
+        echo ""
+        echo ">>> $(t "Antigravity CLI update failed. Continuing with remaining steps.")"
+    fi
+elif [[ "$AG_DESKTOP_INSTALLED" -eq 1 ]]; then
+    ANTIGRAVITY_NOTE=aur
+else
+    ANTIGRAVITY_NOTE=absent
 fi
 
 # ── 7. Quickshell ABI mismatch follow-up ────────────────────────────────────
@@ -848,6 +894,8 @@ status_for() {
         echo "$(t "skipped")"
     elif [[ "$note" == absent ]]; then
         echo "$(t "not installed")"
+    elif [[ "$note" == aur ]]; then
+        echo "$(t "managed via AUR")"
     elif [[ "$note" == deferred ]]; then
         echo "$(t "deferred (system update failed)")"
     elif [[ "$note" == held ]]; then
@@ -884,6 +932,9 @@ else
     printf "  %-30s %s\n" "$(t "System bits (updatems-system):")" "$(status_for "$SKIP_DOTFILES" "$DOTFILES_SYS_RC" "$DOTFILES_NOTE")"
 fi
 printf "  %-30s %s\n" "$(t "Developer extras (topgrade):")"  "$(status_for "$SKIP_EXTRAS"   "$TOPGRADE_RC" "$TOPGRADE_NOTE")"
+if [[ -n "$AGY_BIN" || "$AG_DESKTOP_INSTALLED" -eq 1 ]]; then
+    printf "  %-30s %s\n" "$(t "Antigravity:")"                  "$(status_for "$SKIP_EXTRAS"   "$ANTIGRAVITY_RC" "$ANTIGRAVITY_NOTE")"
+fi
 if [[ -n "$BOOT_RC" ]]; then
     case "$BOOT_RC" in
         0) BOOT_STATUS="$(t "ok")"
@@ -923,5 +974,6 @@ if [[ "$SKIP_SNAP"     -ne 1 ]] && [[ "$SNAP_RC"         -ne 0 ]]; then exit 100
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_RC"     -ne 0 ]]; then exit 101;            fi
 if [[ "$SKIP_DOTFILES" -ne 1 ]] && [[ "$DOTFILES_SYS_RC" -ne 0 ]]; then exit 102;            fi
 if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$TOPGRADE_RC"     -ne 0 ]]; then exit 100;            fi
+if [[ "$SKIP_EXTRAS"   -ne 1 ]] && [[ "$ANTIGRAVITY_RC"  -ne 0 ]]; then exit 100;            fi
 if [[ "$MAINSTREAM_REPO_OFFLINE" -eq 1 ]]; then exit 100; fi
 exit 0

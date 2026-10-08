@@ -2538,5 +2538,9 @@
   "Medium — Balanced reasoning": "中等 — 平衡推理",
   "High — Deep thinking & complex math": "最高 — 深度思考与复杂数学",
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "在线 | Google 模型\n含免费层级的 Google Gemini 模型：Gemini Flash 和 Gemini Pro。",
-  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "已登录。Gemini Flash 和 Gemini Pro 现已加入选择器。可使用 /think 调整思考深度。"
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "已登录。Gemini Flash 和 Gemini Pro 现已加入选择器。可使用 /think 调整思考深度。",
+  "Antigravity CLI — agy update": "Antigravity CLI — agy update",
+  "Antigravity CLI update failed. Continuing with remaining steps.": "Antigravity CLI update failed. Continuing with remaining steps.",
+  "managed via AUR": "managed via AUR",
+  "Antigravity:": "Antigravity:"
 }

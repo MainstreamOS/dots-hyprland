@@ -2538,5 +2538,9 @@
   "Medium — Balanced reasoning": "Vừa — Suy luận cân bằng",
   "High — Deep thinking & complex math": "Cao — Suy nghĩ sâu & toán học phức tạp",
   "Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro.": "Trực tuyến | Mô hình của Google\nCác mô hình Gemini của Google có gói miễn phí: Gemini Flash và Gemini Pro.",
-  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. Gemini Flash và Gemini Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think."
+  "Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think.": "Đã đăng nhập. Gemini Flash và Gemini Pro hiện đã có trong bộ chọn. Điều chỉnh mức độ suy nghĩ bằng /think.",
+  "Antigravity CLI — agy update": "Antigravity CLI — agy update",
+  "Antigravity CLI update failed. Continuing with remaining steps.": "Antigravity CLI update failed. Continuing with remaining steps.",
+  "managed via AUR": "managed via AUR",
+  "Antigravity:": "Antigravity:"
 }
