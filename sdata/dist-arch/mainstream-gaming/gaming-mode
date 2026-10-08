@@ -194,6 +194,8 @@ if [[ ! -f "$conf" ]]; then
             echo "__GLX_VENDOR_LIBRARY_NAME=nvidia"
             vk=$(grep -oiE '10de:[0-9a-f]{4}' <<<"$gpu" | head -1)
             [[ -n "$vk" ]] && echo "VULKAN_ADAPTER=${vk,,}"
+            echo "# Workaround for NVIDIA cursor-hide pageflip black screen (Issue #1252):"
+            echo "HIDE_CURSOR_DELAY_MS=86400000"
             echo "# If gamescope crashes on NVIDIA driver 555+ (vkImportSemaphoreFdKHR"
             echo "# failed), uncomment the next line -- it trades HDR for stability:"
             echo "#ENABLE_GAMESCOPE_WSI=0"
@@ -202,6 +204,18 @@ if [[ ! -f "$conf" ]]; then
             [[ -n "$vk" ]] && echo "VULKAN_ADAPTER=${vk,,}"
         fi
     } > "$conf"
+fi
+
+# Ensure existing NVIDIA configs receive the cursor-hide black screen fix if not yet set
+if [[ -f "$conf" ]]; then
+    gpu_check=$(lspci -nn 2>/dev/null | grep -iE 'vga|3d|display' || true)
+    if grep -qi '\[10de:' <<<"$gpu_check" && ! grep -q "HIDE_CURSOR_DELAY_MS" "$conf"; then
+        {
+            echo ""
+            echo "# Workaround for NVIDIA cursor-hide pageflip black screen (Issue #1252):"
+            echo "HIDE_CURSOR_DELAY_MS=86400000"
+        } >> "$conf"
+    fi
 fi
 
 # 2b. Which screen the session comes up on. Left alone, gamescope-session-plus
