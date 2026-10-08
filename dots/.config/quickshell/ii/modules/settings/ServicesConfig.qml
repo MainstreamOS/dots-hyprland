@@ -80,24 +80,40 @@ ContentPage {
         }
     }
 
-    /*
     ContentSection {
         icon: "neurology"
-        title: Translation.tr("AI")
+        title: Translation.tr("AI Assistant")
 
-        MaterialTextArea {
-            Layout.fillWidth: true
-            placeholderText: Translation.tr("System prompt")
-            text: Config.options.ai.systemPrompt
-            wrapMode: TextEdit.Wrap
-            onTextChanged: {
-                Qt.callLater(() => {
-                    Config.options.ai.systemPrompt = text;
-                });
+        ContentSubsection {
+            title: Translation.tr("Execution Mode")
+            tooltip: Translation.tr("Controls how AI models and agent CLIs handle permissions and tools.\n• Safe: Asks for confirmation before executing commands.\n• YOLO: Automatically approves tool execution, commands, and web fetching.\n• Plan: Focuses strictly on planning and architecture without running commands or edits.")
+
+            ConfigSelectionArray {
+                currentValue: Config.options.ai.mode ?? "safe"
+                onSelected: newValue => {
+                    Config.setNestedValue("ai.mode", newValue);
+                    if (Config.options?.ai) Config.options.ai.mode = newValue;
+                }
+                options: [
+                    {
+                        displayName: Translation.tr("Safe"),
+                        icon: "shield",
+                        value: "safe"
+                    },
+                    {
+                        displayName: Translation.tr("YOLO"),
+                        icon: "bolt",
+                        value: "yolo"
+                    },
+                    {
+                        displayName: Translation.tr("Plan"),
+                        icon: "edit_note",
+                        value: "plan"
+                    }
+                ]
             }
         }
     }
-    */
 
     ContentSection {
         icon: "music_cast"

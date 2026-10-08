@@ -1,4 +1,5 @@
 import QtQuick
+import qs.modules.common
 import qs.modules.common.functions as CF
 
 ApiStrategy {
@@ -38,6 +39,12 @@ ApiStrategy {
         }
         script += ` -p '${CF.StringUtils.shellSingleQuoteEscape(userMessage)}'`;
         script += " --verbose";
+        const mode = Config.options?.ai?.mode ?? "safe";
+        if (mode === "yolo") {
+            script += " --dangerously-skip-permissions";
+        } else if (mode === "plan") {
+            script += " --permission-mode plan";
+        }
         script += " --output-format stream-json";
         script += " --include-partial-messages";
         script += " < /dev/null 2>&1";
@@ -45,7 +52,7 @@ ApiStrategy {
         return script;
     }
 
-    function parseResponseLine(line: string, message: AiMessageData) {
+    function parseResponseLine(line: string, message: AiMessageData): var {
         let cleanData = line.trim();
         if (cleanData.length === 0) return {};
 

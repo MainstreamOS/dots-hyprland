@@ -1,5 +1,6 @@
 import QtQuick
 import qs.services
+import qs.modules.common
 import qs.modules.common.functions as CF
 
 ApiStrategy {
@@ -8,6 +9,7 @@ ApiStrategy {
     property bool _errored: false
     property bool _finished: false
     property bool _streamed: false
+    property int _lastStepIndex: -1
     // Handed in translated by Ai.qml, which has the translation service
     // this module does not import.
     property string exitText: "Antigravity stopped with code %1"
@@ -44,7 +46,15 @@ ApiStrategy {
         // read as another flag, and a message that starts with a slash stays
         // a message rather than one of the CLI's own commands. A conversation
         // the CLI no longer has only draws a warning and starts a new one.
-        let command = "agy --output-format=stream-json --disable-slash-commands";
+        const mode = Config.options?.ai?.mode ?? "safe";
+        let command = "agy --output-format=stream-json";
+        if (mode === "yolo") {
+            command += " --disable-slash-commands --dangerously-skip-permissions";
+        } else if (mode === "plan") {
+            command += " --mode=plan --dangerously-skip-permissions";
+        } else {
+            command += " --disable-slash-commands";
+        }
         if (root.sessionId.length > 0) command += ` --conversation=${root.quote(root.sessionId)}`;
         if (model.model && model.model !== "gemini-plan") {
             command += ` --model=${root.quote(model.model)}`;
@@ -114,6 +124,16 @@ ApiStrategy {
             // the chat.
             const step = json.step_update ?? {};
             if (step.step_type === "agent_response" && step.text_delta) {
+                // Only separate distinct agent steps (e.g. before/after tool execution),
+                // not partial text deltas streaming within the same step.
+                if (root._lastStepIndex !== -1 && step.step_index !== undefined && step.step_index !== root._lastStepIndex) {
+                    if (message.content.length > 0 && !message.content.endsWith("\n")) {
+                        root.append(message, "\n\n");
+                    }
+                }
+                if (step.step_index !== undefined) {
+                    root._lastStepIndex = step.step_index;
+                }
                 root._streamed = true;
                 root.append(message, step.text_delta);
             }
@@ -128,9 +148,18 @@ ApiStrategy {
                 root.fail(message, detail);
                 return { finished: true };
             }
-            // Deltas are the usual way the reply arrives; the whole response
-            // is the fallback when a run sent none.
-            if (!root._streamed && result.response) root.append(message, result.response);
+            // If nothing was streamed yet, use result.response as fallback.
+            if (!root._streamed) {
+                if (result.response) {
+                    root.append(message, result.response);
+                } else if (result.denied_actions && result.denied_actions.length > 0) {
+                    const denied = result.denied_actions.map(a => a.display_name || a.action).join(", ");
+                    root.fail(message, `Action denied (${denied}).`);
+                }
+            } else if (result.denied_actions && result.denied_actions.length > 0 && !result.response) {
+                const denied = result.denied_actions.map(a => a.display_name || a.action).join(", ");
+                root.fail(message, `Action denied (${denied}).`);
+            }
             const done = { finished: true };
             if (result.usage) {
                 done.tokenUsage = {
@@ -164,12 +193,13 @@ ApiStrategy {
     }
 
     function onRequestFinished(message: AiMessageData): var {
-        return {};
+        return { finished: true };
     }
 
     function reset() {
         _errored = false;
         _finished = false;
         _streamed = false;
+        _lastStepIndex = -1;
     }
 }
