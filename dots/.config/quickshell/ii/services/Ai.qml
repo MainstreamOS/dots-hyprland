@@ -46,6 +46,9 @@ Singleton {
             // QML/JS doesn't support replaceAll, so use split/join
             prompt = prompt.split(key).join(root.promptSubstitutions[key]);
         }
+        if ((Config.options?.ai?.mode ?? "safe") === "plan") {
+            prompt += "\n\n## Mode: Plan\nYou are currently in Plan Mode. Focus on designing, architecting, and outlining a structured step-by-step plan. Do not execute destructive edits or commands without user confirmation.";
+        }
         return prompt;
     }
     // property var messages: []
@@ -68,6 +71,16 @@ Singleton {
         property int input: -1
         property int output: -1
         property int total: -1
+    }
+    readonly property bool isGenerating: requester.running
+
+    function cancelRequest() {
+        if (requester.running) {
+            requester.running = false;
+        }
+        if (requester.message && !requester.message.done) {
+            requester.markDone();
+        }
     }
 
     function idForMessage(message) {
@@ -2008,10 +2021,25 @@ Singleton {
                 requester.makeRequest();
                 return;
             }
-            const contentToAppend = `\n\n**Command execution request**\n\n\`\`\`command\n${args.command}\n\`\`\``;
-            message.rawContent += contentToAppend;
-            message.content += contentToAppend;
-            message.functionPending = true; // Use thinking to indicate the command is waiting for approval
+            const mode = Config.options?.ai?.mode ?? "safe";
+            if (mode === "yolo") {
+                const responseMessage = createFunctionOutputMessage(name, "", false);
+                const id = idForMessage(responseMessage);
+                root.messageIDs = [...root.messageIDs, id];
+                root.messageByID[id] = responseMessage;
+                commandExecutionProc.message = responseMessage;
+                commandExecutionProc.baseMessageContent = responseMessage.content;
+                commandExecutionProc.shellCommand = args.command;
+                commandExecutionProc.running = true;
+            } else if (mode === "plan") {
+                addFunctionOutputMessage(name, Translation.tr("Command execution skipped: Plan mode is active."));
+                requester.makeRequest();
+            } else {
+                const contentToAppend = `\n\n**Command execution request**\n\n\`\`\`command\n${args.command}\n\`\`\``;
+                message.rawContent += contentToAppend;
+                message.content += contentToAppend;
+                message.functionPending = true; // Use thinking to indicate the command is waiting for approval
+            }
         }
         else root.addMessage(Translation.tr("Unknown function call: %1").arg(name), "assistant");
     }
