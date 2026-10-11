@@ -9,10 +9,9 @@ import qs.modules.common.functions
 // File + folder search for the launcher widget.
 //
 // Backend: `fd` (https://github.com/sharkdp/fd). Walks ~/ live, no
-// daily-rebuilt database. The single bash invocation tags each result
-// "d:" or "f:" via [ -d ] so the QML side can show the right icon.
-// Query is passed as a bash positional argument ($2), never spliced
-// into the script body — fully injection-safe.
+// daily-rebuilt database. fd runs with no shell around it, so stopping a
+// search stops the walk, and the query stays a plain argument. fd ends
+// directory paths with "/", which picks the icon.
 //
 // Cancellation: runId increments per query; the SplitParser ignores
 // lines from a runId that no longer matches root.searchId, so stale
@@ -81,22 +80,13 @@ Singleton {
         // artefacts, package caches, VCS internals). Make them config-
         // driven once we hit a real case where a user wants different
         // ones; static is simpler now.
-        const script =
-            'fd --type f --type d --max-results "$1" \\\n' +
-            '   --exclude .git --exclude node_modules \\\n' +
-            '   --exclude target --exclude build \\\n' +
-            '   --exclude .cache --exclude .local \\\n' +
-            '   --exclude .npm --exclude .cargo \\\n' +
-            '   --exclude .venv --exclude __pycache__ \\\n' +
-            '   "$2" "$3" 2>/dev/null \\\n' +
-            ' | while IFS= read -r p; do\n' +
-            '     if [ -d "$p" ]; then printf "d:%s\\n" "$p"\n' +
-            '     else printf "f:%s\\n" "$p"\n' +
-            '     fi\n' +
-            '   done';
+        const excludes = [".git", "node_modules", "target", "build", ".cache",
+                          ".local", ".npm", ".cargo", ".venv", "__pycache__"];
 
         fdProc.runId = root.searchId;
-        fdProc.command = ["bash", "-c", script, "_", String(maxResults), trimmed, home];
+        fdProc.command = ["fd", "--type", "f", "--type", "d", "--max-results", String(maxResults)]
+            .concat(...excludes.map(dir => ["--exclude", dir]))
+            .concat(["--", trimmed, home]);
         fdProc.running = true;
         root.running = true;
         flushTimer.start();
@@ -252,9 +242,8 @@ Singleton {
             onRead: line => {
                 if (fdProc.runId !== root.searchId) return;
                 const raw = String(line || "");
-                if (raw.length < 3) return;
-                const isDir = raw[0] === "d";
-                const path = raw.slice(2).trim();
+                const isDir = raw.endsWith("/");
+                const path = isDir ? raw.slice(0, -1) : raw;
                 if (!path) return;
                 // Push into the pending buffer; flushTimer batches the
                 // results-array update so the launcher binding chain re-
