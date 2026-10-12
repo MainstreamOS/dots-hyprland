@@ -1,29 +1,33 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
-import qs.modules.common.functions
 import qs.modules.common
 import QtQuick
 import Quickshell
+import Quickshell.Io
 
 /**
  * Renders LaTeX snippets with MicroTeX.
  * For every request:
  *   1. Hash it
  *   2. Check if the hash is already processed
- *   3. If not, render it with MicroTeX and mark as processed
+ *   3. If not, queue it for MicroTeX and mark as processed
  */
 Singleton {
     id: root
-    
-    readonly property var renderPadding: 4 // This is to prevent cutoff in the rendered images
 
-    property list<string> processedHashes: []
+    readonly property var renderPadding: 4 // This is to prevent cutoff in the rendered images
+    readonly property int maxRunning: 3
+
+    property var processedHashes: ({})
     property var processedExpressions: ({})
     property var renderedImagePaths: ({})
     property string microtexBinaryDir: "/opt/MicroTeX"
     property string microtexBinaryName: "LaTeX"
     property string latexOutputPath: Directories.latexOutput
+
+    property var _queue: []
+    property int _running: 0
 
     signal renderFinished(string hash, string imagePath)
 
@@ -32,52 +36,69 @@ Singleton {
     * Returns the [hash, isNew]
     */
     function requestRender(expression) {
-        // 1. Hash it and initialize necessary variables
         const hash = Qt.md5(expression)
         const imagePath = `${latexOutputPath}/${hash}.svg`
-        
-        // 2. Check if the hash is already processed
-        if (processedHashes.includes(hash)) {
-            // console.log("Already processed: " + hash)
-            renderFinished(hash, imagePath)
-            return [hash, false]
-        } else {
-            root.processedHashes.push(hash)
-            root.processedExpressions[hash] = expression
-            // console.log("Rendering expression: " + expression)
-        }
 
-        // 3. If not, render it with MicroTeX and mark as processed
-        // console.log(`[LatexRenderer] Rendering expression: ${expression} with hash: ${hash}`)
-        // console.log(`                to file: ${imagePath}`)
-        // console.log(`                with command: cd ${microtexBinaryDir} && ./${microtexBinaryName} -headless -input=${StringUtils.shellSingleQuoteEscape(expression)} -output=${imagePath} -textsize=${Appearance.font.pixelSize.normal} -padding=${renderPadding} -background=${Appearance.m3colors.m3tertiary} -foreground=${Appearance.m3colors.m3onTertiary} -maxwidth=0.85`)
-        const processQml = `
-            import Quickshell.Io
-            Process {
-                id: microtexProcess${hash}
-                running: true
-                command: [ "bash", "-c", 
-                    "cd ${root.microtexBinaryDir} && ./${root.microtexBinaryName} -headless '-input=${StringUtils.shellSingleQuoteEscape(StringUtils.escapeBackslashes(expression))}' "
-                    + "'-output=${imagePath}' " 
-                    + "'-textsize=${Appearance.font.pixelSize.normal}' "
-                    + "'-padding=${renderPadding}' "
-                    // + "'-background=${Appearance.m3colors.m3tertiary}' "
-                    + "'-foreground=${Appearance.colors.colOnLayer1}' "
-                    + "-maxwidth=0.85 "
-                ]
-                // stdout: SplitParser {
-                //     onRead: data => { console.log("MicroTeX: " + data) }
-                // }
-                onExited: (exitCode, exitStatus) => {
-                    // console.log("[LatexRenderer] MicroTeX process exited with code: " + exitCode + ", status: " + exitStatus)
-                    renderedImagePaths["${hash}"] = "${imagePath}"
-                    root.renderFinished("${hash}", "${imagePath}")
-                    microtexProcess${hash}.destroy()
-                }
-            }
-        `
-        // console.log("MicroTeX: " + processQml)
-        Qt.createQmlObject(processQml, root, `MicroTeXProcess_${hash}`)
+        if (root.processedHashes[hash]) {
+            // Queued or running renders report when they finish.
+            if (root.renderedImagePaths[hash]) root.renderFinished(hash, imagePath)
+            return [hash, false]
+        }
+        root.processedHashes[hash] = true
+        root.processedExpressions[hash] = expression
+        root._queue.push({ hash: hash, expression: expression, imagePath: imagePath })
+        root._startNext()
         return [hash, true]
+    }
+
+    function _startNext(): void {
+        while (root._running < root.maxRunning && root._queue.length > 0) {
+            const job = root._queue.shift()
+            root._running++
+            renderProcess.createObject(root, {
+                hash: job.hash,
+                imagePath: job.imagePath,
+                command: [
+                    `${root.microtexBinaryDir}/${root.microtexBinaryName}`,
+                    "-headless",
+                    `-input=${job.expression}`,
+                    `-output=${job.imagePath}`,
+                    `-textsize=${Appearance.font.pixelSize.normal}`,
+                    `-padding=${root.renderPadding}`,
+                    `-foreground=${Appearance.colors.colOnLayer1}`,
+                    "-maxwidth=0.85"
+                ],
+                workingDirectory: root.microtexBinaryDir,
+                running: true
+            })
+        }
+    }
+
+    Component {
+        id: renderProcess
+        Process {
+            id: proc
+            property string hash
+            property string imagePath
+            property bool started: false
+            property bool finished: false
+
+            function finish(success: bool): void {
+                if (proc.finished) return
+                proc.finished = true
+                root._running--
+                if (success) {
+                    root.renderedImagePaths[proc.hash] = proc.imagePath
+                    root.renderFinished(proc.hash, proc.imagePath)
+                }
+                root._startNext()
+                proc.destroy()
+            }
+
+            onStarted: proc.started = true
+            onExited: (exitCode, exitStatus) => proc.finish(exitCode === 0)
+            // A binary that fails to start never emits exited.
+            onRunningChanged: if (!running && !proc.started) proc.finish(false)
+        }
     }
 }

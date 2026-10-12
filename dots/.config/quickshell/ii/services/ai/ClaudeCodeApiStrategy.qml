@@ -1,203 +1,172 @@
 import QtQuick
-import qs.modules.common
-import qs.modules.common.functions as CF
+import qs.services
+import "strategyhelpers.js" as Helpers
 
 ApiStrategy {
     id: root
-    property string sessionId: ""
-    property bool isThinking: false
-    property int _inputTokens: -1
     isCliStrategy: true
+    supportsAttachments: true
 
-    function buildEndpoint(model: AiModel): string { return "" }
-    function buildAuthorizationHeader(apiKeyEnvVarName: string): string { return "" }
+    property var _requestInfo: ({})
 
-    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
-        return {};
+    // A path that would change what a permission rule matches (a wildcard,
+    // a closing paren, a second line) gets no rule.
+    function isScopable(value: var): bool {
+        return typeof value === "string" && value.length > 0 && !/[\n)*?\[\]\\]/.test(value)
+            && !value.endsWith("…[truncated]");
     }
 
-    function buildScriptRequestContent(model: AiModel, messages, systemPrompt: string, temperature: real): string {
-        const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
-        const userMessage = lastUserMsg?.rawContent ?? "";
-
-        let script = "unset CLAUDECODE\n";
-        if (model.requires_key) {
-            script += "export ANTHROPIC_API_KEY=\"$API_KEY\"\n";
-        }
-        // The native installer lands in ~/.local/bin, which a non-login shell
-        // may not have on PATH. exec so that killing the request reaches the
-        // CLI itself rather than the bash wrapping it.
-        script += "export PATH=\"$HOME/.local/bin:$PATH\"\n";
-        script += "exec claude";
-        if (model.model && model.model !== "claude-code") {
-            script += ` --model '${CF.StringUtils.shellSingleQuoteEscape(model.model)}'`;
-        }
-        if (root.sessionId.length > 0) {
-            script += ` --resume '${CF.StringUtils.shellSingleQuoteEscape(root.sessionId)}'`;
-        } else if (systemPrompt.length > 0) {
-            script += ` --system-prompt '${CF.StringUtils.shellSingleQuoteEscape(systemPrompt)}'`;
-        }
-        script += ` -p '${CF.StringUtils.shellSingleQuoteEscape(userMessage)}'`;
-        script += " --verbose";
-        const mode = AiModes.current;
-        if (mode === "auto") {
-            script += " --dangerously-skip-permissions";
-        } else if (mode === "plan") {
-            script += " --permission-mode plan";
-        }
-        script += " --output-format stream-json";
-        script += " --include-partial-messages";
-        script += " < /dev/null 2>&1";
-        script += "\n";
-        return script;
+    function pathRule(tool: string, path: var): string {
+        return (root.isScopable(path) && path.startsWith("/")) ? `${tool}(/${path})` : "";
     }
 
-    function parseResponseLine(line: string, message: AiMessageData): var {
-        let cleanData = line.trim();
-        if (cleanData.length === 0) return {};
+    function buildRequest(ctx: var): var {
+        const model = ctx.model;
+        const mode = ctx.mode ?? "ask";
+        const attachment = Helpers.attachmentPath(ctx);
+        // A regenerate starts a fresh conversation; its init event replaces the id.
+        const sessionId = ctx.regenerate ? "" : root.sessionId;
+        root._requestInfo = { mode: mode, modelName: model.name ?? "" };
 
+        const argv = ["claude"];
+        if (model.model && model.model !== "claude-code") argv.push("--model", model.model);
+        if (sessionId.length > 0) {
+            argv.push("--resume", sessionId);
+        } else if ((ctx.systemPrompt ?? "").length > 0) {
+            argv.push("--system-prompt", ctx.systemPrompt);
+        }
+        // No positional prompt: -p reads it from stdin.
+        argv.push("-p");
+        let effort = ctx.thinkingLevel;
+        if (effort === "extra") effort = "xhigh";
+        else if (effort === "ultracode") effort = "max";
+        else if (effort === "minimal") effort = "low";
+        if (["low", "medium", "high", "xhigh", "max"].includes(effort)) argv.push("--effort", effort);
+        if (Ai.cliPlanState["claude-code"]?.features?.includes("thinking-display")) argv.push("--thinking-display", "summarized");
+
+        const granted = mode === "auto";
+        // The file may be outside the working directory, which would raise an
+        // approval for every attachment. Variadic, so another flag follows.
+        if (attachment.length > 0 && !granted) {
+            const rule = root.pathRule("Read", attachment);
+            if (rule.length > 0) argv.push("--allowedTools", rule);
+        }
+        argv.push("--verbose", "--output-format", "stream-json", "--include-partial-messages");
+        if (granted) argv.push("--dangerously-skip-permissions");
+        else if (mode === "plan") argv.push("--permission-mode", "plan");
+
+        const attachedLine = attachment.length > 0 ? Translation.tr("Attached file: %1").arg(attachment) : "";
+        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine);
+        const env = {};
+        if (model.requires_key) env.ANTHROPIC_API_KEY = ctx.apiKey ?? Ai.apiKeys?.[model.key_id] ?? "";
+        return {
+            // Claude Code keys --resume sessions by working directory.
+            options: ["--workdir", ctx.dirs.home, "--stdin", "--filter", "claude", "--report-exit"],
+            argv: argv,
+            stdin: prompt,
+            env: env
+        };
+    }
+
+    // Called after buildRequest, so the mode belongs to this request.
+    function newState(): var {
+        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "" };
+    }
+
+    function inputTokens(usage: var): int {
+        if (usage?.input_tokens === undefined) return -1;
+        return usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    }
+
+    function handleStreamEvent(event: var, sink: var): void {
+        const state = sink.state;
+        switch (event.type) {
+        case "message_start": {
+            const input = root.inputTokens(event.message?.usage);
+            if (input >= 0) state.input = input;
+            break;
+        }
+        case "content_block_start":
+            if (event.content_block?.type === "thinking") sink.think("");
+            break;
+        case "content_block_delta": {
+            const deltaType = event.delta?.type;
+            if (deltaType === "text_delta") {
+                sink.text(event.delta.text || "");
+            } else if (deltaType === "thinking_delta") {
+                sink.think(event.delta.thinking || "");
+            }
+            break;
+        }
+        case "message_delta":
+            if (event.usage) {
+                const input = root.inputTokens(event.usage);
+                if (input >= 0) state.input = input;
+                const output = event.usage.output_tokens ?? -1;
+                sink.usage({ input: state.input, output: output, total: Math.max(0, state.input) + Math.max(0, output) });
+            }
+            break;
+        // Every API call inside an agentic run ends with message_stop; only
+        // the result event ends the request.
+        case "message_stop":
+            sink.endThink();
+            break;
+        }
+    }
+
+    function handleResult(json: var, sink: var): void {
+        const state = sink.state;
+        state.gotResult = true;
+        sink.endThink();
+        // A failed run still arrives with subtype "success", and the reason
+        // is only in is_error.
+        if (json.is_error) {
+            // A dead session pins every retry to the same failure.
+            sink.setSessionId("");
+            sink.error(json.result ?? json.subtype ?? Translation.tr("the request failed"));
+        } else if (json.session_id) {
+            sink.setSessionId(json.session_id);
+        }
+        if (json.usage) {
+            const input = root.inputTokens(json.usage);
+            const output = json.usage.output_tokens ?? -1;
+            sink.usage({ input: input, output: output, total: Math.max(0, input) + Math.max(0, output) });
+        }
+        sink.finished();
+    }
+
+    function parseLine(line: string, sink: var): void {
+        const cleanData = line.trim();
+        if (cleanData.length === 0) return;
+
+        let json;
         try {
-            const json = JSON.parse(cleanData);
-
-            // Claude Code result event (top-level, not wrapped)
-            if (json.type === "result") {
-                if (json.session_id) root.sessionId = json.session_id;
-                if (isThinking) {
-                    isThinking = false;
-                    message.rawContent += "\n\n</think>\n\n";
-                    message.content += "\n\n</think>\n\n";
-                }
-                // A failed run still arrives with subtype "success", and the
-                // reason is only in is_error. Reading the subtype alone reports
-                // an expired login as an empty answer, which reads as the model
-                // having nothing to say. Checked after the thinking block is
-                // closed so a failure partway through one does not leave it open.
-                if (json.is_error) {
-                    // A dead session pins every retry to the same failure, so
-                    // the next request starts a fresh one.
-                    root.sessionId = "";
-                    const failure = `**Error**: ${json.result ?? json.subtype ?? "the request failed"}`;
-                    message.rawContent += failure;
-                    message.content += failure;
-                    return { finished: true };
-                }
-                const result = { finished: true };
-                if (json.usage) {
-                    result.tokenUsage = {
-                        input: json.usage.input_tokens ?? _inputTokens,
-                        output: json.usage.output_tokens ?? -1,
-                        total: (json.usage.input_tokens ?? 0) + (json.usage.output_tokens ?? 0)
-                    };
-                }
-                return result;
-            }
-
-            // Error event
-            if (json.type === "error" || json.error) {
-                const errDetail = typeof json.error === "string" ? json.error
-                    : json.error?.message ?? json.message ?? JSON.stringify(json);
-                const errorMsg = `**Error**: ${errDetail}`;
-                message.rawContent += errorMsg;
-                message.content += errorMsg;
-                return { finished: true };
-            }
-
-            // Claude Code system init event
-            if (json.type === "system" && json.subtype === "init") {
-                if (json.session_id) root.sessionId = json.session_id;
-                return {};
-            }
-
-            // Wrapped API stream event
-            const event = json.type === "stream_event" ? json.event : json;
-            if (!event || !event.type) return {};
-
-            if (event.type === "message_start") {
-                if (event.message?.usage?.input_tokens) {
-                    _inputTokens = event.message.usage.input_tokens;
-                }
-                return {};
-            }
-
-            if (event.type === "content_block_start") {
-                const blockType = event.content_block?.type;
-                if (blockType === "thinking" && !isThinking) {
-                    isThinking = true;
-                    message.rawContent += "\n\n<think>\n\n";
-                    message.content += "\n\n<think>\n\n";
-                }
-                return {};
-            }
-
-            if (event.type === "content_block_delta") {
-                const deltaType = event.delta?.type;
-                if (deltaType === "text_delta") {
-                    if (isThinking) {
-                        isThinking = false;
-                        message.rawContent += "\n\n</think>\n\n";
-                        message.content += "\n\n</think>\n\n";
-                    }
-                    const text = event.delta.text || "";
-                    message.rawContent += text;
-                    message.content += text;
-                } else if (deltaType === "thinking_delta") {
-                    if (!isThinking) {
-                        isThinking = true;
-                        message.rawContent += "\n\n<think>\n\n";
-                        message.content += "\n\n<think>\n\n";
-                    }
-                    const thinking = event.delta.thinking || "";
-                    message.rawContent += thinking;
-                    message.content += thinking;
-                }
-                return {};
-            }
-
-            if (event.type === "content_block_stop") {
-                return {};
-            }
-
-            if (event.type === "message_delta") {
-                const result = {};
-                if (event.usage) {
-                    result.tokenUsage = {
-                        input: event.usage.input_tokens ?? _inputTokens,
-                        output: event.usage.output_tokens ?? -1,
-                        total: (event.usage.input_tokens ?? _inputTokens ?? 0) + (event.usage.output_tokens ?? 0)
-                    };
-                }
-                return result;
-            }
-
-            if (event.type === "message_stop") {
-                if (isThinking) {
-                    isThinking = false;
-                    message.rawContent += "\n\n</think>\n\n";
-                    message.content += "\n\n</think>\n\n";
-                }
-                return { finished: true };
-            }
-
+            json = JSON.parse(cleanData);
         } catch (e) {
-            // Non-JSON line (likely stderr or plain text output) — show to user
-            message.rawContent += cleanData + "\n";
-            message.content += cleanData + "\n";
+            sink.raw(cleanData);
+            return;
         }
-
-        return {};
+        try {
+            if (json.type === "result") {
+                root.handleResult(json, sink);
+            } else if (json.type === "system") {
+                if (json.subtype === "init" && json.session_id) sink.setSessionId(json.session_id);
+            } else if (json.type === "stream_event") {
+                if (json.event?.type) root.handleStreamEvent(json.event, sink);
+            } else if (json.type === "error") {
+                const detail = typeof json.error === "string" ? json.error
+                    : json.error?.message ?? json.message ?? JSON.stringify(json);
+                sink.error(detail);
+            }
+        } catch (e) {
+            console.warn("[Ai] Claude Code: unexpected event:", e);
+        }
     }
 
-    function onRequestFinished(message: AiMessageData): var {
-        if (isThinking) {
-            isThinking = false;
-            message.rawContent += "\n\n</think>\n\n";
-            message.content += "\n\n</think>\n\n";
-        }
-        return {};
-    }
-
-    function reset() {
-        isThinking = false;
-        _inputTokens = -1;
+    function finish(sink: var, exitCode: int, stderrTail: string): void {
+        if (exitCode === 0 || sink.state.gotResult) return;
+        sink.setSessionId("");
+        const detail = Helpers.lastErrorLine(stderrTail);
+        sink.error(detail.length > 0 ? detail : Translation.tr("%1 stopped with code %2").arg("Claude Code").arg(exitCode));
     }
 }

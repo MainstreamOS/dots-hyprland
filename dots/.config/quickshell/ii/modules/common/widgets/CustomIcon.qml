@@ -20,6 +20,9 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectFit
         source: {
+            if (!root.source || root.source.length === 0) {
+                return "";
+            }
             const fullPathWhenSourceIsIconName = iconFolder + "/" + root.source;
             if (iconFolder && fullPathWhenSourceIsIconName) {
                 return fullPathWhenSourceIsIconName

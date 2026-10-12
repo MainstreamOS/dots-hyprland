@@ -8,7 +8,11 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import org.kde.syntaxhighlighting
+import "passbudget.js" as PassBudget
+import "../../../common/functions/markdownblocks.js" as MarkdownBlocks
+import "../../../../services/ai/sink.js" as Sink
 
 ColumnLayout {
     id: root
@@ -16,11 +20,173 @@ ColumnLayout {
     property bool editing: false
     property bool renderMarkdown: true
     property bool enableMouseSelection: false
-    property var segmentContent: ({})
+    property string segmentContent: ""
     property var segmentLang: "txt"
-    property var messageData: {}
+    property var messageData: null
+    property bool done: true
+    property int contentRevision: 0
     property bool isCommandRequest: segmentLang === "command"
     property var displayLang: (isCommandRequest ? "bash" : segmentLang)
+
+    property int _shownLength: 0
+    property int _shownRevision: -1
+    property int _lineCount: 1
+    property bool _ready: false
+    // Posted calls can still arrive while the block is being torn down.
+    property bool _alive: true
+    Component.onDestruction: root._alive = false
+    property string _shownTail: ""
+    readonly property int _appendSlice: 2000
+
+    // Source of this block for saving an edit, fenced again.
+    function sourceText(): string {
+        return MarkdownBlocks.fence(root.segmentLang, root.editing ? codeTextArea.text : root.segmentContent);
+    }
+
+    // The stream escapes think tags in model text; copies and saves get the original.
+    function plainCode(): string {
+        return Sink.unescapeThinkTags(root.segmentContent);
+    }
+
+    function countNewlines(text: string): int {
+        let count = 0;
+        for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) count++;
+        return count;
+    }
+
+    function lineNumbers(from: int, to: int): string {
+        const parts = [];
+        for (let n = from; n <= to; n++) parts.push(n);
+        return parts.join("\n");
+    }
+
+    function setLineNumbers(count: int): void {
+        lineNumberModel.clear();
+        root._lineCount = 0;
+        root.appendLineNumbers(count);
+    }
+
+    // Line numbers live in rows of 100 so an append relays out only the last row.
+    function appendLineNumbers(added: int): void {
+        const last = root._lineCount + added;
+        let n = root._lineCount + 1;
+        while (n <= last) {
+            const row = Math.floor((n - 1) / 100);
+            const rowEnd = Math.min(last, (row + 1) * 100);
+            const numbers = root.lineNumbers(n, rowEnd);
+            if (row < lineNumberModel.count) {
+                lineNumberModel.setProperty(row, "numbers", lineNumberModel.get(row).numbers + "\n" + numbers);
+            } else {
+                lineNumberModel.append({ numbers: numbers });
+            }
+            n = rowEnd + 1;
+        }
+        root._lineCount = last;
+    }
+
+    function setFullText(): void {
+        appendTimer.stop();
+        const text = root.segmentContent;
+        codeTextArea.text = text;
+        root._shownLength = text.length;
+        root._shownTail = text.slice(-8);
+        root._shownRevision = root.contentRevision;
+        root.setLineNumbers(root.countNewlines(text) + 1);
+    }
+
+    // True when the text only grew past what is shown; the open block may have
+    // shown backticks that turned out to be the closing fence.
+    function extendsShown(text: string): bool {
+        if (root._shownRevision !== root.contentRevision || text.length < root._shownLength) return false;
+        return text.slice(root._shownLength - root._shownTail.length, root._shownLength) === root._shownTail;
+    }
+
+    function syncCode(): void {
+        if (root._alive !== true || !root._ready || !root.messageData || root.editing) return;
+        const text = root.segmentContent;
+        if (!root.extendsShown(text)) {
+            root.setFullText();
+            return;
+        }
+        if (text.length === root._shownLength) return;
+        // Streamed code goes in a slice per event loop pass: laying out and
+        // highlighting a long block at once would hold the shell for too long.
+        if (PassBudget.remaining() <= 0) {
+            appendTimer.restart();
+            return;
+        }
+        let end = Math.min(text.length, root._shownLength + root._appendSlice);
+        const last = text.charCodeAt(end - 1);
+        if (end < text.length && last >= 0xD800 && last <= 0xDBFF) end--;
+        const delta = text.slice(root._shownLength, end);
+        codeTextArea.insert(codeTextArea.length, delta);
+        root._shownLength = end;
+        root._shownTail = text.slice(Math.max(0, end - 8), end);
+        const added = root.countNewlines(delta);
+        if (added > 0) root.appendLineNumbers(added);
+        PassBudget.done();
+        if (end < text.length) appendTimer.restart();
+    }
+
+    onSegmentContentChanged: root.syncCode()
+    onContentRevisionChanged: root.syncCode()
+    onEditingChanged: if (!root.editing && root._ready) root.setFullText()
+    // Nothing is shown before this point, so a block that arrives while the reply
+    // streams starts empty and fills in slices instead of all at once.
+    Component.onCompleted: {
+        root._ready = true;
+        if (root.done) {
+            root.setFullText();
+        } else {
+            root._shownRevision = root.contentRevision;
+            root.setLineNumbers(1);
+            // A delegate made during a flush sees the previous open block's text
+            // until the flush is done, so the first slice waits for a later pass.
+            appendTimer.restart();
+        }
+    }
+
+    Timer {
+        id: appendTimer
+        interval: 0
+        repeat: false
+        onTriggered: Qt.callLater(root.syncCode)
+    }
+
+    Component {
+        id: saveFileComponent
+        FileView {
+            id: saveFile
+            property string displayPath
+            atomicWrites: true
+            blockWrites: false
+            preload: false
+            watchChanges: false
+            printErrors: false
+            onSaved: {
+                Quickshell.execDetached(["notify-send",
+                    Translation.tr("Code saved to file"),
+                    Translation.tr("Saved to %1").arg(saveFile.displayPath),
+                    "-a", "Shell"
+                ])
+                saveFile.destroy()
+            }
+            onSaveFailed: {
+                Quickshell.execDetached(["notify-send",
+                    Translation.tr("Could not save the code to %1").arg(saveFile.displayPath),
+                    "-a", "Shell"
+                ])
+                saveFile.destroy()
+            }
+        }
+    }
+
+    function saveToDownloads(): void {
+        const lang = /^[A-Za-z0-9_+-]{1,16}$/.test(root.segmentLang ?? "") ? root.segmentLang : "txt";
+        const path = `${FileUtils.trimFileProtocol(Directories.downloads)}/code.${lang}`;
+        const file = saveFileComponent.createObject(root, { path: path, displayPath: path });
+        file.setText(root.plainCode());
+    }
 
     property real codeBlockBackgroundRounding: Appearance.rounding.small
     property real codeBlockHeaderPadding: 3
@@ -67,7 +233,7 @@ ColumnLayout {
                     buttonIcon: activated ? "inventory" : "content_copy"
 
                     onClicked: {
-                        Quickshell.clipboardText = segmentContent
+                        Quickshell.clipboardText = root.plainCode()
                         copyCodeButton.activated = true
                         copyIconTimer.restart()
                     }
@@ -89,15 +255,7 @@ ColumnLayout {
                     buttonIcon: activated ? "check" : "save"
 
                     onClicked: {
-                        const downloadPath = FileUtils.trimFileProtocol(Directories.downloads)
-                        Quickshell.execDetached(["bash", "-c", 
-                            `echo '${StringUtils.shellSingleQuoteEscape(segmentContent)}' > '${downloadPath}/code.${segmentLang || "txt"}'`
-                        ])
-                        Quickshell.execDetached(["notify-send", 
-                            Translation.tr("Code saved to file"), 
-                            Translation.tr("Saved to %1").arg(`${downloadPath}/code.${segmentLang || "txt"}`),
-                            "-a", "Shell"
-                        ])
+                        root.saveToDownloads()
                         saveCodeButton.activated = true
                         saveIconTimer.restart()
                     }
@@ -142,18 +300,20 @@ ColumnLayout {
                     topMargin: 6
                 }
                 spacing: 0
-                
+
                 Repeater {
-                    model: codeTextArea.text.split("\n").length
+                    model: ListModel {
+                        id: lineNumberModel
+                    }
                     Text {
-                        required property int index
+                        required property string numbers
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignRight
                         font.family: Appearance.font.family.monospace
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: Appearance.colors.colSubtext
                         horizontalAlignment: Text.AlignRight
-                        text: index + 1
+                        text: numbers
                     }
                 }
             }
@@ -240,14 +400,12 @@ ColumnLayout {
                         selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
                         selectionColor: Appearance.colors.colSecondaryContainer
                         // wrapMode: TextEdit.Wrap
-                        color: messageData.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
+                        color: root.messageData?.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
 
-                        text: segmentContent
                         onTextChanged: {
-                            // Only write back user edits: assigning here breaks
-                            // the segmentContent binding, freezing streamed code.
                             if (!root.editing) return
-                            segmentContent = text
+                            const lines = root.countNewlines(codeTextArea.text) + 1
+                            if (lines !== root._lineCount) root.setLineNumbers(lines)
                         }
 
                         Keys.onPressed: (event) => {
@@ -273,7 +431,7 @@ ColumnLayout {
                     }
                 }
                 Loader {
-                    active: root.isCommandRequest && root.messageData.functionPending
+                    active: root.isCommandRequest && (root.messageData?.functionPending ?? false) && Ai.pendingConfirmation?.messageId === root.messageData?.id
                     visible: active
                     Layout.fillWidth: true
                     Layout.margins: 6
@@ -287,7 +445,9 @@ ColumnLayout {
                                     font.pixelSize: Appearance.font.pixelSize.small
                                     color: Appearance.colors.colOnLayer2
                                 }
-                                onClicked: Ai.rejectCommand(root.messageData)
+                                onClicked: {
+                                    if (Ai.pendingConfirmation) Ai.rejectPendingAction(Ai.pendingConfirmation.id)
+                                }
                             }
                             GroupButton {
                                 toggled: true
@@ -296,7 +456,9 @@ ColumnLayout {
                                     font.pixelSize: Appearance.font.pixelSize.small
                                     color: Appearance.colors.colOnPrimary
                                 }
-                                onClicked: Ai.approveCommand(root.messageData)
+                                onClicked: {
+                                    if (Ai.pendingConfirmation) Ai.approvePendingAction(Ai.pendingConfirmation.id)
+                                }
                             }
                         }
                     }

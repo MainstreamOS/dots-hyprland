@@ -9,6 +9,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import qs.services.ai
+import "ai/sink.js" as Sink
+import "ai/sessions.js" as Sessions
 
 /**
  * Basic service to handle LLM chats. Supports Google's and OpenAI's API formats.
@@ -27,13 +29,7 @@ Singleton {
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
     property Component claudeCodeApiStrategy: ClaudeCodeApiStrategy {}
     property Component codexCliApiStrategy: CodexCliApiStrategy {}
-    // The texts are bound here: in apiStrategies, a translation load would
-    // rebuild every strategy and drop the CLI sessions.
-    property Component antigravityCliApiStrategy: AntigravityCliApiStrategy {
-        workDir: root.antigravityDir
-        exitText: Translation.tr("Antigravity stopped with code %1")
-        lapsedText: Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting.")
-    }
+    property Component antigravityCliApiStrategy: AntigravityCliApiStrategy {}
     readonly property string interfaceRole: "interface"
     readonly property string apiKeyEnvVarName: "API_KEY"
 
@@ -51,9 +47,19 @@ Singleton {
         }
         return prompt;
     }
-    // property var messages: []
+    // Reassigned on every change. A message object is in messageByID before
+    // its id joins messageIDs, and leaves messageIDs before it is destroyed.
     property var messageIDs: []
     property var messageByID: ({})
+    onMessageIDsChanged: {
+        if (root._graveyard.length > 0) reaper.restart();
+    }
+    // True while a saved session is being read and rebuilt; sends, edits and
+    // saves wait for it.
+    property bool sessionLoading: false
+    property bool _startupRestored: false
+    property int _loadGeneration: 0
+    property var _restore: null
     readonly property var apiKeys: KeyringStorage.keyringData?.apiKeys ?? {}
     readonly property var apiKeysLoaded: KeyringStorage.loaded
     readonly property bool currentModelHasApiKey: {
@@ -63,7 +69,6 @@ Singleton {
         const key = apiKeys[model.key_id];
         return (key?.length > 0);
     }
-    property var postResponseHook
     property real temperature: Persistent.states?.ai?.temperature ?? 0.5
     property string thinkingLevel: Persistent.states?.ai?.thinkingLevel ?? ""
     readonly property var thinkingLevels: ["minimal", "low", "medium", "high"]
@@ -72,16 +77,12 @@ Singleton {
         property int output: -1
         property int total: -1
     }
-    readonly property bool isGenerating: requester.running
-
-    function cancelRequest() {
-        if (requester.running) {
-            requester.running = false;
-        }
-        if (requester.message && !requester.message.done) {
-            requester.markDone();
-        }
-    }
+    // "idle", "starting", "streaming", "awaitingConfirmation" or "stopping"
+    property string requestState: "idle"
+    readonly property bool isGenerating: root.requestState === "starting"
+        || root.requestState === "streaming" || root.requestState === "stopping"
+    // null or a frozen Confirmation; replaced, never mutated
+    property var pendingConfirmation: null
 
     function idForMessage(message) {
         // Generate a unique ID using timestamp and random value
@@ -95,7 +96,7 @@ Singleton {
     property list<var> defaultPrompts: []
     property list<var> userPrompts: []
     property list<var> promptFiles: [...defaultPrompts, ...userPrompts]
-    property list<var> savedChats: []
+    property list<string> savedChats: []
 
     property var promptSubstitutions: {
         "{DISTRO}": SystemInfo.distroName,
@@ -277,7 +278,7 @@ Singleton {
     // The tool preference is global, but a model that cannot report a function
     // call must not be handed the definitions: it answers with a call instead
     // of prose and the reply arrives empty. Fall back rather than go silent.
-    readonly property string effectiveTool: (root.currentTool === "functions" && !(root.currentApiStrategy?.supportsFunctions ?? false)) ? "none" : root.currentTool
+    readonly property string effectiveTool: (root.currentTool === "functions" && !(root.currentApiStrategy?.supportsFunctions ?? false)) ? "none" : (root.currentTool ?? "search")
     property var toolDescriptions: {
         "functions": Translation.tr("Commands, edit configs, search.\nTakes an extra turn to switch to search mode if that's needed"),
         "search": Translation.tr("Gives the model search capabilities (immediately)"),
@@ -332,8 +333,10 @@ Singleton {
         return root.geminiApiCatalog[id] !== undefined;
     }
 
-    property var models: Config.options.policies.ai === 2 ? {} : {
-        "gemini": aiModelComponent.createObject(this, {
+    // Every model the service knows of, online or not. Only the functions
+    // that register or retire models write it; everything else reads models.
+    property var _registry: ({
+        "gemini": aiModelComponent.createObject(root, {
             "name": "Gemini",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
@@ -348,7 +351,7 @@ Singleton {
             "sendTemperature": false,
             "thinkingLevel": "",
         }),
-        "mistral-4": aiModelComponent.createObject(this, {
+        "mistral-4": aiModelComponent.createObject(root, {
             "name": "Mistral 4",
             "icon": "mistral-symbolic",
             "description": Translation.tr("Online | %1's 1T parameter flagship. Strong at coding, agentic workflows, and structured tool use. Disadvantages: higher initial latency and tends to be verbose").arg("Mistral"),
@@ -361,7 +364,7 @@ Singleton {
             "key_get_description": Translation.tr("**Instructions**: Log into Mistral account, go to Keys on the sidebar, click Create new key"),
             "api_format": "mistral",
         }),
-        "claude": aiModelComponent.createObject(this, {
+        "claude": aiModelComponent.createObject(root, {
             "name": "Claude",
             "icon": "claude-symbolic",
             "description": Translation.tr("Online | Anthropic's Claude Opus 5.5 over the Messages API"),
@@ -373,8 +376,10 @@ Singleton {
             "key_get_link": "https://console.anthropic.com/settings/keys",
             "key_get_description": Translation.tr("**Instructions**: Log into your Anthropic account, go to API Keys, click Create Key"),
             "api_format": "anthropic",
+            "sendTemperature": false,
+            "thinkingLevel": "",
         }),
-        "codex": aiModelComponent.createObject(this, {
+        "codex": aiModelComponent.createObject(root, {
             "name": "Codex",
             "icon": "openai-symbolic",
             "description": Translation.tr("Online | OpenAI's GPT-5.6 over the Chat Completions API"),
@@ -388,6 +393,29 @@ Singleton {
             "key_get_description": Translation.tr("**Instructions**: Log into your OpenAI account, open the API keys page, click Create new secret key"),
             "api_format": "openai",
         }),
+    })
+    // What the picker offers and requests may use: the local-only policy
+    // hides online entries rather than dropping them, so they are back as
+    // soon as the policy allows them again.
+    readonly property var models: Config.options?.policies?.ai === 2 ? root._localModels(root._registry) : root._registry
+    function _isLocalModel(model) {
+        return String(model?.endpoint ?? "").includes("localhost");
+    }
+    function _localModels(map) {
+        const local = {};
+        for (const id of Object.keys(map)) {
+            if (root._isLocalModel(map[id])) local[id] = map[id];
+        }
+        return local;
+    }
+    // Judged by id so it also covers a plan model or a Gemini catalog entry
+    // that is not registered right now. An id nothing knows yet is a saved
+    // local model whose fetch has not answered.
+    function _isOnlineModelId(id) {
+        if (!id || id === root.ollamaSetupModelId) return false;
+        const model = root._registry[id] ?? (root.isGeminiApiModel(id) ? root.geminiApiCatalog[id] : null);
+        if (model) return !root._isLocalModel(model);
+        return root.planFormatFor(id) !== "";
     }
     // Only ever a view of the map. Readonly so no fetch handler can hand it
     // a snapshot that stops following the models registered afterwards.
@@ -414,10 +442,23 @@ Singleton {
         "gemini-plan-3-1-pro-high": "gemini-plan-3-1-pro",
         "gemini-plan-3-1-pro-low": "gemini-plan-3-1-pro",
     })
-    readonly property var currentModelId: {
+    // The user's choice as saved in Persistent. Everything that talks to a
+    // model reads currentModelId instead.
+    readonly property var _savedModelId: {
         const id = Persistent.states?.ai?.model || modelList[0];
         return retiredModels[id] ?? id;
     }
+    // Under the local-only policy an online choice stays saved for when the
+    // policy allows it again, and the first local model answers in its place.
+    // The two inputs are typed bindings of their own: the selection handler
+    // rewrites the map's online entries, and a binding reading the map
+    // directly would be re-entered by that write and abandoned as a loop.
+    readonly property bool _savedIsOnline: root._isOnlineModelId(root._savedModelId)
+    readonly property string _localFallbackId: Object.keys(root._registry).find(id => id !== root.ollamaSetupModelId
+        && root.retiredModels[id] === undefined && root._isLocalModel(root._registry[id])) ?? root.ollamaSetupModelId
+    readonly property var currentModelId: Config.options?.policies?.ai === 2 && root._savedIsOnline
+        ? root._localFallbackId
+        : root._savedModelId
     // Read by the input-box indicator. A plain getModel() call there never
     // re-evaluated, so the name sat on whatever was current when the chat was
     // built. Ollama's list arrives after that, so a saved local model showed as
@@ -432,15 +473,16 @@ Singleton {
     readonly property var currentModel: models[currentModelId] ?? (root.isGeminiApiModel(currentModelId) ? models["gemini"] : null)
 
     property var apiStrategies: {
-        "openai": openaiApiStrategy.createObject(this),
-        "gemini": geminiApiStrategy.createObject(this),
-        "mistral": mistralApiStrategy.createObject(this),
-        "anthropic": anthropicApiStrategy.createObject(this),
-        "claude-code": claudeCodeApiStrategy.createObject(this),
-        "codex-cli": codexCliApiStrategy.createObject(this),
-        "antigravity-cli": antigravityCliApiStrategy.createObject(this),
+        "openai": openaiApiStrategy.createObject(root),
+        "gemini": geminiApiStrategy.createObject(root),
+        "mistral": mistralApiStrategy.createObject(root),
+        "anthropic": anthropicApiStrategy.createObject(root),
+        "claude-code": claudeCodeApiStrategy.createObject(root),
+        "codex-cli": codexCliApiStrategy.createObject(root),
+        "antigravity-cli": antigravityCliApiStrategy.createObject(root),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
+    readonly property bool currentModelSupportsAttachments: Boolean(root.currentApiStrategy?.supportsAttachments)
 
     function addUserModels() {
         (Config?.options.ai?.extraModels ?? []).forEach(model => {
@@ -464,7 +506,10 @@ Singleton {
             "cmd": "claude",
             "install": "curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://claude.ai/install.sh | bash",
             "login": "claude auth login --claudeai",
-            "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'"
+            "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'",
+            // Print mode leaves thinking text out unless asked for it. Older CLIs
+            // refuse the flag before making any request, so empty input tells.
+            "features": "claude -p --thinking-display summarized 2>&1 | grep -q 'unknown option' || echo 'feature thinking-display'"
         },
         "codex-cli": {
             "name": "Codex",
@@ -512,10 +557,15 @@ Singleton {
             "readyCheck": "timeout 20 agy models >/dev/null 2>&1"
         }
     })
-    // Left for bash to expand where it is used. The sign-in's code pipe and
-    // exit file and the chat's own runs all live here, so every use has to
-    // name this one folder.
-    readonly property string antigravityDir: "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/ai/antigravity-cli"
+    // The sign-in's code pipe and exit file and the chat's own runs all live
+    // here, so every use has to name this one folder.
+    readonly property string antigravityDir: root._stateHome + "/quickshell/ai/antigravity-cli"
+
+    // Codex effort -> the tab's level id. Efforts the tab has no level for are not offered.
+    readonly property var codexEffortLevels: ({
+        "none": "none", "minimal": "minimal", "low": "low", "medium": "medium",
+        "high": "high", "xhigh": "extra", "max": "max", "ultra": "ultracode",
+    })
     readonly property var cliPlanModels: ({
         "claude-code": {
             "claude-fable": { alias: "fable", name: "Claude Fable" },
@@ -609,33 +659,32 @@ Singleton {
         && (!cliReady(currentModel.api_format) || setupState !== "")
 
     function syncGeminiApiModels(targetId) {
-        if (Config.options?.policies?.ai === 2) return;
         const current = targetId || root.currentModelId;
         const isGeminiActive = root.isGeminiApiModel(current);
-        let next = Object.assign({}, root.models);
+        let next = Object.assign({}, root._registry);
         let changed = false;
 
         if (isGeminiActive) {
             if (next["gemini"]) {
-                if (next["gemini"].destroy) next["gemini"].destroy();
+                root._bury(next["gemini"]);
                 delete next["gemini"];
                 changed = true;
             }
             for (const id of Object.keys(root.geminiApiCatalog)) {
                 if (next[id]) continue;
-                next[id] = aiModelComponent.createObject(this, root.geminiApiCatalog[id]);
+                next[id] = aiModelComponent.createObject(root, root.geminiApiCatalog[id]);
                 changed = true;
             }
         } else {
             for (const id of Object.keys(root.geminiApiCatalog)) {
                 if (next[id]) {
-                    if (next[id].destroy) next[id].destroy();
+                    root._bury(next[id]);
                     delete next[id];
                     changed = true;
                 }
             }
             if (!next["gemini"]) {
-                next["gemini"] = aiModelComponent.createObject(this, {
+                next["gemini"] = aiModelComponent.createObject(root, {
                     "name": "Gemini",
                     "icon": "google-gemini-symbolic",
                     "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
@@ -653,25 +702,35 @@ Singleton {
                 changed = true;
             }
         }
-        if (changed) root.models = next;
+        if (changed) root._registry = next;
     }
 
     function syncCliPlanModels(fmt) {
-        if (Config.options?.policies?.ai === 2) return;
         const plan = root.cliPlans[fmt];
         const planModels = root.cliPlanModels[fmt];
         if (!plan || !planModels) return;
-        let next = Object.assign({}, root.models);
+        let next = Object.assign({}, root._registry);
         let changed = false;
+        // What this plan registered before, in picker order. A catalog that
+        // changed since leaves entries that are gone, renamed or out of order.
+        const registered = Object.keys(next).filter(id => id !== plan.setupId
+            && next[id]?.api_format === fmt && !next[id].requires_key);
         // A plan shows its models only while it is the one being used. Two
         // signed-in plans would otherwise put nine entries in the picker at
         // once, most of them for the provider nobody is talking to.
         if (root.cliReady(fmt) && root.planFormatFor(root.currentModelId) === fmt) {
-            if (next[plan.setupId]) { delete next[plan.setupId]; changed = true; }
-            for (const id of Object.keys(planModels)) {
+            if (next[plan.setupId]) { root._bury(next[plan.setupId]); delete next[plan.setupId]; changed = true; }
+            const wantedIds = Object.keys(planModels);
+            const current = registered.length === wantedIds.length && wantedIds.every((id, i) => registered[i] === id
+                && next[id].name === planModels[id].name && next[id].model === planModels[id].alias
+                && next[id].thinkingLevel === (planModels[id].thinkingLevel ?? ""));
+            if (!current) {
+                for (const id of registered) { root._bury(next[id]); delete next[id]; changed = true; }
+            }
+            for (const id of wantedIds) {
                 if (next[id]) continue;
                 const planEntry = planModels[id];
-                next[id] = aiModelComponent.createObject(this, {
+                next[id] = aiModelComponent.createObject(root, {
                     "name": planEntry.name,
                     "icon": plan.icon,
                     "description": plan.modelDescription.arg(planEntry.name),
@@ -689,12 +748,11 @@ Singleton {
                 changed = true;
             }
         } else {
-            for (const id of Object.keys(planModels)) {
-                if (next[id]) { delete next[id]; changed = true; }
-            }
+            for (const id of registered) { root._bury(next[id]); delete next[id]; changed = true; }
             const wanted = root.cliReady(fmt) ? plan.readyDescription : plan.setupDescription;
             if (!next[plan.setupId] || next[plan.setupId].description !== wanted) {
-                next[plan.setupId] = aiModelComponent.createObject(this, {
+                if (next[plan.setupId]) root._bury(next[plan.setupId]);
+                next[plan.setupId] = aiModelComponent.createObject(root, {
                     "name": plan.setupName,
                     "icon": plan.icon,
                     "description": wanted,
@@ -707,26 +765,39 @@ Singleton {
                 changed = true;
             }
         }
-        if (changed) root.models = next;
+        if (changed) root._registry = next;
     }
 
     // One detector serves every CLI. Requests that arrive while it is busy queue up,
     // except a sign-in poll waiting on its exit file: the next tick asks again.
+    // Busy is tracked here: until the shell has finished loading, the Process
+    // holds a start back and still reads as not running.
     property var _detectQueue: []
+    property bool _detecting: false
     function detectCli(fmt, waitForLogin = false) {
         const entry = root.cliSetup[fmt];
         if (!entry) return;
-        if (cliDetectProc.running) {
-            if (!waitForLogin && !root._detectQueue.includes(fmt)) root._detectQueue.push(fmt);
+        if (root._detecting) {
+            if (waitForLogin || cliDetectProc.format === fmt) return;
+            // Asked again while waiting means it is wanted now, so it goes next.
+            const waiting = root._detectQueue.filter(f => f !== fmt);
+            root._detectQueue = waiting.length < root._detectQueue.length ? [fmt].concat(waiting) : waiting.concat([fmt]);
             return;
         }
         const readyCheck = waitForLogin && entry.loginDoneCheck
             ? `${entry.loginDoneCheck} && ${entry.readyCheck}` : entry.readyCheck;
-        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${readyCheck}; then echo ready; fi; fi < /dev/null`;
+        const features = entry.features ? `; ${entry.features}` : "";
+        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${readyCheck}; then echo ready${features}; fi; fi < /dev/null`;
         if (entry.loginFailedCheck) script += `; if ${entry.loginFailedCheck}; then echo loginfailed; fi`;
+        root._detecting = true;
         cliDetectProc.format = fmt;
+        cliDetectProc.buf = "";
         cliDetectProc.command = ["bash", "-lc", script];
         cliDetectProc.running = true;
+    }
+    function _detectNext() {
+        const queued = root._detectQueue.shift();
+        if (queued) root.detectCli(queued);
     }
 
     function setupCurrentModel() {
@@ -897,21 +968,29 @@ Singleton {
         property string format: ""
         property string buf: ""
         stdout: SplitParser { onRead: line => cliDetectProc.buf += line + "\n" }
-        onRunningChanged: if (running) buf = ""
+        // A start that failed ends with no exit.
+        onRunningChanged: if (!running && root._detecting) {
+            root._detecting = false;
+            root._detectNext();
+        }
         onExited: (code) => {
+            root._detecting = false;
             const fmt = cliDetectProc.format;
             const wasReady = root.cliReady(fmt);
+            const lines = cliDetectProc.buf.split("\n");
+            const buf = lines.filter(line => !line.startsWith("feature ")).join("\n");
             const nextState = Object.assign({}, root.cliPlanState);
             nextState[fmt] = {
-                installed: cliDetectProc.buf.includes("installed"),
-                ready: cliDetectProc.buf.includes("ready"),
+                installed: buf.includes("installed"),
+                ready: buf.includes("ready"),
+                features: lines.filter(line => line.startsWith("feature ")).map(line => line.slice(8)),
             };
             root.cliPlanState = nextState;
             if (nextState[fmt].ready && root.currentModel?.api_format === fmt) root.setupState = "";
             // A sign-in in the background that ended without a login is over,
             // so the banner offers the next step now rather than at the end
             // of the watch.
-            else if (cliDetectProc.buf.includes("loginfailed") && root.setupState === "loggingIn"
+            else if (buf.includes("loginfailed") && root.setupState === "loggingIn"
                     && root.currentModel?.api_format === fmt) root.setupState = "error";
             root.syncCliPlanModels(fmt);
             const plan = root.cliPlans[fmt];
@@ -925,8 +1004,7 @@ Singleton {
             if (root.models[root.currentModelId] === undefined && root.currentModelId.startsWith(plan.idPrefix)) {
                 Persistent.states.ai.model = nextState[fmt].ready ? plan.firstPick : plan.setupId;
             }
-            const queued = root._detectQueue.shift();
-            if (queued) root.detectCli(queued);
+            root._detectNext();
         }
     }
     // When the vendor download will not come, the same CLI is in the system
@@ -1006,9 +1084,11 @@ Singleton {
         // Both plans re-read the selection: the one just entered brings its
         // models in, and the one just left puts its own away.
         for (const fmt of Object.keys(root.cliSetup)) root.syncCliPlanModels(fmt);
-        const fmt = root.planFormatFor(root.currentModelId)
-            || (root.cliSetup[root.currentModel?.api_format] !== undefined ? root.currentModel.api_format : "");
+        // By id: currentModel has not caught up with the new id yet here.
+        const format = root.models[root.currentModelId]?.api_format ?? "";
+        const fmt = root.planFormatFor(root.currentModelId) || (root.cliSetup[format] !== undefined ? format : "");
         if (fmt !== "") root.detectCli(fmt);
+        root._resetTokenCount();
     }
 
     Connections {
@@ -1019,7 +1099,45 @@ Singleton {
         }
     }
 
-    property string requestScriptFilePath: "/tmp/quickshell/ai/request.sh"
+    Connections {
+        target: Persistent
+        function onReadyChanged() {
+            if (!Persistent.ready) return;
+            if (root._detectAllWhenReady) {
+                root._detectAllWhenReady = false;
+                root._detectAllPlans();
+            }
+        }
+    }
+
+    property bool _detectAllWhenReady: false
+    // Every plan is checked, one after another, the selected one first.
+    function _detectAllPlans() {
+        const selectedPlan = root.planFormatFor(root.currentModelId) || (root.models[root.currentModelId]?.api_format ?? "");
+        const plans = Object.keys(root.cliSetup).sort((a, b) => (b === selectedPlan) - (a === selectedPlan));
+        for (const fmt of plans) root.detectCli(fmt);
+    }
+
+    // The policy can change while a reply is running or a card is waiting,
+    // with the chat page gone (Off) or the model no longer allowed (Local).
+    Connections {
+        target: Config.options?.policies ?? null
+        function onAiChanged() { root._applyAiPolicy() }
+    }
+
+    function _applyAiPolicy() {
+        const policy = Config.options?.policies?.ai ?? 0;
+        if (policy !== 0 && policy !== 2) return;
+        const disallowed = id => policy === 0 || root._isOnlineModelId(id);
+        // Stopped as Stop does: the process group is killed and a stopped
+        // request never continues into a function call.
+        if (root._req && disallowed(root._req.modelId)) root.cancelRequest();
+        if (root.pendingConfirmation && disallowed(root.pendingConfirmation.modelId)) {
+            root._dropConfirmation();
+            root._saveNow();
+        }
+    }
+
     property string pendingFilePath: ""
 
     Component.onCompleted: {
@@ -1031,14 +1149,31 @@ Singleton {
         if (currentModelId !== root.ollamaSetupModelId)
             setModel(currentModelId, false, false); // Do necessary setup for model
         root.addUserModels() // Config onReadyChanged above might not fire if config is loaded before this service
-        for (const fmt of Object.keys(root.cliSetup)) {
+        for (const fmt of Object.keys(root.cliSetup))
             root.syncCliPlanModels(fmt) // The setup entries exist before the CLIs answer
-            root.detectCli(fmt)
-        }
+        // The selection is only known once the saved state is read.
+        if (Persistent.ready) root._detectAllPlans();
+        else root._detectAllWhenReady = true;
         // Last: everything above is the work the selection handler skips while
         // the service is being built, and a selection made from here on is its
         // own to answer.
-        root._startupDone = true
+        root._startupDone = true;
+        // The last session is read in the background once the shell is up;
+        // a New chat or a load before it lands wins.
+        root._loadGeneration++;
+        root.sessionLoading = true;
+        const generation = root._loadGeneration;
+        Qt.callLater(() => {
+            if (generation === root._loadGeneration)
+                root._startLoad(root.autoSaveFilePath, "startup", "");
+        });
+    }
+
+    Component.onDestruction: {
+        // Quickshell kills only the leader on teardown; the group goes too.
+        const pgid = root._req?.pgid;
+        if (Number.isInteger(pgid) && pgid > 1)
+            Quickshell.execDetached(["kill", "-TERM", "--", "-" + pgid]);
     }
 
     function guessModelLogo(model) {
@@ -1063,9 +1198,11 @@ Singleton {
     }
 
     function addModel(modelName, data) {
-        root.models = Object.assign({}, root.models, {
-            [modelName]: aiModelComponent.createObject(this, data)
+        const replaced = root._registry[modelName];
+        root._registry = Object.assign({}, root._registry, {
+            [modelName]: aiModelComponent.createObject(root, data)
         });
+        if (replaced) root._bury(replaced);
     }
 
     // What the local Ollama install is currently able to do. The sidebar reads
@@ -1184,24 +1321,32 @@ Singleton {
                             root.selectOllamaSetupEntry();
                         return;
                     }
-                    dataJson.forEach(model => {
-                        const safeModelName = root.safeModelName(model);
-                        root.addModel(safeModelName, {
-                            "name": guessModelName(model),
-                            "icon": guessModelLogo(model),
+                    const next = Object.assign({}, root._registry);
+                    const replaced = [];
+                    let changed = false;
+                    let currentArrived = false;
+                    for (const model of dataJson) {
+                        const id = root.safeModelName(model);
+                        if (next[id] && next[id].model === model) continue;
+                        if (next[id]) replaced.push(next[id]);
+                        changed = true;
+                        next[id] = root.aiModelComponent.createObject(root, {
+                            "name": root.guessModelName(model),
+                            "icon": root.guessModelLogo(model),
                             "description": Translation.tr("Local Ollama model | %1").arg(model),
                             "homepage": `https://ollama.com/library/${model}`,
                             "endpoint": "http://localhost:11434/v1/chat/completions",
                             "model": model,
                             "requires_key": false,
-                        })
-                    });
+                        });
+                        if (id === root.currentModelId) currentArrived = true;
+                    }
+                    if (changed) root._registry = next;
+                    root._buryAll(replaced);
 
                     // The saved model may only now have become selectable, so
                     // take it up rather than leaving the default in place.
-                    if (root.modelList.includes(root.currentModelId)) {
-                        root.setModel(root.currentModelId, false, false);
-                    }
+                    if (currentArrived) root.setModel(root.currentModelId, false, false);
 
                     // A model the user just downloaded on purpose outranks the
                     // saved one, so it is switched to once it actually exists.
@@ -1221,12 +1366,12 @@ Singleton {
                         const firstLocal = root.safeModelName(dataJson[0]);
                         root.ollamaSelectWhenReady = false;
                         if (root.modelList.includes(firstLocal)) root.setModel(firstLocal);
-                    } else if (Persistent.ready && root.currentModelId === root.ollamaSetupModelId) {
+                    } else if (Persistent.ready && root._savedModelId === root.ollamaSetupModelId) {
                         // The saved model is the local AI default and a real
                         // local model just showed up: that is the machine this
                         // default was waiting for, so take the first one up.
                         // Only once the saved state has actually loaded: until
-                        // then currentModelId reads as that same default, and
+                        // then the saved id reads as that same default, and
                         // this would overwrite whichever model the user picked
                         // before the file arrived.
                         const firstLocal = root.safeModelName(dataJson[0]);
@@ -1268,10 +1413,12 @@ Singleton {
                 "model": "",
                 "requires_key": false,
             });
-        } else if (root.models[root.ollamaSetupModelId]) {
-            const remaining = Object.assign({}, root.models);
+        } else if (root._registry[root.ollamaSetupModelId]) {
+            const removed = root._registry[root.ollamaSetupModelId];
+            const remaining = Object.assign({}, root._registry);
             delete remaining[root.ollamaSetupModelId];
-            root.models = remaining;
+            root._registry = remaining;
+            root._bury(removed);
         }
     }
 
@@ -1374,8 +1521,7 @@ Singleton {
     function setOllamaPullMessage(body) {
         const message = root.messageByID[root.ollamaPullMessageId];
         if (!message) return false;
-        message.content = body;
-        message.rawContent = body;
+        root._setMessageText(message, body);
         return true;
     }
 
@@ -1461,16 +1607,34 @@ Singleton {
 
     Process {
         id: getSavedChats
+        // A refresh asked for while one runs repeats once it ends, so a file
+        // written in between is not missed.
+        property bool again: false
         running: true
-        command: ["ls", "-1", Directories.aiChats]
+        command: ["find", Directories.aiChats, "-maxdepth", "1", "-type", "f", "-name", "*.json", "-printf", "%f\\n"]
         stdout: StdioCollector {
             onStreamFinished: {
-                if (text.length === 0) return;
-                root.savedChats = text.split("\n")
-                    .filter(fileName => fileName.endsWith(".json"))
-                    .map(fileName => `${Directories.aiChats}/${fileName}`)
+                const names = this.text.split("\n")
+                    .filter(fileName => fileName.endsWith(".json") && fileName !== "lastSession.json");
+                names.sort((a, b) => {
+                    const x = a.toLowerCase();
+                    const y = b.toLowerCase();
+                    return x < y ? -1 : (x > y ? 1 : 0);
+                });
+                root.savedChats = names.map(fileName => `${Directories.aiChats}/${fileName}`);
             }
         }
+        onExited: {
+            if (getSavedChats.again) {
+                getSavedChats.again = false;
+                getSavedChats.running = true;
+            }
+        }
+    }
+
+    function reloadSavedChats(): void {
+        if (getSavedChats.running) getSavedChats.again = true;
+        else getSavedChats.running = true;
     }
 
     FileView {
@@ -1493,35 +1657,75 @@ Singleton {
         promptLoader.reload();
     }
 
-    function addMessage(message, role) {
-        if (message.length === 0) return;
-        const aiMessage = aiMessageComponent.createObject(root, {
-            "role": role,
-            "content": message,
-            "rawContent": message,
-            "thinking": false,
-            "done": true,
+    // options: {persist: bool, localFilePath: string}. Returns the new id, ""
+    // for empty text.
+    function addMessage(text: string, role: string, options): string {
+        if (!text || text.length === 0) return "";
+        const persist = options?.persist ?? true;
+        const aiMessage = root._createMessage(role, text, {
+            "persist": persist,
+            "localFilePath": options?.localFilePath ?? "",
         });
-        const id = idForMessage(aiMessage);
-        root.messageIDs = [...root.messageIDs, id];
-        root.messageByID[id] = aiMessage;
+        root._insertMessage(aiMessage);
+        if (persist) root.scheduleSave();
         // Handed back so a caller reporting on something long-running can
         // rewrite the one message instead of appending a line per update.
-        return id;
+        return aiMessage.id;
     }
 
-    function removeMessage(index) {
-        if (index < 0 || index >= messageIDs.length) return;
-        const id = root.messageIDs[index];
-        root.messageIDs.splice(index, 1);
-        root.messageIDs = [...root.messageIDs];
-        delete root.messageByID[id];
+    function _createMessage(role, content, extra) {
+        return aiMessageComponent.createObject(root, Object.assign({
+            "id": root.idForMessage(),
+            "role": role,
+            "content": content,
+            "rawContent": content,
+            "thinking": false,
+            "done": true,
+        }, extra ?? {}));
+    }
+
+    function _insertMessage(message) {
+        root.messageByID[message.id] = message;
+        root.messageIDs = root.messageIDs.concat([message.id]);
+    }
+
+    // A string is a message id; a number is an index into messageIDs.
+    function removeMessage(idOrIndex): void {
+        if (root.sessionLoading) return;
+        const id = typeof idOrIndex === "number" ? root.messageIDs[idOrIndex] : String(idOrIndex ?? "");
+        const message = id ? root.messageByID[id] : undefined;
+        if (!message) return;
+        if (root._req && root._req.messageId === id) root.cancelRequest();
+        if (root.pendingConfirmation?.messageId === id) root._dropConfirmation(false);
+        root._setMessageIds(root.messageIDs.filter(other => other !== id));
+        root._saveNow();
+    }
+
+    // Sets the text of an edited message.
+    function updateMessageContent(id: string, text: string): void {
+        if (root.sessionLoading) return;
+        const message = root.messageByID[id];
+        if (!message) return;
+        root._setMessageText(message, text);
+        root._saveNow();
+    }
+
+    function _setMessageText(message, text) {
+        message.content = text;
+        message.rawContent = text;
+        message.contentRevision++;
+    }
+
+    // What a strategy sends back as an earlier reply: no thoughts, no markers.
+    function historyText(message): string {
+        return Sink.historyText(message?.content ?? "");
     }
 
     function addApiKeyAdvice(model) {
+        if (!model) return;
         root.addMessage(
             Translation.tr('To set an API key, pass it with the %4 command\n\nTo view the key, pass "get" with the command<br/>\n\n### For %1:\n\n**Link**: %2\n\n%3')
-                .arg(model.name).arg(model.key_get_link).arg(model.key_get_description ?? Translation.tr("<i>No further instruction provided</i>")).arg("/key"), 
+                .arg(model.name).arg(model.key_get_link).arg(model.key_get_description ?? Translation.tr("<i>No further instruction provided</i>")).arg("/key"),
             Ai.interfaceRole
         );
     }
@@ -1540,13 +1744,25 @@ Singleton {
         Persistent.states.ai.model = root.ollamaSetupModelId;
     }
 
-    function setModel(modelId, feedback = true, setPersistentState = true) {
+    function setModel(modelId, feedback = true, setPersistentState = true, keyAdvice = feedback) {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
         if (modelId === "gemini") {
             modelId = "gemini-flash-latest";
         }
         modelId = root.retiredModels[modelId] ?? modelId
+        // Plan models and the Gemini catalog are switched to before they are
+        // listed, so the check below on the listed entry would miss them.
+        if (Config.options?.policies?.ai === 2 && root._isOnlineModelId(modelId)) {
+            root.addMessage(
+                Translation.tr("Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar."),
+                root.interfaceRole,
+                { "persist": feedback }
+            );
+            return;
+        }
+        // An approval asked for under another model no longer applies.
+        if (root.pendingConfirmation && modelId !== root.currentModelId) root._dropConfirmation();
         // The setup entry is a prompt wearing a model's clothes. Picking it
         // starts the walkthrough and leaves the working model in place, so a
         // user who was mid-conversation does not lose the model answering it.
@@ -1559,7 +1775,7 @@ Singleton {
         // lands on the plan's first model.
         for (const fmt of Object.keys(root.cliPlans)) {
             if (modelId === root.cliPlans[fmt].setupId && root.cliReady(fmt)) {
-                root.setModel(root.cliPlans[fmt].firstPick, feedback, setPersistentState);
+                root.setModel(root.cliPlans[fmt].firstPick, feedback, setPersistentState, keyAdvice);
                 return;
             }
         }
@@ -1580,25 +1796,26 @@ Singleton {
             // See if policy prevents online models
             if (Config.options.policies.ai === 2 && !model.endpoint.includes("localhost")) {
                 root.addMessage(
-                    Translation.tr("Online models disallowed\n\nControlled by `policies.ai` config option"),
-                    root.interfaceRole
+                    Translation.tr("Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar."),
+                    root.interfaceRole,
+                    { "persist": feedback }
                 );
                 return;
             }
             if (setPersistentState) Persistent.states.ai.model = modelId;
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
             // Advice belongs to somebody who just chose this model. Callers
-            // passing feedback=false are re-applying a model the user already
+            // passing keyAdvice=false are re-applying a model the user already
             // had, and a silent re-apply that answers with a page about API
             // keys reads as though it is talking about whatever just happened.
-            if (feedback && model.requires_key) {
+            if (keyAdvice && model.requires_key) {
                 // If key not there show advice
                 if (root.apiKeysLoaded && (!root.apiKeys[model.key_id] || root.apiKeys[model.key_id].length === 0)) {
                     root.addApiKeyAdvice(model)
                 }
             }
         } else {
-            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported: \n```\n") + modelList.join("\n```\n```\n"), Ai.interfaceRole) + "\n```"
+            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported: \n```\n") + modelList.join("\n```\n```\n") + "\n```", Ai.interfaceRole)
         }
     }
 
@@ -1649,7 +1866,7 @@ Singleton {
         if (model.requires_key) {
             const key = root.apiKeys[model.key_id];
             if (key) {
-                root.addMessage(Translation.tr("API key:\n\n```txt\n%1\n```").arg(key), Ai.interfaceRole);
+                root.addMessage(Translation.tr("API key:\n\n```txt\n%1\n```").arg(key), Ai.interfaceRole, { "persist": false });
             } else {
                 root.addMessage(Translation.tr("No API key set for %1").arg(model.name), Ai.interfaceRole);
             }
@@ -1691,208 +1908,886 @@ Singleton {
         root.addMessage(Translation.tr("Thinking level: %1").arg(current), Ai.interfaceRole);
     }
 
-    function clearMessages() {
-        root.messageIDs = [];
-        root.messageByID = ({});
+    function _resetTokenCount() {
         root.tokenCount.input = -1;
         root.tokenCount.output = -1;
         root.tokenCount.total = -1;
-        // A CLI strategy resumes its session on every request; keeping the id
-        // across a clear would quietly thread the old conversation back in.
+    }
+
+    // A CLI strategy resumes its session on every request; keeping the id
+    // across a clear would quietly thread the old conversation back in.
+    function _resetCliSessions() {
         for (const strategy of Object.values(root.apiStrategies)) {
-            if (strategy.isCliStrategy && strategy.sessionId !== undefined)
-                strategy.sessionId = "";
+            if (strategy?.isCliStrategy) strategy.sessionId = "";
         }
     }
 
-    FileView {
-        id: requesterScriptFile
+    function clearMessages(): void {
+        root._bumpLoad();
+        root._abandonRequest();
+        root._dropConfirmation(false);
+        root._setMessageIds([]);
+        root._resetTokenCount();
+        root._resetCliSessions();
+        root._saveNow();
     }
 
-    Process {
-        id: requester
-        // Set when a function call starts the follow-up request mid-stream: the rest
-        // of this run, and its exit, belong to a message that is already answered.
-        property bool supersededExit: false
-        property list<string> baseCommand: ["bash"]
-        property AiMessageData message
-        property ApiStrategy currentStrategy
-
-        function markDone() {
-            requester.message.done = true;
-            if (root.postResponseHook) {
-                root.postResponseHook();
-                root.postResponseHook = null; // Reset hook after use
-            }
-            root.responseFinished()
+    function _setMessageIds(next) {
+        const previous = root.messageIDs;
+        root.messageIDs = next;
+        const kept = new Set(next);
+        const dead = [];
+        for (const id of previous) {
+            if (kept.has(id)) continue;
+            dead.push(root.messageByID[id]);
+            delete root.messageByID[id];
         }
+        root._buryAll(dead);
+    }
 
-        function makeRequest() {
-            const model = models[currentModelId];
+    // ── Graveyard ──────────────────────────────────────────────────
+    // Views release their delegates with deleteLater, so objects that left a
+    // list are destroyed a while later rather than at once.
+    property var _graveyard: []
 
-            // Fetch API keys if needed
-            if (model?.requires_key && !KeyringStorage.loaded) KeyringStorage.fetchKeyringData();
-            
-            requester.currentStrategy = root.currentApiStrategy;
-            requester.currentStrategy.reset(); // Reset strategy state
+    function _bury(object) {
+        root._buryAll([object]);
+    }
 
-            /* Put API key in environment variable */
-            if (model.requires_key) requester.environment[`${root.apiKeyEnvVarName}`] = root.apiKeys ? (root.apiKeys[model.key_id] ?? "") : ""
+    function _buryAll(objects) {
+        const dead = objects.filter(object => object);
+        if (dead.length === 0) return;
+        root._graveyard = root._graveyard.concat(dead);
+        reaper.restart();
+    }
 
-            /* Build endpoint, request data */
-            const endpoint = root.currentApiStrategy.buildEndpoint(model);
-            const messageArray = root.messageIDs.map(id => root.messageByID[id]);
-            const filteredMessageArray = messageArray.filter(message => message.role !== Ai.interfaceRole);
-            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, root.tools[model.api_format]?.[root.effectiveTool] ?? [], root.pendingFilePath);
-            // console.log("[Ai] Request data: ", JSON.stringify(data, null, 2));
-
-            let requestHeaders = {
-                "Content-Type": "application/json",
-            }
-            
-            /* Create local message object */
-            requester.message = root.aiMessageComponent.createObject(root, {
-                "role": "assistant",
-                "model": currentModelId,
-                "content": "",
-                "rawContent": "",
-                "thinking": true,
-                "done": false,
-            });
-            const id = idForMessage(requester.message);
-            root.messageIDs = [...root.messageIDs, id];
-            root.messageByID[id] = requester.message;
-
-            /* Build header string for curl */ 
-            let headerString = Object.entries(requestHeaders)
-                .filter(([k, v]) => v && v.length > 0)
-                .map(([k, v]) => `-H '${k}: ${v}'`)
-                .join(' ');
-
-            // console.log("Request headers: ", JSON.stringify(requestHeaders));
-            // console.log("Header string: ", headerString);
-
-            /* Get authorization header from strategy */
-            const authHeader = requester.currentStrategy.buildAuthorizationHeader(root.apiKeyEnvVarName);
-            
-            /* Script shebang */
-            const scriptShebang = "#!/usr/bin/env bash\n";
-
-            /* Create extra setup when there's an attached file */
-            let scriptFileSetupContent = ""
-            if (root.pendingFilePath && root.pendingFilePath.length > 0) {
-                requester.message.localFilePath = root.pendingFilePath;
-                scriptFileSetupContent = requester.currentStrategy.buildScriptFileSetup(root.pendingFilePath);
-                root.pendingFilePath = ""
-            }
-
-            /* Create command string */
-            // A strategy backed by a local command writes its own invocation.
-            // There is no endpoint to post to in that case, so the curl form
-            // below would be addressed at an empty URL.
-            let scriptRequestContent = ""
-            if (requester.currentStrategy.isCliStrategy) {
-                scriptRequestContent = requester.currentStrategy.buildScriptRequestContent(model, filteredMessageArray, root.systemPrompt, root.temperature);
-            } else {
-                scriptRequestContent += `curl --no-buffer "${endpoint}"`
-                    + ` ${headerString}`
-                    + (authHeader ? ` ${authHeader}` : "")
-                    + ` --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(data))}'`
-                    + "\n"
-            }
-            
-            /* Send the request */
-            const scriptContent = requester.currentStrategy.finalizeScriptContent(scriptShebang + scriptFileSetupContent + scriptRequestContent)
-            const shellScriptPath = CF.FileUtils.trimFileProtocol(root.requestScriptFilePath)
-            requesterScriptFile.path = Qt.resolvedUrl(shellScriptPath)
-            requesterScriptFile.setText(scriptContent)
-            requester.command = baseCommand.concat([shellScriptPath]);
-            requester.running = true
-        }
-
-        stdout: SplitParser {
-            onRead: data => {
-                if (data.length === 0 || requester.supersededExit) return;
-                if (requester.message.thinking) requester.message.thinking = false;
-                // console.log("[Ai] Raw response line: ", data);
-
-                // Handle response line
+    Timer {
+        id: reaper
+        interval: 500
+        repeat: false
+        onTriggered: {
+            const dead = new Set(root._graveyard);
+            root._graveyard = [];
+            for (const object of dead) {
                 try {
-                    const result = requester.currentStrategy.parseResponseLine(data, requester.message);
-                    // console.log("[Ai] Parsed response result: ", JSON.stringify(result, null, 2));
-
-                    if (result.functionCall) {
-                        const callMessage = requester.message;
-                        callMessage.functionCall = result.functionCall;
-                        root.handleFunctionCall(result.functionCall.name, result.functionCall.args, callMessage);
-                        if (requester.message !== callMessage) {
-                            callMessage.done = true;
-                            requester.supersededExit = true;
-                            return;
-                        }
-                    }
-                    if (result.tokenUsage) {
-                        root.tokenCount.input = result.tokenUsage.input;
-                        root.tokenCount.output = result.tokenUsage.output;
-                        root.tokenCount.total = result.tokenUsage.total;
-                    }
-                    if (result.finished) {
-                        requester.markDone();
-                    }
-                    
-                } catch (e) {
-                    console.log("[AI] Could not parse response: ", e);
-                    requester.message.rawContent += data;
-                    requester.message.content += data;
-                }
+                    object.destroy();
+                } catch (e) {}
             }
         }
+    }
 
-        onExited: (exitCode, exitStatus) => {
-            if (requester.supersededExit) {
-                requester.supersededExit = false;
-                return;
-            }
-            const result = requester.currentStrategy.onRequestFinished(requester.message);
-            
-            if (result.finished) {
-                requester.markDone();
-            } else if (!requester.message.done) {
-                requester.markDone();
-            }
+    // ── Requests ───────────────────────────────────────────────────
+    // One request at a time. Every callback carries the request it belongs to
+    // and does nothing once that request is no longer root._req.
+    property var _req: null
+    property int _requestCounter: 0
+    property int _confirmationCounter: 0
+    property var _pendingKills: []
+    property var _postResponseHook: null
+    readonly property string _home: Quickshell.env("HOME") || ""
+    readonly property string _stateHome: Quickshell.env("XDG_STATE_HOME") || (root._home + "/.local/state")
+    readonly property var _dirs: ({
+        "antigravity": root.antigravityDir,
+        "codex": root._stateHome + "/quickshell/ai/codex-cli",
+        "home": root._home,
+        "runtime": Quickshell.env("XDG_RUNTIME_DIR") || "/tmp",
+    })
+    readonly property string _aiScriptsDir: CF.FileUtils.trimFileProtocol(String(Directories.scriptPath)) + "/ai"
+    readonly property var _scripts: ({
+        "filter": root._aiScriptsDir + "/stream-diff-filter.py",
+        "runRequest": root._aiScriptsDir + "/run-request.sh",
+    })
+    readonly property var _sinkHost: ({
+        "isActive": req => req === root._req && !req.finalized,
+        "now": () => Date.now(),
+        "scheduleFlush": req => root._scheduleFlush(req),
+        "setSessionId": (req, id) => {
+            if (req.strategy) req.strategy.sessionId = id;
+        },
+        "recordFunctionCall": (req, call) => root._recordFunctionCall(req, call),
+        "uploadedFile": (req, uri, mime) => root._recordUploadedFile(req, uri, mime),
+        "actionFallback": Translation.tr("Action"),
+    })
 
-            // A plan whose sign-in stopped working is checked again, which
-            // swaps its models back for the setup entry and its Log in button
-            // rather than failing every later message the same way.
-            if (requester.currentStrategy.loginLapsed) {
-                requester.currentStrategy.loginLapsed = false;
-                const fmt = root.models[requester.message.model]?.api_format ?? root.currentModel?.api_format;
-                if (fmt) root.detectCli(fmt);
+    Component {
+        id: requestProcessComponent
+        Process {
+            id: requestProc
+            property var req: null
+            // Lines are only queued here: a backlog arrives in one burst, and
+            // anything slower per line would stall the shell for its length.
+            stdout: SplitParser {
+                onRead: line => root._onRequestLine(requestProc.req, line)
             }
+            onStarted: root._onProcessStarted(requestProc, requestProc.req)
+            onExited: (exitCode, exitStatus) => root._onRequestExited(requestProc, requestProc.req, exitCode)
+            onRunningChanged: {
+                if (!running) root._onProcessNotRunning(requestProc, requestProc.req);
+            }
+        }
+    }
 
-            // Handle error responses
-            if (requester.message.content.includes("API key not valid")) {
-                root.addApiKeyAdvice(models[requester.message.model]);
+    Component {
+        id: commandProcessComponent
+        Process {
+            id: commandProc
+            property var req: null
+            stdout: StdioCollector {
+                waitForEnd: true
+                onStreamFinished: root._onCommandOutput(commandProc.req, this.text)
             }
-            if (/^\*\*Error \d+\*\*/.test(requester.message.content) && requester.message.content.includes("no longer available to new users")) {
+            onStarted: root._onProcessStarted(commandProc, commandProc.req)
+            onExited: (exitCode, exitStatus) => root._onRequestExited(commandProc, commandProc.req, exitCode)
+            onRunningChanged: {
+                if (!running) root._onProcessNotRunning(commandProc, commandProc.req);
+            }
+        }
+    }
+
+    Timer {
+        id: drainTimer
+        interval: 0
+        repeat: false
+        onTriggered: root._drain()
+    }
+
+    Timer {
+        id: flushTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            if (root._req) root._flushReq(root._req);
+        }
+    }
+
+    Timer {
+        id: stopWatchdog
+        interval: 5000
+        repeat: false
+        onTriggered: {
+            const req = root._req;
+            if (req && req.stopped && !req.finalized) root._finalize(req);
+        }
+    }
+
+    // Sends the KILL that follows every Stop's TERM, whether or not the leader
+    // is still there: the group can outlive it.
+    Timer {
+        id: groupKillTimer
+        interval: 500
+        repeat: true
+        running: root._pendingKills.length > 0
+        onTriggered: {
+            const now = Date.now();
+            const keep = [];
+            for (const entry of root._pendingKills) {
+                if (entry.due <= now) Quickshell.execDetached(["kill", "-KILL", "--", "-" + entry.pgid]);
+                else keep.push(entry);
+            }
+            root._pendingKills = keep;
+        }
+    }
+
+    function _newRequest(kind, message, strategy) {
+        root._requestCounter++;
+        const model = root.currentModel;
+        return {
+            "id": root._requestCounter,
+            "kind": kind,
+            "messageId": message.id,
+            "message": message,
+            "strategy": strategy,
+            "modelId": root.currentModelId,
+            "apiFormat": model?.api_format ?? "",
+            "grant": null,
+            "regenerate": false,
+            "mode": AiModes.current,
+            "proc": null,
+            "pgid": null,
+            "killSent": false,
+            "cancelPending": false,
+            "stopped": false,
+            "started": false,
+            "failedToStart": false,
+            "lineQueue": [],
+            "qHead": 0,
+            "exited": false,
+            "exitCode": null,
+            "stderrTail": "",
+            "finalized": false,
+            "sink": null,
+            "buf": null,
+            "stdin": "",
+            "startTime": Date.now(),
+            "attachmentMessageId": "",
+            "functionCall": null,
+            "loginLapsed": false,
+            "searchRefused": false,
+            "output": "",
+        };
+    }
+
+    function _msgAlive(req) {
+        return Boolean(req && req.message && root.messageByID[req.messageId] === req.message);
+    }
+
+    function _guessMime(path) {
+        const ext = (String(path).split("/").pop().split(".").pop() || "").toLowerCase();
+        const types = {
+            "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
+            "gif": "image/gif", "pdf": "application/pdf",
+        };
+        return types[ext] ?? "";
+    }
+
+    function _resolvedThinkingLevel(model) {
+        const level = String(root.thinkingLevel || model?.thinkingLevel || "").toLowerCase();
+        return level === "auto" ? "" : level;
+    }
+
+    // Message ids whose function call has no later output message of the same
+    // function. Gemini and Mistral refuse a call turn that has no answer.
+    function _unansweredCalls(messages) {
+        const unanswered = Object.create(null);
+        const answers = Object.create(null);
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (!message.functionName) continue;
+            if (message.functionCall !== undefined && message.functionCall !== null) {
+                if ((answers[message.functionName] ?? 0) > 0) answers[message.functionName]--;
+                else unanswered[message.id] = true;
+            } else {
+                answers[message.functionName] = (answers[message.functionName] ?? 0) + 1;
+            }
+        }
+        return unanswered;
+    }
+
+    // options: {attachment: null | {path, mime, messageId}, grant, regenerate}
+    function _startModelRequest(options) {
+        const opts = options ?? {};
+        const policy = Config.options?.policies?.ai ?? 0;
+        if (policy === 0) return false;
+        if (policy === 2 && root._isOnlineModelId(root.currentModelId)) {
+            root.addMessage(
+                Translation.tr("Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar."),
+                root.interfaceRole
+            );
+            return false;
+        }
+        const model = root.currentModel;
+        const strategy = root.currentApiStrategy;
+        if (!model || !strategy) {
+            root.startOllamaWalkthrough();
+            return false;
+        }
+        if (model.requires_key && !KeyringStorage.loaded) KeyringStorage.fetchKeyringData();
+        const history = root.messageIDs.map(id => root.messageByID[id])
+            .filter(message => message && message.role !== root.interfaceRole);
+        const unanswered = root._unansweredCalls(history);
+
+        const message = root._createMessage("assistant", "", {
+            "model": root.currentModelId,
+            "thinking": true,
+            "done": false,
+        });
+        root._insertMessage(message);
+
+        const req = root._newRequest("model", message, strategy);
+        req.grant = opts.grant ?? null;
+        req.regenerate = opts.regenerate === true;
+        req.attachmentMessageId = opts.attachment?.messageId ?? "";
+        root._req = req;
+        root.requestState = "starting";
+        req.sink = Sink.createSink(req, root._sinkHost);
+
+        const apiKey = model.requires_key ? (root.apiKeys?.[model.key_id] ?? "") : "";
+        let built = null;
+        let failure = "";
+        try {
+            built = strategy.buildRequest({
+                "requestId": req.id,
+                "model": model,
+                "messages": history,
+                "unansweredCalls": unanswered,
+                "systemPrompt": root.systemPrompt,
+                "temperature": root.temperature,
+                "tools": root.tools[model.api_format]?.[root.effectiveTool] ?? [],
+                "thinkingLevel": root._resolvedThinkingLevel(model),
+                "mode": req.mode,
+                "grant": req.grant,
+                "attachment": opts.attachment ? { "path": opts.attachment.path, "mime": opts.attachment.mime } : null,
+                "regenerate": req.regenerate,
+                "apiKey": apiKey,
+                "scripts": root._scripts,
+                "dirs": root._dirs,
+            });
+            // After the build: strategies carry values from it into the state.
+            req.sink.state = strategy.newState();
+        } catch (e) {
+            failure = e?.message ?? String(e);
+        }
+        if (!built || !Array.isArray(built.argv) || built.argv.length === 0) {
+            req.sink.error(Translation.tr("Error starting request: %1").arg(failure || model.name));
+            root._finalize(req);
+            return true;
+        }
+
+        const env = Object.assign({}, built.env ?? {});
+        if (model.requires_key) env[root.apiKeyEnvVarName] = apiKey;
+        req.stdin = typeof built.stdin === "string" ? built.stdin : "";
+        const command = ["setsid", "bash", root._scripts.runRequest]
+            .concat((built.options ?? []).map(String), ["--"], built.argv.map(String));
+        req.proc = requestProcessComponent.createObject(root, {
+            "command": command,
+            "environment": env,
+            "stdinEnabled": req.stdin.length > 0,
+        });
+        root._launch(req);
+        return true;
+    }
+
+    // Runs a command the model asked for, as a request of its own: Stop ends
+    // it, and its output reaches QML once, already cut to its last 64 KB.
+    function _startCommandRequest(command) {
+        root._saveNow();
+        const output = root._createCommandOutputMessage(command);
+        root._insertMessage(output);
+        const req = root._newRequest("command", output, null);
+        root._req = req;
+        root.requestState = "starting";
+        req.proc = commandProcessComponent.createObject(root, {
+            "command": ["setsid", "bash", root._scripts.runRequest, "--workdir", root._home,
+                "--tail-bytes", "65536", "--timeout", "120", "--", "bash", "-c", command],
+        });
+        root._launch(req);
+    }
+
+    // The request object is handed over by assignment: initial properties
+    // pass through a QVariantMap, which would copy it.
+    function _launch(req) {
+        if (!req.proc) {
+            req.failedToStart = true;
+            if (req.kind === "model") req.sink.error(Translation.tr("Error starting request: %1").arg("setsid"));
+            root._finalize(req);
+            return;
+        }
+        req.proc.req = req;
+        req.proc.running = true;
+    }
+
+    function _onProcessStarted(proc, req) {
+        if (!req) return;
+        req.started = true;
+        const pid = Number(proc.processId);
+        req.pgid = Number.isInteger(pid) && pid > 1 ? pid : null;
+        if (req !== root._req || req.cancelPending) {
+            req.stdin = "";
+            proc.stdinEnabled = false;
+            root._killGroup(req);
+            return;
+        }
+        if (req.stdin.length > 0) proc.write(req.stdin);
+        req.stdin = "";
+        // Closing stdin sends EOF once the written data is flushed.
+        proc.stdinEnabled = false;
+        if (root.requestState === "starting") root.requestState = "streaming";
+    }
+
+    function _onRequestLine(req, line) {
+        if (req !== root._req || req.stopped || line.length === 0) return;
+        req.lineQueue.push(line);
+        if (!drainTimer.running) drainTimer.start();
+    }
+
+    function _onCommandOutput(req, text) {
+        if (req === root._req && !req.stopped) req.output = text;
+    }
+
+    function _onRequestExited(proc, req, exitCode) {
+        root._bury(proc);
+        if (!req) return;
+        req.exited = true;
+        if (req.exitCode === null) req.exitCode = exitCode;
+        if (req !== root._req || req.finalized) return;
+        if (req.kind === "command" || req.stopped || req.qHead >= req.lineQueue.length) root._finalize(req);
+        else if (!drainTimer.running) drainTimer.start();
+    }
+
+    // Quickshell reports a process that never started only through running.
+    function _onProcessNotRunning(proc, req) {
+        if (!req || req.started) return;
+        req.failedToStart = true;
+        root._bury(proc);
+        if (req !== root._req || req.finalized) return;
+        if (req.kind === "model" && !req.stopped)
+            req.sink.error(Translation.tr("Error starting request: %1").arg(proc.command[0] ?? ""));
+        root._finalize(req);
+    }
+
+    // Parses queued lines for at most 8 ms, then yields to the event loop.
+    function _drain() {
+        const req = root._req;
+        if (!req || req.stopped || req.finalized) return;
+        const deadline = Date.now() + 8;
+        while (req.qHead < req.lineQueue.length) {
+            const line = req.lineQueue[req.qHead];
+            req.lineQueue[req.qHead] = undefined;
+            req.qHead++;
+            root._handleLine(req, line);
+            if (req !== root._req || req.stopped) return;
+            if (Date.now() >= deadline) break;
+        }
+        if (req.qHead >= req.lineQueue.length) {
+            req.lineQueue = [];
+            req.qHead = 0;
+            if (req.exited) root._finalize(req);
+            return;
+        }
+        if (req.qHead > 4096) {
+            req.lineQueue = req.lineQueue.slice(req.qHead);
+            req.qHead = 0;
+        }
+        drainTimer.restart();
+    }
+
+    function _handleLine(req, line) {
+        if (line.startsWith('{"event":"cli_exit"')) {
+            try {
+                const exit = JSON.parse(line);
+                if (exit.event === "cli_exit") {
+                    if (Number.isInteger(exit.code)) req.exitCode = exit.code;
+                    req.stderrTail = String(exit.stderr ?? "");
+                    return;
+                }
+            } catch (e) {}
+        }
+        try {
+            req.strategy.parseLine(line, req.sink);
+        } catch (e) {
+            console.warn("[Ai] Could not parse a response line:", e);
+            req.sink.raw(line);
+        }
+    }
+
+    function _scheduleFlush(req) {
+        if (req !== root._req || flushTimer.running) return;
+        const length = root._msgAlive(req) ? req.message.content.length : 0;
+        flushTimer.interval = Math.max(50, Math.min(250, Math.round(length / 400)));
+        flushTimer.start();
+    }
+
+    function _flushReq(req) {
+        if (!req.buf) return;
+        if (!root._msgAlive(req)) {
+            Sink.discard(req.buf);
+            return;
+        }
+        const usage = Sink.flush(req.buf, req.message);
+        if (usage) {
+            root.tokenCount.input = usage.input;
+            root.tokenCount.output = usage.output;
+            root.tokenCount.total = usage.total;
+        }
+    }
+
+    function _recordFunctionCall(req, call) {
+        if (req.functionCall || !root._msgAlive(req)) return false;
+        const message = req.message;
+        message.functionName = call.name;
+        message.functionArgs = call.args;
+        message.functionCallId = call.id;
+        message.functionThoughtSignature = call.thoughtSignature;
+        message.functionCall = { "name": call.name, "args": call.args, "id": call.id };
+        req.functionCall = { "name": call.name, "args": call.args };
+        return true;
+    }
+
+    // The uploaded file belongs to the user turn that attached it, so later
+    // requests send it with that turn.
+    function _recordUploadedFile(req, uri, mime) {
+        const target = root.messageByID[req.attachmentMessageId] ?? (root._msgAlive(req) ? req.message : null);
+        if (!target) return;
+        target.fileUri = uri;
+        target.fileMimeType = mime;
+    }
+
+    function _killGroup(req) {
+        const pgid = req?.pgid;
+        if (!Number.isInteger(pgid) || pgid <= 1 || req.killSent) return;
+        req.killSent = true;
+        Quickshell.execDetached(["kill", "-TERM", "--", "-" + pgid]);
+        root._pendingKills = root._pendingKills.concat([{ "pgid": pgid, "due": Date.now() + 3000 }]);
+    }
+
+    function cancelRequest(): void {
+        const req = root._req;
+        if (!req || req.stopped || req.finalized) return;
+        req.stopped = true;
+        root.requestState = "stopping";
+        drainTimer.stop();
+        req.lineQueue = [];
+        req.qHead = 0;
+        stopWatchdog.restart();
+        root._stopProcess(req);
+    }
+
+    // A process that has not started yet is killed by its own start.
+    function _stopProcess(req) {
+        if (req.started) root._killGroup(req);
+        else req.cancelPending = true;
+    }
+
+    // The timers serve only the active request.
+    function _detach(req) {
+        if (req !== root._req) return;
+        drainTimer.stop();
+        flushTimer.stop();
+        stopWatchdog.stop();
+        root._req = null;
+        root.requestState = "idle";
+    }
+
+    // Drops the active request without waiting for it; its late output is
+    // ignored because it is no longer root._req.
+    function _abandonRequest() {
+        const req = root._req;
+        if (!req) return;
+        req.stopped = true;
+        root._detach(req);
+        if (req.buf) Sink.discard(req.buf);
+        root._stopProcess(req);
+        if (root._msgAlive(req)) {
+            req.message.done = true;
+            req.message.thinking = false;
+        }
+        root._runPostResponseHook();
+    }
+
+    function _runPostResponseHook() {
+        const hook = root._postResponseHook;
+        root._postResponseHook = null;
+        if (hook) hook();
+    }
+
+    // The end of a reply, function continuations included.
+    function _finishChain() {
+        root._runPostResponseHook();
+        root.responseFinished();
+        root._saveNow();
+    }
+
+    function _finalize(req) {
+        if (!req || req.finalized) return;
+        if (req.kind === "command") {
+            root._finalizeCommand(req);
+            return;
+        }
+        if (req !== root._req) {
+            req.finalized = true;
+            return;
+        }
+        if (!req.stopped) {
+            try {
+                req.strategy.finish(req.sink, req.exitCode ?? 0, req.stderrTail ?? "");
+            } catch (e) {
+                console.warn("[Ai] Could not finish the response:", e);
+            }
+        }
+        req.sink.close();
+        root._flushReq(req);
+        req.finalized = true;
+        root._detach(req);
+
+        const message = root._msgAlive(req) ? req.message : null;
+        if (message) {
+            message.rawContent = message.content;
+            message.done = true;
+            message.thinking = false;
+        }
+
+        // History must never hold a call without an answer.
+        let call = req.functionCall;
+        if (req.stopped && call) {
+            if (message) root._addFunctionOutputMessage(call.name, Translation.tr("[[ Command stopped by user ]]"));
+            call = null;
+        }
+
+        // A plan whose sign-in stopped working is checked again, which
+        // swaps its models back for the setup entry and its Log in button
+        // rather than failing every later message the same way.
+        if (req.loginLapsed || req.strategy?.loginLapsed) {
+            if (req.strategy) req.strategy.loginLapsed = false;
+            const fmt = req.apiFormat || root.currentModel?.api_format;
+            if (fmt) root.detectCli(fmt);
+        }
+
+        // Handle error responses
+        if (message) {
+            if (message.content.includes("API key not valid")) {
+                root.addApiKeyAdvice(root.models[message.model] ?? null);
+            }
+            if (/^\*\*Error \d+\*\*/.test(message.content) && message.content.includes("no longer available to new users")) {
                 root.addMessage(Translation.tr("This Google account can no longer use this model. Pick another one with %1.").arg("/model"), Ai.interfaceRole);
             }
-            if (requester.currentStrategy.searchRefused) {
-                requester.currentStrategy.searchRefused = false;
-                root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
+        }
+        if (req.searchRefused) {
+            root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
+        }
+
+        if (!req.stopped && message && call) {
+            if (root._handleFunctionCall(req, call.name, call.args ?? {}, message)) return;
+        }
+        root._finishChain();
+    }
+
+    function _commandResponse(text, exitCode) {
+        let body = text;
+        let code = exitCode ?? 0;
+        let timedOut = false;
+        const trimmed = body.endsWith("\n") ? body.slice(0, -1) : body;
+        const lineStart = trimmed.lastIndexOf("\n") + 1;
+        const trailer = /^ms-exit (\d+) ([01])$/.exec(trimmed.slice(lineStart));
+        if (trailer) {
+            body = trimmed.slice(0, lineStart);
+            code = Number(trailer[1]);
+            timedOut = trailer[2] === "1";
+        }
+        if (timedOut) return body + Translation.tr("[[ Command timed out after %1 s ]]").arg(120);
+        return body + `[[ Command exited with code ${code} ]]`;
+    }
+
+    function _finalizeCommand(req) {
+        if (req.finalized) return;
+        req.finalized = true;
+        const output = root._msgAlive(req) ? req.message : null;
+        const ran = !req.stopped && !req.failedToStart;
+        if (output) {
+            if (req.failedToStart) output.functionResponse = Translation.tr("Error starting request: %1").arg("setsid");
+            else if (req.stopped) output.functionResponse = Translation.tr("[[ Command stopped by user ]]");
+            else output.functionResponse = root._commandResponse(req.output, req.exitCode);
+            const blocks = (output.thinkBlocks ?? []).slice();
+            if (blocks.length > 0) {
+                blocks[0] = Object.assign({}, blocks[0], {
+                    "duration": Math.max(1, Math.round((Date.now() - req.startTime) / 1000)),
+                });
+                output.thinkBlocks = blocks;
             }
+        }
+        req.output = "";
+        root._detach(req);
+        if (ran && output && root._continueRequest()) return;
+        root._finishChain();
+    }
+
+    // ── Function calls ─────────────────────────────────────────────
+    function _createFunctionOutputMessage(name, output) {
+        const content = `[[ Output of ${name} ]]` + Sink.THINK_OPEN + Sink.cleanModelText(output) + Sink.THINK_CLOSE;
+        return root._createMessage("user", content, {
+            "functionName": name,
+            "functionResponse": output,
+            "thinkBlocks": [{ "start": Date.now(), "duration": 1, "collapsed": null }],
+        });
+    }
+
+    function _createCommandOutputMessage(command) {
+        const record = Sink.normalizeActivity({
+            "kind": "command",
+            "verb": "Ran",
+            "target": command,
+            "copyText": command,
+        }, root._sinkHost.actionFallback);
+        const content = "[[ Output of run_shell_command ]]" + Sink.THINK_OPEN + "\n" + Sink.marker(0) + "\n" + Sink.THINK_CLOSE;
+        return root._createMessage("user", content, {
+            "functionName": "run_shell_command",
+            "functionResponse": "",
+            "activities": [record],
+            "thinkBlocks": [{ "start": Date.now(), "duration": 0, "collapsed": null }],
+        });
+    }
+
+    function _addFunctionOutputMessage(name, output) {
+        root._insertMessage(root._createFunctionOutputMessage(name, String(output ?? "")));
+    }
+
+    function _continueRequest() {
+        root._saveNow();
+        return root._startModelRequest({});
+    }
+
+    function _applyShellConfig(name, key, value) {
+        // Every call needs its answer, an unknown key included, or the next request
+        // is refused or comes back empty.
+        try {
+            Config.setNestedValue(key, value);
+            root._addFunctionOutputMessage(name, Translation.tr("Set %1 to %2.").arg(key).arg(JSON.stringify(value)));
+        } catch (e) {
+            root._addFunctionOutputMessage(name, `${e}`);
         }
     }
 
-    function sendUserMessage(message) {
-        if (message.length === 0) return;
-        root.addMessage(message, "user");
+    // Returns true when it started another request; false ends the reply.
+    function _handleFunctionCall(req, name, args, message) {
+        const mode = AiModes.current;
+        const confirm = (command) => {
+            message.functionPending = true;
+            root._raiseConfirmation({
+                "type": "function",
+                "requestId": req.id,
+                "provider": req.apiFormat,
+                "modelId": req.modelId,
+                "messageId": message.id,
+                "action": name,
+                "command": command,
+                "scope": "once",
+            });
+        };
+        if (name === "switch_to_search_mode") {
+            root.currentTool = "search";
+            root._postResponseHook = () => { root.currentTool = "functions"; };
+            root._addFunctionOutputMessage(name, Translation.tr("Switched to search mode. Continue with the user's request."));
+            return root._continueRequest();
+        }
+        if (name === "get_shell_config") {
+            root._addFunctionOutputMessage(name, JSON.stringify(CF.ObjectUtils.toPlainObject(Config.options)));
+            return root._continueRequest();
+        }
+        if (name === "set_shell_config") {
+            if (!args.key || args.value === undefined || args.value === null) {
+                root._addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `key` and `value`."));
+                return root._continueRequest();
+            }
+            const key = String(args.key);
+            root._applyShellConfig(name, key, args.value);
+            return root._continueRequest();
+        }
+        if (name === "run_shell_command") {
+            const command = typeof args.command === "string" ? args.command : "";
+            if (command.length === 0) {
+                root._addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `command`."));
+                return root._continueRequest();
+            }
+            if (mode === "auto") {
+                root._startCommandRequest(command);
+                return true;
+            }
+            if (mode === "plan") {
+                root._addFunctionOutputMessage(name, Translation.tr("Command execution skipped: Plan mode is active."));
+                return root._continueRequest();
+            }
+            message.content = message.content + `\n\n**Command execution request**\n\n\`\`\`command\n${command}\n\`\`\``;
+            message.rawContent = message.content;
+            confirm(command);
+            return false;
+        }
+        root.addMessage(Translation.tr("Unknown function call: %1").arg(name), "assistant");
+        return false;
+    }
+
+    // ── Confirmations ──────────────────────────────────────────────
+    function _raiseConfirmation(fields) {
+        root._confirmationCounter++;
+        const scopes = ["once", "all"];
+        root.pendingConfirmation = Object.freeze({
+            "id": `confirm-${Date.now().toString(36)}-${root._confirmationCounter}`,
+            "requestId": Number(fields.requestId ?? 0),
+            "type": fields.type === "cli" ? "cli" : "function",
+            "provider": String(fields.provider ?? ""),
+            "modelId": String(fields.modelId ?? ""),
+            "messageId": String(fields.messageId ?? ""),
+            "action": String(fields.action ?? ""),
+            "command": String(fields.command ?? ""),
+            "target": String(fields.target ?? ""),
+            "scope": scopes.includes(fields.scope) ? fields.scope : "once",
+            "grantNote": String(fields.grantNote ?? ""),
+            "sessionId": String(fields.sessionId ?? ""),
+        });
+        root.requestState = "awaitingConfirmation";
+    }
+
+    // Clears the pending confirmation. A function call it leaves unanswered
+    // gets the rejected output unless the caller is discarding that message.
+    function _dropConfirmation(addRejected = true) {
+        const conf = root.pendingConfirmation;
+        if (root.requestState === "awaitingConfirmation") root.requestState = "idle";
+        if (!conf) return;
+        root.pendingConfirmation = null;
+        if (conf.type !== "function") return;
+        const message = root.messageByID[conf.messageId];
+        if (!message || !message.functionPending) return;
+        message.functionPending = false;
+        if (addRejected) root._addFunctionOutputMessage(message.functionName, Translation.tr("Command rejected by user"));
+    }
+
+    function approvePendingAction(confirmationId = root.pendingConfirmation?.id): bool {
+        const conf = root.pendingConfirmation;
+        const valid = conf !== null && conf.id === confirmationId
+            && root.requestState === "awaitingConfirmation"
+            && root.currentModelId === conf.modelId
+            && (conf.type !== "cli" || (root.currentApiStrategy?.sessionId ?? "") === conf.sessionId);
+        if (!valid) {
+            root._dropConfirmation();
+            root.addMessage(Translation.tr("This approval is out of date, so nothing was run."), root.interfaceRole);
+            return false;
+        }
+        root.pendingConfirmation = null;
+        root.requestState = "idle";
+        const message = root.messageByID[conf.messageId];
+        if (!message) {
+            root._saveNow();
+            return false;
+        }
+        message.functionPending = false;
+        const args = message.functionArgs ?? {};
+        if (conf.action === "run_shell_command") {
+            root._startCommandRequest(typeof args.command === "string" ? args.command : conf.command);
+        } else if (conf.action === "set_shell_config") {
+            root._applyShellConfig(conf.action, String(args.key ?? ""), args.value);
+            root._continueRequest();
+        }
+        return true;
+    }
+
+    function rejectPendingAction(confirmationId = root.pendingConfirmation?.id): bool {
+        const conf = root.pendingConfirmation;
+        root._dropConfirmation();
+        const matches = Boolean(conf) && conf.id === confirmationId;
+        root._saveNow();
+        return matches;
+    }
+
+    // For the buttons inside a command request block.
+    function approveCommand(message) {
+        const conf = root.pendingConfirmation;
+        if (!conf || !message || conf.messageId !== message.id) return false;
+        return root.approvePendingAction(conf.id);
+    }
+
+    function rejectCommand(message) {
+        const conf = root.pendingConfirmation;
+        if (!conf || !message || conf.messageId !== message.id) return false;
+        return root.rejectPendingAction(conf.id);
+    }
+
+    // ── Sending ────────────────────────────────────────────────────
+    function sendUserMessage(text: string): bool {
+        const content = String(text ?? "");
+        if (content.length === 0 || root.isGenerating || root.sessionLoading) return false;
+        const attachmentPath = root.pendingFilePath;
+        if (attachmentPath.length > 0 && !(root.currentApiStrategy?.acceptsAttachment(attachmentPath) ?? false)) {
+            root.addMessage(Translation.tr("This model can't read that file type. Remove the attachment to send your message."), root.interfaceRole, { "persist": false });
+            return false;
+        }
+        if (root.requestState === "awaitingConfirmation") root._dropConfirmation();
+        const messageId = root.addMessage(content, "user", { "localFilePath": attachmentPath });
+        root.pendingFilePath = "";
+        root._saveNow();
         // The setup entry names no model, so a request built from it would post
         // an empty one and come back as a failure the user cannot act on. Say
         // what local AI is still waiting for instead.
         if (root.currentModelId === root.ollamaSetupModelId) {
             root.startOllamaWalkthrough();
-            return;
+            return true;
         }
         // A saved local model has no object until the fetch answers, and a
         // request without one dies somewhere less explainable than here.
@@ -1905,230 +2800,336 @@ Singleton {
         }
         if (!root.currentModel) {
             root.startOllamaWalkthrough();
+            return true;
+        }
+        root._startModelRequest({
+            "attachment": attachmentPath.length > 0
+                ? { "path": attachmentPath, "mime": root._guessMime(attachmentPath), "messageId": messageId }
+                : null,
+        });
+        return true;
+    }
+
+    // "" clears. file:// URLs are decoded; anything else is taken literally.
+    function attachFile(pathOrUrl): bool {
+        if (!pathOrUrl) {
+            root.pendingFilePath = "";
+            return true;
+        }
+        let path = String(pathOrUrl);
+        if (path.startsWith("file://")) {
+            path = path.slice(7);
+            if (path.startsWith("localhost/")) path = path.slice(9);
+            try {
+                path = decodeURIComponent(path);
+            } catch (e) {
+                path = "";
+            }
+        } else if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(path)) {
+            path = "";
+        }
+        if (!path.startsWith("/")) {
+            root.addMessage(Translation.tr("Only local files can be attached."), root.interfaceRole, { "persist": false });
+            return false;
+        }
+        root.pendingFilePath = path;
+        return true;
+    }
+
+    function regenerate(idOrIndex): bool {
+        if (root.isGenerating || root.sessionLoading || !root.currentModel) return false;
+        const index = typeof idOrIndex === "number" ? idOrIndex : root.messageIDs.indexOf(String(idOrIndex ?? ""));
+        if (index < 0 || index >= root.messageIDs.length) return false;
+        const message = root.messageByID[root.messageIDs[index]];
+        if (!message || message.role !== "assistant") return false;
+        root._dropConfirmation(false);
+        root._setMessageIds(root.messageIDs.slice(0, index));
+        root._saveNow();
+        root._startModelRequest({ "regenerate": true });
+        return true;
+    }
+
+    // ── Sessions ───────────────────────────────────────────────────
+    readonly property string autoSaveFilePath: `${Directories.aiChats}/lastSession.json`
+    property bool _saveInFlight: false
+    property bool _savePending: false
+    readonly property var _sessionOptions: ({
+        "retiredModels": root.retiredModels,
+        "isAntigravityModel": id => root.planFormatFor(id) === "antigravity-cli" || String(id).startsWith("gemini-plan"),
+        "newId": () => root.idForMessage(),
+    })
+
+    // Written only, never read: the restore reads through a loader of its own.
+    FileView {
+        id: autoSaveFileView
+        path: root.autoSaveFilePath
+        preload: false
+        blockLoading: false
+        blockWrites: false
+        atomicWrites: true
+        printErrors: false
+        watchChanges: false
+        onSaved: root._onAutoSaveDone()
+        onSaveFailed: error => root._onAutoSaveDone()
+    }
+
+    Timer {
+        id: saveDebounce
+        interval: 1500
+        repeat: false
+        onTriggered: {
+            if (!root.isGenerating) root._saveNow();
+        }
+    }
+
+    Timer {
+        id: restoreTimer
+        interval: 0
+        repeat: false
+        onTriggered: root._restoreChunk()
+    }
+
+    Component {
+        id: sessionLoaderComponent
+        FileView {
+            id: loaderView
+            property int generation: 0
+            property string kind: ""
+            property string chatName: ""
+            preload: true
+            blockLoading: false
+            printErrors: false
+            watchChanges: false
+            onLoaded: root._onSessionLoaded(loaderView)
+            onLoadFailed: error => root._onSessionLoadFailed(loaderView)
+        }
+    }
+
+    Component {
+        id: namedSaveComponent
+        FileView {
+            id: saveView
+            property string chatName: ""
+            preload: false
+            blockLoading: false
+            blockWrites: false
+            atomicWrites: true
+            printErrors: false
+            watchChanges: false
+            onSaved: {
+                root.reloadSavedChats();
+                root._bury(saveView);
+            }
+            onSaveFailed: error => root._bury(saveView)
+        }
+    }
+
+    function scheduleSave(): void {
+        if (!root._startupRestored || root.sessionLoading || root.isGenerating) return;
+        saveDebounce.restart();
+    }
+
+    function _serializeSession() {
+        const cliSessions = {};
+        for (const [key, strategy] of Object.entries(root.apiStrategies)) {
+            if (strategy?.isCliStrategy && strategy.sessionId) cliSessions[key] = strategy.sessionId;
+        }
+        return Sessions.serialize(root.messageIDs.map(id => root.messageByID[id]), root.currentModelId, cliSessions, Date.now());
+    }
+
+    // Writes lastSession.json. One write at a time: a new text is never handed
+    // over while a write runs, since that would block on it.
+    function _saveNow() {
+        if (!root._startupRestored || root.sessionLoading) return;
+        saveDebounce.stop();
+        if (root._saveInFlight) {
+            root._savePending = true;
             return;
         }
-        requester.makeRequest();
+        const text = root._serializeSession();
+        root._saveInFlight = true;
+        autoSaveFileView.setText(text);
     }
 
-    function attachFile(filePath: string) {
-        root.pendingFilePath = CF.FileUtils.trimFileProtocol(filePath);
-    }
-
-    function regenerate(messageIndex) {
-        if (messageIndex < 0 || messageIndex >= messageIDs.length) return;
-        const id = root.messageIDs[messageIndex];
-        const message = root.messageByID[id];
-        if (message.role !== "assistant") return;
-        // Remove all messages after this one
-        for (let i = root.messageIDs.length - 1; i >= messageIndex; i--) {
-            root.removeMessage(i);
+    function _onAutoSaveDone() {
+        root._saveInFlight = false;
+        if (root._savePending) {
+            root._savePending = false;
+            // The FileView still counts the finished write as live until this
+            // signal returns, and a write started now would be dropped.
+            Qt.callLater(root._saveNow);
         }
-        requester.makeRequest();
     }
 
-    function createFunctionOutputMessage(name, output, includeOutputInChat = true) {
-        return aiMessageComponent.createObject(root, {
-            "role": "user",
-            "content": `[[ Output of ${name} ]]${includeOutputInChat ? ("\n\n<think>\n" + output + "\n</think>") : ""}`,
-            "rawContent": `[[ Output of ${name} ]]${includeOutputInChat ? ("\n\n<think>\n" + output + "\n</think>") : ""}`,
-            "functionName": name,
-            "functionResponse": output,
-            "thinking": false,
-            "done": true,
-            // "visibleToUser": false,
+    function _cleanChatName(chatName) {
+        let cleanName = String(chatName ?? "").trim();
+        if (cleanName.endsWith(".json")) cleanName = cleanName.slice(0, -5).trim();
+        if (cleanName.includes("/")) cleanName = cleanName.split("/").pop().replace(".json", "");
+        return cleanName;
+    }
+
+    function _savedChatName(chatName) {
+        const cleanName = root._cleanChatName(chatName);
+        return cleanName.toLowerCase() === "lastsession" ? "saved-session" : cleanName;
+    }
+
+    /**
+     * Saves the chat under a name, in the background.
+     * @param chatName name of the chat
+     * @returns the name saved under, or "" when nothing was saved
+     */
+    function saveChat(chatName): string {
+        const cleanName = root._savedChatName(chatName);
+        if (cleanName.length === 0) return "";
+        if (!root.messageIDs.some(id => root.messageByID[id]?.role === "user")) return "";
+        const writer = namedSaveComponent.createObject(root, { "chatName": cleanName });
+        if (!writer) return "";
+        writer.path = `${Directories.aiChats}/${cleanName}.json`;
+        writer.setText(root._serializeSession());
+        return cleanName;
+    }
+
+    /**
+     * Starts loading a saved chat. True means the load has started; a
+     * failure arrives later as a message.
+     * @param chatName name of the chat
+     */
+    function loadChat(chatName): bool {
+        const cleanName = root._cleanChatName(chatName);
+        if (cleanName.length === 0) return false;
+        root._bumpLoad();
+        root._abandonRequest();
+        root._dropConfirmation(false);
+        root._startLoad(`${Directories.aiChats}/${cleanName}.json`, "named", cleanName);
+        return true;
+    }
+
+    // Abandons any load in progress; its late callbacks see another generation.
+    function _bumpLoad() {
+        root._loadGeneration++;
+        restoreTimer.stop();
+        if (root._restore) {
+            root._buryAll(root._restore.created);
+            root._restore = null;
+        }
+        root._endLoad();
+    }
+
+    // Every load ends here, and the first one to end settles the startup restore.
+    function _endLoad() {
+        root.sessionLoading = false;
+        root._startupRestored = true;
+    }
+
+    function _startLoad(path, kind, chatName) {
+        root.sessionLoading = true;
+        const loader = sessionLoaderComponent.createObject(root, {
+            "generation": root._loadGeneration,
+            "kind": kind,
+            "chatName": chatName,
         });
-    }
-
-    function addFunctionOutputMessage(name, output) {
-        const aiMessage = createFunctionOutputMessage(name, output);
-        const id = idForMessage(aiMessage);
-        root.messageIDs = [...root.messageIDs, id];
-        root.messageByID[id] = aiMessage;
-    }
-
-    function rejectCommand(message: AiMessageData) {
-        if (!message.functionPending) return;
-        message.functionPending = false; // User decided, no more "thinking"
-        addFunctionOutputMessage(message.functionName, Translation.tr("Command rejected by user"))
-    }
-
-    function approveCommand(message: AiMessageData) {
-        if (!message.functionPending) return;
-        message.functionPending = false; // User decided, no more "thinking"
-
-        const responseMessage = createFunctionOutputMessage(message.functionName, "", false);
-        const id = idForMessage(responseMessage);
-        root.messageIDs = [...root.messageIDs, id];
-        root.messageByID[id] = responseMessage;
-
-        commandExecutionProc.message = responseMessage;
-        commandExecutionProc.baseMessageContent = responseMessage.content;
-        commandExecutionProc.shellCommand = message.functionCall.args.command;
-        commandExecutionProc.running = true; // Start the command execution
-    }
-
-    Process {
-        id: commandExecutionProc
-        property string shellCommand: ""
-        property AiMessageData message
-        property string baseMessageContent: ""
-        command: ["bash", "-c", shellCommand]
-        stdout: SplitParser {
-            onRead: (output) => {
-                commandExecutionProc.message.functionResponse += output + "\n\n";
-                const updatedContent = commandExecutionProc.baseMessageContent + `\n\n<think>\n<tt>${commandExecutionProc.message.functionResponse}</tt>\n</think>`;
-                commandExecutionProc.message.rawContent = updatedContent;
-                commandExecutionProc.message.content = updatedContent;
-            }
+        if (!loader) {
+            root._loadFailed(kind, chatName);
+            return;
         }
-        onExited: (exitCode, exitStatus) => {
-            commandExecutionProc.message.functionResponse += `[[ Command exited with code ${exitCode} (${exitStatus}) ]]\n`;
-            requester.makeRequest(); // Continue
-        }
+        // Assigning the path starts the read in the background.
+        loader.path = path;
     }
 
-    function handleFunctionCall(name, args: var, message: AiMessageData) {
-        if (name === "switch_to_search_mode") {
-            const modelId = root.currentModelId;
-            root.currentTool = "search"
-            root.postResponseHook = () => { root.currentTool = "functions" }
-            addFunctionOutputMessage(name, Translation.tr("Switched to search mode. Continue with the user's request."))
-            requester.makeRequest();
-        } else if (name === "get_shell_config") {
-            const configJson = CF.ObjectUtils.toPlainObject(Config.options)
-            addFunctionOutputMessage(name, JSON.stringify(configJson));
-            requester.makeRequest();
-        } else if (name === "set_shell_config") {
-            if (!args.key || args.value == null) {
-                addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `key` and `value`."));
-                requester.makeRequest();
-                return;
-            }
-            const key = args.key;
-            const value = args.value;
-            // Every call needs its answer, an unknown key included, or the next request
-            // is refused or comes back empty.
-            try {
-                Config.setNestedValue(key, value);
-                addFunctionOutputMessage(name, Translation.tr("Set %1 to %2.").arg(key).arg(JSON.stringify(value)));
-            } catch (e) {
-                addFunctionOutputMessage(name, `${e}`);
-            }
-            requester.makeRequest();
-        } else if (name === "run_shell_command") {
-            if (!args.command || args.command.length === 0) {
-                addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `command`."));
-                requester.makeRequest();
-                return;
-            }
-            const mode = AiModes.current;
-            if (mode === "auto") {
-                const responseMessage = createFunctionOutputMessage(name, "", false);
-                const id = idForMessage(responseMessage);
-                root.messageIDs = [...root.messageIDs, id];
-                root.messageByID[id] = responseMessage;
-                commandExecutionProc.message = responseMessage;
-                commandExecutionProc.baseMessageContent = responseMessage.content;
-                commandExecutionProc.shellCommand = args.command;
-                commandExecutionProc.running = true;
-            } else if (mode === "plan") {
-                addFunctionOutputMessage(name, Translation.tr("Command execution skipped: Plan mode is active."));
-                requester.makeRequest();
-            } else {
-                const contentToAppend = `\n\n**Command execution request**\n\n\`\`\`command\n${args.command}\n\`\`\``;
-                message.rawContent += contentToAppend;
-                message.content += contentToAppend;
-                message.functionPending = true; // Use thinking to indicate the command is waiting for approval
-            }
-        }
-        else root.addMessage(Translation.tr("Unknown function call: %1").arg(name), "assistant");
-    }
-
-    function chatToJson() {
-        return root.messageIDs.map(id => {
-            const message = root.messageByID[id]
-            return ({
-                "role": message.role,
-                "rawContent": message.rawContent,
-                "fileMimeType": message.fileMimeType,
-                "fileUri": message.fileUri,
-                "localFilePath": message.localFilePath,
-                "model": message.model,
-                "thinking": false,
-                "done": true,
-                "annotations": message.annotations,
-                "annotationSources": message.annotationSources,
-                "functionName": message.functionName,
-                "functionCall": message.functionCall,
-                "functionResponse": message.functionResponse,
-                "visibleToUser": message.visibleToUser,
-            })
-        })
-    }
-
-    FileView {
-        id: chatSaveFile
-        property string chatName: ""
-        path: chatName.length > 0 ? `${Directories.aiChats}/${chatName}.json` : ""
-        blockLoading: true // Prevent race conditions
-    }
-
-    FileView {
-        id: chatWriter
-    }
-
-    /**
-     * Saves chat to a JSON list of message objects.
-     * @param chatName name of the chat
-     */
-    function saveChat(chatName) {
-        const filePath = `${Directories.aiChats}/${chatName.trim()}.json`
-        chatWriter.path = filePath
-        const saveContent = JSON.stringify(root.chatToJson())
-        chatWriter.setText(saveContent)
-        getSavedChats.running = true;
-    }
-
-    /**
-     * Loads chat from a JSON list of message objects.
-     * @param chatName name of the chat
-     */
-    function loadChat(chatName) {
+    function _onSessionLoaded(loader) {
+        const generation = loader.generation;
+        const kind = loader.kind;
+        const chatName = loader.chatName;
+        const current = generation === root._loadGeneration;
+        const text = current ? loader.text() : "";
+        root._bury(loader);
+        if (!current) return;
+        let parsed = null;
         try {
-            chatSaveFile.chatName = chatName.trim()
-            chatSaveFile.reload()
-            const saveContent = chatSaveFile.text()
-            // console.log(saveContent)
-            const saveData = JSON.parse(saveContent)
-            root.clearMessages()
-            root.messageIDs = saveData.map((_, i) => {
-                return i
-            })
-            // console.log(JSON.stringify(messageIDs))
-            for (let i = 0; i < saveData.length; i++) {
-                const message = saveData[i];
-                root.messageByID[i] = root.aiMessageComponent.createObject(root, {
-                    "role": message.role,
-                    "rawContent": message.rawContent,
-                    "content": message.rawContent,
-                    "fileMimeType": message.fileMimeType,
-                    "fileUri": message.fileUri,
-                    "localFilePath": message.localFilePath,
-                    "model": root.retiredModels[message.model] ?? message.model,
-                    "thinking": message.thinking,
-                    "done": message.done,
-                    "annotations": message.annotations,
-                    "annotationSources": message.annotationSources,
-                    "functionName": message.functionName,
-                    "functionCall": message.functionCall,
-                    "functionResponse": message.functionResponse,
-                    "visibleToUser": message.visibleToUser,
-                });
-            }
+            parsed = Sessions.parse(JSON.parse(text));
         } catch (e) {
-            console.log("[AI] Could not load chat: ", e);
-        } finally {
-            getSavedChats.running = true;
+            parsed = null;
         }
+        if (!parsed || !parsed.ok || (kind === "named" && parsed.items.length === 0)) {
+            root._loadFailed(kind, chatName);
+            return;
+        }
+        root._restore = {
+            "generation": generation,
+            "kind": kind,
+            "chatName": chatName,
+            "parsed": parsed,
+            "index": 0,
+            "ids": [],
+            "byId": ({}),
+            "created": [],
+        };
+        restoreTimer.start();
+    }
+
+    function _onSessionLoadFailed(loader) {
+        const current = loader.generation === root._loadGeneration;
+        const kind = loader.kind;
+        const chatName = loader.chatName;
+        root._bury(loader);
+        if (current) root._loadFailed(kind, chatName);
+    }
+
+    function _loadFailed(kind, chatName) {
+        root._endLoad();
+        if (kind === "startup") return;
+        root.addMessage(Translation.tr("Could not load the saved session %1.").arg(chatName), root.interfaceRole, { "persist": false });
+    }
+
+    // Builds 25 message objects per event loop pass.
+    function _restoreChunk() {
+        const r = root._restore;
+        if (!r || r.generation !== root._loadGeneration) return;
+        const items = r.parsed.items;
+        const end = Math.min(r.index + 25, items.length);
+        for (; r.index < end; r.index++) {
+            const props = Sessions.messageProps(items[r.index], r.parsed.version, root._sessionOptions);
+            if (!props) continue;
+            if (r.byId[props.id] || root.messageByID[props.id]) props.id = root.idForMessage();
+            const message = aiMessageComponent.createObject(root, props);
+            if (!message) continue;
+            r.created.push(message);
+            r.ids.push(props.id);
+            r.byId[props.id] = message;
+        }
+        if (r.index < items.length) {
+            restoreTimer.restart();
+            return;
+        }
+        root._restore = null;
+        root._completeLoad(r);
+    }
+
+    function _completeLoad(r) {
+        if (r.kind === "startup") {
+            // Notices posted while the restore ran stay after it.
+            const byId = Object.assign({}, r.byId);
+            for (const id of root.messageIDs) byId[id] = root.messageByID[id];
+            root.messageByID = byId;
+            root.messageIDs = r.ids.concat(root.messageIDs);
+        } else {
+            root.messageByID = Object.assign({}, root.messageByID, r.byId);
+            root._setMessageIds(r.ids);
+            root._resetTokenCount();
+        }
+        root._resetCliSessions();
+        const cliSessions = r.parsed.cliSessions;
+        for (const key of Object.keys(cliSessions)) {
+            const strategy = root.apiStrategies[key];
+            if (strategy?.isCliStrategy && typeof cliSessions[key] === "string") strategy.sessionId = cliSessions[key];
+        }
+        root._endLoad();
+        // At startup the selection the user has now stands over the one saved.
+        // Picking the setup entry starts the Ollama walkthrough, so a chat saved
+        // on it keeps the current model instead.
+        const savedModel = root.retiredModels[r.parsed.model] ?? r.parsed.model;
+        if (r.kind !== "startup" && savedModel.length > 0 && savedModel !== root.ollamaSetupModelId)
+            root.setModel(savedModel, false, true, false);
+        root._saveNow();
     }
 }

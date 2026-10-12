@@ -1,124 +1,133 @@
 import QtQuick
-import qs.modules.common.functions as CF
+import qs.services
+import "strategyhelpers.js" as Helpers
 
 ApiStrategy {
     id: root
-    property string sessionId: ""
-    property int _inputTokens: -1
-    property bool _errored: false
     isCliStrategy: true
+    supportsAttachments: true
 
-    function buildEndpoint(model: AiModel): string { return "" }
-    function buildAuthorizationHeader(apiKeyEnvVarName: string): string { return "" }
+    property var _requestInfo: ({})
 
-    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
-        return {};
+    function buildRequest(ctx: var): var {
+        const model = ctx.model;
+        const mode = ctx.mode ?? "ask";
+        root._requestInfo = { mode: mode, modelName: model.name ?? "" };
+        const attachment = Helpers.attachmentPath(ctx);
+        const image = attachment.length > 0 && Helpers.isImage(attachment);
+        // A regenerate starts a fresh thread; its thread.started event replaces the id.
+        const sessionId = ctx.regenerate ? "" : root.sessionId;
+
+        // No system prompt: exec mode has no supported way to carry one.
+        const argv = ["codex", "exec"];
+        if (sessionId.length > 0) argv.push("resume", sessionId);
+        argv.push("--json", "--skip-git-repo-check");
+        // -c rather than --sandbox, which resume does not take.
+        if (mode === "auto") argv.push("--dangerously-bypass-approvals-and-sandbox");
+        else argv.push("-c", 'sandbox_mode="read-only"');
+        if (model.model && model.model !== "codex-plan") argv.push("-m", model.model);
+        const effort = root.effortFor(ctx.thinkingLevel, []);
+        if (effort.length > 0) argv.push("-c", `model_reasoning_effort="${effort}"`);
+        if (image) argv.push("-i", attachment);
+        // -i takes several files; the lone - after -- reads the prompt from stdin.
+        argv.push("--", "-");
+
+        const attachedLine = (attachment.length > 0 && !image) ? Translation.tr("Attached file: %1").arg(attachment) : "";
+        return {
+            options: ["--workdir", ctx.dirs.codex, "--stdin", "--filter", "codex", "--report-exit"],
+            argv: argv,
+            stdin: Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine),
+            env: {}
+        };
     }
 
-    function buildScriptRequestContent(model: AiModel, messages, systemPrompt: string, temperature: real): string {
-        const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
-        const userMessage = lastUserMsg?.rawContent ?? "";
-
-        // The native installer lands in ~/.local/bin, which a non-login shell
-        // may not have on PATH. exec so that killing the request reaches the
-        // CLI itself rather than the bash wrapping it. The sandbox stays
-        // read-only and the git check off: this is a chat window, not a
-        // working tree. No system prompt: exec mode has no supported way to
-        // carry one, and the chat reads fine without it.
-        let script = "export PATH=\"$HOME/.local/bin:$PATH\"\n";
-        script += "exec codex exec";
-        const resuming = root.sessionId.length > 0;
-        if (resuming) {
-            script += ` resume '${CF.StringUtils.shellSingleQuoteEscape(root.sessionId)}'`;
-        }
-        script += " --json --skip-git-repo-check";
-        // resume takes no --sandbox: it keeps the mode the thread was opened
-        // with, and passing it anyway is an argument error that ends the run
-        // before a single event, so every turn after the first would fail.
-        if (!resuming) script += " --sandbox read-only";
-        if (model.model && model.model !== "codex-plan") {
-            script += ` -m '${CF.StringUtils.shellSingleQuoteEscape(model.model)}'`;
-        }
-        script += ` '${CF.StringUtils.shellSingleQuoteEscape(userMessage)}'`;
-        script += " < /dev/null 2>&1";
-        script += "\n";
-        return script;
+    // The Codex effort for one of the tab's levels, or "" to leave it to the
+    // CLI. A non-empty list limits it to the efforts the model supports.
+    function effortFor(level: string, supported: var): string {
+        let effort = Object.keys(Ai.codexEffortLevels).find(key => Ai.codexEffortLevels[key] === level) ?? "";
+        if (effort === "minimal" && !supported.includes("minimal")) effort = "low";
+        if (supported.length > 0) return supported.includes(effort) ? effort : "";
+        return ["none", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort) ? effort : "";
     }
 
-    function parseResponseLine(line: string, message: AiMessageData) {
-        let cleanData = line.trim();
-        if (cleanData.length === 0) return {};
+    // Called after buildRequest, so the mode belongs to this request.
+    function newState(): var {
+        return {
+            finished: false,
+            textOpen: false,
+            mode: root._requestInfo.mode ?? "ask",
+            modelName: root._requestInfo.modelName ?? ""
+        };
+    }
+
+    // Messages and notices arrive as whole items; a blank line keeps them apart.
+    function emitBlock(sink: var, text: string): void {
+        sink.text((sink.state.textOpen ? "\n\n" : "") + text);
+        sink.state.textOpen = true;
+    }
+
+    function parseLine(line: string, sink: var): void {
+        const cleanData = line.trim();
+        if (cleanData.length === 0) return;
         // The CLI announces that it noticed a redirected stdin; chat has
         // nothing to learn from that.
-        if (cleanData.startsWith("Reading additional input from stdin")) return {};
+        if (cleanData.startsWith("Reading additional input from stdin")) return;
 
+        let json;
         try {
-            const json = JSON.parse(cleanData);
-
-            if (json.type === "thread.started") {
-                if (json.thread_id) root.sessionId = json.thread_id;
-                return {};
-            }
-
+            json = JSON.parse(cleanData);
+        } catch (e) {
+            sink.raw(cleanData);
+            return;
+        }
+        try {
+            const state = sink.state;
+            switch (json.type) {
+            case "thread.started":
+                if (json.thread_id) sink.setSessionId(json.thread_id);
+                break;
             // exec mode delivers whole items, not deltas: the message text
             // and the reasoning summary each arrive once, completed.
-            if (json.type === "item.completed") {
+            case "item.completed": {
                 const item = json.item ?? {};
                 if (item.type === "agent_message" && item.text) {
-                    message.rawContent += item.text;
-                    message.content += item.text;
+                    root.emitBlock(sink, item.text);
                 } else if (item.type === "reasoning" && item.text) {
-                    const thought = `\n\n<think>\n\n${item.text}\n\n</think>\n\n`;
-                    message.rawContent += thought;
-                    message.content += thought;
+                    sink.thinkWhole(item.text);
+                    state.textOpen = false;
                 }
-                return {};
+                break;
             }
-
-            if (json.type === "turn.completed") {
-                const result = { finished: true };
+            case "turn.completed":
+                state.finished = true;
                 if (json.usage) {
-                    const input = (json.usage.input_tokens ?? 0) + (json.usage.cached_input_tokens ?? 0);
-                    result.tokenUsage = {
-                        input: input,
-                        output: json.usage.output_tokens ?? -1,
-                        total: input + (json.usage.output_tokens ?? 0)
-                    };
+                    // Cached input is a subset of input_tokens.
+                    const input = json.usage.input_tokens ?? -1;
+                    const output = json.usage.output_tokens ?? -1;
+                    sink.usage({ input: input, output: output, total: Math.max(0, input) + Math.max(0, output) });
                 }
-                return result;
+                sink.finished();
+                break;
+            case "turn.failed":
+            case "error": {
+                // A dead session pins every retry to the same failure. One
+                // failure arrives as both an error event and a failed turn,
+                // and the sink shows only the first error.
+                sink.setSessionId("");
+                state.finished = true;
+                sink.error(json.error?.message ?? json.message ?? JSON.stringify(json));
+                break;
             }
-
-            if (json.type === "turn.failed" || json.type === "error") {
-                // A dead session pins every retry to the same failure, so
-                // the next request starts a fresh one. One failure arrives as
-                // both an error event and a failed turn; the reason is only
-                // worth reading once.
-                root.sessionId = "";
-                if (root._errored) return { finished: true };
-                root._errored = true;
-                const detail = json.error?.message ?? json.message ?? JSON.stringify(json);
-                const failure = `**Error**: ${detail}`;
-                message.rawContent += failure;
-                message.content += failure;
-                return { finished: true };
             }
-
         } catch (e) {
-            // Non-JSON line (CLI logging or an error before the stream
-            // starts): show it rather than losing it.
-            message.rawContent += cleanData + "\n";
-            message.content += cleanData + "\n";
+            console.warn("[Ai] Codex: unexpected event:", e);
         }
-
-        return {};
     }
 
-    function onRequestFinished(message: AiMessageData): var {
-        return {};
-    }
-
-    function reset() {
-        _inputTokens = -1;
-        _errored = false;
+    function finish(sink: var, exitCode: int, stderrTail: string): void {
+        if (exitCode === 0 || sink.state.finished) return;
+        sink.setSessionId("");
+        const detail = Helpers.lastErrorLine(stderrTail);
+        sink.error(detail.length > 0 ? detail : Translation.tr("%1 stopped with code %2").arg("Codex").arg(exitCode));
     }
 }

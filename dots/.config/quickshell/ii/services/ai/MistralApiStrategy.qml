@@ -1,146 +1,157 @@
 import QtQuick
+import qs.services
+import "strategyhelpers.js" as Helpers
 
 ApiStrategy {
+    id: root
     supportsFunctions: true
 
-    property bool isReasoning: false
-    
-    function buildEndpoint(model: AiModel): string {
-        // console.log("[AI] Endpoint: " + model.endpoint);
-        return model.endpoint;
-    }
-
-    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
-        let baseData = {
+    function buildRequest(ctx: var): var {
+        const model = ctx.model;
+        const unanswered = ctx.unansweredCalls ?? {};
+        const history = [];
+        // A tool message must answer the call right before it, by that call's id.
+        let pendingCallId = "";
+        for (const message of (ctx.messages ?? [])) {
+            const hasCall = message.functionCall != undefined && message.functionName.length > 0;
+            const callId = message.functionCallId ?? "";
+            if (hasCall && callId.length > 0 && !unanswered[message.id]) {
+                pendingCallId = callId;
+                history.push({
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{
+                        "id": callId,
+                        "type": "function",
+                        "function": {
+                            "name": message.functionName,
+                            "arguments": JSON.stringify(message.functionArgs ?? {})
+                        }
+                    }]
+                });
+                continue;
+            }
+            if (!hasCall && message.functionName.length > 0 && pendingCallId.length > 0) {
+                history.push({
+                    "role": "tool",
+                    "name": message.functionName,
+                    "content": message.functionResponse,
+                    "tool_call_id": pendingCallId
+                });
+                pendingCallId = "";
+                continue;
+            }
+            pendingCallId = "";
+            history.push({
+                "role": message.role,
+                "content": message.role === "assistant" ? Ai.historyText(message) : message.rawContent,
+            });
+        }
+        const baseData = {
             "model": model.model,
             "messages": [
-                {role: "system", content: systemPrompt},
-                ...messages.map(message => {
-                    const hasFunctionCall = message.functionCall != undefined && message.functionName.length > 0
-                    let messageData = {
-                        "role": message.role,
-                        "content": message.rawContent,
-                    }
-                    if (hasFunctionCall) {
-                        if (message.functionResponse?.length > 0) {
-                            messageData.name = message.functionName; // Does the func call also need this name? or just the func output?
-                            messageData.role = "tool";
-                            messageData.content = message.functionResponse;
-                            messageData.tool_call_id = message.functionCall.id
-                        }
-                    }
-                    return messageData
-                }),
+                {role: "system", content: ctx.systemPrompt},
+                ...history,
             ],
             "stream": true,
-            "temperature": temperature,
-            "tools": tools,
+            "temperature": ctx.temperature,
         };
-        // console.log("[AI] Request data: ", JSON.stringify(baseData, null, 2));
-        return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
+        const tools = ctx.tools ?? [];
+        if (tools.length > 0) {
+            baseData.tools = tools;
+        }
+        const body = model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
+
+        const options = ["--report-exit", "--body"];
+        if (model.requires_key) options.push("--secret-header", "Authorization", "Bearer ", "API_KEY");
+        return {
+            options: options,
+            argv: ["curl", "--no-buffer", "--silent", "--show-error", model.endpoint,
+                "-H", "Content-Type: application/json", "--data-binary", "@-"],
+            stdin: JSON.stringify(body),
+            env: {}
+        };
     }
 
-    function buildAuthorizationHeader(apiKeyEnvVarName: string): string {
-        return `-H "Authorization: Bearer \$\{${apiKeyEnvVarName}\}"`;
+    function newState(): var {
+        return { gotAny: false };
     }
 
-    function parseResponseLine(line, message) {
+    function parseLine(line: string, sink: var): void {
         // Remove 'data: ' prefix if present and trim whitespace
         let cleanData = line.trim();
         if (cleanData.startsWith("data:")) {
             cleanData = cleanData.slice(5).trim();
         }
-        
-        // Handle special cases
-        if (!cleanData || cleanData.startsWith(":")) return {};
+
+        if (!cleanData || cleanData.startsWith(":")) return;
+        const state = sink.state;
+        state.gotAny = true;
         if (cleanData === "[DONE]") {
-            return { finished: true };
+            sink.finished();
+            return;
         }
-        
-        // Real stuff
+
+        let dataJson;
         try {
-            const dataJson = JSON.parse(cleanData);
-
-            // Error response handling
-            if (dataJson.error) {
-                const errorMsg = `**Error**: ${dataJson.error.message || JSON.stringify(dataJson.error)}`;
-                message.rawContent += errorMsg;
-                message.content += errorMsg;
-                return { finished: true };
-            }
-
-            let newContent = "";
-
-            const responseContent = dataJson.choices[0]?.delta?.content || dataJson.message?.content;
-            const responseReasoning = dataJson.choices[0]?.delta?.reasoning || dataJson.choices[0]?.delta?.reasoning_content;
-
-            // Function call
-            if (dataJson.choices[0]?.delta?.tool_calls) {
-                const functionCall = dataJson.choices[0].delta.tool_calls[0];
-                const functionName = functionCall.function.name;
-                const functionArgs = JSON.parse(functionCall.function.arguments) || {}; // Args are given as string???
-                const functionId = functionCall.id;
-                const newContent = `\n\n[[ Function: ${functionName}(${JSON.stringify(functionArgs, null, 2)}) ]]\n`;
-                message.rawContent += newContent;
-                message.content += newContent;
-                message.functionName = functionName;
-                message.functionCall = functionName; 
-                return { functionCall: { name: functionName, args: functionArgs, id: functionId } };
-            }
-
-            // Thinking?
-            if (responseContent && responseContent.length > 0) {
-                if (isReasoning) {
-                    isReasoning = false;
-                    const endBlock = "\n\n</think>\n\n";
-                    message.content += endBlock;
-                    message.rawContent += endBlock;
-                }
-                newContent = responseContent;
-            } else if (responseReasoning && responseReasoning.length > 0) {
-                if (!isReasoning) {
-                    isReasoning = true;
-                    const startBlock = "\n\n<think>\n\n";
-                    message.rawContent += startBlock;
-                    message.content += startBlock;
-                }
-                newContent = responseReasoning;
-            }
-
-            // Text
-            message.content += newContent;
-            message.rawContent += newContent;
-
-            // Usage metadata
-            if (dataJson.usage) {
-                return {
-                    tokenUsage: {
-                        input: dataJson.usage.prompt_tokens ?? -1,
-                        output: dataJson.usage.completion_tokens ?? -1,
-                        total: dataJson.usage.total_tokens ?? -1
-                    }
-                };
-            }
-
-            if (`dataJson`.done) {
-                return { finished: true };
-            }
-            
+            dataJson = JSON.parse(cleanData);
         } catch (e) {
-            console.log("[AI] Mistral: Could not parse line: ", e);
-            message.rawContent += line;
-            message.content += line;
+            sink.raw(line);
+            return;
         }
-        
-        return {};
-    }
-    
-    function onRequestFinished(message) {
-        return {};
-    }
-    
-    function reset() {
-        isReasoning = false;
+        try {
+            if (dataJson.error) {
+                sink.error(dataJson.error.message || JSON.stringify(dataJson.error));
+                sink.finished();
+                return;
+            }
+
+            const delta = dataJson.choices?.[0]?.delta;
+            const toolCall = delta?.tool_calls?.[0];
+            if (toolCall) {
+                const functionName = toolCall.function?.name ?? "";
+                const rawArgs = toolCall.function?.arguments;
+                let functionArgs = {};
+                try {
+                    functionArgs = (typeof rawArgs === "string" ? JSON.parse(rawArgs) : rawArgs) || {};
+                } catch (e) {
+                    sink.error(Translation.tr("Could not read the arguments of %1").arg(functionName));
+                    return;
+                }
+                // The sink skips a call without a name, which still ends the thoughts.
+                sink.endThink();
+                sink.functionCall({ name: functionName, args: functionArgs, id: toolCall.id ?? "" });
+                return;
+            }
+
+            const responseContent = delta?.content || dataJson.message?.content;
+            const responseReasoning = delta?.reasoning || delta?.reasoning_content;
+            if (responseContent && responseContent.length > 0) {
+                sink.text(responseContent);
+            } else if (responseReasoning && responseReasoning.length > 0) {
+                sink.think(responseReasoning);
+            }
+
+            if (dataJson.usage) {
+                sink.usage({
+                    input: dataJson.usage.prompt_tokens ?? -1,
+                    output: dataJson.usage.completion_tokens ?? -1,
+                    total: dataJson.usage.total_tokens ?? -1
+                });
+            }
+
+            if (dataJson.done) {
+                sink.finished();
+            }
+        } catch (e) {
+            console.warn("[Ai] Mistral: unexpected response line:", e);
+        }
     }
 
+    function finish(sink: var, exitCode: int, stderrTail: string): void {
+        if (exitCode !== 0 && !sink.state.gotAny) {
+            const detail = Helpers.lastErrorLine(stderrTail);
+            if (detail.length > 0) sink.error(detail);
+        }
+    }
 }

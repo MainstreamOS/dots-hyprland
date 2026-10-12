@@ -70,7 +70,7 @@ Item {
     property var allCommands: [
         {
             name: "attach",
-            description: Translation.tr("Attach a file. Only works with Gemini."),
+            description: Translation.tr("Attach a file"),
             execute: args => {
                 Ai.attachFile(args.join(" ").trim());
             }
@@ -509,12 +509,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
                 delegate: AiMessage {
                     required property var modelData
-                    required property int index
-                    messageIndex: index
-                    messageData: {
-                        Ai.messageByID[modelData];
-                    }
-                    messageInputField: root.inputField
+                    messageId: modelData
+                    messageData: Ai.messageByID[modelData] ?? null
                 }
             }
 
