@@ -63,6 +63,7 @@ Singleton {
     property string appFoldersPath: FileUtils.trimFileProtocol(`${Directories.state}/user/app-folders.json`)
     property string aiChats: FileUtils.trimFileProtocol(`${Directories.state}/user/ai/chats`)
     property string aiTranslationScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/ai/gemini-translate.sh`)
+    property string aiGeminiUsageScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/ai/gemini-usage.py`)
     property string recordScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/videos/record.sh`)
     property string userAvatarPathAccountsService: FileUtils.trimFileProtocol(`/var/lib/AccountsService/icons/${SystemInfo.username}`)
     property string userAvatarPathRicersAndWeirdSystems: FileUtils.trimFileProtocol(`${Directories.home}/.face`)

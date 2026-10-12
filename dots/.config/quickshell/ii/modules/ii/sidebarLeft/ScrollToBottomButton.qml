@@ -7,11 +7,17 @@ import QtQuick.Layouts
 RippleButton {
     id: root
     required property ListView target
+    // Extra room past the content's end, so the last line clears an edge fade.
+    property real glowOffset: 0
+    // The list keeps itself at its end; it catches up with its own growth after the layout.
+    property bool pinned: false
     // Content-relative end rather than atYEnd: a list with bottom runway
     // (margin) is only atYEnd deep inside the blank space, which would keep
     // this button up permanently. Identical to atYEnd on margin-less lists.
-    readonly property bool atContentEnd: target.contentHeight <= target.height
-        || target.contentY >= target.originY + target.contentHeight - target.height - 1
+    readonly property real endY: target ? Math.min(target.originY + target.contentHeight - target.height + root.glowOffset,
+        target.originY + target.contentHeight + target.bottomMargin - target.height) : 0
+    readonly property bool atContentEnd: root.pinned || (!target) || (target.contentHeight <= target.height)
+        || target.contentY >= root.endY - 1
 
     anchors {
         bottom: parent.bottom
@@ -41,12 +47,15 @@ RippleButton {
         // positionViewAtEnd works from estimated delegate heights and lands
         // short on rich messages. It still runs first to instantiate the
         // tail, then the exact end comes from real geometry, stopping at the
-        // content's edge rather than the runway below it.
+        // content's edge rather than the runway below it, while leaving room
+        // for the edge glow fade.
         target.positionViewAtEnd();
-        Qt.callLater(() => {
-            if (target.contentHeight > target.height)
-                target.contentY = target.originY + target.contentHeight - target.height;
-        });
+        const updateScroll = () => {
+            if (target && target.contentHeight > target.height)
+                target.contentY = root.endY;
+        };
+        Qt.callLater(updateScroll);
+        Qt.callLater(() => Qt.callLater(updateScroll));
     }
 
     contentItem: Row {

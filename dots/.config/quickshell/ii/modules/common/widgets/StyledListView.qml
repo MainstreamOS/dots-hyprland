@@ -20,6 +20,15 @@ ListView {
     property bool animateMovement: false
     // Accumulated scroll destination so wheel deltas stack while animating
     property real scrollTargetY: 0
+    // Off while the list moves itself in small steps that must land at once.
+    property bool smoothScroll: true
+    // How far into the bottom margin the wheel may go. Negative keeps the wheel
+    // to the content alone, ignoring both margins.
+    property real wheelBottomReach: -1
+    property bool wheelScrolling: false
+    // The hand is moving the list, so code that also moves it waits.
+    readonly property bool userScrolling: root.wheelScrolling || root.moving
+        || (root.ScrollBar.vertical?.pressed ?? false)
 
     property real touchpadScrollFactor: Config?.options.interactions.scrolling.touchpadScrollFactor ?? 100
     property real mouseScrollFactor: Config?.options.interactions.scrolling.mouseScrollFactor ?? 50
@@ -30,15 +39,32 @@ ListView {
         root.dragDistance = 0
     }
 
+    // The wheel's range when wheelBottomReach is zero or more.
+    function clampToWheelRange(y: real): real {
+        const minY = root.originY - root.topMargin;
+        const maxY = Math.max(minY, root.originY + root.contentHeight - root.height
+            + Math.min(root.bottomMargin, root.wheelBottomReach));
+        return Math.max(minY, Math.min(y, maxY));
+    }
+
     maximumFlickVelocity: 3500
     boundsBehavior: Flickable.DragOverBounds
     ScrollBar.vertical: StyledScrollBar {}
+
+    Timer {
+        id: wheelScrollTimer
+        // Outlasts the eased step of the last wheel event.
+        interval: Appearance.animation.scroll.duration + 50
+        onTriggered: root.wheelScrolling = false
+    }
 
     MouseArea {
         visible: Config?.options.interactions.scrolling.fasterTouchpadScroll
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
         onWheel: function(wheelEvent) {
+            root.wheelScrolling = true;
+            wheelScrollTimer.restart();
             const delta = wheelEvent.angleDelta.y / root.mouseScrollDeltaThreshold;
             // The angleDelta.y of a touchpad is usually small and continuous,
             // while that of a mouse wheel is typically in multiples of ±120.
@@ -52,9 +78,11 @@ ListView {
                 // rest.
                 const restY = root.originY + root.contentHeight - root.height;
                 targetY = Math.max(Math.min(root.originY, restY), Math.min(base - delta * scrollFactor, restY));
-            } else {
+            } else if (root.wheelBottomReach < 0) {
                 const maxY = Math.max(0, root.contentHeight - root.height);
                 targetY = Math.max(0, Math.min(base - delta * scrollFactor, maxY));
+            } else {
+                targetY = root.clampToWheelRange(base - delta * scrollFactor);
             }
 
             root.scrollTargetY = targetY;
@@ -67,7 +95,7 @@ ListView {
         // A scrollbar drag is a continuous stream of writes; easing each one
         // with alwaysRunToEnd stacks overlapping animations that fight the
         // hand, so the smoothing steps aside while the bar is held.
-        enabled: !(root.ScrollBar.vertical?.pressed ?? false)
+        enabled: root.smoothScroll && !(root.ScrollBar.vertical?.pressed ?? false)
         NumberAnimation {
             id: scrollAnim
             alwaysRunToEnd: true

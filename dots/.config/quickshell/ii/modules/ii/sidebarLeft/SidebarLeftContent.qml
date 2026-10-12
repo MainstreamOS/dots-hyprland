@@ -77,11 +77,17 @@ Item {
 
     function showPage(index) {
         if (index < 0 || index >= swipeView.count) return;
-        root.currentPageId = swipeView.itemAt(index).pageId;
+        const page = swipeView.itemAt(index);
+        const arriving = root.currentPageId !== page.pageId;
+        root.currentPageId = page.pageId;
         root.syncing = true;
         if (swipeView.currentIndex !== index) swipeView.setCurrentIndex(index);
         if (tabBar.currentIndex !== index) tabBar.setCurrentIndex(index);
         root.syncing = false;
+        // Focus goes to the page itself each time it comes on show, not to
+        // whatever inside it last had it, so the page can pass it on to its
+        // own text field.
+        if (arriving && page.item) page.item.focus = true;
     }
 
     Component.onCompleted: root.syncPages()
@@ -105,18 +111,21 @@ Item {
         property bool built: false
         onOnScreenChanged: if (pageLoader.onScreen) pageLoader.built = true
         active: pageLoader.built || pageLoader.onScreen
-        // The swipe view gives focus to the loader of the page it shows. It
-        // goes to the page itself each time, not to whatever inside the page
-        // last had it, so the page can pass it on to its own text field.
+        // Handed over here and in showPage, never from the loader's own focus:
+        // a page passing focus to its field sets the loader's focus again on
+        // the way up, which would hand it straight back to the page.
         onLoaded: pageLoader.item.focus = true
-        onFocusChanged: if (pageLoader.focus && pageLoader.item) pageLoader.item.focus = true
     }
 
     // One page for each id SidebarLeftTabs can ask for.
     property list<Item> pagePool: [
         PageLoader {
+            id: aiPage
             pageId: "ai"
-            sourceComponent: AiChat {}
+            sourceComponent: AiChat {
+                scopeRoot: root.scopeRoot
+                onScreen: aiPage.onScreen
+            }
         },
         PageLoader {
             pageId: "translator"
@@ -140,17 +149,30 @@ Item {
         }
     ]
 
+    // The sidebar's own shortcuts, handled once here for every page.
     Keys.onPressed: (event) => {
-        if (event.modifiers === Qt.ControlModifier) {
-            if (event.key === Qt.Key_PageDown) {
-                swipeView.incrementCurrentIndex()
-                event.accepted = true;
-            }
-            else if (event.key === Qt.Key_PageUp) {
-                swipeView.decrementCurrentIndex()
-                event.accepted = true;
-            }
+        if (event.modifiers !== Qt.ControlModifier)
+            return;
+        switch (event.key) {
+        case Qt.Key_PageDown:
+            swipeView.incrementCurrentIndex();
+            break;
+        case Qt.Key_PageUp:
+            swipeView.decrementCurrentIndex();
+            break;
+        case Qt.Key_D:
+            root.scopeRoot.toggleDetach();
+            break;
+        case Qt.Key_O:
+            root.scopeRoot.toggleExtend();
+            break;
+        case Qt.Key_P:
+            root.scopeRoot.togglePin();
+            break;
+        default:
+            return;
         }
+        event.accepted = true;
     }
 
     ColumnLayout {

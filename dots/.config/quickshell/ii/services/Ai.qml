@@ -71,7 +71,9 @@ Singleton {
     }
     property real temperature: Persistent.states?.ai?.temperature ?? 0.5
     property string thinkingLevel: Persistent.states?.ai?.thinkingLevel ?? ""
-    readonly property var thinkingLevels: ["minimal", "low", "medium", "high"]
+    readonly property var thinkingLevels: [
+        "minimal", "low", "medium", "high", "extra", "max", "ultracode", "none"
+    ]
     property QtObject tokenCount: QtObject {
         property int input: -1
         property int output: -1
@@ -1088,6 +1090,7 @@ Singleton {
         const format = root.models[root.currentModelId]?.api_format ?? "";
         const fmt = root.planFormatFor(root.currentModelId) || (root.cliSetup[format] !== undefined ? format : "");
         if (fmt !== "") root.detectCli(fmt);
+        root.restoreThinkingLevelForModel(root.currentModelId);
         root._resetTokenCount();
     }
 
@@ -1103,6 +1106,7 @@ Singleton {
         target: Persistent
         function onReadyChanged() {
             if (!Persistent.ready) return;
+            root.restoreThinkingLevelForModel(root.currentModelId);
             if (root._detectAllWhenReady) {
                 root._detectAllWhenReady = false;
                 root._detectAllPlans();
@@ -1158,6 +1162,7 @@ Singleton {
         // the service is being built, and a selection made from here on is its
         // own to answer.
         root._startupDone = true;
+        root.restoreThinkingLevelForModel(root.currentModelId);
         // The last session is read in the background once the shell is up;
         // a New chat or a load before it lands wins.
         root._loadGeneration++;
@@ -1292,6 +1297,10 @@ Singleton {
         root.refreshOllama();
     }
 
+    function fetchOllamaModels(): void {
+        root.kickOllamaRefresh();
+    }
+
     Process {
         id: getOllamaModels
         running: true
@@ -1346,7 +1355,10 @@ Singleton {
 
                     // The saved model may only now have become selectable, so
                     // take it up rather than leaving the default in place.
-                    if (currentArrived) root.setModel(root.currentModelId, false, false);
+                    if (currentArrived) {
+                        root.setModel(root.currentModelId, false, false);
+                        root.restoreThinkingLevelForModel(root.currentModelId);
+                    }
 
                     // A model the user just downloaded on purpose outranks the
                     // saved one, so it is switched to once it actually exists.
@@ -1784,7 +1796,10 @@ Singleton {
         // follow it in rather than failing the membership check below.
         const wantedPlan = root.planFormatFor(modelId);
         if (wantedPlan !== "" && root.cliReady(wantedPlan) && !root.models[modelId]) {
-            if (setPersistentState) Persistent.states.ai.model = modelId;
+            if (setPersistentState) {
+                Persistent.states.ai.model = modelId;
+                root.restoreThinkingLevelForModel(modelId);
+            }
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(root.cliPlanModels[wantedPlan][modelId].name), root.interfaceRole);
             return;
         }
@@ -1802,7 +1817,12 @@ Singleton {
                 );
                 return;
             }
-            if (setPersistentState) Persistent.states.ai.model = modelId;
+            // Only a real selection carries its reasoning level along; a
+            // re-apply must not hand this model's level to the active one.
+            if (setPersistentState) {
+                Persistent.states.ai.model = modelId;
+                root.restoreThinkingLevelForModel(modelId, model);
+            }
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
             // Advice belongs to somebody who just chose this model. Callers
             // passing keyAdvice=false are re-applying a model the user already
@@ -1828,21 +1848,64 @@ Singleton {
         return true;
     }
     
+    function responseStyleId(temp): string {
+        const t = (temp !== undefined) ? temp : root.temperature;
+        if (t <= 0.35) return "precise";
+        if (t <= 0.65) return "balanced";
+        return "creative";
+    }
+
+    function getResponseStyleName(temp) {
+        switch (root.responseStyleId(temp)) {
+        case "precise":
+            return Translation.tr("Precise");
+        case "balanced":
+            return Translation.tr("Balanced");
+        default:
+            return Translation.tr("Creative");
+        }
+    }
+
+    function cycleResponseStyle(): void {
+        const next = { "precise": 0.5, "balanced": 0.8, "creative": 0.2 };
+        root.setTemperature(next[root.responseStyleId()], false);
+    }
+
     function getTemperature() {
         return root.temperature;
     }
 
-    function setTemperature(value) {
-        if (value == NaN || value < 0 || value > 2) {
-            root.addMessage(Translation.tr("Temperature must be between 0 and 2"), Ai.interfaceRole);
+    function setResponseStyle(style) {
+        const norm = (style || "").toString().trim().toLowerCase();
+        if (norm === "precise" || norm === "code" || norm === "exact") {
+            root.setTemperature(0.2);
+        } else if (norm === "balanced" || norm === "default" || norm === "normal") {
+            root.setTemperature(0.5);
+        } else if (norm === "creative" || norm === "ideas" || norm === "imaginative") {
+            root.setTemperature(0.8);
+        } else {
+            const num = parseFloat(style);
+            if (!isNaN(num)) {
+                root.setTemperature(num);
+            } else {
+                root.addMessage(Translation.tr("Invalid style '%1'. Valid styles: precise, balanced, creative").arg(style), Ai.interfaceRole);
+            }
+        }
+    }
+
+    function setTemperature(value, feedback = true) {
+        if (isNaN(value) || value < 0 || value > 2) {
+            if (feedback) root.addMessage(Translation.tr("Temperature must be between 0 and 2"), Ai.interfaceRole);
             return;
         }
         Persistent.states.ai.temperature = value;
         root.temperature = value;
+        if (!feedback) return;
+        const styleName = root.getResponseStyleName(value);
         if (root.currentModel?.sendTemperature === false) {
-            root.addMessage(Translation.tr("Temperature set to %1. (Note: %2 uses default sampling; adjust thinking level with /think instead)").arg(value).arg(root.currentModel.name), Ai.interfaceRole);
+            root.addMessage(Translation.tr("Response style set to %1 (%2). (Note: %3 uses default sampling; adjust thinking level with /think instead)").arg(styleName).arg(value).arg(root.currentModel.name), Ai.interfaceRole);
         } else {
-            root.addMessage(Translation.tr("Temperature set to %1").arg(value), Ai.interfaceRole);
+            root.addMessage(Translation.tr("Response style set to %1 (%2)").arg(styleName).arg(value), Ai.interfaceRole);
         }
     }
 
@@ -1876,31 +1939,208 @@ Singleton {
     }
 
     function printTemperature() {
+        const styleName = root.getResponseStyleName(root.temperature);
         if (root.currentModel?.sendTemperature === false) {
-            root.addMessage(Translation.tr("Temperature: %1 (Not used by %2; adjust thinking level with /think instead)").arg(root.temperature).arg(root.currentModel.name), Ai.interfaceRole);
+            root.addMessage(Translation.tr("Response style: %1 (%2) (Not used by %3; adjust thinking level with /think instead)").arg(styleName).arg(root.temperature).arg(root.currentModel.name), Ai.interfaceRole);
         } else {
-            root.addMessage(Translation.tr("Temperature: %1").arg(root.temperature), Ai.interfaceRole);
+            root.addMessage(Translation.tr("Response style: %1 (%2)").arg(styleName).arg(root.temperature), Ai.interfaceRole);
         }
     }
 
-    function setThinkingLevel(value) {
-        const norm = (value || "").toString().trim().toLowerCase();
-        if (root.thinkingLevels.includes(norm)) {
-            Persistent.states.ai.thinkingLevel = norm;
-            root.thinkingLevel = norm;
-            root.addMessage(Translation.tr("Thinking level set to %1").arg(norm), Ai.interfaceRole);
-        } else if (norm === "off" || norm === "default" || norm === "auto" || norm === "") {
-            Persistent.states.ai.thinkingLevel = "";
-            root.thinkingLevel = "";
-            root.addMessage(Translation.tr("Thinking level set to default (%1)").arg(root.defaultThinkingLevelLabel()), Ai.interfaceRole);
-        } else {
-            root.addMessage(Translation.tr("Invalid thinking level '%1'. Valid levels: minimal, low, medium, high, auto").arg(value), Ai.interfaceRole);
+    function printResponseStyle() {
+        root.printTemperature();
+    }
+
+    function getModelThinkingLevels(model) {
+        const m = model || root.currentModel;
+        const fmt = m?.api_format || "";
+        const mid = (m?.model || m?.name || "").toLowerCase();
+        // Generic fallback for any other models, and for local Ollama
+        // models, which speak the OpenAI format but take only these.
+        const generic = () => [
+            { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning") },
+            { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning effort") },
+            { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning") },
+            { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning effort") },
+        ];
+        if ((m?.endpoint ?? "").includes("localhost:11434")) return generic();
+
+        // Claude (Claude Code CLI, Anthropic API, or Claude-named models)
+        if (fmt === "claude-code" || fmt === "anthropic" || mid.includes("claude")) {
+            return [
+                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning budget") },
+                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Quick reasoning for routine edits and questions") },
+                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for standard coding and debugging") },
+                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex logic and tricky bugs") },
+                { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
+                { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
+                { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") },
+            ];
         }
+
+        // Codex (Codex CLI or OpenAI reasoning models)
+        if (fmt === "codex-cli" || fmt === "openai" || mid.includes("codex") || mid.startsWith("o1") || mid.startsWith("o3") || mid.startsWith("gpt-5")) {
+            return [
+                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") },
+                { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") },
+                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
+                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
+                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
+                { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Maximum reasoning effort for hard problems") },
+            ];
+        }
+
+        // Gemini (Gemini API or Antigravity CLI)
+        if (fmt === "gemini" || fmt === "antigravity-cli" || mid.includes("gemini")) {
+            return [
+                { id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default dynamic reasoning") },
+                { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") },
+                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Standard reasoning effort") },
+                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Balanced reasoning for coding and analysis") },
+                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep thinking and complex mathematics") },
+            ];
+        }
+
+        return generic();
+    }
+
+    function canonicalModelId(modelId) {
+        const id = (modelId || root.currentModelId || "").toLowerCase();
+        return root.retiredModels[id] ?? id;
+    }
+
+    function getModelObject(modelId) {
+        if (!modelId) return root.currentModel;
+        const id = modelId.toLowerCase();
+        const norm = root.canonicalModelId(id);
+        if (root.models[norm]) return root.models[norm];
+        if (root.models[id]) return root.models[id];
+        if (root.isGeminiApiModel(norm)) return root.geminiApiCatalog[norm] ?? root.models["gemini"];
+        if (root.isGeminiApiModel(id)) return root.geminiApiCatalog[id] ?? root.models["gemini"];
+        for (const fmt of Object.keys(root.cliPlanModels)) {
+            if (root.cliPlanModels[fmt][norm]) {
+                const entry = root.cliPlanModels[fmt][norm];
+                return { api_format: fmt, model: entry.alias || norm, name: entry.name, thinkingLevel: entry.thinkingLevel || "" };
+            }
+            if (root.cliPlanModels[fmt][id]) {
+                const entry = root.cliPlanModels[fmt][id];
+                return { api_format: fmt, model: entry.alias || id, name: entry.name, thinkingLevel: entry.thinkingLevel || "" };
+            }
+        }
+        return root.currentModel;
+    }
+
+    function getStoredThinkingLevel(modelId) {
+        const id = (modelId || root.currentModelId || "").toLowerCase();
+        const norm = root.canonicalModelId(id);
+        const map = Persistent.states?.ai?.modelThinkingLevels ?? ({});
+        if (map[norm] !== undefined) return map[norm];
+        if (map[id] !== undefined) return map[id];
+        if (norm === "gemini-flash-latest" && map["gemini"] !== undefined) return map["gemini"];
+        if (norm === "gemini" && map["gemini-flash-latest"] !== undefined) return map["gemini-flash-latest"];
+        const legacyLevel = (Persistent.states?.ai?.thinkingLevel || "").toLowerCase();
+        if (legacyLevel === "ultracode" && (norm === "claude" || norm.startsWith("claude-"))) {
+            return "ultracode";
+        }
+        return undefined;
+    }
+
+    function restoreThinkingLevelForModel(modelId, targetModelObj) {
+        const id = (modelId || root.currentModelId || "").toLowerCase();
+        const norm = root.canonicalModelId(id);
+        const modelObj = targetModelObj || root.getModelObject(norm);
+
+        const stored = root.getStoredThinkingLevel(norm);
+        const defaultLevel = (modelObj?.thinkingLevel || "").toLowerCase();
+
+        let targetLevel = "";
+        if (stored !== undefined && stored !== null) {
+            const storedNorm = stored.toString().trim().toLowerCase();
+            if (storedNorm === "" || storedNorm === "auto" || storedNorm === "default" || storedNorm === "off") {
+                targetLevel = "";
+            } else {
+                const validLevels = root.getModelThinkingLevels(modelObj).map(item => item.id.toLowerCase());
+                if (validLevels.includes(storedNorm)) {
+                    targetLevel = storedNorm;
+                } else {
+                    targetLevel = defaultLevel === "auto" ? "" : defaultLevel;
+                }
+            }
+        } else {
+            targetLevel = defaultLevel === "auto" ? "" : defaultLevel;
+        }
+
+        root.thinkingLevel = targetLevel;
+        try {
+            if (Persistent.states?.ai) {
+                Persistent.states.ai.thinkingLevel = targetLevel;
+            }
+        } catch (e) {
+            console.warn("[Ai] Failed to update active thinkingLevel in persistent state:", e);
+        }
+    }
+
+    function setThinkingLevel(value, feedback = true): void {
+        const norm = (value || "").toString().trim().toLowerCase();
+        const modelKey = root.canonicalModelId(root.currentModelId);
+        const validItems = root.getModelThinkingLevels(root.currentModel);
+        const validIds = validItems.map(item => item.id.toLowerCase());
+
+        if (norm === "off" || norm === "default" || norm === "auto" || norm === "") {
+            try {
+                if (Persistent.states?.ai) {
+                    const next = Object.assign({}, Persistent.states.ai.modelThinkingLevels ?? {});
+                    next[modelKey] = "";
+                    if (modelKey === "gemini-flash-latest") next["gemini"] = "";
+                    else if (modelKey === "gemini") next["gemini-flash-latest"] = "";
+                    Persistent.states.ai.modelThinkingLevels = next;
+                    Persistent.states.ai.thinkingLevel = "";
+                }
+            } catch (e) {
+                console.warn("[Ai] Failed to clear thinkingLevel in persistent state:", e);
+            }
+            root.thinkingLevel = "";
+            if (feedback) root.addMessage(Translation.tr("Thinking level set to default (%1)").arg(root.defaultThinkingLevelLabel()), Ai.interfaceRole);
+        } else if (validIds.includes(norm)) {
+            try {
+                if (Persistent.states?.ai) {
+                    const next = Object.assign({}, Persistent.states.ai.modelThinkingLevels ?? {});
+                    next[modelKey] = norm;
+                    if (modelKey === "gemini-flash-latest") next["gemini"] = norm;
+                    else if (modelKey === "gemini") next["gemini-flash-latest"] = norm;
+                    Persistent.states.ai.modelThinkingLevels = next;
+                    Persistent.states.ai.thinkingLevel = norm;
+                }
+            } catch (e) {
+                console.warn("[Ai] Failed to save thinkingLevel to persistent state:", e);
+            }
+            root.thinkingLevel = norm;
+            if (feedback) root.addMessage(Translation.tr("Thinking level set to %1").arg(root.thinkingLevelName(norm)), Ai.interfaceRole);
+        } else {
+            if (feedback) root.addMessage(Translation.tr("Invalid thinking level '%1'. Valid levels: %2").arg(value).arg(validIds.join(", ")), Ai.interfaceRole);
+        }
+    }
+
+    // Display name of a level id, translated.
+    function thinkingLevelName(id: string): string {
+        const norm = String(id ?? "").trim().toLowerCase();
+        if (norm === "" || norm === "auto" || norm === "default" || norm === "off") return Translation.tr("Auto");
+        const names = {
+            "minimal": Translation.tr("Minimal"),
+            "low": Translation.tr("Low"),
+            "medium": Translation.tr("Medium"),
+            "high": Translation.tr("High"),
+            "extra": Translation.tr("Extra"),
+            "max": Translation.tr("Max"),
+            "ultracode": Translation.tr("UltraCode"),
+            "none": Translation.tr("None"),
+        };
+        return names.hasOwnProperty(norm) ? names[norm] : norm.charAt(0).toUpperCase() + norm.slice(1);
     }
 
     function defaultThinkingLevelLabel() {
         const level = root.currentModel?.thinkingLevel;
-        return level ? `${level} (model default)` : "model default";
+        return level ? Translation.tr("%1 (model default)").arg(root.thinkingLevelName(level)) : Translation.tr("Auto (model default)");
     }
 
     function printThinkingLevel() {

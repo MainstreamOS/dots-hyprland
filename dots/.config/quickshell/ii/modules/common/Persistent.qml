@@ -124,6 +124,8 @@ Singleton {
             property JsonObject ai: JsonObject {
                 property string model: "local-ai-setup"
                 property real temperature: 0.5
+                property string thinkingLevel: ""
+                property var modelThinkingLevels: ({})
             }
 
             property JsonObject cheatsheet: JsonObject {

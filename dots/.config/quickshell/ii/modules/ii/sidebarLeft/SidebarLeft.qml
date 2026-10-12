@@ -14,11 +14,18 @@ Scope { // Scope
     // Not bound: "Pinned by default" decides it on each open, and a toggle
     // holds until the next one.
     property bool pin: false
+    readonly property bool extend: sidebarLoader.item?.extend ?? false
     property Component contentComponent: SidebarLeftContent {}
     property Item sidebarContent
 
     function toggleDetach() {
         root.detach = !root.detach;
+    }
+
+    function toggleExtend() {
+        if (root.detach || !sidebarLoader.item)
+            return;
+        sidebarLoader.item.extend = !sidebarLoader.item.extend;
     }
 
     Process { // Dodge cursor away, pin, move cursor back
@@ -97,6 +104,8 @@ Scope { // Scope
     }
 
     function togglePin() {
+        if (root.detach)
+            return;
         if (!root.pin) pinWithFunnyHyprlandWorkaroundProc.doIt()
         else root.pin = !root.pin;
     }
@@ -240,16 +249,6 @@ Scope { // Scope
                     if (event.key === Qt.Key_Escape) {
                         panelWindow.hide();
                     }
-                    if (event.modifiers === Qt.ControlModifier) {
-                        if (event.key === Qt.Key_O) {
-                            panelWindow.extend = !panelWindow.extend;
-                        } else if (event.key === Qt.Key_D) {
-                            root.toggleDetach();
-                        } else if (event.key === Qt.Key_P) {
-                            root.togglePin();
-                        }
-                        event.accepted = true;
-                    }
                 }
             }
         }
@@ -273,15 +272,6 @@ Scope { // Scope
                 id: detachedSidebarBackground
                 anchors.fill: parent
                 color: Appearance.colors.colLayer0
-
-                Keys.onPressed: (event) => {
-                    if (event.modifiers === Qt.ControlModifier) {
-                        if (event.key === Qt.Key_D) {
-                            root.toggleDetach();
-                        }
-                        event.accepted = true;
-                    }
-                }
             }
         }
     }

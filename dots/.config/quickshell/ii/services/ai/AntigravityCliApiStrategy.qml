@@ -224,6 +224,7 @@ ApiStrategy {
                 total: result.usage.total_tokens ?? -1
             });
         }
+        GeminiUsage.refreshAfterReply();
         sink.finished();
     }
 
