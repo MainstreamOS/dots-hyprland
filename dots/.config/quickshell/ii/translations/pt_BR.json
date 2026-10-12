@@ -2542,5 +2542,7 @@
   "Antigravity CLI — agy update": "Antigravity CLI — agy update",
   "Antigravity CLI update failed. Continuing with remaining steps.": "Antigravity CLI update failed. Continuing with remaining steps.",
   "managed via AUR": "managed via AUR",
-  "Antigravity:": "Antigravity:"
+  "Antigravity:": "Antigravity:",
+  "Open the left sidebar pinned, reserving screen space for it": "Abrir a barra lateral esquerda fixada, reservando espaço na tela para ela",
+  "Pinned by default": "Fixada por padrão"
 }

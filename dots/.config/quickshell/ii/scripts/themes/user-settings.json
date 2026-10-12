@@ -16,5 +16,6 @@
   ["screenSnip", "savePath"],
   ["session", "simpleMenu"],
   ["bar", "weather"],
-  ["bar", "seededWidgets"]
+  ["bar", "seededWidgets"],
+  ["sidebar", "pinnedOnStartup"]
 ]

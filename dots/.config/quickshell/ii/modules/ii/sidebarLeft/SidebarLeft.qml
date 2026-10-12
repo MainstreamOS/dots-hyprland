@@ -11,6 +11,8 @@ import Quickshell.Hyprland
 Scope { // Scope
     id: root
     property bool detach: false
+    // Not bound: "Pinned by default" decides it on each open, and a toggle
+    // holds until the next one.
     property bool pin: false
     property Component contentComponent: SidebarLeftContent {}
     property Item sidebarContent
@@ -58,7 +60,7 @@ Scope { // Scope
     Binding {
         target: GlobalStates
         property: "sidebarLeftPinned"
-        value: root.pin && !root.detach
+        value: GlobalStates.sidebarLeftOpen && root.pin && !root.detach
     }
 
     // The strip the pinned sidebar reserves, and where, for the surfaces
@@ -89,7 +91,20 @@ Scope { // Scope
         else root.pin = !root.pin;
     }
 
+    function applyPinnedByDefault() {
+        root.pin = Config.options?.sidebar?.pinnedOnStartup ?? true;
+    }
+
+    Connections {
+        target: GlobalStates
+        function onSidebarLeftOpenChanged() {
+            if (GlobalStates.sidebarLeftOpen)
+                root.applyPinnedByDefault();
+        }
+    }
+
     Component.onCompleted: {
+        root.applyPinnedByDefault();
         root.sidebarContent = contentComponent.createObject(null, {
             "scopeRoot": root,
         });
@@ -128,7 +143,7 @@ Scope { // Scope
             }
 
             exclusionMode: ExclusionMode.Normal
-            exclusiveZone: root.pin ? sidebarWidth : 0
+            exclusiveZone: (root.pin && GlobalStates.sidebarLeftOpen) ? sidebarWidth : 0
             // Pinned, the sidebar's reserved space moves every window beside
             // it as it comes and goes, and Hyprland reports no window event
             // for that, so the window list everything else reads would keep

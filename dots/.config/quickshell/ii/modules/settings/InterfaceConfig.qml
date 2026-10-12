@@ -663,6 +663,16 @@ ContentPage {
         mirrorIcon: true
         title: Translation.tr("Left Sidebar")
 
+        ConfigSwitch {
+            buttonIcon: "push_pin"
+            text: Translation.tr("Pinned by default")
+            tooltipText: Translation.tr("Open the left sidebar pinned, reserving screen space for it")
+            checked: Config.options.sidebar.pinnedOnStartup
+            onCheckedChanged: {
+                Config.options.sidebar.pinnedOnStartup = checked;
+            }
+        }
+
         ConfigRow {
             ColumnLayout {
                 ContentSubsectionLabel {
