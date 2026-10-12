@@ -81,36 +81,24 @@ ContentPage {
     }
 
     ContentSection {
+        visible: Config.options.policies.ai !== 0
         icon: "neurology"
         title: Translation.tr("AI Assistant")
 
         ContentSubsection {
             title: Translation.tr("Execution Mode")
-            tooltip: Translation.tr("Controls how AI models and agent CLIs handle permissions and tools.\n• Safe: Asks for confirmation before executing commands.\n• YOLO: Automatically approves tool execution, commands, and web fetching.\n• Plan: Focuses strictly on planning and architecture without running commands or edits.")
+            tooltip: Translation.tr("Controls how AI models and agent CLIs handle permissions and tools.\n• Ask: Asks for confirmation before executing commands.\n• Auto: Automatically approves tool execution, commands, and web fetching.\n• Plan: Focuses strictly on planning and architecture without running commands or edits.")
 
             ConfigSelectionArray {
-                currentValue: Config.options.ai.mode ?? "safe"
+                currentValue: AiModes.current
                 onSelected: newValue => {
-                    Config.setNestedValue("ai.mode", newValue);
-                    if (Config.options?.ai) Config.options.ai.mode = newValue;
+                    AiModes.set(newValue);
                 }
-                options: [
-                    {
-                        displayName: Translation.tr("Safe"),
-                        icon: "shield",
-                        value: "safe"
-                    },
-                    {
-                        displayName: Translation.tr("YOLO"),
-                        icon: "bolt",
-                        value: "yolo"
-                    },
-                    {
-                        displayName: Translation.tr("Plan"),
-                        icon: "edit_note",
-                        value: "plan"
-                    }
-                ]
+                options: AiModes.ids.map(id => ({
+                    displayName: AiModes.name(id),
+                    icon: AiModes.icon(id),
+                    value: id
+                }))
             }
         }
     }

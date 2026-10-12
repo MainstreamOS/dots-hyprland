@@ -60,16 +60,10 @@ Item {
         }
     }
 
-    function setExecutionMode(target) {
-        if (target !== "safe" && target !== "yolo" && target !== "plan") return false;
-        try {
-            Config.setNestedValue("ai.mode", target);
-            if (Config.options?.ai && typeof Config.options.ai.mode !== "undefined") {
-                Config.options.ai.mode = target;
-            }
-        } catch (e) {
-            console.warn("[AiChat] setExecutionMode failed:", e);
-        }
+    function setMode(id: string): bool {
+        if (!AiModes.set(id))
+            return false;
+        Ai.addMessage(Translation.tr("Execution mode set to %1").arg(AiModes.name(id)), Ai.interfaceRole);
         return true;
     }
 
@@ -117,39 +111,25 @@ Item {
         },
         {
             name: "mode",
-            description: Translation.tr("Set execution mode: safe, yolo, or plan"),
+            description: Translation.tr("Set execution mode: ask, auto, or plan"),
             execute: args => {
                 if (args.length === 0 || args[0] === "get") {
-                    Ai.addMessage(Translation.tr("Current mode: %1\nUsage: %2mode [safe|yolo|plan]").arg(Config.options?.ai?.mode ?? "safe").arg(root.commandPrefix), Ai.interfaceRole);
+                    Ai.addMessage(Translation.tr("Current mode: %1\nUsage: %2mode [ask|auto|plan]").arg(AiModes.name(AiModes.current)).arg(root.commandPrefix), Ai.interfaceRole);
                     return;
                 }
-                const target = args[0].toLowerCase();
-                if (root.setExecutionMode(target)) {
-                    Ai.addMessage(Translation.tr("Execution mode set to %1").arg(target), Ai.interfaceRole);
-                } else {
-                    Ai.addMessage(Translation.tr("Invalid mode. Supported: safe, yolo, plan"), Ai.interfaceRole);
-                }
+                if (!root.setMode(args[0]))
+                    Ai.addMessage(Translation.tr("Invalid mode. Supported: ask, auto, plan"), Ai.interfaceRole);
             }
         },
         {
-            name: "yolo",
-            description: Translation.tr("Toggle YOLO mode (auto-approve all tools and commands)"),
-            execute: () => {
-                const current = Config.options?.ai?.mode ?? "safe";
-                const next = (current === "yolo") ? "safe" : "yolo";
-                root.setExecutionMode(next);
-                Ai.addMessage(Translation.tr("Execution mode set to %1").arg(next), Ai.interfaceRole);
-            }
+            name: "auto",
+            description: Translation.tr("Toggle Auto mode (auto-approve all tools and commands)"),
+            execute: () => root.setMode(AiModes.current === "auto" ? "ask" : "auto")
         },
         {
             name: "plan",
             description: Translation.tr("Toggle Plan mode (architectural planning without executing edits)"),
-            execute: () => {
-                const current = Config.options?.ai?.mode ?? "safe";
-                const next = (current === "plan") ? "safe" : "plan";
-                root.setExecutionMode(next);
-                Ai.addMessage(Translation.tr("Execution mode set to %1").arg(next), Ai.interfaceRole);
-            }
+            execute: () => root.setMode(AiModes.current === "plan" ? "ask" : "plan")
         },
         {
             name: "ollama",
@@ -1123,24 +1103,22 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     implicitHeight: modelIndicator.implicitHeight
                     implicitWidth: modeRowLayout.implicitWidth + 8 * 2
                     buttonRadius: Appearance.rounding.small
-                    property string currentMode: Config.options?.ai?.mode ?? "safe"
+                    property string currentMode: AiModes.current
 
                     colBackground: {
-                        if (currentMode === "yolo") return Appearance.colors.colPrimaryContainer;
+                        if (currentMode === "auto") return Appearance.colors.colPrimaryContainer;
                         if (currentMode === "plan") return Appearance.colors.colSecondaryContainer;
                         return Appearance.colors.colLayer2;
                     }
 
                     colBackgroundHover: {
-                        if (currentMode === "yolo") return Appearance.colors.colPrimaryContainerHover ?? Appearance.colors.colPrimaryContainer;
+                        if (currentMode === "auto") return Appearance.colors.colPrimaryContainerHover ?? Appearance.colors.colPrimaryContainer;
                         if (currentMode === "plan") return Appearance.colors.colSecondaryContainerHover ?? Appearance.colors.colSecondaryContainer;
                         return Appearance.colors.colLayer2Hover;
                     }
 
                     downAction: () => {
-                        const current = Config.options?.ai?.mode ?? "safe";
-                        const next = (current === "safe") ? "yolo" : (current === "yolo" ? "plan" : "safe");
-                        root.setExecutionMode(next);
+                        root.setMode(AiModes.ids[(AiModes.ids.indexOf(AiModes.current) + 1) % AiModes.ids.length]);
                     }
 
                     contentItem: RowLayout {
@@ -1149,27 +1127,19 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         anchors.centerIn: parent
 
                         MaterialSymbol {
-                            text: {
-                                if (modeButton.currentMode === "yolo") return "bolt";
-                                if (modeButton.currentMode === "plan") return "edit_note";
-                                return "shield";
-                            }
+                            text: AiModes.icon(modeButton.currentMode)
                             iconSize: Appearance.font.pixelSize.normal
                             color: {
-                                if (modeButton.currentMode === "yolo") return Appearance.colors.colOnPrimaryContainer;
+                                if (modeButton.currentMode === "auto") return Appearance.colors.colOnPrimaryContainer;
                                 if (modeButton.currentMode === "plan") return Appearance.colors.colOnSecondaryContainer;
                                 return Appearance.colors.colSubtext;
                             }
                         }
                         StyledText {
-                            text: {
-                                if (modeButton.currentMode === "yolo") return "YOLO";
-                                if (modeButton.currentMode === "plan") return "Plan";
-                                return "Safe";
-                            }
+                            text: AiModes.name(modeButton.currentMode)
                             font.pixelSize: Appearance.font.pixelSize.smaller
                             color: {
-                                if (modeButton.currentMode === "yolo") return Appearance.colors.colOnPrimaryContainer;
+                                if (modeButton.currentMode === "auto") return Appearance.colors.colOnPrimaryContainer;
                                 if (modeButton.currentMode === "plan") return Appearance.colors.colOnSecondaryContainer;
                                 return Appearance.colors.colSubtext;
                             }
@@ -1177,13 +1147,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     }
 
                     StyledToolTip {
-                        text: {
-                            if (modeButton.currentMode === "yolo")
-                                return Translation.tr("Mode: YOLO (Auto-approve tools & commands)\nClick to switch to Plan mode");
-                            if (modeButton.currentMode === "plan")
-                                return Translation.tr("Mode: Plan (Planning only, no edits/commands executed)\nClick to switch to Safe mode");
-                            return Translation.tr("Mode: Safe (Manual approval for commands)\nClick to switch to YOLO mode");
-                        }
+                        text: AiModes.name(modeButton.currentMode) + "\n" + AiModes.description(modeButton.currentMode)
                     }
                 }
 

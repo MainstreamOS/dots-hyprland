@@ -46,12 +46,13 @@ ApiStrategy {
         // read as another flag, and a message that starts with a slash stays
         // a message rather than one of the CLI's own commands. A conversation
         // the CLI no longer has only draws a warning and starts a new one.
-        const mode = Config.options?.ai?.mode ?? "safe";
+        const mode = AiModes.current;
         let command = "agy --output-format=stream-json";
-        if (mode === "yolo") {
+        if (mode === "auto") {
             command += " --disable-slash-commands --dangerously-skip-permissions";
         } else if (mode === "plan") {
-            command += " --mode=plan --dangerously-skip-permissions";
+            // agy ignores Plan mode while slash commands are off.
+            command += " --mode=plan";
         } else {
             command += " --disable-slash-commands";
         }

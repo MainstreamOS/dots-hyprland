@@ -39,8 +39,8 @@ ApiStrategy {
         }
         script += ` -p '${CF.StringUtils.shellSingleQuoteEscape(userMessage)}'`;
         script += " --verbose";
-        const mode = Config.options?.ai?.mode ?? "safe";
-        if (mode === "yolo") {
+        const mode = AiModes.current;
+        if (mode === "auto") {
             script += " --dangerously-skip-permissions";
         } else if (mode === "plan") {
             script += " --permission-mode plan";

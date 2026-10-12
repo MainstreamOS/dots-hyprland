@@ -46,7 +46,7 @@ Singleton {
             // QML/JS doesn't support replaceAll, so use split/join
             prompt = prompt.split(key).join(root.promptSubstitutions[key]);
         }
-        if ((Config.options?.ai?.mode ?? "safe") === "plan") {
+        if (AiModes.current === "plan") {
             prompt += "\n\n## Mode: Plan\nYou are currently in Plan Mode. Focus on designing, architecting, and outlining a structured step-by-step plan. Do not execute destructive edits or commands without user confirmation.";
         }
         return prompt;
@@ -2021,8 +2021,8 @@ Singleton {
                 requester.makeRequest();
                 return;
             }
-            const mode = Config.options?.ai?.mode ?? "safe";
-            if (mode === "yolo") {
+            const mode = AiModes.current;
+            if (mode === "auto") {
                 const responseMessage = createFunctionOutputMessage(name, "", false);
                 const id = idForMessage(responseMessage);
                 root.messageIDs = [...root.messageIDs, id];
