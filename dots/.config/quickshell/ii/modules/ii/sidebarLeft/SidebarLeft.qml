@@ -62,6 +62,16 @@ Scope { // Scope
         property: "sidebarLeftPinned"
         value: GlobalStates.sidebarLeftOpen && root.pin && !root.detach
     }
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftDetached"
+        value: root.detach
+    }
+    Binding {
+        target: GlobalStates
+        property: "sidebarLeftWidth"
+        value: sidebarLoader.item?.sidebarWidth ?? Appearance.sizes.sidebarWidth
+    }
 
     // The strip the pinned sidebar reserves, and where, for the surfaces
     // raised over it with the overview that would otherwise keep clear of it.

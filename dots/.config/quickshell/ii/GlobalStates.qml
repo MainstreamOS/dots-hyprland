@@ -60,6 +60,10 @@ Singleton {
     property bool dockPinned: false
     // Written by the left sidebar; pinned, it reserves an exclusive zone.
     property bool sidebarLeftPinned: false
+    // Written by the left sidebar: whether it is currently detached into a floating window.
+    property bool sidebarLeftDetached: false
+    // Written by the left sidebar: current sidebar target width.
+    property real sidebarLeftWidth: Appearance.sizes.sidebarWidth
     // Written by the left sidebar: how far it reaches in from its edge while
     // open without reserving that room. Pinned, its exclusive zone moves
     // popups instead.
