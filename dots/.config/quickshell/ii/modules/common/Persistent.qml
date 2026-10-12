@@ -20,12 +20,47 @@ Singleton {
         root.states.hyprlandInstanceSignature = Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || ""
     }
 
+    property bool _writing: false
+    property bool _writeAgain: false
+    property bool _reloadAgain: false
+
+    // Calling setText while a write runs would block the GUI thread until it
+    // ends, so a change made meanwhile is written once that write is done.
+    function writeStates() {
+        if (root._writing) {
+            root._writeAgain = true;
+            return;
+        }
+        persistentStatesAdapterView.writeAdapter();
+        const text = persistentStatesAdapterView.text();
+        // setText skips text the file already holds, and then no saved signal comes.
+        if (text === persistentStatesFileView.text())
+            return;
+        root._writing = true;
+        persistentStatesFileView.setText(text);
+    }
+
+    function writeDone() {
+        root._writing = false;
+        if (root._writeAgain) {
+            root._writeAgain = false;
+            root.writeStates();
+        }
+        if (root._reloadAgain && !root._writing) {
+            root._reloadAgain = false;
+            persistentStatesFileView.reload();
+        }
+    }
+
     Timer {
         id: fileReloadTimer
         interval: 100
         repeat: false
         onTriggered: {
-            persistentStatesFileView.reload()
+            if (root._writing)
+                root._reloadAgain = true;
+            else
+                persistentStatesFileView.reload();
         }
     }
 
@@ -34,18 +69,28 @@ Singleton {
         interval: 100
         repeat: false
         onTriggered: {
-            persistentStatesFileView.writeAdapter()
+            root.writeStates()
         }
     }
 
+    // Writes run off the GUI thread, since their fsync can stall for seconds
+    // under heavy disk I/O. The adapter is not attached here, so a write landing
+    // never reloads its older snapshot over a change made while it ran.
     FileView {
         id: persistentStatesFileView
         path: root.filePath
 
         watchChanges: true
         onFileChanged: fileReloadTimer.restart()
-        onAdapterUpdated: fileWriteTimer.restart()
-        onLoaded: root.ready = true
+        onLoaded: {
+            // A read of our own write equals the last serialization, so setText skips it.
+            persistentStatesAdapterView.setText(persistentStatesFileView.text());
+            root.ready = true;
+        }
+        // The FileView counts the finished write as live until these signals return,
+        // so a write or reload started inside them would be dropped.
+        onSaved: Qt.callLater(root.writeDone)
+        onSaveFailed: Qt.callLater(root.writeDone)
         onLoadFailed: error => {
             console.log("Failed to load persistent states file:", error);
             if (error == FileViewError.FileNotFound) {
@@ -58,6 +103,18 @@ Singleton {
                 fileWriteTimer.restart();
             }
         }
+    }
+
+    // Holds the adapter in memory: its blocking writes go to /dev/null and only
+    // serialize the adapter, while setText hands it the file's content.
+    FileView {
+        id: persistentStatesAdapterView
+        preload: false
+        printErrors: false
+        path: "/dev/null"
+        blockWrites: true
+        atomicWrites: false
+        onAdapterUpdated: fileWriteTimer.restart()
 
         adapter: JsonAdapter {
             id: persistentStatesJsonAdapter
