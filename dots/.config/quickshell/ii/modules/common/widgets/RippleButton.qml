@@ -41,6 +41,7 @@ Button {
     function cancelRipple() { rippleFadeAnim.restart(); }
 
     function startRipple(x, y) {
+        if (!root.rippleEnabled) return;
         // The ripple is a child of the background, which the control insets on
         // both axes — so a horizontal inset offsets the origin just as a
         // vertical one does, and the reach is the background's, not the whole
@@ -80,7 +81,6 @@ Button {
             }
             root.down = true
             if (root.downAction) root.downAction();
-            if (!root.rippleEnabled) return;
             const {x,y} = event
             startRipple(x, y)
         }

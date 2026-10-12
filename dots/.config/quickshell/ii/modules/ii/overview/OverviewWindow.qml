@@ -150,18 +150,12 @@ Item { // Window
     // showing what's actually in each window. The overview-open speed
     // fix is independent of this (it's about the wlr-layer-shell surface
     // lifecycle, see Overview.qml).
-    ScreencopyView {
+    HdrScreencopyView {
         id: windowPreview
         anchors.fill: parent
         captureSource: (GlobalStates.overviewOpen && !root.captureSuppressed) ? root.toplevel : null
         live: true
         constraintSize: Qt.size(Math.max(1, root.targetWindowWidth), Math.max(1, root.targetWindowHeight))
-        // PQ-to-sRGB tone-mapping when HDR Always On
-        layer.enabled: GlobalStates.hdrActive
-        layer.effect: ShaderEffect {
-            property real sdrPaperWhite: 203.0
-            fragmentShader: "file://" + Quickshell.env("HOME") + "/.config/quickshell/ii/shaders/pq_to_srgb.frag.qsb"
-        }
     }
 
     // Color overlay for interactions

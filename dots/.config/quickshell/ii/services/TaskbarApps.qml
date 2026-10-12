@@ -92,6 +92,7 @@ Singleton {
     // Doing so creates a reactive dependency that re-evaluates the entire
     // dock model on every folder change, causing animation glitches.
     // Folder data is resolved lazily by DockAppButton via AppFolderManager.
+    readonly property var appsWithoutSeparator: apps.filter(app => app.appId !== "SEPARATOR")
     property list<var> apps: {
         // resolveAppId registers no dependency, so this re-runs once per app scan
         // (not once per app) to regroup windows restored before the scan landed.

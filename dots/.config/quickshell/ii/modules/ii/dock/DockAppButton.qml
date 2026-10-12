@@ -1,3 +1,4 @@
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
@@ -14,8 +15,11 @@ DockButton {
     property var appListRoot
     property int delegateIndex: -1
     property real iconSize: dockRoot.fittedIconSize
-    property real countDotWidth: 10
-    property real countDotHeight: 4
+    // The window marks keep their stock proportions to the icon at any icon size.
+    readonly property real markScale: root.iconSize / Appearance.sizes.dockIconStock
+    readonly property real markGap: Math.max(2, Math.round(3 * markScale))
+    property real countDotWidth: Math.max(5, Math.round(10 * markScale))
+    property real countDotHeight: Math.max(2, Math.round(4 * markScale))
     property bool appIsActive: appToplevel?.toplevels?.find(t => (t.activated == true)) !== undefined
 
     // How many windows this button stands for. A delegate goes on answering
@@ -204,7 +208,7 @@ DockButton {
                 var mapped = mapToItem(appListRoot, event.x, event.y);
                 appListRoot.dragStartCursorPos = dockRoot.dockVertical ? mapped.y : mapped.x;
                 appListRoot.dragCursorPos = appListRoot.dragStartCursorPos;
-                appListRoot.slotSize = (dockRoot.dockVertical ? root.height : root.width) + 2;
+                appListRoot.slotSize = (dockRoot.dockVertical ? root.height : root.width) + appListRoot.listViewRef.spacing;
                 appListRoot.dragging = true;
             }
             if (dragActive) {
@@ -233,6 +237,11 @@ DockButton {
     }
 
     onClicked: {
+        // Over the Alt+Tab overview an app picks among its windows there.
+        if (dockRoot.overWindowOverview && !root.isFolder && !root.isSidebar) {
+            GlobalStates.windowOverviewAppClicked(root.appToplevel);
+            return;
+        }
         if (root.isFolder) {
             // Toggle folder popup directly above this icon
             if (appListRoot.folderPopupShow && appListRoot.clickedButton === root) {
@@ -242,6 +251,7 @@ DockButton {
                 const folder = AppFolderManager.getFolder(folderId);
                 if (folder) appListRoot.showFolderPopup(root, folder);
             }
+
         } else if (root.windowCount > 1) {
             // Multiple windows: toggle the preview so there's something to pick between
             if (appListRoot.clickedButton === root) {
@@ -290,7 +300,12 @@ DockButton {
 
     contentItem: Loader {
         active: !isSeparator
-        sourceComponent: Item {
+        sourceComponent: regularIcon
+    }
+
+    Component {
+        id: regularIcon
+        Item {
             anchors.centerIn: parent
             width: root.iconSize
             height: root.iconSize
@@ -387,37 +402,15 @@ DockButton {
                     verticalCenter: parent.verticalCenter
                 }
                 active: root.isFolder
-                sourceComponent: Rectangle {
-                    implicitWidth: root.iconSize
-                    implicitHeight: root.iconSize
-                    radius: Appearance.rounding.small
+                sourceComponent: DockFolderTile {
+                    size: root.iconSize
+                    appIds: root.folderAppIds
                     color: dockRoot.content.colLayer1
-                    border.width: 1
                     border.color: dockRoot.content.colLayer0BorderOnLayer1
-
-                    Grid {
-                        anchors.centerIn: parent
-                        columns: 2
-                        spacing: 1
-
-                        Repeater {
-                            model: root.folderAppIds
-
-                            IconImage {
-                                id: folderTileIcon
-                                required property var modelData
-                                source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
-                                implicitSize: root.iconSize * 0.4
-                                mipmap: true
-                                // Folder tiles live in the same scaled Item
-                                // as the main app icon, so they need the
-                                // same maxScale-bumped sourceSize to stay
-                                // crisp through the hover animation.
-                                backer.sourceSize.width: root.rasterFor(root.iconSize * 0.4)
-                                backer.sourceSize.height: root.rasterFor(root.iconSize * 0.4)
-                            }
-                        }
-                    }
+                    // Folder tiles live in the same scaled Item as the main app
+                    // icon, so they need the same maxScale-bumped sourceSize to
+                    // stay crisp through the hover animation.
+                    rasterSize: root.rasterFor(root.iconSize * 0.4)
                 }
             }
 
@@ -491,8 +484,8 @@ DockButton {
             }
 
             GridLayout {
-                columnSpacing: 3
-                rowSpacing: 3
+                columnSpacing: root.markGap
+                rowSpacing: root.markGap
                 columns: dockRoot.dockVertical ? 1 : -1
                 rows: dockRoot.dockVertical ? -1 : 1
                 anchors {
@@ -506,10 +499,10 @@ DockButton {
                     // them into stretched slivers.
                     left: dockRoot.dockEdge === "right" ? parent.horizontalCenter : undefined
                     right: dockRoot.dockEdge === "left" ? parent.horizontalCenter : undefined
-                    topMargin: dockRoot.dockEdge === "bottom" ? 2 : 0
-                    bottomMargin: dockRoot.dockEdge === "top" ? 2 : 0
-                    leftMargin: dockRoot.dockEdge === "right" ? root.iconSize / 2 + 3 : 0
-                    rightMargin: dockRoot.dockEdge === "left" ? root.iconSize / 2 + 3 : 0
+                    topMargin: dockRoot.dockEdge === "bottom" ? root.markGap - 1 : 0
+                    bottomMargin: dockRoot.dockEdge === "top" ? root.markGap - 1 : 0
+                    leftMargin: dockRoot.dockEdge === "right" ? root.iconSize / 2 + root.markGap : 0
+                    rightMargin: dockRoot.dockEdge === "left" ? root.iconSize / 2 + root.markGap : 0
                     horizontalCenter: dockRoot.dockVertical ? undefined : parent.horizontalCenter
                     verticalCenter: dockRoot.dockVertical ? parent.verticalCenter : undefined
                 }

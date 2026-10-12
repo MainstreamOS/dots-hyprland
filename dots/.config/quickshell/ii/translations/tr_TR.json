@@ -2783,5 +2783,9 @@
   "Could not retrieve Ollama models.\n\n```\n%1\n```": "Could not retrieve Ollama models.\n\n```\n%1\n```",
   "Could not retrieve Ollama models.": "Could not retrieve Ollama models.",
   "Live / unknown duration": "Live / unknown duration",
-  "Reset to default speed": "Reset to default speed"
+  "Reset to default speed": "Reset to default speed",
+  "Type to search windows": "Type to search windows",
+  "Show applications": "Show applications",
+  "No matching windows": "No matching windows",
+  "Empty workspace": "Empty workspace"
 }

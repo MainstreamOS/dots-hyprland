@@ -466,6 +466,7 @@ hl.layer_rule({ match = { namespace = "quickshell:notificationPopup" }, animatio
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, ignore_alpha = 1})
 hl.layer_rule({ match = { namespace = "quickshell:overview" }, no_anim = true})
+hl.layer_rule({ match = { namespace = "quickshell:windowOverview" }, no_anim = true})
 -- The dim grows from a pixel to the screen on every open; animated, that
 -- reads as blur spreading outward. It appears in one step, like the launcher.
 hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, no_anim = true})

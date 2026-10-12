@@ -2876,7 +2876,7 @@ ApplicationWindow {
         // notch and its "span" is Hug. Anything else is drawn as rect, as the
         // bar and the dock themselves draw it.
         readonly property string barShape: root.barDockStyle || "rect"
-        readonly property string dockShape: ({ float: "float", hug: "notch", span: "hug" })[Config.options.dock.cornerStyle] ?? "rect"
+        readonly property string dockShape: ({ float: "float", overview: "float", hug: "notch", span: "hug" })[Config.options.dock.cornerStyle] ?? "rect"
         readonly property bool dockShown: Config.options.dock.enable
 
         Item {

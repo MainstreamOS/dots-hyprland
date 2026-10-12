@@ -866,7 +866,7 @@ Singleton {
                 // Settings labels "hug" as Notch and "span" as Hug. hug sits flush with its
                 // edge corners curving outward; span runs the whole edge facing the bar.
                 // Any other value is drawn as rect.
-                property string cornerStyle: "float" // "float" | "hug" | "rect" | "span"
+                property string cornerStyle: "float" // "float" | "overview" | "hug" | "rect" | "span"
                 // Corners facing the desktop; below zero they follow radius. The edge pair's
                 // shape comes from the style.
                 property real topRadius: -1

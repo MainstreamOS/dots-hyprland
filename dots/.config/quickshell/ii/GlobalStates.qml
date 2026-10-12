@@ -79,6 +79,10 @@ Singleton {
     property bool oskOpen: false
     property bool overlayOpen: false
     property bool overviewOpen: false
+    // The screen the Alt+Tab overview has opened on, by name; the dock there is drawn over it.
+    property string windowOverviewScreen: ""
+    // A dock app clicked over the Alt+Tab overview, which picks among its windows there.
+    signal windowOverviewAppClicked(var app)
     // The screens the launcher's dim is shown on, by name, as the dim sets
     // them when it starts to fade in or out. It covers the focused screen
     // alone, and only once its surface spans that screen, which can land a

@@ -161,7 +161,7 @@ ContentPage {
 
         // The glow's strength is what that effect is chosen for, so it leads.
         ConfigSlider {
-            visible: Config.options.dock.hoverEffect === "glow"
+            visible: Appearance.sizes.dockHoverEffect === "glow"
             text: Translation.tr("Glow intensity")
             buttonIcon: "flare"
             stopIndicatorValues: [Appearance.sizes.dockGlowIntensityStock]
@@ -180,7 +180,7 @@ ContentPage {
         // and range: the wave has room to be dramatic, the glow's lift is an
         // accent and the track keeps it one.
         ConfigSlider {
-            visible: Config.options.dock.hoverEffect !== "off"
+            visible: Appearance.sizes.dockHoverEffect !== "off"
             text: Translation.tr("Magnify amount")
             buttonIcon: "zoom_in"
             stopIndicatorValues: [Appearance.sizes.dockHoverMagnifyStock]
@@ -207,7 +207,7 @@ ContentPage {
                 }
             }
             ConfigSwitch {
-                buttonIcon: "apps"
+                    buttonIcon: "apps"
                 text: Translation.tr("Show overview button")
                 checked: Config.options.dock.showOverviewButton
                 onCheckedChanged: {
@@ -227,7 +227,7 @@ ContentPage {
                 }
             }
             ConfigSwitch {
-                buttonIcon: "keep"
+                    buttonIcon: "keep"
                 text: Translation.tr("Show pin button")
                 checked: Config.options.dock.showPinButton
                 onCheckedChanged: {
@@ -358,9 +358,9 @@ ContentPage {
         // Hug shows neither roundness, so what those two hold belongs to
         // the style it was last left for and is no reason to offer a reset.
         ConfigResetButton {
-            visible: Config.options.dock.iconSize >= 0
+            visible: (Config.options.dock.iconSize >= 0
                 || (Config.options.dock.cornerStyle !== "span"
-                    && (Config.options.dock.radius >= 0 || Config.options.dock.topRadius >= 0))
+                    && (Config.options.dock.radius >= 0 || Config.options.dock.topRadius >= 0)))
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default shape")
@@ -385,8 +385,8 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Background")
-            visible: Config.options.dock.showBackground
-            stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
+            visible: Appearance.sizes.dockShowBackground
+            stopIndicatorValues: [Appearance.colors.dockStockAlpha]
             buttonIcon: "wallpaper"
             // The track stops where the dock stops being frosted rather than at
             // nothing, so every point along it answers the same way. Running it
@@ -395,7 +395,7 @@ ContentPage {
             to: 1
             value: Math.max(Appearance.colors.surfaceOpacityFloor,
                 Config.options.dock.backgroundOpacity < 0
-                    ? Appearance.colors.layer0StockAlpha : Config.options.dock.backgroundOpacity)
+                    ? Appearance.colors.dockStockAlpha : Config.options.dock.backgroundOpacity)
             onMoved: {
                 if (Math.abs(value - Config.options.dock.backgroundOpacity) < 0.005)
                     return;
@@ -457,7 +457,7 @@ ContentPage {
         }
 
         ColorField {
-            visible: Config.options.dock.hoverEffect === "glow"
+            visible: Appearance.sizes.dockHoverEffect === "glow"
             text: Translation.tr("Glow color")
             allowEmpty: true
             buttonIcon: "blur_on"

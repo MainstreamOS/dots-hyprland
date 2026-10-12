@@ -128,7 +128,7 @@ Item {
         folderPopupData = null;
     }
 
-    // Drag-to-reorder state
+    // Drag-to-reorder and style-switch state
     property bool dragging: false
     property bool _reordering: false
     property bool _suppressTranslateAnim: false
@@ -154,6 +154,7 @@ Item {
         onTriggered: {
             root._reordering = false;
             root._suppressTranslateAnim = false;
+            listView.forceLayout();
         }
     }
 
@@ -215,7 +216,7 @@ Item {
     // effects read as one decision. The effect is asked first: a mode that
     // grows nothing never reads the mouse, and its bindings stay cold.
     function hoverScaleFor(itemPos, itemSize, isSeparator) {
-        const effect = Config.options.dock.hoverEffect;
+        const effect = Appearance.sizes.dockHoverEffect;
         if (effect === "off" || !listHovered || previewShow) return 1.0;
         if (effect === "glow")
             return !isSeparator && pointerIsOver(itemPos, itemSize) ? maxScale : 1.0;
@@ -241,10 +242,10 @@ Item {
 
     Layout.fillHeight: !dockRoot.dockVertical
     Layout.fillWidth: dockRoot.dockVertical
-    Layout.topMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : 0
-    Layout.bottomMargin: dockRoot.dockEdge === "top" ? Appearance.sizes.hyprlandGapsOut : 0
-    Layout.leftMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : 0
-    Layout.rightMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : 0
+    Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.hyprlandGapsOut)
+    Layout.bottomMargin: dockRoot.itemMargin("bottom", Appearance.sizes.hyprlandGapsOut)
+    Layout.leftMargin: dockRoot.itemMargin("left", Appearance.sizes.hyprlandGapsOut)
+    Layout.rightMargin: dockRoot.itemMargin("right", Appearance.sizes.hyprlandGapsOut)
     implicitWidth: dockRoot.dockVertical ? 0 : listView.implicitWidth
     implicitHeight: dockRoot.dockVertical ? listView.implicitHeight : 0
 
@@ -269,7 +270,7 @@ Item {
 
     StyledListView {
         id: listView
-        spacing: 2
+        spacing: dockRoot.listSpacing
         clip: false
         interactive: false
         animateAppearance: !root._reordering
@@ -280,8 +281,10 @@ Item {
             left: dockRoot.dockVertical ? parent.left : undefined
             right: dockRoot.dockVertical ? parent.right : undefined
         }
-        implicitWidth: dockRoot.dockVertical ? 0 : contentWidth
-        implicitHeight: dockRoot.dockVertical ? contentHeight : 0
+        implicitWidth: dockRoot.dockVertical ? 0
+            : contentWidth
+        implicitHeight: !dockRoot.dockVertical ? 0
+            : contentHeight
 
         Behavior on implicitWidth {
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -307,15 +310,15 @@ Item {
             }
             buttonIndex: index
 
-            topInset: dockRoot.dockVertical ? 0 : Appearance.sizes.hyprlandGapsOut + root.buttonPadding
-            bottomInset: dockRoot.dockVertical ? 0 : Appearance.sizes.hyprlandGapsOut + root.buttonPadding
-            leftInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
-            rightInset: dockRoot.dockVertical ? Appearance.sizes.hyprlandGapsOut + root.buttonPadding : 0
+            topInset: dockRoot.dockVertical ? 0 : dockRoot.buttonInset
+            bottomInset: topInset
+            leftInset: !dockRoot.dockVertical ? 0 : dockRoot.buttonInset
+            rightInset: leftInset
             hoverScale: root.hoverScaleFor(dockRoot.dockVertical ? y : x,
                 dockRoot.dockVertical ? height : width, isSeparator)
             // Gated on the mode first, so the halo's only consumer is also the
             // only one paying the per-motion arithmetic behind it.
-            pointerOver: Config.options.dock.hoverEffect === "glow"
+            pointerOver: Appearance.sizes.dockHoverEffect === "glow"
                 && root.pointerIsOver(dockRoot.dockVertical ? y : x, dockRoot.dockVertical ? height : width)
         }
     }
@@ -434,19 +437,13 @@ Item {
                                             }
                                         }
 
-                                        ScreencopyView {
+                                        HdrScreencopyView {
                                             id: screencopyView
                                             anchors.fill: parent
                                             captureSource: windowButton.captureSuppressed ? null : windowButton.modelData
                                             live: true
                                             paintCursor: true
                                             constraintSize: Qt.size(root.maxWindowPreviewWidth, root.maxWindowPreviewHeight)
-                                            // PQ-to-sRGB tone-mapping when HDR Always On
-                                            layer.enabled: GlobalStates.hdrActive
-                                            layer.effect: ShaderEffect {
-                                                property real sdrPaperWhite: 203.0
-                                                fragmentShader: "file://" + Quickshell.env("HOME") + "/.config/quickshell/ii/shaders/pq_to_srgb.frag.qsb"
-                                            }
                                         }
                                     }
                                 }

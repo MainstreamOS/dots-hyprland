@@ -41,6 +41,13 @@ hl.bind("SUPER + A", hl.dsp.global("quickshell:sidebarLeftToggle"), {description
 hl.bind("SUPER + ALT + A", hl.dsp.global("quickshell:sidebarLeftToggleDetach") )
 hl.bind("SUPER + N", hl.dsp.global("quickshell:sidebarRightToggle"), {description = "Toggle right sidebar"} )
 hl.bind("SUPER + Tab", hl.dsp.global("quickshell:cheatsheetToggle"), {description = "Toggle cheatsheet"} )
+-- Activities-style window spread. Alt release selects; the toggle stays open
+-- for browsing workspaces with the wheel, Page Up/Down, or Ctrl+Left/Right.
+hl.bind("ALT + Tab", hl.dsp.global("quickshell:windowOverviewNext"), {description = "Next window in Activities overview"})
+hl.bind("ALT + SHIFT + Tab", hl.dsp.global("quickshell:windowOverviewPrevious"), {description = "Previous window in Activities overview"})
+hl.bind("ALT_L", hl.dsp.global("quickshell:windowOverviewAccept"), {release = true, ignore_mods = true, non_consuming = true})
+hl.bind("ALT_R", hl.dsp.global("quickshell:windowOverviewAccept"), {release = true, ignore_mods = true, non_consuming = true})
+hl.bind("SUPER + SHIFT + Tab", hl.dsp.global("quickshell:windowOverviewToggle"), {description = "Toggle Activities overview"})
 hl.bind("SUPER + f11", hl.dsp.global("quickshell:oskToggle"), {description = "Toggle on-screen keyboard"} )
 hl.bind("SUPER + M", hl.dsp.global("quickshell:mediaControlsToggle"), {description = "Toggle media controls"} )
 hl.bind("SUPER + f12", hl.dsp.global("quickshell:overlayToggle"), {description = "Toggle overlay"} )
