@@ -2757,5 +2757,7 @@
   "Approved": "Одобрено",
   "Declined": "Отклонено",
   "Subscription": "Подписка",
-  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Сейчас разрешены только локальные модели. Чтобы использовать онлайн-модели, выберите для ИИ значение «Да» в разделе Настройки > Интерфейс > Left Sidebar."
+  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Сейчас разрешены только локальные модели. Чтобы использовать онлайн-модели, выберите для ИИ значение «Да» в разделе Настройки > Интерфейс > Left Sidebar.",
+  "Approving lets %1 run commands and edit files for the rest of this reply.": "Одобрение позволяет %1 выполнять команды и изменять файлы до конца этого ответа.",
+  "The user declined this step.": "Пользователь отклонил этот шаг."
 }

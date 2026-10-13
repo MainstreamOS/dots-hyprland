@@ -2757,5 +2757,7 @@
   "Approved": "Onaylandı",
   "Declined": "Reddedildi",
   "Subscription": "Abonelik",
-  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Şu anda yalnızca yerel modellere izin veriliyor. Çevrimiçi modelleri kullanmak için Ayarlar > Arayüz > Left Sidebar bölümünde AI seçeneğini Evet yapın."
+  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Şu anda yalnızca yerel modellere izin veriliyor. Çevrimiçi modelleri kullanmak için Ayarlar > Arayüz > Left Sidebar bölümünde AI seçeneğini Evet yapın.",
+  "Approving lets %1 run commands and edit files for the rest of this reply.": "Onayladığınızda %1, bu yanıtın geri kalanında komut çalıştırabilir ve dosya düzenleyebilir.",
+  "The user declined this step.": "Kullanıcı bu adımı reddetti."
 }

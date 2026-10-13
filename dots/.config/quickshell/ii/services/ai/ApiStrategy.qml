@@ -26,12 +26,13 @@ QtObject {
     //       interface messages), unansweredCalls (set of message ids whose
     //       function call has no output message), systemPrompt, temperature,
     //       tools, thinkingLevel (resolved), mode (AiModes id),
-    //       grant (null | {scope, tools}), attachment (null | {path, mime}),
+    //       grant (null | {scope}), attachment (null | {path, mime}),
     //       regenerate (bool), apiKey, scripts: {filter, runRequest},
     //       dirs: {antigravity, codex, home, runtime}}
-    // Returns {options: string[], argv: string[], stdin: string, env: object}.
-    // stdin carries the request body (API) or the prompt (CLI); argv never
-    // carries either.
+    // Returns {options: string[], argv: string[], stdin: string, env: object,
+    // keepStdin: bool}. stdin carries the request body (API) or the prompt
+    // (CLI); argv never carries either. keepStdin leaves it open for
+    // writeInput until endInput.
     function buildRequest(ctx: var): var {
         throw new Error("Not implemented");
     }
@@ -50,5 +51,10 @@ QtObject {
     }
 
     function finish(sink: var, exitCode: int, stderrTail: string): void {
+    }
+
+    // The line that answers a step raised with sink.askPermission.
+    function permissionAnswer(controlId: string, allow: bool, message: string): string {
+        return "";
     }
 }

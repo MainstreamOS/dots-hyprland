@@ -515,7 +515,7 @@ Singleton {
             "readyCheck": "claude auth status --json 2>/dev/null | grep -q '\"loggedIn\": *true'",
             // Print mode leaves thinking text out unless asked for it. Older CLIs
             // refuse the flag before making any request, so empty input tells.
-            "features": "claude -p --thinking-display summarized 2>&1 | grep -q 'unknown option' || echo 'feature thinking-display'"
+            "features": "claude -p --thinking-display summarized 2>&1 | grep -q 'unknown option' || echo 'feature thinking-display'; claude -p --permission-prompt-tool stdio 2>&1 | grep -q 'unknown option' || echo 'feature permission-bridge'"
         },
         "codex-cli": {
             "name": "Codex",
@@ -2407,6 +2407,13 @@ Singleton {
         },
         "recordFunctionCall": (req, call) => root._recordFunctionCall(req, call),
         "uploadedFile": (req, uri, mime) => root._recordUploadedFile(req, uri, mime),
+        "askPermission": (req, fields) => root._askPermission(req, fields),
+        "writeInput": (req, line) => root._writeInput(req, line),
+        "endInput": req => {
+            if (!req.keepStdin) return;
+            req.keepStdin = false;
+            if (req.proc) req.proc.stdinEnabled = false;
+        },
         "actionFallback": Translation.tr("Action"),
     })
 
@@ -2519,6 +2526,9 @@ Singleton {
             "sink": null,
             "buf": null,
             "stdin": "",
+            // Open until the result: approvals are answered on it mid-reply.
+            "keepStdin": false,
+            "allowSteps": false,
             "startTime": Date.now(),
             "attachmentMessageId": "",
             "functionCall": null,
@@ -2638,12 +2648,13 @@ Singleton {
         const env = Object.assign({}, built.env ?? {});
         if (model.requires_key) env[root.apiKeyEnvVarName] = apiKey;
         req.stdin = typeof built.stdin === "string" ? built.stdin : "";
+        req.keepStdin = built.keepStdin === true;
         const command = ["setsid", "bash", root._scripts.runRequest]
             .concat((built.options ?? []).map(String), ["--"], built.argv.map(String));
         req.proc = requestProcessComponent.createObject(root, {
             "command": command,
             "environment": env,
-            "stdinEnabled": req.stdin.length > 0,
+            "stdinEnabled": req.stdin.length > 0 || req.keepStdin,
         });
         root._launch(req);
         return true;
@@ -2692,7 +2703,7 @@ Singleton {
         if (req.stdin.length > 0) proc.write(req.stdin);
         req.stdin = "";
         // Closing stdin sends EOF once the written data is flushed.
-        proc.stdinEnabled = false;
+        if (!req.keepStdin) proc.stdinEnabled = false;
         if (root.requestState === "starting") root.requestState = "streaming";
     }
 
@@ -2826,6 +2837,7 @@ Singleton {
         const req = root._req;
         if (!req || req.stopped || req.finalized) return;
         req.stopped = true;
+        if (root.pendingConfirmation?.live) root.pendingConfirmation = null;
         root.requestState = "stopping";
         drainTimer.stop();
         req.lineQueue = [];
@@ -2889,6 +2901,7 @@ Singleton {
             req.finalized = true;
             return;
         }
+        if (root.pendingConfirmation?.live && root.pendingConfirmation.requestId === req.id) root.pendingConfirmation = null;
         if (!req.stopped) {
             try {
                 req.strategy.finish(req.sink, req.exitCode ?? 0, req.stderrTail ?? "");
@@ -3127,8 +3140,39 @@ Singleton {
             "scope": scopes.includes(fields.scope) ? fields.scope : "once",
             "grantNote": String(fields.grantNote ?? ""),
             "sessionId": String(fields.sessionId ?? ""),
+            // Asked in the middle of a reply that waits for the answer.
+            "live": fields.live === true,
+            "controlId": String(fields.controlId ?? ""),
         });
-        root.requestState = "awaitingConfirmation";
+        if (!root.pendingConfirmation.live) root.requestState = "awaitingConfirmation";
+    }
+
+    // A step the CLI holds until the user answers; one approval covers the
+    // rest of the reply, as it did when approving restarted the reply.
+    function _askPermission(req, fields) {
+        if (req !== root._req || req.stopped) return;
+        if (req.allowSteps) {
+            root._answerPermission(req, fields.controlId, true);
+            return;
+        }
+        root._raiseConfirmation(Object.assign({}, fields, {
+            "type": "cli",
+            "live": true,
+            "requestId": req.id,
+            "provider": req.apiFormat,
+            "modelId": req.modelId,
+            "messageId": req.messageId,
+            "sessionId": req.strategy?.sessionId ?? "",
+        }));
+    }
+
+    function _answerPermission(req, controlId, allow) {
+        root._writeInput(req, req.strategy?.permissionAnswer(String(controlId ?? ""), allow,
+            Translation.tr("The user declined this step.")) ?? "");
+    }
+
+    function _writeInput(req, line) {
+        if (req.keepStdin && req.proc && typeof line === "string" && line.length > 0) req.proc.write(line);
     }
 
     // Clears the pending confirmation. A function call it leaves unanswered
@@ -3138,6 +3182,11 @@ Singleton {
         if (root.requestState === "awaitingConfirmation") root.requestState = "idle";
         if (!conf) return;
         root.pendingConfirmation = null;
+        // Unanswered, a paused reply cannot go on.
+        if (conf.live) {
+            if (root._req?.id === conf.requestId) root.cancelRequest();
+            return;
+        }
         if (conf.type !== "function") return;
         const message = root.messageByID[conf.messageId];
         if (!message || !message.functionPending) return;
@@ -3147,6 +3196,14 @@ Singleton {
 
     function approvePendingAction(confirmationId = root.pendingConfirmation?.id): bool {
         const conf = root.pendingConfirmation;
+        if (conf?.live && conf.id === confirmationId) {
+            root.pendingConfirmation = null;
+            const req = root._req;
+            if (!req || req.id !== conf.requestId || req.stopped) return false;
+            req.allowSteps = true;
+            root._answerPermission(req, conf.controlId, true);
+            return true;
+        }
         const valid = conf !== null && conf.id === confirmationId
             && root.requestState === "awaitingConfirmation"
             && root.currentModelId === conf.modelId
@@ -3182,8 +3239,15 @@ Singleton {
 
     function rejectPendingAction(confirmationId = root.pendingConfirmation?.id): bool {
         const conf = root.pendingConfirmation;
-        root._dropConfirmation();
         const matches = Boolean(conf) && conf.id === confirmationId;
+        // The model hears the decline and goes on with the same reply.
+        if (matches && conf.live) {
+            root.pendingConfirmation = null;
+            const req = root._req;
+            if (req && req.id === conf.requestId && !req.stopped) root._answerPermission(req, conf.controlId, false);
+            return true;
+        }
+        root._dropConfirmation();
         // The decline is a message of its own, which saves.
         if (matches && conf.type === "cli") {
             root._sendInternal(Translation.tr("Declined. Do not run the command."), "declined", {});

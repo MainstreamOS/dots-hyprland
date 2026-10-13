@@ -2757,5 +2757,7 @@
   "Approved": "Đã chấp nhận",
   "Declined": "Đã từ chối",
   "Subscription": "Gói đăng ký",
-  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Hiện chỉ cho phép model chạy trên máy. Để dùng model trực tuyến, hãy đặt AI thành Có trong Cài đặt > Giao diện > Left Sidebar."
+  "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Hiện chỉ cho phép model chạy trên máy. Để dùng model trực tuyến, hãy đặt AI thành Có trong Cài đặt > Giao diện > Left Sidebar.",
+  "Approving lets %1 run commands and edit files for the rest of this reply.": "Khi chấp nhận, %1 được chạy lệnh và sửa tệp trong phần còn lại của lần trả lời này.",
+  "The user declined this step.": "Người dùng đã từ chối bước này."
 }

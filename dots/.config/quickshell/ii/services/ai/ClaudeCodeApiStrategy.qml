@@ -29,7 +29,6 @@ ApiStrategy {
         const attachment = Helpers.attachmentPath(ctx);
         // A regenerate starts a fresh conversation; its init event replaces the id.
         const sessionId = ctx.regenerate ? "" : root.sessionId;
-        root._requestInfo = { mode: mode, modelName: model.name ?? "" };
 
         const argv = ["claude"];
         if (model.model && model.model !== "claude-code") argv.push("--model", model.model);
@@ -50,6 +49,9 @@ ApiStrategy {
         // An approval covers the whole next reply, as one approval should
         // carry a task through all of its steps.
         const granted = mode === "auto" || (mode === "ask" && Boolean(ctx.grant));
+        // Claude asks before each step that needs approval and waits for the answer.
+        const bridged = mode === "ask" && !granted && Boolean(Ai.cliPlanState["claude-code"]?.features?.includes("permission-bridge"));
+        root._requestInfo = { mode: mode, modelName: model.name ?? "", bridged: bridged };
         // The file may be outside the working directory, which would raise an
         // approval for every attachment. Variadic, so another flag follows.
         if (attachment.length > 0 && !granted) {
@@ -59,6 +61,7 @@ ApiStrategy {
         argv.push("--verbose", "--output-format", "stream-json", "--include-partial-messages");
         if (granted) argv.push("--dangerously-skip-permissions");
         else if (mode === "plan") argv.push("--permission-mode", "plan");
+        else if (bridged) argv.push("--input-format", "stream-json", "--permission-prompt-tool", "stdio");
         else argv.push("--append-system-prompt", root.askNote);
 
         const attachedLine = attachment.length > 0 ? Translation.tr("Attached file: %1").arg(attachment) : "";
@@ -69,19 +72,29 @@ ApiStrategy {
             // Claude Code keys --resume sessions by working directory.
             options: ["--workdir", ctx.dirs.home, "--stdin", "--filter", "claude", "--report-exit"],
             argv: argv,
-            stdin: prompt,
+            stdin: bridged ? JSON.stringify({ type: "user", message: { role: "user", content: prompt } }) + "\n" : prompt,
+            keepStdin: bridged,
             env: env
         };
     }
 
     // Called after buildRequest, so the mode belongs to this request.
     function newState(): var {
-        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "" };
+        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "", bridged: root._requestInfo.bridged === true };
     }
 
     function inputTokens(usage: var): int {
         if (usage?.input_tokens === undefined) return -1;
         return usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    }
+
+    // What the approval card shows for one tool call.
+    function stepCommand(name: string, input: var): string {
+        return name === "Bash" ? String(input?.command ?? "") : "";
+    }
+
+    function stepTarget(input: var): string {
+        return String(input?.file_path ?? input?.notebook_path ?? input?.path ?? input?.url ?? "");
     }
 
     function raiseDenials(denials: var, sink: var): void {
@@ -92,9 +105,8 @@ ApiStrategy {
             const name = String(denial?.tool_name ?? "");
             if (name.length === 0) continue;
             if (!names.includes(name)) names.push(name);
-            const input = denial?.tool_input ?? {};
-            const command = name === "Bash" ? String(input.command ?? "") : "";
-            const target = String(input.file_path ?? input.notebook_path ?? input.path ?? input.url ?? "");
+            const command = root.stepCommand(name, denial?.tool_input);
+            const target = root.stepTarget(denial?.tool_input);
             if (command.length > 0 && !commands.includes(command)) commands.push(command);
             if (target.length > 0 && !targets.includes(target)) targets.push(target);
         }
@@ -146,9 +158,38 @@ ApiStrategy {
         }
     }
 
+    function handleControl(json: var, sink: var): void {
+        const request = json.request ?? {};
+        const id = String(json.request_id ?? "");
+        if (request.subtype !== "can_use_tool" || !sink.state.bridged) {
+            sink.writeInput(JSON.stringify({ type: "control_response", response: { subtype: "error", request_id: id, error: "unsupported request" } }) + "\n");
+            return;
+        }
+        const name = String(request.tool_name ?? "");
+        const target = root.stepTarget(request.input);
+        sink.endThink();
+        sink.askPermission({
+            controlId: id,
+            action: String(request.display_name || name),
+            command: root.stepCommand(name, request.input),
+            target: target.length > 0 ? target : String(request.blocked_path ?? ""),
+            scope: "all",
+            grantNote: Translation.tr("Approving lets %1 run commands and edit files for the rest of this reply.").arg(sink.state.modelName)
+        });
+    }
+
+    // Allowing without updatedInput keeps the call as the model wrote it;
+    // the stream filter may have shortened the input this side saw.
+    function permissionAnswer(controlId: string, allow: bool, message: string): string {
+        const response = allow ? { behavior: "allow" } : { behavior: "deny", message: message };
+        return JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: controlId, response: response } }) + "\n";
+    }
+
     function handleResult(json: var, sink: var): void {
         const state = sink.state;
         state.gotResult = true;
+        // Ends the CLI, which would otherwise wait for another turn.
+        if (state.bridged) sink.endInput();
         sink.endThink();
         // A failed run still arrives with subtype "success", and the reason
         // is only in is_error.
@@ -164,8 +205,9 @@ ApiStrategy {
             const output = json.usage.output_tokens ?? -1;
             sink.usage({ input: input, output: output, total: Math.max(0, input) + Math.max(0, output) });
         }
+        // Bridged denials are the user's own declines.
         const denials = json.permission_denials ?? [];
-        if (state.mode === "ask" && Array.isArray(denials) && denials.length > 0) {
+        if (state.mode === "ask" && !state.bridged && Array.isArray(denials) && denials.length > 0) {
             root.raiseDenials(denials, sink);
         }
         sink.finished();
@@ -187,6 +229,8 @@ ApiStrategy {
                 root.handleResult(json, sink);
             } else if (json.type === "system") {
                 if (json.subtype === "init" && json.session_id) sink.setSessionId(json.session_id);
+            } else if (json.type === "control_request") {
+                root.handleControl(json, sink);
             } else if (json.type === "stream_event") {
                 if (json.event?.type) root.handleStreamEvent(json.event, sink);
             } else if (json.type === "error") {

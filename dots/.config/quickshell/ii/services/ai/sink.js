@@ -104,7 +104,8 @@ function sameSources(a, b) {
  * Creates the sink for one request. host provides:
  *   isActive(req): bool, now(): number, scheduleFlush(req),
  *   setSessionId(req, id), recordFunctionCall(req, call): bool,
- *   uploadedFile(req, uri, mime), actionFallback: string
+ *   uploadedFile(req, uri, mime), askPermission(req, fields),
+ *   writeInput(req, line), endInput(req), actionFallback: string
  * The buffers live on req.buf; flush() moves them into the message.
  */
 function createSink(req, host) {
@@ -292,6 +293,19 @@ function createSink(req, host) {
         requestConfirmation(partial) {
             if (active() && partial && typeof partial === "object")
                 req.confirmationDraft = partial;
+        },
+        // A step the CLI holds until the user answers; the request keeps running.
+        askPermission(fields) {
+            if (active() && fields && typeof fields === "object")
+                host.askPermission(req, fields);
+        },
+        writeInput(line) {
+            if (active())
+                host.writeInput(req, String(line ?? ""));
+        },
+        endInput() {
+            if (active())
+                host.endInput(req);
         },
         loginLapsed() {
             if (active())
