@@ -289,6 +289,10 @@ function createSink(req, host) {
             if (active())
                 host.uploadedFile(req, String(uri ?? ""), String(mime ?? ""));
         },
+        requestConfirmation(partial) {
+            if (active() && partial && typeof partial === "object")
+                req.confirmationDraft = partial;
+        },
         loginLapsed() {
             if (active())
                 req.loginLapsed = true;

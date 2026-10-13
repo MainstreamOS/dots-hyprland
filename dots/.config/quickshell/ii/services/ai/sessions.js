@@ -40,6 +40,7 @@ function serializeMessage(m) {
         "functionCallId": str(m.functionCallId),
         "functionResponse": str(m.functionResponse),
         "visibleToUser": m.visibleToUser !== false,
+        "answer": str(m.answer),
         "activities": plainArray(m.activities),
         "thinkBlocks": plainArray(m.thinkBlocks),
     };

@@ -1811,6 +1811,7 @@ Singleton {
         const aiMessage = root._createMessage(role, text, {
             "persist": persist,
             "localFilePath": options?.localFilePath ?? "",
+            "answer": options?.answer ?? "",
         });
         root._insertMessage(aiMessage);
         if (persist) root.scheduleSave();
@@ -2515,6 +2516,7 @@ Singleton {
             "startTime": Date.now(),
             "attachmentMessageId": "",
             "functionCall": null,
+            "confirmationDraft": null,
             "loginLapsed": false,
             "searchRefused": false,
             "output": "",
@@ -2929,7 +2931,16 @@ Singleton {
             root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
         }
 
-        if (!req.stopped && message && call) {
+        if (!req.stopped && message && req.confirmationDraft && req.mode === "ask") {
+            root._raiseConfirmation(Object.assign({}, req.confirmationDraft, {
+                "type": "cli",
+                "requestId": req.id,
+                "provider": req.apiFormat,
+                "modelId": req.modelId,
+                "messageId": req.messageId,
+                "sessionId": req.strategy?.sessionId ?? "",
+            }));
+        } else if (!req.stopped && message && call) {
             if (root._handleFunctionCall(req, call.name, call.args ?? {}, message)) return;
         }
         root._finishChain();
@@ -3009,6 +3020,10 @@ Singleton {
         return root._startModelRequest({});
     }
 
+    function _configValueText(value) {
+        return typeof value === "string" ? value : JSON.stringify(value);
+    }
+
     function _applyShellConfig(name, key, value) {
         // Every call needs its answer, an unknown key included, or the next request
         // is refused or comes back empty.
@@ -3052,8 +3067,19 @@ Singleton {
                 return root._continueRequest();
             }
             const key = String(args.key);
-            root._applyShellConfig(name, key, args.value);
-            return root._continueRequest();
+            if (mode === "plan") {
+                root._addFunctionOutputMessage(name, Translation.tr("Config change skipped: Plan mode is active."));
+                return root._continueRequest();
+            }
+            // Commands the shell runs, model endpoints and modes, and policy
+            // switches always ask, in Auto mode too.
+            const sensitive = /^(apps|ai|policies)(\.|$)/.test(key);
+            if (mode === "auto" && !sensitive) {
+                root._applyShellConfig(name, key, args.value);
+                return root._continueRequest();
+            }
+            confirm(key + " = " + root._configValueText(args.value));
+            return false;
         }
         if (name === "run_shell_command") {
             const command = typeof args.command === "string" ? args.command : "";
@@ -3126,6 +3152,12 @@ Singleton {
         }
         root.pendingConfirmation = null;
         root.requestState = "idle";
+        if (conf.type === "cli") {
+            // The grant lives only on the request this starts.
+            return root._sendInternal(Translation.tr("Approved. Proceed."), "approved", {
+                "grant": { "scope": conf.scope },
+            });
+        }
         const message = root.messageByID[conf.messageId];
         if (!message) {
             root._saveNow();
@@ -3146,6 +3178,11 @@ Singleton {
         const conf = root.pendingConfirmation;
         root._dropConfirmation();
         const matches = Boolean(conf) && conf.id === confirmationId;
+        // The decline is a message of its own, which saves.
+        if (matches && conf.type === "cli") {
+            root._sendInternal(Translation.tr("Declined. Do not run the command."), "declined", {});
+            return true;
+        }
         root._saveNow();
         return matches;
     }
@@ -3164,6 +3201,15 @@ Singleton {
     }
 
     // ── Sending ────────────────────────────────────────────────────
+    // An approval or decline answer: not sendUserMessage, which would reject
+    // the confirmation it answers.
+    function _sendInternal(text, answer, options) {
+        if (root.isGenerating || root.sessionLoading) return false;
+        root.addMessage(text, "user", { "answer": answer });
+        root._saveNow();
+        return root._startModelRequest(options);
+    }
+
     function sendUserMessage(text: string): bool {
         const content = String(text ?? "");
         if (content.length === 0 || root.isGenerating || root.sessionLoading) return false;

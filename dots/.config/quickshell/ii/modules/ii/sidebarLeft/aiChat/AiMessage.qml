@@ -31,6 +31,8 @@ Rectangle {
     // Function and command outputs are stored as user messages but belong to a tool.
     readonly property bool isToolOutput: root.role !== "assistant" && (root.messageData?.functionName ?? "").length > 0
     readonly property bool isUserMessage: root.role === "user" && !root.isToolOutput
+    // The model still gets the answer's text as the user turn.
+    readonly property string answer: root.messageData?.answer ?? ""
     readonly property string toolTitle: {
         if (!root.isToolOutput) return "";
         const activities = root.messageData?.activities ?? [];
@@ -94,11 +96,11 @@ Rectangle {
 
     anchors.left: parent?.left
     anchors.right: parent?.right
-    implicitHeight: columnLayout.implicitHeight + root.messagePadding * 2
+    implicitHeight: root.answer ? answerLine.implicitHeight + root.messagePadding * 2 : columnLayout.implicitHeight + root.messagePadding * 2
 
     radius: Appearance.rounding.normal
-    color: (root.role === 'user') ? Appearance.colors.colLayer2 : Appearance.colors.colLayer1
-    border.width: (root.role === 'user') ? 1 : 0
+    color: root.answer ? "transparent" : (root.role === 'user') ? Appearance.colors.colLayer2 : Appearance.colors.colLayer1
+    border.width: (root.role === 'user' && !root.answer) ? 1 : 0
     border.color: Appearance.colors.colOutlineVariant
 
     Keys.onPressed: (event) => {
@@ -117,8 +119,27 @@ Rectangle {
         }
     }
 
+    RowLayout {
+        id: answerLine
+        visible: !!root.answer
+        anchors.centerIn: parent
+        spacing: 6
+
+        MaterialSymbol {
+            iconSize: Appearance.font.pixelSize.normal
+            color: Appearance.colors.colSubtext
+            text: root.answer === "approved" ? "check" : "close"
+        }
+        StyledText {
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            text: root.answer === "approved" ? Translation.tr("Approved") : Translation.tr("Declined")
+        }
+    }
+
     ColumnLayout { // Main layout of the whole thing
         id: columnLayout
+        visible: !root.answer
 
         anchors.left: parent.left
         anchors.right: parent.right

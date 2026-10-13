@@ -1520,6 +1520,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             Layout.bottomMargin: visible ? 6 : 0
         }
 
+        ActionConfirmationCard {
+            Layout.fillWidth: true
+            Layout.bottomMargin: Math.min(6, implicitHeight)
+        }
+
         Rectangle { // Input area
             id: inputWrapper
             property real spacing: 5

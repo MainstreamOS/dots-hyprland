@@ -36,7 +36,7 @@ ApiStrategy {
         } else {
             argv.push("--disable-slash-commands");
             // agy has no narrower grant that holds outside its own folder.
-            if (mode === "auto") argv.push("--dangerously-skip-permissions");
+            if (mode === "auto" || ctx.grant) argv.push("--dangerously-skip-permissions");
         }
         if (sessionId.length > 0) argv.push("--conversation=" + sessionId);
         if (model.model && model.model !== "gemini-plan") {
@@ -184,7 +184,7 @@ ApiStrategy {
         return null;
     }
 
-    function handleDenials(deniedActions: var, sink: var, replied: bool): void {
+    function handleDenials(deniedActions: var, sink: var): void {
         const state = sink.state;
         if (state.mode === "auto") return;
         const names = [];
@@ -202,7 +202,19 @@ ApiStrategy {
             root.emitText(sink, "\n\n" + Translation.tr("Plan mode is on, so this was not run: %1").arg(action));
             return;
         }
-        if (!replied) root.fail(sink, `Action denied (${action}).`);
+        const command = commands.join("\n");
+        const target = targets.join("\n");
+        const shown = command || target;
+        root.emitText(sink, `\n\n**Awaiting confirmation**: ${action}${shown ? ` \`${shown}\`` : ""}`);
+        sink.requestConfirmation({
+            type: "cli",
+            provider: "antigravity-cli",
+            action: action,
+            command: command,
+            target: target,
+            scope: "all",
+            grantNote: Translation.tr("Approving lets %1 run commands and edit files without asking for its next reply only.").arg(state.modelName)
+        });
     }
 
     function handleResult(result: var, sink: var): void {
@@ -215,7 +227,7 @@ ApiStrategy {
         } else {
             if (!state.streamed && result.response) root.emitText(sink, result.response);
             const denied = result.denied_actions ?? [];
-            if (Array.isArray(denied) && denied.length > 0) root.handleDenials(denied, sink, Boolean(result.response));
+            if (Array.isArray(denied) && denied.length > 0) root.handleDenials(denied, sink);
         }
         if (result.usage) {
             sink.usage({

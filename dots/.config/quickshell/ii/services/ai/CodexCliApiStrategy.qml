@@ -7,12 +7,17 @@ ApiStrategy {
     isCliStrategy: true
     supportsAttachments: true
 
+    // The words Codex itself reads as a sandbox denial in a failed command's output.
+    readonly property var sandboxDenialWords: ["operation not permitted", "permission denied", "read-only file system", "seccomp", "sandbox", "landlock", "failed to write file"]
     property var _requestInfo: ({})
 
     function buildRequest(ctx: var): var {
         const model = ctx.model;
         const mode = ctx.mode ?? "ask";
-        root._requestInfo = { mode: mode, modelName: model.name ?? "" };
+        // exec never asks for approval: Ask runs in the read-only sandbox, where
+        // Codex refuses what would change something, and an approval reruns the reply without it.
+        const granted = mode === "ask" && ctx.grant?.scope === "all";
+        root._requestInfo = { mode: mode, modelName: model.name ?? "", granted: granted };
         const attachment = Helpers.attachmentPath(ctx);
         const image = attachment.length > 0 && Helpers.isImage(attachment);
         // A regenerate starts a fresh thread; its thread.started event replaces the id.
@@ -23,7 +28,7 @@ ApiStrategy {
         if (sessionId.length > 0) argv.push("resume", sessionId);
         argv.push("--json", "--skip-git-repo-check");
         // -c rather than --sandbox, which resume does not take.
-        if (mode === "auto") argv.push("--dangerously-bypass-approvals-and-sandbox");
+        if (mode === "auto" || granted) argv.push("--dangerously-bypass-approvals-and-sandbox");
         else argv.push("-c", 'sandbox_mode="read-only"');
         if (model.model && model.model !== "codex-plan") argv.push("-m", model.model);
         const effort = root.effortFor(ctx.thinkingLevel, Ai.codexEfforts(model.model ?? ""));
@@ -55,8 +60,10 @@ ApiStrategy {
         return {
             finished: false,
             textOpen: false,
+            refused: [],
             mode: root._requestInfo.mode ?? "ask",
-            modelName: root._requestInfo.modelName ?? ""
+            modelName: root._requestInfo.modelName ?? "",
+            granted: root._requestInfo.granted === true
         };
     }
 
@@ -64,6 +71,27 @@ ApiStrategy {
     function emitBlock(sink: var, text: string): void {
         sink.text((sink.state.textOpen ? "\n\n" : "") + text);
         sink.state.textOpen = true;
+    }
+
+    function isRefused(item: var): bool {
+        if (item.status === "declined") return true;
+        if (item.status !== "failed" || item.exit_code === 0) return false;
+        const output = String(item.aggregated_output ?? "").toLowerCase();
+        return root.sandboxDenialWords.some(word => output.includes(word));
+    }
+
+    function raiseRefusals(sink: var): void {
+        const state = sink.state;
+        if (state.refused.length === 0) return;
+        sink.requestConfirmation({
+            type: "cli",
+            provider: "codex-cli",
+            action: Translation.tr("Shell command"),
+            command: state.refused.join("\n"),
+            target: "",
+            scope: "all",
+            grantNote: Translation.tr("Approving lets %1 run commands and edit files without asking for its next reply only.").arg(state.modelName)
+        });
     }
 
     function parseLine(line: string, sink: var): void {
@@ -95,6 +123,11 @@ ApiStrategy {
                 } else if (item.type === "reasoning" && item.text) {
                     sink.thinkWhole(item.text);
                     state.textOpen = false;
+                } else if (item.type === "command_execution") {
+                    // Plan runs read-only too, and a refusal there raises no card.
+                    const command = String(item.command ?? "");
+                    if (state.mode === "ask" && !state.granted && root.isRefused(item) && !state.refused.includes(command))
+                        state.refused.push(command);
                 } else if (item.type === "error" && item.message) {
                     // A warning that does not stop the turn, such as a thread
                     // resumed with another model than it was recorded with.
@@ -110,6 +143,7 @@ ApiStrategy {
                     const output = json.usage.output_tokens ?? -1;
                     sink.usage({ input: input, output: output, total: Math.max(0, input) + Math.max(0, output) });
                 }
+                root.raiseRefusals(sink);
                 sink.finished();
                 break;
             case "turn.failed":

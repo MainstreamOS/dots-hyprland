@@ -34,6 +34,8 @@ QtObject {
     property bool visibleToUser: true
     // False for notices that are never written to session files
     property bool persist: true
+    // "approved" or "declined" for the answer to an approval card, drawn as a short line
+    property string answer
     // ActivityRecord[], append-only; marker lines in content index into it
     property var activities: []
     // ThinkBlockState[] ({start, duration, collapsed}), by think block ordinal

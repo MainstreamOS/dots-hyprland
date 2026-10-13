@@ -8,6 +8,9 @@ ApiStrategy {
     supportsAttachments: true
 
     property var _requestInfo: ({})
+    // A denied step otherwise sends the model hunting for workarounds and
+    // writing up why each one failed, before the approval card even shows.
+    readonly property string askNote: "Actions that change files or run commands need the user's approval, which this session cannot ask for mid-reply: such a tool call is denied, and the user then sees an approval card. When one is denied, stop at once. Do not try another tool or command to get around it. End the reply with one short line naming what needs approval. If the user approves, the next message says so and every step of the task is allowed for that reply, so continue the task from where it stopped."
 
     // A path that would change what a permission rule matches (a wildcard,
     // a closing paren, a second line) gets no rule.
@@ -44,7 +47,9 @@ ApiStrategy {
         if (["low", "medium", "high", "xhigh", "max"].includes(effort)) argv.push("--effort", effort);
         if (Ai.cliPlanState["claude-code"]?.features?.includes("thinking-display")) argv.push("--thinking-display", "summarized");
 
-        const granted = mode === "auto";
+        // An approval covers the whole next reply, as one approval should
+        // carry a task through all of its steps.
+        const granted = mode === "auto" || (mode === "ask" && Boolean(ctx.grant));
         // The file may be outside the working directory, which would raise an
         // approval for every attachment. Variadic, so another flag follows.
         if (attachment.length > 0 && !granted) {
@@ -54,6 +59,7 @@ ApiStrategy {
         argv.push("--verbose", "--output-format", "stream-json", "--include-partial-messages");
         if (granted) argv.push("--dangerously-skip-permissions");
         else if (mode === "plan") argv.push("--permission-mode", "plan");
+        else argv.push("--append-system-prompt", root.askNote);
 
         const attachedLine = attachment.length > 0 ? Translation.tr("Attached file: %1").arg(attachment) : "";
         const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine);
@@ -76,6 +82,32 @@ ApiStrategy {
     function inputTokens(usage: var): int {
         if (usage?.input_tokens === undefined) return -1;
         return usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    }
+
+    function raiseDenials(denials: var, sink: var): void {
+        const names = [];
+        const commands = [];
+        const targets = [];
+        for (const denial of denials) {
+            const name = String(denial?.tool_name ?? "");
+            if (name.length === 0) continue;
+            if (!names.includes(name)) names.push(name);
+            const input = denial?.tool_input ?? {};
+            const command = name === "Bash" ? String(input.command ?? "") : "";
+            const target = String(input.file_path ?? input.notebook_path ?? input.path ?? input.url ?? "");
+            if (command.length > 0 && !commands.includes(command)) commands.push(command);
+            if (target.length > 0 && !targets.includes(target)) targets.push(target);
+        }
+        if (names.length === 0) return;
+        sink.requestConfirmation({
+            type: "cli",
+            provider: "claude-code",
+            action: names.join(", "),
+            command: commands.join("\n"),
+            target: targets.join("\n"),
+            scope: "all",
+            grantNote: Translation.tr("Approving lets %1 run commands and edit files without asking for its next reply only.").arg(sink.state.modelName)
+        });
     }
 
     function handleStreamEvent(event: var, sink: var): void {
@@ -131,6 +163,10 @@ ApiStrategy {
             const input = root.inputTokens(json.usage);
             const output = json.usage.output_tokens ?? -1;
             sink.usage({ input: input, output: output, total: Math.max(0, input) + Math.max(0, output) });
+        }
+        const denials = json.permission_denials ?? [];
+        if (state.mode === "ask" && Array.isArray(denials) && denials.length > 0) {
+            root.raiseDenials(denials, sink);
         }
         sink.finished();
     }
