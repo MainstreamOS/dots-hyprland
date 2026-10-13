@@ -2323,6 +2323,18 @@ Singleton {
         for (const strategy of Object.values(root.apiStrategies)) {
             if (strategy?.isCliStrategy) strategy.sessionId = "";
         }
+        root._shownNotices = [];
+    }
+
+    // Warnings that do not stop a reply, shown once per conversation as a
+    // notice of their own instead of inside every reply they come with.
+    property var _shownNotices: []
+    function _showNotices(notices) {
+        for (const text of notices) {
+            if (root._shownNotices.includes(text)) continue;
+            root._shownNotices = root._shownNotices.concat([text]);
+            root.addMessage(`**${Translation.tr("Note")}**: ${text}`, root.interfaceRole, { "persist": false });
+        }
     }
 
     function clearMessages(): void {
@@ -2537,6 +2549,7 @@ Singleton {
             "confirmationDraft": null,
             "loginLapsed": false,
             "searchRefused": false,
+            "notices": [],
             "output": "",
         };
     }
@@ -2948,6 +2961,7 @@ Singleton {
                 root.addMessage(Translation.tr("This Google account can no longer use this model. Pick another one with %1.").arg("/model"), Ai.interfaceRole);
             }
         }
+        root._showNotices(req.notices);
         if (req.searchRefused) {
             root.addMessage(Translation.tr("Web search with Gemini 3 needs a Google AI Studio project with billing turned on. Ask again without searching, or switch to Gemini 2.5 Flash with %1 if your account can still use it.").arg("/model"), Ai.interfaceRole);
         }

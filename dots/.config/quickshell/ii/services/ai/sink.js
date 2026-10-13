@@ -315,6 +315,12 @@ function createSink(req, host) {
             if (active())
                 req.searchRefused = true;
         },
+        // A warning that does not stop the reply; shown after it, once.
+        notice(text) {
+            const t = String(text ?? "");
+            if (active() && t.length > 0 && !req.notices.includes(t))
+                req.notices.push(t);
+        },
         // The process exit, not this event, ends a request.
         finished() {},
         // Service side: ends an open think block and releases held text.

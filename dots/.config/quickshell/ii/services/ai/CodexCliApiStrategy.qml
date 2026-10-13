@@ -171,7 +171,7 @@ ApiStrategy {
                 } else if (item.type === "error" && item.message) {
                     // A warning that does not stop the turn, such as a thread
                     // resumed with another model than it was recorded with.
-                    root.emitBlock(sink, `**${Translation.tr("Note")}**: ${item.message}`);
+                    sink.notice(item.message);
                 }
                 break;
             }
@@ -236,7 +236,11 @@ ApiStrategy {
             state.usage = params.tokenUsage?.last ?? null;
             break;
         case "warning":
-            if (params.message) root.emitBlock(sink, `**${Translation.tr("Note")}**: ${params.message}`);
+            sink.notice(params.message);
+            break;
+        case "configWarning":
+        case "deprecationNotice":
+            sink.notice(params.summary);
             break;
         case "error":
             if (!params.willRetry) root.fail(sink, params.error?.message ?? JSON.stringify(params));
