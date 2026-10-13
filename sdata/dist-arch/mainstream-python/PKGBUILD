@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-python
 pkgver=1.1
-pkgrel=9
+pkgrel=10
 pkgdesc='Mainstream OS Python Dependencies'
 provides=('illogical-impulse-python')
 replaces=('illogical-impulse-python')
@@ -12,6 +12,7 @@ depends=(
   uv
   python312
   python-pillow
+  python-websockets
   gtk4
   libadwaita
   libsoup3

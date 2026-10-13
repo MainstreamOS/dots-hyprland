@@ -124,7 +124,8 @@ Item {
             pageId: "ai"
             sourceComponent: AiChat {
                 scopeRoot: root.scopeRoot
-                onScreen: aiPage.onScreen
+                // Any lock screen covers the sidebar without closing it.
+                onScreen: aiPage.onScreen && !GlobalStates.sessionLocked
             }
         },
         PageLoader {
@@ -148,6 +149,14 @@ Item {
             sourceComponent: placeholder
         }
     ]
+
+    // Only the chat listens, so only it has Hyprland asked about other lockers.
+    Binding {
+        target: GlobalStates
+        property: "sessionLockWatched"
+        value: true
+        when: aiPage.onScreen
+    }
 
     // The sidebar's own shortcuts, handled once here for every page.
     Keys.onPressed: (event) => {

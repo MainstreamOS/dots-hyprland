@@ -133,6 +133,23 @@ Singleton {
     }
     property bool regionSelectorOpen: false
     property bool screenLocked: false
+    // Any locker holding the session, including hyprlock, which useHyprlock and
+    // hypridle start without screenLocked. Kept current only while watched.
+    readonly property bool sessionLocked: root.screenLocked || root._compositorLocked
+    property bool sessionLockWatched: false
+    property bool _compositorLocked: false
+    // Nothing focused is assumed until Hyprland reports focus: a lock then posts no event.
+    property bool _focusEmpty: true
+    onSessionLockWatchedChanged: {
+        if (root.sessionLockWatched)
+            sessionLockCheckProc.running = true;
+        else
+            root._compositorLocked = false;
+    }
+    onScreenLockedChanged: {
+        if (!root.screenLocked && root.sessionLockWatched)
+            sessionLockCheckProc.running = true;
+    }
     property bool screenLockContainsCharacters: false
     property bool screenUnlockFailed: false
     property bool screenTranslatorOpen: false
@@ -286,6 +303,39 @@ Singleton {
                     root.scrollOverviewOpen = false;
                 }
             }
+
+            // Hyprland sends no lock event, but a lock drops keyboard focus to
+            // nothing and an unlock hands it back.
+            if (event.name === "activewindowv2") {
+                root._focusEmpty = event.data === "";
+                if (root.sessionLockWatched && (root._focusEmpty || root._compositorLocked))
+                    sessionLockCheckProc.running = true;
+            }
+        }
+    }
+
+    // With nothing focused a lock drops nothing, so Hyprland is asked instead.
+    Timer {
+        interval: root._compositorLocked ? 3000 : 1000
+        repeat: true
+        running: root.sessionLockWatched && !root.screenLocked && (root._compositorLocked || root._focusEmpty)
+        onTriggered: sessionLockCheckProc.running = true
+    }
+
+    // Asked again while running, it runs once more when done.
+    Process {
+        id: sessionLockCheckProc
+        command: ["hyprctl", "-i", "0", "locked"]
+        property string output: ""
+        stdout: SplitParser {
+            onRead: data => sessionLockCheckProc.output += data
+        }
+        onExited: {
+            const answer = sessionLockCheckProc.output.trim();
+            sessionLockCheckProc.output = "";
+            // No answer, as when Hyprland cannot be reached, keeps the last one.
+            if (root.sessionLockWatched && (answer === "true" || answer === "false"))
+                root._compositorLocked = answer === "true";
         }
     }
 

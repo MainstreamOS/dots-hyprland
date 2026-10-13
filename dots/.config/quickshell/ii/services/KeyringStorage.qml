@@ -16,8 +16,14 @@ Singleton {
     id: root
 
     signal dataChanged()
+    // A read ended with the keyring still locked, as when its unlock prompt is dismissed.
+    signal fetchLeftLocked()
 
     property bool loaded: false
+    // Set on request, since the process signals running only once it has started.
+    // Set before starting it: a failed start clears it from inside that call.
+    property bool _fetching: false
+    readonly property bool fetching: root._fetching
     property var keyringData: ({})
     
     property var properties: {
@@ -63,9 +69,13 @@ Singleton {
         saveKeyringData();
     }
 
-    function fetchKeyringData() {
+    function fetchKeyringData(afterUnlock = false) {
         // console.log("[KeyringStorage] Fetching keyring data...");
         // console.log("[KeyringStorage] getData command:'" + getData.command.join("' '") + "'");
+        // A lookup asked for while one runs would run again after it, with a second
+        // unlock prompt. Right after an unlock it runs again, since the keyring is open.
+        if (getData.running && !afterUnlock) return;
+        root._fetching = true;
         getData.running = true;
     }
 
@@ -108,6 +118,7 @@ Singleton {
 
     Process {
         id: getData
+        onRunningChanged: root._fetching = getData.running
         command: [ // We need to use echo for a newline so splitparser does parse
             "bash", "-c", `${Directories.scriptPath}/keyring/try_lookup.sh 2> /dev/null`,
         ]
@@ -135,6 +146,8 @@ Singleton {
             }
             if (exitCode !== 2) {
                 root.loaded = true;
+            } else {
+                root.fetchLeftLocked();
             }
         }
     }

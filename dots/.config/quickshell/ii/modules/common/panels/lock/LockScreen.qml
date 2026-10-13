@@ -31,7 +31,7 @@ Scope {
     Process {
         id: unlockKeyringProc
         onExited: (exitCode, exitStatus) => {
-            KeyringStorage.fetchKeyringData();
+            KeyringStorage.fetchKeyringData(true);
         }
     }
     function unlockKeyring() {

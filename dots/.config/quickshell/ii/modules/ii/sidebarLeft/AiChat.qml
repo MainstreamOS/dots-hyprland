@@ -21,7 +21,7 @@ Item {
     // than reaching through an id that is no longer there.
     property string commandPrefix: "/"
     property var scopeRoot: null
-    // False while the sidebar is closed or another tab is on show.
+    // False while the sidebar is closed, another tab is on show or the screen is locked.
     property bool onScreen: true
     readonly property int clipboardInsertLimit: 50000
 
@@ -44,11 +44,14 @@ Item {
         target: Ai
         function onCurrentModelIdChanged() {
             root.loadApiKeysIfNeeded();
+            voiceProc.cancelRecording();
         }
     }
     onOnScreenChanged: {
-        if (!root.onScreen)
+        if (!root.onScreen) {
+            voiceProc.cancelRecording();
             return;
+        }
         // Nothing is laid out while hidden, so a followed reply takes its new height on showing.
         messageListView.holdLonger();
     }
@@ -416,6 +419,157 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             } else {
                 console.error("[AiChat] Failed to decode image in clipboard content");
             }
+        }
+    }
+
+    Process {
+        id: voiceHelperCheck
+        // "unknown" until the first check ends, then "yes" or "no"
+        property string status: "unknown"
+        command: ["python3", "-c", "import websockets"]
+        running: true
+        onExited: (exitCode, exitStatus) => voiceHelperCheck.resolve(exitCode === 0)
+        // A python3 that cannot start ends the check without an exit.
+        onRunningChanged: {
+            if (!voiceHelperCheck.running && voiceHelperCheck.status === "unknown")
+                voiceHelperCheck.resolve(false);
+        }
+
+        function resolve(found: bool): void {
+            voiceHelperCheck.status = found ? "yes" : "no";
+            if (!voiceProc.startWhenHelperChecked)
+                return;
+            voiceProc.startWhenHelperChecked = false;
+            if (root.onScreen)
+                voiceProc.startRecording();
+        }
+    }
+
+    // Recording is this process running; the helper exits on SIGTERM after
+    // printing the words it still had, or on stdin EOF if the shell dies.
+    Process {
+        id: voiceProc
+        property string initialText: ""
+        property bool sendOnStop: false
+        property bool stopping: false
+        property bool discard: false
+        property bool startWhenKeyringLoaded: false
+        property bool startWhenHelperChecked: false
+
+        stdinEnabled: true
+
+        function startRecording(): void {
+            if (voiceProc.running)
+                return;
+            if (voiceHelperCheck.status === "unknown") {
+                voiceProc.startWhenHelperChecked = true;
+                return;
+            }
+            if (voiceHelperCheck.status === "no") {
+                voiceProc.reportError("no-websockets");
+                voiceHelperCheck.running = true;
+                return;
+            }
+            if (!KeyringStorage.loaded) {
+                voiceProc.startWhenKeyringLoaded = true;
+                // A read already running has its unlock prompt open; a second would queue another.
+                if (!KeyringStorage.fetching)
+                    KeyringStorage.fetchKeyringData();
+                return;
+            }
+            voiceProc.startWhenKeyringLoaded = false;
+            voiceProc.initialText = messageInputField.text;
+            voiceProc.sendOnStop = false;
+            voiceProc.stopping = false;
+            voiceProc.discard = false;
+            voiceProc.environment = {
+                "GEMINI_API_KEY": Ai.apiKeys?.gemini ?? ""
+            };
+            voiceProc.command = ["python3", "-u", FileUtils.trimFileProtocol(`${Directories.scriptPath}/ai/live-transcribe.py`)];
+            voiceProc.running = true;
+        }
+
+        function stopAndSend(): void {
+            if (!voiceProc.running || voiceProc.stopping)
+                return;
+            voiceProc.sendOnStop = true;
+            voiceProc.stopping = true;
+            voiceProc.running = false;
+        }
+
+        function cancelRecording(): void {
+            voiceProc.startWhenKeyringLoaded = false;
+            voiceProc.startWhenHelperChecked = false;
+            if (!voiceProc.running)
+                return;
+            voiceProc.sendOnStop = false;
+            voiceProc.discard = true;
+            messageInputField.text = voiceProc.initialText;
+            if (!voiceProc.stopping) {
+                voiceProc.stopping = true;
+                voiceProc.running = false;
+            }
+        }
+
+        function reportError(code: string): void {
+            switch (code) {
+            case "no-key":
+                root.postNotice(Translation.tr("Voice input needs a Gemini API key. Set one with /key while a Gemini model is selected."));
+                break;
+            case "no-websockets":
+                voiceHelperCheck.status = "no";
+                root.postNotice(Translation.tr("Voice input needs the python-websockets package, which is not installed."));
+                break;
+            case "no-recorder":
+                root.postNotice(Translation.tr("No audio recorder was found (pw-record, ffmpeg, parecord or arecord)."));
+                break;
+            case "connect":
+            case "closed":
+                root.postNotice(Translation.tr("Voice input lost its connection to Gemini."));
+                break;
+            }
+        }
+
+        stdout: SplitParser {
+            onRead: line => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith("TEXT:")) {
+                    const transcribed = trimmed.substring(5).trim();
+                    if (transcribed.length > 0 && !voiceProc.discard) {
+                        const prefix = voiceProc.initialText.trim();
+                        messageInputField.text = prefix.length > 0 ? (prefix + " " + transcribed) : transcribed;
+                        messageInputField.cursorPosition = messageInputField.text.length;
+                    }
+                } else if (trimmed.startsWith("ERROR:") && !voiceProc.discard) {
+                    voiceProc.reportError(trimmed.substring(6).trim());
+                }
+            }
+        }
+
+        onExited: (exitCode, exitStatus) => {
+            const send = voiceProc.sendOnStop && !voiceProc.discard;
+            voiceProc.sendOnStop = false;
+            voiceProc.stopping = false;
+            if (!send || Ai.isGenerating)
+                return;
+            const inputText = messageInputField.text.trim();
+            if (inputText.length > 0 && root.handleInput(inputText))
+                messageInputField.clear();
+        }
+    }
+
+    Connections {
+        target: KeyringStorage
+        function onLoadedChanged() {
+            if (KeyringStorage.loaded && voiceProc.startWhenKeyringLoaded && root.onScreen)
+                voiceProc.startRecording();
+        }
+        // A dismissed unlock prompt drops the start instead of leaving it for whatever unlocks the keyring next.
+        function onFetchLeftLocked() {
+            if (!voiceProc.startWhenKeyringLoaded)
+                return;
+            voiceProc.startWhenKeyringLoaded = false;
+            root.postNotice(Translation.tr("Voice input could not read the Gemini API key because the keyring could not be unlocked."));
         }
     }
 
@@ -1630,6 +1784,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         anchors.fill: parent
                         wrapMode: TextArea.Wrap
                         padding: 10
+                        // Dictation rewrites the text as words arrive, which would drop anything typed meanwhile.
+                        readOnly: voiceProc.running
                         color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
                         placeholderText: root ? Translation.tr('Message the model... "%1" for commands').arg(root.commandPrefix) : ""
 
@@ -1769,6 +1925,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     messageInputField.insert(messageInputField.cursorPosition, "\n");
                                     event.accepted = true;
                                 } else {
+                                    if (voiceProc.running) {
+                                        voiceProc.stopAndSend();
+                                        event.accepted = true;
+                                        return;
+                                    }
                                     // Accept text
                                     messageInputField.accept();
                                     event.accepted = true;
@@ -1803,7 +1964,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                                 event.accepted = false; // No image, let text pasting proceed
                             } else if (event.key === Qt.Key_Escape) {
-                                if (Ai.pendingFilePath.length > 0) {
+                                if (voiceProc.running) {
+                                    voiceProc.cancelRecording();
+                                    event.accepted = true;
+                                } else if (Ai.pendingFilePath.length > 0) {
                                     Ai.attachFile("");
                                     event.accepted = true;
                                 } else {
@@ -1811,6 +1975,49 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                             }
                         }
+                    }
+                }
+                RippleButton { // Voice input button
+                    id: voiceButton
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.rightMargin: 2
+                    implicitWidth: 40
+                    implicitHeight: 40
+                    buttonRadius: Appearance.rounding.small
+                    enabled: !Ai.isGenerating || voiceProc.running
+                    toggled: voiceProc.running
+
+                    colBackground: "transparent"
+                    colBackgroundHover: Appearance.colors.colLayer1Hover
+                    colBackgroundToggled: Appearance.colors.colErrorContainer
+                    colBackgroundToggledHover: Appearance.colors.colErrorContainerHover
+
+                    onClicked: {
+                        if (voiceProc.running) {
+                            voiceProc.stopAndSend();
+                        } else {
+                            voiceProc.startRecording();
+                        }
+                    }
+
+                    altAction: () => voiceProc.cancelRecording()
+
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        iconSize: 22
+                        color: {
+                            if (!voiceButton.enabled) return Appearance.colors.colOnLayer2Disabled;
+                            if (voiceProc.running) return Appearance.colors.colOnErrorContainer;
+                            return (voiceButton.hovered ? Appearance.colors.colPrimary : Appearance.colors.colSubtext);
+                        }
+                        text: voiceProc.running ? "stop" : "mic"
+                    }
+
+                    StyledToolTip {
+                        text: voiceProc.running ?
+                            Translation.tr("Stop and send voice input (Right click or Esc to cancel)") :
+                            Translation.tr("Voice input")
                     }
                 }
 
@@ -1821,13 +2028,17 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     implicitWidth: 40
                     implicitHeight: 40
                     buttonRadius: Appearance.rounding.small
-                    enabled: Ai.isGenerating || messageInputField.text.length > 0
+                    enabled: Ai.isGenerating || messageInputField.text.length > 0 || voiceProc.running
                     toggled: enabled
 
                     colBackgroundToggled: Ai.isGenerating ? Appearance.colors.colErrorContainer : Appearance.colors.colPrimary
                     colBackgroundToggledHover: Ai.isGenerating ? Appearance.colors.colErrorContainerHover : Appearance.colors.colPrimaryHover
 
                     onClicked: {
+                        if (voiceProc.running) {
+                            voiceProc.stopAndSend();
+                            return;
+                        }
                         if (Ai.isGenerating) {
                             Ai.cancelRequest();
                             return;
