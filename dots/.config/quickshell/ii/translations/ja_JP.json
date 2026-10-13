@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "承認すると、%1はこの返信の終わりまでコマンドの実行とファイルの編集ができます。",
   "The user declined this step.": "ユーザーはこの手順を拒否しました。",
   "File change": "ファイルの変更",
-  "Extra access": "追加のアクセス"
+  "Extra access": "追加のアクセス",
+  "Updated %1 min ago": "%1分前に更新",
+  "Updated %1 h ago": "%1時間前に更新"
 }

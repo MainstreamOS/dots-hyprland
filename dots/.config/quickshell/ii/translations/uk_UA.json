@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Схвалення дозволяє %1 виконувати команди та змінювати файли до кінця цієї відповіді.",
   "The user declined this step.": "Користувач відхилив цей крок.",
   "File change": "Зміна файлу",
-  "Extra access": "Додатковий доступ"
+  "Extra access": "Додатковий доступ",
+  "Updated %1 min ago": "Оновлено %1 хв тому",
+  "Updated %1 h ago": "Оновлено %1 год тому"
 }

@@ -75,6 +75,30 @@ Rectangle {
 
     readonly property bool providerFetching: activeProvider === "antigravity-cli" && (root.gemini?.running ?? false)
 
+    // Failed reads keep the last good numbers; past two missed polls they
+    // say how old they are.
+    property double now: Date.now()
+    readonly property double staleMs: {
+        const at = root.usageService?.updatedAt ?? 0;
+        const interval = root.usageService?.fetchInterval ?? 0;
+        const age = root.now - at;
+        return (at > 0 && interval > 0 && age > 2 * interval) ? age : 0;
+    }
+
+    function updatedText(ms: double): string {
+        const minutes = Math.floor(ms / 60000);
+        return minutes < 60 ? Translation.tr("Updated %1 min ago").arg(minutes)
+            : Translation.tr("Updated %1 h ago").arg(Math.floor(minutes / 60));
+    }
+
+    Timer {
+        interval: 30 * 1000
+        repeat: true
+        triggeredOnStart: true
+        running: root.visible && root.providerAvailable
+        onTriggered: root.now = Date.now()
+    }
+
     visible: activeProvider !== ""
     radius: Appearance.rounding.normal
     color: Appearance.colors.colLayer2
@@ -292,6 +316,15 @@ Rectangle {
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
             maximumLineCount: 2
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            visible: root.providerAvailable && root.staleMs > 0
+            text: root.updatedText(root.staleMs)
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            elide: Text.ElideRight
         }
 
         // Claude meters

@@ -33,6 +33,7 @@ Singleton {
     // "rate-limit", "network" and "unexpected" keep the last numbers.
     readonly property bool available: poller.available
     readonly property string lastError: poller.lastError
+    readonly property double updatedAt: poller.updatedAt
     property string planType: ""
 
     // Utilization percentages (0-100)

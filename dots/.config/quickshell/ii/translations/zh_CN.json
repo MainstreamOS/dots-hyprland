@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "批准后，%1 可以在本次回复的剩余部分运行命令和编辑文件。",
   "The user declined this step.": "用户拒绝了此步骤。",
   "File change": "文件更改",
-  "Extra access": "额外访问权限"
+  "Extra access": "额外访问权限",
+  "Updated %1 min ago": "%1 分钟前更新",
+  "Updated %1 h ago": "%1 小时前更新"
 }

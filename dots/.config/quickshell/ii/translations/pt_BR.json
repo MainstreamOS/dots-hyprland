@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Aprovar permite que %1 execute comandos e edite arquivos durante o restante desta resposta.",
   "The user declined this step.": "O usuário recusou esta etapa.",
   "File change": "Alteração de arquivo",
-  "Extra access": "Acesso adicional"
+  "Extra access": "Acesso adicional",
+  "Updated %1 min ago": "Atualizado há %1 min",
+  "Updated %1 h ago": "Atualizado há %1 h"
 }

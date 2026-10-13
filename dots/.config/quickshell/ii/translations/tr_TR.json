@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Onayladığınızda %1, bu yanıtın geri kalanında komut çalıştırabilir ve dosya düzenleyebilir.",
   "The user declined this step.": "Kullanıcı bu adımı reddetti.",
   "File change": "Dosya değişikliği",
-  "Extra access": "Ek erişim"
+  "Extra access": "Ek erişim",
+  "Updated %1 min ago": "%1 dk önce güncellendi",
+  "Updated %1 h ago": "%1 sa önce güncellendi"
 }

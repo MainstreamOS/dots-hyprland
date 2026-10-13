@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Khi chấp nhận, %1 được chạy lệnh và sửa tệp trong phần còn lại của lần trả lời này.",
   "The user declined this step.": "Người dùng đã từ chối bước này.",
   "File change": "Thay đổi tệp",
-  "Extra access": "Quyền truy cập bổ sung"
+  "Extra access": "Quyền truy cập bổ sung",
+  "Updated %1 min ago": "Cập nhật %1 phút trước",
+  "Updated %1 h ago": "Cập nhật %1 giờ trước"
 }

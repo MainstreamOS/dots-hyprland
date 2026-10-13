@@ -31,6 +31,8 @@ Singleton {
 
     property bool available: false
     property string lastError: ""
+    // Epoch ms of the last good read; its numbers stay shown after failures.
+    property double updatedAt: 0
     property string planType: ""
 
     // Utilization percentages (0-100); -1 means "not reported"
@@ -125,6 +127,7 @@ Singleton {
         }
         root.available = true;
         root.lastError = "";
+        root.updatedAt = Date.now();
         root._backoff = root._minBackoff;
     }
 

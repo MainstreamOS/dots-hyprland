@@ -32,6 +32,7 @@ Singleton {
     // "rate-limit", "network" and "unexpected" keep the last numbers.
     readonly property bool available: poller.available
     readonly property string lastError: poller.lastError
+    readonly property double updatedAt: poller.updatedAt
     property string subscriptionType: "" // "pro" | "max" | ...
 
     // Utilization percentages (0-100); -1 means "not reported by the API"

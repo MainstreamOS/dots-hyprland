@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "האישור מאפשר ל-%1 להריץ פקודות ולערוך קבצים עד סוף התגובה הזו.",
   "The user declined this step.": "המשתמש דחה את השלב הזה.",
   "File change": "שינוי בקובץ",
-  "Extra access": "גישה נוספת"
+  "Extra access": "גישה נוספת",
+  "Updated %1 min ago": "עודכן לפני %1 דק׳",
+  "Updated %1 h ago": "עודכן לפני %1 שע׳"
 }

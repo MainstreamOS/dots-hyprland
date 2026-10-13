@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Persetujuan memungkinkan %1 menjalankan perintah dan mengedit file selama sisa balasan ini.",
   "The user declined this step.": "Pengguna menolak langkah ini.",
   "File change": "Perubahan file",
-  "Extra access": "Akses tambahan"
+  "Extra access": "Akses tambahan",
+  "Updated %1 min ago": "Diperbarui %1 menit lalu",
+  "Updated %1 h ago": "Diperbarui %1 jam lalu"
 }

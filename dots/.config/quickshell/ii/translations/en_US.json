@@ -2761,5 +2761,7 @@
   "Approving lets %1 run commands and edit files for the rest of this reply.": "Approving lets %1 run commands and edit files for the rest of this reply.",
   "The user declined this step.": "The user declined this step.",
   "File change": "File change",
-  "Extra access": "Extra access"
+  "Extra access": "Extra access",
+  "Updated %1 min ago": "Updated %1 min ago",
+  "Updated %1 h ago": "Updated %1 h ago"
 }

@@ -20,6 +20,8 @@ QtObject {
 
     property bool available: false
     property string lastError: ""
+    // Epoch ms of the last good read; its numbers stay shown after failures.
+    property double updatedAt: 0
 
     readonly property var codes: ["no-login", "expired", "auth", "rate-limit", "network", "unexpected"]
     readonly property int minBackoff: 30 * 1000
@@ -67,6 +69,7 @@ QtObject {
         }
         root.available = true;
         root.lastError = "";
+        root.updatedAt = Date.now();
         root.failures = 0;
         root.holdUntil = 0;
         root.manualUsed = false;
