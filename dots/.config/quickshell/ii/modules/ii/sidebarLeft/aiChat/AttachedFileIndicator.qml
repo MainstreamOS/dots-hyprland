@@ -119,7 +119,8 @@ Rectangle {
 
         Loader {
             id: imagePreviewLoader
-            visible: (root.imageWidth != -1) && (root.imageHeight != -1)
+            active: (root.imageWidth != -1) && (root.imageHeight != -1)
+            visible: active
             Layout.alignment: Qt.AlignHCenter
             sourceComponent: Item {
                 implicitHeight: root.imageHeight * root.scale

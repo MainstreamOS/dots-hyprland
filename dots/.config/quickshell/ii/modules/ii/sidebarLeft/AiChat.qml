@@ -28,7 +28,7 @@ Item {
     property var suggestionQuery: ""
     property var suggestionList: []
 
-    readonly property bool anySheetShown: [modelSheetLoader, executionModeSheetLoader, reasoningSheetLoader]
+    readonly property bool anySheetShown: [modelSheetLoader, executionModeSheetLoader, reasoningSheetLoader, fileSheetLoader]
         .some(loader => loader.shown)
 
     // The keyring is left closed at startup when nobody typed its password, so
@@ -90,6 +90,9 @@ Item {
     function openReasoningSheet(): void {
         reasoningSheetLoader.load().open();
     }
+    function openFileSheet(): void {
+        fileSheetLoader.load().open();
+    }
 
     function prefillInput(text: string): void {
         if (messageInputField.readOnly)
@@ -145,6 +148,10 @@ Item {
             name: "attach",
             description: Translation.tr("Attach a file"),
             execute: args => {
+                if (args.length === 0) {
+                    root.openFileSheet();
+                    return;
+                }
                 Ai.attachFile(args.join(" ").trim());
             }
         },
@@ -1560,6 +1567,31 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
                 spacing: 2
 
+                RippleButton {
+                    id: attachFileButton
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.leftMargin: 6
+                    Layout.bottomMargin: 4
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    buttonRadius: Appearance.rounding.small
+                    colBackground: "transparent"
+                    colBackgroundHover: Appearance.colors.colLayer1Hover
+
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: "attach_file"
+                        iconSize: 20
+                        color: Appearance.colors.colSubtext
+                    }
+
+                    onClicked: root.openFileSheet()
+
+                    StyledToolTip {
+                        text: Translation.tr("Attach file (browse inside sidebar)")
+                    }
+                }
+
                 ScrollView {
                     id: inputScrollView
                     Layout.fillWidth: true
@@ -1872,6 +1904,124 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         id: reasoningSheetLoader
         sourceComponent: ReasoningSelectionSheet {
             onClosed: root.focusInput()
+        }
+    }
+
+    SheetLoader {
+        id: fileSheetLoader
+        sourceComponent: FileSelectionSheet {
+            onFileSelected: fileUrl => Ai.attachFile(fileUrl)
+            onClosed: root.focusInput()
+        }
+    }
+
+    Process {
+        id: dropCheckProc
+        property string path: ""
+        property int extraCount: 0
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                root.postNotice(Translation.tr("Only files can be attached."));
+                return;
+            }
+            Ai.attachFile(dropCheckProc.path);
+            if (dropCheckProc.extraCount > 0)
+                root.postNotice(Translation.tr("Only the first file was attached."));
+        }
+    }
+
+    DropArea {
+        id: fileDropArea
+        anchors.fill: parent
+        z: 150
+
+        function isLocalFileDrag(drag): bool {
+            if (!drag.hasUrls)
+                return false;
+            const urls = drag.urls;
+            return urls.length > 0 && String(urls[0]).startsWith("file:");
+        }
+
+        onEntered: (drag) => {
+            if (!fileDropArea.isLocalFileDrag(drag)) {
+                drag.accepted = false;
+                return;
+            }
+            drag.accept(Qt.CopyAction);
+        }
+
+        // Moves only arrive for a drag that onEntered accepted.
+        onPositionChanged: (drag) => drag.accept(Qt.CopyAction)
+
+        onDropped: (drop) => {
+            if (!fileDropArea.isLocalFileDrag(drop)) return;
+            let path = "";
+            try {
+                path = decodeURIComponent(FileUtils.trimFileProtocol(String(drop.urls[0])));
+            } catch (e) {
+                path = "";
+            }
+            if (fileSheetLoader.shown) fileSheetLoader.item.close();
+            drop.accept(Qt.CopyAction);
+            if (!path.startsWith("/")) {
+                root.postNotice(Translation.tr("Only local files can be attached."));
+                return;
+            }
+            dropCheckProc.path = path;
+            dropCheckProc.extraCount = drop.urls.length - 1;
+            dropCheckProc.exec(["test", "-f", path]);
+        }
+
+        Rectangle {
+            id: dropOverlay
+            anchors.fill: parent
+            anchors.margins: root.padding
+            enabled: false
+            radius: Appearance.rounding.normal
+            color: ColorUtils.transparentize(Appearance.colors.colLayer2Base, 0.15)
+            border.width: 2
+            border.color: Appearance.colors.colPrimary
+            visible: opacity > 0
+            opacity: fileDropArea.containsDrag ? 1 : 0
+
+            Behavior on opacity {
+                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+            }
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 12
+
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: 64
+                    implicitHeight: 64
+                    radius: Appearance.rounding.full
+                    color: Appearance.colors.colPrimaryContainer
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: "attach_file"
+                        iconSize: 32
+                        color: Appearance.colors.colOnPrimaryContainer
+                    }
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Translation.tr("Drop file to attach")
+                    font.pixelSize: Appearance.font.pixelSize.large
+                    font.weight: Font.DemiBold
+                    color: Appearance.m3colors.m3onSurface
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Translation.tr("Release to attach to AI chat")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                }
+            }
         }
     }
 }
