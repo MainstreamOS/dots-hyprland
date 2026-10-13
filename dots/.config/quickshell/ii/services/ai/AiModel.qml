@@ -15,6 +15,7 @@ import QtQuick;
  * - extraParams: Extra parameters to be passed to the model. This is a JSON object.
  * - sendTemperature: Whether to send temperature sampling parameter (deprecated on Gemini 3)
  * - thinkingLevel: Thinking/reasoning level ("minimal", "low", "medium", "high")
+ * - supportsSessions: Whether the model supports saving and loading chat sessions
  */
 
 QtObject {
@@ -33,4 +34,5 @@ QtObject {
     property var extraParams: ({})
     property bool sendTemperature: true
     property string thinkingLevel: ""
+    property bool supportsSessions: true
 }

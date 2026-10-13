@@ -60,6 +60,9 @@ Singleton {
     property bool _startupRestored: false
     property int _loadGeneration: 0
     property var _restore: null
+    // What the chat looked like when it last matched a named session
+    property string _savedSignature: ""
+    property string _savedName: ""
     readonly property var apiKeys: KeyringStorage.keyringData?.apiKeys ?? {}
     readonly property var apiKeysLoaded: KeyringStorage.loaded
     readonly property bool currentModelHasApiKey: {
@@ -473,6 +476,7 @@ Singleton {
     // selection writes Persistent, and both id and object derive from it, so
     // no imperative write can strand the id and the object apart again.
     readonly property var currentModel: models[currentModelId] ?? (root.isGeminiApiModel(currentModelId) ? models["gemini"] : null)
+    readonly property bool currentModelSupportsSessions: Boolean(currentModel && currentModel.supportsSessions !== false && currentModelId !== ollamaSetupModelId)
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(root),
@@ -864,6 +868,7 @@ Singleton {
                     "model": plan.setupId,
                     "requires_key": false,
                     "api_format": fmt,
+                    "supportsSessions": false,
                 });
                 changed = true;
             }
@@ -1558,6 +1563,7 @@ Singleton {
                 "endpoint": "http://localhost:11434/v1/chat/completions",
                 "model": "",
                 "requires_key": false,
+                "supportsSessions": false,
             });
         } else if (root._registry[root.ollamaSetupModelId]) {
             const removed = root._registry[root.ollamaSetupModelId];
@@ -3360,7 +3366,22 @@ Singleton {
                 root.reloadSavedChats();
                 root._bury(saveView);
             }
-            onSaveFailed: error => root._bury(saveView)
+            onSaveFailed: error => {
+                if (root._savedName === saveView.chatName)
+                    root._savedSignature = "";
+                root._bury(saveView);
+            }
+        }
+    }
+
+    Component {
+        id: removeProcessComponent
+        Process {
+            id: removeProc
+            onExited: (exitCode, exitStatus) => {
+                root.reloadSavedChats();
+                root._bury(removeProc);
+            }
         }
     }
 
@@ -3413,6 +3434,11 @@ Singleton {
         return cleanName.toLowerCase() === "lastsession" ? "saved-session" : cleanName;
     }
 
+    function sessionNameExists(name): bool {
+        const cleanName = root._savedChatName(name);
+        return cleanName.length > 0 && root.savedChats.includes(`${Directories.aiChats}/${cleanName}.json`);
+    }
+
     /**
      * Saves the chat under a name, in the background.
      * @param chatName name of the chat
@@ -3426,7 +3452,44 @@ Singleton {
         if (!writer) return "";
         writer.path = `${Directories.aiChats}/${cleanName}.json`;
         writer.setText(root._serializeSession());
+        root._savedSignature = root._chatSignature();
+        root._savedName = cleanName;
         return cleanName;
+    }
+
+    // Changes whenever a message is added, removed, edited or still streaming.
+    function _chatSignature() {
+        const ids = root.messageIDs;
+        const parts = [];
+        for (let i = 0; i < ids.length; i++) {
+            const msg = root.messageByID[ids[i]];
+            parts.push(ids[i] + ":" + (msg?.contentRevision ?? 0) + ":" + (msg?.content?.length ?? 0) + ":" + (msg?.done ?? true));
+        }
+        return parts.join("|");
+    }
+
+    /**
+     * True when the chat has a user message and is not the named session
+     * it last matched, so loading over it would lose it.
+     */
+    function chatIsUnsaved(): bool {
+        if (!root.messageIDs.some(id => root.messageByID[id]?.role === "user")) return false;
+        return root._chatSignature() !== root._savedSignature || !root.sessionNameExists(root._savedName);
+    }
+
+    /**
+     * Deletes saved chat file.
+     * @param chatName name of the chat
+     */
+    function deleteChat(chatName): void {
+        const cleanName = root._cleanChatName(chatName);
+        if (cleanName.length === 0 || cleanName === "lastSession") return;
+        const filePath = `${Directories.aiChats}/${cleanName}.json`;
+        root.savedChats = root.savedChats.filter(path => path !== filePath);
+        removeProcessComponent.createObject(root, {
+            "command": ["rm", "-f", "--", filePath],
+            "running": true,
+        });
     }
 
     /**
@@ -3570,6 +3633,11 @@ Singleton {
         const savedModel = root.retiredModels[r.parsed.model] ?? r.parsed.model;
         if (r.kind !== "startup" && savedModel.length > 0 && savedModel !== root.ollamaSetupModelId)
             root.setModel(savedModel, false, true, false);
+        // Taken after the model switch, which can post a notice of its own.
+        if (r.kind !== "startup") {
+            root._savedSignature = root._chatSignature();
+            root._savedName = r.chatName;
+        }
         root._saveNow();
     }
 }

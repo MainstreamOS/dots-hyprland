@@ -28,7 +28,7 @@ Item {
     property var suggestionQuery: ""
     property var suggestionList: []
 
-    readonly property bool anySheetShown: [modelSheetLoader, executionModeSheetLoader, reasoningSheetLoader, fileSheetLoader]
+    readonly property bool anySheetShown: [modelSheetLoader, executionModeSheetLoader, reasoningSheetLoader, sessionSheetLoader, fileSheetLoader]
         .some(loader => loader.shown)
 
     // The keyring is left closed at startup when nobody typed its password, so
@@ -89,6 +89,13 @@ Item {
     }
     function openReasoningSheet(): void {
         reasoningSheetLoader.load().open();
+    }
+    function openSessionSheet(save: bool): void {
+        const sheet = sessionSheetLoader.load();
+        if (save)
+            sheet.openSave();
+        else
+            sheet.openLoad();
     }
     function openFileSheet(): void {
         fileSheetLoader.load().open();
@@ -247,7 +254,7 @@ Item {
             execute: args => {
                 const joinedArgs = args.join(" ");
                 if (joinedArgs.trim().length == 0) {
-                    Ai.addMessage(Translation.tr("Usage: %1save CHAT_NAME").arg(root.commandPrefix), Ai.interfaceRole);
+                    root.openSessionSheet(true);
                     return;
                 }
                 Ai.saveChat(joinedArgs);
@@ -259,10 +266,11 @@ Item {
             execute: args => {
                 const joinedArgs = args.join(" ");
                 if (joinedArgs.trim().length == 0) {
-                    Ai.addMessage(Translation.tr("Usage: %1load CHAT_NAME").arg(root.commandPrefix), Ai.interfaceRole);
+                    root.openSessionSheet(false);
                     return;
                 }
-                Ai.loadChat(joinedArgs);
+                // Asks about an unsaved chat first, as a pick in the sheet does.
+                sessionSheetLoader.load().requestLoad(joinedArgs.trim());
             }
         },
         {
@@ -594,7 +602,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             Rectangle {
                 id: statusBg
                 z: 2
-                readonly property list<Item> items: [responseStyleStatusItem, keyStatusItem, reasoningStatusItem, newChatStatusItem, tokenCountStatusItem]
+                readonly property list<Item> items: [sessionStatusItem, responseStyleStatusItem, keyStatusItem, reasoningStatusItem, newChatStatusItem, tokenCountStatusItem]
                 // A separator shows before an item only when some item to its left shows too.
                 function hasVisibleBefore(item: Item): bool {
                     for (const other of statusBg.items) {
@@ -639,6 +647,24 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     id: statusRowLayout
                     anchors.centerIn: parent
                     spacing: statusBg.compact ? 6 : 8
+
+                    StatusItem {
+                        id: sessionStatusItem
+                        visible: Ai.currentModelSupportsSessions
+                        readonly property bool hasPrompts: Ai.messageIDs.some(id => {
+                            const role = Ai.messageByID[id]?.role;
+                            return role === "user" || role === "assistant";
+                        })
+                        icon: hasPrompts ? "save" : "history"
+                        text: hasPrompts ? Translation.tr("Save") : Translation.tr("Load")
+                        description: hasPrompts
+                            ? Translation.tr("Save session\nClick to save current conversation")
+                            : Translation.tr("Load session\nClick to choose a saved chat session")
+                        onClicked: root.openSessionSheet(hasPrompts)
+                    }
+                    StatusSeparator {
+                        next: responseStyleStatusItem
+                    }
 
                     StatusItem {
                         id: responseStyleStatusItem
@@ -1903,6 +1929,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
     SheetLoader {
         id: reasoningSheetLoader
         sourceComponent: ReasoningSelectionSheet {
+            onClosed: root.focusInput()
+        }
+    }
+
+    SheetLoader {
+        id: sessionSheetLoader
+        sourceComponent: SessionSelectionSheet {
             onClosed: root.focusInput()
         }
     }
