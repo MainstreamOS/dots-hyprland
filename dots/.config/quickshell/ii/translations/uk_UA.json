@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Дані про використання з'являться після вашого наступного повідомлення.",
   "Usage checks are rate limited. Trying again soon.": "Перевірки використання обмежені за частотою. Невдовзі спробуємо знову.",
   "Sign in to Codex again to see usage.": "Увійдіть в Codex знову, щоб побачити дані про використання.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Вхід виконано. Моделі за підпискою тепер є у списку вибору: введіть /model, щоб вибрати одну.",
+  "Note": "Примітка",
   "Subscription": "Підписка",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Зараз дозволено лише локальні моделі. Щоб використовувати онлайн-моделі, виберіть для ШІ значення «Так» у розділі Параметри > Інтерфейс > Left Sidebar."
 }

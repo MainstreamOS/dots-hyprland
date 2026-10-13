@@ -26,7 +26,7 @@ ApiStrategy {
         if (mode === "auto") argv.push("--dangerously-bypass-approvals-and-sandbox");
         else argv.push("-c", 'sandbox_mode="read-only"');
         if (model.model && model.model !== "codex-plan") argv.push("-m", model.model);
-        const effort = root.effortFor(ctx.thinkingLevel, []);
+        const effort = root.effortFor(ctx.thinkingLevel, Ai.codexEfforts(model.model ?? ""));
         if (effort.length > 0) argv.push("-c", `model_reasoning_effort="${effort}"`);
         if (image) argv.push("-i", attachment);
         // -i takes several files; the lone - after -- reads the prompt from stdin.
@@ -42,7 +42,7 @@ ApiStrategy {
     }
 
     // The Codex effort for one of the tab's levels, or "" to leave it to the
-    // CLI. A non-empty list limits it to the efforts the model supports.
+    // CLI. A model the catalog lists takes only the efforts listed for it.
     function effortFor(level: string, supported: var): string {
         let effort = Object.keys(Ai.codexEffortLevels).find(key => Ai.codexEffortLevels[key] === level) ?? "";
         if (effort === "minimal" && !supported.includes("minimal")) effort = "low";
@@ -95,6 +95,10 @@ ApiStrategy {
                 } else if (item.type === "reasoning" && item.text) {
                     sink.thinkWhole(item.text);
                     state.textOpen = false;
+                } else if (item.type === "error" && item.message) {
+                    // A warning that does not stop the turn, such as a thread
+                    // resumed with another model than it was recorded with.
+                    root.emitBlock(sink, `**${Translation.tr("Note")}**: ${item.message}`);
                 }
                 break;
             }

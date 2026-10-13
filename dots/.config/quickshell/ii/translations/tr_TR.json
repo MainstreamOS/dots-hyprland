@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Kullanım, bir sonraki mesajınızdan sonra görünür.",
   "Usage checks are rate limited. Trying again soon.": "Kullanım denetimleri hız sınırına takıldı. Kısa süre sonra yeniden denenecek.",
   "Sign in to Codex again to see usage.": "Kullanımı görmek için Codex'te yeniden oturum açın.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Oturum açıldı. Plan modelleri artık seçicide: birini seçmek için /model yazın.",
+  "Note": "Not",
   "Subscription": "Abonelik",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Şu anda yalnızca yerel modellere izin veriliyor. Çevrimiçi modelleri kullanmak için Ayarlar > Arayüz > Left Sidebar bölümünde AI seçeneğini Evet yapın."
 }

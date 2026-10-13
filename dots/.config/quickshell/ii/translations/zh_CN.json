@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "用量将在你发送下一条消息后显示。",
   "Usage checks are rate limited. Trying again soon.": "用量查询受到频率限制，稍后将重试。",
   "Sign in to Codex again to see usage.": "请重新登录 Codex 以查看用量。",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "已登录。订阅计划的模型现已加入选择器：输入 /model 进行选择。",
+  "Note": "注意",
   "Subscription": "订阅",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "目前仅允许使用本地模型。要使用在线模型，请在 设置 > 界面 > Left Sidebar 中将 AI 设为“是”。"
 }

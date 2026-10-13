@@ -523,7 +523,24 @@ Singleton {
             // a trip to a terminal.
             "installFallback": "codex",
             "login": "codex login",
-            "readyCheck": "codex login status >/dev/null 2>&1"
+            "readyCheck": "codex login status >/dev/null 2>&1",
+            // The CLI's own model list, read once signed in. The raw catalog
+            // runs to hundreds of KB, so only the fields used here reach QML.
+            "catalog": "timeout 30 codex debug models 2>/dev/null | python3 -I -c \"$1\"",
+            "catalogFilter": "import json, sys\n"
+                + "try:\n"
+                + "    out = []\n"
+                + "    for m in (json.load(sys.stdin).get('models') or [])[:200]:\n"
+                + "        if not isinstance(m, dict): continue\n"
+                + "        up = m.get('upgrade')\n"
+                + "        levels = m.get('supported_reasoning_levels') or []\n"
+                + "        out.append({'slug': m.get('slug'), 'name': m.get('display_name'), 'visibility': m.get('visibility'),\n"
+                + "            'priority': m.get('priority'), 'default': m.get('default_reasoning_level'),\n"
+                + "            'efforts': [l.get('effort') for l in levels if isinstance(l, dict)][:20],\n"
+                + "            'upgrade': up.get('model') if isinstance(up, dict) else None})\n"
+                + "    print('catalog ' + json.dumps(out, separators=(',', ':')))\n"
+                + "except Exception:\n"
+                + "    pass\n"
         },
         "antigravity-cli": {
             "name": "Antigravity",
@@ -563,11 +580,97 @@ Singleton {
     // here, so every use has to name this one folder.
     readonly property string antigravityDir: root._stateHome + "/quickshell/ai/antigravity-cli"
 
+    // ── Codex plan models, from the CLI's own catalog ─────────────
+    // What the plan offers when the catalog cannot be read.
+    readonly property var _codexFallbackCatalog: [
+        { slug: "gpt-6.1-sol", name: "GPT-6.1-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low" },
+        { slug: "gpt-6-astra", name: "GPT-6-Astra", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "low" },
+        { slug: "gpt-6-sol", name: "GPT-6-Sol", efforts: ["low", "medium", "high", "xhigh", "max", "ultra"], defaultEffort: "medium" },
+        { slug: "gpt-6-luna", name: "GPT-6-Luna", efforts: ["low", "medium", "high", "xhigh", "max"], defaultEffort: "medium" },
+    ]
+    // The last catalog the CLI answered with: { listed, upgrades }. A read
+    // that fails later keeps it.
+    property var _codexCatalog: null
+    readonly property var _codexListed: root._codexCatalog?.listed ?? root._codexFallbackCatalog
     // Codex effort -> the tab's level id. Efforts the tab has no level for are not offered.
     readonly property var codexEffortLevels: ({
         "none": "none", "minimal": "minimal", "low": "low", "medium": "medium",
         "high": "high", "xhigh": "extra", "max": "max", "ultra": "ultracode",
     })
+    // Ids saved before the catalog named the models keep answering.
+    readonly property var _codexLegacyIds: ({ "gpt-5.6-terra": "codex-terra", "gpt-5.6-luna": "codex-luna" })
+    function codexModelId(slug: string): string {
+        return root._codexLegacyIds[slug] ?? ("codex-" + String(slug).toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    }
+    readonly property var _codexPlanModels: {
+        const out = {};
+        for (const entry of root._codexListed) {
+            const id = root.codexModelId(entry.slug);
+            if (out[id] !== undefined || id === "codex-plan") continue;
+            const level = root.codexEffortLevels[entry.defaultEffort] ?? "";
+            out[id] = {
+                alias: entry.slug,
+                name: entry.name,
+                thinkingLevel: entry.efforts.includes(entry.defaultEffort) ? level : "",
+            };
+        }
+        return out;
+    }
+    // The efforts a listed model accepts, or [] when it is not listed.
+    function codexEfforts(slug: string): var {
+        return root._codexListed.find(entry => entry.slug === slug)?.efforts ?? [];
+    }
+
+    // The filtered catalog line from the detector, or null when it holds no
+    // listed model.
+    function _parseCodexCatalog(text: string): var {
+        let raw = null;
+        try {
+            raw = JSON.parse(text);
+        } catch (e) {
+            return null;
+        }
+        if (!Array.isArray(raw)) return null;
+        const upgrades = {};
+        const listed = [];
+        raw.forEach((m, index) => {
+            const slug = typeof m?.slug === "string" ? m.slug : "";
+            if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(slug)) return;
+            if (typeof m.upgrade === "string" && m.upgrade.length > 0) upgrades[slug] = m.upgrade;
+            if (m.visibility !== "list") return;
+            const name = typeof m.name === "string" && m.name.trim().length > 0 ? m.name.trim().slice(0, 80) : slug;
+            const efforts = (Array.isArray(m.efforts) ? m.efforts : [])
+                .filter(effort => typeof effort === "string" && root.codexEffortLevels.hasOwnProperty(effort));
+            listed.push({
+                slug: slug,
+                name: name,
+                efforts: efforts,
+                defaultEffort: typeof m.default === "string" ? m.default : "",
+                priority: Number.isFinite(m.priority) ? m.priority : Infinity,
+                index: index,
+            });
+        });
+        if (listed.length === 0) return null;
+        listed.sort((a, b) => (a.priority - b.priority) || (a.index - b.index));
+        return { listed: listed, upgrades: upgrades };
+    }
+
+    // Where a saved pick the plan no longer lists goes: its catalog upgrade
+    // when that is listed, else the plan's first model.
+    function _planSuccessor(fmt: string, id: string): string {
+        const planModels = root.cliPlanModels[fmt] ?? {};
+        if (fmt === "codex-cli") {
+            const upgrades = root._codexCatalog?.upgrades ?? {};
+            let slug = Object.keys(upgrades).find(s => root.codexModelId(s) === id);
+            for (let hop = 0; slug !== undefined && hop < 5; hop++) {
+                slug = upgrades[slug];
+                if (slug === undefined) break;
+                if (planModels[root.codexModelId(slug)] !== undefined) return root.codexModelId(slug);
+            }
+        }
+        return root.cliPlans[fmt].firstPick;
+    }
+
     readonly property var cliPlanModels: ({
         "claude-code": {
             "claude-fable": { alias: "fable", name: "Claude Fable" },
@@ -576,13 +679,7 @@ Singleton {
             "claude-sonnet": { alias: "sonnet", name: "Claude Sonnet" },
             "claude-haiku": { alias: "haiku", name: "Claude Haiku" },
         },
-        // Sol is refused under ChatGPT-account auth (API key only), so the
-        // plan shelf carries the three the subscription actually serves.
-        "codex-cli": {
-            "codex-terra": { alias: "gpt-5.6-terra", name: "Codex Terra" },
-            "codex-luna": { alias: "gpt-5.6-luna", name: "Codex Luna" },
-            "codex-gpt-5-5": { alias: "gpt-5.5", name: "Codex GPT-5.5" },
-        },
+        "codex-cli": root._codexPlanModels,
         // Google serves personal accounts through Antigravity; supports Gemini 3
         // with dynamic reasoning effort.
         "antigravity-cli": {
@@ -612,11 +709,11 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your ChatGPT subscription. Pick it to use its models"),
             setupHomepage: "https://learn.chatgpt.com/docs/codex/cli",
             modelDescription: Translation.tr("Plan | %1 through your ChatGPT subscription. No API key needed"),
-            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose between Terra, Luna, and GPT-5.5."),
+            signedIn: Translation.tr("Signed in. The plan models are in the picker now: type /model to choose one."),
             icon: "openai-symbolic",
             endpoint: "https://chatgpt.com",
             homepage: "https://learn.chatgpt.com/docs/codex/cli",
-            firstPick: "codex-terra",
+            firstPick: Object.keys(root._codexPlanModels)[0] ?? "",
             idPrefix: "codex-",
         },
         // Google serves personal accounts through Antigravity now; the
@@ -647,6 +744,10 @@ Singleton {
     function planFormatFor(id) {
         for (const fmt of Object.keys(root.cliPlanModels))
             if (root.cliPlanModels[fmt][id] !== undefined) return fmt;
+        // Codex names its models from a catalog that may not have answered
+        // yet or may have dropped a saved one, so its whole id space counts.
+        const codex = root.cliPlans["codex-cli"];
+        if (String(id).startsWith(codex.idPrefix) && id !== codex.setupId) return "codex-cli";
         return "";
     }
     property string setupState: ""
@@ -776,9 +877,14 @@ Singleton {
     // holds a start back and still reads as not running.
     property var _detectQueue: []
     property bool _detecting: false
-    function detectCli(fmt, waitForLogin = false) {
+    // A plan's catalog is read once per need (startup, a sign-in, an explicit
+    // reread), not on every check: need and served are counters per plan.
+    property var _catalogNeed: ({})
+    property var _catalogServed: ({})
+    function detectCli(fmt, waitForLogin = false, rereadCatalog = false) {
         const entry = root.cliSetup[fmt];
         if (!entry) return;
+        if (rereadCatalog && entry.catalog) root._catalogNeed[fmt] = (root._catalogNeed[fmt] ?? 1) + 1;
         if (root._detecting) {
             if (waitForLogin || cliDetectProc.format === fmt) return;
             // Asked again while waiting means it is wanted now, so it goes next.
@@ -788,13 +894,20 @@ Singleton {
         }
         const readyCheck = waitForLogin && entry.loginDoneCheck
             ? `${entry.loginDoneCheck} && ${entry.readyCheck}` : entry.readyCheck;
+        // The catalog is read with the sign-in it depends on, so a plan's
+        // models and its readiness always land together. Only while online AI
+        // is allowed, since the CLI may refresh it over the network.
+        const need = root._catalogNeed[fmt] ?? 1;
+        const catalog = entry.catalog && need !== (root._catalogServed[fmt] ?? 0)
+            && Config.options?.policies?.ai === 1 ? `; ${entry.catalog}` : "";
         const features = entry.features ? `; ${entry.features}` : "";
-        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${readyCheck}; then echo ready${features}; fi; fi < /dev/null`;
+        let script = root.cliPathPrefix + `if command -v ${entry.cmd} >/dev/null 2>&1; then echo installed; if ${readyCheck}; then echo ready${catalog}${features}; fi; fi < /dev/null`;
         if (entry.loginFailedCheck) script += `; if ${entry.loginFailedCheck}; then echo loginfailed; fi`;
         root._detecting = true;
         cliDetectProc.format = fmt;
+        cliDetectProc.catalogNeed = catalog ? need : 0;
         cliDetectProc.buf = "";
-        cliDetectProc.command = ["bash", "-lc", script];
+        cliDetectProc.command = catalog ? ["bash", "-lc", script, "_", entry.catalogFilter] : ["bash", "-lc", script];
         cliDetectProc.running = true;
     }
     function _detectNext() {
@@ -969,6 +1082,7 @@ Singleton {
         id: cliDetectProc
         property string format: ""
         property string buf: ""
+        property int catalogNeed: 0
         stdout: SplitParser { onRead: line => cliDetectProc.buf += line + "\n" }
         // A start that failed ends with no exit.
         onRunningChanged: if (!running && root._detecting) {
@@ -980,13 +1094,20 @@ Singleton {
             const fmt = cliDetectProc.format;
             const wasReady = root.cliReady(fmt);
             const lines = cliDetectProc.buf.split("\n");
-            const buf = lines.filter(line => !line.startsWith("feature ")).join("\n");
+            const catalogLine = lines.find(line => line.startsWith("catalog "));
+            const buf = lines.filter(line => !line.startsWith("catalog ") && !line.startsWith("feature ")).join("\n");
+            const catalog = fmt === "codex-cli" && catalogLine !== undefined ? root._parseCodexCatalog(catalogLine.slice(8)) : null;
+            if (catalog !== null) root._codexCatalog = catalog;
             const nextState = Object.assign({}, root.cliPlanState);
             nextState[fmt] = {
                 installed: buf.includes("installed"),
                 ready: buf.includes("ready"),
                 features: lines.filter(line => line.startsWith("feature ")).map(line => line.slice(8)),
             };
+            // A read that ran is spent even when it failed: the last good list
+            // stands until the next need. Signed out, the next sign-in reads again.
+            if (!nextState[fmt].ready) delete root._catalogServed[fmt];
+            else if (cliDetectProc.catalogNeed > 0) root._catalogServed[fmt] = cliDetectProc.catalogNeed;
             root.cliPlanState = nextState;
             if (nextState[fmt].ready && root.currentModel?.api_format === fmt) root.setupState = "";
             // A sign-in in the background that ended without a login is over,
@@ -1003,9 +1124,16 @@ Singleton {
             // A selection this family no longer offers (a lapsed login, or a
             // model entry that was retired) falls to the best seat still open
             // rather than dangling on an id that no longer resolves.
-            if (root.models[root.currentModelId] === undefined && root.currentModelId.startsWith(plan.idPrefix)) {
-                Persistent.states.ai.model = nextState[fmt].ready ? plan.firstPick : plan.setupId;
+            // Until a catalog read has run, a pick the built-in list lacks may
+            // still be offered, so it waits for one.
+            const listUnknown = fmt === "codex-cli" && root._codexCatalog === null && root._catalogServed[fmt] === undefined;
+            if (root.models[root.currentModelId] === undefined && root.currentModelId.startsWith(plan.idPrefix)
+                    && !(nextState[fmt].ready && listUnknown)) {
+                Persistent.states.ai.model = nextState[fmt].ready ? root._planSuccessor(fmt, root.currentModelId) : plan.setupId;
             }
+            // A model's levels and default may have changed with the catalog.
+            if (catalog !== null && root.models[root.currentModelId]?.api_format === fmt)
+                root.restoreThinkingLevelForModel(root.currentModelId);
             root._detectNext();
         }
     }
@@ -1131,6 +1259,12 @@ Singleton {
 
     function _applyAiPolicy() {
         const policy = Config.options?.policies?.ai ?? 0;
+        if (policy === 1) {
+            // A catalog passed over while online AI was off is read now.
+            const fmt = root.planFormatFor(root.currentModelId);
+            if (root.cliSetup[fmt]?.catalog) root.detectCli(fmt);
+            return;
+        }
         if (policy !== 0 && policy !== 2) return;
         const disallowed = id => policy === 0 || root._isOnlineModelId(id);
         // Stopped as Stop does: the process group is killed and a stopped
@@ -1795,6 +1929,8 @@ Singleton {
         // use, so a switch into one writes the selection and lets the models
         // follow it in rather than failing the membership check below.
         const wantedPlan = root.planFormatFor(modelId);
+        if (wantedPlan !== "" && root.cliReady(wantedPlan) && root.cliPlanModels[wantedPlan][modelId] === undefined)
+            modelId = root._planSuccessor(wantedPlan, modelId);
         if (wantedPlan !== "" && root.cliReady(wantedPlan) && !root.models[modelId]) {
             if (setPersistentState) {
                 Persistent.states.ai.model = modelId;
@@ -1976,6 +2112,24 @@ Singleton {
                 { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
                 { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") },
             ];
+        }
+
+        // Codex plan models: the levels the catalog lists for that model.
+        const codexEfforts = fmt === "codex-cli" ? root.codexEfforts(m?.model ?? "") : [];
+        if (codexEfforts.length > 0) {
+            const rows = [
+                { id: "none", name: Translation.tr("None"), desc: Translation.tr("Disable reasoning for instantaneous output") },
+                { id: "minimal", name: Translation.tr("Minimal"), desc: Translation.tr("Minimal thinking for lowest latency") },
+                { id: "low", name: Translation.tr("Low"), desc: Translation.tr("Light reasoning with high throughput") },
+                { id: "medium", name: Translation.tr("Medium"), desc: Translation.tr("Standard balanced reasoning effort") },
+                { id: "high", name: Translation.tr("High"), desc: Translation.tr("Deep reasoning for complex math and architecture") },
+                { id: "extra", name: Translation.tr("Extra"), desc: Translation.tr("Extended thinking across large contexts and refactors") },
+                { id: "max", name: Translation.tr("Max"), desc: Translation.tr("Maximum reasoning budget for exhaustive verification") },
+                { id: "ultracode", name: Translation.tr("UltraCode"), desc: Translation.tr("Full extended thinking & autonomous multi-pass reasoning") },
+            ];
+            const offered = codexEfforts.map(effort => root.codexEffortLevels[effort]);
+            return [{ id: "auto", name: Translation.tr("Auto"), desc: Translation.tr("Model default reasoning effort") }]
+                .concat(rows.filter(row => offered.includes(row.id)));
         }
 
         // Codex (Codex CLI or OpenAI reasoning models)

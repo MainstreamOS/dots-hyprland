@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Mức sử dụng sẽ hiện sau tin nhắn tiếp theo của bạn.",
   "Usage checks are rate limited. Trying again soon.": "Việc kiểm tra mức sử dụng đang bị giới hạn tần suất. Sẽ thử lại sau ít phút.",
   "Sign in to Codex again to see usage.": "Hãy đăng nhập lại Codex để xem mức sử dụng.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Đã đăng nhập. Các model theo gói đã có trong bộ chọn: gõ /model để chọn.",
+  "Note": "Lưu ý",
   "Subscription": "Gói đăng ký",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Hiện chỉ cho phép model chạy trên máy. Để dùng model trực tuyến, hãy đặt AI thành Có trong Cài đặt > Giao diện > Left Sidebar."
 }

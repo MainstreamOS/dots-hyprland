@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "使用状況は次のメッセージの後に表示されます。",
   "Usage checks are rate limited. Trying again soon.": "使用状況の確認はレート制限されています。まもなく再試行します。",
   "Sign in to Codex again to see usage.": "使用状況を表示するには、Codexにもう一度ログインしてください。",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "ログインしました。プランのモデルが選択リストに追加されました。/model と入力して選択してください。",
+  "Note": "注記",
   "Subscription": "サブスクリプション",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "現在はローカルモデルのみ使用できます。オンラインモデルを使うには、設定 > インターフェース > Left Sidebar で AI を「表示」に設定してください。"
 }

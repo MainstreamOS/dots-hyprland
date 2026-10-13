@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Penggunaan muncul setelah pesan Anda berikutnya.",
   "Usage checks are rate limited. Trying again soon.": "Pemeriksaan penggunaan dibatasi frekuensinya. Mencoba lagi sebentar lagi.",
   "Sign in to Codex again to see usage.": "Masuk ke Codex lagi untuk melihat penggunaan.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Sudah masuk. Model langganan sekarang ada di pemilih: ketik /model untuk memilih salah satu.",
+  "Note": "Catatan",
   "Subscription": "Langganan",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Saat ini hanya model lokal yang diizinkan. Untuk memakai model online, atur AI ke Ya di Pengaturan > Antarmuka > Left Sidebar."
 }

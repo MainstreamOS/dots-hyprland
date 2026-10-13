@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Usage appears after your next message.",
   "Usage checks are rate limited. Trying again soon.": "Usage checks are rate limited. Trying again soon.",
   "Sign in to Codex again to see usage.": "Sign in to Codex again to see usage.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Signed in. The plan models are in the picker now: type /model to choose one.",
+  "Note": "Note",
   "Subscription": "Subscription",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar."
 }

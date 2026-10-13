@@ -2687,6 +2687,8 @@
   "Usage appears after your next message.": "Die Nutzung erscheint nach deiner nächsten Nachricht.",
   "Usage checks are rate limited. Trying again soon.": "Nutzungsabfragen sind ratenbegrenzt. Es wird bald erneut versucht.",
   "Sign in to Codex again to see usage.": "Melde dich erneut bei Codex an, um die Nutzung zu sehen.",
+  "Signed in. The plan models are in the picker now: type /model to choose one.": "Angemeldet. Die Plan-Modelle sind jetzt in der Auswahl: Tippe /model, um eines zu wählen.",
+  "Note": "Hinweis",
   "Subscription": "Abo",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Gerade sind nur lokale Modelle erlaubt. Um Online-Modelle zu nutzen, stelle KI unter Einstellungen > Schnittstelle > Left Sidebar auf Ja."
 }
