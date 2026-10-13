@@ -9,6 +9,8 @@ Item {
     property real fadeSize: Appearance.m3colors.darkmode ? 40 : 20
     property color color: Appearance.colors.colLayer1Base
     property bool vertical: true
+    // A list with runway below its last item says where its content really ends.
+    property bool atEnd: root.vertical ? root.target.atYEnd : root.target.atXEnd
 
     anchors.fill: target
 
@@ -29,7 +31,7 @@ Item {
             left: vertical ? parent.left : undefined
             top: vertical ? undefined : parent.top
         }
-        shown: !(root.vertical ? root.target.atYEnd : root.target.atXEnd)
+        shown: !root.atEnd
         rotation: 180
     }
 

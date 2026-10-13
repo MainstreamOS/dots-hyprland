@@ -905,6 +905,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 z: 1
                 target: messageListView
                 vertical: true
+                atEnd: messageListView.atRealEnd
             }
 
             StyledListView { // Message list
@@ -920,15 +921,19 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                 // Slack below the end while it can shrink under the view (a followed reply
                 // dipping for a pass, rows leaving the end): a tight end would clamp the view up.
-                bottomMargin: slack ? height : followGlow
-                wheelBottomReach: followGlow
+                bottomMargin: slack ? height : 0
+                wheelBottomReach: 0
                 // The list's own moves land at once; the reader's wheel keeps its easing.
                 smoothScroll: !parking && (!holding || wheelScrolling)
 
                 // The newest line stays above the bottom edge. Scrolling up stops that;
                 // scrolling back near the end, sending or Scroll to Bottom resumes it.
                 property bool following: true
-                readonly property real followGlow: messageEdgeFade.fadeSize
+                // The last row's end is in view; the slack below it does not count.
+                readonly property bool atRealEnd: {
+                    const end = followTarget();
+                    return isNaN(end) ? atYEnd : contentY >= end - 1;
+                }
                 readonly property bool holding: following && (Ai.isGenerating || followHoldTimer.running)
                 property real parkedY: NaN
                 property real lastContentY: 0
@@ -962,7 +967,14 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     const tail = itemAtIndex(count - 1);
                     if (!tail)
                         return NaN;
-                    return Math.round(Math.max(originY - topMargin, tail.y + tail.height + followGlow - height));
+                    return Math.round(Math.max(originY - topMargin, tail.y + tail.height - height));
+                }
+                // A hand moving down past the last row's end, into the slack kept below a
+                // streaming reply. A view already past it (a shorter reply growing back)
+                // only stops moving down.
+                function pastEnd(dy: real): bool {
+                    const end = followTarget();
+                    return dy > 0 && !isNaN(end) && contentY > end + 0.5;
                 }
                 function nearEnd(): bool {
                     return nearEndAt(contentY, false);
@@ -998,6 +1010,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
                 function park(y: real): void {
                     followShrinkTimer.stop();
+                    followShrinkTimer.since = 0;
                     const top = y < contentY - 0.5 ? (peeked ? contentY : climbLimit()) : -Infinity;
                     if (y < top && !climbing)
                         climbFrom = Infinity;
@@ -1059,7 +1072,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     seenCount = count;
                     const wasResized = resized;
                     resized = false;
-                    const target = followTarget();
+                    let target = followTarget();
+                    // Past the last row with nothing coming, the view would only show the slack.
+                    if (!holding && !modelPending && !userScrolling && !jumpPending && !isNaN(target) && contentY > target + 0.5) {
+                        ahead = false;
+                        moveTo(target);
+                        target = followTarget();
+                    }
                     // Dropped only where a tight end cannot clamp the view.
                     const wantSlack = holding || modelPending || contentY > target + 0.5;
                     if (slack !== wantSlack && !chatScrollBar.pressed)
@@ -1092,6 +1111,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             return;
                         // Rows refill a dip a pass or two later; only a lasting shrink moves the view.
                         if (Math.abs(contentY - parkedY) < 0.5) {
+                            if (followShrinkTimer.since === 0)
+                                followShrinkTimer.since = Date.now();
                             if (!followShrinkTimer.running || target < followShrinkTimer.low)
                                 followShrinkTimer.restart();
                             followShrinkTimer.low = target;
@@ -1168,14 +1189,20 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 Timer {
                     id: followShrinkTimer
                     property real low: 0
+                    // When the view first sat below a shorter end; 0 once it is back at the end.
+                    property real since: 0
                     interval: 300
                     onTriggered: {
                         const target = messageListView.followTarget();
-                        // A streaming reply grows back over a small gap, so until it ends only a
-                        // large one moves the view up.
-                        if (messageListView.holding && !messageListView.userScrolling && !isNaN(target)
-                                && (!Ai.isGenerating || messageListView.contentY - target > messageListView.height / 2))
+                        // A streaming reply grows back over a brief dip, so until it ends only a
+                        // large gap or one that lasts (a reply still thinking) moves the view up.
+                        if (!messageListView.holding || messageListView.userScrolling || isNaN(target))
+                            return;
+                        const gap = messageListView.contentY - target;
+                        if (!Ai.isGenerating || gap > messageListView.height / 2 || Date.now() - since >= 300)
                             messageListView.park(target);
+                        else if (gap > 0.5)
+                            restart(); // nothing else may lay out again while it waits
                     }
                 }
                 Connections {
@@ -1303,10 +1330,20 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         // The bar moves the list after its own position signal, so the hand's
                         // position is read here.
                         if (!chatScrollBar.compensating) {
+                            if (pastEnd(dy)) {
+                                chatScrollBar.compensating = true;
+                                moveTo(Math.max(followTarget(), contentY - dy));
+                                chatScrollBar.compensating = false;
+                            }
                             chatScrollBar.anchorY = contentY;
                             chatScrollBar.anchorAtEnd = nearEndAt(contentY, contentY < chatScrollBar.pressY);
                         }
                     } else if (!parking && userScrolling) {
+                        if (pastEnd(dy)) {
+                            cancelFlick();
+                            moveTo(Math.max(followTarget(), contentY - dy));
+                            return;
+                        }
                         readerMoved(contentY, dy);
                     }
                 }
@@ -1535,7 +1572,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             ScrollToBottomButton {
                 z: 3
                 target: messageListView
-                glowOffset: messageEdgeFade.fadeSize
                 pinned: messageListView.following
                 downAction: () => messageListView.pinToEnd()
             }

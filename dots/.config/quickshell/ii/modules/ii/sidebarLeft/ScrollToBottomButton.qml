@@ -7,15 +7,12 @@ import QtQuick.Layouts
 RippleButton {
     id: root
     required property ListView target
-    // Extra room past the content's end, so the last line clears an edge fade.
-    property real glowOffset: 0
     // The list keeps itself at its end; it catches up with its own growth after the layout.
     property bool pinned: false
     // Content-relative end rather than atYEnd: a list with bottom runway
     // (margin) is only atYEnd deep inside the blank space, which would keep
     // this button up permanently. Identical to atYEnd on margin-less lists.
-    readonly property real endY: target ? Math.min(target.originY + target.contentHeight - target.height + root.glowOffset,
-        target.originY + target.contentHeight + target.bottomMargin - target.height) : 0
+    readonly property real endY: target ? target.originY + target.contentHeight - target.height : 0
     readonly property bool atContentEnd: root.pinned || (!target) || (target.contentHeight <= target.height)
         || target.contentY >= root.endY - 1
 
