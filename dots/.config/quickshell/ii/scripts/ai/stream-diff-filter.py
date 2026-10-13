@@ -194,16 +194,17 @@ def process_claude(data):
     return data, False
 
 
-# App server notifications the chat never reads: streamed pieces of items
-# that also arrive whole, and status chatter.
+# App server notifications the chat never reads: streamed pieces of items it
+# only shows whole (command output, file patches), and status chatter.
 CODEX_NOISE = ("mcpServer/startupStatus/updated", "account/rateLimits/updated", "account/updated",
                "thread/status/changed", "remoteControl/status/changed", "serverRequest/resolved")
+CODEX_STREAMED = ("item/agentMessage/delta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded")
 
 
 def process_codex(data):
     method = data.get("method")
     if isinstance(method, str):
-        if method in CODEX_NOISE or method.lower().endswith("delta") or method.endswith("/summaryPartAdded"):
+        if method in CODEX_NOISE or (method.lower().endswith("delta") and method not in CODEX_STREAMED):
             return None, False
         params = data.get("params")
         if not isinstance(params, dict):

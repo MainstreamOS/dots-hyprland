@@ -99,6 +99,8 @@ ApiStrategy {
             turn: root._requestInfo.turn ?? null,
             // File paths of each file change item, by item id
             files: ({}),
+            // Ids of the items whose text arrived in pieces
+            streamed: ({}),
             usage: null
         };
     }
@@ -219,13 +221,35 @@ ApiStrategy {
             if (params.item?.type === "fileChange")
                 state.files[params.item.id] = (params.item.changes ?? []).map(change => String(change?.path ?? "")).filter(path => path.length > 0);
             break;
+        // Text arrives in pieces as it is written; the finished item repeats it.
+        case "item/agentMessage/delta": {
+            const id = String(params.itemId ?? "");
+            if (!state.streamed[id]) {
+                state.streamed[id] = true;
+                if (state.textOpen) sink.text("\n\n");
+                state.textOpen = true;
+            }
+            sink.text(String(params.delta ?? ""));
+            break;
+        }
+        case "item/reasoning/summaryPartAdded":
+            if (state.streamed[String(params.itemId ?? "")]) sink.think("\n\n");
+            break;
+        case "item/reasoning/summaryTextDelta":
+            state.streamed[String(params.itemId ?? "")] = true;
+            sink.think(String(params.delta ?? ""));
+            break;
         case "item/completed": {
             const item = params.item ?? {};
-            if (item.type === "agentMessage" && item.text) {
+            const streamed = state.streamed[String(item.id ?? "")] === true;
+            if (item.type === "agentMessage" && item.text && !streamed) {
                 root.emitBlock(sink, item.text);
             } else if (item.type === "reasoning") {
                 const summary = (item.summary ?? []).map(String).join("\n\n");
-                if (summary.length > 0) {
+                if (streamed) {
+                    sink.endThink();
+                    state.textOpen = false;
+                } else if (summary.length > 0) {
                     sink.thinkWhole(summary);
                     state.textOpen = false;
                 }
