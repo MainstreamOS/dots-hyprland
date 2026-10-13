@@ -56,7 +56,7 @@ RippleButton {
         anchors.centerIn: parent
         width: 19.5
         height: 19.5
-        // The stock icon is the logo of the model picked in the Intelligence
+        // The stock icon is the logo of the model picked in the AI Assistant
         // tab; with AI off the button is not shown at all. No model object yet
         // means local AI is still being looked up.
         source: Config.options.bar.topLeftIcon == 'distro' ? SystemInfo.distroIcon

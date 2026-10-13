@@ -497,7 +497,6 @@
   "Discussions": "Tartışmalar",
   "Tray": "Tepsi",
   "Numbers": "Numaralar",
-  "Intelligence": "Zeka",
   "Open network portal": "Ağ portalını aç",
   "<i>No further instruction provided</i>": "<i>Başka talimat verilmedi</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "Dil listede yok veya çeviriler eksik mi?\nGemini ile çeviriler oluşturmayı seçebilirsiniz.\n1. Super+A ile sol kenar çubuğunu açın, modeli Gemini olarak ayarlayın (değilse)\n2. /key yazın, Enter'a basın ve talimatları izleyin\n3. /key API_ANAHTARINIZ yazın\n4. Dilinizin yerel ayarını aşağıya yazın ve Oluştur'a basın",

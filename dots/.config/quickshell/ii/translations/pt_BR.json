@@ -497,7 +497,6 @@
   "Discussions": "Discussões",
   "Tray": "Bandeja (Tray)",
   "Numbers": "Números",
-  "Intelligence": "Inteligência",
   "Open network portal": "Fazer login na rede",
   "<i>No further instruction provided</i>": "<i>Nenhuma instrução adicional fornecida</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "Idioma não listado ou traduções incompletas?\nVocê pode gerar traduções com o Gemini.\n1. Abra a barra lateral esquerda com Super+A, defina o modelo para Gemini\n2. Digite /key, aperte Enter e siga as instruções\n3. Digite /key SUA_API_KEY\n4. Digite o código do seu idioma abaixo e clique em Gerar",

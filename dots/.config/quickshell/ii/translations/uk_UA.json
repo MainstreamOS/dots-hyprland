@@ -497,7 +497,6 @@
   "Discussions": "Дискусії",
   "Tray": "Tray",
   "Numbers": "Numbers",
-  "Intelligence": "Інтелект",
   "Open network portal": "Open network portal",
   "<i>No further instruction provided</i>": "<i>Подальших інструкцій не надано</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate",

@@ -497,7 +497,6 @@
   "Discussions": "讨论区",
   "Tray": "托盘",
   "Numbers": "数字",
-  "Intelligence": "智能",
   "Open network portal": "打开网络门户",
   "<i>No further instruction provided</i>": "<i>未提供进一步说明</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "想要的语言不在列表内或翻译不完整？\n你可以选择使用 Gemini 为其生成翻译。\n1. 按 Super+A 打开左侧边栏，将模型设置为 Gemini（如果不已经是了的话）\n2. 输入 /key，按 Enter 然后跟随说明\n3. 输入 /key YOUR_API_KEY\n4. 在下方输入你的语言代码并按下生成",

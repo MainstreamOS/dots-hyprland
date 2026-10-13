@@ -497,7 +497,6 @@
   "Discussions": "Обсуждения",
   "Tray": "Трей",
   "Numbers": "С числами",
-  "Intelligence": "ИИ",
   "Open network portal": "Открыть сетевой портал",
   "<i>No further instruction provided</i>": "<i>Инструкция не предоставлена</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "Языка нет или перевод неполный?\nМожно сгенерировать перевод через Gemini.\n1. Откройте левую панель (Super+A), выберите модель Gemini\n2. Введите /key и следуйте инструкциям\n3. Введите /key ВАШ_КЛЮЧ\n4. Введите код локали ниже и нажмите «Сгенерировать»",

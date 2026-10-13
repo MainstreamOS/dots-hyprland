@@ -497,7 +497,6 @@
   "Discussions": "דיונים",
   "Tray": "אפליקציות רקע",
   "Numbers": "מספרים",
-  "Intelligence": "בינה מלאכותית",
   "Open network portal": "פתח את פורטל הרשת",
   "<i>No further instruction provided</i>": "<i>לא ניתנה הנחיה נוספת</i>",
   "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate": "Language not listed or incomplete translations?\nYou can choose to generate translations for it with Gemini.\n1. Open the left sidebar with Super+A, set model to Gemini (if it isn't already)\n2. Type /key, hit Enter and follow the instructions\n3. Type /key YOUR_API_KEY\n4. Type the locale of your language below and press Generate",
