@@ -2759,5 +2759,7 @@
   "Subscription": "订阅",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "目前仅允许使用本地模型。要使用在线模型，请在 设置 > 界面 > Left Sidebar 中将 AI 设为“是”。",
   "Approving lets %1 run commands and edit files for the rest of this reply.": "批准后，%1 可以在本次回复的剩余部分运行命令和编辑文件。",
-  "The user declined this step.": "用户拒绝了此步骤。"
+  "The user declined this step.": "用户拒绝了此步骤。",
+  "File change": "文件更改",
+  "Extra access": "额外访问权限"
 }

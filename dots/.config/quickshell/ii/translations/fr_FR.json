@@ -2759,5 +2759,7 @@
   "Subscription": "Abonnement",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "Seuls les modèles locaux sont autorisés pour le moment. Pour utiliser les modèles en ligne, réglez IA sur Oui dans Paramètres > Interface > Left Sidebar.",
   "Approving lets %1 run commands and edit files for the rest of this reply.": "L'approbation permet à %1 d'exécuter des commandes et de modifier des fichiers pour le reste de cette réponse.",
-  "The user declined this step.": "L'utilisateur a refusé cette étape."
+  "The user declined this step.": "L'utilisateur a refusé cette étape.",
+  "File change": "Modification de fichier",
+  "Extra access": "Accès supplémentaire"
 }

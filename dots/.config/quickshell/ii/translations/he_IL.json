@@ -2759,5 +2759,7 @@
   "Subscription": "מנוי",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "כרגע מותרים רק מודלים מקומיים. כדי להשתמש במודלים מקוונים, הגדר את \"בינה מלאכותית\" ל\"כן\" בהגדרות > ממשק > Left Sidebar.",
   "Approving lets %1 run commands and edit files for the rest of this reply.": "האישור מאפשר ל-%1 להריץ פקודות ולערוך קבצים עד סוף התגובה הזו.",
-  "The user declined this step.": "המשתמש דחה את השלב הזה."
+  "The user declined this step.": "המשתמש דחה את השלב הזה.",
+  "File change": "שינוי בקובץ",
+  "Extra access": "גישה נוספת"
 }

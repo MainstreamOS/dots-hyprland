@@ -544,7 +544,9 @@ Singleton {
                 + "            'upgrade': up.get('model') if isinstance(up, dict) else None})\n"
                 + "    print('catalog ' + json.dumps(out, separators=(',', ':')))\n"
                 + "except Exception:\n"
-                + "    pass\n"
+                + "    pass\n",
+            // Ask runs through the app server, which holds a step until it is approved.
+            "features": "codex app-server --help >/dev/null 2>&1 && echo 'feature app-server'"
         },
         "antigravity-cli": {
             "name": "Antigravity",

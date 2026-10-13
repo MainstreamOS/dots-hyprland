@@ -194,7 +194,30 @@ def process_claude(data):
     return data, False
 
 
+# App server notifications the chat never reads: streamed pieces of items
+# that also arrive whole, and status chatter.
+CODEX_NOISE = ("mcpServer/startupStatus/updated", "account/rateLimits/updated", "account/updated",
+               "thread/status/changed", "remoteControl/status/changed", "serverRequest/resolved")
+
+
 def process_codex(data):
+    method = data.get("method")
+    if isinstance(method, str):
+        if method in CODEX_NOISE or method.lower().endswith("delta") or method.endswith("/summaryPartAdded"):
+            return None, False
+        params = data.get("params")
+        if not isinstance(params, dict):
+            return data, False
+        # A finished turn repeats every item, which already arrived one by one.
+        turn = params.get("turn")
+        if isinstance(turn, dict) and turn.get("items"):
+            turn["items"] = []
+            return data, True
+        item = params.get("item")
+        if isinstance(item, dict) and item.get("type") not in ("agentMessage", "reasoning"):
+            params["item"] = truncate_strings(item)
+            return data, True
+        return data, False
     item = data.get("item")
     if isinstance(item, dict) and item.get("type") not in ("agent_message", "reasoning"):
         data["item"] = truncate_strings(item)
@@ -224,6 +247,8 @@ def process_line(raw, fmt, with_diff):
             return None
     elif fmt == "codex":
         data, changed = process_codex(data)
+        if data is None:
+            return None
 
     out = encode(data) if changed else raw
     if len(out) > LINE_CAP:

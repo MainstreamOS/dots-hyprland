@@ -2759,5 +2759,7 @@
   "Subscription": "サブスクリプション",
   "Only local models are allowed right now. To use online models, set AI to Yes in Settings > Interface > Left Sidebar.": "現在はローカルモデルのみ使用できます。オンラインモデルを使うには、設定 > インターフェース > Left Sidebar で AI を「表示」に設定してください。",
   "Approving lets %1 run commands and edit files for the rest of this reply.": "承認すると、%1はこの返信の終わりまでコマンドの実行とファイルの編集ができます。",
-  "The user declined this step.": "ユーザーはこの手順を拒否しました。"
+  "The user declined this step.": "ユーザーはこの手順を拒否しました。",
+  "File change": "ファイルの変更",
+  "Extra access": "追加のアクセス"
 }
