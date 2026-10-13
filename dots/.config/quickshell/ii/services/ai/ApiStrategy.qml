@@ -28,7 +28,7 @@ QtObject {
     //       tools, thinkingLevel (resolved), mode (AiModes id),
     //       grant (null | {scope}), attachment (null | {path, mime}),
     //       regenerate (bool), apiKey, scripts: {filter, runRequest},
-    //       dirs: {antigravity, codex, home, runtime}}
+    //       dirs: {antigravity, claude, codex, home, runtime}}
     // Returns {options: string[], argv: string[], stdin: string, env: object,
     // keepStdin: bool}. stdin carries the request body (API) or the prompt
     // (CLI); argv never carries either. keepStdin leaves it open for

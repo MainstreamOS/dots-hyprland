@@ -51,7 +51,7 @@ ApiStrategy {
         const granted = mode === "auto" || (mode === "ask" && Boolean(ctx.grant));
         // Claude asks before each step that needs approval and waits for the answer.
         const bridged = mode === "ask" && !granted && Boolean(Ai.cliPlanState["claude-code"]?.features?.includes("permission-bridge"));
-        root._requestInfo = { mode: mode, modelName: model.name ?? "", bridged: bridged };
+        root._requestInfo = { mode: mode, modelName: model.name ?? "", bridged: bridged, resumed: sessionId.length > 0 };
         // The file may be outside the working directory, which would raise an
         // approval for every attachment. Variadic, so another flag follows.
         if (attachment.length > 0 && !granted) {
@@ -69,8 +69,10 @@ ApiStrategy {
         const env = {};
         if (model.requires_key) env.ANTHROPIC_API_KEY = ctx.apiKey ?? Ai.apiKeys?.[model.key_id] ?? "";
         return {
-            // Claude Code keys --resume sessions by working directory.
-            options: ["--workdir", ctx.dirs.home, "--stdin", "--filter", "claude", "--report-exit"],
+            // Claude Code keys --resume sessions by working directory. Its own folder,
+            // as Codex has, keeps personal files behind an approval and the chats out
+            // of the user's own Claude Code history and memory.
+            options: ["--workdir", ctx.dirs.claude, "--stdin", "--filter", "claude", "--report-exit"],
             argv: argv,
             stdin: bridged ? JSON.stringify({ type: "user", message: { role: "user", content: prompt } }) + "\n" : prompt,
             keepStdin: bridged,
@@ -80,7 +82,7 @@ ApiStrategy {
 
     // Called after buildRequest, so the mode belongs to this request.
     function newState(): var {
-        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "", bridged: root._requestInfo.bridged === true };
+        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "", bridged: root._requestInfo.bridged === true, resumed: root._requestInfo.resumed === true };
     }
 
     function inputTokens(usage: var): int {
@@ -196,7 +198,11 @@ ApiStrategy {
         if (json.is_error) {
             // A dead session pins every retry to the same failure.
             sink.setSessionId("");
-            sink.error(json.result ?? json.subtype ?? Translation.tr("the request failed"));
+            const errors = Array.isArray(json.errors) ? json.errors.map(String) : [];
+            if (state.resumed && errors.some(e => e.startsWith("No conversation found")))
+                sink.sessionLost();
+            else
+                sink.error(json.result ?? json.subtype ?? Translation.tr("the request failed"));
         } else if (json.session_id) {
             sink.setSessionId(json.session_id);
         }

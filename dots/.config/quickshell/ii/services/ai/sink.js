@@ -307,6 +307,11 @@ function createSink(req, host) {
             if (active())
                 host.endInput(req);
         },
+        // The resumed session does not exist; the reply is retried in a fresh one.
+        sessionLost() {
+            if (active())
+                req.sessionLost = true;
+        },
         loginLapsed() {
             if (active())
                 req.loginLapsed = true;

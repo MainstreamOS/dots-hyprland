@@ -2403,6 +2403,7 @@ Singleton {
     readonly property string _stateHome: Quickshell.env("XDG_STATE_HOME") || (root._home + "/.local/state")
     readonly property var _dirs: ({
         "antigravity": root.antigravityDir,
+        "claude": root._stateHome + "/quickshell/ai/claude-code",
         "codex": root._stateHome + "/quickshell/ai/codex-cli",
         "home": root._home,
         "runtime": Quickshell.env("XDG_RUNTIME_DIR") || "/tmp",
@@ -2549,6 +2550,7 @@ Singleton {
             "confirmationDraft": null,
             "loginLapsed": false,
             "searchRefused": false,
+            "sessionLost": false,
             "notices": [],
             "output": "",
         };
@@ -2934,6 +2936,14 @@ Singleton {
             message.rawContent = message.content;
             message.done = true;
             message.thinking = false;
+        }
+
+        // A chat whose CLI session is not where the CLI looks (started in another
+        // folder, or removed) goes on in a fresh one that carries the conversation.
+        if (req.sessionLost && !req.regenerate && !req.stopped && message) {
+            root._finishChain();
+            Qt.callLater(() => root.regenerate(req.messageId));
+            return;
         }
 
         // History must never hold a call without an answer.
