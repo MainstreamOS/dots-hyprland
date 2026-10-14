@@ -18,6 +18,10 @@ MouseArea { // Notification group area
     property bool multipleNotifications: notificationCount > 1
     property bool expanded: false
     property bool popup: false
+    // Bound large groups so ListView only creates visible notification cards.
+    readonly property bool scrollExpandedGroup: expanded && !popup && notificationCount > 8
+    readonly property real expandedViewportHeight: Math.max(180, Math.min(480,
+        (root.ListView.view?.height ?? 540) - topRow.implicitHeight - root.padding * 2))
     property real padding: 10
     implicitHeight: background.implicitHeight
 
@@ -178,6 +182,7 @@ MouseArea { // Notification group area
             spacing: 10
 
             NotificationAppIcon { // Icons
+                id: groupIcon
                 Layout.alignment: Qt.AlignTop
                 Layout.fillWidth: false
                 image: root?.multipleNotifications ? "" : notificationGroup?.notifications[0]?.image ?? ""
@@ -251,34 +256,45 @@ MouseArea { // Notification group area
                     }
                 }
 
-                StyledListView { // Notification body (expanded)
-                    id: notificationsColumn
-                    implicitHeight: contentHeight
-                    // The card clips its rows, so a centered column keeps the
-                    // slide rather than fading them.
-                    removeDirection: root.dismissDirection < 0 ? -1 : 1
+                Item {
                     Layout.fillWidth: true
-                    spacing: expanded ? 5 : 3
-                    // clip: true
-                    interactive: false
-                    Behavior on spacing {
-                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                    }
-                    model: ScriptModel {
-                        values: root.expanded ? root.notifications.slice().reverse() : 
-                            root.notifications.slice().reverse().slice(0, 2)
-                    }
-                    delegate: NotificationItem {
-                        required property int index
-                        required property var modelData
-                        notificationObject: modelData
-                        dismissDirection: root.dismissDirection
-                        expanded: root.expanded
-                        onlyNotification: (root.notificationCount === 1)
-                        opacity: (!root.expanded && index == 1 && root.notificationCount > 2) ? 0.5 : 1
-                        visible: root.expanded || (index < 2)
-                        anchors.left: parent?.left
-                        anchors.right: parent?.right
+                    // Include the contact-image gutter inside the clipped viewport.
+                    Layout.leftMargin: root.scrollExpandedGroup ? -(groupIcon.implicitWidth + row.spacing) : 0
+                    implicitHeight: notificationsColumn.implicitHeight
+                    clip: root.scrollExpandedGroup
+                    StyledListView { // Notification body (expanded)
+                        id: notificationsColumn
+                        anchors.fill: parent
+                        implicitHeight: root.scrollExpandedGroup ? root.expandedViewportHeight : contentHeight
+                        cacheBuffer: root.scrollExpandedGroup ? 64 : 320
+                        animateAppearance: !root.scrollExpandedGroup
+                        boundsBehavior: Flickable.StopAtBounds
+                        // The card clips its rows, so a centered column keeps the
+                        // slide rather than fading them.
+                        removeDirection: root.dismissDirection < 0 ? -1 : 1
+                        spacing: root.expanded ? 5 : 3
+                        // clip: true
+                        interactive: root.scrollExpandedGroup
+                        Behavior on spacing {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
+                        model: ScriptModel {
+                            values: root.expanded ? root.notifications.slice().reverse() :
+                                root.notifications.slice().reverse().slice(0, 2)
+                        }
+                        delegate: NotificationItem {
+                            required property int index
+                            required property var modelData
+                            notificationObject: modelData
+                            dismissDirection: root.dismissDirection
+                            expanded: root.expanded
+                            onlyNotification: (root.notificationCount === 1)
+                            opacity: (!root.expanded && index == 1 && root.notificationCount > 2) ? 0.5 : 1
+                            visible: root.expanded || (index < 2)
+                            anchors.left: parent?.left
+                            anchors.leftMargin: root.scrollExpandedGroup ? groupIcon.implicitWidth + row.spacing : 0
+                            anchors.right: parent?.right
+                        }
                     }
                 }
 
