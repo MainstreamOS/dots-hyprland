@@ -297,8 +297,7 @@ Rectangle {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            root.device.trusted = true;
-                            root.device?.connect();
+                            BluetoothStatus.connectDevice(root.device);
                         }
                     }
                 }
@@ -338,7 +337,7 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.device?.disconnect()
+                        onClicked: BluetoothStatus.disconnectDevice(root.device)
                     }
                 }
                 

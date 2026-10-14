@@ -54,7 +54,7 @@ ShellRoot {
         FirstRunExperience.load()
         ConflictKiller.load()
         Cliphist.refresh()
-        BluetoothStatus.reconnectTrustedAudioDevicesAtStartup()
+        BluetoothStatus.startProfileReconnect()
         Wallpapers.load()
         Updates.load()
         ReleaseUpdates.load()

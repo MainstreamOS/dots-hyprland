@@ -113,10 +113,9 @@ DialogListItem {
 
                 onClicked: {
                     if (root.device?.connected) {
-                        root.device.disconnect();
+                        BluetoothStatus.disconnectDevice(root.device);
                     } else {
-                        root.device.trusted = true;
-                        root.device.connect();
+                        BluetoothStatus.connectDevice(root.device);
                     }
                 }
             }

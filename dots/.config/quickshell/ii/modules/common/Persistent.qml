@@ -121,6 +121,11 @@ Singleton {
 
             property string hyprlandInstanceSignature: ""
 
+            property JsonObject bluetooth: JsonObject {
+                // Explicit Disconnect stays in effect across shell reloads.
+                property list<string> manualDisconnects: []
+            }
+
             property JsonObject ai: JsonObject {
                 property string model: "local-ai-setup"
                 property real temperature: 0.5
