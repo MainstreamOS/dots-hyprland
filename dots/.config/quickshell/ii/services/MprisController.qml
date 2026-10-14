@@ -9,6 +9,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
+import "mpris-selection.js" as Selection
 import qs.modules.common
 
 /**
@@ -18,7 +19,12 @@ Singleton {
 	id: root;
 	property list<MprisPlayer> players: Mpris.players.values.filter(player => isRealPlayer(player));
 	property MprisPlayer trackedPlayer: null;
-	property MprisPlayer activePlayer: trackedPlayer ?? Mpris.players.values[0] ?? null;
+	readonly property MprisPlayer activePlayer: trackedPlayer && players.indexOf(trackedPlayer) !== -1
+		? trackedPlayer : Selection.choose(orderByRecency(players), null, null);
+	onPlayersChanged: Qt.callLater(() => root.reconcileSelection(null))
+	function reconcileSelection(preferred) {
+		root.trackedPlayer = Selection.choose(orderByRecency(root.players), root.trackedPlayer, preferred);
+	}
 	signal trackChanged(reverse: bool);
 
 	// Most-recently-active bus names, newest first — lets the popup show only
@@ -140,25 +146,13 @@ Singleton {
 			Component.onCompleted: {
 				coveredBuiltinsRefresh.restart();
 				root.notePlaybackChange(modelData);
-				if (root.trackedPlayer == null || modelData.isPlaying) {
-					root.trackedPlayer = modelData;
-				}
+				Qt.callLater(() => root.reconcileSelection(modelData));
 			}
 
 			Component.onDestruction: {
 				coveredBuiltinsRefresh.restart();
-				if (root.trackedPlayer == null || !root.trackedPlayer.isPlaying) {
-					for (const player of Mpris.players.values) {
-						if (player.playbackState.isPlaying) {
-							root.trackedPlayer = player;
-							break;
-						}
-					}
-
-					if (trackedPlayer == null && Mpris.players.values.length != 0) {
-						trackedPlayer = Mpris.players.values[0];
-					}
-				}
+				if (root.trackedPlayer === modelData) root.trackedPlayer = null;
+				Qt.callLater(() => root.reconcileSelection(null));
 			}
 
 			// Recency rides on the isPlaying PROPERTY change, not
@@ -167,10 +161,7 @@ Singleton {
 			// not-playing there and never gets bumped.
 			function onIsPlayingChanged() {
 				root.notePlaybackChange(modelData);
-			}
-
-			function onPlaybackStateChanged() {
-				if (root.trackedPlayer !== modelData) root.trackedPlayer = modelData;
+				root.reconcileSelection(modelData.isPlaying ? modelData : null);
 			}
 		}
 	}
@@ -185,7 +176,7 @@ Singleton {
 		function onTrackArtUrlChanged() {
 			// console.log("arturl:", activePlayer.trackArtUrl)
 			// root.updateTrack();
-			if (root.activePlayer.uniqueId == root.activeTrack.uniqueId && root.activePlayer.trackArtUrl != root.activeTrack.artUrl) {
+			if (root.activePlayer && root.activeTrack && root.activePlayer.uniqueId == root.activeTrack.uniqueId && root.activePlayer.trackArtUrl != root.activeTrack.artUrl) {
 				// cantata likes to send cover updates *BEFORE* updating the track info.
 				// as such, art url changes shouldn't be able to break the reverse animation
 				const r = root.__reverse;
@@ -253,12 +244,12 @@ Singleton {
 	}
 
 	function setActivePlayer(player: MprisPlayer) {
-		const targetPlayer = player ?? Mpris.players[0];
+		const targetPlayer = player && root.players.indexOf(player) !== -1 ? player : root.players[0] ?? null;
 		root.bumpRecentPlayer(targetPlayer);
 		console.log(`[Mpris] Active player ${targetPlayer} << ${activePlayer}`)
 
 		if (targetPlayer && this.activePlayer) {
-			this.__reverse = Mpris.players.indexOf(targetPlayer) < Mpris.players.indexOf(this.activePlayer);
+			this.__reverse = root.players.indexOf(targetPlayer) < root.players.indexOf(this.activePlayer);
 		} else {
 			// always animate forward if going to null
 			this.__reverse = false;

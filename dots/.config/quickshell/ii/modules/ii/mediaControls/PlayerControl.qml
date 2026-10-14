@@ -379,7 +379,9 @@ Item { // Player instance
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: blendedColors.colSubtext
                         elide: Text.ElideRight
-                        text: `${StringUtils.friendlyTimeForSeconds(root.player?.position)} / ${StringUtils.friendlyTimeForSeconds(root.player?.length)}`
+                        text: root.player?.length > 0
+                            ? `${StringUtils.friendlyTimeForSeconds(root.player?.position)} / ${StringUtils.friendlyTimeForSeconds(root.player?.length)}`
+                            : Translation.tr("Live / unknown duration")
                     }
 
                     RowLayout {
@@ -440,7 +442,7 @@ Item { // Player instance
                             Loader {
                                 id: sliderLoader
                                 anchors.fill: parent
-                                active: root.player?.canSeek ?? false
+                                active: (root.player?.canSeek ?? false) && root.player.length > 0
                                 sourceComponent: StyledSlider { 
                                     configuration: StyledSlider.Configuration.Wavy
                                     highlightColor: blendedColors.colPrimary
@@ -460,7 +462,7 @@ Item { // Player instance
                                     left: parent.left
                                     right: parent.right
                                 }
-                                active: !(root.player?.canSeek ?? false)
+                                active: !((root.player?.canSeek ?? false) && root.player.length > 0)
                                 sourceComponent: StyledProgressBar { 
                                     wavy: root.player?.isPlaying
                                     highlightColor: blendedColors.colPrimary

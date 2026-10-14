@@ -26,47 +26,24 @@ Scope {
         const order = MprisController.recentPlayerNames;
         return filterDuplicatePlayers(MprisController.orderByRecency(realPlayers)).slice(0, Config.options.media.maxShownPlayers);
     }
+    // One track mirrored on several buses is one card: the active player when
+    // it is among them, so the selection keeps its card, else the one with art.
+    function filterDuplicatePlayers(players) {
+        const groups = [];
+        for (const player of players) {
+            const title = player.trackTitle;
+            const group = title ? groups.find(g => g[0].trackTitle
+                && (g[0].trackTitle.includes(title) || title.includes(g[0].trackTitle))) : null;
+            if (group) group.push(player);
+            else groups.push([player]);
+        }
+        return groups.map(g => g.find(p => p === root.activePlayer)
+            ?? g.find(p => p.trackArtUrl?.length > 0) ?? g[0]);
+    }
     readonly property real osdWidth: Appearance.sizes.osdWidth
     readonly property real widgetWidth: Appearance.sizes.mediaControlsWidth
     readonly property real widgetHeight: Appearance.sizes.mediaControlsHeight
     property real popupRounding: RoundedCorners.on ? Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1 : 0
-
-    function filterDuplicatePlayers(players) {
-        let filtered = [];
-        let used = new Set();
-
-        for (let i = 0; i < players.length; ++i) {
-            if (used.has(i))
-                continue;
-            let p1 = players[i];
-            let group = [i];
-
-            // Group only genuine duplicates of the SAME track: one title
-            // contains the other (a mirror bus may truncate the title). The
-            // old extra clause `p1.position - p2.position <= 2 && p1.length -
-            // p2.length <= 2` used signed subtraction (no abs), so any player
-            // shorter than another matched and distinct tracks were collapsed
-            // — with per-tab browser players (mpris-hyprland) it
-            // dropped the actually-playing video from the panel. Title match
-            // is the reliable signal; MprisController already removes the
-            // playerctld mirror and the browser built-in.
-            for (let j = i + 1; j < players.length; ++j) {
-                let p2 = players[j];
-                if (p1.trackTitle && p2.trackTitle && (p1.trackTitle.includes(p2.trackTitle) || p2.trackTitle.includes(p1.trackTitle))) {
-                    group.push(j);
-                }
-            }
-
-            // Pick the one with non-empty trackArtUrl, or fallback to the first
-            let chosenIdx = group.find(idx => players[idx].trackArtUrl && players[idx].trackArtUrl.length > 0);
-            if (chosenIdx === undefined)
-                chosenIdx = group[0];
-
-            filtered.push(players[chosenIdx]);
-            group.forEach(idx => used.add(idx));
-        }
-        return filtered;
-    }
 
     // Centralized post-send revert: once a transfer reaches Sent state
     // (whether the popup is open or not), wait 3 seconds, then close the
