@@ -13,8 +13,8 @@ ApiStrategy {
         const model = ctx.model;
         const tools = ctx.tools ?? [];
         const usingSearch = tools[0]?.google_search !== undefined;
-        // 2.5 searches on the free tier, so only a Gemini 3 refusal is about billing.
-        root._usedSearch = usingSearch && (model.model.startsWith("gemini-3") || model.model.endsWith("-latest"));
+        // 2.5 searches on the free tier, so only a Gemini 3 or 4 refusal is about billing.
+        root._usedSearch = usingSearch && (model.model.startsWith("gemini-3") || model.model.startsWith("gemini-4") || model.model.endsWith("-latest"));
         const unanswered = ctx.unansweredCalls ?? {};
         // Gemini 3 answers a functionResponse only when it carries its call's id.
         let lastCallId = "";
@@ -84,8 +84,8 @@ ApiStrategy {
             } else if (geminiLevel === "none") {
                 geminiLevel = "minimal";
             }
-            // Models like Pro and latest series support low, medium, high. Clamp minimal to low.
-            if (geminiLevel === "minimal" && (model.model.includes("pro") || model.model.includes("3.8") || model.model.endsWith("-latest"))) {
+            // Models like Pro, Argon, and latest series support low, medium, high. Clamp minimal to low.
+            if (geminiLevel === "minimal" && (model.model.includes("pro") || model.model.includes("3.8") || model.model.includes("argon") || model.model.endsWith("-latest"))) {
                 geminiLevel = "low";
             }
             if (["minimal", "low", "medium", "high"].includes(geminiLevel)) {

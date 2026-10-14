@@ -332,6 +332,21 @@ Singleton {
             "api_format": "gemini",
             "sendTemperature": false,
             "thinkingLevel": "",
+        },
+        "gemini-4-argon": {
+            "name": "Gemini 4 Argon",
+            "icon": "google-gemini-symbolic",
+            "description": Translation.tr("Online | Google's frontier model\nGoogle's flagship frontier reasoning model: complex coding, mathematics, and research."),
+            "homepage": "https://aistudio.google.com",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+            "model": "gemini-4-argon",
+            "requires_key": true,
+            "key_id": "gemini",
+            "key_get_link": "https://aistudio.google.com/app/apikey",
+            "key_get_description": Translation.tr("**Pricing**: pay-as-you-go.\n\n**Instructions**: Log into Google account, allow AI Studio to create Google Cloud project, go to Get API key"),
+            "api_format": "gemini",
+            "sendTemperature": false,
+            "thinkingLevel": "",
         }
     })
     function isGeminiApiModel(id) {
@@ -344,7 +359,7 @@ Singleton {
         "gemini": aiModelComponent.createObject(root, {
             "name": "Gemini",
             "icon": "google-gemini-symbolic",
-            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
+            "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash, Gemini Pro, and Gemini 4 Argon."),
             "homepage": "https://aistudio.google.com",
             "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
             "model": "gemini-flash-latest",
@@ -440,6 +455,9 @@ Singleton {
         "gemini-pro": "gemini-pro-latest",
         "gemini-3.1-pro": "gemini-pro-latest",
         "gemini-3.1-pro-preview": "gemini-pro-latest",
+        "argon": "gemini-4-argon",
+        "gemini-argon": "gemini-4-argon",
+        "gemini-4": "gemini-4-argon",
         "gemini-plan-default": "gemini-plan-3-8-flash",
         "gemini-plan-3-8-flash-high": "gemini-plan-3-8-flash",
         "gemini-plan-3-8-flash-medium": "gemini-plan-3-8-flash",
@@ -796,7 +814,7 @@ Singleton {
                 next["gemini"] = aiModelComponent.createObject(root, {
                     "name": "Gemini",
                     "icon": "google-gemini-symbolic",
-                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash and Gemini Pro."),
+                    "description": Translation.tr("Online | Google's model\nGoogle's Gemini models with a free tier: Gemini Flash, Gemini Pro, and Gemini 4 Argon."),
                     "homepage": "https://aistudio.google.com",
                     "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
                     "model": "gemini-flash-latest",

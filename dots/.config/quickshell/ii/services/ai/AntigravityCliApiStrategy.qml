@@ -47,7 +47,7 @@ ApiStrategy {
                 else if (effort === "ultracode") effort = "max";
                 else if (effort === "minimal" || effort === "none") effort = "low";
                 if (!["low", "medium", "high", "xhigh", "max"].includes(effort)) effort = "medium";
-                if (model.model.includes("3.1-pro") && effort === "medium") effort = "high";
+                if ((model.model.includes("3.1-pro") || model.model.includes("argon")) && effort === "medium") effort = "high";
                 argv.push("--effort=" + effort);
             }
         }

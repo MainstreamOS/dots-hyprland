@@ -203,7 +203,9 @@ def usage(target_model):
 
     # Priority lookup based on active model if requested
     target_lower = target_model.lower()
-    if "pro" in target_lower:
+    if "argon" in target_lower:
+        preferred = ["gemini-4-argon", "gemini-4.0-argon", "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low"]
+    elif "pro" in target_lower:
         preferred = ["gemini-3.1-pro-low", "gemini-3.1-pro-high", "gemini-pro-agent", "gemini-2.5-pro"]
     elif "flash" in target_lower:
         preferred = ["gemini-3.8-flash-tiered", "gemini-3.8-flash-medium", "gemini-3.6-flash-high", "gemini-3.1-flash-lite"]
