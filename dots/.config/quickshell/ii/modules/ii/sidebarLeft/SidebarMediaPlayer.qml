@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import qs
 import qs.services
+import "../../../services/mpris-capabilities.js" as Capabilities
 import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
@@ -137,7 +138,7 @@ Item {
         function fetch() {
             artDownloader.target = root.artFilePath;
             artDownloader.stopped = false;
-            artDownloader.command = ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artDownloader.target, root.artUrl, "http,https"];
+            artDownloader.command = ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artDownloader.target, root.artUrl, "http,https,file"];
             artDownloader.running = true;
         }
         function stop() {
@@ -192,7 +193,7 @@ Item {
     // A player that never says how long the track is gets its position
     // reported as the length, so the bar would sit full and both times would
     // read the same. Such a track shows how far in it is and nothing else.
-    readonly property bool hasLength: (root.player?.lengthSupported ?? false) && root.player.length > 0
+    readonly property bool hasLength: Capabilities.hasLength(root.player)
     readonly property real trackLength: root.hasLength ? root.player.length : 0
 
     readonly property bool canChangeVolume: MprisController.canChangeVolume

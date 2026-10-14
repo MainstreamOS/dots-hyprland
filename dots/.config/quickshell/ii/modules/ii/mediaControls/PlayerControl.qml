@@ -3,6 +3,7 @@ import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
 import qs.services
+import "../../../services/mpris-capabilities.js" as Capabilities
 import qs.modules.common.functions
 import Qt5Compat.GraphicalEffects
 import QtQuick
@@ -379,7 +380,7 @@ Item { // Player instance
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: blendedColors.colSubtext
                         elide: Text.ElideRight
-                        text: root.player?.length > 0
+                        text: Capabilities.hasLength(root.player)
                             ? `${StringUtils.friendlyTimeForSeconds(root.player?.position)} / ${StringUtils.friendlyTimeForSeconds(root.player?.length)}`
                             : Translation.tr("Live / unknown duration")
                     }
@@ -393,7 +394,7 @@ Item { // Player instance
                         anchors.leftMargin: 10
                         anchors.rightMargin: 4
 
-                        visible: root.player !== null
+                        visible: Capabilities.volume(root.player)
 
                         MaterialSymbol {
                             iconSize: Appearance.font.pixelSize.medium
@@ -416,7 +417,7 @@ Item { // Player instance
                             value: root.player?.volume ?? 1.0
 
                             onMoved: {
-                                if (root.player) root.player.volume = value;
+                                if (Capabilities.volume(root.player)) root.player.volume = value;
                             }
                         }
                     }
@@ -442,7 +443,7 @@ Item { // Player instance
                             Loader {
                                 id: sliderLoader
                                 anchors.fill: parent
-                                active: (root.player?.canSeek ?? false) && root.player.length > 0
+                                active: Capabilities.hasLength(root.player) && (root.player?.canSeek ?? false)
                                 sourceComponent: StyledSlider { 
                                     configuration: StyledSlider.Configuration.Wavy
                                     highlightColor: blendedColors.colPrimary
@@ -462,12 +463,12 @@ Item { // Player instance
                                     left: parent.left
                                     right: parent.right
                                 }
-                                active: !((root.player?.canSeek ?? false) && root.player.length > 0)
+                                active: !(Capabilities.hasLength(root.player) && (root.player?.canSeek ?? false))
                                 sourceComponent: StyledProgressBar { 
                                     wavy: root.player?.isPlaying
                                     highlightColor: blendedColors.colPrimary
                                     trackColor: blendedColors.colSecondaryContainer
-                                    value: root.player?.position / root.player?.length
+                                    value: Capabilities.hasLength(root.player) ? root.player.position / root.player.length : 0
                                 }
                             }
 

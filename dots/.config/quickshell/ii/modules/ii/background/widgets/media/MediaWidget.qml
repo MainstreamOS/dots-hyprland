@@ -116,7 +116,7 @@ AbstractBackgroundWidget {
         id: coverArtDownloader
         property string targetFile: root.artUrl ?? ""
         property string artFilePath: root.artFilePath
-        command: ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), coverArtDownloader.artFilePath, coverArtDownloader.targetFile, "http,https"]
+        command: ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), coverArtDownloader.artFilePath, coverArtDownloader.targetFile, "http,https,file"]
         // Art that was missing when the images looked is loaded again once it
         // has arrived; a failed download leaves the placeholder.
         onExited: (exitCode, exitStatus) => {

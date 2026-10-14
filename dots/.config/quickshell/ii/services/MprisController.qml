@@ -10,6 +10,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import "mpris-selection.js" as Selection
+import "mpris-capabilities.js" as Capabilities
 import qs.modules.common
 
 /**
@@ -225,9 +226,9 @@ Singleton {
 		}
 	}
 
-	property bool canChangeVolume: this.activePlayer && this.activePlayer.volumeSupported && this.activePlayer.canControl;
+	property bool canChangeVolume: Capabilities.volume(this.activePlayer);
 
-	property bool loopSupported: this.activePlayer && this.activePlayer.loopSupported && this.activePlayer.canControl;
+	property bool loopSupported: Capabilities.loop(this.activePlayer);
 	property var loopState: this.activePlayer?.loopState ?? MprisLoopState.None;
 	function setLoopState(loopState: var) {
 		if (this.loopSupported) {
@@ -235,7 +236,7 @@ Singleton {
 		}
 	}
 
-	property bool shuffleSupported: this.activePlayer && this.activePlayer.shuffleSupported && this.activePlayer.canControl;
+	property bool shuffleSupported: Capabilities.shuffle(this.activePlayer);
 	property bool hasShuffle: this.activePlayer?.shuffle ?? false;
 	function setShuffle(shuffle: bool) {
 		if (this.shuffleSupported) {
