@@ -464,6 +464,8 @@ Singleton {
         "gemini-plan-3-8-flash-low": "gemini-plan-3-8-flash",
         "gemini-plan-3-1-pro-high": "gemini-plan-3-1-pro",
         "gemini-plan-3-1-pro-low": "gemini-plan-3-1-pro",
+        "gemini-plan-argon": "gemini-plan-4-argon",
+        "gemini-plan-4": "gemini-plan-4-argon",
     })
     // The user's choice as saved in Persistent. Everything that talks to a
     // model reads currentModelId instead.
@@ -705,10 +707,11 @@ Singleton {
         },
         "codex-cli": root._codexPlanModels,
         // Google serves personal accounts through Antigravity; supports Gemini 3
-        // with dynamic reasoning effort.
+        // and Gemini 4 with dynamic reasoning effort.
         "antigravity-cli": {
             "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini Flash", thinkingLevel: "" },
             "gemini-plan-3-1-pro": { alias: "gemini-3.1-pro", name: "Gemini Pro", thinkingLevel: "" },
+            "gemini-plan-4-argon": { alias: "gemini-4-argon", name: "Gemini 4 Argon", thinkingLevel: "" },
         }
     })
     readonly property var cliPlans: ({
@@ -750,7 +753,7 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
             setupHomepage: "https://antigravity.google/product/antigravity-cli",
             modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
-            signedIn: Translation.tr("Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think."),
+            signedIn: Translation.tr("Signed in. Gemini Flash, Gemini Pro, and Gemini 4 Argon are in the picker now. Adjust thinking level with /think."),
             icon: "antigravity-symbolic",
             endpoint: "https://antigravity.google",
             homepage: "https://antigravity.google",
