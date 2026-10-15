@@ -1704,11 +1704,15 @@ Singleton {
         ollamaPullProc.running = true;
     }
 
-    function setOllamaPullMessage(body) {
-        const message = root.messageByID[root.ollamaPullMessageId];
+    function replaceMessage(id, body) {
+        const message = root.messageByID[id];
         if (!message) return false;
         root._setMessageText(message, body);
         return true;
+    }
+
+    function setOllamaPullMessage(body) {
+        return root.replaceMessage(root.ollamaPullMessageId, body);
     }
 
     Process {
@@ -1760,6 +1764,79 @@ Singleton {
             const body = failure.length > 0 ? Translation.tr("Could not download **%1**.\n\n```\n%2\n```").arg(name).arg(failure) : Translation.tr("Could not download **%1**.").arg(name);
             if (!root.setOllamaPullMessage(body)) root.addMessage(body, root.interfaceRole);
             root.ollamaPullMessageId = "";
+        }
+    }
+
+    property string ollamaListMessageId: ""
+
+    function listOllamaModels(filter = "") {
+        if (ollamaListProc.running) {
+            root.addMessage(Translation.tr("A model list is already being fetched."), root.interfaceRole);
+            return;
+        }
+        root.ollamaListMessageId = root.addMessage(Translation.tr("Fetching list of latest Ollama models..."), root.interfaceRole);
+        ollamaListProc.filter = (filter ?? "").trim();
+        ollamaListProc.command = ["python3", root._aiScriptsDir + "/ollama-list.py", ollamaListProc.filter];
+        ollamaListProc.running = true;
+    }
+
+    function ollamaListText(result, filter) {
+        const lines = [Translation.tr("### Installed models"), ""];
+        if (result.serverDown)
+            lines.push(Translation.tr("The local Ollama server is not running. Start it with %1.").arg("`/ollama status`"));
+        else if (result.installed.length === 0 && filter.length > 0 && result.library !== null)
+            lines.push(Translation.tr("No installed models match \"%1\".").arg(filter));
+        else if (result.installed.length === 0)
+            lines.push(Translation.tr("No local models installed yet."));
+        for (const model of result.installed) {
+            const details = [model.size, model.parameters].filter(s => s.length > 0).join(", ");
+            lines.push(`* **\`${model.name}\`** (${details})`);
+        }
+        if (result.library === null)
+            return lines.join("\n");
+        lines.push("", filter.length > 0 ? Translation.tr("### Library models matching \"%1\"").arg(filter) : Translation.tr("### Latest in the Ollama library"), "");
+        if (result.unreachable)
+            lines.push(Translation.tr("The Ollama library could not be reached."), "");
+        else if (result.library.length === 0)
+            lines.push(Translation.tr("No matching library models found."), "");
+        for (const model of result.library) {
+            const sizes = model.sizes.map(s => `\`${s}\``).join(", ");
+            const features = model.features.map(f => ` **[${f.charAt(0).toUpperCase()}${f.slice(1)}]**`).join("");
+            const pull = "`/ollama pull " + model.tag + "`";
+            lines.push(`* **${model.name}**${sizes.length > 0 ? ` (${sizes})` : ""}${features}`);
+            if (model.description.length > 0)
+                lines.push(`  *${model.description}*`);
+            lines.push("  " + Translation.tr("Download with %1").arg(pull), "");
+        }
+        lines.push(Translation.tr("Any model from [ollama.com/library](https://ollama.com/library) can be downloaded with `%1 MODEL_NAME`.").arg("/ollama pull"));
+        return lines.join("\n");
+    }
+
+    Process {
+        id: ollamaListProc
+        property string filter: ""
+        stdout: StdioCollector {
+            id: ollamaListOut
+        }
+        stderr: StdioCollector {
+            id: ollamaListErr
+        }
+        onExited: exitCode => {
+            let result = null;
+            try {
+                result = JSON.parse(ollamaListOut.text);
+            } catch (e) {}
+            let body;
+            if (exitCode === 0 && result) {
+                body = root.ollamaListText(result, ollamaListProc.filter);
+            } else {
+                const err = ollamaListErr.text.trim();
+                body = err.length > 0
+                    ? Translation.tr("Could not retrieve Ollama models.\n\n```\n%1\n```").arg(err)
+                    : Translation.tr("Could not retrieve Ollama models.");
+            }
+            if (!root.replaceMessage(root.ollamaListMessageId, body)) root.addMessage(body, root.interfaceRole);
+            root.ollamaListMessageId = "";
         }
     }
 

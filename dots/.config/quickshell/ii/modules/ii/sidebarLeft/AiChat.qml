@@ -223,20 +223,17 @@ Item {
         },
         {
             name: "ollama",
-            description: Translation.tr("Set up local AI"),
-            // Kept out of the command list: local AI is reached by picking it
-            // under /model, and offering it here as well puts a second door on
-            // one room. It still runs when typed, which is what the setup
-            // walkthrough tells the user to do to fetch a model.
-            hidden: true,
+            description: Translation.tr("Manage local Ollama models (list, pull, status)"),
             execute: args => {
                 const action = (args[0] ?? "").toLowerCase();
                 if (action === "pull") {
                     Ai.pullOllamaModel(args.slice(1).join(" "));
+                } else if (action === "list" || action === "ls") {
+                    Ai.listOllamaModels(args.slice(1).join(" "));
                 } else if (action.length === 0 || action === "status") {
                     Ai.startOllamaWalkthrough();
                 } else {
-                    Ai.addMessage(Translation.tr("Usage: %1ollama pull MODEL_NAME").arg(root.commandPrefix), Ai.interfaceRole);
+                    Ai.addMessage(Translation.tr("Usage: %1ollama [list [FILTER] | pull MODEL_NAME | status]").arg(root.commandPrefix), Ai.interfaceRole);
                 }
             }
         },
@@ -1929,6 +1926,31 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                         description: Ai.toolDescriptions[toolName]
                                     };
                                 });
+                            } else if (messageInputField.text.startsWith(`${root.commandPrefix}ollama`)) {
+                                const parts = messageInputField.text.trim().split(" ");
+                                root.suggestionQuery = parts[1] ?? "";
+                                const isDirect = parts.length === 1;
+                                const ollamaActions = [
+                                    {
+                                        name: isDirect ? `${root.commandPrefix}ollama list` : "list",
+                                        displayName: "list",
+                                        description: Translation.tr("List installed and latest Ollama models (supports %1ollama list [filter])").arg(root.commandPrefix),
+                                        executeOnAccept: true
+                                    },
+                                    {
+                                        name: isDirect ? `${root.commandPrefix}ollama pull ` : "pull ",
+                                        displayName: "pull",
+                                        description: Translation.tr("Download a model (e.g. %1ollama pull %2)").arg(root.commandPrefix).arg(Ai.ollamaSuggestedModel),
+                                        executeOnAccept: false
+                                    },
+                                    {
+                                        name: isDirect ? `${root.commandPrefix}ollama status` : "status",
+                                        displayName: "status",
+                                        description: Translation.tr("Check Ollama server and setup walkthrough"),
+                                        executeOnAccept: true
+                                    }
+                                ];
+                                root.suggestionList = ollamaActions.filter(item => item.displayName.startsWith(root.suggestionQuery.toLowerCase()));
                             } else if (messageInputField.text.startsWith(root.commandPrefix)) {
                                 root.suggestionQuery = messageInputField.text;
                                 root.suggestionList = root.allCommands.filter(cmd => !cmd.hidden && cmd.name.startsWith(messageInputField.text.substring(1))).map(cmd => {
