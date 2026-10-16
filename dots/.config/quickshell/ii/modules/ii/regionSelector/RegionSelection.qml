@@ -365,11 +365,16 @@ PanelWindow {
             Config.options.screenSnip.savePath : "";
         var screenshotAction = root.getScreenshotAction();
         if (screenshotAction === null) return;
+        // Recording takes global logical coordinates; the other actions crop
+        // this monitor's capture in pixels.
+        const scale = root.isRecording ? 1 : root.monitorScale;
+        const offsetX = root.isRecording ? root.monitorOffsetX : 0;
+        const offsetY = root.isRecording ? root.monitorOffsetY : 0;
         const command = ScreenshotAction.getCommand(
-            root.regionX * root.monitorScale, //
-            root.regionY * root.monitorScale, //
-            root.regionWidth * root.monitorScale,// 
-            root.regionHeight * root.monitorScale, //
+            (root.regionX + offsetX) * scale, //
+            (root.regionY + offsetY) * scale, //
+            root.regionWidth * scale,// 
+            root.regionHeight * scale, //
             root.screenshotPath, //
             screenshotAction, //
             screenshotDir
