@@ -397,7 +397,7 @@ Item { // Player instance
                         visible: Capabilities.volume(root.player)
 
                         MaterialSymbol {
-                            iconSize: Appearance.font.pixelSize.medium
+                            iconSize: Appearance.font.pixelSize.normal
                             color: blendedColors.colSubtext
                             text: {
                                 const vol = root.player?.volume ?? 1.0
@@ -409,8 +409,9 @@ Item { // Player instance
 
                         StyledSlider {
                             Layout.preferredWidth: 120
-
+                            Layout.preferredHeight: Appearance.sizes.wavySliderHeight
                             configuration: StyledSlider.Configuration.Wavy
+                            animateWave: false
                             highlightColor: blendedColors.colPrimary
                             trackColor: blendedColors.colSecondaryContainer
                             handleColor: blendedColors.colPrimary
@@ -438,7 +439,7 @@ Item { // Player instance
                         Item {
                             id: progressBarContainer
                             Layout.fillWidth: true
-                            implicitHeight: Math.max(sliderLoader.implicitHeight, progressBarLoader.implicitHeight)
+                            implicitHeight: Appearance.sizes.wavySliderHeight
 
                             Loader {
                                 id: sliderLoader
@@ -446,6 +447,7 @@ Item { // Player instance
                                 active: Capabilities.hasLength(root.player) && (root.player?.canSeek ?? false)
                                 sourceComponent: StyledSlider { 
                                     configuration: StyledSlider.Configuration.Wavy
+                                    animateWave: root.player?.isPlaying ?? false
                                     highlightColor: blendedColors.colPrimary
                                     trackColor: blendedColors.colSecondaryContainer
                                     handleColor: blendedColors.colPrimary

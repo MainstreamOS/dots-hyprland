@@ -19,7 +19,6 @@ ProgressBar {
     property bool animateWave: true
     property real waveAmplitudeMultiplier: wavy ? 0.5 : 0
     property real waveFrequency: 6
-    property real waveFps: 60
 
     Behavior on waveAmplitudeMultiplier {
         animation: Appearance?.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -48,16 +47,11 @@ ProgressBar {
                 id: wavyFill
                 frequency: root.waveFrequency
                 color: root.highlightColor
-                amplitudeMultiplier: root.wavy ? 0.5 : 0
+                amplitudeMultiplier: root.waveAmplitudeMultiplier
                 height: contentItem.height * 6
                 width: contentItem.width * root.visualPosition
                 lineWidth: contentItem.height
                 fullLength: root.width
-                Connections {
-                    target: root
-                    function onValueChanged() { wavyFill.requestPaint(); }
-                    function onHighlightColorChanged() { wavyFill.requestPaint(); }
-                }
                 FrameAnimation {
                     running: root.animateWave
                     onTriggered: {

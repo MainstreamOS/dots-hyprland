@@ -1690,6 +1690,7 @@ Singleton {
         property real hyprlandGapsOut: 5
         property real mediaControlsWidth: 440
         property real mediaControlsHeight: 160
+        property real wavySliderHeight: 24
         property real notificationPopupWidth: 410
         // Where notification popups sit, read by the popup and by the picker in
         // Settings so the spot shown picked is always the one in use. A

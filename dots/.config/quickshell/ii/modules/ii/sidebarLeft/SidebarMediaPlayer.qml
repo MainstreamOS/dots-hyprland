@@ -512,7 +512,7 @@ Item {
                         Item {
                             Layout.fillWidth: true
                             visible: root.hasLength
-                            implicitHeight: Math.max(seekLoader.implicitHeight, progressLoader.implicitHeight)
+                            implicitHeight: Appearance.sizes.wavySliderHeight
 
                             Loader {
                                 id: seekLoader

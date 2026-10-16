@@ -43,7 +43,7 @@ Slider {
         : trackWidth >= StyledSlider.Configuration.M ? 9
         : trackWidth >= StyledSlider.Configuration.S ? 6
         : height / 2
-    property real handleHeight: (configuration === StyledSlider.Configuration.Wavy) ? 24 : Math.max(33, trackWidth + 9)
+    property real handleHeight: (configuration === StyledSlider.Configuration.Wavy) ? Appearance.sizes.wavySliderHeight : Math.max(33, trackWidth + 9)
     property real handleWidth: root.pressed ? handlePressedWidth : handleDefaultWidth
     property real handleMargins: 4
     property real dividerMargins: 2
@@ -54,11 +54,10 @@ Slider {
     property bool animateWave: true
     property real waveAmplitudeMultiplier: wavy ? 0.5 : 0
     property real waveFrequency: 6
-    property real waveFps: 60
 
     leftPadding: handleMargins
     rightPadding: handleMargins
-    property real effectiveDraggingWidth: width - leftPadding - rightPadding
+    property real effectiveDraggingWidth: Math.max(0, width - leftPadding - rightPadding)
 
     Layout.fillWidth: true
     from: 0
@@ -100,7 +99,7 @@ Slider {
         anchors.verticalCenter: parent.verticalCenter
         anchors.horizontalCenter: parent.horizontalCenter
         width: root.width
-        implicitHeight: trackWidth
+        implicitHeight: Math.max(root.trackWidth, root.handleHeight)
         property var normalized: root.dividerValues.map(v => (v - root.from) / (root.to - root.from))
         property var filtered: normalized.filter(v => Math.abs(v - root.visualPosition) * effectiveDraggingWidth > handleMargins + handleWidth / 2 - dividerMargins)
         property var leftValues: [0, ...filtered.filter(v => v < root.visualPosition), root.visualPosition]
@@ -141,21 +140,15 @@ Slider {
                 property real rightMargin: index < background.leftWidths.length - 1 ? root.dividerMargins : root.handleMargins
                 x: background.leftValues[index] * root.effectiveDraggingWidth + leftMargin + (index > 0 ? leftPadding : 0)
                 width: background.leftWidths[index] * root.effectiveDraggingWidth - leftMargin - rightMargin - (index === background.leftWidths.length - 1 ? handleWidth / 2 : 0) + (index === 0 ? leftPadding : 0)
-                height: root.height
+                height: Math.ceil(root.trackWidth * (1 + 2 * root.waveAmplitudeMultiplier)) + 2
                 active: root.wavy
                 sourceComponent: WavyLine {
                     id: wavyFill
                     frequency: root.waveFrequency
                     fullLength: root.width
                     color: root.highlightColor
-                    amplitudeMultiplier: root.wavy ? 0.5 : 0
-                    width: parent.width
-                    height: root.trackWidth
-                    Connections {
-                        target: root
-                        function onValueChanged() { wavyFill.requestPaint(); }
-                        function onHighlightColorChanged() { wavyFill.requestPaint(); }
-                    }
+                    lineWidth: root.trackWidth
+                    amplitudeMultiplier: root.waveAmplitudeMultiplier
                     FrameAnimation {
                         running: root.animateWave
                         onTriggered: {
@@ -208,7 +201,7 @@ Slider {
         color: root.handleColor
 
         Behavior on implicitWidth {
-            animation: Appearance?.animation.elementMoveFast.numberAnimation.createObject(this)
+            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
 
         StyledToolTip {

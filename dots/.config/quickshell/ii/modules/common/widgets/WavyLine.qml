@@ -1,34 +1,50 @@
 import qs.modules.common
 import QtQuick
+import QtQuick.Shapes
 
-Canvas {
+Shape {
     id: root
     property real amplitudeMultiplier: 0.5
     property real frequency: 6
     property color color: Appearance?.colors.colPrimary ?? "#685496"
     property real lineWidth: 4
     property real fullLength: width
+    property bool animate: false
+    property real _phase: 0
 
-    onPaint: {
-        var ctx = getContext("2d");
-        ctx.clearRect(0, 0, width, height);
+    preferredRendererType: Shape.CurveRenderer
+    clip: true
 
-        var amplitude = root.lineWidth * root.amplitudeMultiplier;
-        var frequency = root.frequency;
-        var phase = Date.now() / 400.0;
-        var centerY = height / 2;
-
-        ctx.strokeStyle = root.color;
-        ctx.lineWidth = root.lineWidth;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        for (var x = ctx.lineWidth / 2; x <= root.width - ctx.lineWidth / 2; x += 1) {
-            var waveY = centerY + amplitude * Math.sin(frequency * 2 * Math.PI * x / root.fullLength + phase);
-            if (x === 0)
-                ctx.moveTo(x, waveY);
-            else
-                ctx.lineTo(x, waveY);
+    // Keep the stroke in the scene graph: resizing or reusing a seek bar must
+    // not depend on a Canvas's previous backing image or paint state.
+    readonly property var points: {
+        if (width < lineWidth || height <= 0 || fullLength <= 0) return [];
+        const result = [];
+        const start = lineWidth / 2;
+        const end = width - lineWidth / 2;
+        const amplitude = lineWidth * amplitudeMultiplier;
+        const k = frequency * 2 * Math.PI / fullLength;
+        // Twenty-four samples per cycle keep the curve smooth at every width
+        // without rebuilding a point for every pixel on every animation frame.
+        const steps = Math.max(2, Math.ceil(frequency * 24 * width / fullLength));
+        for (let i = 0; i <= steps; i++) {
+            const x = start + (end - start) * i / steps;
+            result.push(Qt.point(x, height / 2 + amplitude * Math.sin(k * x + _phase)));
         }
-        ctx.stroke();
+        return result;
+    }
+
+    FrameAnimation {
+        running: root.animate && root.visible && (root.Window.window?.visible ?? false)
+        onTriggered: root._phase += frameTime * 2.5
+    }
+
+    ShapePath {
+        strokeColor: root.color
+        strokeWidth: root.lineWidth
+        fillColor: "transparent"
+        capStyle: ShapePath.RoundCap
+        joinStyle: ShapePath.RoundJoin
+        PathPolyline { path: root.points }
     }
 }
