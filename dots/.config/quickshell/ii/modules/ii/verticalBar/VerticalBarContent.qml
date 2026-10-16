@@ -240,15 +240,6 @@ Item { // Bar content region
         Bar.Workspaces {
             vertical: true
             Layout.fillHeight: false
-            MouseArea { // Right-click to toggle overview
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                onPressed: event => {
-                    if (event.button === Qt.RightButton) {
-                        GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-                    }
-                }
-            }
         }
     }
 

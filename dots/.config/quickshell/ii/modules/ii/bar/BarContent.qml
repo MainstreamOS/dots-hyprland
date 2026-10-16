@@ -329,15 +329,6 @@ Item { // Bar content region
                 Workspaces {
                     id: workspacesWidget
                     Layout.fillHeight: true
-                    MouseArea { // Right-click to toggle overview
-                        anchors.fill: parent
-                        acceptedButtons: Qt.RightButton
-                        onPressed: event => {
-                            if (event.button === Qt.RightButton) {
-                                GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -389,15 +380,6 @@ Item { // Bar content region
         id: comp_workspaces
         Workspaces {
             Layout.fillHeight: true
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                onPressed: event => {
-                    if (event.button === Qt.RightButton) {
-                        GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-                    }
-                }
-            }
         }
     }
 

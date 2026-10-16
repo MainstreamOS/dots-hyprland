@@ -66,7 +66,7 @@ ButtonMouseArea {
         if (mouse.button == Qt.LeftButton)
             switchWorkspaceToHovered();
         else if (mouse.button == Qt.RightButton)
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            Hyprland.dispatch('hl.dsp.workspace.toggle_special("special")');
     }
     onWheel: event => {
         if (event.angleDelta.y < 0)
