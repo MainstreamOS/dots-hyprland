@@ -44,7 +44,7 @@ ProgressBar {
             }
             active: root.wavy
             sourceComponent: WavyLine {
-                id: wavyFill
+                animate: root.animateWave
                 frequency: root.waveFrequency
                 color: root.highlightColor
                 amplitudeMultiplier: root.waveAmplitudeMultiplier
@@ -52,12 +52,6 @@ ProgressBar {
                 width: contentItem.width * root.visualPosition
                 lineWidth: contentItem.height
                 fullLength: root.width
-                FrameAnimation {
-                    running: root.animateWave
-                    onTriggered: {
-                        wavyFill.requestPaint()
-                    }
-                }
             }
         }
 

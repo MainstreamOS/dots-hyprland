@@ -379,6 +379,7 @@ Item { // Player instance
                         anchors.bottomMargin: 4
                         anchors.left: parent.left
                         font.pixelSize: Appearance.font.pixelSize.small
+                        font.features: { "tnum": 1 }
                         color: blendedColors.colSubtext
                         elide: Text.ElideRight
                         text: Capabilities.hasLength(root.player)

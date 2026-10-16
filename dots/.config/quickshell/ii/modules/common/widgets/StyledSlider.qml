@@ -143,18 +143,12 @@ Slider {
                 height: Math.ceil(root.trackWidth * (1 + 2 * root.waveAmplitudeMultiplier)) + 2
                 active: root.wavy
                 sourceComponent: WavyLine {
-                    id: wavyFill
+                    animate: root.animateWave
                     frequency: root.waveFrequency
                     fullLength: root.width
                     color: root.highlightColor
                     lineWidth: root.trackWidth
                     amplitudeMultiplier: root.waveAmplitudeMultiplier
-                    FrameAnimation {
-                        running: root.animateWave
-                        onTriggered: {
-                            wavyFill.requestPaint()
-                        }
-                    }
                 }
             }
         }
