@@ -2782,5 +2782,6 @@
   "Any model from [ollama.com/library](https://ollama.com/library) can be downloaded with `%1 MODEL_NAME`.": "Any model from [ollama.com/library](https://ollama.com/library) can be downloaded with `%1 MODEL_NAME`.",
   "Could not retrieve Ollama models.\n\n```\n%1\n```": "Could not retrieve Ollama models.\n\n```\n%1\n```",
   "Could not retrieve Ollama models.": "Could not retrieve Ollama models.",
-  "Live / unknown duration": "Live / unknown duration"
+  "Live / unknown duration": "Live / unknown duration",
+  "Reset to default speed": "Reset to default speed"
 }

@@ -239,23 +239,25 @@ ContentPage {
         return String(value)
     }
 
-    function applyInput(key, value) {
-        if (!root.ready) return
-        // Live apply: Lua mode rejects `hyprctl keyword` ("can't work with
-        // non-legacy parsers. Use eval."), so we route through hyprctl eval +
-        // hl.config(). Booleans need real Lua keywords (`true`/`false`),
-        // numbers stay bare, strings get quoted — _luaLiteral handles all
-        // three. The leaf is just the input-table key, no nested colons.
-        const luaVal = root._luaLiteral(key, value)
-        Quickshell.execDetached([
-            "hyprctl", "eval",
-            'hl.config({ input = { ["' + key + '"] = ' + luaVal + ' } })'
-        ])
-        // Persist into env.lua. Replaces the first matching key in the
-        // OUTER input table (skipping the nested touchpad block). The
-        // touchpad-detection regex anchors on `touchpad = {` so comment
-        // lines mentioning 'touchpad' (e.g. the file-top doc comment)
-        // don't falsely latch in_tp and block legitimate matches.
+    // A drag moves in small steps: the live value goes out at most every
+    // 50 ms, and env.lua is written once the slider settles.
+    Timer {
+        id: sensitivityApplyTimer
+        interval: 50
+        onTriggered: root._evalInput("sensitivity", root.sensitivity.toFixed(2))
+    }
+    Timer {
+        id: sensitivitySaveTimer
+        interval: 300
+        onTriggered: root._persistInput("sensitivity", root.sensitivity.toFixed(2))
+    }
+
+    // Persist into env.lua. Replaces the first matching key in the
+    // OUTER input table (skipping the nested touchpad block). The
+    // touchpad-detection regex anchors on `touchpad = {` so comment
+    // lines mentioning 'touchpad' (e.g. the file-top doc comment)
+    // don't falsely latch in_tp and block legitimate matches.
+    function _persistInput(key, luaVal) {
         const mouseScript =
             "import sys, re\n" +
             "key, val, conf = sys.argv[1], sys.argv[2], sys.argv[3]\n" +
@@ -281,6 +283,30 @@ ContentPage {
             "    sys.exit(0)\n" +
             "open(conf, 'w').write('\\n'.join(result))\n"
         Quickshell.execDetached(["python3", "-c", mouseScript, String(key), luaVal, root.envConf])
+    }
+
+    function applyInput(key, value) {
+        if (!root.ready) return
+        if (key === "sensitivity") {
+            if (!sensitivityApplyTimer.running) sensitivityApplyTimer.start()
+            sensitivitySaveTimer.restart()
+            return
+        }
+        const luaVal = root._luaLiteral(key, value)
+        root._evalInput(key, luaVal)
+        root._persistInput(key, luaVal)
+    }
+
+    // Live apply: Lua mode rejects `hyprctl keyword` ("can't work with
+    // non-legacy parsers. Use eval."), so we route through hyprctl eval +
+    // hl.config(). Booleans need real Lua keywords (`true`/`false`),
+    // numbers stay bare, strings get quoted — _luaLiteral handles all
+    // three. The leaf is just the input-table key, no nested colons.
+    function _evalInput(key, luaVal) {
+        Quickshell.execDetached([
+            "hyprctl", "eval",
+            'hl.config({ input = { ["' + key + '"] = ' + luaVal + ' } })'
+        ])
     }
 
     // Write mouse natural_scroll - skips inside touchpad block.
@@ -445,32 +471,29 @@ ContentPage {
         icon: "mouse"
         title: Translation.tr("Mouse")
 
-        ConfigRow {
-            StyledText {
-                Layout.fillWidth: true
-                text: Translation.tr("Pointer Speed")
-                font.pixelSize: Appearance.font.pixelSize.normal
-                color: Appearance.colors.colOnLayer1
+        ConfigSlider {
+            text: Translation.tr("Pointer Speed")
+            buttonIcon: "speed"
+            stopIndicatorValues: [0]
+            from: -1
+            to: 1
+            value: root.sensitivity
+            onMoved: {
+                const stepped = Math.round(value * 20) / 20
+                if (stepped === root.sensitivity) return
+                root.sensitivity = stepped
+                root.applyInput("sensitivity", stepped.toFixed(2))
             }
-            StyledComboBox {
-                textRole: "displayName"
-                Layout.fillWidth: false
-                Layout.preferredWidth: 220
-                model: [
-                    { displayName: Translation.tr("Slowest"), value: -1.0 },
-                    { displayName: Translation.tr("Slow"),    value: -0.5 },
-                    { displayName: Translation.tr("Default"), value:  0.0 },
-                    { displayName: Translation.tr("Fast"),    value:  1.0 },
-                    { displayName: Translation.tr("Fastest"), value:  2.0 },
-                ]
-                currentIndex: {
-                    const idx = model.findIndex(item => Math.abs(item.value - root.sensitivity) < 0.26)
-                    return idx !== -1 ? idx : 2
-                }
-                onActivated: index => {
-                    root.sensitivity = model[index].value
-                    root.applyInput("sensitivity", model[index].value.toFixed(1))
-                }
+        }
+
+        ConfigResetButton {
+            visible: root.sensitivity !== 0
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default speed")
+            onClicked: {
+                root.sensitivity = 0
+                root.applyInput("sensitivity", "0.00")
             }
         }
 
