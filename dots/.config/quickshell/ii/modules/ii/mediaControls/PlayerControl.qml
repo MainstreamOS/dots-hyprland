@@ -371,11 +371,12 @@ Item { // Player instance
                 Item { Layout.fillHeight: true }
                 Item {
                     Layout.fillWidth: true
-                    implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight
+                    implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight + 4
 
                     StyledText {
                         id: trackTime
                         anchors.bottom: sliderRow.top
+                        anchors.bottomMargin: 4
                         anchors.left: parent.left
                         font.pixelSize: Appearance.font.pixelSize.small
                         color: blendedColors.colSubtext
@@ -386,8 +387,7 @@ Item { // Player instance
                     }
 
                     RowLayout {
-                        anchors.bottom: sliderRow.top
-                        anchors.bottomMargin: -7
+                        anchors.verticalCenter: trackTime.verticalCenter
 
                         anchors.left: trackTime.right
                         anchors.right: sliderRow.right
