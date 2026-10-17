@@ -468,7 +468,16 @@ MouseArea {
         ToolbarTextField {
             id: passwordBox
             Layout.rightMargin: -Layout.leftMargin
-            placeholderText: GlobalStates.screenUnlockFailed ? Translation.tr("Incorrect password") : Translation.tr("Enter password")
+            placeholderText: {
+                if (!GlobalStates.screenUnlockFailed) return Translation.tr("Enter password");
+                const msg = root.context.pamMessage;
+                if (/lock/i.test(msg)) {
+                    const mins = msg.match(/(\d+)\s*minutes?/i);
+                    return mins ? Translation.tr("Account locked, retry in %1 min").arg(mins[1])
+                                : Translation.tr("Account locked, try again later");
+                }
+                return Translation.tr("Incorrect password");
+            }
 
             // Style
             clip: true
