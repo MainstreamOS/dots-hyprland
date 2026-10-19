@@ -9,7 +9,10 @@ Scope {
     id: root
     required property var manager
     required property BluetoothDevice device
-    property bool automaticCapable: !(device?.icon ?? "").startsWith("input-")
+    readonly property bool inputDevice: (device?.icon ?? "").startsWith("input-")
+    // The connector's last answer; until then, input devices are left to BlueZ.
+    property var reported: null
+    readonly property bool automaticCapable: reported ?? !inputDevice
     readonly property bool automaticReady: manager?.profileReconnectReady && Persistent.ready
         && automaticCapable && device?.paired && device.trusted && !device.blocked
         && device.adapter?.enabled && !manager.reconnectPaused(device.address)
@@ -73,12 +76,15 @@ Scope {
             } else {
                 // Heal an incoming control-only link before its idle timeout. A
                 // link after a quiet minute gets a fresh attempt budget.
+                root.reported = null;
                 if (Date.now() - root.lastAttempt >= 60000) root.attempts = 0;
                 root.schedule(250);
             }
         }
         function onPairedChanged() {
-            if (!root.device.paired) {
+            if (root.device.paired) {
+                root.reported = null;
+            } else {
                 root.cancel();
                 root.manager.setReconnectPaused(root.device.address, false);
             }
@@ -89,7 +95,7 @@ Scope {
         id: connector
         stdout: SplitParser {
             onRead: data => {
-                try { root.automaticCapable = JSON.parse(data).automatic; }
+                try { root.reported = JSON.parse(data).automatic; }
                 catch (error) { console.warn("[Bluetooth profiles] Invalid connection result:", error); }
             }
         }

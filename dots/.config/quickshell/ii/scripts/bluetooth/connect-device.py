@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import sys
+import time
 
 from gi.repository import Gio, GLib
 
@@ -46,6 +47,14 @@ def properties_for(bus, path):
 
 def connect(bus, path, automatic=False):
     properties = properties_for(bus, path)
+    if properties.get("Connected") and not properties.get("ServicesResolved", True):
+        deadline = time.monotonic() + 3
+        while (properties.get("Connected") and not properties.get("ServicesResolved", True)
+               and time.monotonic() < deadline):
+            time.sleep(0.15)
+            properties = properties_for(bus, path)
+        if automatic and not properties.get("Connected"):
+            return dict(plan(properties), skipped=True)
     selected = plan(properties)
     if automatic and (not selected["automatic"] or not properties.get("Paired")
                       or not properties.get("Trusted") or properties.get("Blocked")):
