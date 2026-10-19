@@ -188,9 +188,12 @@ ColumnLayout {
         file.setText(root.plainCode());
     }
 
-    property real codeBlockBackgroundRounding: Appearance.rounding.small
-    property real codeBlockHeaderPadding: 3
+    property real codeBlockBackgroundRounding: 14
+    property real codeBlockHeaderPadding: 4
     property real codeBlockComponentSpacing: 2
+    property color codeBlockBackgroundColor: ColorUtils.mix(
+        ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer2, 0.94),
+        Appearance.colors.colSecondaryContainer, 0.75)
 
     spacing: codeBlockComponentSpacing
 
@@ -200,7 +203,7 @@ ColumnLayout {
         topRightRadius: codeBlockBackgroundRounding
         bottomLeftRadius: Appearance.rounding.unsharpen
         bottomRightRadius: Appearance.rounding.unsharpen
-        color: Appearance.colors.colSurfaceContainerHighest
+        color: root.codeBlockBackgroundColor
         implicitHeight: codeBlockTitleBarRowLayout.implicitHeight + codeBlockHeaderPadding * 2
 
         RowLayout { // Language and buttons
@@ -222,7 +225,10 @@ ColumnLayout {
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.weight: Font.DemiBold
                 color: Appearance.colors.colOnLayer2
-                text: root.displayLang ? Repository.definitionForName(root.displayLang).name : "plain"
+                text: {
+                    const definition = Repository.definitionForName(root.displayLang || "");
+                    return definition.isValid ? definition.name : Translation.tr("Plain text");
+                }
             }
 
             Item { Layout.fillWidth: true }
@@ -288,7 +294,7 @@ ColumnLayout {
             bottomLeftRadius: codeBlockBackgroundRounding
             topRightRadius: Appearance.rounding.unsharpen
             bottomRightRadius: Appearance.rounding.unsharpen
-            color: Appearance.colors.colLayer2
+            color: root.codeBlockBackgroundColor
 
             ColumnLayout {
                 id: lineNumberColumnLayout
@@ -325,7 +331,7 @@ ColumnLayout {
             bottomLeftRadius: Appearance.rounding.unsharpen
             topRightRadius: Appearance.rounding.unsharpen
             bottomRightRadius: codeBlockBackgroundRounding
-            color: Appearance.colors.colLayer2
+            color: root.codeBlockBackgroundColor
             implicitHeight: codeColumnLayout.implicitHeight
 
             // Sideways wheel/touchpad scrolling for long lines. Lives outside

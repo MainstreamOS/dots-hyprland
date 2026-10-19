@@ -137,11 +137,6 @@ Item {
         return text.slice(0, end);
     }
 
-    function isAutoThinkingLevel(level): bool {
-        const lvl = (level || "").toLowerCase();
-        return lvl === "" || lvl === "auto" || lvl === "default";
-    }
-
     function formatTokenCount(count): string {
         if (count === undefined || count === null || count < 0) return "";
         if (count < 1000) return count.toString();
@@ -726,10 +721,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         }
         spacing: root.padding
 
-        Item {
-            // Messages
+        Rectangle {
+            // Match the phone conversation's recessed timeline.
             Layout.fillWidth: true
             Layout.fillHeight: true
+            radius: 14
+            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
             layer.enabled: true
             layer.effect: OpacityMask {
                 // The mask is stretched over the area, so its size sets the corner
@@ -741,19 +738,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
             }
 
-            StyledRectangularShadow {
-                z: 1
-                target: statusBg
-                opacity: messageListView.atYBeginning ? 0 : 1
-                visible: opacity > 0
-                Behavior on opacity {
-                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                }
-            }
             Rectangle {
                 id: statusBg
                 z: 2
-                readonly property list<Item> items: [sessionStatusItem, responseStyleStatusItem, keyStatusItem, reasoningStatusItem, newChatStatusItem, tokenCountStatusItem]
+                readonly property list<Item> items: [sessionStatusItem, responseStyleStatusItem, keyStatusItem, newChatStatusItem, tokenCountStatusItem]
                 // A separator shows before an item only when some item to its left shows too.
                 function hasVisibleBefore(item: Item): bool {
                     for (const other of statusBg.items) {
@@ -785,15 +773,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     top: parent.top
                     topMargin: 4
                 }
-                width: Math.min(parent.width - 16, implicitWidth)
+                width: parent.width - 16
                 implicitWidth: statusRowLayout.implicitWidth + 10 * 2
                 implicitHeight: Math.max(statusRowLayout.implicitHeight, 38)
-                radius: Appearance.rounding.normal - root.padding
+                radius: 10
                 clip: true
-                color: messageListView.atYBeginning ? Appearance.colors.colLayer2 : Appearance.colors.colLayer2Base
-                Behavior on color {
-                    animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-                }
+                color: "transparent"
                 RowLayout {
                     id: statusRowLayout
                     anchors.centerIn: parent
@@ -862,17 +847,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         }
                     }
                     StatusSeparator {
-                        next: reasoningStatusItem
-                    }
-                    StatusItem {
-                        id: reasoningStatusItem
-                        icon: "psychology"
-                        readonly property string label: root.isAutoThinkingLevel(Ai.thinkingLevel) ? Translation.tr("think") : Ai.thinkingLevelName(Ai.thinkingLevel)
-                        text: label
-                        description: Translation.tr("Reasoning effort: %1\nClick to choose reasoning depth").arg(label)
-                        onClicked: root.openReasoningSheet()
-                    }
-                    StatusSeparator {
                         next: newChatStatusItem
                     }
                     StatusItem {
@@ -897,21 +871,23 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
             }
 
-            ScrollEdgeFade {
-                id: messageEdgeFade
-                z: 1
-                target: messageListView
-                vertical: true
-                atEnd: messageListView.atRealEnd
-            }
-
             StyledListView { // Message list
                 id: messageListView
                 z: 0
-                anchors.fill: parent
-                spacing: 10
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    top: statusBg.bottom
+                    bottom: parent.bottom
+                    leftMargin: 8
+                    rightMargin: 8
+                    topMargin: 6
+                    bottomMargin: 6
+                }
+                clip: true
+                spacing: 12
                 popin: false
-                topMargin: statusBg.implicitHeight + statusBg.anchors.topMargin * 2
+                topMargin: 0
 
                 touchpadScrollFactor: Config.options.interactions.scrolling.touchpadScrollFactor * 1.4
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
@@ -926,11 +902,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 // The newest line stays above the bottom edge. Scrolling up stops that;
                 // scrolling back near the end, sending or Scroll to Bottom resumes it.
                 property bool following: true
-                // The last row's end is in view; the slack below it does not count.
-                readonly property bool atRealEnd: {
-                    const end = followTarget();
-                    return isNaN(end) ? atYEnd : contentY >= end - 1;
-                }
                 readonly property bool holding: following && (Ai.isGenerating || followHoldTimer.running)
                 property real parkedY: NaN
                 property real lastContentY: 0
@@ -1353,10 +1324,19 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         return message?.visibleToUser ?? true;
                     })
                 }
-                delegate: AiMessage {
+                delegate: Item {
+                    id: messageRow
                     required property var modelData
-                    messageId: modelData
-                    messageData: Ai.messageByID[modelData] ?? null
+                    width: messageListView.width
+                    implicitHeight: message.implicitHeight
+
+                    // The list positions this full-width row; the bubble
+                    // aligns inside it without fighting the list's layout.
+                    AiMessage {
+                        id: message
+                        messageId: messageRow.modelData
+                        messageData: Ai.messageByID[messageId] ?? null
+                    }
                 }
             }
 
@@ -1737,21 +1717,27 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
         AiUsageCard {
             Layout.fillWidth: true
-            Layout.bottomMargin: visible ? 6 : 0
         }
 
         ActionConfirmationCard {
             Layout.fillWidth: true
-            Layout.bottomMargin: Math.min(6, implicitHeight)
         }
 
-        Rectangle { // Input area
-            id: inputWrapper
-            property real spacing: 5
+        AiComposerControls {
             Layout.fillWidth: true
-            radius: Appearance.rounding.normal - root.padding
-            color: Appearance.colors.colLayer2
-            implicitHeight: Math.max(inputFieldRowLayout.implicitHeight + inputFieldRowLayout.anchors.topMargin + commandButtonsRow.implicitHeight + commandButtonsRow.anchors.bottomMargin + spacing, 45) + (attachedFileIndicator.implicitHeight + spacing + attachedFileIndicator.anchors.topMargin)
+            Layout.topMargin: 4
+            Layout.bottomMargin: 4
+            onModelRequested: root.openModelSheet()
+            onModeRequested: root.openExecutionModeSheet()
+            onReasoningRequested: root.openReasoningSheet()
+        }
+
+        Rectangle { // Message composer, aligned with the phone composer.
+            id: inputWrapper
+            Layout.fillWidth: true
+            radius: 14
+            color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+            implicitHeight: inputFieldRowLayout.height + (attachedFileIndicator.visible ? attachedFileIndicator.implicitHeight + 10 : 0)
             clip: true
 
             Behavior on implicitHeight {
@@ -1773,28 +1759,30 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             RowLayout { // Input field and send button
                 id: inputFieldRowLayout
                 anchors {
-                    bottom: commandButtonsRow.top
                     left: parent.left
                     right: parent.right
-                    bottomMargin: 5
+                    bottom: parent.bottom
+                    leftMargin: 6
+                    rightMargin: 7
                 }
+                height: Math.max(46, inputScrollView.Layout.preferredHeight + 16)
                 spacing: 2
 
                 RippleButton {
                     id: attachFileButton
-                    Layout.alignment: Qt.AlignBottom
-                    Layout.leftMargin: 6
-                    Layout.bottomMargin: 4
+                    Layout.alignment: Qt.AlignVCenter
                     implicitWidth: 32
                     implicitHeight: 32
-                    buttonRadius: Appearance.rounding.small
+                    buttonRadius: 9
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.colors.colLayer1Hover
 
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                         text: "attach_file"
-                        iconSize: 20
+                        iconSize: 18
                         color: Appearance.colors.colSubtext
                     }
 
@@ -1807,16 +1795,22 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                 ScrollView {
                     id: inputScrollView
+                    implicitWidth: 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(root.height * 3/5, messageInputField.height)
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredHeight: Math.max(30, Math.min(root.height * 3/5, messageInputField.implicitHeight))
+                    contentWidth: availableWidth
                     clip: true
                     ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
                     StyledTextArea { // The actual TextArea (inside ScrollView to enable scrolling)
                         id: messageInputField
-                        anchors.fill: parent
+                        implicitWidth: 0
+                        implicitHeight: contentHeight + topPadding + bottomPadding
+                        width: inputScrollView.availableWidth
+                        height: Math.max(inputScrollView.availableHeight, implicitHeight)
+                        verticalAlignment: TextEdit.AlignVCenter
                         wrapMode: TextArea.Wrap
-                        padding: 10
                         // Dictation rewrites the text as words arrive, which would drop anything typed meanwhile.
                         readOnly: voiceProc.running
                         color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
@@ -2035,20 +2029,19 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         }
                     }
                 }
-                RippleButton { // Voice input button
+                RippleButton { // Voice input button (matching phone page)
                     id: voiceButton
-                    Layout.alignment: Qt.AlignBottom
-                    Layout.rightMargin: 2
-                    implicitWidth: 40
-                    implicitHeight: 40
-                    buttonRadius: Appearance.rounding.small
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    buttonRadius: 16
                     enabled: !Ai.isGenerating || voiceProc.running
                     toggled: voiceProc.running
 
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.colors.colLayer1Hover
-                    colBackgroundToggled: Appearance.colors.colErrorContainer
-                    colBackgroundToggledHover: Appearance.colors.colErrorContainerHover
+                    colBackgroundToggled: ColorUtils.transparentize(Appearance.colors.colError, 0.85)
+                    colBackgroundToggledHover: ColorUtils.transparentize(Appearance.colors.colError, 0.7)
 
                     onClicked: {
                         if (voiceProc.running) {
@@ -2063,10 +2056,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
                         horizontalAlignment: Text.AlignHCenter
-                        iconSize: 22
+                        verticalAlignment: Text.AlignVCenter
+                        iconSize: 18
                         color: {
                             if (!voiceButton.enabled) return Appearance.colors.colOnLayer2Disabled;
-                            if (voiceProc.running) return Appearance.colors.colOnErrorContainer;
+                            if (voiceProc.running) return Appearance.colors.colError;
                             return (voiceButton.hovered ? Appearance.colors.colPrimary : Appearance.colors.colSubtext);
                         }
                         text: voiceProc.running ? "stop" : "mic"
@@ -2075,106 +2069,58 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     StyledToolTip {
                         text: voiceProc.running ?
                             Translation.tr("Stop and send voice input (Right click or Esc to cancel)") :
-                            Translation.tr("Voice input")
+                            Translation.tr("Voice input\n(Click to record, click again to send)")
                     }
+
                 }
 
-                RippleButton { // Send / Stop button
+                Button {
                     id: sendButton
-                    Layout.alignment: Qt.AlignBottom
-                    Layout.rightMargin: 5
-                    implicitWidth: 40
-                    implicitHeight: 40
-                    buttonRadius: Appearance.rounding.small
-                    enabled: Ai.isGenerating || messageInputField.text.length > 0 || voiceProc.running
-                    toggled: enabled
-
-                    colBackgroundToggled: Ai.isGenerating ? Appearance.colors.colErrorContainer : Appearance.colors.colPrimary
-                    colBackgroundToggledHover: Ai.isGenerating ? Appearance.colors.colErrorContainerHover : Appearance.colors.colPrimaryHover
-
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: 3
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    padding: 0
+                    leftInset: 0
+                    rightInset: 0
+                    topInset: 0
+                    bottomInset: 0
+                    enabled: Ai.isGenerating || messageInputField.text.trim().length > 0 || voiceProc.running
+                    Accessible.name: Ai.isGenerating ? Translation.tr("Stop generating")
+                        : (voiceProc.running ? Translation.tr("Send voice input") : Translation.tr("Send message"))
                     onClicked: {
-                        if (voiceProc.running) {
-                            voiceProc.stopAndSend();
-                            return;
-                        }
-                        if (Ai.isGenerating) {
-                            Ai.cancelRequest();
-                            return;
-                        }
-                        messageInputField.accept();
+                        if (voiceProc.running) voiceProc.stopAndSend();
+                        else if (Ai.isGenerating) Ai.cancelRequest();
+                        else messageInputField.accept();
                     }
 
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        horizontalAlignment: Text.AlignHCenter
-                        iconSize: 22
-                        color: {
-                            if (Ai.isGenerating) return Appearance.colors.colOnErrorContainer;
-                            return sendButton.enabled ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer2Disabled;
+                    background: Rectangle {
+                        radius: 16
+                        readonly property color activeColor: Ai.isGenerating ? Appearance.colors.colError : Appearance.colors.colPrimary
+                        readonly property color onActiveColor: Ai.isGenerating ? Appearance.colors.colOnError : Appearance.colors.colOnPrimary
+                        color: !sendButton.enabled
+                            ? ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.86)
+                            : sendButton.down ? ColorUtils.mix(activeColor, "black", 0.85)
+                            : sendButton.hovered ? ColorUtils.mix(activeColor, onActiveColor, 0.88) : activeColor
+                        border.width: sendButton.visualFocus ? 2 : 0
+                        border.color: Appearance.colors.colOnLayer1
+                        Behavior on color {
+                            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
                         }
+                    }
+                    contentItem: MaterialSymbol {
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        iconSize: 17
+                        color: sendButton.enabled
+                            ? (Ai.isGenerating ? Appearance.colors.colOnError : Appearance.colors.colOnPrimary)
+                            : Appearance.colors.colOnLayer1
                         text: Ai.isGenerating ? "stop" : "arrow_upward"
                     }
-
-                    StyledToolTip {
-                        text: Ai.isGenerating ? Translation.tr("Stop generating") : Translation.tr("Send message")
+                    HoverHandler {
+                        cursorShape: sendButton.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     }
-                }
-            }
-
-            RowLayout { // Controls
-                id: commandButtonsRow
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 5
-                anchors.leftMargin: 10
-                anchors.rightMargin: 5
-                spacing: 4
-
-                AiInputBoxIndicator {
-                    // Model indicator
-                    id: modelIndicator
-                    Layout.alignment: Qt.AlignVCenter
-                    icon: "api"
-                    customIcon: (Ai.currentModel && Ai.currentModel.icon) ? Ai.currentModel.icon : ""
-                    readonly property string fullModelName: {
-                        const raw = (Ai.currentModel && Ai.currentModel.name) ? Ai.currentModel.name : (Ai.ollamaSetupEntryName || "");
-                        return raw.replace(/^Custom:\s*/i, "");
-                    }
-                    readonly property int maxNameLength: 14
-                    text: (root.width >= 580 || fullModelName.length <= maxNameLength)
-                        ? fullModelName
-                        : (fullModelName.slice(0, maxNameLength).replace(/\s+$/, "") + "…")
-                    tooltipText: Translation.tr("Current model: %1\nClick to choose model").arg(fullModelName)
-                    maxTextWidth: (root.width >= 580) ? 9999 : 160
-                    onClicked: root.openModelSheet()
-                }
-
-                AiInputBoxIndicator {
-                    // Execution Mode indicator
-                    id: modeIndicator
-                    Layout.alignment: Qt.AlignVCenter
-                    icon: AiModes.icon(AiModes.current)
-                    text: Translation.tr("Execution Mode")
-                    maxTextWidth: 160
-                    tooltipText: Translation.tr("Execution Mode: %1\nClick to choose execution mode").arg(AiModes.name(AiModes.current))
-                    onClicked: root.openExecutionModeSheet()
-                }
-
-                AiInputBoxIndicator {
-                    // Reasoning indicator (aligned to the right of execution mode)
-                    id: reasoningIndicator
-                    Layout.alignment: Qt.AlignVCenter
-                    icon: "psychology"
-                    text: Translation.tr("Reasoning")
-                    maxTextWidth: 120
-                    tooltipText: Translation.tr("Reasoning Level: %1\nClick to choose reasoning depth")
-                        .arg(Ai.thinkingLevelName(Ai.thinkingLevel))
-                    onClicked: root.openReasoningSheet()
-                }
-
-                Item {
-                    Layout.fillWidth: true
+                    StyledToolTip { text: sendButton.Accessible.name }
                 }
             }
         }

@@ -99,12 +99,25 @@ Rectangle {
         onTriggered: root.now = Date.now()
     }
 
+    property bool expanded: false
+    readonly property real primaryPct: {
+        if (root.activeProvider === "claude-code") return ClaudeUsage.fiveHour;
+        if (root.activeProvider === "codex-cli") return CodexUsage.fiveHour;
+        if (root.activeProvider === "antigravity-cli") return root.gemini?.session ?? 0;
+        return 0;
+    }
+    readonly property real warningThreshold: {
+        if (root.activeProvider === "claude-code") return Config.options.bar.claudeUsage.warningThreshold;
+        if (root.activeProvider === "codex-cli") return Config.options.bar.codexUsage.warningThreshold;
+        return Config.options.bar.geminiUsage.warningThreshold;
+    }
+    readonly property color usageColor: root.primaryPct >= root.warningThreshold
+        ? Appearance.colors.colError : Appearance.colors.colPrimary
+
     visible: activeProvider !== ""
-    radius: Appearance.rounding.normal
-    color: Appearance.colors.colLayer2
-    border.width: 1
-    border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.4)
-    implicitHeight: visible ? (mainCol.implicitHeight + 16) : 0
+    radius: 14
+    color: root.expanded ? Appearance.colors.colLayer2 : "transparent"
+    implicitHeight: visible ? (mainCol.implicitHeight + 12) : 0
 
     readonly property string providerIcon: {
         if (activeProvider === "claude-code") return "claude-symbolic";
@@ -223,68 +236,72 @@ Rectangle {
             leftMargin: 12
             rightMargin: 12
         }
-        spacing: 8
+        spacing: 6
 
-        // Header Row
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: 4
 
-            CustomIcon {
-                id: cIcon
-                visible: root.providerIcon !== ""
-                width: 16
-                height: 16
-                source: root.providerIcon
-                colorize: true
-                color: Appearance.colors.colPrimary
-                Layout.alignment: Qt.AlignVCenter
+            RippleButton {
+                id: expandButton
+                Layout.fillWidth: true
+                implicitHeight: 28
+                buttonRadius: 8
+                colBackground: "transparent"
+                Accessible.name: root.providerTitle + ", " + (root.expanded ? Translation.tr("Hide usage details") : Translation.tr("Show usage details"))
+                Accessible.role: Accessible.Button
+                onClicked: root.expanded = !root.expanded
+                contentItem: RowLayout {
+                    spacing: 6
+                    CustomIcon {
+                        visible: root.providerIcon !== ""
+                        implicitWidth: 15
+                        implicitHeight: 15
+                        source: root.providerIcon
+                        colorize: true
+                        color: Appearance.colors.colSubtext
+                    }
+                    StyledText {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        text: root.providerTitle
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                    }
+                    StyledText {
+                        visible: root.providerAvailable && !root.expanded
+                        text: `${Math.round(root.primaryPct)}%`
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.weight: Font.Medium
+                        color: root.usageColor
+                    }
+                }
             }
-
-            MaterialSymbol {
-                visible: !cIcon.visible
-                text: "speed"
-                iconSize: Appearance.font.pixelSize.normal
-                color: Appearance.colors.colPrimary
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignVCenter
-                text: root.providerTitle
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                font.weight: Font.DemiBold
-                color: Appearance.m3colors.m3onSurface
-            }
-
-            Item { Layout.fillWidth: true }
 
             RippleButton {
                 id: refreshBtn
-                implicitWidth: 22
-                implicitHeight: 22
-                buttonRadius: Appearance.rounding.full
-                colBackground: "transparent"
-                colBackgroundHover: Appearance.colors.colLayer1Hover
-                Layout.alignment: Qt.AlignVCenter
-
+                visible: root.expanded || root.providerError.length > 0
+                implicitWidth: 28
+                implicitHeight: 28
+                buttonRadius: 8
+                Accessible.name: Translation.tr("Refresh usage")
+                onClicked: {
+                    if (root.activeProvider !== "antigravity-cli") spinAnim.restart();
+                    root.refresh();
+                }
                 contentItem: MaterialSymbol {
-                    id: refreshIcon
                     anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
                     text: "refresh"
-                    iconSize: Appearance.font.pixelSize.small
+                    iconSize: 18
                     color: Appearance.colors.colSubtext
-
                     RotationAnimation on rotation {
                         id: spinAnim
                         running: false
                         from: 0
                         to: 360
                         duration: 500
-                        loops: 1
                     }
-
-                    // Turns for as long as a Gemini fetch runs, then finishes its turn.
                     RotationAnimation on rotation {
                         running: root.providerFetching
                         from: 0
@@ -294,16 +311,36 @@ Rectangle {
                         alwaysRunToEnd: true
                     }
                 }
+                StyledToolTip { text: Translation.tr("Refresh usage") }
+            }
 
-                StyledToolTip {
-                    text: Translation.tr("Refresh usage")
+            RippleButton {
+                implicitWidth: 28
+                implicitHeight: 28
+                buttonRadius: 8
+                Accessible.name: root.expanded ? Translation.tr("Hide usage details") : Translation.tr("Show usage details")
+                onClicked: root.expanded = !root.expanded
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.expanded ? "expand_less" : "expand_more"
+                    iconSize: 18
+                    color: Appearance.colors.colSubtext
                 }
+            }
+        }
 
-                onClicked: {
-                    if (root.activeProvider !== "antigravity-cli")
-                        spinAnim.restart();
-                    root.refresh();
-                }
+        Rectangle {
+            Layout.fillWidth: true
+            visible: root.providerAvailable && !root.expanded
+            implicitHeight: 3
+            radius: 1.5
+            color: Appearance.colors.colLayer2
+            Rectangle {
+                height: parent.height
+                width: parent.width * Math.max(0, Math.min(1, root.primaryPct / 100))
+                radius: parent.radius
+                color: root.usageColor
             }
         }
 
@@ -320,7 +357,7 @@ Rectangle {
 
         StyledText {
             Layout.fillWidth: true
-            visible: root.providerAvailable && root.staleMs > 0
+            visible: root.expanded && root.providerAvailable && root.staleMs > 0
             text: root.updatedText(root.staleMs)
             font.pixelSize: Appearance.font.pixelSize.smaller
             color: Appearance.colors.colSubtext
@@ -329,7 +366,7 @@ Rectangle {
 
         // Claude meters
         UsageMeter {
-            visible: root.activeProvider === "claude-code" && root.providerAvailable
+            visible: root.expanded && root.activeProvider === "claude-code" && root.providerAvailable
             label: Translation.tr("Session (5h)")
             pct: ClaudeUsage.fiveHour
             resetMs: ClaudeUsage.fiveHourReset
@@ -337,7 +374,7 @@ Rectangle {
             timeUntilFunc: ClaudeUsage.timeUntil
         }
         UsageMeter {
-            visible: root.activeProvider === "claude-code" && root.providerAvailable
+            visible: root.expanded && root.activeProvider === "claude-code" && root.providerAvailable
             label: Translation.tr("Weekly")
             pct: ClaudeUsage.sevenDay
             resetMs: ClaudeUsage.sevenDayReset
@@ -347,7 +384,7 @@ Rectangle {
 
         // Codex meters
         UsageMeter {
-            visible: root.activeProvider === "codex-cli" && root.providerAvailable
+            visible: root.expanded && root.activeProvider === "codex-cli" && root.providerAvailable
             label: Translation.tr("Session (5h)")
             pct: CodexUsage.fiveHour
             resetMs: CodexUsage.fiveHourReset
@@ -355,7 +392,7 @@ Rectangle {
             timeUntilFunc: CodexUsage.timeUntil
         }
         UsageMeter {
-            visible: root.activeProvider === "codex-cli" && root.providerAvailable
+            visible: root.expanded && root.activeProvider === "codex-cli" && root.providerAvailable
             label: Translation.tr("Weekly")
             pct: CodexUsage.sevenDay
             resetMs: CodexUsage.sevenDayReset
@@ -368,12 +405,13 @@ Rectangle {
             id: geminiLoader
             Layout.fillWidth: true
             active: root.geminiWanted
-            visible: root.activeProvider === "antigravity-cli" && root.providerAvailable
+            visible: root.expanded && root.activeProvider === "antigravity-cli" && root.providerAvailable
 
             sourceComponent: ColumnLayout {
                 readonly property bool available: GeminiUsage.available
                 readonly property string lastError: GeminiUsage.lastError
                 readonly property bool running: GeminiUsage.running
+                readonly property real session: GeminiUsage.session
 
                 function getData(): void {
                     GeminiUsage.getData();

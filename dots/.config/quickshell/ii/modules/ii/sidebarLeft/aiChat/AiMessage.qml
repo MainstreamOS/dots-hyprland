@@ -6,7 +6,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Widgets
 import "../../../common/functions/markdownblocks.js" as MarkdownBlocks
 import "../../../../services/ai/sink.js" as Sink
 
@@ -20,8 +19,8 @@ Rectangle {
         return (models && Object.prototype.hasOwnProperty.call(models, id)) ? models[id] : null;
     }
 
-    property real messagePadding: 7
-    property real contentSpacing: 3
+    property real messagePadding: 10
+    property real contentSpacing: 6
 
     property bool enableMouseSelection: false
     property bool renderMarkdown: true
@@ -31,6 +30,8 @@ Rectangle {
     // Function and command outputs are stored as user messages but belong to a tool.
     readonly property bool isToolOutput: root.role !== "assistant" && (root.messageData?.functionName ?? "").length > 0
     readonly property bool isUserMessage: root.role === "user" && !root.isToolOutput
+    readonly property color headerColor: root.isUserMessage || root.role === "assistant"
+        ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colSubtext
     // The model still gets the answer's text as the user turn.
     readonly property string answer: root.messageData?.answer ?? ""
     readonly property string toolTitle: {
@@ -94,14 +95,26 @@ Rectangle {
         Ai.updateMessageContent(root.messageId, parts.join(""));
     }
 
-    anchors.left: parent?.left
+    TextMetrics {
+        id: userTextMetrics
+        font.family: Appearance.font.family.reading
+        font.pixelSize: Appearance.font.pixelSize.small
+        text: root.isUserMessage ? (root.messageData?.content ?? "") : ""
+    }
+
+    anchors.left: root.isUserMessage ? undefined : parent?.left
     anchors.right: parent?.right
+    width: parent ? (root.isUserMessage
+        ? Math.min(parent.width * 0.88, Math.max(180, userTextMetrics.boundingRect.width + root.messagePadding * 2 + 16))
+        : parent.width) : 0
     implicitHeight: root.answer ? answerLine.implicitHeight + root.messagePadding * 2 : columnLayout.implicitHeight + root.messagePadding * 2
 
-    radius: Appearance.rounding.normal
-    color: root.answer ? "transparent" : (root.role === 'user') ? Appearance.colors.colLayer2 : Appearance.colors.colLayer1
-    border.width: (root.role === 'user' && !root.answer) ? 1 : 0
-    border.color: Appearance.colors.colOutlineVariant
+    radius: 14
+    color: root.answer ? "transparent" : root.isUserMessage ? Appearance.colors.colSecondaryContainer
+        : root.role === "assistant" ? ColorUtils.mix(
+            ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.9),
+            Appearance.colors.colSecondaryContainer, 0.75)
+        : root.isToolOutput ? Appearance.colors.colLayer2 : "transparent"
 
     Keys.onPressed: (event) => {
         if ( // Prevent de-select
@@ -147,208 +160,157 @@ Rectangle {
         anchors.margins: messagePadding
         spacing: root.contentSpacing
 
-        Rectangle {
+        RowLayout {
             Layout.fillWidth: true
-            implicitWidth: headerRowLayout.implicitWidth + 4 * 2
-            implicitHeight: headerRowLayout.implicitHeight + 4 * 2
-            color: (root.role === 'user') ? Appearance.colors.colLayer1 : Appearance.colors.colSecondaryContainer
-            radius: Appearance.rounding.small
+            spacing: 6
 
-            RowLayout { // Header
-                id: headerRowLayout
-                anchors {
-                    fill: parent
-                    margins: 4
+            CustomIcon {
+                visible: root.role === "assistant" && !!root.modelEntry?.icon
+                implicitWidth: 16
+                implicitHeight: 16
+                source: root.modelEntry?.icon ?? ""
+                colorize: true
+                color: root.headerColor
+            }
+
+            MaterialSymbol {
+                visible: root.role !== "assistant" || !root.modelEntry?.icon
+                text: root.isToolOutput ? "terminal" : root.isUserMessage ? "person" : "neurology"
+                iconSize: 16
+                color: root.headerColor
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                font.weight: Font.Medium
+                color: root.headerColor
+                text: root.role === "assistant"
+                    ? (root.modelEntry?.name ?? root.messageData?.model ?? "").replace(/^Custom:\s*/i, "")
+                    : root.isToolOutput ? root.toolTitle : root.isUserMessage ? Translation.tr("You") : Translation.tr("Interface")
+            }
+
+            MaterialSymbol {
+                visible: root.role === "interface"
+                text: "visibility_off"
+                iconSize: 16
+                color: Appearance.colors.colSubtext
+            }
+
+            RippleButton {
+                id: copyButton
+                property bool activated: false
+                implicitWidth: 28
+                implicitHeight: 28
+                buttonRadius: 8
+                Accessible.name: Translation.tr("Copy message")
+                onClicked: {
+                    Quickshell.clipboardText = root.copyText();
+                    activated = true;
+                    copyIconTimer.restart();
                 }
-                spacing: 8
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: copyButton.activated ? "check" : "content_copy"
+                    iconSize: 17
+                    color: Appearance.colors.colSubtext
+                }
+                Timer {
+                    id: copyIconTimer
+                    interval: 1500
+                    onTriggered: copyButton.activated = false
+                }
+                StyledToolTip { text: Translation.tr("Copy") }
+            }
 
-                Item { // Name
-                    id: nameWrapper
-                    implicitHeight: Math.max(nameRowLayout.implicitHeight + 2 * 2, 26)
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-
-                    RowLayout {
-                        id: nameRowLayout
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin: 6
-                        anchors.rightMargin: 6
-                        spacing: 8
-
-                        Item {
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.fillHeight: true
-                            implicitWidth: root.role === 'assistant' ? modelIcon.width
-                                : root.isUserMessage ? userAvatar.width
-                                : roleIcon.implicitWidth
-                            implicitHeight: root.role === 'assistant' ? modelIcon.height
-                                : root.isUserMessage ? userAvatar.height
-                                : roleIcon.implicitHeight
-
-                            CustomIcon {
-                                id: modelIcon
-                                anchors.centerIn: parent
-                                visible: root.role === 'assistant' && !!root.modelEntry?.icon
-                                width: Appearance.font.pixelSize.large
-                                height: Appearance.font.pixelSize.large
-                                source: root.role === 'assistant' ? (root.modelEntry?.icon ?? '') : ''
-
-                                colorize: true
-                                color: Appearance.m3colors.m3onSecondaryContainer
-                            }
-
-                            ClippingRectangle {
-                                id: userAvatar
-                                anchors.centerIn: parent
-                                visible: root.isUserMessage && userAvatarImage.status === Image.Ready
-                                width: Appearance.font.pixelSize.larger
-                                height: Appearance.font.pixelSize.larger
-                                radius: Appearance.rounding.full
-                                color: "transparent"
-
-                                StyledImage {
-                                    id: userAvatarImage
-                                    anchors.fill: parent
-                                    source: (root.isUserMessage && Directories.userAvatarPathAccountsService) ? ("file://" + Directories.userAvatarPathAccountsService) : ""
-                                    fallbacks: [
-                                        Directories.userAvatarPathRicersAndWeirdSystems ? ("file://" + Directories.userAvatarPathRicersAndWeirdSystems) : "",
-                                        Directories.userAvatarPathRicersAndWeirdSystems2 ? ("file://" + Directories.userAvatarPathRicersAndWeirdSystems2) : ""
-                                    ]
-                                    fillMode: Image.PreserveAspectCrop
-                                    antialiasing: true
-                                    fadeIn: false
-                                }
-                            }
-
-                            MaterialSymbol {
-                                id: roleIcon
-                                anchors.centerIn: parent
-                                visible: !modelIcon.visible && !userAvatar.visible
-                                iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.m3colors.m3onSecondaryContainer
-                                text: root.isToolOutput ? (root.messageData?.functionName === "run_shell_command" ? 'terminal' : 'build') :
-                                    root.role == 'user' ? 'person' :
-                                    root.role == 'interface' ? 'settings' :
-                                    root.role == 'assistant' ? 'neurology' :
-                                    'computer'
-                            }
-                        }
-
-                        StyledText {
-                            id: providerName
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            font.pixelSize: Appearance.font.pixelSize.normal
-                            color: Appearance.m3colors.m3onSecondaryContainer
-                            text: root.role == 'assistant' ? ((root.modelEntry?.name ?? root.messageData?.model ?? "").replace(/^Custom:\s*/i, "")) :
-                                root.isToolOutput ? root.toolTitle :
-                                root.role == 'user' ? (SystemInfo.username || Translation.tr("User")) :
-                                Translation.tr("Interface")
-                        }
-                    }
+            RippleButton {
+                id: moreButton
+                implicitWidth: 28
+                implicitHeight: 28
+                buttonRadius: 8
+                Accessible.name: Translation.tr("Message actions")
+                onClicked: {
+                    if (messageMenu.visible) messageMenu.close();
+                    else messageMenu.openAt(moreButton.width - messageMenu.width, moreButton.height + 4);
+                }
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.editing ? "edit" : "more_horiz"
+                    iconSize: 20
+                    color: root.editing ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                }
+                StyledToolTip {
+                    extraVisibleCondition: !messageMenu.visible
+                    text: Translation.tr("Message actions")
                 }
 
-                Button { // Not visible to model
-                    id: modelVisibilityIndicator
-                    visible: root.role == 'interface'
-                    implicitWidth: 16
-                    implicitHeight: 30
-                    Layout.alignment: Qt.AlignVCenter
+                ContextMenuPopup {
+                    id: messageMenu
+                    width: 240
+                    implicitHeight: menuColumn.implicitHeight + topPadding + bottomPadding
+                    focus: true
+                    // Let the trigger close the menu on click instead of
+                    // dismissing it on press and immediately opening it again.
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                    contentItem: ColumnLayout {
+                        id: menuColumn
+                        spacing: 2
 
-                    background: Item
-
-                    MaterialSymbol {
-                        id: notVisibleToModelText
-                        anchors.centerIn: parent
-                        iconSize: Appearance.font.pixelSize.small
-                        color: Appearance.colors.colSubtext
-                        text: "visibility_off"
-                    }
-                    StyledToolTip {
-                        text: Translation.tr("Not visible to model")
-                    }
-                }
-
-                ButtonGroup {
-                    spacing: 5
-
-                    AiMessageControlButton {
-                        id: regenButton
-                        buttonIcon: "refresh"
-                        visible: root.role === 'assistant'
-
-                        onClicked: {
-                            Ai.regenerate(root.messageId)
-                        }
-
-                        StyledToolTip {
-                            text: Translation.tr("Regenerate")
-                        }
-                    }
-
-                    AiMessageControlButton {
-                        id: copyButton
-                        buttonIcon: activated ? "inventory" : "content_copy"
-
-                        onClicked: {
-                            Quickshell.clipboardText = root.copyText()
-                            copyButton.activated = true
-                            copyIconTimer.restart()
-                        }
-
-                        Timer {
-                            id: copyIconTimer
-                            interval: 1500
-                            repeat: false
-                            onTriggered: {
-                                copyButton.activated = false
+                        ContextMenuItem {
+                            visible: root.role === "assistant"
+                            enabled: root.messageData?.done ?? false
+                            iconName: "refresh"
+                            label: Translation.tr("Regenerate")
+                            Accessible.name: label
+                            onClicked: {
+                                messageMenu.close();
+                                Ai.regenerate(root.messageId);
                             }
                         }
-
-                        StyledToolTip {
-                            text: Translation.tr("Copy")
+                        ContextMenuItem {
+                            enabled: root.messageData?.done ?? false
+                            iconName: root.editing ? "save" : "edit"
+                            label: root.editing ? Translation.tr("Save changes") : Translation.tr("Edit message")
+                            Accessible.name: label
+                            onClicked: {
+                                messageMenu.close();
+                                if (root.editing) root.saveMessage();
+                                else root.editing = true;
+                            }
                         }
-                    }
-                    AiMessageControlButton {
-                        id: editButton
-                        activated: root.editing
-                        enabled: root.messageData?.done ?? false
-                        buttonIcon: "edit"
-                        onClicked: {
-                            if (root.editing) root.saveMessage()
-                            else root.editing = true
+                        ContextMenuItem {
+                            visible: root.role === "assistant"
+                            iconName: "code"
+                            label: root.renderMarkdown ? Translation.tr("View Markdown source") : Translation.tr("Show formatted text")
+                            Accessible.name: label
+                            onClicked: {
+                                messageMenu.close();
+                                root.renderMarkdown = !root.renderMarkdown;
+                            }
                         }
-                        StyledToolTip {
-                            text: root.editing ? Translation.tr("Save") : Translation.tr("Edit")
-                        }
-                    }
-                    AiMessageControlButton {
-                        id: toggleMarkdownButton
-                        visible: root.role === 'assistant'
-                        activated: !root.renderMarkdown
-                        buttonIcon: "code"
-                        onClicked: {
-                            root.renderMarkdown = !root.renderMarkdown
-                        }
-                        StyledToolTip {
-                            text: Translation.tr("View Markdown source")
-                        }
-                    }
-                    AiMessageControlButton {
-                        id: deleteButton
-                        buttonIcon: "close"
-                        onClicked: {
-                            Ai.removeMessage(root.messageId)
-                        }
-                        StyledToolTip {
-                            text: Translation.tr("Delete")
+                        ContextMenuSeparator {}
+                        ContextMenuItem {
+                            iconName: "delete"
+                            label: Translation.tr("Delete message")
+                            Accessible.name: label
+                            onClicked: {
+                                messageMenu.close();
+                                Ai.removeMessage(root.messageId);
+                            }
                         }
                     }
                 }
             }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: ColorUtils.transparentize(root.isUserMessage
+                ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1, 0.82)
         }
 
         Loader {
@@ -362,7 +324,8 @@ Rectangle {
 
         ColumnLayout { // Message content
             id: messageContentColumnLayout
-            spacing: 0
+            Layout.fillWidth: true
+            spacing: 4
 
             Item {
                 Layout.fillWidth: true
@@ -414,6 +377,7 @@ Rectangle {
                         contentRevision: root.messageData?.contentRevision ?? 0
                     } }
                     DelegateChoice { roleValue: "text"; MessageTextBlock {
+                        textColor: root.isUserMessage ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1
                         editing: root.editing
                         renderMarkdown: root.renderMarkdown
                         enableMouseSelection: root.enableMouseSelection

@@ -1,5 +1,6 @@
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import qs.services
 import QtQuick
 import QtQuick.Layouts
@@ -15,21 +16,28 @@ Item {
     property real maxTextWidth: 160
     property color textColor: Appearance.m3colors.m3onSurface
     property color iconColor: Appearance.m3colors.m3onSurface
-    property color colBackground: Appearance.colors.colLayer2
-    property color colBackgroundHover: Appearance.colors.colLayer2Hover
+    property color colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+    property color colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer2Hover, Appearance.colors.colOnLayer1, 0.94)
 
-    implicitHeight: 30
-    implicitWidth: button.implicitWidth
+    readonly property real labelPadding: button.leftPadding + button.rightPadding + rowLayout.spacing * 2
+        + (cIcon.visible ? cIcon.width : materialIcon.implicitWidth) + chevron.implicitWidth
+    implicitHeight: 28
+    implicitWidth: Math.ceil(Math.min(providerName.implicitWidth, Math.max(0, maxTextWidth)) + labelPadding)
 
     RippleButton {
         id: button
         anchors.fill: parent
-        implicitHeight: 30
-        implicitWidth: rowLayout.implicitWidth + 8 * 2
-        buttonRadius: Appearance.rounding.small
+        topPadding: 0
+        bottomPadding: 0
+        leftPadding: 8
+        rightPadding: 8
+        implicitHeight: 28
+        implicitWidth: root.implicitWidth
+        buttonRadius: 8
         colBackground: root.colBackground
         colBackgroundHover: root.colBackgroundHover
         clip: true
+        Accessible.name: root.text
         onClicked: root.clicked()
 
         contentItem: RowLayout {
@@ -40,8 +48,8 @@ Item {
             CustomIcon {
                 id: cIcon
                 visible: root.customIcon !== ""
-                width: 16
-                height: 16
+                width: 15
+                height: 15
                 source: root.customIcon
                 colorize: true
                 color: root.iconColor
@@ -49,8 +57,11 @@ Item {
             }
 
             MaterialSymbol {
+                id: materialIcon
                 visible: !cIcon.visible
                 Layout.alignment: Qt.AlignVCenter
+                verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignHCenter
                 text: root.icon
                 iconSize: Appearance.font.pixelSize.normal
                 color: root.iconColor
@@ -59,6 +70,7 @@ Item {
             StyledText {
                 id: providerName
                 Layout.alignment: Qt.AlignVCenter
+                verticalAlignment: Text.AlignVCenter
                 Layout.maximumWidth: root.maxTextWidth
                 Layout.preferredWidth: Math.min(implicitWidth, root.maxTextWidth)
                 font.pixelSize: Appearance.font.pixelSize.smaller
@@ -69,7 +81,10 @@ Item {
             }
 
             MaterialSymbol {
+                id: chevron
                 Layout.alignment: Qt.AlignVCenter
+                verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignHCenter
                 text: "expand_more"
                 iconSize: Appearance.font.pixelSize.small
                 color: Appearance.colors.colSubtext

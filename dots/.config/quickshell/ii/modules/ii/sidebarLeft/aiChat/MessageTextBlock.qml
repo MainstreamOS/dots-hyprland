@@ -24,6 +24,7 @@ ColumnLayout {
     property bool completed: false
     property int contentRevision: 0
     property bool forceDisableChunkSplitting: false
+    property color textColor: Appearance.colors.colOnLayer1
 
     readonly property bool finished: root.completed || root.done
     readonly property bool fadeChunkSplitting: !root.forceDisableChunkSplitting && !root._sawPipeLine && Config.options.sidebar.ai.textFadeIn
@@ -306,7 +307,7 @@ ColumnLayout {
                 selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
                 selectionColor: Appearance.colors.colSecondaryContainer
                 wrapMode: TextEdit.Wrap
-                color: root.messageData?.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
+                color: root.messageData?.thinking ? Appearance.colors.colSubtext : root.textColor
                 textFormat: root.renderMarkdown ? TextEdit.MarkdownText : TextEdit.PlainText
 
                 // Assigned after creation and once the width is known: a text item
@@ -355,7 +356,7 @@ ColumnLayout {
             font.hintingPreference: Font.PreferNoHinting // Prevent weird bold text
             font.pixelSize: Appearance.font.pixelSize.small
             wrapMode: TextEdit.Wrap
-            color: root.messageData?.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
+            color: root.messageData?.thinking ? Appearance.colors.colSubtext : root.textColor
             textFormat: TextEdit.PlainText
 
             Component.onCompleted: editArea.text = root.segmentContent

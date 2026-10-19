@@ -25,8 +25,9 @@ Item {
     property int thinkIndex: 0
     property int contentRevision: 0
 
-    property real thinkBlockBackgroundRounding: Appearance.rounding.verysmall
     property var collapseAnimation: Appearance.animation.elementMoveFast
+    readonly property color headerBackgroundColor: ColorUtils.mix(
+        Appearance.colors.colLayer2Hover, Appearance.colors.colSecondaryContainer, 0.65)
 
     readonly property bool live: !root.completed && !root.done
     readonly property var blockState: root.messageData?.thinkBlocks?.[root.thinkIndex] ?? null
@@ -123,38 +124,6 @@ Item {
     Layout.fillWidth: true
     implicitHeight: columnLayout.implicitHeight
 
-    // Card background & outline container
-    Rectangle {
-        id: card
-        anchors.fill: parent
-        radius: root.thinkBlockBackgroundRounding
-        color: Appearance.colors.colLayer2
-        border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
-        clip: true
-
-        // Vertical accent bar on left edge (signature accent style)
-        Rectangle {
-            id: accentStripe
-            property real pulse: 1
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 3
-            color: Appearance.colors.colPrimary
-            topLeftRadius: root.thinkBlockBackgroundRounding
-            bottomLeftRadius: root.thinkBlockBackgroundRounding
-            opacity: root.live ? accentStripe.pulse : 1
-
-            SequentialAnimation on pulse {
-                running: root.live
-                loops: Animation.Infinite
-                NumberAnimation { to: 0.55; duration: 800; easing.type: Easing.InOutQuad }
-                NumberAnimation { to: 1.0; duration: 800; easing.type: Easing.InOutQuad }
-            }
-        }
-    }
-
     ColumnLayout {
         id: columnLayout
         anchors.left: parent.left
@@ -171,9 +140,10 @@ Item {
             Rectangle {
                 id: headerHoverBg
                 anchors.fill: parent
-                anchors.leftMargin: 3
-                radius: root.thinkBlockBackgroundRounding
-                color: headerMouseArea.containsMouse ? Appearance.colors.colLayer2Hover : "transparent"
+                radius: 8
+                color: headerMouseArea.containsMouse
+                    ? ColorUtils.mix(root.headerBackgroundColor, Appearance.colors.colOnSecondaryContainer, 0.86)
+                    : root.headerBackgroundColor
             }
 
             MouseArea {
@@ -213,8 +183,8 @@ Item {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     font.pixelSize: Appearance.font.pixelSize.small
-                    font.weight: Font.DemiBold
-                    color: root.live ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                    font.weight: Font.Medium
+                    color: root.live ? Appearance.colors.colPrimary : Appearance.colors.colOnSecondaryContainer
                     elide: Text.ElideRight
                     text: {
                         const dur = root.formatDuration(root.shownSeconds);
