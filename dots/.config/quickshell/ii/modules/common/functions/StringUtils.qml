@@ -234,6 +234,36 @@ Singleton {
     }
 
     /**
+     * Plain text as styled text (Text.StyledText) with its web and email
+     * addresses as links, or "" when it has none.
+     * @param { string } str
+     * @returns { string }
+     */
+    function linkify(str) {
+        const text = String(str ?? "");
+        if (!/[\/@]|www\./i.test(text)) return "";
+        // http(s) and www. addresses, a host with a path (bit.ly/x), or an email address.
+        const pattern = /(?:\bhttps?:\/\/|\bwww\.)[^\s<>"]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/[^\s<>"]*|\b[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b/gi;
+        // Styled text collapses runs of spaces and ignores line breaks.
+        const plain = s => root.escapeHtml(s).replace(/ {2,}/g, m => " " + "&nbsp;".repeat(m.length - 1)).replace(/\n/g, "<br>");
+        let out = "";
+        let last = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            let link = match[0];
+            // Punctuation ending a sentence or an aside is not part of the address.
+            while (/[.,!?;:'"\]]$/.test(link) || (link.endsWith(")") && link.split("(").length < link.split(")").length))
+                link = link.slice(0, -1);
+            const href = /^https?:\/\//i.test(link) ? link
+                : link.includes("@") && !link.includes("/") ? "mailto:" + link : "https://" + link;
+            // Styled text does not unescape attributes; the pattern keeps quotes and brackets out of them.
+            out += plain(text.slice(last, match.index)) + `<a href="${href}">${root.escapeHtml(link)}</a>`;
+            last = match.index + link.length;
+        }
+        return out.length > 0 ? out + plain(text.slice(last)) : "";
+    }
+
+    /**
      * Cleans a cliphist entry by removing leading digits and tab.
      * @param { string } str
      * @returns { string }

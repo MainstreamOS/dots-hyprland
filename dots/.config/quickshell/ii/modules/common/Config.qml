@@ -620,7 +620,16 @@ Singleton {
                     }
                 }
                 property bool bottom: false // Instead of top
-                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch
+                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch | 4: Dynamic Island
+                property JsonObject island: JsonObject {
+                    property bool showContactName: true
+                    property bool showPhoneNumber: false
+                    property bool showMessage: true
+                    property bool showContactPicture: true
+                    property bool phoneIntegration: true
+                    property bool automaticAlerts: true
+                    property int alertSeconds: 10
+                }
                 property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle is 1 (Float) or 3 (Notch)
                 property JsonObject hotCorners: JsonObject {
                     // Top-left hot corner: "scrolloverview" (the scrolling overview plugin), "default"
@@ -1178,6 +1187,11 @@ Singleton {
                 property JsonObject translator: JsonObject {
                     property bool enable: false
                     property int delay: 300 // Delay before sending request. Reduces (potential) rate limits and lag.
+                }
+                property JsonObject phone: JsonObject {
+                    property bool enable: true
+                    // Fetches the page of each link in a message shown on screen.
+                    property bool linkPreviews: true
                 }
                 property JsonObject media: JsonObject {
                     property bool enable: true

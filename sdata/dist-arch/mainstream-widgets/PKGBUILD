@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-widgets
 pkgver=1.0
-pkgrel=10
+pkgrel=11
 pkgdesc='Mainstream OS Widget Dependencies'
 provides=('illogical-impulse-widgets')
 replaces=('illogical-impulse-widgets')
@@ -21,4 +21,5 @@ depends=(
   wlogout
   libqalculate
   mpris-hyprland
+  rust-connect
 )

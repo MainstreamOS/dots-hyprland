@@ -37,6 +37,9 @@ Singleton {
 	property string emojiFrequencyPath: FileUtils.trimFileProtocol(`${Directories.state}/user/emoji-frequency.json`)
 	property string notesPath: FileUtils.trimFileProtocol(`${Directories.state}/user/notes.txt`)
 	property string desktopNotesPath: FileUtils.trimFileProtocol(`${Directories.state}/user/desktop-notes.json`)
+	property string phoneSentPath: FileUtils.trimFileProtocol(`${Directories.state}/user/phone-sent.json`)
+	property string islandPhoneHistoryPath: FileUtils.trimFileProtocol(`${Directories.state}/user/island-phone-history.json`)
+	property string phoneGifs: FileUtils.trimFileProtocol(`${Directories.cache}/phone/gifs`)
 	property string conflictCachePath: FileUtils.trimFileProtocol(`${Directories.cache}/conflict-killer`)
     property string notificationsPath: FileUtils.trimFileProtocol(`${Directories.cache}/notifications/notifications.json`)
     // updatems keeps its clone here and owns the applied-tag file, so this
