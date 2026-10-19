@@ -7,6 +7,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Widgets
 
 DockButton {
@@ -29,6 +30,7 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel?.appId === "SEPARATOR"
     readonly property bool isFolder: appToplevel?.isFolder === true
+    readonly property bool isSidebar: root.lookupAppId === "mainstream-sidebar" || root.lookupAppId === "sidebar"
     // Which of the two ways of showing window count this button is drawing.
     // Both name the styles they want rather than the ones they do not, so a
     // style added later stays off until it is asked for, instead of switching
@@ -70,7 +72,7 @@ DockButton {
         // count stays the same, and when the copy of a looked-up entry lands.
         AppSearch.records;
         root.lookupAttempt;
-        if (root.isFolder) return null;
+        if (root.isFolder || root.isSidebar) return null;
         return AppSearch.guessDesktopEntry(root.lookupAppId);
     }
 
@@ -80,7 +82,7 @@ DockButton {
         // here is what broke the binding in the first place.
         property int retryCount: 5
         interval: 1000
-        running: !root.isSeparator && !root.isFolder && root.desktopEntry === null && retryCount > 0
+        running: !root.isSeparator && !root.isFolder && !root.isSidebar && root.desktopEntry === null && retryCount > 0
         repeat: true
         onTriggered: {
             retryCount--;
@@ -250,7 +252,13 @@ DockButton {
                 const folder = AppFolderManager.getFolder(folderId);
                 if (folder) appListRoot.showFolderPopup(root, folder);
             }
-
+        } else if (root.isSidebar) {
+            if (root.windowCount > 0) {
+                appListRoot.focusToplevel(root.appToplevel?.toplevels?.[0]);
+            } else {
+                launchAnims.play(Config.options.dock.launchAnimation);
+                Hyprland.dispatch('hl.dsp.global("quickshell:sidebarLeftOpenDetached")');
+            }
         } else if (root.windowCount > 1) {
             // Multiple windows: toggle the preview so there's something to pick between
             if (appListRoot.clickedButton === root) {
@@ -290,7 +298,11 @@ DockButton {
     }
 
     middleClickAction: () => {
-        if (!root.isFolder) root.desktopEntry?.execute();
+        if (root.isSidebar) {
+            Hyprland.dispatch('hl.dsp.global("quickshell:sidebarLeftOpenDetached")');
+        } else if (!root.isFolder) {
+            root.desktopEntry?.execute();
+        }
     }
 
     altAction: () => {

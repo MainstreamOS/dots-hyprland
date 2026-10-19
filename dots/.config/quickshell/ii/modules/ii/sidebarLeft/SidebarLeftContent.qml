@@ -140,7 +140,17 @@ Item {
 
     // Keeps the current page aligned after a resize or a page change.
     function realign(): void {
-        Qt.callLater(() => swipeView.contentItem?.positionViewAtIndex(swipeView.currentIndex, 0));
+        Qt.callLater(root.alignCurrentPage);
+    }
+
+    function alignCurrentPage(): void {
+        const view = swipeView.contentItem;
+        if (!view || swipeView.width <= 0 || swipeView.currentIndex < 0) return;
+        // Reparenting a resized detached sidebar changes the page widths before
+        // the ListView lays them out. Position against the new page geometry.
+        view.cancelFlick();
+        view.forceLayout();
+        view.positionViewAtIndex(swipeView.currentIndex, ListView.Beginning);
     }
 
     function showPage(index) {
@@ -166,6 +176,7 @@ Item {
         return idx !== -1;
     }
 
+    onParentChanged: root.realign()
     Component.onCompleted: root.syncPages()
     Connections {
         target: SidebarLeftTabs

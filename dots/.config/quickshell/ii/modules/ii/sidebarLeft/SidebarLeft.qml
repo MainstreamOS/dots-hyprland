@@ -17,9 +17,42 @@ Scope { // Scope
     readonly property bool extend: sidebarLoader.item?.extend ?? false
     property Component contentComponent: SidebarLeftContent {}
     property Item sidebarContent
+    property bool detachedFocusPending: false
+
+    function focusDetached() {
+        if (!root.detachedFocusPending) return;
+        if (!root.detach || !GlobalStates.sidebarLeftOpen) {
+            root.detachedFocusPending = false;
+            return;
+        }
+        const window = HyprlandData.windowList.find(w => w.pid === Quickshell.processId
+            && w.title === detachedSidebarLoader.item?.title);
+        if (!window) return;
+        root.detachedFocusPending = false;
+        // Like the dock, target the window's address: Wayland activation can
+        // be ignored, and focus alone does not raise a covered floating window.
+        Hyprland.dispatch(`hl.dsp.focus({window = "address:${window.address}"})`);
+        if (window.floating) Hyprland.dispatch(`MainstreamRaiseFloat("address:${window.address}")`);
+    }
+
+    Connections {
+        target: HyprlandData
+        enabled: root.detachedFocusPending
+        function onWindowListChanged() { root.focusDetached(); }
+    }
 
     function toggleDetach() {
         root.detach = !root.detach;
+    }
+
+    function openDetached() {
+        root.detach = true;
+        GlobalStates.sidebarLeftOpen = true;
+    }
+
+    function reattach() {
+        root.detach = false;
+        GlobalStates.sidebarLeftOpen = true;
     }
 
     function toggleExtend() {
@@ -119,6 +152,20 @@ Scope { // Scope
         function onSidebarLeftOpenChanged() {
             if (GlobalStates.sidebarLeftOpen)
                 root.applyPinnedByDefault();
+        }
+    }
+
+    Connections {
+        target: SidebarLeftTabs
+        function onRequestTab(tabId) {
+            GlobalStates.sidebarLeftOpen = true;
+            // An already open detached sidebar may be behind another window
+            // or minimized. Selecting its page alone does not bring it back.
+            if (root.detach && detachedSidebarLoader.item) {
+                root.detachedFocusPending = true;
+                detachedSidebarLoader.item.minimized = false;
+                Qt.callLater(root.focusDetached);
+            }
         }
     }
 
@@ -260,6 +307,7 @@ Scope { // Scope
 
         sourceComponent: FloatingWindow {
             id: detachedSidebarRoot
+            title: Translation.tr("Sidebar")
             property var contentParent: detachedSidebarBackground
             color: "transparent"
 
@@ -283,12 +331,28 @@ Scope { // Scope
             GlobalStates.sidebarLeftOpen = !GlobalStates.sidebarLeftOpen
         }
 
+        function toggleDetach(): void {
+            root.toggleDetach();
+        }
+
+        function openDetached(): void {
+            root.openDetached();
+        }
+
+        function reattach(): void {
+            root.reattach();
+        }
+
         function close(): void {
             GlobalStates.sidebarLeftOpen = false
         }
 
         function open(): void {
             GlobalStates.sidebarLeftOpen = true
+        }
+
+        function openTab(tabId: string): void {
+            SidebarLeftTabs.showTab(tabId);
         }
     }
 
@@ -323,9 +387,21 @@ Scope { // Scope
         name: "sidebarLeftToggleDetach"
         description: "Detach left sidebar into a window/Attach it back"
 
-        onPressed: {
-            root.detach = !root.detach;
-        }
+        onPressed: root.toggleDetach()
+    }
+
+    GlobalShortcut {
+        name: "sidebarLeftOpenDetached"
+        description: "Open left sidebar detached into a window"
+
+        onPressed: root.openDetached()
+    }
+
+    GlobalShortcut {
+        name: "sidebarLeftReattach"
+        description: "Reattach left sidebar back to screen edge"
+
+        onPressed: root.reattach()
     }
 
 }

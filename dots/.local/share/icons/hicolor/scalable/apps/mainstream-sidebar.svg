@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Sidebar">
+  <defs>
+    <linearGradient id="tileFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2d2e36"/>
+      <stop offset="100%" stop-color="#27292f"/>
+    </linearGradient>
+    <linearGradient id="tileBevel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#868da0" stop-opacity="0.34"/>
+      <stop offset="42%" stop-color="#565c69" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#0a0b0e" stop-opacity="0.28"/>
+    </linearGradient>
+    <filter id="tileDrop" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="b"/>
+      <feOffset in="b" dy="2" result="o"/>
+      <feFlood flood-color="#000000" flood-opacity="0.28" result="c"/>
+      <feComposite in="c" in2="o" operator="in" result="s"/>
+      <feMerge>
+        <feMergeNode in="s"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(6.0,6.0) scale(0.9)">
+  <g filter="url(#tileDrop)">
+    <rect x="3" y="2" width="114" height="114" rx="24.5" fill="url(#tileFace)"/>
+    <rect x="3.6" y="2.6" width="112.8" height="112.8" rx="23.9" fill="none" stroke="url(#tileBevel)" stroke-width="1.2"/>
+  </g>
+  <!-- FOREGROUND: Mainstream Grey (#c9ccd4) replacing blue and darker grey -->
+  <g transform="translate(60, 59) scale(0.095, -0.095) translate(-480, -480)">
+    <path d="M500 592V368Q500 354 512.0 349.0Q524 344 534 354L632 452Q644 464 644.0 480.0Q644 496 632 508L534 606Q524 616 512.0 611.0Q500 606 500 592 Z M200 120Q167 120 143.5 143.5Q120 167 120 200V760Q120 793 143.5 816.5Q167 840 200 840H760Q793 840 816.5 816.5Q840 793 840 760V200Q840 167 816.5 143.5Q793 120 760 120 Z M400 200H760Q760 200 760.0 200.0Q760 200 760 200V760Q760 760 760.0 760.0Q760 760 760 760H400 Z" fill="#c9ccd4"/>
+  </g>
+  </g>
+</svg>

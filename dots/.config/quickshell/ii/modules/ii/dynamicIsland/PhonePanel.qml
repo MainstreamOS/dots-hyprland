@@ -332,9 +332,11 @@ ColumnLayout {
                 visible: !root.calls && root.canReply
                 Accessible.name: Translation.tr("Open in sidebar")
                 onClicked: {
+                    if (root.recordingVoice) voiceRecordProc.cancel();
+                    root.replying = false;
+                    quickReplyInput.focus = false;
                     Phone.wanted = true;
                     SidebarLeftTabs.showTab("phone");
-                    GlobalStates.sidebarLeftOpen = true;
                     Phone.openTargetConversation({
                         thread: root.entry?.thread,
                         number: root.entry?.number || root.entry?.address || "",

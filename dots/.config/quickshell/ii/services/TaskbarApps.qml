@@ -34,6 +34,7 @@ Singleton {
         if (title === Translation.tr("Welcome to Mainstream")) return "welcome-tutorial";
         if (title === Translation.tr("Uninstall Apps")) return "app-remover";
         if (title === Translation.tr("Auto Drive Mount")) return "disk-mounter";
+        if (title === Translation.tr("Sidebar") || title === "Sidebar" || title === Translation.tr("Mainstream Sidebar")) return "mainstream-sidebar";
         return toplevel.appId;
     }
 
