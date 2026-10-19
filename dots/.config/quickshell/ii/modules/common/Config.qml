@@ -648,6 +648,8 @@ Singleton {
                     // Top-left hot corner: "scrolloverview" (the scrolling overview plugin), "default"
                     // (built-in overview) or "off" (clicks fall through to the bar).
                     property string trigger: "scrolloverview"
+                    // Top-right hot corner: "sidebar" (toggle the right sidebar) or "off".
+                    property string rightTrigger: "sidebar"
                     // Off skips the corner ripple and the wait for it, so the overview opens immediately.
                     property bool animationEnabled: true
                 }

@@ -584,6 +584,19 @@ ContentPage {
         }
     }
 
+    // ── Right Hot Corner ─────────────────────────────────────────────────────
+    ContentSection {
+        icon: "ads_click"
+        title: Translation.tr("Right Hot Corner")
+
+        ConfigSwitch {
+            buttonIcon: "right_panel_open"
+            text: Translation.tr("Open the right sidebar")
+            checked: Config.options.bar.hotCorners.rightTrigger === "sidebar"
+            onCheckedChanged: Config.options.bar.hotCorners.rightTrigger = checked ? "sidebar" : "off"
+        }
+    }
+
     ContentSection {
         icon: "overview_key"
         title: Translation.tr("Launcher Overview")

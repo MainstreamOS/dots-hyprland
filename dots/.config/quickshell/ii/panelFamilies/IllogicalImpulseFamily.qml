@@ -32,8 +32,9 @@ Scope {
     // After Bar so most compositors stack the ripple above the bar within
     // the Overlay layer (creation-order tiebreak). Loads regardless of
     // bar orientation since HotCornerRipple anchors itself to the screen's
-    // top-left and works without a horizontal bar present.
-    PanelLoader { component: HotCornerRipple {} }
+    // top corners and works without a horizontal bar present.
+    PanelLoader { component: HotCornerRipple { trigger: Config.options.bar.hotCorners.trigger } }
+    PanelLoader { component: HotCornerRipple { right: true; trigger: Config.options.bar.hotCorners.rightTrigger } }
     PanelLoader { component: Background {} }
     PanelLoader { component: Cheatsheet {} }
     PanelLoader { component: DesktopMenu {} }

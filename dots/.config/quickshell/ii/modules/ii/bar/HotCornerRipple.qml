@@ -9,20 +9,19 @@ import qs
 import qs.services
 import qs.modules.common
 
-// Top-left hot corner — owns both the GNOME-style ripple visual AND
-// the trigger MouseArea. Living in its own per-monitor PanelWindow
-// (rather than nested inside Bar.qml's hover region) means the corner
-// stays anchored to the screen's top-left regardless of bar position
-// (top / bottom / vertical) — or even bar absence.
-//
-// One panel per monitor. Listens on GlobalStates.hotCornerTriggered()
-// so every monitor's ripple fires together; this keeps the wiring
-// simple at the cost of a redundant animation on monitors that don't
-// actually have the bar attached. Adjust by gating on `modelData.name`
-// if it ever matters in a multi-monitor setup.
+// A top screen corner (ripple, trigger area, dwell and holds) whose trigger picks
+// its action. Its own PanelWindow per monitor keeps it in place whatever the bar does.
 Variants {
     id: root
-    model: Quickshell.screens
+    model: root.action !== null ? Quickshell.screens : []
+    // Which top corner this is, and its trigger: "off", "sidebar", or an
+    // overview ("default", "scrolloverview"). The trigger picks the action.
+    property bool right: false
+    property string trigger: "off"
+    readonly property QtObject overviewAction: HotCornerOverviewAction { mode: root.trigger }
+    readonly property QtObject sidebarAction: HotCornerSidebarAction {}
+    readonly property QtObject action: root.trigger === "sidebar" ? root.sidebarAction
+        : (root.trigger === "default" || root.trigger === "scrolloverview") ? root.overviewAction : null
 
     PanelWindow {
         id: ripplePanel
@@ -70,7 +69,8 @@ Variants {
         exclusionMode: ExclusionMode.Ignore
         anchors {
             top: true
-            left: true
+            left: !root.right
+            right: root.right
         }
         implicitWidth: 360
         implicitHeight: 360
@@ -80,25 +80,30 @@ Variants {
         // the rest of the 360×360 panel (where the ripple rings expand
         // into) lets pointer events fall through to whatever is
         // underneath (bar widgets, dock, windows).
+        // Nothing at all while the action is off, so a disabled corner keeps
+        // nothing from the bar or what lies beneath it.
         mask: Region {
-            item: triggerArea
+            item: triggerArea.enabled ? triggerArea : null
         }
 
         Connections {
-            target: GlobalStates
-            function onHotCornerTriggered() {
-                ripplePanel.trigger();
-                // Whatever fired this has just acted on the corner's behalf,
-                // the overview closing itself from the same rectangle included.
-                // The pointer lands back on this surface the moment that other
-                // surface lets go of it, and Hyprland synthesises an entry for
-                // a pointer that never moved. Without holding the corner off,
-                // that entry reads as a fresh approach and opens again what was
-                // just closed.
-                triggerArea.toggleCooldown = true;
-                triggerArea.awaitingExit = true;
-                cooldownTimer.restart();
+            target: root.action
+            function onFired() {
+                ripplePanel.acknowledge();
             }
+        }
+        function acknowledge() {
+            ripplePanel.trigger();
+            // Whatever fired this has just acted on the corner's behalf,
+            // the overview closing itself from the same rectangle included.
+            // The pointer lands back on this surface the moment that other
+            // surface lets go of it, and Hyprland synthesises an entry for
+            // a pointer that never moved. Without holding the corner off,
+            // that entry reads as a fresh approach and opens again what was
+            // just closed.
+            triggerArea.toggleCooldown = true;
+            triggerArea.awaitingExit = true;
+            cooldownTimer.restart();
         }
 
         // Register with the global focus grab as a persistent surface so
@@ -124,7 +129,7 @@ Variants {
                 readonly property real localProgress: index === 0 ? ripplePanel.progress0
                                                     : index === 1 ? ripplePanel.progress1
                                                     :               ripplePanel.progress2
-                x: -width / 2
+                x: root.right ? parent.width - width / 2 : -width / 2
                 y: -height / 2
                 width: 224
                 height: 224
@@ -187,14 +192,14 @@ Variants {
         }
 
         // ── Trigger MouseArea ────────────────────────────────────────
-        // Sits at the top-left of the panel = top-left of the screen, and
-        // ends before the bar's first widget: this surface is above the bar,
-        // so anything inside the rectangle never reaches what is under it.
+        // Sits in the panel's corner = the screen's corner, and ends before
+        // the bar's first or last widget: this surface is above the bar, so
+        // anything inside the rectangle never reaches what is under it.
         MouseArea {
             id: triggerArea
             width: Appearance.sizes.hotCornerWidth
             height: Appearance.sizes.hotCornerHeight
-            x: 0
+            x: root.right ? parent.width - width : 0
             y: 0
 
             // The shake-to-locate magnifier writes this file while it holds
@@ -232,19 +237,15 @@ Variants {
                             return; // No answer is not permission to fire.
                         }
                         const win = triggerArea.QsWindow.window;
-                        const localX = at.x - (win?.screen?.x ?? 0);
+                        const fromLeft = at.x - (win?.screen?.x ?? 0);
+                        const localX = root.right ? (win?.screen?.width ?? 0) - 1 - fromLeft : fromLeft;
                         const localY = at.y - (win?.screen?.y ?? 0);
                         if (localX < 0 || localY < 0 || localX >= triggerArea.width || localY >= triggerArea.height)
                             return;
-                        triggerArea.act();
+                        root.action?.act();
                     }
                 }
             }
-
-            // Resolve the configured trigger once and reuse — keeps the
-            // binding logic in one place. Falls back to "off" if Config
-            // isn't ready yet.
-            readonly property string trigger: Config?.options.bar.hotCorners.trigger ?? "off"
 
             // Brief cooldown after a "default" toggle. The layer-shell
             // focus shift when the overview opens can synthesize a fresh
@@ -263,10 +264,8 @@ Variants {
             // has to mean coming back.
             property bool awaitingExit: false
 
-            // Disable only when the user explicitly set the trigger to "off".
-            //
-            // Previously this also disabled when scrolloverview plugin wasn't
-            // loaded, but `GlobalStates.scrollOverviewEnabled` re-polls via
+            // Only a trigger of "off" disables the corner, not a missing
+            // scrolloverview plugin: `GlobalStates.scrollOverviewEnabled` re-polls via
             // `hyprctl plugin list` on every Hyprland `configreloaded` event
             // — including the plugin unload+load cycle in our custom/general.lua
             // layer.opened workaround. If the user's cursor was inside the
@@ -281,7 +280,7 @@ Variants {
             // no overview opens). Tradeoff: a permanently-unloaded plugin
             // leaves the ripple firing into nothing — but that's better than
             // missed activations on a working setup.
-            enabled: trigger !== "off"
+            enabled: root.action !== null
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton
 
@@ -316,183 +315,26 @@ Variants {
 }
             }
 
-            // Runs only once the compositor has confirmed the pointer.
-            function act() {
-
-                    const trig = triggerArea.trigger;
-
-                    // Close path: "default" with overview already open
-                    // toggles it off and fires the ripple in parallel
-                    // with the overview's own fade-out (Overlay > Top
-                    // layer, so the cascade stays visible above the
-                    // closing overview). Symmetric with the open path's
-                    // visual feedback, just without the open delay —
-                    // the close itself happens immediately.
-                    if (trig === "default" && GlobalStates.overviewOpen) {
-                        GlobalStates.hotCornerTriggered();
-                        GlobalStates.overviewOpen = false;
-                        triggerArea.toggleCooldown = true;
-                        cooldownTimer.restart();
-                        return;
-                    }
-
-                    // Close path: "scrolloverview" with its overview already
-                    // up toggles it off — call the dispatcher that
-                    // overview("off") returns and fire the ripple in parallel,
-                    // mirroring the "default" close above. Runs before the
-                    // dismissable check (like default) so the corner can always
-                    // close it.
-                    if (trig === "scrolloverview" && GlobalStates.scrollOverviewOpen) {
-                        GlobalStates.hotCornerTriggered();
-                        Quickshell.execDetached(["hyprctl", "eval",
-                            '(function() local f = hl.plugin.scrolloverview.overview("off") if type(f) == "function" then f() end end)()']);
-                        triggerArea.toggleCooldown = true;
-                        cooldownTimer.restart();
-                        return;
-                    }
-
-                    // Skip the open path when an unrelated dismissable
-                    // overlay (cheatsheet, sidebar, media controls, …)
-                    // is up. Those overlays activate Hyprland's focus
-                    // grab via GlobalFocusGrab.addDismissable, and grab
-                    // activation refreshes pointer focus across the
-                    // listed surfaces — which includes this panel via
-                    // the persistent registration above. If the cursor
-                    // sits inside the trigger region at that moment,
-                    // Hyprland synthesizes a fresh onEntered here and
-                    // the dwell + delay sequence would re-fire the
-                    // corner alongside the overlay the user actually
-                    // opened. Default-trigger close runs earlier above
-                    // and returns before this check, so toggling the
-                    // dots overview off via the corner still works.
-                    if (GlobalFocusGrab.dismissable.length > 0) return;
-
-                    // Open path (both scrolloverview and default): emit
-                    // the global trigger signal so every monitor's ripple
-                    // fires together (trigger() is a no-op when the
-                    // ripple toggle is off), then the delay timer below
-                    // opens the matching overview after the cascade.
-                    GlobalStates.hotCornerTriggered();
-                    delayTimer.restart();
-
-                    // Cooldown both triggers so a focus-grab re-entry
-                    // synthesized right after opening can't immediately
-                    // toggle the overview back off.
-                    triggerArea.toggleCooldown = true;
-                    cooldownTimer.restart();
-                            }
-
             Timer {
                 id: cooldownTimer
                 interval: 500
                 onTriggered: triggerArea.toggleCooldown = false
             }
-            // Self-healing dispatch for the scrolloverview plugin.
-            //
-            // Failure mode: the layer.opened workaround in custom/general.lua
-            // does an `hyprctl plugin unload + 100ms + load` cycle every
-            // time Quickshell's layer surface registers (which happens on
-            // initial Hyprland start AND on every Quickshell reload). The
-            // cycle is fire-and-forget — if the re-load races with the
-            // plugin's previous unload, or hyprctl returns "Cannot load a
-            // plugin twice" during a transient state, the plugin can end up
-            // unloaded. Once unloaded, hl.plugin.scrolloverview is nil and
-            // every corner dispatch errors with "attempt to index a nil
-            // value (field 'scrolloverview')".
-            //
-            // The Lua expression below guards on the function existing:
-            //   - If loaded → call overview("on")
-            //   - If nil → return a sentinel string we can grep for in the
-            //     dispatchProc.onExited handler, which then triggers a
-            //     force-reload so the NEXT click works.
-            //
-            // Wrapping in a do/return block keeps the expression a single
-            // statement that the hyprctl eval wrap (`return hl.dispatch(<X>)`
-            // — see HyprCtl.cpp:1108) doesn't trip over.
-            Process {
-                id: dispatchProc
-                // Upstream's dispatcher refactor (scroll-overview afa8fc8) changed
-                // overview(arg): outside a __lua keybind it no longer dispatches —
-                // it RETURNS the dispatcher function. So call what it returns. The
-                // IIFE keeps it a single expression (the eval wrap can't trip over
-                // it) and lets the nil-plugin error still surface: when the plugin's
-                // Lua function is missing, indexing it errors with "attempt to index
-                // a nil value (field 'scrolloverview')", which onExited greps to
-                // trigger the force-reload so the NEXT hover succeeds.
-                command: ["hyprctl", "eval",
-                    '(function() local f = hl.plugin.scrolloverview.overview("on") if type(f) == "function" then f() end end)()']
-                property string outBuf: ""
-                property string errBuf: ""
-                onRunningChanged: if (running) { outBuf = ""; errBuf = "" }
-                stdout: SplitParser { onRead: data => dispatchProc.outBuf += data + "\n" }
-                stderr: SplitParser { onRead: data => dispatchProc.errBuf += data + "\n" }
-                onExited: {
-                    // Self-heal: scrolloverview's Lua function is missing
-                    // (plugin transiently unloaded by the layer.opened
-                    // workaround race in custom/general.lua). Kick a
-                    // `hyprctl plugin load` async so the next hover works.
-                    const missing = dispatchProc.outBuf.indexOf("'scrolloverview'") >= 0
-                                  || dispatchProc.errBuf.indexOf("'scrolloverview'") >= 0;
-                    if (missing) {
-                        soReloadProc.running = false;
-                        soReloadProc.running = true;
-                    }
-                }
-            }
-            // Force-reload helper for when the scrolloverview plugin has
-            // gone missing. Tries `plugin load` directly; the prior unload
-            // may or may not have happened cleanly, hence `|| true` so the
-            // pipeline doesn't fail if Hyprland already considers it loaded
-            // (`Cannot load a plugin twice!`).
-            Process {
-                id: soReloadProc
-                command: ["bash", "-c",
-                    "hyprctl plugin load " +
-                    "\"$HOME/.local/share/hyprland/plugins/scrolloverview.so\" 2>&1 || true"]
-            }
-            Timer {
-                // Waits for the full ripple cascade before opening the
-                // chosen overview. Action depends on the current trigger:
-                //   "scrolloverview" → dispatch the plugin
-                //   "default"        → flip overviewOpen with
-                //                      workspaces-only mode
-                // Ripple disabled (animationEnabled === false) → interval
-                // collapses to 0ms so the open is effectively instant.
-                id: delayTimer
-                interval: Config?.options.bar.hotCorners.animationEnabled === false ? 0 : 530
-                onTriggered: {
-                    if (GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen) return;
-                    if (triggerArea.trigger === "scrolloverview") {
-                        // Hyprland 0.55 Lua mode: scrolloverview:overview
-                        // dispatcher (with the colon) is unreachable from
-                        // hl.dispatch. Route through the addLuaFunction
-                        // exposure registered by our patched plugin
-                        // (hl.plugin.scrolloverview.overview). Goes through
-                        // dispatchProc rather than execDetached so onExited
-                        // can grep the eval's stderr for the nil-value
-                        // error and trigger the self-heal reload.
-                        dispatchProc.running = false;
-                        dispatchProc.running = true;
-                    } else if (triggerArea.trigger === "default"
-                            && (Config?.options.overview.enable ?? true)) {
-                        // With the overview switched off there are no workspace
-                        // previews to show, and this mode shows nothing else, so
-                        // opening would put an empty surface over the screen.
-                        GlobalStates.overviewWorkspacesOnly = true;
-                        GlobalStates.overviewOpen = true;
-                    }
-                }
-            }
 
             onEntered: {
-                // Arm the dwell for both triggers in both states — the dwell
-                // handler does the open-vs-close decision, so a second hover
-                // toggles the overview off (scrolloverview included now).
+                // Armed in both states: the action decides whether this
+                // opens or closes, so a second visit takes back the first.
                 dwellTimer.restart();
             }
             onExited: {
                 dwellTimer.stop();
                 triggerArea.awaitingExit = false;
+            }
+            // The corner sits over the bar's end, so a scroll here does what
+            // it does on the bar beside it, for actions that take one.
+            onWheel: event => {
+                if (event.angleDelta.y !== 0 && typeof root.action?.scroll === "function")
+                    root.action.scroll(event.angleDelta.y > 0);
             }
         }
     }
