@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.modules.common
+import qs.modules.common.functions
 import "IslandPhoneHistory.js" as History
 import "PhoneIdentity.js" as Identity
 
@@ -23,6 +24,27 @@ Singleton {
     property var pendingPictureSources: []
     property bool writing: false
     property bool writeAgain: false
+    property var cachedAttachments: ({})
+    property var pendingSynced: []
+
+    function refreshMessages(device, messages) {
+        if (!root.ready) {
+            root.pendingSynced = root.pendingSynced.concat({device, messages: messages.slice(-100)}).slice(-20);
+            return;
+        }
+        const known = new Set();
+        for (const message of root.messages)
+            if (message.deviceId === device) for (const id of message.sourceIds) known.add(id);
+        const entries = messages.map(m => Phone.messageEntry(device, m)).filter(m => known.has(m.id));
+        if (!entries.length) return;
+        const updated = History.updateMessages(root.messages, root.seenMessages, entries, root.messagesClearedAt, Date.now());
+        if (JSON.stringify(root.messages) !== JSON.stringify(updated.messages)) {
+            root.messages = updated.messages;
+            root.seenMessages = updated.seen;
+            root.refreshAttachments();
+            save.restart();
+        }
+    }
 
     // Until the call helper has reported, an empty list does not mean a saved
     // call in progress has ended.
@@ -49,7 +71,46 @@ Singleton {
             seenMessages = updated.seen;
             save.restart();
         }
+        root.refreshAttachments();
         Qt.callLater(root.rememberContactPictures, incoming);
+    }
+    function refreshAttachments() {
+        if (!ready) return;
+        let updated = messages;
+        const devices = [...new Set(messages.map(m => m.deviceId).filter(Boolean))];
+        for (const device of devices) {
+            const files = Object.assign({}, cachedAttachments[device] || {},
+                device === Phone.deviceId ? Phone.attachmentFiles : {});
+            const directory = FileUtils.trimFileProtocol(`${Directories.cache}/phone/${device}`);
+            updated = History.resolveImages(updated, device, files, directory);
+        }
+        if (JSON.stringify(messages) !== JSON.stringify(updated)) {
+            messages = updated;
+            save.restart();
+        }
+    }
+    // The bridge keeps incoming files across restarts, while the live map fills only
+    // as threads open; its cache repairs history for conversations not open.
+    FileView {
+        path: FileUtils.trimFileProtocol(`${Directories.cache}/phone/attachments.json`)
+        printErrors: false
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const data = JSON.parse(text());
+                root.cachedAttachments = data && typeof data === "object" && !Array.isArray(data) ? data : ({});
+                root.refreshAttachments();
+            } catch (error) { console.warn("[Island history] Could not read attachment cache:", error); }
+        }
+    }
+    Connections {
+        target: Phone
+        function onMessagesSynced(device, messages) {
+            root.refreshMessages(device, messages);
+        }
+        function onAttachmentFilesChanged() { root.refreshAttachments(); }
+        function onDeviceIdChanged() { root.refreshAttachments(); }
     }
     function clearCalls() {
         calls = calls.filter(c => activeCalls.some(a => a.id === c.id));
@@ -83,6 +144,14 @@ Singleton {
         enrichContacts(contacts);
         save.restart();
     }
+    Connections {
+        target: NotificationImageCache
+        function onStored(notificationId, original, cached) {
+            const entries = root.pendingPictureSources.filter(p => p.picture === original);
+            root.pendingPictureSources = root.pendingPictureSources.filter(p => p.picture !== original);
+            root.rememberContactPictures(entries.map(p => Object.assign({}, p, {picture: cached})));
+        }
+    }
     function clearMessages() {
         messages = [];
         messagesClearedAt = Date.now();
@@ -103,11 +172,15 @@ Singleton {
     }
     function loaded() {
         ready = true;
+        for (const batch of pendingSynced) root.refreshMessages(batch.device, batch.messages);
+        pendingSynced = [];
         rememberContactPictures(pendingPhotos);
         pendingPhotos = [];
         enrichContacts(contacts);
         observeCalls(pendingCalls, callsKnown);
         observeMessages(pendingMessages);
+        refreshAttachments();
+        save.restart();
     }
     Timer { id: save; interval: 200; onTriggered: root.write() }
     FileView {

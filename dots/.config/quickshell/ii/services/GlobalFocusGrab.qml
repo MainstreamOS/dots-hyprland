@@ -16,9 +16,11 @@ Singleton {
 
     property list<var> persistent: []
     property list<var> dismissable: []
+    property var focusTarget: null
 
     function dismiss() {
         root.dismissable = [];
+        root.focusTarget = null;
         root.dismissed();
     }
 
@@ -43,6 +45,17 @@ Singleton {
         if (root.dismissable.indexOf(window) === -1) {
             root.dismissable.push(window);
         }
+        // Admit the new popup before releasing modal search's keyboard focus.
+        if (root.focusTarget && root.focusTarget !== window) root.focusTarget = null;
+    }
+
+    // Search is modal; admit it before narrowing the grab so the compositor
+    // always has a committed surface to focus during the transition.
+    function focus(window) {
+        root.addDismissable(window);
+        Qt.callLater(() => {
+            if (root.dismissable.includes(window)) root.focusTarget = window;
+        });
     }
 
     function removeDismissable(window) {
@@ -50,6 +63,7 @@ Singleton {
         if (index !== -1) {
             root.dismissable.splice(index, 1);
         }
+        if (root.focusTarget === window) root.focusTarget = null;
     }
 
     function hasActive(element) {
@@ -62,7 +76,12 @@ Singleton {
 
     HyprlandFocusGrab {
         id: grab
-        windows: root.dismissable.every(w => !w?.focusable) || root.dismissable.some(w => hasActive(w?.contentItem)) ? [...root.dismissable, ...root.persistent] : [...root.dismissable]
+        // Keep the old surfaces admitted until a replacement is visible: an empty
+        // grab ends it, and its delayed cleared event would close the popup.
+        windows: root.focusTarget?.contentItem.Window.window?.visible ? [root.focusTarget]
+            : root.dismissable.some(w => !w?.contentItem.Window.window?.visible)
+                || root.dismissable.every(w => !w?.focusable) || root.dismissable.some(w => hasActive(w?.contentItem))
+                ? [...root.dismissable, ...root.persistent] : [...root.dismissable]
         active: root.dismissable.length > 0
         onCleared: () => {
             root.dismiss();

@@ -267,6 +267,16 @@ Singleton {
         adaptive: root.autoIconContrast
         flipped: root.followsDock(backdrops) ? root.dockContent.flipped : root.contentFlipped(backdrops, backdrops)
     }
+    // Borders share the surface recipe, but choose contrast against the bar
+    // itself rather than following the dock's optional contrast coordination.
+    readonly property SurfaceContent barOutlineContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.barBackdrop]
+        stockBackdrops: [root.barStockBackdrop]
+        adaptive: root.autoIconContrast
+        flipped: root.contentFlipped(backdrops, backdrops)
+    }
     readonly property SurfaceContent dockContent: SurfaceContent {
         m3: root.m3colors
         palette: root.colors
@@ -967,7 +977,7 @@ Singleton {
         // The outline is the palette's own recipe, the outline tone laid over
         // the surface, made with the surface as drawn: a picked color gets an
         // edge in its own hue, and the outline tone follows the content's side.
-        property color colBarBackgroundBorder: surfaceBorder(root.barStripContent.colOutlineVariant, colBarBackground)
+        property color colBarBackgroundBorder: surfaceBorder(root.barOutlineContent.colOutlineVariant, colBarBackground)
         // The shadow the same way: a slab of shade around a strip that has
         // faded from sight reads as a decoration around nothing.
         property color colBarShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colBarBackground.a)
@@ -1422,10 +1432,14 @@ Singleton {
         // land in the screen's corners and the curves beside them have
         // nowhere to go. It stops a little short of that by default, which is
         // also as far as its slider goes.
-        readonly property bool barIsNotch: Config.options?.bar.cornerStyle === 3
+        readonly property string islandShape: ["float", "rect"].includes(Config.options?.bar.island.shape)
+            ? Config.options.bar.island.shape : "notch"
+        readonly property bool barIsNotch: barIsIsland ? islandShape === "notch" : Config.options?.bar.cornerStyle === 3
+        // The Dynamic Island replaces the bar only on a horizontal bar.
+        readonly property bool barIsIsland: (Config.options?.bar.mode === "island" || Config.options?.bar.cornerStyle === 4) && !Config.options?.bar.vertical
         // The styles that draw a strip of their own rather than dressing the
         // whole window: they share the width, the split and the shadow.
-        readonly property bool barFloats: barIsNotch || Config.options?.bar.cornerStyle === 1
+        readonly property bool barFloats: barIsIsland ? islandShape !== "rect" : barIsNotch || Config.options?.bar.cornerStyle === 1
         // How far the style may be asked to reach, which is also where it
         // starts. The notch is set down on the edge, so at the whole width its
         // ends land in the screen's corners with nowhere to put the curves
@@ -1662,7 +1676,7 @@ Singleton {
         Behavior on dockMagnifyHeadroom {
             animation: root.animation.elementMoveFast.numberAnimation.createObject(this)
         }
-        property real barHeight: Config.options.bar.cornerStyle === 1 ? 
+        property real barHeight: (barIsIsland ? islandShape === "float" : Config.options.bar.cornerStyle === 1) ?
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
         property real barCenterSideModuleWidth: Config.options?.bar.verbose ? 360 : 140
         property real barCenterSideModuleWidthShortened: 280

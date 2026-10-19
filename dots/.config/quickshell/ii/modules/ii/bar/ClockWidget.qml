@@ -6,6 +6,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    property bool interactive: true
     property bool borderless: Config.options.bar.borderless
     property bool showDate: Config.options.bar.verbose
     implicitWidth: rowLayout.implicitWidth
@@ -40,6 +41,7 @@ Item {
 
     MouseArea {
         id: mouseArea
+        enabled: root.interactive
         anchors.fill: parent
         hoverEnabled: !Config.options.bar.tooltips.clickToShow
 

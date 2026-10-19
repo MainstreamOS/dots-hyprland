@@ -65,14 +65,15 @@ Singleton {
     // (open or pinned). Mirrors the users' own Loader/visible gates.
     readonly property bool barWatching: ObjectUtils.layoutHasEnabledWidget(Config.options.bar.layout, "resources")
         && Config.options.bar.resources.gpuLayout !== -1
-        && GlobalStates.barOpen && !GlobalStates.screenLocked
+        && GlobalStates.barOpen && !GlobalStates.screenLocked && !Appearance.sizes.barIsIsland
     readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
         && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
+    property int islandWatchers: 0
 
     Timer {
         interval: Config.options?.resources?.updateInterval ?? 3000
         running: (Config.options?.resources?.enableGpu !== false)
-            && (root.barWatching || root.overlayWatching)
+            && (root.barWatching || root.overlayWatching || root.islandWatchers > 0)
             && (root.iGpuAvailable || root.dGpuAvailable)
         repeat: true
         triggeredOnStart: true

@@ -6,6 +6,7 @@ import Quickshell.Io
 import QtQuick
 
 import qs.modules.common
+import "WeatherForecast.js" as WeatherForecast
 
 Singleton {
     id: root
@@ -41,6 +42,28 @@ Singleton {
     // behind every change of mind and would leave the choice dead with no
     // network.
     property var lastReply: null
+    readonly property var hourlyForecast: WeatherForecast.upcoming(lastReply, useUSCS)
+    // WeatherForecast.condition() names, written out so the translation scanner sees them.
+    readonly property var conditionNames: ({
+        "Clear sky": Translation.tr("Clear sky"),
+        "Mostly clear": Translation.tr("Mostly clear"),
+        "Partly cloudy": Translation.tr("Partly cloudy"),
+        "Overcast": Translation.tr("Overcast"),
+        "Fog": Translation.tr("Fog"),
+        "Drizzle": Translation.tr("Drizzle"),
+        "Freezing rain": Translation.tr("Freezing rain"),
+        "Rain": Translation.tr("Rain"),
+        "Snow": Translation.tr("Snow"),
+        "Rain showers": Translation.tr("Rain showers"),
+        "Snow showers": Translation.tr("Snow showers"),
+        "Thunderstorms": Translation.tr("Thunderstorms"),
+        "Weather unavailable": Translation.tr("Weather unavailable")
+    })
+    readonly property string condition: {
+        const name = WeatherForecast.condition(lastReply?.current?.weather_code);
+        return conditionNames[name] ?? name;
+    }
+    readonly property bool refreshing: weatherFetcher.running || fallbackFetcher.running || geocoder.running
 
     // Resolved on every read rather than written into the settings file, so a
     // location landing after login writes nothing. "auto" is the shipped value
@@ -249,7 +272,7 @@ Singleton {
         // does nothing, so one request left hanging would swallow every one
         // behind it until the shell restarts.
         function fetch() {
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${root.latitude}&longitude=${root.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,uv_index,visibility&daily=sunrise,sunset&timezone=auto&forecast_days=1`;
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${root.latitude}&longitude=${root.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,uv_index,visibility&daily=sunrise,sunset&hourly=temperature_2m,weather_code,precipitation_probability,is_day&timezone=auto&forecast_days=2`;
             command = ["curl", "-s", "--max-time", "15", url];
             running = true;
         }

@@ -31,7 +31,12 @@ Singleton {
             { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
         ]
     })
+    readonly property var defaultIslandPanels: ["system", "media", "notifications", "weather", "timers", "calendar", "call", "text", "resources", "localsend"]
 
+    function pickBarMode(mode) {
+        if (mode === "island") root.options.bar.vertical = false;
+        root.options.bar.mode = mode;
+    }
 
     property bool ready: false
     property int readWriteDelay: 50 // milliseconds
@@ -620,14 +625,22 @@ Singleton {
                     }
                 }
                 property bool bottom: false // Instead of top
-                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch | 4: Dynamic Island
+                property string mode: "bar" // "bar" | "island"
+                property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch
                 property JsonObject island: JsonObject {
+                    property string shape: "notch" // "notch" | "float" | "rect"
+                    property bool appDrawer: false
+                    property list<string> panelOrder: root.defaultIslandPanels
+                    property list<string> disabledPanels: []
                     property bool showContactName: true
                     property bool showPhoneNumber: false
                     property bool showMessage: true
                     property bool showContactPicture: true
                     property bool phoneIntegration: true
                     property bool automaticAlerts: true
+                    property bool suppressWhileStreaming: false
+                    property bool suppressForDiscord: true
+                    property bool suppressForObs: true
                     property int alertSeconds: 10
                 }
                 property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle is 1 (Float) or 3 (Notch)

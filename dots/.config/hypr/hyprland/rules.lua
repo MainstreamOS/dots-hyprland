@@ -429,7 +429,7 @@ hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotC
 -- above sits inside the reach of their stock alpha — the automatic transparency
 -- can land them a hair under it on a dark wallpaper, and a surface should not
 -- lose its blur to settings nobody touched.
-hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
+hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
 -- The dock and the app list sit above the overview's dim while the overview is
 -- open, so they are the blurred surfaces here whose blur edge is ever seen
 -- against anything but the wallpaper. Blurring the wallpaper alone punches a
@@ -441,7 +441,12 @@ hl.layer_rule({ match = { namespace = "quickshell:(bar|verticalBar|dock[A-Za-z]*
 -- the apps behind the launcher; with xray it would frost the wallpaper and
 -- leave every window legible through it.
 hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overview[A-Za-z]*)" }, xray = false})
+-- The island's antialiased edge must blend with the surface beneath it.
+-- X-ray blur injects wallpaper color there even when the body is fully opaque.
+hl.layer_rule({ match = { namespace = "quickshell:dynamicIsland" }, xray = false})
 hl.layer_rule({ match = { namespace = "quickshell:bar" }, animation = "slide"})
+-- The island animates its own surface; a compositor slide would double it.
+hl.layer_rule({ match = { namespace = "quickshell:dynamicIsland" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:actionCenter" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:cheatsheet" }, animation = "slide bottom"})
 -- A menu belongs under the pointer at once. The stock layer animation
@@ -457,7 +462,7 @@ hl.layer_rule({ match = { namespace = "quickshell:dockRight" }, animation = "sli
 -- dock sharing its layer, leaving the dock to be the one shortened. A pinned
 -- left sidebar comes after everything else, so it only pushes windows and fits
 -- between the bar and the dock instead of shortening either of them.
-hl.layer_rule({ match = { namespace = "quickshell:bar" }, order = 10 })
+hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland)" }, order = 10 })
 hl.layer_rule({ match = { namespace = "quickshell:verticalBar" }, order = 10 })
 hl.layer_rule({ match = { namespace = "quickshell:sidebarLeft" }, order = -1 })
 hl.layer_rule({ match = { namespace = "quickshell:screenCorners" }, animation = "popin 120%"})

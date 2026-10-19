@@ -9,6 +9,7 @@ import Quickshell
 import Quickshell.Io
 import "PhoneReactions.js" as PhoneReactions
 import "PhoneIdentity.js" as Identity
+import "IslandPhoneHistory.js" as History
 
 /**
  * Paired phones through KDE Connect or rust-connect, for the Phone tab, the
@@ -158,6 +159,8 @@ Singleton {
     property string playingMedia: ""
 
     signal conversationOpened(int thread)
+    // Synced records can enrich saved Island history without posting an alert.
+    signal messagesSynced(string device, var messages)
     signal shared(int count)
     signal opened(string uid)
     // An audio attachment is ready to play from this file.
@@ -974,6 +977,7 @@ Singleton {
         case "conversations": {
             if (event.device !== root.deviceId) break;
             root.conversations = (event.items ?? []).slice().sort((a, b) => b.date - a.date);
+            root.messagesSynced(event.device, root.conversations);
             const allAtts = [];
             const nextCache = Object.assign({}, root.threadCache);
             for (const item of root.conversations) {
@@ -1000,7 +1004,12 @@ Singleton {
             break;
         }
         case "message": {
-            if (event.live && event.message) root.rememberLiveMessage(event.device, event.message);
+            if (event.message) {
+                const key = "kde:/modules/kdeconnect/devices/" + event.device + ":" + event.message.uid;
+                if (event.live || root.recentMessages.some(m => m.sourceIds?.includes(key)))
+                    root.rememberLiveMessage(event.device, event.message);
+                root.messagesSynced(event.device, [event.message]);
+            }
             if (event.device !== root.deviceId || !event.message) break;
             const message = event.message;
             if (message.attachments) {
@@ -1025,6 +1034,7 @@ Singleton {
         case "thread": {
             if (event.device !== root.deviceId) break;
             const threadMsgs = event.messages ?? [];
+            root.messagesSynced(event.device, threadMsgs);
             const allAtts = [];
             for (const m of threadMsgs) {
                 if (m.attachments) allAtts.push(...m.attachments);
@@ -1159,50 +1169,51 @@ Singleton {
         return String(attachment?.mime ?? "").toLowerCase().startsWith("image/");
     }
 
-    function rememberLiveMessage(device, message): void {
+    function messageEntry(device, message): var {
         const attachments = message.attachments ?? [];
         const images = attachments.filter(root.isImage).filter((a, i, all) =>
             !a.uid || all.findIndex(other => String(other.uid) === String(a.uid)) === i);
         // Slots line up with imageUids, so a full image replaces its own thumbnail.
         const imageSlots = images.map(a => a.path || a.thumb ? FileUtils.fileUrl(a.path || a.thumb) : "");
-        let entry = {
+        const entry = {
             id: "kde:/modules/kdeconnect/devices/" + device + ":" + message.uid, backend: "KDE Connect",
             name: "", number: root.addressText(message.addresses?.[0]), live: true, deviceId: device,
-            time: message.date, body: message.body ?? "", picture: "", thread: message.thread,
+            time: message.date, body: attachments.length && History.isMediaPlaceholder(message.body) ? "" : message.body ?? "",
+            picture: "", thread: message.thread, type: message.type, sub: message.sub,
+            media: attachments.map(a => ({uid: String(a.uid ?? ""), part: a.part, mime: a.mime || "",
+                path: a.path || "", thumb: a.thumb || ""})),
             images: imageSlots.filter(u => u.length > 0).slice(0, 4), imageSlots,
             imageUids: images.map(a => String(a.uid)),
             audioClips: attachments.filter(a => /^audio\/|^application\/ogg/.test(String(a.mime ?? "").toLowerCase())).slice(0, 8)
                 .map(a => ({deviceId: device, part: a.part, mime: a.mime, uid: String(a.uid)}))
         };
         entry.sourceIds = [entry.id];
+        return entry;
+    }
+
+    function rememberLiveMessage(device, message): void {
+        let entry = root.messageEntry(device, message);
         // A captioned MMS can arrive as two messages at the same time, one with the text and
         // one with the media; the Island shows them as one.
         const previous = root.recentMessages.find(m => m.id === entry.id || m.sourceIds?.includes(entry.id));
-        const partner = previous || root.recentMessages.find(m => root.captionHalves(m, entry));
+        const partner = previous || root.recentMessages.find(m => History.captionHalves(m, entry));
         if (partner) {
-            const hasMedia = entry.imageUids.length > 0 || entry.audioClips.length > 0;
+            const hasMedia = History.hasMedia(entry);
             entry = Object.assign({}, partner, {
                 body: entry.body || partner.body,
                 sourceIds: [...new Set((partner.sourceIds || [partner.id]).concat(entry.sourceIds))],
                 images: hasMedia ? entry.images : partner.images,
                 imageSlots: hasMedia ? entry.imageSlots : partner.imageSlots,
                 imageUids: hasMedia ? entry.imageUids : partner.imageUids,
-                audioClips: hasMedia ? entry.audioClips : partner.audioClips
+                audioClips: hasMedia ? entry.audioClips : partner.audioClips,
+                media: hasMedia ? entry.media : partner.media
             });
         }
         root.recentMessages = [entry].concat(root.recentMessages.filter(m =>
             !(m.sourceIds || [m.id]).some(id => entry.sourceIds.includes(id)))).slice(0, 30);
         // The Island shows full images, which the phone sends on request.
-        for (const a of images)
+        for (const a of (message.attachments ?? []).filter(root.isImage))
             if (!a.path && a.part >= 0) root.command({cmd: "attachment", device, part: a.part, uid: String(a.uid)});
-    }
-
-    function captionHalves(a, b): bool {
-        const textOnly = m => m.body.length > 0 && m.imageUids.length === 0 && m.audioClips.length === 0;
-        const mediaOnly = m => m.body.length === 0 && (m.imageUids.length > 0 || m.audioClips.length > 0);
-        return a.deviceId === b.deviceId && a.number === b.number && a.time === b.time
-            && (a.thread === undefined || b.thread === undefined || a.thread === b.thread)
-            && ((textOnly(a) && mediaOnly(b)) || (mediaOnly(a) && textOnly(b)));
     }
 
     function updateLiveImages(device, uid, path): void {

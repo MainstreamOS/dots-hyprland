@@ -16,7 +16,9 @@ import Qt5Compat.GraphicalEffects
 ButtonMouseArea {
     id: root
 
-    readonly property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
+    property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
+    property alias shownCount: wsModel.shownCount
+    property bool alwaysShowNumbers: Config.options?.bar.workspaces.alwaysShowNumbers
     WorkspaceModel {
         id: wsModel
         monitor: root.monitor
@@ -52,7 +54,8 @@ ButtonMouseArea {
     }
 
     // Interactions
-    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    property bool enableRightClick: true
+    acceptedButtons: enableRightClick ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
     hoverEnabled: true
     property int hoverIndex: {
         const position = root.vertical ? mouseY : mouseX;
@@ -65,10 +68,15 @@ ButtonMouseArea {
     onPressed: mouse => {
         if (mouse.button == Qt.LeftButton)
             switchWorkspaceToHovered();
-        else if (mouse.button == Qt.RightButton)
+        else if (mouse.button == Qt.RightButton && enableRightClick)
             Hyprland.dispatch('hl.dsp.workspace.toggle_special("special")');
     }
+    property bool enableWheel: true
     onWheel: event => {
+        if (!root.enableWheel) {
+            event.accepted = false;
+            return;
+        }
         if (event.angleDelta.y < 0)
             Hyprland.dispatch(`hl.dsp.focus({workspace = "r+1"})`);
         else if (event.angleDelta.y > 0)
@@ -496,7 +504,7 @@ ButtonMouseArea {
                 return true;
             if (GlobalStates.screenLocked)
                 return false;
-            if (Config.options?.bar.workspaces.alwaysShowNumbers && (!Config.options?.bar.workspaces.showAppIcons || !wsNum.hasBiggestWindow))
+            if (root.alwaysShowNumbers && (!Config.options?.bar.workspaces.showAppIcons || !wsNum.hasBiggestWindow))
                 return true;
             return false;
         }

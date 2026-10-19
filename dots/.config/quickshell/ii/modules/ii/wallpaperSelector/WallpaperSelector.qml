@@ -95,6 +95,7 @@ Scope {
     onMonitorTargetGoneChanged: if (root.monitorTargetGone) GlobalStates.wallpaperSelectorOpen = false
 
     function toggleWallpaperSelector() {
+        GlobalStates.superReleaseMightTrigger = false;
         if (Config.options.wallpaperSelector.useSystemFileDialog) {
             Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode);
             return;

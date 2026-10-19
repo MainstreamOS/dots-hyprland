@@ -747,20 +747,27 @@ Scope {
         GlobalStates.overviewOpen = true;
     }
 
+    function toggleSearch() {
+        if (GlobalStates.wallpaperSelectorOpen || GlobalStates.sessionOpen) return;
+        if (!IslandLauncher.toggle()) GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+    }
+
     IpcHandler {
         target: "search"
 
         function toggle() {
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleSearch();
         }
         function workspacesToggle() {
             GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
         }
         function close() {
+            IslandLauncher.close();
             GlobalStates.overviewOpen = false;
         }
         function open() {
-            GlobalStates.overviewOpen = true;
+            if (GlobalStates.wallpaperSelectorOpen || GlobalStates.sessionOpen) return;
+            if (!IslandLauncher.open()) GlobalStates.overviewOpen = true;
         }
         function toggleReleaseInterrupt() {
             GlobalStates.superReleaseMightTrigger = false;
@@ -775,7 +782,7 @@ Scope {
         description: "Toggles search on press"
 
         onPressed: {
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleSearch();
         }
     }
     GlobalShortcut {
@@ -807,7 +814,7 @@ Scope {
                 GlobalStates.superReleaseMightTrigger = true;
                 return;
             }
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleSearch();
         }
     }
     GlobalShortcut {

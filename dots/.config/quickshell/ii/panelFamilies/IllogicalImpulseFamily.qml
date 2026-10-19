@@ -4,6 +4,7 @@ import Quickshell
 import qs.modules.common
 import qs.modules.ii.background
 import qs.modules.ii.bar
+import qs.modules.ii.dynamicIsland
 import qs.modules.ii.cheatsheet
 import qs.modules.ii.desktopMenu
 import qs.modules.ii.dock
@@ -27,6 +28,7 @@ import qs.modules.ii.windowOverview
 
 Scope {
     PanelLoader { extraCondition: !Config.options.bar.vertical; component: Bar {} }
+    PanelLoader { extraCondition: Appearance.sizes.barIsIsland; component: DynamicIsland {} }
     // After Bar so most compositors stack the ripple above the bar within
     // the Overlay layer (creation-order tiebreak). Loads regardless of
     // bar orientation since HotCornerRipple anchors itself to the screen's

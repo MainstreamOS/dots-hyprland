@@ -228,6 +228,7 @@ Singleton {
     }
 
     function fuzzyQuery(search: string): var {
+        if (!search.length) return root.list;
         if (root.sloppySearch) {
             const results = list.map(obj => ({
                 entry: obj,

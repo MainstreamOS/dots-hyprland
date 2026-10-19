@@ -167,6 +167,7 @@ PanelWindow {
             .filter(layer => !(
                 layer.namespace.includes(":bar") ||
                 layer.namespace.includes(":verticalBar") ||
+                layer.namespace.includes(":dynamicIsland") ||
                 layer.namespace.includes(":dock") ||
                 layer.namespace.includes(":sidebarLeft") ||
                 layer.namespace.includes(":sidebarRight")

@@ -1,7 +1,9 @@
 import qs.modules.common
+import qs.services
 import qs.modules.common.functions
 import Qt5Compat.GraphicalEffects
 import QtQuick
+import QtQuick.Window
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.Notifications
@@ -53,7 +55,8 @@ MaterialShape { // App icon
         sourceComponent: IconImage {
             id: appIconImage
             implicitSize: root.appIconSize
-            source: Quickshell.iconPath(root.appIcon, "image-missing")
+            source: Notifications.iconSource(root.appIcon)
+            backer.sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio), Math.ceil(height * Screen.devicePixelRatio))
         }
     }
     Loader {
@@ -88,7 +91,8 @@ MaterialShape { // App icon
                 anchors.right: parent.right
                 sourceComponent: IconImage {
                     implicitSize: root.smallAppIconSize
-                    source: Quickshell.iconPath(root.appIcon, "image-missing")
+                    source: Notifications.iconSource(root.appIcon)
+                    backer.sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio), Math.ceil(height * Screen.devicePixelRatio))
                 }
             }
         }

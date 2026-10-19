@@ -25,7 +25,8 @@ Scope {
         }
         LazyLoader {
             id: barLoader
-            active: GlobalStates.barOpen && !GlobalStates.screenLocked
+            // In island style the Dynamic Island takes the bar's place.
+            active: GlobalStates.barOpen && !GlobalStates.screenLocked && !Appearance.sizes.barIsIsland
             required property ShellScreen modelData
             component: PanelWindow { // Bar window
                 id: barRoot
@@ -61,7 +62,7 @@ Scope {
                 property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
                 visible: !hasFullscreenWindow
                 exclusionMode: ExclusionMode.Ignore
-                exclusiveZone: (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) ? 0 :
+                exclusiveZone: (Config.options.bar.cornerStyle === 4 || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
                 // The compositor subtracts Top-layer exclusive zones before it
@@ -142,7 +143,6 @@ Scope {
 
                     BarContent {
                         id: barContent
-                        
                         implicitHeight: Appearance.sizes.barHeight
                         anchors {
                             right: parent.right

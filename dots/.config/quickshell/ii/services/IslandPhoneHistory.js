@@ -3,19 +3,128 @@
 .import "PhoneIdentity.js" as Identity
 
 const limit = 30;
-const mediaPlaceholders = new Set(["image", "photo", "gif", "video", "audio", "voice message", "media", "attachment"]);
+const mediaPlaceholders = new Set(["image", "photo", "gif", "video", "audio", "audio clip", "voice message", "media", "attachment"]);
 
 function isMediaPlaceholder(body) {
     return mediaPlaceholders.has(String(body || "").trim().toLowerCase());
 }
 
 function hasMedia(message) {
-    return !!(message.images?.length || message.audioClips?.length);
+    // Attachment identity exists before its thumbnail or full file arrives.
+    return !!(message.media?.length || message.imageUids?.length || message.images?.length || message.audioClips?.length);
+}
+
+function sameConversation(a, b) {
+    return a.deviceId === b.deviceId && contactMatches(a, b)
+        && (a.thread === undefined || b.thread === undefined || a.thread === b.thread)
+        && (a.type === undefined || b.type === undefined || a.type === b.type)
+        && (a.sub === undefined || b.sub === undefined || a.sub === b.sub);
+}
+
+function captionHalves(a, b) {
+    const textOnly = m => !!String(m.body || "").trim() && !hasMedia(m);
+    const mediaOnly = m => (!String(m.body || "").trim() || isMediaPlaceholder(m.body)) && hasMedia(m);
+    return a.time > 0 && a.time === b.time && sameConversation(a, b)
+        && ((textOnly(a) && mediaOnly(b)) || (mediaOnly(a) && textOnly(b)));
 }
 
 // Reactions fold into the message they react to, so history keeps neither.
 function sanitizeHistoryMessages(rawList) {
-    return Array.isArray(rawList) ? rawList.filter(m => m && !Reactions.isReaction(String(m.body || ""))) : [];
+    return Array.isArray(rawList) ? coalesceMessages(rawList.filter(m => m && !Reactions.isReaction(String(m.body || "")))) : [];
+}
+
+// Android can publish one captioned MMS as a text row and a media row. Combine only
+// native halves with the same sender and timestamp; nearby texts stay separate.
+function coalesceMessages(messages) {
+    const records = [];
+    const sources = m => m.sourceIds || [m.id];
+    const native = m => sources(m).some(id => id.startsWith("kde:"));
+    for (const message of messages) {
+        const index = native(message) ? records.findIndex(other => native(other)
+            && captionHalves(other, message)) : -1;
+        if (index < 0) {
+            records.push(message);
+            continue;
+        }
+        const other = records[index];
+        const media = hasMedia(message) ? message : other;
+        records[index] = Object.assign({}, other, {
+            sourceIds: [...new Set(sources(other).concat(sources(message)))],
+            body: (hasMedia(other) ? message.body : other.body) || "",
+            images: media.images || [], audioClips: media.audioClips || [],
+            media: media.media || [], imageUids: media.imageUids || [], imageSlots: media.imageSlots || [],
+            picture: other.picture || message.picture || "",
+            previewImage: media.previewImage || ""
+        });
+    }
+    return records;
+}
+
+// A caption and its media or link can arrive as records seconds apart. Group them
+// for display only; history and the backend keep every original record.
+function groupMessages(messages, extractUrls) {
+    const sources = m => m.sourceIds || [m.id];
+    const native = m => !m.mirrored && m.deviceId && m.thread !== undefined
+        && sources(m).some(id => id.startsWith("kde:"));
+    const uid = m => Number(sources(m).find(id => id.startsWith("kde:"))?.split(":").pop()) || 0;
+    const ordered = messages.slice().sort((a, b) => a.time - b.time || uid(a) - uid(b));
+    const grouped = new Map();
+    const captions = new Set();
+    for (let i = 0; i < ordered.length; i++) {
+        const part = ordered[i];
+        if (!native(part) || part.previewUrl || !(part.time > 0)) continue;
+        const mediaOnly = hasMedia(part) && (!String(part.body || "").trim() || isMediaPlaceholder(part.body));
+        const urls = !hasMedia(part) && /^(?:https?:\/\/|www\.)\S+$/i.test(String(part.body || "").trim())
+            ? extractUrls(part.body) : [];
+        if (!mediaOnly && urls.length !== 1) continue;
+        const sameThread = other => native(other) && other.deviceId === part.deviceId
+            && other.thread === part.thread && contactMatches(other, part);
+        const following = ordered.slice(i + 1).find(sameThread);
+        const previous = ordered.slice(0, i).reverse().find(sameThread);
+        // Media follows its caption on Android. Link previews commonly arrive
+        // first. An intervening message is a boundary, never skipped over.
+        const candidates = mediaOnly ? [previous, following] : [following, previous];
+        const caption = candidates.find(other => other && !captions.has(other.id)
+            && !grouped.has(other.id) && sameConversation(other, part)
+            && other.time > 0 && Math.abs(other.time - part.time) <= 30000
+            && !hasMedia(other) && !other.previewUrl && String(other.body || "").trim()
+            && !isMediaPlaceholder(other.body) && extractUrls(other.body).length === 0);
+        if (!caption) continue;
+        grouped.set(part.id, Object.assign({}, part, {
+            id: part.id, time: Math.max(part.time, caption.time), body: caption.body,
+            picture: part.picture || caption.picture || "",
+            sourceIds: [...new Set(sources(part).concat(sources(caption)))],
+            memberIds: [part.id, caption.id],
+            previewUrl: urls[0] || ""
+        }));
+        captions.add(caption.id);
+    }
+    return ordered.filter(message => !captions.has(message.id))
+        .map(message => grouped.get(message.id) || message).sort((a, b) => b.time - a.time);
+}
+
+// Older history kept a thumbnail alongside the fetched file. Resolve only
+// thumbnails in this phone's cache with an authoritative attachment mapping.
+function resolveImages(messages, device, files, thumbnailDirectory) {
+    const prefix = thumbnailDirectory.replace(/\/$/, "") + "/";
+    return messages.map(message => {
+        if (message.deviceId !== device) return message;
+        const media = (message.media || []).map(a => Object.assign({}, a, {path: files[a.uid] || a.path || ""}));
+        const sources = media.length ? media.map(a => /^image\//.test(a.mime) ? (a.path || a.thumb)
+            : /^video\//.test(a.mime) ? a.thumb : "").filter(Boolean) : (message.images || []);
+        const images = sources.map(source => {
+            // Descriptors already choose the right representation. A video's
+            // thumbnail must stay an image even after its MP4 has been fetched.
+            if (media.length) return source.startsWith("/") ? "file://" + source : source;
+            const file = source.startsWith("file://") ? source.slice(7) : source;
+            if (!file.startsWith(prefix) || !/\.(png|jpe?g|webp|gif)$/.test(file))
+                return source.startsWith("/") ? "file://" + source : source;
+            const uid = file.slice(prefix.length).replace(/\.(png|jpe?g|webp|gif)$/, "");
+            const path = !uid.includes("/") && files[uid];
+            return path ? (path.startsWith("file://") ? path : "file://" + path) : source;
+        }).filter((source, i, all) => all.indexOf(source) === i);
+        return Object.assign({}, message, {images, media});
+    });
 }
 
 function savedImage(source) {
@@ -59,9 +168,22 @@ function mirrorRepresented(message, records) {
     let remaining = String(message.body || "").trim();
     if (!remaining) return false;
     let lines = remaining.split("\n");
+    // A replayed unread notification, outside the usual window, can be represented
+    // only by the latest synced message before it.
+    const synced = records.filter(other => other.deviceId && other.deviceId === message.deviceId
+        && other.time > 0 && contactMatches(other, message)
+        && (other.thread === undefined || message.thread === undefined || other.thread === message.thread)
+        && other.sourceIds.some(id => id.startsWith("kde:")))
+        .sort((a, b) => a.time - b.time);
+    const latestSynced = synced.filter(other => other.time <= message.time).pop();
+    // Some phones post the notification before dating the SMS: only the first
+    // following SMS within ten minutes, with identical text, represents it.
+    const followingSynced = synced.find(other => other.time > message.time);
+    if (followingSynced && followingSynced.time - message.time <= 600000
+        && String(followingSynced.body || "").trim() === remaining) return true;
     for (const other of records) {
         if (other.id === message.id || !other.sourceIds.some(id => !id.startsWith("notification:"))
-            || Math.abs(other.time - message.time) > 120000 || !contactMatches(other, message)) continue;
+            || (Math.abs(other.time - message.time) > 120000 && other !== latestSynced) || !contactMatches(other, message)) continue;
         const content = String(other.body || "").trim();
         if (!content) {
             if (hasMedia(other)) lines = lines.filter(line => !isMediaPlaceholder(line));
@@ -111,7 +233,7 @@ function updateCalls(history, previous, incoming, now) {
 }
 
 function updateMessages(history, seen, incoming, clearedAt, now) {
-    const records = history.slice();
+    const records = coalesceMessages(history);
     const ids = seen.slice();
     const sanitizedIncoming = sanitizeHistoryMessages(incoming);
     for (const message of sanitizedIncoming.slice().reverse()) {
@@ -135,14 +257,17 @@ function updateMessages(history, seen, incoming, clearedAt, now) {
             if (picture) records[index] = Object.assign({}, old, {picture});
             continue;
         }
-        const resolvedBody = (old?.images?.length && isMediaPlaceholder(message.body)) ? (old.body || "") : (message.body || old?.body || "");
+        const resolvedBody = old && hasMedia(old) && isMediaPlaceholder(message.body) ? (old.body || "")
+            : hasMedia(message) && isMediaPlaceholder(old?.body) ? (message.body || "") : (message.body || old?.body || "");
         const record = {
-            id: old?.id || "message:" + key, sourceIds: (old?.sourceIds || []).concat(key).filter((id, i, all) => all.indexOf(id) === i),
-            time: old?.time || time, name: message.name || old?.name || "",
+            id: old?.id || "message:" + key, sourceIds: (old?.sourceIds || []).concat(message.sourceIds || [key]).filter((id, i, all) => all.indexOf(id) === i),
+            time: old?.time || time, thread: message.thread ?? old?.thread, name: message.name || old?.name || "",
+            type: message.type ?? old?.type, sub: message.sub ?? old?.sub,
             number: message.number || old?.number || "", body: resolvedBody,
             deviceId: message.deviceId || old?.deviceId || "",
             picture: savedImage(message.picture) || old?.picture || "",
             previewImage: savedImage(message.previewImage) || old?.previewImage || "",
+            media: (message.media?.length ? message.media : old?.media || []).slice(0, 16),
             images: (message.images || []).map(savedImage).filter(Boolean).slice(0, 4),
             audioClips: (message.audioClips || []).slice(0, 8).map(clip => ({
                 deviceId: clip.deviceId || message.deviceId || "", part: clip.part,

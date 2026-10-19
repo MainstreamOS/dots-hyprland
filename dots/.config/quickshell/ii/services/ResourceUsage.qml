@@ -97,15 +97,17 @@ Singleton {
     // widget or the overlay resources widget (open or pinned). Mirrors the
     // users' own Loader/visible gates.
     readonly property bool barWatching: ObjectUtils.layoutHasEnabledWidget(Config.options.bar.layout, "resources")
-        && GlobalStates.barOpen && !GlobalStates.screenLocked
+        && GlobalStates.barOpen && !GlobalStates.screenLocked && !Appearance.sizes.barIsIsland
     readonly property bool overlayWatching: Persistent.states.overlay.open.includes("resources")
         && (GlobalStates.overlayOpen || Persistent.states.overlay.resources.pinned)
     // The desktop resources widget is a third reader, hidden with the lock screen.
     readonly property bool desktopWatching: Config.options.background.widgets.resources.enable && !GlobalStates.screenLocked
+    // Each visible island card registers independently, including on multiple monitors.
+    property int islandWatchers: 0
 
     Timer {
         interval: Config.options?.resources?.updateInterval ?? 3000
-        running: root.barWatching || root.overlayWatching || root.desktopWatching
+        running: root.barWatching || root.overlayWatching || root.desktopWatching || root.islandWatchers > 0
         repeat: true
         triggeredOnStart: true
         onTriggered: {

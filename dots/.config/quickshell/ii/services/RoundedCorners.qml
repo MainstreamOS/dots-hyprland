@@ -78,7 +78,7 @@ Singleton {
         const memory = look.roundCornersRestore;
         const alreadyOn = bar.cornerStyle !== 2 && look.fakeScreenRounding !== 0;
         if (bar.cornerStyle === 2)
-            bar.cornerStyle = root.inRange(memory.barCornerStyle, 0, 3) ? memory.barCornerStyle
+            bar.cornerStyle = root.inRange(memory.barCornerStyle, 0, 4) ? memory.barCornerStyle
                 : (root.barForDock[Config.options.dock.cornerStyle] ?? root.stockBarStyle);
         // Screen corners that were already off come back as they ship.
         if (look.fakeScreenRounding === 0)
@@ -98,6 +98,13 @@ Singleton {
     // lets turnOn keep a Rect chosen while the corners were off, which it
     // could not otherwise tell apart from the Rect turnOff set.
     function pickBarStyle(v) {
+        // The island lives on a horizontal bar; it shows at most ten workspaces
+        // itself, so the user's count stays as it is for the other styles.
+        if (v === 4) {
+            Config.pickBarMode("island");
+            return;
+        }
+        Config.pickBarMode("bar");
         Config.options.bar.cornerStyle = v;
         Config.options.appearance.roundCornersRestore.barCornerStyle = v;
     }

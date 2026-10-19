@@ -9,6 +9,10 @@ DialogListItem {
     id: root
     required property var device
     property bool expanded: false
+    property bool compact: false
+    property var contentColors: Appearance.colors
+    verticalPadding: compact ? 6 : 12
+    horizontalPadding: compact ? 10 : Appearance.rounding.large
     pointingHandCursor: !expanded
 
     onClicked: expanded = !expanded
@@ -44,9 +48,9 @@ DialogListItem {
             spacing: 10
 
             MaterialSymbol {
-                iconSize: Appearance.font.pixelSize.larger
+                iconSize: root.compact ? 18 : Appearance.font.pixelSize.larger
                 text: Icons.getBluetoothDeviceMaterialSymbol(root.device?.icon || "")
-                color: Appearance.colors.colOnSurfaceVariant
+                color: root.contentColors.colOnSurfaceVariant
             }
 
             ColumnLayout {
@@ -54,7 +58,8 @@ DialogListItem {
                 Layout.fillWidth: true
                 StyledText {
                     Layout.fillWidth: true
-                    color: Appearance.colors.colOnSurfaceVariant
+                    color: root.contentColors.colOnSurfaceVariant
+                    font.pixelSize: root.compact ? 11 : Appearance.font.pixelSize.small
                     elide: Text.ElideRight
                     text: root.device?.name || Translation.tr("Unknown device")
                     textFormat: Text.PlainText
@@ -62,8 +67,8 @@ DialogListItem {
                 StyledText {
                     visible: (root.device?.connected || root.device?.paired) ?? false
                     Layout.fillWidth: true
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colSubtext
+                    font.pixelSize: root.compact ? 10 : Appearance.font.pixelSize.smaller
+                    color: root.contentColors.colSubtext
                     elide: Text.ElideRight
                     text: {
                         if (!root.device?.paired) return "";
@@ -77,8 +82,8 @@ DialogListItem {
 
             MaterialSymbol {
                 text: "keyboard_arrow_down"
-                iconSize: Appearance.font.pixelSize.larger
-                color: Appearance.colors.colOnLayer3
+                iconSize: root.compact ? 18 : Appearance.font.pixelSize.larger
+                color: root.contentColors.colOnLayer3 ?? root.contentColors.colOnLayer1
                 rotation: root.expanded ? 180 : 0
                 Behavior on rotation {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)

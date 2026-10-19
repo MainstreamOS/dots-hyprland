@@ -153,6 +153,10 @@ Item { // Wrapper
                 Synchronizer on searchingText {
                     property alias source: root.searchingText
                 }
+                onAccepted: {
+                    const item = appResults.itemAtIndex(0);
+                    if (item) item.clicked();
+                }
             }
 
             Rectangle {

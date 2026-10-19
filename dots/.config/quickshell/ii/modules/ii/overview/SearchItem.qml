@@ -42,7 +42,9 @@ RippleButton {
     property int buttonHorizontalPadding: 10
     property int buttonVerticalPadding: 6
     property bool keyboardDown: false
-    readonly property bool selected: (root.hovered || root.focus)
+    property bool keyboardSelected: false
+    property var dismiss: () => { GlobalStates.overviewOpen = false; }
+    readonly property bool selected: root.hovered || root.focus || root.keyboardSelected
 
     implicitHeight: root.isSeparator ? separatorItem.implicitHeight : (rowLayout.implicitHeight + root.buttonVerticalPadding * 2)
     implicitWidth: root.isSeparator ? separatorItem.implicitWidth : (rowLayout.implicitWidth + root.buttonHorizontalPadding * 2)
@@ -149,8 +151,9 @@ RippleButton {
     }
 
     onClicked: {
-        GlobalStates.overviewOpen = false
-        root.itemExecute()
+        const execute = root.itemExecute;
+        root.dismiss();
+        if (execute) execute();
     }
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Delete && event.modifiers === Qt.ShiftModifier) {

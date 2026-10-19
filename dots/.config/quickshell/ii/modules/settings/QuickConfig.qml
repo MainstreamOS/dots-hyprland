@@ -474,9 +474,11 @@ ContentPage {
         icon: "screenshot_monitor"
         title: Translation.tr("Bar & Dock")
 
+        BarModeChoices {}
+
         ConfigRow {
             ContentSubsection {
-                title: Translation.tr("Bar position")
+                title: Appearance.sizes.barIsIsland ? Translation.tr("Island position") : Translation.tr("Bar position")
 
                 ConfigSelectionArray {
                     currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
@@ -502,12 +504,22 @@ ContentPage {
                             icon: "arrow_forward",
                             value: 3 // bottom: true, vertical: true
                         }
-                    ]
+                    ].filter(option => !Appearance.sizes.barIsIsland || (option.value & 2) === 0)
                 }
             }
 
             ContentSubsection {
-                title: Translation.tr("Bar style")
+                title: Translation.tr("Island style")
+                visible: Appearance.sizes.barIsIsland
+                Layout.fillWidth: false
+                Layout.preferredWidth: islandStyleChoices.naturalWidth
+
+                IslandStyleChoices { id: islandStyleChoices }
+            }
+
+            ContentSubsection {
+                title: Translation.tr("Corner style")
+                visible: !Appearance.sizes.barIsIsland
 
                 Layout.fillWidth: false
 

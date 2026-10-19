@@ -46,7 +46,7 @@ Singleton {
         // ones like quickshell:background map before the themed bar paints on a
         // cold first boot, so a bare match races it. Settle a beat, then launch.
         Quickshell.execDetached(["bash", "-c",
-            `for i in $(seq 1 150); do hyprctl layers -j 2>/dev/null | grep -Eq '"namespace": *"quickshell:(bar|verticalBar)"' && break; sleep 0.1; done; sleep 0.3; qs -p '${root.welcomeQmlPath}'`])
+            `for i in $(seq 1 150); do hyprctl layers -j 2>/dev/null | grep -Eq '"namespace": *"quickshell:(bar|verticalBar|dynamicIsland)"' && break; sleep 0.1; done; sleep 0.3; qs -p '${root.welcomeQmlPath}'`])
     }
 
     FileView {

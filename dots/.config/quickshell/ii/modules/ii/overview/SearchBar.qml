@@ -14,6 +14,13 @@ RowLayout {
     property bool animateWidth: false
     property alias searchInput: searchInput
     property string searchingText
+    property bool inputFocused: GlobalStates.overviewOpen
+    property bool fillSearchWidth: false
+    property bool synchronizeQuery: true
+    property bool completeFirstResult: true
+    property var dismiss: () => { GlobalStates.overviewOpen = false; }
+    signal accepted()
+    signal keyPressed(var event)
 
     function forceFocus() {
         searchInput.forceActiveFocus();
@@ -64,8 +71,10 @@ RowLayout {
         id: searchInput
         Layout.topMargin: 4
         Layout.bottomMargin: 4
+        Layout.fillWidth: root.fillSearchWidth
+        Layout.minimumWidth: root.fillSearchWidth ? 0 : -1
         implicitHeight: 40
-        focus: GlobalStates.overviewOpen
+        focus: root.inputFocused
         font.pixelSize: Appearance.font.pixelSize.small
         colBackground: Appearance.launcherContent.colLayer1
         radius: RoundedCorners.on ? Appearance.rounding.full : 0
@@ -86,20 +95,12 @@ RowLayout {
             }
         }
 
-        onTextChanged: LauncherSearch.query = text
-
-        onAccepted: {
-            if (appResults.count > 0) {
-                // Get the first visible delegate and trigger its click
-                let firstItem = appResults.itemAtIndex(0);
-                if (firstItem && firstItem.clicked) {
-                    firstItem.clicked();
-                }
-            }
-        }
+        onTextChanged: if (root.synchronizeQuery) LauncherSearch.query = text
+        onAccepted: root.accepted()
 
         Keys.onPressed: event => {
-            if (event.key === Qt.Key_Tab) {
+            root.keyPressed(event);
+            if (event.key === Qt.Key_Tab && root.completeFirstResult) {
                 if (LauncherSearch.results.length === 0) return;
                 const tabbedText = LauncherSearch.results[0].name;
                 LauncherSearch.query = tabbedText;
@@ -116,7 +117,7 @@ RowLayout {
         colRipple: Appearance.launcherContent.colLayer1Active
         colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
         onClicked: {
-            GlobalStates.overviewOpen = false;
+            root.dismiss();
             lensDelayTimer.start();
         }
         text: "image_search"
@@ -183,7 +184,7 @@ RowLayout {
         colRipple: Appearance.launcherContent.colLayer1Active
         colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
         onClicked: {
-            GlobalStates.overviewOpen = false;
+            root.dismiss();
             GlobalStates.sessionOpen = true;
         }
         text: "power_settings_new"
