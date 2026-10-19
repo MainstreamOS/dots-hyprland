@@ -72,6 +72,9 @@ Singleton {
     // and the screen that strip is on.
     property real sidebarLeftZone: 0
     property string sidebarLeftScreen: ""
+    // Written by the bars: screens where an auto-hidden bar is showing
+    // without reserving its room, so the left sidebar makes that room itself.
+    property var barOverlapScreens: []
     property var mediaTransferUrls: []
     property bool mediaReceiveActive: false
     property bool osdBrightnessOpen: false

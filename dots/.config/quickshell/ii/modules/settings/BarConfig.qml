@@ -258,6 +258,14 @@ ContentPage {
             IslandStyleChoices {}
         }
 
+        ConfigSwitch {
+            visible: Config.options.bar.autoHide.enable
+            buttonIcon: "open_in_full"
+            text: Translation.tr("Move windows aside while the hidden bar shows")
+            checked: Config.options.bar.autoHide.pushWindows
+            onCheckedChanged: Config.options.bar.autoHide.pushWindows = checked
+        }
+
         ConfigRow {
             
             ContentSubsection {

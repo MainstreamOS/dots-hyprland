@@ -62,7 +62,9 @@ Scope {
                 property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
                 visible: !hasFullscreenWindow
                 exclusionMode: ExclusionMode.Ignore
-                exclusiveZone: (Config.options.bar.cornerStyle === 4 || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
+                // Reserving nothing, the bar also ignores the zones others
+                // reserve (-1), so a pinned sidebar cannot push it aside.
+                exclusiveZone: (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) ? -1 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
                 // The compositor subtracts Top-layer exclusive zones before it
@@ -108,12 +110,22 @@ Scope {
                     bottom: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.bottom) * -1
                 }
 
+                readonly property bool overlapsSidebar: visible && Config.options.bar.autoHide.enable && mustShow && !Config.options.bar.autoHide.pushWindows
+                function publishOverlap(overlaps) {
+                    const name = barRoot.screen?.name ?? "";
+                    const others = GlobalStates.barOverlapScreens.filter(s => s !== name);
+                    GlobalStates.barOverlapScreens = overlaps ? others.concat([name]) : others;
+                }
+                onOverlapsSidebarChanged: publishOverlap(overlapsSidebar)
+
                 // Include in focus grab
                 Component.onCompleted: {
                     GlobalFocusGrab.addPersistent(barRoot);
+                    barRoot.publishOverlap(barRoot.overlapsSidebar);
                 }
                 Component.onDestruction: {
                     GlobalFocusGrab.removePersistent(barRoot);
+                    barRoot.publishOverlap(false);
                 }
 
                 MouseArea  {

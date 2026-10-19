@@ -618,7 +618,7 @@ Singleton {
                 property JsonObject autoHide: JsonObject {
                     property bool enable: false
                     property int hoverRegionWidth: 2
-                    property bool pushWindows: false
+                    property bool pushWindows: true
                     property JsonObject showWhenPressingSuper: JsonObject {
                         property bool enable: true
                         property int delay: 140

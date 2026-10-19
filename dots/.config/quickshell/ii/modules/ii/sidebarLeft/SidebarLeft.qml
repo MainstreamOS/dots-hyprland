@@ -223,6 +223,13 @@ Scope { // Scope
             color: "transparent"
 
             readonly property bool onRight: Appearance.sizes.sidebarLeftEdge === "right"
+            // An auto-hidden bar slides in over this edge without reserving its
+            // room, so the card shortens to sit beside it as it comes in.
+            property real barInset: GlobalStates.barOverlapScreens.includes(panelWindow.screen?.name ?? "")
+                ? Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0) : 0
+            Behavior on barInset {
+                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+            }
 
             anchors {
                 top: true
@@ -272,7 +279,7 @@ Scope { // Scope
             Rectangle {
                 id: sidebarLeftBackground
                 anchors.top: parent.top
-                anchors.topMargin: Appearance.sizes.hyprlandGapsOut
+                anchors.topMargin: Appearance.sizes.hyprlandGapsOut + (Config.options.bar.bottom ? 0 : panelWindow.barInset)
                 // Held against whichever edge the panel opens from, so the
                 // card keeps its screen gap there and the width animation
                 // below grows inward rather than off the display. Placed by x
@@ -282,7 +289,7 @@ Scope { // Scope
                 x: panelWindow.onRight ? parent.width - width - Appearance.sizes.hyprlandGapsOut
                     : Appearance.sizes.hyprlandGapsOut
                 width: panelWindow.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
-                height: parent.height - Appearance.sizes.hyprlandGapsOut * 2
+                height: parent.height - Appearance.sizes.hyprlandGapsOut * 2 - panelWindow.barInset
                 color: Appearance.colors.colLayer0
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
