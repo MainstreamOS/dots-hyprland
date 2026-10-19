@@ -52,7 +52,15 @@ Scope {
                     }
                 }
                 property bool superShow: false
-                property bool mustShow: hoverRegion.containsMouse || superShow
+                property bool mustShow: hoverRegion.containsMouse || hoverGrace.running || superShow
+                // Opening a sidebar from the bar starts a focus grab, and Hyprland
+                // answers a grab by sending the pointer out and straight back in.
+                // A leave counts only once it has held this long, so that round
+                // trip does not slide the bar away and back, windows and all.
+                Timer {
+                    id: hoverGrace
+                    interval: 150
+                }
                 // Hidden, the surfaces ride off the window with the strip, so a
                 // surfaces-only mask would go empty and the pointer could never
                 // reach the sliver that brings the bar back.
@@ -131,6 +139,7 @@ Scope {
                 MouseArea  {
                     id: hoverRegion
                     hoverEnabled: true
+                    onContainsMouseChanged: if (!containsMouse) hoverGrace.restart()
                     anchors {
                         fill: parent
                         rightMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * 1
