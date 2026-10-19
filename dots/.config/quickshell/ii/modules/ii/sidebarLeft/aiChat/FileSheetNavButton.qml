@@ -10,12 +10,14 @@ RippleButton {
     property string tip
     property bool sheetShown: false
 
-    implicitWidth: 28
-    implicitHeight: 28
-    buttonRadius: Appearance.rounding.small
-    colBackground: "transparent"
+    implicitWidth: 30
+    implicitHeight: 30
+    buttonRadius: 9
+    colBackground: Appearance.colors.colLayer2
     colBackgroundHover: Appearance.colors.colLayer1Hover
     opacity: enabled ? 1 : 0.35
+
+    Accessible.name: root.tip
 
     contentItem: MaterialSymbol {
         anchors.centerIn: parent

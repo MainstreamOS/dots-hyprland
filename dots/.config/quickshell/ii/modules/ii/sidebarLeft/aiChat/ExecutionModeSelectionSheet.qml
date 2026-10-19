@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 
 SheetBase {
     id: root
@@ -26,7 +27,7 @@ SheetBase {
         root.close();
     }
 
-    maxCardHeight: 310
+    maxCardHeight: 370
     icon: AiModes.icon(AiModes.current)
     title: Translation.tr("Execution Mode")
     subtitle: Translation.tr("Tool and command execution behavior")
@@ -36,25 +37,31 @@ SheetBase {
     onRowActivated: index => root.selectMode(root.modes[index].id)
 
     // Mode List
-    StyledListView {
-        id: modeListView
+    Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        clip: true
-        spacing: 6
+        radius: 14
+        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+        StyledListView {
+            id: modeListView
+            anchors.fill: parent
+            anchors.margins: 6
+            clip: true
+            spacing: 6
 
-        model: root.modes
+            model: root.modes
 
-        delegate: SheetOptionRow {
-            required property var modelData
+            delegate: SheetOptionRow {
+                required property var modelData
 
-            iconName: modelData.icon
-            name: modelData.name
-            description: modelData.desc
-            selected: AiModes.current === modelData.id
-            sheetShown: root.shown
+                iconName: modelData.icon
+                name: modelData.name
+                description: modelData.desc
+                selected: AiModes.current === modelData.id
+                sheetShown: root.shown
 
-            onClicked: root.selectMode(modelData.id)
+                onClicked: root.selectMode(modelData.id)
+            }
         }
     }
 

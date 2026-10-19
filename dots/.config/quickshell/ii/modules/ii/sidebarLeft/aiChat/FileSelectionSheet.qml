@@ -282,7 +282,7 @@ SheetBase {
         nameFilters: root.activeFilters
     }
 
-    maxCardHeight: 520
+    maxCardHeight: 560
     icon: "attach_file"
     title: Translation.tr("Attach File")
     closeToolTip: Translation.tr("Close")
@@ -347,11 +347,9 @@ SheetBase {
         // Current directory path badge
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 28
-            radius: Appearance.rounding.small
-            color: Appearance.colors.colLayer1
-            border.width: 1
-            border.color: Appearance.colors.colOutlineVariant
+            implicitHeight: 30
+            radius: 9
+            color: Appearance.colors.colLayer2
 
             RowLayout {
                 anchors.fill: parent
@@ -373,61 +371,6 @@ SheetBase {
                     color: Appearance.m3colors.m3onSurface
                     elide: Text.ElideLeft
                 }
-            }
-        }
-    }
-
-    // 3. Quick Jump Bookmarks Row (shown when browsing folders)
-    RowLayout {
-        visible: !root.isSearching
-        Layout.fillWidth: true
-        spacing: 6
-
-        Repeater {
-            model: [
-                { name: Translation.tr("Home"), icon: "home", path: Directories.home },
-                { name: Translation.tr("Pictures"), icon: "image", path: Directories.pictures },
-                { name: Translation.tr("Downloads"), icon: "download", path: Directories.downloads },
-                { name: Translation.tr("Docs"), icon: "description", path: Directories.documents }
-            ]
-
-            delegate: RippleButton {
-                id: bookmarkBtn
-                required property var modelData
-                readonly property bool isCurrent: root.isCurrentPath(modelData.path)
-                Layout.fillWidth: true
-                implicitHeight: 28
-                buttonRadius: Appearance.rounding.small
-                colBackground: bookmarkBtn.isCurrent
-                    ? Appearance.colors.colPrimaryContainer
-                    : Appearance.colors.colLayer1
-                colBackgroundHover: bookmarkBtn.isCurrent
-                    ? Appearance.colors.colPrimaryContainerHover
-                    : Appearance.colors.colLayer1Hover
-
-                contentItem: RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 4
-
-                    MaterialSymbol {
-                        text: bookmarkBtn.modelData.icon
-                        iconSize: 14
-                        color: bookmarkBtn.isCurrent
-                            ? Appearance.colors.colOnPrimaryContainer
-                            : Appearance.colors.colSubtext
-                    }
-
-                    StyledText {
-                        text: bookmarkBtn.modelData.name
-                        font.pixelSize: Appearance.font.pixelSize.smaller
-                        font.weight: bookmarkBtn.isCurrent ? Font.DemiBold : Font.Normal
-                        color: bookmarkBtn.isCurrent
-                            ? Appearance.colors.colOnPrimaryContainer
-                            : Appearance.m3colors.m3onSurface
-                    }
-                }
-
-                onClicked: root.goToFolder(modelData.path)
             }
         }
     }
@@ -477,7 +420,7 @@ SheetBase {
         id: searchField
         Layout.fillWidth: true
         placeholder: Translation.tr("Search all files...")
-        fontPixelSize: Appearance.font.pixelSize.normal
+        fontPixelSize: Appearance.font.pixelSize.small
         clearable: true
 
         onFieldKeyPressed: event => {
@@ -494,6 +437,61 @@ SheetBase {
                 if (root.keyboardIndex >= 0)
                     root.selectListRow(root.keyboardIndex);
                 event.accepted = true;
+            }
+        }
+    }
+
+    // 3. Quick Jump Bookmarks Row (shown when browsing folders)
+    RowLayout {
+        visible: !root.isSearching
+        Layout.fillWidth: true
+        spacing: 6
+
+        Repeater {
+            model: [
+                { name: Translation.tr("Home"), icon: "home", path: Directories.home },
+                { name: Translation.tr("Pictures"), icon: "image", path: Directories.pictures },
+                { name: Translation.tr("Downloads"), icon: "download", path: Directories.downloads },
+                { name: Translation.tr("Docs"), icon: "description", path: Directories.documents }
+            ]
+
+            delegate: RippleButton {
+                id: bookmarkBtn
+                required property var modelData
+                readonly property bool isCurrent: root.isCurrentPath(modelData.path)
+                Layout.fillWidth: true
+                implicitHeight: 30
+                buttonRadius: 9
+                colBackground: bookmarkBtn.isCurrent
+                    ? Appearance.colors.colPrimaryContainer
+                    : Appearance.colors.colLayer1
+                colBackgroundHover: bookmarkBtn.isCurrent
+                    ? Appearance.colors.colPrimaryContainerHover
+                    : Appearance.colors.colLayer1Hover
+
+                contentItem: RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 4
+
+                    MaterialSymbol {
+                        text: bookmarkBtn.modelData.icon
+                        iconSize: 14
+                        color: bookmarkBtn.isCurrent
+                            ? Appearance.colors.colOnPrimaryContainer
+                            : Appearance.colors.colSubtext
+                    }
+
+                    StyledText {
+                        text: bookmarkBtn.modelData.name
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.weight: bookmarkBtn.isCurrent ? Font.DemiBold : Font.Normal
+                        color: bookmarkBtn.isCurrent
+                            ? Appearance.colors.colOnPrimaryContainer
+                            : Appearance.m3colors.m3onSurface
+                    }
+                }
+
+                onClicked: root.goToFolder(modelData.path)
             }
         }
     }
@@ -515,8 +513,8 @@ SheetBase {
                 id: typeChipBtn
                 required property var modelData
                 Layout.fillWidth: true
-                implicitHeight: 24
-                buttonRadius: Appearance.rounding.small
+                implicitHeight: 28
+                buttonRadius: 9
                 colBackground: root.selectedTypeFilter === modelData.id
                     ? Appearance.colors.colSecondaryContainer
                     : "transparent"
@@ -528,7 +526,7 @@ SheetBase {
                     font.pixelSize: Appearance.font.pixelSize.smaller
                     font.weight: root.selectedTypeFilter === typeChipBtn.modelData.id ? Font.DemiBold : Font.Normal
                     color: root.selectedTypeFilter === typeChipBtn.modelData.id
-                        ? Appearance.colors.colPrimary
+                        ? Appearance.colors.colOnSecondaryContainer
                         : Appearance.colors.colSubtext
                 }
 
@@ -538,9 +536,11 @@ SheetBase {
     }
 
     // 6. File & Directory List / Search Results
-    Item {
+    Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
+        radius: 14
+        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
 
         // Keys the focused list leaves unhandled
         Keys.onPressed: event => {
@@ -557,7 +557,10 @@ SheetBase {
         // Folder browse view (when not searching)
         StyledListView {
             id: fileListView
+            popin: false
+            animateAppearance: false
             anchors.fill: parent
+            anchors.margins: 6
             visible: !root.isSearching
             clip: true
             spacing: 4
@@ -585,7 +588,10 @@ SheetBase {
         // Global search results view (when searching across ~)
         StyledListView {
             id: searchListView
+            popin: false
+            animateAppearance: false
             anchors.fill: parent
+            anchors.margins: 6
             visible: root.isSearching
             clip: true
             spacing: 4

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 
 // Option row of the Reasoning and Execution mode sheets.
 RippleButton {
@@ -15,10 +16,14 @@ RippleButton {
     readonly property bool isFocused: root.ListView.isCurrentItem && root.sheetShown
 
     width: root.ListView.view.width
-    implicitHeight: itemRow.implicitHeight + 16
-    buttonRadius: Appearance.rounding.small
-    colBackground: (root.selected || root.isFocused) ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer1
-    colBackgroundHover: (root.selected || root.isFocused) ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer1Hover
+    implicitHeight: Math.max(60, itemRow.implicitHeight + 20)
+    buttonRadius: 10
+    colBackground: root.selected ? Appearance.colors.colSecondaryContainer
+        : root.isFocused ? Appearance.colors.colLayer2Hover : "transparent"
+    colBackgroundHover: root.selected ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer2Hover
+
+    Accessible.name: root.name
+    Accessible.description: root.description
 
     contentItem: RowLayout {
         id: itemRow
@@ -31,11 +36,19 @@ RippleButton {
         }
         spacing: 12
 
-        MaterialSymbol {
+        Rectangle {
             Layout.alignment: Qt.AlignVCenter
-            text: root.iconName
-            iconSize: Appearance.font.pixelSize.larger
-            color: root.selected ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+            implicitWidth: 34
+            implicitHeight: 34
+            radius: 10
+            color: root.selected ? ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.9)
+                : Appearance.colors.colLayer2
+            MaterialSymbol {
+                anchors.centerIn: parent
+                text: root.iconName
+                iconSize: 20
+                color: root.selected ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colPrimary
+            }
         }
 
         ColumnLayout {
@@ -43,17 +56,19 @@ RippleButton {
             spacing: 2
 
             StyledText {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 text: root.name
                 font.pixelSize: Appearance.font.pixelSize.normal
                 font.weight: root.selected ? Font.DemiBold : Font.Normal
-                color: root.selected ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
+                color: root.selected ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
             }
 
             StyledText {
                 Layout.fillWidth: true
                 text: root.description
                 font.pixelSize: Appearance.font.pixelSize.smaller
-                color: Appearance.colors.colSubtext
+                color: root.selected ? ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.18) : Appearance.colors.colSubtext
                 wrapMode: Text.WordWrap
                 elide: Text.ElideRight
                 maximumLineCount: 2
@@ -63,9 +78,9 @@ RippleButton {
         MaterialSymbol {
             visible: root.selected
             Layout.alignment: Qt.AlignVCenter
-            text: "check"
+            text: "check_circle"
             iconSize: Appearance.font.pixelSize.normal
-            color: Appearance.colors.colPrimary
+            color: Appearance.colors.colOnSecondaryContainer
         }
     }
 }

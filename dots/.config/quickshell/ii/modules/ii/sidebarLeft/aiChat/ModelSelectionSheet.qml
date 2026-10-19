@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import Quickshell
 
 SheetBase {
@@ -56,14 +57,17 @@ SheetBase {
         }
     }
 
-    Item {
+    Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
+        radius: 14
+        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
 
         // Model List
         StyledListView {
             id: modelListView
             anchors.fill: parent
+            anchors.margins: 6
             visible: root.filteredModels.length > 0
             clip: true
             spacing: 6
@@ -83,10 +87,13 @@ SheetBase {
                 readonly property bool isPlan: Ai.apiStrategies[modelObj?.api_format]?.isCliStrategy ?? false
 
                 width: modelListView.width
-                implicitHeight: itemRow.implicitHeight + 16
-                buttonRadius: Appearance.rounding.small
-                colBackground: (isCurrent || isFocused) ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer1
-                colBackgroundHover: (isCurrent || isFocused) ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer1Hover
+                implicitHeight: Math.max(64, itemRow.implicitHeight + 20)
+                buttonRadius: 10
+                colBackground: isCurrent ? Appearance.colors.colSecondaryContainer
+                    : isFocused ? Appearance.colors.colLayer2Hover : "transparent"
+                colBackgroundHover: isCurrent ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer2Hover
+                Accessible.name: modelObj?.name ?? modelData
+                Accessible.description: modelObj?.description ?? ""
 
                 onClicked: root.selectModel(modelData)
 
@@ -102,9 +109,13 @@ SheetBase {
                     spacing: 10
 
                     // Icon
-                    Item {
-                        implicitWidth: 28
-                        implicitHeight: 28
+                    Rectangle {
+                        implicitWidth: 34
+                        implicitHeight: 34
+                        radius: 10
+                        color: modelItemButton.isCurrent
+                            ? ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.9)
+                            : Appearance.colors.colLayer2
                         Layout.alignment: Qt.AlignVCenter
 
                         CustomIcon {
@@ -115,7 +126,7 @@ SheetBase {
                             height: 22
                             source: (modelItemButton.modelObj && modelItemButton.modelObj.icon) ? modelItemButton.modelObj.icon : ""
                             colorize: true
-                            color: modelItemButton.isCurrent ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
+                            color: modelItemButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
                         }
 
                         MaterialSymbol {
@@ -123,7 +134,7 @@ SheetBase {
                             visible: !cIcon.visible
                             text: modelItemButton.isPlan ? "bolt" : "api"
                             iconSize: Appearance.font.pixelSize.larger
-                            color: modelItemButton.isCurrent ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
+                            color: modelItemButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
                         }
                     }
 
@@ -137,11 +148,12 @@ SheetBase {
                             spacing: 6
 
                             StyledText {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
                                 text: (modelItemButton.modelObj && modelItemButton.modelObj.name) ? modelItemButton.modelObj.name : modelItemButton.modelData
                                 font.pixelSize: Appearance.font.pixelSize.small
                                 font.weight: modelItemButton.isCurrent ? Font.Bold : Font.DemiBold
-                                color: modelItemButton.isCurrent ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
-                                elide: Text.ElideRight
+                                color: modelItemButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
                             }
 
                             // Plan / Format pill
@@ -171,7 +183,9 @@ SheetBase {
                                 return firstLine.replace(/^Online\s*\|\s*/, "");
                             }
                             font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: Appearance.colors.colSubtext
+                            color: modelItemButton.isCurrent
+                                ? ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.18)
+                                : Appearance.colors.colSubtext
                             elide: Text.ElideRight
                             maximumLineCount: 1
                         }
@@ -182,7 +196,7 @@ SheetBase {
                         visible: modelItemButton.isCurrent
                         text: "check_circle"
                         iconSize: Appearance.font.pixelSize.larger
-                        color: Appearance.colors.colPrimary
+                        color: Appearance.colors.colOnSecondaryContainer
                         Layout.alignment: Qt.AlignVCenter
                     }
                 }
@@ -213,25 +227,34 @@ SheetBase {
         RippleButton {
             implicitHeight: 28
             implicitWidth: refreshRow.implicitWidth + 12
+            topPadding: 0
+            bottomPadding: 0
+            leftPadding: 6
+            rightPadding: 6
             buttonRadius: Appearance.rounding.small
             colBackground: Appearance.colors.colLayer1
             colBackgroundHover: Appearance.colors.colLayer1Hover
 
-            contentItem: RowLayout {
-                id: refreshRow
-                anchors.centerIn: parent
-                spacing: 4
+            contentItem: Item {
+                RowLayout {
+                    id: refreshRow
+                    anchors.centerIn: parent
+                    spacing: 4
 
-                MaterialSymbol {
-                    text: "refresh"
-                    iconSize: Appearance.font.pixelSize.small
-                    color: Appearance.colors.colSubtext
-                }
+                    MaterialSymbol {
+                        Layout.alignment: Qt.AlignVCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "refresh"
+                        iconSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                    }
 
-                StyledText {
-                    text: Translation.tr("Ollama")
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colSubtext
+                    StyledText {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: Translation.tr("Ollama")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                    }
                 }
             }
 

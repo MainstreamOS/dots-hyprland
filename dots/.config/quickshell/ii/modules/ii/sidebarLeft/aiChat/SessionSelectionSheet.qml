@@ -310,66 +310,72 @@ SheetBase {
             Layout.topMargin: 4
         }
 
-        StyledListView {
-            id: saveSessionListView
+        Rectangle {
             visible: Ai.savedChats.length > 0
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            spacing: 4
+            radius: 14
+            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+            StyledListView {
+                id: saveSessionListView
+                anchors.fill: parent
+                anchors.margins: 6
+                clip: true
+                spacing: 4
 
-            model: ScriptModel {
-                values: root.chatNames
-            }
+                model: ScriptModel {
+                    values: root.chatNames
+                }
 
-            delegate: Item {
-                id: saveChatRowItem
-                required property var modelData
-                required property int index
+                delegate: Item {
+                    id: saveChatRowItem
+                    required property var modelData
+                    required property int index
 
-                width: saveSessionListView.width
-                implicitHeight: 38
+                    width: saveSessionListView.width
+                    implicitHeight: 38
 
-                RippleButton {
-                    anchors.fill: parent
-                    buttonRadius: Appearance.rounding.small
-                    colBackground: hovered ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer1
-                    onClicked: root.editSaveName(saveChatRowItem.modelData)
+                    RippleButton {
+                        anchors.fill: parent
+                        buttonRadius: Appearance.rounding.small
+                        colBackground: hovered ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer1
+                        onClicked: root.editSaveName(saveChatRowItem.modelData)
 
-                    contentItem: RowLayout {
-                        anchors {
-                            fill: parent
-                            leftMargin: 10
-                            rightMargin: 10
+                        contentItem: RowLayout {
+                            anchors {
+                                fill: parent
+                                leftMargin: 10
+                                rightMargin: 10
+                            }
+                            spacing: 8
+
+                            MaterialSymbol {
+                                text: "history"
+                                iconSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: saveChatRowItem.modelData
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                color: Appearance.m3colors.m3onSurface
+                                elide: Text.ElideRight
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            MaterialSymbol {
+                                text: "edit"
+                                iconSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                                Layout.alignment: Qt.AlignVCenter
+                            }
                         }
-                        spacing: 8
 
-                        MaterialSymbol {
-                            text: "history"
-                            iconSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                            Layout.alignment: Qt.AlignVCenter
+                        StyledToolTip {
+                            text: Translation.tr("Click to use this name")
                         }
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: saveChatRowItem.modelData
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.m3colors.m3onSurface
-                            elide: Text.ElideRight
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        MaterialSymbol {
-                            text: "edit"
-                            iconSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-
-                    StyledToolTip {
-                        text: Translation.tr("Click to use this name")
                     }
                 }
             }
@@ -395,115 +401,121 @@ SheetBase {
             placeholder: Translation.tr("Filter saved sessions…")
         }
 
-        StyledListView {
-            id: sessionListView
+        Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            spacing: 4
             visible: root.filteredChats.length > 0 && !root.confirmingLoad
+            radius: 14
+            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+            StyledListView {
+                id: sessionListView
+                anchors.fill: parent
+                anchors.margins: 6
+                clip: true
+                spacing: 4
 
-            model: ScriptModel {
-                values: root.filteredChats
-            }
-
-            delegate: Item {
-                id: chatRowItem
-                required property var modelData
-                required property int index
-
-                readonly property bool isSelected: sessionListView.currentIndex === index && root.shown
-                property bool deleteArmed: false
-
-                width: sessionListView.width
-                implicitHeight: 44
-
-                Timer {
-                    id: disarmTimer
-                    interval: 3000
-                    onTriggered: chatRowItem.deleteArmed = false
+                model: ScriptModel {
+                    values: root.filteredChats
                 }
 
-                RippleButton {
-                    id: loadRowButton
-                    anchors {
-                        left: parent.left
-                        right: deleteButton.left
-                        rightMargin: 4
-                        top: parent.top
-                        bottom: parent.bottom
+                delegate: Item {
+                    id: chatRowItem
+                    required property var modelData
+                    required property int index
+
+                    readonly property bool isSelected: sessionListView.currentIndex === index && root.shown
+                    property bool deleteArmed: false
+
+                    width: sessionListView.width
+                    implicitHeight: 44
+
+                    Timer {
+                        id: disarmTimer
+                        interval: 3000
+                        onTriggered: chatRowItem.deleteArmed = false
                     }
-                    buttonRadius: Appearance.rounding.small
-                    colBackground: (chatRowItem.isSelected || hovered) ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer1
-                    colBackgroundHover: Appearance.colors.colSecondaryContainerHover
 
-                    onClicked: root.requestLoad(chatRowItem.modelData)
-
-                    contentItem: RowLayout {
+                    RippleButton {
+                        id: loadRowButton
                         anchors {
-                            fill: parent
-                            leftMargin: 12
-                            rightMargin: 12
+                            left: parent.left
+                            right: deleteButton.left
+                            rightMargin: 4
+                            top: parent.top
+                            bottom: parent.bottom
                         }
-                        spacing: 10
+                        buttonRadius: Appearance.rounding.small
+                        colBackground: (chatRowItem.isSelected || hovered) ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer1
+                        colBackgroundHover: Appearance.colors.colSecondaryContainerHover
 
-                        MaterialSymbol {
-                            text: "chat"
+                        onClicked: root.requestLoad(chatRowItem.modelData)
+
+                        contentItem: RowLayout {
+                            anchors {
+                                fill: parent
+                                leftMargin: 12
+                                rightMargin: 12
+                            }
+                            spacing: 10
+
+                            MaterialSymbol {
+                                text: "chat"
+                                iconSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colPrimary
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: chatRowItem.modelData
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.weight: Font.DemiBold
+                                color: Appearance.m3colors.m3onSurface
+                                elide: Text.ElideRight
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            MaterialSymbol {
+                                text: "file_download"
+                                iconSize: Appearance.font.pixelSize.small
+                                color: Appearance.colors.colSubtext
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+                    }
+
+                    RippleButton {
+                        id: deleteButton
+                        anchors {
+                            right: parent.right
+                            top: parent.top
+                            bottom: parent.bottom
+                        }
+                        implicitWidth: 38
+                        buttonRadius: Appearance.rounding.small
+                        colBackground: hovered ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer1
+                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        onClicked: {
+                            if (chatRowItem.deleteArmed) {
+                                chatRowItem.deleteArmed = false;
+                                disarmTimer.stop();
+                                Ai.deleteChat(chatRowItem.modelData);
+                            } else {
+                                chatRowItem.deleteArmed = true;
+                                disarmTimer.restart();
+                            }
+                        }
+
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent
+                            text: chatRowItem.deleteArmed ? "delete_forever" : "delete_outline"
                             iconSize: Appearance.font.pixelSize.normal
-                            color: Appearance.colors.colPrimary
-                            Layout.alignment: Qt.AlignVCenter
+                            color: (chatRowItem.deleteArmed || deleteButton.hovered) ? Appearance.colors.colError : Appearance.colors.colSubtext
                         }
 
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: chatRowItem.modelData
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            font.weight: Font.DemiBold
-                            color: Appearance.m3colors.m3onSurface
-                            elide: Text.ElideRight
-                            Layout.alignment: Qt.AlignVCenter
+                        StyledToolTip {
+                            text: chatRowItem.deleteArmed ? Translation.tr("Click again to delete") : Translation.tr("Delete saved session")
                         }
-
-                        MaterialSymbol {
-                            text: "file_download"
-                            iconSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-                }
-
-                RippleButton {
-                    id: deleteButton
-                    anchors {
-                        right: parent.right
-                        top: parent.top
-                        bottom: parent.bottom
-                    }
-                    implicitWidth: 38
-                    buttonRadius: Appearance.rounding.small
-                    colBackground: hovered ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer1
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
-                    onClicked: {
-                        if (chatRowItem.deleteArmed) {
-                            chatRowItem.deleteArmed = false;
-                            disarmTimer.stop();
-                            Ai.deleteChat(chatRowItem.modelData);
-                        } else {
-                            chatRowItem.deleteArmed = true;
-                            disarmTimer.restart();
-                        }
-                    }
-
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        text: chatRowItem.deleteArmed ? "delete_forever" : "delete_outline"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: (chatRowItem.deleteArmed || deleteButton.hovered) ? Appearance.colors.colError : Appearance.colors.colSubtext
-                    }
-
-                    StyledToolTip {
-                        text: chatRowItem.deleteArmed ? Translation.tr("Click again to delete") : Translation.tr("Delete saved session")
                     }
                 }
             }

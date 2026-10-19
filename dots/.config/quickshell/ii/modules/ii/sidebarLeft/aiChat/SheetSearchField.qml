@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 
 // Text field used by the chat tab's sheets for search, filter and name input.
 Rectangle {
@@ -20,11 +21,11 @@ Rectangle {
         textInput.selectAll();
     }
 
-    implicitHeight: 38
-    radius: Appearance.rounding.small
-    color: Appearance.colors.colLayer1
-    border.width: textInput.activeFocus ? 2 : 1
-    border.color: textInput.activeFocus ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+    implicitHeight: 40
+    radius: 12
+    color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+    border.width: 1
+    border.color: textInput.activeFocus ? ColorUtils.transparentize(Appearance.colors.colPrimary, 0.65) : "transparent"
 
     RowLayout {
         anchors.fill: parent
@@ -63,6 +64,7 @@ Rectangle {
                 selectByMouse: true
                 clip: true
                 font.pixelSize: root.fontPixelSize
+                Accessible.name: root.placeholder
                 color: Appearance.m3colors.m3onSurface
                 Keys.onPressed: event => root.fieldKeyPressed(event)
             }

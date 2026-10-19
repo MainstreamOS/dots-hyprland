@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
@@ -121,10 +122,10 @@ FocusScope {
             margins: 8
         }
         height: Math.min(parent.height - 16, root.maxCardHeight)
-        radius: Appearance.rounding.normal
-        color: Appearance.colors.colLayer2Base
+        radius: 14
+        color: Appearance.colors.colLayer0Base
         border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
+        border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, 0.4)
         clip: true
 
         StyledRectangularShadow {
@@ -142,68 +143,91 @@ FocusScope {
             id: contentColumn
             anchors.fill: parent
             anchors.margins: 12
-            spacing: 10
+            spacing: 8
 
-            // Header Row
-            RowLayout {
+            Rectangle {
                 Layout.fillWidth: true
-                spacing: 8
-
-                MaterialSymbol {
-                    text: root.icon
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colPrimary
-                }
-
-                ColumnLayout {
-                    spacing: 1
-
-                    StyledText {
-                        text: root.title
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        font.weight: Font.DemiBold
-                        color: Appearance.m3colors.m3onSurface
-                    }
-
-                    StyledText {
-                        visible: root.subtitle.length > 0
-                        text: root.subtitle
-                        font.pixelSize: Appearance.font.pixelSize.smaller
-                        color: Appearance.colors.colSubtext
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
+                implicitHeight: headerRow.implicitHeight + 16
+                radius: 14
+                color: ColorUtils.mix(
+                    ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94),
+                    Appearance.colors.colSecondaryContainer, 0.75)
 
                 RowLayout {
-                    id: headerActionsRow
-                    visible: children.length > 0
-                    spacing: 8
-                }
+                    id: headerRow
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 10
 
-                RippleButton {
-                    implicitWidth: 32
-                    implicitHeight: 32
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: "transparent"
-                    colBackgroundHover: Appearance.colors.colSecondaryContainerHover
-
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        text: "close"
-                        iconSize: Appearance.font.pixelSize.normal
-                        color: Appearance.colors.colSubtext
+                    Rectangle {
+                        implicitWidth: 34
+                        implicitHeight: 34
+                        radius: 10
+                        color: Appearance.colors.colSecondaryContainer
+                        MaterialSymbol {
+                            anchors.centerIn: parent
+                            text: root.icon
+                            iconSize: 20
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
                     }
 
-                    onClicked: root.close()
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: root.title
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.weight: Font.Medium
+                            color: Appearance.m3colors.m3onSurface
+                            elide: Text.ElideRight
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            visible: root.subtitle.length > 0
+                            text: root.subtitle
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
 
-                    StyledToolTip {
-                        extraVisibleCondition: root.shown && root.closeToolTip.length > 0
-                        text: root.closeToolTip
+                    RowLayout {
+                        id: headerActionsRow
+                        visible: children.length > 0
+                        spacing: 4
+                    }
+
+                    RippleButton {
+                        implicitWidth: 32
+                        implicitHeight: 32
+                        buttonRadius: 9
+                        colBackground: Appearance.colors.colLayer2
+                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        Accessible.name: root.closeToolTip.length > 0 ? root.closeToolTip : Translation.tr("Close")
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "close"
+                            iconSize: 18
+                            color: Appearance.colors.colOnLayer2
+                        }
+                        onClicked: root.close()
+                        StyledToolTip {
+                            extraVisibleCondition: root.shown && root.closeToolTip.length > 0
+                            text: root.closeToolTip
+                        }
                     }
                 }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: ColorUtils.transparentize(Appearance.colors.colOnLayer1, 0.85)
             }
         }
     }

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell.Widgets
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
@@ -18,12 +19,15 @@ RippleButton {
     readonly property var iconInfo: root.sheet.fileIconInfo(root.name, root.isDir)
 
     width: root.ListView.view.width
-    implicitHeight: 46
-    buttonRadius: Appearance.rounding.small
+    implicitHeight: 54
+    buttonRadius: 10
     colBackground: (root.ListView.isCurrentItem && root.ListView.view.activeFocus)
         ? Appearance.colors.colSecondaryContainer
         : "transparent"
     colBackgroundHover: Appearance.colors.colLayer1Hover
+
+    Accessible.name: root.name
+    Accessible.description: root.detail
 
     contentItem: RowLayout {
         anchors {
@@ -34,15 +38,17 @@ RippleButton {
         spacing: 10
 
         // File / Folder Icon or Image Thumbnail
-        Item {
-            implicitWidth: 28
-            implicitHeight: 28
+        Rectangle {
+            implicitWidth: 34
+            implicitHeight: 34
+            radius: 10
+            color: Appearance.colors.colLayer2
             Layout.alignment: Qt.AlignVCenter
 
-            Rectangle {
+            ClippingRectangle {
                 visible: Boolean(root.iconInfo.isImage)
                 anchors.fill: parent
-                radius: Appearance.rounding.verysmall
+                radius: 10
                 clip: true
                 color: "transparent"
 
@@ -66,7 +72,7 @@ RippleButton {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            spacing: 1
+            spacing: 3
 
             StyledText {
                 Layout.fillWidth: true

@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.functions
 import Quickshell
 
 SheetBase {
@@ -52,27 +53,33 @@ SheetBase {
     onRowActivated: index => root.selectLevel(root.levels[index].id)
 
     // Reasoning Level List
-    StyledListView {
-        id: levelListView
+    Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        clip: true
-        spacing: 6
+        radius: 14
+        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+        StyledListView {
+            id: levelListView
+            anchors.fill: parent
+            anchors.margins: 6
+            clip: true
+            spacing: 6
 
-        model: ScriptModel {
-            values: root.levels
-        }
+            model: ScriptModel {
+                values: root.levels
+            }
 
-        delegate: SheetOptionRow {
-            required property var modelData
+            delegate: SheetOptionRow {
+                required property var modelData
 
-            iconName: root.levelIcon(modelData.id)
-            name: modelData.name
-            description: modelData.desc ?? ""
-            selected: root.isCurrentLevel(modelData.id)
-            sheetShown: root.shown
+                iconName: root.levelIcon(modelData.id)
+                name: modelData.name
+                description: modelData.desc ?? ""
+                selected: root.isCurrentLevel(modelData.id)
+                sheetShown: root.shown
 
-            onClicked: root.selectLevel(modelData.id)
+                onClicked: root.selectLevel(modelData.id)
+            }
         }
     }
 
