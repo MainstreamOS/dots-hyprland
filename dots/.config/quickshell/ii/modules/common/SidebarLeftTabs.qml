@@ -11,8 +11,18 @@ import qs.services
 Singleton {
     id: root
 
+    property string targetTab: ""
+    signal requestTab(string tabId)
+
+    function showTab(tabId) {
+        root.targetTab = tabId;
+        root.requestTab(tabId);
+    }
+
+
     readonly property var definitions: [
         { id: "ai", icon: "neurology", name: Translation.tr("AI Assistant"), enabled: Config.options.policies.ai !== 0 },
+        { id: "phone", icon: "smartphone", name: Translation.tr("Phone"), enabled: Config.options.sidebar.phone.enable && Phone.installed },
         { id: "media", icon: "music_note", name: Translation.tr("Media"), enabled: Config.options.sidebar.media.enable },
         { id: "translator", icon: "translate", name: Translation.tr("Translator"), enabled: Config.options.sidebar.translator.enable },
         { id: "anime", icon: "bookmark_heart", name: Translation.tr("Anime"), enabled: Config.options.policies.weeb !== 0 }

@@ -723,6 +723,35 @@ ContentPage {
                     ]
                 }
             }
+            ColumnLayout {
+                ContentSubsectionLabel {
+                    text: Translation.tr("Phone")
+                }
+                ConfigSelectionArray {
+                    currentValue: Config.options.sidebar.phone.enable ? 1 : 0
+                    onSelected: newValue => {
+                        Config.options.sidebar.phone.enable = (newValue === 1);
+                    }
+                    options: [
+                        { displayName: Translation.tr("No"),  icon: "close", value: 0 },
+                        { displayName: Translation.tr("Yes"), icon: "check", value: 1 }
+                    ]
+                }
+            }
+        }
+
+        ContentSubsection {
+            visible: Config.options.sidebar.phone.enable
+
+            ConfigSwitch {
+                buttonIcon: "link"
+                text: Translation.tr("Link previews in messages")
+                checked: Config.options.sidebar.phone.linkPreviews
+                onCheckedChanged: Config.options.sidebar.phone.linkPreviews = checked
+                StyledToolTip {
+                    text: Translation.tr("Shows a card for each link, which loads the linked page from the web when the message is on screen")
+                }
+            }
         }
 
         ContentSubsection {

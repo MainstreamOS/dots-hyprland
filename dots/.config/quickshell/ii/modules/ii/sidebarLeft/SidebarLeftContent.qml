@@ -59,6 +59,9 @@ Item {
             if (at === -1) swipeView.insertItem(i, wanted[i]);
             else if (at !== i) swipeView.moveItem(at, i);
         }
+        if (swipeView.contentItem && "cacheBuffer" in swipeView.contentItem) {
+            swipeView.contentItem.cacheBuffer = 10000;
+        }
         // The swipe view only takes these changes in at its next layout, and
         // doing so shifts its current index, which would carry it off the
         // page picked below to wherever the old one's neighbor ended up.
@@ -69,10 +72,75 @@ Item {
         const isTab = SidebarLeftTabs.tabs.some(tab => tab.id === root.currentPageId);
         root.tabButtonList = SidebarLeftTabs.tabs;
         root.syncing = false;
+        if (SidebarLeftTabs.targetTab) {
+            const targetIdx = wanted.findIndex(page => page.pageId === SidebarLeftTabs.targetTab);
+            if (targetIdx !== -1) {
+                root.showPage(targetIdx);
+                SidebarLeftTabs.targetTab = "";
+                warmupTimer.restart();
+                return;
+            }
+        }
         const kept = (wasTab && !isTab) ? -1 : wanted.findIndex(page => page.pageId === root.currentPageId);
         // A page that is gone gives way to a tab near it, never to the
         // closeted page, which only a swipe is meant to reach.
         root.showPage(kept !== -1 ? kept : Math.max(0, Math.min(previousIndex, root.tabButtonList.length - 1)));
+        warmupTimer.restart();
+    }
+
+    Timer {
+        id: warmupTimer
+        interval: 40
+        repeat: true
+        onTriggered: {
+            for (let i = 0; i < swipeView.count; i++) {
+                const page = swipeView.itemAt(i);
+                // The closeted page is built when someone swipes to it.
+                if (page && !page.built && !(page.pageId === "anime" && SidebarLeftTabs.animeCloset)) {
+                    page.built = true;
+                    return;
+                }
+            }
+            for (let i = 0; i < swipeView.count; i++) {
+                const page = swipeView.itemAt(i);
+                if (page && page.built && !page.sgWarmed && page.item && page.width > 0 && page.height > 0 && GlobalStates.sidebarLeftOpen) {
+                    page.sgWarmed = true;
+                    page.item.grabToImage(() => {}, Qt.size(1, 1));
+                    return;
+                }
+            }
+            warmupTimer.stop();
+        }
+    }
+
+    Connections {
+        target: GlobalStates
+        function onSidebarLeftOpenChanged() {
+            if (GlobalStates.sidebarLeftOpen) {
+                if (SidebarLeftTabs.targetTab && root.showTab(SidebarLeftTabs.targetTab)) SidebarLeftTabs.targetTab = "";
+                root.realign();
+                warmupTimer.restart();
+            }
+        }
+    }
+
+    Connections {
+        target: Phone
+        function onConversationsLoadedChanged() {
+            if (Phone.conversationsLoaded) {
+                for (let i = 0; i < root.pagePool.length; i++) {
+                    if (root.pagePool[i].pageId === "phone") {
+                        root.pagePool[i].sgWarmed = false;
+                    }
+                }
+                if (GlobalStates.sidebarLeftOpen) warmupTimer.restart();
+            }
+        }
+    }
+
+    // Keeps the current page aligned after a resize or a page change.
+    function realign(): void {
+        Qt.callLater(() => swipeView.contentItem?.positionViewAtIndex(swipeView.currentIndex, 0));
     }
 
     function showPage(index) {
@@ -83,11 +151,19 @@ Item {
         root.syncing = true;
         if (swipeView.currentIndex !== index) swipeView.setCurrentIndex(index);
         if (tabBar.currentIndex !== index) tabBar.setCurrentIndex(index);
+        root.realign();
         root.syncing = false;
         // Focus goes to the page itself each time it comes on show, not to
         // whatever inside it last had it, so the page can pass it on to its
         // own text field.
         if (arriving && page.item) page.item.focus = true;
+    }
+
+    // False when the tab is not listed yet; the request then waits in targetTab for syncPages.
+    function showTab(tabId) {
+        const idx = root.tabButtonList.findIndex(t => t.id === tabId);
+        if (idx !== -1) root.showPage(idx);
+        return idx !== -1;
     }
 
     Component.onCompleted: root.syncPages()
@@ -97,11 +173,14 @@ Item {
         // comes, each has settled.
         function onPageIdsChanged() { Qt.callLater(root.syncPages) }
         function onTabsChanged() { Qt.callLater(root.syncPages) }
+        function onRequestTab(tabId) {
+            if (root.showTab(tabId)) SidebarLeftTabs.targetTab = "";
+        }
     }
 
-    // A page is built the first time it is on screen and kept from then on,
-    // so a tab nobody opens costs nothing and one already open keeps its
-    // state across tab switches.
+    // A page is built in the background after startup and kept from then on,
+    // so switching tabs never stutters to build a page mid-animation and one
+    // already open keeps its state across tab switches.
     component PageLoader: Loader {
         id: pageLoader
         required property string pageId
@@ -109,12 +188,20 @@ Item {
         // item passes through other pages while syncPages moves them.
         readonly property bool onScreen: GlobalStates.sidebarLeftOpen && root.currentPageId === pageLoader.pageId
         property bool built: false
-        onOnScreenChanged: if (pageLoader.onScreen) pageLoader.built = true
+        property bool sgWarmed: false
+        onBuiltChanged: if (!pageLoader.built) pageLoader.sgWarmed = false
+        onOnScreenChanged: if (pageLoader.onScreen) {
+            pageLoader.built = true;
+            pageLoader.sgWarmed = true;
+        }
         active: pageLoader.built || pageLoader.onScreen
         // Handed over here and in showPage, never from the loader's own focus:
         // a page passing focus to its field sets the loader's focus again on
         // the way up, which would hand it straight back to the page.
-        onLoaded: pageLoader.item.focus = true
+        onLoaded: {
+            if (pageLoader.onScreen) pageLoader.item.focus = true;
+            else if (GlobalStates.sidebarLeftOpen) warmupTimer.restart();
+        }
     }
 
     // One page for each id SidebarLeftTabs can ask for.
@@ -126,6 +213,13 @@ Item {
                 scopeRoot: root.scopeRoot
                 // Any lock screen covers the sidebar without closing it.
                 onScreen: aiPage.onScreen && !GlobalStates.sessionLocked
+            }
+        },
+        PageLoader {
+            id: phonePage
+            pageId: "phone"
+            sourceComponent: PhoneTab {
+                onScreen: phonePage.onScreen
             }
         },
         PageLoader {
@@ -219,6 +313,9 @@ Item {
                 anchors.fill: parent
                 spacing: 10
                 onCurrentIndexChanged: if (!root.syncing) root.showPage(swipeView.currentIndex)
+                onWidthChanged: {
+                    if (width > 0) root.realign();
+                }
 
                 clip: true
                 layer.enabled: true
