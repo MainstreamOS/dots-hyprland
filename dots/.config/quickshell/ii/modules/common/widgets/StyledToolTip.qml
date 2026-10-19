@@ -12,7 +12,7 @@ ToolTip {
     // window; anything shorter keeps its single line. Zero turns wrapping off.
     property real maximumTextWidth: 360
 
-    readonly property bool internalVisibleCondition: (extraVisibleCondition && (parent.hovered === undefined || parent?.hovered)) || alternativeVisibleCondition
+    readonly property bool internalVisibleCondition: (extraVisibleCondition && !!parent && (parent.hovered === undefined || parent.hovered)) || alternativeVisibleCondition
     verticalPadding: 5
     horizontalPadding: 10
     background: null

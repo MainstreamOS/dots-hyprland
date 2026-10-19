@@ -6,6 +6,7 @@ import qs.modules.common
 import qs.modules.common.models
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import qs.modules.ii.mediaControls
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Controls
@@ -221,19 +222,6 @@ Item {
         }
     }
 
-    function playerName(player) {
-        return player?.identity || player?.desktopEntry || Translation.tr("Unknown");
-    }
-
-    // Two windows of one browser are two players with one name, so those
-    // say what they are playing as well.
-    function playerLabel(player) {
-        const name = root.playerName(player);
-        const twins = root.players.filter(other => root.playerName(other) === name).length > 1;
-        const title = StringUtils.cleanMusicTitle(player?.trackTitle);
-        return twins && title ? `${name} · ${title}` : name;
-    }
-
     // ---- sizes ----
 
     readonly property real playSize: Math.round(Math.max(52, Math.min(70, root.height * 0.085)))
@@ -311,24 +299,13 @@ Item {
             readonly property real artSide: Math.floor(Math.max(0, Math.min(content.width, content.height * 0.45,
                 content.height - content.otherHeight - content.middleMinimum)))
 
-            StyledComboBox {
+            MediaPlayerSelector {
                 id: playerPicker
-                visible: root.players.length >= 2
                 Layout.fillWidth: true
                 Layout.bottomMargin: content.gap
-                implicitHeight: 36
-                model: root.players.map(player => root.playerLabel(player))
-                currentIndex: root.players.indexOf(root.player)
-                // A new title in one of two browser windows rebuilds the list,
-                // and a rebuilt list puts the choice back at the top. The
-                // picker names the player the controls drive regardless, and
-                // its choice goes back to that player.
-                displayText: root.playerLabel(root.player)
-                onModelChanged: Qt.callLater(playerPicker.followPlayer)
-                function followPlayer() {
-                    playerPicker.currentIndex = Qt.binding(() => root.players.indexOf(root.player));
-                }
-                onActivated: index => MprisController.setActivePlayer(root.players[index])
+                players: root.players
+                player: root.player
+                onPlayerSelected: player => MprisController.setActivePlayer(player)
             }
 
             // ── Album art ──

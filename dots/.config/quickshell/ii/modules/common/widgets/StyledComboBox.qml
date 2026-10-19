@@ -6,18 +6,33 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import Quickshell
+import Quickshell.Widgets
 
 ComboBox {
     id: root
 
     property string buttonIcon: ""
+    property string buttonAppIcon: ""
+    property string appIconRole: "appIcon"
+    readonly property var currentEntry: currentIndex >= 0 && typeof model?.[currentIndex] === 'object' ? model[currentIndex] : null
+    readonly property string currentAppIcon: buttonAppIcon || (currentEntry?.[appIconRole] ?? "")
+    readonly property real appIconSize: Appearance.font.pixelSize.larger + 4
     property real buttonRadius: height / 2
     property color colBackground: Appearance.colors.colSecondaryContainer
     property color colBackgroundHover: Appearance.colors.colSecondaryContainerHover
     property color colBackgroundActive: Appearance.colors.colSecondaryContainerActive
 
     implicitHeight: 40
+    readonly property real contentInset: 16
+    leftPadding: 0
+    rightPadding: indicator.width + root.contentInset
     Layout.fillWidth: true
+
+    function iconSource(icon) {
+        if (!icon) return "";
+        return (icon.startsWith("/") || icon.startsWith("file://")) ? icon : Quickshell.iconPath(icon, "multimedia-audio-player");
+    }
 
     background: Rectangle {
         radius: root.buttonRadius
@@ -55,20 +70,25 @@ ComboBox {
             id: buttonLayout
             anchors.fill: parent
             spacing: 8
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
+            anchors.leftMargin: root.contentInset
+            anchors.rightMargin: 8
 
             Loader {
                 Layout.alignment: Qt.AlignVCenter
-                active: root.buttonIcon.length > 0 || (root.currentIndex >= 0 && typeof root.model[root.currentIndex] === 'object' && root.model[root.currentIndex]?.icon)
+                active: root.currentAppIcon.length > 0
+                visible: active
+                sourceComponent: IconImage {
+                    implicitSize: root.appIconSize
+                    source: root.iconSource(root.currentAppIcon)
+                }
+            }
+
+            Loader {
+                Layout.alignment: Qt.AlignVCenter
+                active: !root.currentAppIcon && (root.buttonIcon.length > 0 || !!root.currentEntry?.icon)
                 visible: active
                 sourceComponent: MaterialSymbol {
-                    text: {
-                        if (root.currentIndex >= 0 && typeof root.model[root.currentIndex] === 'object' && root.model[root.currentIndex]?.icon) {
-                            return root.model[root.currentIndex].icon;
-                        }
-                        return root.buttonIcon;
-                    }
+                    text: root.currentEntry?.icon || root.buttonIcon
                     iconSize: Appearance.font.pixelSize.larger
                     color: Appearance.colors.colOnSecondaryContainer
                 }
@@ -79,6 +99,7 @@ ComboBox {
                 Layout.alignment: Qt.AlignVCenter
                 color: Appearance.colors.colOnSecondaryContainer
                 text: root.displayText
+                visible: text.length > 0
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
             }
@@ -88,10 +109,16 @@ ComboBox {
     delegate: ItemDelegate {
         id: itemDelegate
         width: ListView.view ? ListView.view.width : root.width
-        implicitHeight: 40
+        implicitHeight: Math.max(40, implicitContentHeight + topPadding + bottomPadding)
+        topPadding: 8
+        bottomPadding: 8
+        // The popup's own padding also contributes to the icon's screen position.
+        leftPadding: Math.max(0, root.contentInset - root.popup.leftPadding)
+        rightPadding: 12
 
         required property var model
         required property int index
+        readonly property string appIcon: typeof model === 'object' ? (model?.[root.appIconRole] ?? "") : ""
         property color color: {
             if (root.currentIndex === itemDelegate.index) {
                 if (itemDelegate.down) return Appearance.colors.colSecondaryContainerActive;
@@ -123,13 +150,21 @@ ComboBox {
 
         contentItem: RowLayout {
             spacing: 8
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
+
+            Loader {
+                Layout.alignment: Qt.AlignVCenter
+                active: itemDelegate.appIcon.length > 0
+                visible: active
+                sourceComponent: IconImage {
+                    implicitSize: root.appIconSize
+                    source: root.iconSource(itemDelegate.appIcon)
+                }
+            }
 
             Loader {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.preferredHeight: Appearance.font.pixelSize.larger
-                active: typeof itemDelegate.model === 'object' && itemDelegate.model?.icon?.length > 0
+                active: !itemDelegate.appIcon && typeof itemDelegate.model === 'object' && itemDelegate.model?.icon?.length > 0
                 visible: active
 
                 sourceComponent: Item {
@@ -148,9 +183,9 @@ ComboBox {
 
             StyledText {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Appearance.font.pixelSize.larger
+                Layout.alignment: Qt.AlignVCenter
                 color: itemDelegate.colText
-                text: itemDelegate.model[root.textRole]
+                text: root.textRole ? (itemDelegate.model[root.textRole] ?? "") : (itemDelegate.model.modelData ?? "")
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
             }
