@@ -2803,5 +2803,13 @@
   "Unable to start the call. Connect your phone over Bluetooth and try again.": "Unable to start the call. Connect your phone over Bluetooth and try again.",
   "The phone did not respond in time. Check the call on your phone.": "The phone did not respond in time. Check the call on your phone.",
   "Unable to complete this action. Check your phone connection and try again.": "Unable to complete this action. Check your phone connection and try again.",
-  "Phone connection interrupted. Reconnecting…": "Phone connection interrupted. Reconnecting…"
+  "Phone connection interrupted. Reconnecting…": "Phone connection interrupted. Reconnecting…",
+  "Instagram Reel": "Instagram Reel",
+  "Open in browser": "Open in browser",
+  "Full screen": "Full screen",
+  "Loading preview...": "Loading preview...",
+  "Save to Pictures": "Save to Pictures",
+  "Could not save": "Could not save",
+  "Show in folder": "Show in folder",
+  "Open in your video player": "Open in your video player"
 }

@@ -36,17 +36,18 @@ Rectangle {
             onStreamFinished: {
                 root.mimeType = this.text;
                 if (root.mimeType.startsWith("image/"))
-                    imageSizeProc.exec(["identify", "-format", "%wx%h", filePath]);
+                    imageSizeProc.exec(["identify", "-format", "%[width]x%[height]\n", filePath]);
             }
         }
     }
 
     Process {
         id: imageSizeProc
-        command: ["identify", "-format", "%wx%h", filePath]
+        command: ["identify", "-format", "%[width]x%[height]\n", filePath]
         stdout: StdioCollector {
             onStreamFinished: {
-                const dimensions = this.text.split("x");
+                const firstLine = (this.text || "").trim().split("\n")[0];
+                const dimensions = firstLine.split("x");
                 root.imageWidth = parseInt(dimensions[0]);
                 root.imageHeight = parseInt(dimensions[1]);
             }
@@ -56,7 +57,7 @@ Rectangle {
     // Styles/widgets
     property real horizontalPadding: 10
     property real verticalPadding: 10
-    radius: Appearance.rounding.small - anchors.margins
+    radius: Appearance.rounding.normal - anchors.margins
     color: Appearance.colors.colLayer2
     implicitHeight: visible ? (contentItem.implicitHeight + verticalPadding * 2) : 0
 
@@ -125,10 +126,41 @@ Rectangle {
             sourceComponent: Item {
                 implicitHeight: root.imageHeight * root.scale
                 implicitWidth: imagePreview.implicitWidth
+
+                AnimatedImage {
+                    id: gifPreview
+                    anchors.fill: parent
+                    visible: root.mimeType.toLowerCase().includes("gif") || root.filePath.toLowerCase().endsWith(".gif")
+                    source: visible ? Qt.resolvedUrl(root.filePath) : ""
+                    fillMode: Image.PreserveAspectFit
+                    antialiasing: true
+                    playing: true
+                    width: root.imageWidth * root.scale
+                    height: root.imageHeight * root.scale
+
+                    layer.enabled: true
+                    layer.effect: OpacityMask {
+                        maskSource: Rectangle {
+                            width: gifPreview.width
+                            height: gifPreview.height
+                            radius: Appearance.rounding.normal
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+                        radius: Appearance.rounding.normal
+                    }
+                }
+
                 StyledImage {
                     id: imagePreview
                     anchors.fill: parent
-                    source: Qt.resolvedUrl(root.filePath)
+                    visible: !(root.mimeType.toLowerCase().includes("gif") || root.filePath.toLowerCase().endsWith(".gif"))
+                    source: visible ? Qt.resolvedUrl(root.filePath) : ""
                     fillMode: Image.PreserveAspectFit
                     antialiasing: true
                     width: root.imageWidth * root.scale

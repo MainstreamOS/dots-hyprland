@@ -12,6 +12,7 @@ MouseArea {
     id: root
     required property Item textItem
     property bool selectable: false
+    property bool closeSidebarOnOpen: true
     readonly property string link: root.textItem?.hoveredLink ?? ""
     property point tipPosition: Qt.point(0, 0)
 
@@ -22,7 +23,9 @@ MouseArea {
     function activate(url: string): void {
         if (root.opens(url)) {
             Qt.openUrlExternally(url);
-            GlobalStates.sidebarLeftOpen = false;
+            if (root.closeSidebarOnOpen) {
+                GlobalStates.sidebarLeftOpen = false;
+            }
         } else {
             Quickshell.clipboardText = url;
         }
