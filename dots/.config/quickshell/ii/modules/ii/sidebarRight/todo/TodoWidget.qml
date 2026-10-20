@@ -213,12 +213,9 @@ Item {
                     focus: root.showAddDialog
                     onAccepted: addDialog.addTask()
 
-                    background: Rectangle {
+                    background: OutlinedFieldBackground {
                         anchors.fill: parent
-                        radius: Appearance.rounding.verysmall
-                        border.width: 2
-                        border.color: todoInput.activeFocus ? Appearance.colors.colPrimary : Appearance.m3colors.m3outline
-                        color: "transparent"
+                        focused: todoInput.activeFocus
                     }
 
                     cursorDelegate: Rectangle {
@@ -392,12 +389,9 @@ Item {
                     focus: root.showEditDialog
                     onAccepted: editDialog.saveTask()
 
-                    background: Rectangle {
+                    background: OutlinedFieldBackground {
                         anchors.fill: parent
-                        radius: Appearance.rounding.verysmall
-                        border.width: 2
-                        border.color: editInput.activeFocus ? Appearance.colors.colPrimary : Appearance.m3colors.m3outline
-                        color: "transparent"
+                        focused: editInput.activeFocus
                     }
 
                     cursorDelegate: Rectangle {

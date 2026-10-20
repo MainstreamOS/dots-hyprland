@@ -16,7 +16,7 @@ RippleButton {
         }
     }
 
-    buttonRadius: Appearance.rounding.small
+    buttonRadius: 8
 
     contentItem: StyledText {
         text: buttonText

@@ -61,12 +61,7 @@ RowLayout {
             root._syncToDate()
         }
 
-        background: Rectangle {
-            radius: Appearance.rounding.verysmall
-            border.width: 1
-            border.color: Appearance.m3colors.m3outline
-            color: "transparent"
-        }
+        background: OutlinedFieldBackground {}
 
         contentItem: TextInput {
             text: firstSpinBox.textFromValue(firstSpinBox.value, firstSpinBox.locale)
@@ -111,12 +106,7 @@ RowLayout {
             root._syncToDate()
         }
 
-        background: Rectangle {
-            radius: Appearance.rounding.verysmall
-            border.width: 1
-            border.color: Appearance.m3colors.m3outline
-            color: "transparent"
-        }
+        background: OutlinedFieldBackground {}
 
         contentItem: TextInput {
             text: secondSpinBox.textFromValue(secondSpinBox.value, secondSpinBox.locale)
@@ -159,12 +149,7 @@ RowLayout {
             root._syncToDate()
         }
 
-        background: Rectangle {
-            radius: Appearance.rounding.verysmall
-            border.width: 1
-            border.color: Appearance.m3colors.m3outline
-            color: "transparent"
-        }
+        background: OutlinedFieldBackground {}
 
         contentItem: TextInput {
             text: yearSpinBox.textFromValue(yearSpinBox.value, yearSpinBox.locale)
