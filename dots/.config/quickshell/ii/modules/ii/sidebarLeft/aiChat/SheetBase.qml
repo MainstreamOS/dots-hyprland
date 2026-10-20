@@ -201,20 +201,10 @@ FocusScope {
                         spacing: 4
                     }
 
-                    RippleButton {
-                        implicitWidth: 32
-                        implicitHeight: 32
-                        buttonRadius: 9
-                        colBackground: Appearance.colors.colLayer2
-                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                    IslandButton {
+                        contentColors: Appearance.colors
+                        symbol: "close"
                         Accessible.name: root.closeToolTip.length > 0 ? root.closeToolTip : Translation.tr("Close")
-                        contentItem: MaterialSymbol {
-                            anchors.centerIn: parent
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "close"
-                            iconSize: 18
-                            color: Appearance.colors.colOnLayer2
-                        }
                         onClicked: root.close()
                         StyledToolTip {
                             extraVisibleCondition: root.shown && root.closeToolTip.length > 0

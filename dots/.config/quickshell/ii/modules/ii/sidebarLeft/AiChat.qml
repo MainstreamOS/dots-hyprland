@@ -620,8 +620,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         RippleButton {
             id: chip
             anchors.fill: parent
-            buttonRadius: Appearance.rounding.small
-            colBackground: Appearance.colors.colLayer2
+            buttonRadius: 10
+            colBackground: Appearance.surfaces.raised
             colBackgroundHover: Appearance.colors.colLayer2Hover
             onClicked: chipRoot.clicked()
 
@@ -1501,7 +1501,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                             : (shortcutsCardColumn.implicitHeight + 8 * 2)
                                         implicitHeight: shortcutsCardColumn.implicitHeight + 8 * 2
                                         radius: Appearance.rounding.small
-                                        color: Appearance.colors.colLayer2
+                                        color: Appearance.surfaces.raised
                                         border.color: Appearance.colors.colLayer0
                                         border.width: 1
 
@@ -1736,7 +1736,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             id: inputWrapper
             Layout.fillWidth: true
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+            color: Appearance.surfaces.raised
             implicitHeight: inputFieldRowLayout.height + (attachedFileIndicator.visible ? attachedFileIndicator.implicitHeight + 10 : 0)
             clip: true
 
