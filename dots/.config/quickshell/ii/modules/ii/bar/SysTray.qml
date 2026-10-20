@@ -9,6 +9,7 @@ import qs.modules.common.widgets
 
 Item {
     id: root
+    property var contentColors: Appearance.barContent
     // Room between the icons and the pill drawn around them, the same the
     // utility buttons keep, so the two read as the same kind of thing when they
     // sit beside each other.
@@ -91,18 +92,18 @@ Item {
             background.implicitWidth: 24
             background.implicitHeight: 24
             background.anchors.centerIn: this
-            colBackgroundHover: Appearance.barContent.colLayer1Hover
-            colRipple: Appearance.barContent.colLayer1Active
-            colBackgroundToggled: Appearance.barContent.colSecondaryContainer
-            colBackgroundToggledHover: Appearance.barContent.colSecondaryContainerHover
-            colRippleToggled: Appearance.barContent.colSecondaryContainerActive
+            colBackgroundHover: root.contentColors.colLayer1Hover
+            colRipple: root.contentColors.colLayer1Active
+            colBackgroundToggled: root.contentColors.colSecondaryContainer
+            colBackgroundToggledHover: root.contentColors.colSecondaryContainerHover
+            colRippleToggled: root.contentColors.colSecondaryContainerActive
 
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 iconSize: Appearance.font.pixelSize.larger
                 text: "expand_more"
                 horizontalAlignment: Text.AlignHCenter
-                color: root.trayOverflowOpen ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer2
+                color: root.trayOverflowOpen ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnLayer2
                 rotation: (root.trayOverflowOpen ? 180 : 0) - (90 * root.vertical) + (180 * root.invertSide)
                 Behavior on rotation {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -127,6 +128,7 @@ Item {
                         delegate: SysTrayItem {
                             required property SystemTrayItem modelData
                             item: modelData
+                            contentColors: root.contentColors
                             backdrop: Appearance.m3colors.m3surfaceContainer
                             Layout.fillHeight: !root.vertical
                             Layout.fillWidth: root.vertical
@@ -146,6 +148,7 @@ Item {
             delegate: SysTrayItem {
                 required property SystemTrayItem modelData
                 item: modelData
+                contentColors: root.contentColors
                 Layout.fillHeight: !root.vertical
                 Layout.fillWidth: root.vertical
                 onMenuClosed: root.releaseFocus();
@@ -158,7 +161,7 @@ Item {
         StyledText {
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
             font.pixelSize: Appearance.font.pixelSize.larger
-            color: Appearance.barContent.colSubtext
+            color: root.contentColors.colSubtext
             text: "•"
             visible: root.showSeparator && SystemTray.items.values.length > 0
         }

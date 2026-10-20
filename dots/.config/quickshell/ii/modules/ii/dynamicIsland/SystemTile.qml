@@ -13,9 +13,8 @@ RippleButton {
     property bool expanded: false
     property var iconAction: null
 
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
-    readonly property color colText: Appearance.colors.colOnLayer1
-    readonly property color colIcon: highlighted ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer3
+    readonly property color colText: Appearance.islandContent.colOnLayer1
+    readonly property color colIcon: highlighted ? Appearance.colors.colOnPrimary : Appearance.islandContent.m3onSurface
 
     Layout.preferredWidth: 1
     Layout.minimumWidth: 0
@@ -24,8 +23,8 @@ RippleButton {
     leftPadding: 6
     rightPadding: 8
 
-    colBackground: elevatedSurface
-    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer2Hover, Appearance.colors.colOnLayer0, 0.92)
+    colBackground: Appearance.surfaces.raised
+    colBackgroundHover: Appearance.surfaces.raisedHover
     colRipple: Appearance.colors.colLayer2Active
     buttonRadius: highlighted ? (Appearance?.rounding?.normal ?? 17) : height / 2
     buttonRadiusPressed: Appearance?.rounding?.small ?? 12
@@ -55,7 +54,7 @@ RippleButton {
                 radius: Math.max(4, root.buttonEffectiveRadius - root.padding)
                 color: root.highlighted
                     ? Appearance.colors.colPrimary
-                    : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    : Appearance.surfaces.row
 
                 Behavior on radius {
                     animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
@@ -103,7 +102,7 @@ RippleButton {
                 text: root.subtitle
                 font.pixelSize: 10
                 font.weight: Font.Normal
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
                 elide: Text.ElideRight
             }
         }
@@ -114,7 +113,7 @@ RippleButton {
             Layout.preferredHeight: 14
             text: "chevron_right"
             iconSize: 14
-            color: Appearance.colors.colSubtext
+            color: Appearance.islandContent.colSubtext
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             rotation: root.expanded ? 90 : 0

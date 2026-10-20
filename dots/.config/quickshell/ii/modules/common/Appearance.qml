@@ -17,6 +17,29 @@ Singleton {
     property string syntaxHighlightingTheme
     property int themeRevision: 0
 
+    // The Dynamic Island's surfaces, for every panel drawn in its style: rows and tiles sit on `row`,
+    // buttons and raised tiles on `raised`.
+    readonly property QtObject surfaces: QtObject {
+        readonly property color row: ColorUtils.mix(root.colors.colLayer0, root.colors.colLayer1, 0.5)
+        readonly property color raised: ColorUtils.mix(root.colors.colLayer2, root.colors.colOnLayer0, 0.92)
+        readonly property color raisedHover: ColorUtils.mix(root.colors.colLayer2Hover, root.colors.colOnLayer0, 0.92)
+        readonly property color unread: ColorUtils.mix(root.colors.colPrimaryContainer, raised, 0.55)
+    }
+
+    // Chat bubbles in the AI Assistant tab and phone conversations, as the Dynamic Island draws its
+    // surfaces: your side in the accent it highlights with, the other side on its neutral raised
+    // surface, so the two sides never share a color family.
+    readonly property QtObject chatBubble: QtObject {
+        readonly property color mine: root.colors.colPrimaryContainer
+        readonly property color mineText: root.colors.colOnPrimaryContainer
+        readonly property color theirs: root.surfaces.raised
+        readonly property color theirsText: root.colors.colOnLayer1
+        readonly property color mineQuote: ColorUtils.mix(mine, root.colors.colLayer0Base, 0.72)
+        readonly property color theirsQuote: ColorUtils.mix(theirs, root.colors.colLayer0Base, 0.55)
+        readonly property color mineTextFaint: ColorUtils.transparentize(mineText, 0.3)
+        readonly property color theirsTextFaint: ColorUtils.transparentize(theirsText, 0.3)
+    }
+
     // The dock inside the Activities overview.
     readonly property QtObject overviewDock: QtObject {
         readonly property int iconSize: 34
@@ -138,14 +161,14 @@ Singleton {
     function laidOver(surface, edge, shown) {
         return shown ? ColorUtils.composite(surface, wallpaperEdge(edge)) : wallpaperEdge(edge)
     }
-    readonly property color barBackdrop: laidOver(colors.colBarBackground, sizes.barEdge, Config.options?.bar.showBackground)
+    readonly property color barBackdrop: laidOver(colors.colBarBackground, sizes.barEdge, Config.options?.bar.showBackground || sizes.barIsIsland)
     readonly property color dockBackdrop: laidOver(colors.colDockBackground, sizes.dockEdge,
         root.sizes.dockShowBackground)
     // The same edges under the strip and the dock as they come. The palette's
     // inks were chosen to stand off these, so a surface the user has colored
     // is held to what they show here, and the stock one is left exactly as is.
     readonly property color barStockBackdrop: laidOver(ColorUtils.applyAlpha(colors.colLayer0, colors.barStockAlpha),
-        sizes.barEdge, Config.options?.bar.showBackground)
+        sizes.barEdge, Config.options?.bar.showBackground || sizes.barIsIsland)
     readonly property color dockStockBackdrop: laidOver(ColorUtils.applyAlpha(colors.colLayer0, colors.dockStockAlpha),
         sizes.dockEdge, root.sizes.dockShowBackground)
     // The bar and the dock read as one set, so while the dock is there it
@@ -277,6 +300,18 @@ Singleton {
         adaptive: root.autoIconContrast
         flipped: root.contentFlipped(backdrops, backdrops)
     }
+    // Judge the Island's translucent cards over its strip, rather than over
+    // the traditional bar's widget pill, for its panels and shared widgets.
+    readonly property SurfaceContent islandContent: SurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [ColorUtils.composite(root.surfaces.raised, root.barBackdrop),
+            ColorUtils.composite(root.surfaces.row, root.barBackdrop)]
+        stockBackdrops: [ColorUtils.composite(root.surfaces.raised, root.barStockBackdrop),
+            ColorUtils.composite(root.surfaces.row, root.barStockBackdrop)]
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
+        flipped: root.contentFlipped(backdrops, backdrops) || root.extremeFlipped(backdrops)
+    }
     readonly property SurfaceContent dockContent: SurfaceContent {
         m3: root.m3colors
         palette: root.colors
@@ -399,6 +434,15 @@ Singleton {
         holdsFills: true
         flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
             ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
+    }
+    readonly property LauncherSurfaceContent islandLauncherContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.barBackdrop]
+        stockBackdrops: [root.barStockBackdrop]
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled && root.sizes.barIsIsland
+        holdsFills: true
+        flipped: root.barStripContent.flipped
     }
     readonly property LauncherSurfaceContent drawerContent: LauncherSurfaceContent {
         m3: root.m3colors
@@ -623,6 +667,8 @@ Singleton {
         readonly property color colOnPrimary: tone(palette.colOnPrimary)
         readonly property color colTertiary: tone(palette.colTertiary)
         readonly property color colError: tone(palette.colError)
+        // Text and icons drawn in the error color.
+        readonly property color colErrorMark: accent(palette.colError)
         readonly property color colSecondaryContainer: fill(palette.colSecondaryContainer, m3onSurface, m3.m3onSurface)
         readonly property color colSecondaryContainerHover: fill(palette.colSecondaryContainerHover, m3onSurface, m3.m3onSurface)
         readonly property color colSecondaryContainerActive: flash(palette.colSecondaryContainerActive, m3onSurface, m3.m3onSurface)

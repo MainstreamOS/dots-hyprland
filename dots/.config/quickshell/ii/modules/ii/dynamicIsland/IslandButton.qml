@@ -6,12 +6,13 @@ import qs.modules.common.functions
 
 RippleButton {
     id: root
+    property var contentColors: Appearance.islandContent
     property string symbol: ""
     property string subtitle: ""
     property bool compact: false
     readonly property bool iconOnly: text.length === 0 && subtitle.length === 0
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
-    readonly property color ink: highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+    readonly property color elevatedSurface: Appearance.surfaces.raised
+    readonly property color ink: highlighted ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colOnLayer1
 
     implicitHeight: compact ? 42 : subtitle ? 58 : 34
     implicitWidth: iconOnly ? implicitHeight : subtitle ? 170 : Math.max(implicitHeight, (buttonContent ? buttonContent.implicitWidth : 0) + leftPadding + rightPadding)
@@ -75,7 +76,7 @@ RippleButton {
                     Layout.alignment: Qt.AlignVCenter
                     text: root.subtitle
                     visible: text.length > 0
-                    color: root.highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                    color: root.highlighted ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colSubtext
                     font.pixelSize: root.compact ? 10 : 11
                     elide: Text.ElideRight
                     verticalAlignment: Text.AlignVCenter

@@ -5,10 +5,10 @@ import Quickshell.Services.UPower
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 
 Flickable {
     id: root
+    property var contentColors: Appearance.islandContent
     property var entries: []
     implicitHeight: 60
     contentWidth: cards.width
@@ -16,7 +16,6 @@ Flickable {
     flickableDirection: Flickable.HorizontalFlick
     boundsBehavior: Flickable.StopAtBounds
     clip: true
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
     function details(entry) {
         const parts = [];
         if (entry.state === UPowerDeviceState.FullyCharged) parts.push(Translation.tr("Fully charged"));
@@ -58,12 +57,12 @@ Flickable {
                 bottomLeftRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === 0 ? (Appearance?.rounding?.normal ?? 17) : 4
                 topRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) : 4
                 bottomRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) : 4
-                readonly property color ink: Appearance.colors.colOnLayer0
+                readonly property color ink: root.contentColors.colOnLayer0
                 readonly property bool charging: modelData.state === UPowerDeviceState.Charging
                 readonly property real level: Math.max(0, Math.min(1, modelData.percentage))
                 readonly property color accent: level <= Config.options.battery.low / 100 && !charging
-                    ? Appearance.colors.colError : Appearance.colors.colPrimary
-                color: root.elevatedSurface
+                    ? root.contentColors.accent(Appearance.colors.colError) : root.contentColors.colPrimary
+                color: Appearance.surfaces.raised
                 Accessible.role: Accessible.StaticText
                 Accessible.name: modelData.label + " · " + Math.round(level * 100) + "% · " + root.details(modelData)
                 ColumnLayout {
@@ -74,7 +73,7 @@ Flickable {
                         Layout.fillWidth: true
                         spacing: 5
                         MaterialSymbol { text: card.modelData.symbol; iconSize: 18; color: card.accent }
-                        StyledText { Layout.fillWidth: true; Layout.minimumWidth: 0; text: card.modelData.label; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; textFormat: Text.PlainText }
+                        StyledText { Layout.fillWidth: true; Layout.minimumWidth: 0; text: card.modelData.label; color: card.ink; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; textFormat: Text.PlainText }
                         MaterialSymbol { visible: card.charging; text: "bolt"; iconSize: 14; color: card.accent }
                         StyledText { text: Math.round(card.level * 100) + "%"; font.pixelSize: 13; font.weight: Font.DemiBold; color: card.accent }
                     }
@@ -82,7 +81,7 @@ Flickable {
                         Layout.fillWidth: true
                         text: root.details(card.modelData)
                         font.pixelSize: 10
-                        color: Appearance.colors.colOnSurfaceVariant
+                        color: root.contentColors.colOnSurfaceVariant
                         elide: Text.ElideRight
                     }
                     Rectangle {

@@ -15,6 +15,7 @@ import Qt5Compat.GraphicalEffects
 
 ButtonMouseArea {
     id: root
+    property var contentColors: Appearance.barContent
 
     property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
     property alias shownCount: wsModel.shownCount
@@ -179,7 +180,7 @@ ButtonMouseArea {
             id: occupiedIndicatorsBg
             anchors.fill: parent
             contentLayer: StyledRectangle.ContentLayer.Group
-            color: ColorUtils.transparentize(Appearance.barContent.m3secondaryContainer, 0.4)
+            color: ColorUtils.transparentize(root.contentColors.m3secondaryContainer, 0.4)
             visible: false
         }
 
@@ -261,7 +262,7 @@ ButtonMouseArea {
                 hover: root.containsMouse
                 press: root.containsPress
                 drag: true // There are too many layers so we need to force this to be a lil more opaque
-                contentColor: Appearance.barContent.colPrimary
+                contentColor: root.contentColors.colPrimary
             }
         }
 
@@ -285,8 +286,8 @@ ButtonMouseArea {
         Colorizer {
             z: 5
             anchors.fill: numbersGrid
-            colorizationColor: Appearance.barContent.colOnPrimary
-            sourceColor: Appearance.barContent.colOnSecondaryContainer
+            colorizationColor: root.contentColors.colOnPrimary
+            sourceColor: root.contentColors.colOnSecondaryContainer
 
             source: activeIndicator
             maskEnabled: true
@@ -307,7 +308,7 @@ ButtonMouseArea {
                     id: wsApp
                     property var biggestWindow: wsModel.biggestWindow[index]
                     property var mainAppIconSource: Quickshell.iconPath(AppSearch.guessIcon(biggestWindow?.class), "image-missing")
-                    readonly property color contentColor: (wsModel.occupied[index] && wsModel.getWorkspaceIdAt(index) !== wsModel.fakeWorkspace) ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer1Inactive
+                    readonly property color contentColor: (wsModel.occupied[index] && wsModel.getWorkspaceIdAt(index) !== wsModel.fakeWorkspace) ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnLayer1Inactive
                     property real cornerMargin: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons && wsApp.biggestWindow) ? (root.workspaceButtonWidth - root.workspaceIconSize) / 2 : root.workspaceIconMarginShrinked
                     Behavior on cornerMargin {
                         animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
@@ -343,7 +344,7 @@ ButtonMouseArea {
                                 sourceComponent: Colorizer {
                                     implicitWidth: appIcon.implicitWidth
                                     implicitHeight: appIcon.implicitHeight
-                                    colorizationColor: Appearance.barContent.darkmode ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnPrimary
+                                    colorizationColor: root.contentColors.darkmode ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnPrimary
                                     colorization: Config.options.bar.workspaces.monochromeIcons ? 0.8 : 0.5
                                     brightness: 0
                                     source: appIcon
@@ -429,7 +430,7 @@ ButtonMouseArea {
                     return base;
                 return root.workspaceButtonWidth;
             }
-            color: Appearance.barContent.colPrimary
+            color: root.contentColors.colPrimary
 
             implicitWidth: root.vertical ? undirectionalWidth : undirectionalLength
             implicitHeight: root.vertical ? undirectionalLength : undirectionalWidth
@@ -490,7 +491,7 @@ ButtonMouseArea {
         id: wsNum
         property bool hasBiggestWindow: !!wsModel.biggestWindow[index]
         property int wsId: wsModel.getWorkspaceIdAt(index)
-        property color contentColor: (wsModel.occupied[wsNum.index] && wsId !== wsModel.fakeWorkspace) ? Appearance.barContent.colOnSecondaryContainer : Appearance.barContent.colOnLayer1Inactive
+        property color contentColor: (wsModel.occupied[wsNum.index] && wsId !== wsModel.fakeWorkspace) ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnLayer1Inactive
 
         // Drag-to-scroll: slots left of centre show a left chevron, slots to
         // the right show a right chevron; the middle slot(s) keep the dot.
@@ -569,7 +570,7 @@ ButtonMouseArea {
 
             contentLayer: StyledRectangle.ContentLayer.Group
             radius: indicatorThickness / 2
-            color: Appearance.barContent.colPrimary
+            color: root.contentColors.colPrimary
 
             x: root.vertical ? null : indicatorPosition
             y: root.vertical ? indicatorPosition : null

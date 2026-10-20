@@ -31,7 +31,6 @@ ColumnLayout {
     property bool audioDrawerOpen: false
     readonly property bool busy: tray.trayOverflowOpen || !!tray.activeMenu || root.audioDrawerOpen || root.wifiDrawerOpen || root.bluetoothDrawerOpen || root.nightLightDrawerOpen
     readonly property bool needsKeyboardFocus: (root.wifiDrawerOpen && (shownNetworks.held || root.wifiDrawerPasswordFocused)) ?? false
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
     spacing: 6
 
     // A network asked for a password releases its prompt when the drawer closes or
@@ -128,7 +127,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 158
         radius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.audioDrawerOpen
 
         ColumnLayout {
@@ -151,7 +150,7 @@ ColumnLayout {
                     text: Translation.tr("Audio Output")
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnSurfaceVariant
+                    color: Appearance.islandContent.colOnSurfaceVariant
                     verticalAlignment: Text.AlignVCenter
                 }
 
@@ -164,7 +163,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Volume mixer")
                     onClicked: {
                         Quickshell.execDetached(["bash", "-c", Config.options.apps.volumeMixer]);
@@ -175,7 +174,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "tune"
                         iconSize: 15
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -186,7 +185,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close audio output")
                     onClicked: root.audioDrawerOpen = false
                     contentItem: MaterialSymbol {
@@ -195,7 +194,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
                         iconSize: 17
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
             }
@@ -260,10 +259,10 @@ ColumnLayout {
                     } else {
                         if (itemDelegate.down) return Appearance.colors.colLayer2Active;
                         if (itemDelegate.hovered) return Appearance.colors.colLayer2Hover;
-                        return ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5);
+                        return Appearance.surfaces.row;
                     }
                 }
-                property color colText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                property color colText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
 
                 background: Rectangle {
                     anchors.fill: parent
@@ -294,7 +293,7 @@ ColumnLayout {
                         radius: itemDelegate.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) : height / 2
                         color: itemDelegate.isCurrent
                             ? Appearance.colors.colPrimary
-                            : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                            : Appearance.surfaces.row
 
                         MaterialSymbol {
                             anchors.fill: parent
@@ -310,7 +309,7 @@ ColumnLayout {
                                 return "speaker";
                             }
                             iconSize: 15
-                            color: itemDelegate.isCurrent ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer1
+                            color: itemDelegate.isCurrent ? Appearance.colors.colOnPrimary : Appearance.islandContent.colOnLayer1
                         }
                     }
 
@@ -354,7 +353,7 @@ ColumnLayout {
                 anchors.centerIn: parent
                 text: Translation.tr("No output devices")
                 font.pixelSize: 12
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
             }
         }
     }
@@ -370,7 +369,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 158
         radius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.wifiDrawerOpen
 
         ColumnLayout {
@@ -393,7 +392,7 @@ ColumnLayout {
                     text: Translation.tr("Wi-Fi Networks")
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnSurfaceVariant
+                    color: Appearance.islandContent.colOnSurfaceVariant
                     verticalAlignment: Text.AlignVCenter
                 }
 
@@ -406,7 +405,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Rescan Wi-Fi networks")
                     onClicked: Network.rescanWifi()
                     contentItem: MaterialSymbol {
@@ -415,7 +414,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "refresh"
                         iconSize: 15
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -426,7 +425,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Network settings")
                     onClicked: {
                         root.wifiDrawerOpen = false;
@@ -438,7 +437,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "settings"
                         iconSize: 15
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -449,7 +448,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close Wi-Fi networks")
                     onClicked: root.wifiDrawerOpen = false
                     contentItem: MaterialSymbol {
@@ -458,7 +457,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
                         iconSize: 17
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
             }
@@ -548,10 +547,10 @@ ColumnLayout {
                         } else {
                             if (wifiItem.down) return Appearance.colors.colLayer2Active;
                             if (wifiItem.hovered) return Appearance.colors.colLayer2Hover;
-                            return ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5);
+                            return Appearance.surfaces.row;
                         }
                     }
-                    property color itemColText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                    property color itemColText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
 
                     background: Rectangle {
                         anchors.fill: parent
@@ -587,7 +586,7 @@ ColumnLayout {
                                 radius: wifiItem.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) : height / 2
                                 color: wifiItem.isCurrent
                                     ? Appearance.colors.colPrimary
-                                    : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                    : Appearance.surfaces.row
 
                                 MaterialSymbol {
                                     anchors.fill: parent
@@ -596,7 +595,7 @@ ColumnLayout {
                                     property int strength: wifiItem.modelData?.strength ?? 0
                                     text: strength > 80 ? "signal_wifi_4_bar" : strength > 60 ? "network_wifi_3_bar" : strength > 40 ? "network_wifi_2_bar" : strength > 20 ? "network_wifi_1_bar" : "signal_wifi_0_bar"
                                     iconSize: 16
-                                    color: wifiItem.isCurrent ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer1
+                                    color: wifiItem.isCurrent ? Appearance.colors.colOnPrimary : Appearance.islandContent.colOnLayer1
                                 }
                             }
 
@@ -618,7 +617,7 @@ ColumnLayout {
                                 visible: (wifiItem.modelData?.isSecure || false) && !wifiItem.isCurrent
                                 text: "lock"
                                 iconSize: 13
-                                color: Appearance.colors.colSubtext
+                                color: Appearance.islandContent.colSubtext
                             }
 
                             MaterialSymbol {
@@ -628,7 +627,7 @@ ColumnLayout {
                                 visible: wifiItem.isConnecting
                                 text: "settings_ethernet"
                                 iconSize: 14
-                                color: Appearance.colors.colPrimary
+                                color: Appearance.islandContent.colPrimary
                             }
 
                             Rectangle {
@@ -659,7 +658,7 @@ ColumnLayout {
                                 visible: (wifiItem.modelData?.connectionError ?? "").length > 0
                                 text: wifiItem.modelData?.connectionError ?? ""
                                 font.pixelSize: 10
-                                color: Appearance.colors.colError
+                                color: Appearance.islandContent.colErrorMark
                                 Layout.fillWidth: true
                             }
 
@@ -731,7 +730,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: Network.wifiScanning ? Translation.tr("Scanning for networks…") : Translation.tr("No Wi-Fi networks found")
                     font.pixelSize: 12
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
         }
@@ -784,7 +783,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 158
         radius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.bluetoothDrawerOpen
 
         ColumnLayout {
@@ -804,7 +803,7 @@ ColumnLayout {
                     text: Translation.tr("Bluetooth")
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnSurfaceVariant
+                    color: Appearance.islandContent.colOnSurfaceVariant
                 }
 
                 Item { Layout.fillWidth: true }
@@ -815,7 +814,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Settings")
                     onClicked: Session.openSettings("BluetoothConfig.qml")
                     contentItem: MaterialSymbol {
@@ -824,7 +823,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "settings"
                         iconSize: 15
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -834,7 +833,7 @@ ColumnLayout {
                     padding: 0
                     buttonRadius: 6
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close")
                     onClicked: root.bluetoothDrawerOpen = false
                     contentItem: MaterialSymbol {
@@ -843,7 +842,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
                         iconSize: 17
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
             }
@@ -868,7 +867,7 @@ ColumnLayout {
                         device: modelData
                         width: Math.max(0, ListView.view.width - 8)
                         compact: true
-                        contentColors: Appearance.colors
+                        contentColors: Appearance.islandContent
                     }
                     ScrollBar.vertical: StyledScrollBar {
                         policy: ScrollBar.AlwaysOn
@@ -883,7 +882,7 @@ ColumnLayout {
                     visible: BluetoothStatus.friendlyDeviceList.length === 0
                     text: Translation.tr("No devices found")
                     font.pixelSize: 12
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
                 StyledIndeterminateProgressBar {
                     anchors.left: parent.left
@@ -900,7 +899,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 158
         radius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.nightLightDrawerOpen
 
         ColumnLayout {
@@ -919,7 +918,7 @@ ColumnLayout {
                     text: Translation.tr("Night Light")
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnSurfaceVariant
+                    color: Appearance.islandContent.colOnSurfaceVariant
                 }
 
                 Item { Layout.fillWidth: true }
@@ -971,13 +970,13 @@ ColumnLayout {
                 StyledText {
                     text: Translation.tr("Turn on") + " · " + DateTime.formatTimeOfDay(Config.options.light.night.from)
                     font.pixelSize: 11
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
                 Item { Layout.fillWidth: true }
                 StyledText {
                     text: Translation.tr("Turn off") + " · " + DateTime.formatTimeOfDay(Config.options.light.night.to)
                     font.pixelSize: 11
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
 
@@ -991,19 +990,19 @@ ColumnLayout {
                     MaterialSymbol {
                         text: "thermostat"
                         iconSize: 18
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                     StyledText {
                         Layout.fillWidth: true
                         text: Translation.tr("Intensity")
                         font.pixelSize: 12
                         font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                     StyledText {
                         text: Math.round(Config.options.light.night.colorTemperature) + " K"
                         font.pixelSize: 12
-                        color: Appearance.colors.colSubtext
+                        color: Appearance.islandContent.colSubtext
                     }
                 }
 
@@ -1038,7 +1037,7 @@ ColumnLayout {
             topRightRadius: Appearance?.rounding?.normal ?? 17
             bottomLeftRadius: 4
             bottomRightRadius: 4
-            color: root.elevatedSurface
+            color: Appearance.surfaces.raised
 
             ControlWheel {
                 enabled: Audio.ready && !!Audio.sink?.audio
@@ -1059,14 +1058,14 @@ ColumnLayout {
                     buttonRadius: height / 2
                     buttonRadiusPressed: Appearance?.rounding?.verysmall ?? 8
                     colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Mute volume")
                     onClicked: Audio.toggleMute()
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
                         text: Audio.sink?.audio?.muted ? "volume_off" : "volume_up"
                         iconSize: 18
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -1077,7 +1076,7 @@ ColumnLayout {
                     text: Translation.tr("Volume")
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     elide: Text.ElideRight
                 }
 
@@ -1099,7 +1098,7 @@ ColumnLayout {
                     text: Math.round(Audio.value * 100) + "%"
                     font.pixelSize: 12
                     font.weight: Font.Medium
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
         }
@@ -1111,7 +1110,7 @@ ColumnLayout {
             topRightRadius: 4
             bottomLeftRadius: Appearance?.rounding?.normal ?? 17
             bottomRightRadius: Appearance?.rounding?.normal ?? 17
-            color: root.elevatedSurface
+            color: Appearance.surfaces.raised
 
             ControlWheel {
                 enabled: !root.isLaptop || !!root.brightness
@@ -1136,7 +1135,7 @@ ColumnLayout {
                         anchors.centerIn: parent
                         text: root.isLaptop ? "brightness_6" : "tonality"
                         iconSize: 18
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -1145,7 +1144,7 @@ ColumnLayout {
                     text: root.isLaptop ? Translation.tr("Brightness") : Translation.tr("Gamma")
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     elide: Text.ElideRight
                 }
 
@@ -1174,7 +1173,7 @@ ColumnLayout {
                     text: (root.isLaptop ? Math.round((root.brightness?.brightness ?? 0) * 100) : Hyprsunset.gamma) + "%"
                     font.pixelSize: 12
                     font.weight: Font.Medium
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
         }
@@ -1187,7 +1186,7 @@ ColumnLayout {
         implicitWidth: Math.min(root.width, trayRow.implicitWidth + 20)
         implicitHeight: 28
         radius: height / 2
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: !root.wifiDrawerOpen && !root.audioDrawerOpen && !root.bluetoothDrawerOpen && !root.nightLightDrawerOpen
             && (tray.pinnedItems.length > 0 || tray.unpinnedItems.length > 0)
         onVisibleChanged: if (!visible) expanded = false
@@ -1211,6 +1210,7 @@ ColumnLayout {
 
                 SysTray {
                     id: tray
+                    contentColors: Appearance.islandContent
                     showSeparator: false
                     showOverflowMenu: false
                     pinnedItems: trayContainer.expanded
@@ -1228,7 +1228,7 @@ ColumnLayout {
                 bottomPadding: 0
                 buttonRadius: height / 2
                 colBackground: "transparent"
-                colBackgroundHover: Appearance.colors.colLayer1Hover
+                colBackgroundHover: Appearance.surfaces.row
                 Accessible.name: trayContainer.expanded
                     ? Translation.tr("Hide tray icons") : Translation.tr("Show hidden tray icons")
                 onClicked: trayContainer.expanded = !trayContainer.expanded
@@ -1237,7 +1237,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: trayContainer.expanded ? "chevron_left" : "chevron_right"
                     iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }

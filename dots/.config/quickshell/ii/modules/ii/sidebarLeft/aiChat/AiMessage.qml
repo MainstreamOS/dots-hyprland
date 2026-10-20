@@ -30,8 +30,8 @@ Rectangle {
     // Function and command outputs are stored as user messages but belong to a tool.
     readonly property bool isToolOutput: root.role !== "assistant" && (root.messageData?.functionName ?? "").length > 0
     readonly property bool isUserMessage: root.role === "user" && !root.isToolOutput
-    readonly property color headerColor: root.isUserMessage || root.role === "assistant"
-        ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colSubtext
+    readonly property color headerColor: root.isUserMessage ? Appearance.chatBubble.mineText
+        : root.role === "assistant" ? Appearance.chatBubble.theirsText : Appearance.colors.colSubtext
     // The model still gets the answer's text as the user turn.
     readonly property string answer: root.messageData?.answer ?? ""
     readonly property string toolTitle: {
@@ -110,10 +110,8 @@ Rectangle {
     implicitHeight: root.answer ? answerLine.implicitHeight + root.messagePadding * 2 : columnLayout.implicitHeight + root.messagePadding * 2
 
     radius: 14
-    color: root.answer ? "transparent" : root.isUserMessage ? Appearance.colors.colSecondaryContainer
-        : root.role === "assistant" ? ColorUtils.mix(
-            ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.9),
-            Appearance.colors.colSecondaryContainer, 0.75)
+    color: root.answer ? "transparent" : root.isUserMessage ? Appearance.chatBubble.mine
+        : root.role === "assistant" ? Appearance.chatBubble.theirs
         : root.isToolOutput ? Appearance.colors.colLayer2 : "transparent"
 
     Keys.onPressed: (event) => {
@@ -310,7 +308,7 @@ Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1
             color: ColorUtils.transparentize(root.isUserMessage
-                ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1, 0.82)
+                ? Appearance.chatBubble.mineText : Appearance.chatBubble.theirsText, 0.82)
         }
 
         Loader {
@@ -377,7 +375,7 @@ Rectangle {
                         contentRevision: root.messageData?.contentRevision ?? 0
                     } }
                     DelegateChoice { roleValue: "text"; MessageTextBlock {
-                        textColor: root.isUserMessage ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnLayer1
+                        textColor: root.isUserMessage ? Appearance.chatBubble.mineText : Appearance.chatBubble.theirsText
                         editing: root.editing
                         renderMarkdown: root.renderMarkdown
                         enableMouseSelection: root.enableMouseSelection

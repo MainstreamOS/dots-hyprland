@@ -22,9 +22,9 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: 140
         visible: !IslandState.player
-        MaterialSymbol { Layout.alignment: Qt.AlignHCenter; text: "music_note"; iconSize: 42; color: Appearance.colors.colPrimary }
-        StyledText { Layout.alignment: Qt.AlignHCenter; text: Translation.tr("No media playing"); font.pixelSize: Appearance.font.pixelSize.large }
-        StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: Translation.tr("Play music or video in a browser, Spotify, VLC, or an MPRIS-enabled player."); color: Appearance.colors.colOnSurfaceVariant }
+        MaterialSymbol { Layout.alignment: Qt.AlignHCenter; text: "music_note"; iconSize: 42; color: Appearance.barStripContent.colPrimary }
+        StyledText { Layout.alignment: Qt.AlignHCenter; text: Translation.tr("No media playing"); color: Appearance.barStripContent.colOnLayer0; font.pixelSize: Appearance.font.pixelSize.large }
+        StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: Translation.tr("Play music or video in a browser, Spotify, VLC, or an MPRIS-enabled player."); color: Appearance.barStripContent.colOnSurfaceVariant }
     }
     MediaPlayerSelector {
         id: playerSelector

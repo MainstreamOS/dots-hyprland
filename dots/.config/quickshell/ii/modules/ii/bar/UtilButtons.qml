@@ -10,6 +10,7 @@ import Quickshell.Services.UPower
 
 Item {
     id: root
+    property var contentColors: Appearance.barContent
     property bool borderless: Config.options.bar.borderless
     implicitWidth: rowLayout.implicitWidth + rowLayout.spacing * 2
     implicitHeight: rowLayout.implicitHeight
@@ -24,6 +25,7 @@ Item {
             active: Config.options.bar.utilButtons.showScreenSnip
             visible: Config.options.bar.utilButtons.showScreenSnip
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "region", "screenshot"]);
                 MaterialSymbol {
@@ -31,7 +33,7 @@ Item {
                     fill: 1
                     text: "screenshot_region"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -40,6 +42,7 @@ Item {
             active: Config.options.bar.utilButtons.showScreenRecord
             visible: Config.options.bar.utilButtons.showScreenRecord
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: Quickshell.execDetached([Directories.recordScriptPath])
                 MaterialSymbol {
@@ -47,7 +50,7 @@ Item {
                     fill: 1
                     text: "videocam"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -56,6 +59,7 @@ Item {
             active: Config.options.bar.utilButtons.showColorPicker
             visible: Config.options.bar.utilButtons.showColorPicker
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: Quickshell.execDetached(["hyprpicker", "-a"])
                 MaterialSymbol {
@@ -63,7 +67,7 @@ Item {
                     fill: 1
                     text: "colorize"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -72,6 +76,7 @@ Item {
             active: Config.options.bar.utilButtons.showKeyboardToggle
             visible: Config.options.bar.utilButtons.showKeyboardToggle
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: GlobalStates.oskOpen = !GlobalStates.oskOpen
                 MaterialSymbol {
@@ -79,7 +84,7 @@ Item {
                     fill: 0
                     text: "keyboard"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -88,6 +93,7 @@ Item {
             active: Config.options.bar.utilButtons.showMicToggle
             visible: Config.options.bar.utilButtons.showMicToggle
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_SOURCE@", "toggle"])
                 MaterialSymbol {
@@ -95,7 +101,7 @@ Item {
                     fill: 0
                     text: Pipewire.defaultAudioSource?.audio?.muted ? "mic_off" : "mic"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -104,6 +110,7 @@ Item {
             active: Config.options.bar.utilButtons.showDarkModeToggle
             visible: Config.options.bar.utilButtons.showDarkModeToggle
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: event => {
                     if (Appearance.m3colors.darkmode) {
@@ -117,7 +124,7 @@ Item {
                     fill: 0
                     text: Appearance.m3colors.darkmode ? "light_mode" : "dark_mode"
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }
@@ -126,6 +133,7 @@ Item {
             active: Config.options.bar.utilButtons.showPerformanceProfileToggle
             visible: Config.options.bar.utilButtons.showPerformanceProfileToggle
             sourceComponent: CircleUtilButton {
+                contentColors: root.contentColors
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: event => {
                     if (PowerProfiles.hasPerformanceProfile) {
@@ -150,7 +158,7 @@ Item {
                         case PowerProfile.Performance: return "local_fire_department"
                     }
                     iconSize: Appearance.font.pixelSize.large
-                    color: Appearance.barContent.colOnLayer2
+                    color: root.contentColors.colOnLayer2
                 }
             }
         }

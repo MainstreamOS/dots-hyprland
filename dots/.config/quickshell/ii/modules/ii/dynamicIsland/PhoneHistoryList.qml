@@ -6,7 +6,6 @@ import Quickshell.Widgets
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 
 ColumnLayout {
     id: root
@@ -17,7 +16,6 @@ ColumnLayout {
     implicitHeight: 204
     spacing: 6
 
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
 
     function contact(entry) {
         const privacy = Config.options.bar.island;
@@ -48,7 +46,7 @@ ColumnLayout {
             text: root.calls ? Translation.tr("Recent calls") : Translation.tr("Recent messages")
             font.pixelSize: 12
             font.weight: Font.DemiBold
-            color: Appearance.colors.colOnSurfaceVariant
+            color: Appearance.islandContent.colOnSurfaceVariant
         }
 
         RippleButton {
@@ -58,7 +56,7 @@ ColumnLayout {
             leftPadding: 10
             rightPadding: 10
             buttonRadius: 8
-            colBackground: root.elevatedSurface
+            colBackground: Appearance.surfaces.raised
             colBackgroundHover: Appearance.colors.colLayer2Hover
             Accessible.name: root.calls ? Translation.tr("Clear call history") : Translation.tr("Clear message history")
             enabled: root.entries.length > 0
@@ -70,7 +68,7 @@ ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
                     text: "delete_sweep"
                     iconSize: 15
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -79,7 +77,7 @@ ColumnLayout {
                     text: Translation.tr("Clear")
                     font.pixelSize: 11
                     font.weight: Font.Medium
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     verticalAlignment: Text.AlignVCenter
                 }
             }
@@ -114,7 +112,7 @@ ColumnLayout {
             leftPadding: 10
             rightPadding: 10
 
-            colBackground: root.elevatedSurface
+            colBackground: Appearance.surfaces.raised
             colBackgroundHover: Appearance.colors.colLayer2Hover
             colRipple: Appearance.colors.colLayer2Active
             onClicked: root.selected(modelData.id)
@@ -138,7 +136,7 @@ ColumnLayout {
                     Layout.preferredWidth: 34
                     Layout.preferredHeight: 34
                     radius: 17
-                    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    color: Appearance.surfaces.row
 
                     Image {
                         id: contactPhoto
@@ -156,7 +154,7 @@ ColumnLayout {
                         visible: contactPhoto.status !== Image.Ready
                         text: "person"
                         iconSize: 20
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
@@ -171,7 +169,7 @@ ColumnLayout {
                         textFormat: Text.PlainText
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                         maximumLineCount: 1
                         wrapMode: Text.NoWrap
                         elide: Text.ElideRight
@@ -187,7 +185,7 @@ ColumnLayout {
                         font.pixelSize: 11
                         maximumLineCount: 1
                         wrapMode: Text.NoWrap
-                        color: Appearance.colors.colSubtext
+                        color: Appearance.islandContent.colSubtext
                         elide: Text.ElideRight
                     }
                 }
@@ -195,7 +193,7 @@ ColumnLayout {
                 StyledText {
                     text: root.timestamp(row.modelData.time)
                     font.pixelSize: 10
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
         }
@@ -208,7 +206,7 @@ ColumnLayout {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             font.pixelSize: 13
-            color: Appearance.colors.colOnSurfaceVariant
+            color: Appearance.islandContent.colOnSurfaceVariant
         }
     }
 }

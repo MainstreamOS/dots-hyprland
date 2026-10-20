@@ -11,10 +11,11 @@ import qs.modules.common.functions
 
 MouseArea {
     id: root
+    property var contentColors: Appearance.barContent
     required property SystemTrayItem item
     property bool targetMenuOpen: false
     // The color the icon sits on, as drawn: its bar group, or the overflow popup.
-    property color backdrop: Appearance.barContent.backdrops[0]
+    property color backdrop: root.contentColors.backdrops[0]
     readonly property real backdropLuminance: ColorUtils.relativeLuminance(root.backdrop)
     // Read once per image, so a new backdrop is judged without a new read.
     property var iconSample: null
@@ -74,8 +75,8 @@ MouseArea {
     }
     // The color a lost icon is drawn toward.
     readonly property color ink: {
-        const own = Appearance.barContent.colOnLayer0;
-        if (ColorUtils.contrastRatio(own, root.backdrop) >= Appearance.barContent.markContrast)
+        const own = root.contentColors.colOnLayer0;
+        if (ColorUtils.contrastRatio(own, root.backdrop) >= root.contentColors.markContrast)
             return own;
         const lbg = root.backdropLuminance;
         return ColorUtils.contrastOfLuminances(lbg, 0) >= ColorUtils.contrastOfLuminances(lbg, 1) ? "black" : "white";
@@ -92,7 +93,7 @@ MouseArea {
         const bg = Qt.color(root.backdrop);
         const lbg = root.backdropLuminance;
         const ink = Qt.color(root.ink);
-        const need = Appearance.barContent.markContrast;
+        const need = root.contentColors.markContrast;
         const toInk = [];
         const under = [];
         for (let i = 0; i < px.length; i += 4) {
@@ -281,7 +282,7 @@ MouseArea {
                 ColorOverlay {
                     anchors.fill: desaturatedIcon
                     source: desaturatedIcon
-                    color: ColorUtils.transparentize(Appearance.barContent.colOnLayer0, 0.9)
+                    color: ColorUtils.transparentize(root.contentColors.colOnLayer0, 0.9)
                 }
             }
         }

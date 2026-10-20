@@ -7,6 +7,7 @@ import QtQuick.Layouts
 Item {
     id: root
     property bool interactive: true
+    property color contentColor: Appearance.barContent.colOnLayer1
     property bool borderless: Config.options.bar.borderless
     property bool showDate: Config.options.bar.verbose
     implicitWidth: rowLayout.implicitWidth
@@ -20,21 +21,21 @@ Item {
         StyledText {
             font.pixelSize: Appearance.font.pixelSize.large
             font.features: { "tnum": 1 }
-            color: Appearance.barContent.colOnLayer1
+            color: root.contentColor
             text: DateTime.time
         }
 
         StyledText {
             visible: root.showDate
             font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.barContent.colOnLayer1
+            color: root.contentColor
             text: "•"
         }
 
         StyledText {
             visible: root.showDate
             font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.barContent.colOnLayer1
+            color: root.contentColor
             text: DateTime.longDate
         }
     }

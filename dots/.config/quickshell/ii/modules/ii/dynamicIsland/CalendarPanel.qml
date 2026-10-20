@@ -4,12 +4,11 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import "../sidebarRight/calendar/calendar_layout.js" as CalendarLayout
 
 ColumnLayout {
     id: root
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
+    property var contentColors: Appearance.islandContent
     property int taskIndex: 0
     property int monthOffset: 0
     readonly property date month: CalendarLayout.getDateInXMonthsTime(monthOffset)
@@ -50,7 +49,7 @@ ColumnLayout {
         topRightRadius: Appearance?.rounding?.normal ?? 17
         bottomLeftRadius: 5
         bottomRightRadius: 5
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         ColumnLayout {
             anchors.fill: parent
@@ -63,6 +62,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 24
                 IslandButton {
+                    contentColors: root.contentColors
                     implicitHeight: 24
                     implicitWidth: 24
                     symbol: "chevron_left"
@@ -83,10 +83,11 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer0
+                        color: root.contentColors.colOnLayer0
                     }
                 }
                 IslandButton {
+                    contentColors: root.contentColors
                     implicitHeight: 24
                     implicitWidth: 24
                     symbol: "chevron_right"
@@ -107,7 +108,7 @@ ColumnLayout {
                         text: Translation.tr(modelData.day)
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        color: Appearance.colors.colSubtext
+                        color: root.contentColors.colSubtext
                         font.pixelSize: 10
                     }
                 }
@@ -136,7 +137,7 @@ ColumnLayout {
                             anchors.centerIn: parent
                             text: parent.modelData.day
                             opacity: parent.modelData.today === -1 ? 0.35 : 1
-                            color: parent.modelData.today === 1 ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer0
+                            color: parent.modelData.today === 1 ? Appearance.colors.colOnPrimary : root.contentColors.colOnLayer0
                             font.pixelSize: 11
                             font.weight: parent.modelData.today === 1 ? Font.DemiBold : Font.Normal
                             horizontalAlignment: Text.AlignHCenter
@@ -155,7 +156,7 @@ ColumnLayout {
         topRightRadius: 5
         bottomLeftRadius: Appearance?.rounding?.normal ?? 17
         bottomRightRadius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         RowLayout {
             id: taskRow
@@ -166,6 +167,7 @@ ColumnLayout {
             spacing: 8
 
             IslandButton {
+                contentColors: root.contentColors
                 symbol: "chevron_left"
                 implicitHeight: 26
                 implicitWidth: 26
@@ -193,7 +195,7 @@ ColumnLayout {
                         height: 18
                         radius: 5
                         border.width: 2
-                        border.color: root.completingTask ? Appearance.colors.colPrimary : Appearance.colors.colOnSurfaceVariant
+                        border.color: root.completingTask ? Appearance.colors.colPrimary : root.contentColors.colOnSurfaceVariant
                         color: root.completingTask ? Appearance.colors.colPrimary : "transparent"
                         Behavior on color { ColorAnimation { duration: 160 } }
                         MaterialSymbol {
@@ -217,14 +219,14 @@ ColumnLayout {
 
                 StyledText {
                     text: root.completionCaption || Translation.tr("Tasks") + (root.tasks.length ? " · " + (root.taskIndex + 1) + " / " + root.tasks.length : "")
-                    color: Appearance.colors.colSubtext
+                    color: root.contentColors.colSubtext
                     font.pixelSize: 10
                 }
 
                 StyledText {
                     Layout.fillWidth: true
                     text: root.displayedTask?.content || Translation.tr("All caught up")
-                    color: Appearance.colors.colOnLayer0
+                    color: root.contentColors.colOnLayer0
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
                     maximumLineCount: 1
@@ -233,6 +235,7 @@ ColumnLayout {
             }
 
             IslandButton {
+                contentColors: root.contentColors
                 symbol: "chevron_right"
                 implicitHeight: 26
                 implicitWidth: 26

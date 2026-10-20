@@ -16,7 +16,6 @@ ColumnLayout {
     Layout.fillWidth: true
     Layout.fillHeight: true
 
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
 
     // 0: Timer (Countdown), 1: Stopwatch, 2: Pomodoro
     property int currentMode: 0
@@ -71,7 +70,7 @@ ColumnLayout {
         topRightRadius: Appearance?.rounding?.normal ?? 17
         bottomLeftRadius: 5
         bottomRightRadius: 5
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         ColumnLayout {
             anchors.fill: parent
@@ -86,7 +85,7 @@ ColumnLayout {
                     Layout.preferredHeight: 28
                     Layout.preferredWidth: 236
                     radius: 8
-                    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    color: Appearance.surfaces.row
 
                     RowLayout {
                         anchors.fill: parent
@@ -98,7 +97,7 @@ ColumnLayout {
                             Layout.fillHeight: true
                             buttonRadius: 6
                             colBackground: root.currentMode === 0 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 0 ? Appearance.colors.colPrimaryContainerHover : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                            colBackgroundHover: root.currentMode === 0 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
                             colRipple: root.currentMode === 0 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                             onClicked: root.currentMode = 0
 
@@ -108,18 +107,18 @@ ColumnLayout {
                                 MaterialSymbol {
                                     text: "hourglass_top"
                                     iconSize: 13
-                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 StyledText {
                                     text: Translation.tr("Timer")
                                     font.pixelSize: 11
                                     font.weight: root.currentMode === 0 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 Rectangle {
                                     visible: TimerService.countdownRunning && root.currentMode !== 0
                                     width: 5; height: 5; radius: 2.5
-                                    color: Appearance.colors.colPrimary
+                                    color: Appearance.islandContent.colPrimary
                                 }
                             }
                         }
@@ -129,7 +128,7 @@ ColumnLayout {
                             Layout.fillHeight: true
                             buttonRadius: 6
                             colBackground: root.currentMode === 1 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 1 ? Appearance.colors.colPrimaryContainerHover : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                            colBackgroundHover: root.currentMode === 1 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
                             colRipple: root.currentMode === 1 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                             onClicked: root.currentMode = 1
 
@@ -139,18 +138,18 @@ ColumnLayout {
                                 MaterialSymbol {
                                     text: "timer"
                                     iconSize: 13
-                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 StyledText {
                                     text: Translation.tr("Stopwatch")
                                     font.pixelSize: 11
                                     font.weight: root.currentMode === 1 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 Rectangle {
                                     visible: TimerService.stopwatchRunning && root.currentMode !== 1
                                     width: 5; height: 5; radius: 2.5
-                                    color: Appearance.colors.colPrimary
+                                    color: Appearance.islandContent.colPrimary
                                 }
                             }
                         }
@@ -160,7 +159,7 @@ ColumnLayout {
                             Layout.fillHeight: true
                             buttonRadius: 6
                             colBackground: root.currentMode === 2 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 2 ? Appearance.colors.colPrimaryContainerHover : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                            colBackgroundHover: root.currentMode === 2 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
                             colRipple: root.currentMode === 2 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                             onClicked: root.currentMode = 2
 
@@ -170,18 +169,18 @@ ColumnLayout {
                                 MaterialSymbol {
                                     text: "search_activity"
                                     iconSize: 13
-                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 StyledText {
                                     text: Translation.tr("Focus")
                                     font.pixelSize: 11
                                     font.weight: root.currentMode === 2 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
                                 }
                                 Rectangle {
                                     visible: TimerService.pomodoroRunning && root.currentMode !== 2
                                     width: 5; height: 5; radius: 2.5
-                                    color: Appearance.colors.colPrimary
+                                    color: Appearance.islandContent.colPrimary
                                 }
                             }
                         }
@@ -204,9 +203,9 @@ ColumnLayout {
                         Rectangle {
                             width: 6; height: 6; radius: 3
                             color: {
-                                if (root.currentMode === 0) return TimerService.countdownRunning ? Appearance.colors.colPrimary : Appearance.colors.colSubtext;
-                                if (root.currentMode === 1) return TimerService.stopwatchRunning ? Appearance.colors.colPrimary : Appearance.colors.colSubtext;
-                                return TimerService.pomodoroRunning ? Appearance.colors.colPrimary : Appearance.colors.colSubtext;
+                                if (root.currentMode === 0) return TimerService.countdownRunning ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext;
+                                if (root.currentMode === 1) return TimerService.stopwatchRunning ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext;
+                                return TimerService.pomodoroRunning ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext;
                             }
                         }
 
@@ -264,7 +263,7 @@ ColumnLayout {
                                 return TimerService.pomodoroLongBreak ? "eco" : TimerService.pomodoroBreak ? "local_cafe" : "search_activity";
                             }
                             iconSize: 22
-                            color: Appearance.colors.colPrimary
+                            color: Appearance.islandContent.colPrimary
                         }
 
                         StyledText {
@@ -282,7 +281,7 @@ ColumnLayout {
                             }
                             font.pixelSize: 10
                             font.weight: Font.DemiBold
-                            color: Appearance.colors.colSubtext
+                            color: Appearance.islandContent.colSubtext
                         }
                     }
                 }
@@ -318,7 +317,7 @@ ColumnLayout {
                                 font.pixelSize: 34
                                 font.weight: Font.DemiBold
                                 font.features: ({ "tnum": 1 })
-                                color: Appearance.colors.colOnLayer0
+                                color: Appearance.islandContent.colOnLayer0
                             }
 
                             StyledText {
@@ -330,7 +329,7 @@ ColumnLayout {
                                 font.pixelSize: 22
                                 font.weight: Font.Medium
                                 font.features: ({ "tnum": 1 })
-                                color: Appearance.colors.colSubtext
+                                color: Appearance.islandContent.colSubtext
                                 Layout.alignment: Qt.AlignBaseline
                             }
                         }
@@ -355,7 +354,7 @@ ColumnLayout {
                             font.pixelSize: 34
                             font.weight: Font.DemiBold
                             font.features: ({ "tnum": 1 })
-                            color: Appearance.colors.colPrimary
+                            color: Appearance.islandContent.colPrimary
                             Keys.onReturnPressed: root.applyCountdownEdit()
                             Keys.onEnterPressed: root.applyCountdownEdit()
                             Keys.onEscapePressed: root.isEditingCountdown = false
@@ -390,7 +389,7 @@ ColumnLayout {
                             return Translation.tr("Next: %1 min break").arg(Math.floor(TimerService.breakTime / 60));
                         }
                         font.pixelSize: 11
-                        color: Appearance.colors.colSubtext
+                        color: Appearance.islandContent.colSubtext
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -466,7 +465,7 @@ ColumnLayout {
                             }
                             enabled: isLapMode || canReset
 
-                            colBackground: isLapMode ? Appearance.colors.colPrimaryContainer : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                            colBackground: isLapMode ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.row
                             colBackgroundHover: isLapMode ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
                             colRipple: isLapMode ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                             opacity: enabled ? 1 : 0.45
@@ -487,13 +486,13 @@ ColumnLayout {
                                 MaterialSymbol {
                                     text: parent.parent.isLapMode ? "flag" : "replay"
                                     iconSize: 15
-                                    color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                                    color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                 }
                                 StyledText {
                                     text: parent.parent.isLapMode ? Translation.tr("Lap") : Translation.tr("Reset")
                                     font.pixelSize: 12
                                     font.weight: parent.parent.isLapMode ? Font.DemiBold : Font.Medium
-                                    color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                                    color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                 }
                             }
                         }
@@ -510,7 +509,7 @@ ColumnLayout {
         topRightRadius: 5
         bottomLeftRadius: Appearance?.rounding?.normal ?? 17
         bottomRightRadius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         RowLayout {
             visible: root.currentMode === 0
@@ -523,7 +522,7 @@ ColumnLayout {
                 text: Translation.tr("Add:")
                 font.pixelSize: 11
                 font.weight: Font.Medium
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -549,7 +548,7 @@ ColumnLayout {
                         text: modelData.label
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
             }
@@ -568,7 +567,7 @@ ColumnLayout {
             MaterialSymbol {
                 text: parent.hasLaps ? "history" : "info"
                 iconSize: 16
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
             }
 
             StyledText {
@@ -581,7 +580,7 @@ ColumnLayout {
                 }
                 font.pixelSize: 11
                 font.weight: Font.Medium
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.islandContent.colOnLayer1
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -598,7 +597,7 @@ ColumnLayout {
                 }
                 font.pixelSize: 11
                 font.weight: Font.DemiBold
-                color: Appearance.colors.colPrimary
+                color: Appearance.islandContent.colPrimary
             }
 
             RippleButton {
@@ -616,7 +615,7 @@ ColumnLayout {
                     text: Translation.tr("Reset")
                     font.pixelSize: 11
                     font.weight: Font.Medium
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                 }
             }
         }
@@ -632,7 +631,7 @@ ColumnLayout {
                 text: Translation.tr("Adjust:")
                 font.pixelSize: 11
                 font.weight: Font.Medium
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -658,7 +657,7 @@ ColumnLayout {
                         text: modelData.label
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
+                        color: Appearance.islandContent.colOnLayer1
                     }
                 }
             }

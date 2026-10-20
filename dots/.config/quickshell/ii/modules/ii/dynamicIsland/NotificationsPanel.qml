@@ -8,14 +8,12 @@ import Quickshell.Widgets
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 
 ColumnLayout {
     id: root
     implicitHeight: 204
     spacing: 6
     property int currentIndex: 0
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
     readonly property var entries: IslandState.notifications
     readonly property string newestId: entries[0]?.id ?? ""
     onNewestIdChanged: currentIndex = 0
@@ -61,7 +59,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 44
         radius: 12
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         RowLayout {
             anchors.fill: parent
@@ -104,7 +102,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     text: root.entry?.sourceApp || Translation.tr("Notifications")
                     font.pixelSize: 10
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
@@ -114,7 +112,7 @@ ColumnLayout {
                     text: !root.entry ? Translation.tr("You're all caught up") : root.privateContact ? Translation.tr("Private notification") : root.entry.summary
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnLayer0
+                    color: Appearance.islandContent.colOnLayer0
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
@@ -127,7 +125,7 @@ ColumnLayout {
                 topPadding: 0
                 bottomPadding: 0
                 buttonRadius: 9
-                colBackground: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 Accessible.name: Translation.tr("Dismiss notification")
                 onClicked: IslandState.dismissNotification(root.entry)
@@ -135,7 +133,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: "close"
                     iconSize: 16
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -192,7 +190,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !!root.liveNotif?.actionError
         text: root.liveNotif?.actionError || ""
-        color: Appearance.colors.colError
+        color: Appearance.barStripContent.colErrorMark
         font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -237,7 +235,7 @@ ColumnLayout {
             implicitHeight: 24
             implicitWidth: countText.implicitWidth + 12
             radius: 6
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+            color: Appearance.surfaces.row
 
             StyledText {
                 id: countText
@@ -245,7 +243,7 @@ ColumnLayout {
                 text: root.entries.length ? (root.currentIndex + 1) + " / " + root.entries.length : "0"
                 font.pixelSize: 11
                 font.weight: Font.Medium
-                color: Appearance.colors.colOnLayer1
+                color: Appearance.islandContent.colOnLayer1
             }
         }
 
@@ -289,7 +287,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 34
         radius: 10
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.replying
 
         TapHandler {
@@ -309,14 +307,14 @@ ColumnLayout {
                 bottomPadding: 0
                 buttonRadius: 8
                 colBackground: "transparent"
-                colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                colBackgroundHover: Appearance.surfaces.row
                 Accessible.name: Translation.tr("Cancel reply")
                 onClicked: root.cancelReply()
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "close"
                     iconSize: 15
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -354,7 +352,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: "arrow_upward"
                     iconSize: 16
-                    color: sendNotifBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.colors.colSubtext
+                    color: sendNotifBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.islandContent.colSubtext
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }

@@ -9,7 +9,7 @@ import qs.modules.common.functions
 ColumnLayout {
     id: root
     required property var attachment
-    readonly property color contentColor: Appearance.colors.colOnLayer1
+    readonly property color contentColor: Appearance.islandContent.colOnLayer1
     readonly property bool current: IslandMessageAudio.currentKey === IslandMessageAudio.key(attachment)
     readonly property bool loading: current && IslandMessageAudio.loading
     readonly property bool playing: current && IslandMessageAudio.playing
@@ -54,7 +54,7 @@ ColumnLayout {
         MaterialSymbol {
             text: (root.current && IslandMessageAudio.error) ? "error" : "mic"
             iconSize: 14
-            color: (root.current && IslandMessageAudio.error) ? Appearance.m3colors.m3error : Appearance.colors.colOnSurfaceVariant
+            color: (root.current && IslandMessageAudio.error) ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colOnSurfaceVariant
         }
 
         StyledText {
@@ -65,7 +65,7 @@ ColumnLayout {
             font.pixelSize: 11
             font.weight: Font.Medium
             elide: Text.ElideRight
-            color: (root.current && IslandMessageAudio.error) ? Appearance.m3colors.m3error : Appearance.colors.colOnSurfaceVariant
+            color: (root.current && IslandMessageAudio.error) ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colOnSurfaceVariant
         }
 
         StyledText {
@@ -79,7 +79,7 @@ ColumnLayout {
             }
             font.pixelSize: 10
             font.features: {"tnum": 1}
-            color: Appearance.colors.colOnSurfaceVariant
+            color: Appearance.islandContent.colOnSurfaceVariant
         }
     }
 
@@ -156,7 +156,7 @@ ColumnLayout {
                     visible: !root.saveBusy
                     text: root.saveResult === "done" ? "check" : root.saveResult === "failed" ? "error" : "download"
                     iconSize: Appearance.font.pixelSize.normal
-                    color: root.saveResult === "failed" ? Appearance.m3colors.m3error : root.contentColor
+                    color: root.saveResult === "failed" ? Appearance.islandContent.colErrorMark : root.contentColor
                 }
                 MaterialLoadingIndicator {
                     anchors.centerIn: parent

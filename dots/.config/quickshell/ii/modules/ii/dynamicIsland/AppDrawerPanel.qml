@@ -61,6 +61,7 @@ Item {
 
         SearchBar {
             id: searchBar
+            contentColors: Appearance.islandLauncherContent
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.preferredHeight: 48
@@ -103,6 +104,7 @@ Item {
             model: ScriptModel { values: root.entries }
             boundsBehavior: Flickable.StopAtBounds
             delegate: SearchItem {
+                contentColors: Appearance.islandLauncherContent
                 required property var modelData
                 required property int index
                 width: results.width
@@ -117,7 +119,7 @@ Item {
                 anchors.centerIn: parent
                 visible: !results.count
                 text: Translation.tr("No results")
-                color: Appearance.colors.colSubtext
+                color: Appearance.barStripContent.colSubtext
             }
         }
     }

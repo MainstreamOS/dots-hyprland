@@ -355,6 +355,7 @@ Scope {
 
                     ClockWidget {
                         id: clock
+                        contentColor: Appearance.barStripContent.colOnLayer1
                         anchors.centerIn: parent
                         visible: !window.expanded
                         interactive: false
@@ -377,7 +378,7 @@ Scope {
                                 topPadding: 0
                                 bottomPadding: 0
                                 buttonRadius: 10
-                                colBackground: highlighted ? Appearance.colors.colPrimaryContainer : ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
+                                colBackground: highlighted ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.raised
                                 colBackgroundHover: highlighted ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
                                 colRipple: highlighted ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                                 highlighted: GlobalStates.sidebarLeftOpen
@@ -387,7 +388,7 @@ Scope {
                                     anchors.centerIn: parent
                                     text: "left_panel_open"
                                     iconSize: 18
-                                    color: leftSidebarButton.highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                                    color: leftSidebarButton.highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -398,7 +399,7 @@ Scope {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: window.navigationHeight
                                 radius: 12
-                                color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
+                                color: Appearance.surfaces.raised
 
                                 readonly property bool showWorkspaces: navHover.hovered || workspacesWidget.containsMouse
 
@@ -415,7 +416,7 @@ Scope {
                                         bottomPadding: 0
                                         buttonRadius: 8
                                         colBackground: "transparent"
-                                        colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                        colBackgroundHover: Appearance.surfaces.row
                                         enabled: IslandState.panels.length > 1
                                         Accessible.name: Translation.tr("Previous panel")
                                         onClicked: IslandState.step(-1)
@@ -423,7 +424,7 @@ Scope {
                                             anchors.centerIn: parent
                                             text: "chevron_left"
                                             iconSize: 18
-                                            color: Appearance.colors.colOnLayer1
+                                            color: Appearance.islandContent.colOnLayer1
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -433,7 +434,7 @@ Scope {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 28
                                         radius: 8
-                                        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                        color: Appearance.surfaces.row
 
                                         RowLayout {
                                             anchors.centerIn: parent
@@ -444,12 +445,12 @@ Scope {
                                             MaterialSymbol {
                                                 text: IslandPanels.entry(window.displayedPanel)?.icon ?? "tune"
                                                 iconSize: 14
-                                                color: Appearance.colors.colPrimary
+                                                color: Appearance.islandContent.colPrimary
                                             }
 
                                             StyledText {
                                                 text: IslandPanels.entry(window.displayedPanel)?.name ?? ""
-                                                color: Appearance.colors.colOnLayer0
+                                                color: Appearance.islandContent.colOnLayer0
                                                 font.pixelSize: 12
                                                 font.weight: Font.DemiBold
                                             }
@@ -457,6 +458,7 @@ Scope {
 
                                         Workspaces {
                                             id: workspacesWidget
+                                            contentColors: Appearance.islandContent
                                             anchors.centerIn: parent
                                             shownCount: Math.min(Config.options.bar.workspaces.shown, 10)
                                             monitor: window.monitor
@@ -502,7 +504,7 @@ Scope {
                                         bottomPadding: 0
                                         buttonRadius: 8
                                         colBackground: "transparent"
-                                        colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                        colBackgroundHover: Appearance.surfaces.row
                                         enabled: IslandState.panels.length > 1
                                         Accessible.name: Translation.tr("Next panel")
                                         onClicked: IslandState.step(1)
@@ -510,7 +512,7 @@ Scope {
                                             anchors.centerIn: parent
                                             text: "chevron_right"
                                             iconSize: 18
-                                            color: Appearance.colors.colOnLayer1
+                                            color: Appearance.islandContent.colOnLayer1
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -525,7 +527,7 @@ Scope {
                                 topPadding: 0
                                 bottomPadding: 0
                                 buttonRadius: 10
-                                colBackground: highlighted ? Appearance.colors.colPrimaryContainer : ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
+                                colBackground: highlighted ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.raised
                                 colBackgroundHover: highlighted ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
                                 colRipple: highlighted ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
                                 highlighted: GlobalStates.sidebarRightOpen
@@ -535,7 +537,7 @@ Scope {
                                     anchors.centerIn: parent
                                     text: "right_panel_open"
                                     iconSize: 18
-                                    color: rightSidebarButton.highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                                    color: rightSidebarButton.highlighted ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }

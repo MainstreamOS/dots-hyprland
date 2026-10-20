@@ -5,7 +5,6 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import "../../../services/IslandText.js" as TextFormatting
 
 Rectangle {
@@ -15,7 +14,7 @@ Rectangle {
     property var images: []
     property var audioClips: []
     property bool imagesOnRight: false
-    readonly property color ink: Appearance.colors.colOnLayer0
+    readonly property color ink: Appearance.islandContent.colOnLayer0
     readonly property bool hasAudio: root.audioClips && root.audioClips.length > 0
     readonly property bool hasTextOrAudio: (root.text && root.text.length > 0) || root.hasAudio
     readonly property bool hasImageSources: root.images && root.images.some(source => typeof source === "string" && source.trim().length > 0)
@@ -23,7 +22,7 @@ Rectangle {
     readonly property bool isAudioOnly: root.hasAudio && (!root.text || root.text.length === 0) && !root.hasImages
     implicitHeight: root.isAudioOnly ? 70 : 104
     radius: 12
-    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+    color: Appearance.surfaces.row
     RowLayout {
         anchors.fill: parent
         anchors.topMargin: root.isAudioOnly ? 8 : 10
@@ -80,7 +79,7 @@ Rectangle {
                     wrapMode: Text.Wrap
                     lineHeight: 1.2
                     font.pixelSize: 13
-                    color: Appearance.colors.colOnLayer0
+                    color: Appearance.islandContent.colOnLayer0
                     verticalAlignment: Text.AlignTop
                 }
             }

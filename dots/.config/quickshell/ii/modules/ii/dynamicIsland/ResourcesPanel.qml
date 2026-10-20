@@ -12,8 +12,8 @@ import qs.modules.ii.bar
 
 ColumnLayout {
     id: root
+    property var contentColors: Appearance.islandContent
     spacing: 6
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
     readonly property bool showUtilButtons: Config.options.bar.utilButtons.showScreenSnip
         || Config.options.bar.utilButtons.showScreenRecord
         || Config.options.bar.utilButtons.showColorPicker
@@ -96,6 +96,7 @@ ColumnLayout {
         Layout.maximumHeight: implicitHeight
         visible: entries.length > 0
         entries: root.batteries
+        contentColors: root.contentColors
     }
     StyledFlickable {
         id: metricsScroll
@@ -117,7 +118,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 implicitHeight: sectionContent.implicitHeight + 20
                 radius: Appearance?.rounding?.normal ?? 17
-                color: root.elevatedSurface
+                color: Appearance.surfaces.raised
                 Accessible.role: Accessible.Button
                 Accessible.name: Translation.tr("Task Manager")
                 Accessible.onPressAction: Session.launchTaskManager()
@@ -188,14 +189,14 @@ ColumnLayout {
                                     MaterialSymbol {
                                         text: colLayout.modelData.symbol
                                         iconSize: 16
-                                        color: Appearance.colors.colOnSurfaceVariant
+                                        color: root.contentColors.colOnSurfaceVariant
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
                                         text: colLayout.modelData.label
                                         font.pixelSize: 12
                                         font.weight: Font.DemiBold
-                                        color: Appearance.colors.colOnSurfaceVariant
+                                        color: root.contentColors.colOnSurfaceVariant
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -215,12 +216,12 @@ ColumnLayout {
                                             MaterialSymbol {
                                                 text: rowItem.modelData.icon
                                                 iconSize: 13
-                                                color: Appearance.colors.colOnSurfaceVariant
+                                                color: root.contentColors.colOnSurfaceVariant
                                             }
                                             StyledText {
                                                 text: rowItem.modelData.label
                                                 font.pixelSize: 11
-                                                color: Appearance.colors.colOnSurfaceVariant
+                                                color: root.contentColors.colOnSurfaceVariant
                                             }
                                             Item {
                                                 Layout.fillWidth: true
@@ -229,7 +230,7 @@ ColumnLayout {
                                                 text: rowItem.modelData.value
                                                 font.pixelSize: 11
                                                 font.weight: Font.Medium
-                                                color: Appearance.colors.colOnLayer0
+                                                color: root.contentColors.colOnLayer0
                                                 horizontalAlignment: Text.AlignRight
                                                 elide: Text.ElideRight
                                             }
@@ -284,14 +285,14 @@ ColumnLayout {
                                     MaterialSymbol {
                                         text: gpuColLayout.modelData.symbol
                                         iconSize: 16
-                                        color: Appearance.colors.colOnSurfaceVariant
+                                        color: root.contentColors.colOnSurfaceVariant
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
                                         text: gpuColLayout.modelData.label
                                         font.pixelSize: 12
                                         font.weight: Font.DemiBold
-                                        color: Appearance.colors.colOnSurfaceVariant
+                                        color: root.contentColors.colOnSurfaceVariant
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -311,12 +312,12 @@ ColumnLayout {
                                             MaterialSymbol {
                                                 text: gpuRowItem.modelData.icon
                                                 iconSize: 13
-                                                color: Appearance.colors.colOnSurfaceVariant
+                                                color: root.contentColors.colOnSurfaceVariant
                                             }
                                             StyledText {
                                                 text: gpuRowItem.modelData.label
                                                 font.pixelSize: 11
-                                                color: Appearance.colors.colOnSurfaceVariant
+                                                color: root.contentColors.colOnSurfaceVariant
                                             }
                                             Item {
                                                 Layout.fillWidth: true
@@ -325,7 +326,7 @@ ColumnLayout {
                                                 text: gpuRowItem.modelData.value
                                                 font.pixelSize: 11
                                                 font.weight: Font.Medium
-                                                color: Appearance.colors.colOnLayer0
+                                                color: root.contentColors.colOnLayer0
                                                 horizontalAlignment: Text.AlignRight
                                                 elide: Text.ElideRight
                                             }
@@ -345,11 +346,12 @@ ColumnLayout {
         implicitWidth: utilButtons.implicitWidth + 20
         implicitHeight: 28
         radius: 14
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.showUtilButtons
 
         UtilButtons {
             id: utilButtons
+            contentColors: root.contentColors
             anchors.centerIn: parent
         }
     }

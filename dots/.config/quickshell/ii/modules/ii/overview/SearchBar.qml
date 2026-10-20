@@ -10,6 +10,7 @@ import qs.modules.common.functions
 
 RowLayout {
     id: root
+    property var contentColors: Appearance.launcherContent
     spacing: 6
     property bool animateWidth: false
     property alias searchInput: searchInput
@@ -43,8 +44,8 @@ RowLayout {
         id: searchIcon
         Layout.alignment: Qt.AlignVCenter
         iconSize: Appearance.font.pixelSize.huge
-        color: Appearance.launcherContent.colSecondaryContainer
-        colSymbol: Appearance.launcherContent.colOnSecondaryContainer
+        color: root.contentColors.colSecondaryContainer
+        colSymbol: root.contentColors.colOnSecondaryContainer
         shape: switch(root.searchPrefixType) {
             case SearchBar.SearchPrefixType.Action: return MaterialShape.Shape.Pill;
             case SearchBar.SearchPrefixType.App: return MaterialShape.Shape.Clover4Leaf;
@@ -76,12 +77,12 @@ RowLayout {
         implicitHeight: 40
         focus: root.inputFocused
         font.pixelSize: Appearance.font.pixelSize.small
-        colBackground: Appearance.launcherContent.colLayer1
+        colBackground: root.contentColors.colLayer1
         radius: RoundedCorners.on ? Appearance.rounding.full : 0
-        color: Appearance.launcherContent.colOnLayer1Field
-        placeholderTextColor: Appearance.launcherContent.colSubtextField
-        selectedTextColor: Appearance.launcherContent.colOnSecondaryContainer
-        selectionColor: Appearance.launcherContent.colSecondaryContainer
+        color: root.contentColors.colOnLayer1Field
+        placeholderTextColor: root.contentColors.colSubtextField
+        selectedTextColor: root.contentColors.colOnSecondaryContainer
+        selectionColor: root.contentColors.colSecondaryContainer
         placeholderText: Translation.tr("Search, calculate or run")
         implicitWidth: root.searchingText == "" ? Appearance.sizes.searchWidthCollapsed : Appearance.sizes.searchWidth
 
@@ -113,9 +114,9 @@ RowLayout {
     IconToolbarButton {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
-        colBackgroundHover: Appearance.launcherContent.colLayer1Hover
-        colRipple: Appearance.launcherContent.colLayer1Active
-        colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
+        colBackgroundHover: root.contentColors.colLayer1Hover
+        colRipple: root.contentColors.colLayer1Active
+        colText: (hovered || down) ? root.contentColors.colOnSurfaceVariantHover : root.contentColors.colOnSurfaceVariant
         onClicked: {
             root.dismiss();
             lensDelayTimer.start();
@@ -145,8 +146,8 @@ RowLayout {
             text: Translation.tr("Recognize music")
         }
 
-        colText: toggled ? Appearance.launcherContent.colOnPrimaryToggle
-            : hovered ? Appearance.launcherContent.colOnSurfaceVariantHigh : Appearance.launcherContent.colOnSurfaceVariant
+        colText: toggled ? root.contentColors.colOnPrimaryToggle
+            : hovered ? root.contentColors.colOnSurfaceVariantHigh : root.contentColors.colOnSurfaceVariant
         background: MaterialShape {
             RotationAnimation on rotation {
                 running: songRecButton.toggled
@@ -165,9 +166,9 @@ RowLayout {
             }
             color: {
                 if (songRecButton.toggled) {
-                    return songRecButton.hovered ? Appearance.launcherContent.colPrimaryToggleHover : Appearance.launcherContent.colPrimary
+                    return songRecButton.hovered ? root.contentColors.colPrimaryToggleHover : root.contentColors.colPrimary
                 } else {
-                    return songRecButton.hovered ? Appearance.launcherContent.colSurfaceContainerHigh : ColorUtils.transparentize(Appearance.launcherContent.colSurfaceContainerHigh)
+                    return songRecButton.hovered ? root.contentColors.colSurfaceContainerHigh : ColorUtils.transparentize(root.contentColors.colSurfaceContainerHigh)
                 }
             }
             Behavior on color {
@@ -180,9 +181,9 @@ RowLayout {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
         Layout.rightMargin: 4
-        colBackgroundHover: Appearance.launcherContent.colLayer1Hover
-        colRipple: Appearance.launcherContent.colLayer1Active
-        colText: (hovered || down) ? Appearance.launcherContent.colOnSurfaceVariantHover : Appearance.launcherContent.colOnSurfaceVariant
+        colBackgroundHover: root.contentColors.colLayer1Hover
+        colRipple: root.contentColors.colLayer1Active
+        colText: (hovered || down) ? root.contentColors.colOnSurfaceVariantHover : root.contentColors.colOnSurfaceVariant
         onClicked: {
             root.dismiss();
             GlobalStates.sessionOpen = true;

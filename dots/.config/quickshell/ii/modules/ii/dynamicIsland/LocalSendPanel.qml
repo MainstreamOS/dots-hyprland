@@ -41,7 +41,7 @@ ColumnLayout {
         StyledText {
             visible: !root.receiving && !GlobalStates.mediaTransferUrls.length
             text: Translation.tr("Drop files here")
-            font.pixelSize: 12; color: Appearance.colors.colOnSurfaceVariant
+            font.pixelSize: 12; color: Appearance.barStripContent.colOnSurfaceVariant
         }
     }
     Loader {

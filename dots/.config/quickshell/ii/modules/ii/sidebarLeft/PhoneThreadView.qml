@@ -1095,7 +1095,7 @@ Item {
                 required property int index
                 required property var modelData
                 readonly property bool outgoing: Phone.isOutgoing(bubbleRow.modelData)
-                readonly property color textColor: outgoing ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnSecondaryContainer
+                readonly property color textColor: outgoing ? Appearance.chatBubble.mineText : Appearance.chatBubble.theirsText
                 readonly property bool isLastMessage: bubbleRow.index === messageList.count - 1
                 readonly property var reactions: bubbleRow.modelData.reactions ?? []
                 readonly property bool hasReactions: reactions.length > 0
@@ -1193,9 +1193,7 @@ Item {
                         topRightRadius: Appearance.rounding.normal
                         bottomLeftRadius: 5
                         bottomRightRadius: 5
-                        color: bubbleRow.outgoing
-                            ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer0Base, 0.72)
-                            : ColorUtils.mix(bubble.baseColor, Appearance.colors.colLayer0Base, 0.55)
+                        color: bubbleRow.outgoing ? Appearance.chatBubble.mineQuote : Appearance.chatBubble.theirsQuote
 
                         RowLayout {
                             id: quoteCapRow
@@ -1230,9 +1228,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: bubbleRow.quoteSnippetDisplay
                                     font.pixelSize: Appearance.font.pixelSize.smaller
-                                    color: bubbleRow.outgoing
-                                        ? ColorUtils.transparentize(Appearance.colors.colOnPrimaryContainer, 0.3)
-                                        : ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.3)
+                                    color: bubbleRow.outgoing ? Appearance.chatBubble.mineTextFaint : Appearance.chatBubble.theirsTextFaint
                                     elide: Text.ElideRight
                                     maximumLineCount: 1
                                 }
@@ -1278,7 +1274,7 @@ Item {
                     topRightRadius: bubbleRow.hasQuote ? 5 : Appearance.rounding.normal
                     bottomLeftRadius: Appearance.rounding.normal
                     bottomRightRadius: Appearance.rounding.normal
-                    readonly property color baseColor: bubbleRow.outgoing ? Appearance.colors.colPrimaryContainer : Appearance.colors.colSecondaryContainer
+                    readonly property color baseColor: bubbleRow.outgoing ? Appearance.chatBubble.mine : Appearance.chatBubble.theirs
                     color: bubbleRow.isHighlighted ? ColorUtils.mix(baseColor, Appearance.colors.colPrimary, 0.65) : baseColor
                     Behavior on color {
                         ColorAnimation { duration: 240; easing.type: Easing.OutQuad }
@@ -1613,7 +1609,7 @@ Item {
                             textFormat: bodyText.linked.length > 0 ? Text.StyledText : Text.PlainText
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: bubbleRow.textColor
-                            linkColor: bubbleRow.outgoing ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colPrimary
+                            linkColor: bubbleRow.outgoing ? Appearance.chatBubble.mineText : Appearance.colors.colPrimary
                             onLinkActivated: link => linkArea.activate(link)
 
                             MessageLinkArea {

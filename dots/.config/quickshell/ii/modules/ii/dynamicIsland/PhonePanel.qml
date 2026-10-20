@@ -21,7 +21,6 @@ ColumnLayout {
     readonly property var entries: calls ? IslandState.recentCalls : IslandState.recentMessages
     readonly property bool liveCall: calls && !!IslandState.call
     readonly property bool liveMessage: !calls && IslandState.alertOpen && !!IslandState.message
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
 
     readonly property string pendingRequest: Object.keys(IslandState.messageRequests).find(request => IslandState.messageRequests[request].key === root.draftKey) || ""
     readonly property string draftKey: (root.entry?.deviceId || "") + ":" + (root.entry?.number || root.entry?.id || "")
@@ -218,7 +217,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 44
         radius: 12
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: !!root.entry
 
         RowLayout {
@@ -234,7 +233,7 @@ ColumnLayout {
                 topPadding: 0
                 bottomPadding: 0
                 buttonRadius: 9
-                colBackground: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 Accessible.name: Translation.tr("Back to history")
                 onClicked: root.selectedHistoryId = ""
@@ -242,7 +241,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: "arrow_back"
                     iconSize: 16
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -253,7 +252,7 @@ ColumnLayout {
                 Layout.preferredWidth: 32
                 Layout.preferredHeight: 32
                 radius: 16
-                color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                color: Appearance.surfaces.row
 
                 Image {
                     anchors.fill: parent
@@ -267,7 +266,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: !root.entry?.picture
                     text: root.calls ? "call" : "chat"
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     iconSize: 18
                 }
             }
@@ -286,7 +285,7 @@ ColumnLayout {
                         Layout.minimumWidth: 0
                         text: root.privacy.showContactName && root.entry?.name && (root.entry.name !== root.entry.number || root.privacy.showPhoneNumber)
                             ? root.entry.name : root.privacy.showPhoneNumber && root.entry?.number ? root.entry.number : Translation.tr("Private contact")
-                        color: Appearance.colors.colOnLayer0
+                        color: Appearance.islandContent.colOnLayer0
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
@@ -296,7 +295,7 @@ ColumnLayout {
                         implicitHeight: 16
                         implicitWidth: typeLabel.implicitWidth + 8
                         radius: 4
-                        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                        color: Appearance.surfaces.row
 
                         StyledText {
                             id: typeLabel
@@ -306,7 +305,7 @@ ColumnLayout {
                                 : Translation.tr("Text message")
                             font.pixelSize: 9
                             font.weight: Font.Medium
-                            color: Appearance.colors.colSubtext
+                            color: Appearance.islandContent.colSubtext
                         }
                     }
                 }
@@ -315,7 +314,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     visible: root.privacy.showPhoneNumber && !!root.entry?.number
                     text: (root.entry?.number || "") + (root.entry?.time ? " · " + Qt.formatDateTime(new Date(root.entry.time), Config.options.time.format) : "")
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                     font.pixelSize: 10
                     elide: Text.ElideRight
                 }
@@ -327,7 +326,7 @@ ColumnLayout {
                 topPadding: 0
                 bottomPadding: 0
                 buttonRadius: 9
-                colBackground: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 visible: !root.calls && root.canReply
                 Accessible.name: Translation.tr("Open in sidebar")
@@ -347,7 +346,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: "open_in_new"
                     iconSize: 16
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -362,7 +361,7 @@ ColumnLayout {
         Layout.preferredHeight: root.composing ? 114 : 154
         implicitHeight: root.composing ? 114 : 154
         radius: 12
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.calls && !root.liveCall && !!root.entry
         clip: true
 
@@ -380,7 +379,7 @@ ColumnLayout {
                 MaterialSymbol {
                     text: root.entry?.answered ? "call_received" : (root.entry?.incoming ? "call_missed" : "call_made")
                     iconSize: 20
-                    color: root.entry?.answered ? Appearance.colors.colPrimary : (root.entry?.incoming ? Appearance.colors.colError : Appearance.colors.colSubtext)
+                    color: root.entry?.answered ? Appearance.islandContent.colPrimary : (root.entry?.incoming ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colSubtext)
                 }
 
                 StyledText {
@@ -388,14 +387,14 @@ ColumnLayout {
                         : (root.entry?.incoming ? Translation.tr("Missed call") : Translation.tr("Outgoing call"))
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnLayer1
+                    color: Appearance.islandContent.colOnLayer1
                 }
 
                 StyledText {
                     visible: !!root.entry?.time
                     text: "·  " + (root.entry?.time ? Qt.formatDateTime(new Date(root.entry.time), Config.options.time.format) : "")
                     font.pixelSize: 11
-                    color: Appearance.colors.colSubtext
+                    color: Appearance.islandContent.colSubtext
                 }
             }
 
@@ -424,7 +423,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.callbackTarget && !!PhoneCalls.dialError
                 text: PhoneCalls.dialError
-                color: Appearance.colors.colError
+                color: Appearance.islandContent.colErrorMark
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -441,7 +440,7 @@ ColumnLayout {
         text: root.callStatus
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: 18
-        color: Appearance.colors.colOnLayer1
+        color: Appearance.barStripContent.colOnLayer1
     }
 
     MessageBody {
@@ -461,7 +460,7 @@ ColumnLayout {
         text: IslandState.phoneError || (root.calls && root.entry?.backend === "KDE Connect"
             ? Translation.tr("Connect your phone over Bluetooth for Accept and Decline controls.")
             : IslandState.phoneStatus)
-        color: Appearance.colors.colOnSurfaceVariant
+        color: Appearance.barStripContent.colOnSurfaceVariant
         font.pixelSize: 12
         wrapMode: Text.WordWrap
         maximumLineCount: 3
@@ -510,7 +509,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.canReply && !!IslandState.phoneError
         text: IslandState.phoneError
-        color: Appearance.colors.colError
+        color: Appearance.barStripContent.colErrorMark
         font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
@@ -521,7 +520,7 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 34
         radius: 10
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
         visible: root.canReply
 
         function send(): void {
@@ -572,7 +571,7 @@ ColumnLayout {
                 visible: !root.recordingVoice
                 text: "reply"
                 iconSize: 16
-                color: Appearance.colors.colSubtext
+                color: Appearance.islandContent.colSubtext
             }
 
             ToolbarTextField {
@@ -618,7 +617,7 @@ ColumnLayout {
                     implicitWidth: 8
                     implicitHeight: 8
                     radius: Appearance.rounding.full
-                    color: Appearance.colors.colError
+                    color: Appearance.islandContent.colErrorMark
                     SequentialAnimation on opacity {
                         loops: Animation.Infinite
                         running: root.recordingVoice
@@ -632,7 +631,7 @@ ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Recording voice note: %1:%2").arg(Math.floor(root.recordingSeconds / 60)).arg((root.recordingSeconds % 60 < 10 ? "0" : "") + (root.recordingSeconds % 60))
                     font.pixelSize: 12
-                    color: Appearance.colors.colError
+                    color: Appearance.islandContent.colErrorMark
                     elide: Text.ElideRight
                 }
 
@@ -652,7 +651,7 @@ ColumnLayout {
                         verticalAlignment: Text.AlignVCenter
                         text: "close"
                         iconSize: 15
-                        color: Appearance.colors.colSubtext
+                        color: Appearance.islandContent.colSubtext
                     }
                     StyledToolTip {
                         text: Translation.tr("Cancel recording (Esc)")
@@ -690,7 +689,7 @@ ColumnLayout {
                     verticalAlignment: Text.AlignVCenter
                     text: root.recordingVoice ? "stop" : "mic"
                     iconSize: 16
-                    color: root.recordingVoice ? Appearance.colors.colError : (parent.enabled ? (micBtn.hovered ? Appearance.colors.colPrimary : Appearance.colors.colSubtext) : ColorUtils.transparentize(Appearance.colors.colSubtext, 0.5))
+                    color: root.recordingVoice ? Appearance.islandContent.colErrorMark : (parent.enabled ? (micBtn.hovered ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext) : ColorUtils.transparentize(Appearance.islandContent.colSubtext, 0.5))
                 }
                 StyledToolTip {
                     text: root.recordingVoice
@@ -729,7 +728,7 @@ ColumnLayout {
                         text: "arrow_upward"
                         iconSize: 16
                         color: sendBtn.canSend ? Appearance.colors.colOnPrimary
-                            : root.replySent ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                            : root.replySent ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         opacity: 1 - sendBtn.flight
@@ -739,7 +738,7 @@ ColumnLayout {
                         anchors.centerIn: parent
                         text: "check"
                         iconSize: 16
-                        color: sendBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.colors.colPrimary
+                        color: sendBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.islandContent.colPrimary
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         opacity: sendBtn.confirmation

@@ -13,6 +13,7 @@ import Quickshell.Hyprland
 
 RippleButton {
     id: root
+    property var contentColors: Appearance.launcherContent
     property LauncherSearchResult entry
     property string query
     property bool isSeparator: entry?.isSeparator ?? false
@@ -52,29 +53,29 @@ RippleButton {
     // A press that does not hover the row, as a touch does, paints the
     // ripple's own color, so the text keeps the fills it is held on.
     colBackground: root.isSeparator ? "transparent" :
-        (root.down ? Appearance.launcherContent.colPrimaryContainerRipple :
-        root.keyboardDown ? Appearance.launcherContent.colPrimaryContainerActive :
-        (selected ? Appearance.launcherContent.colPrimaryContainer :
-        ColorUtils.transparentize(Appearance.launcherContent.colPrimaryContainer, 1)))
-    colBackgroundHover: root.isSeparator ? "transparent" : Appearance.launcherContent.colPrimaryContainer
-    colRipple: root.isSeparator ? "transparent" : Appearance.launcherContent.colPrimaryContainerRipple
+        (root.down ? root.contentColors.colPrimaryContainerRipple :
+        root.keyboardDown ? root.contentColors.colPrimaryContainerActive :
+        (selected ? root.contentColors.colPrimaryContainer :
+        ColorUtils.transparentize(root.contentColors.colPrimaryContainer, 1)))
+    colBackgroundHover: root.isSeparator ? "transparent" : root.contentColors.colPrimaryContainer
+    colRipple: root.isSeparator ? "transparent" : root.contentColors.colPrimaryContainerRipple
     // Held against the fills painted under it. The pointer on the row paints
     // the hover fill, which a pointer press spreads the ripple over; a key
     // pressed with the pointer elsewhere paints the pressed fill.
-    property color colOnFill: root.down ? Appearance.launcherContent.colOnPrimaryContainerActive
-        : (root.keyboardDown && !root.hovered) ? Appearance.launcherContent.colOnPrimaryContainerPressed
-        : Appearance.launcherContent.colOnPrimaryContainer
+    property color colOnFill: root.down ? root.contentColors.colOnPrimaryContainerActive
+        : (root.keyboardDown && !root.hovered) ? root.contentColors.colOnPrimaryContainerPressed
+        : root.contentColors.colOnPrimaryContainer
     property color colForeground: selected ? colOnFill
-        : root.down ? Appearance.launcherContent.m3onSurfaceOnRipple
-        : root.keyboardDown ? Appearance.launcherContent.m3onSurfacePressed : Appearance.launcherContent.m3onSurface
+        : root.down ? root.contentColors.m3onSurfaceOnRipple
+        : root.keyboardDown ? root.contentColors.m3onSurfacePressed : root.contentColors.m3onSurface
     // The copied entry's check disc and its glyph, held on the fills the
     // text is held on; off a picked or pressed row the disc keeps the accent.
-    property color colCheck: root.down ? Appearance.launcherContent.colPrimaryOnContainerActive
-        : (root.keyboardDown && !root.hovered) ? Appearance.launcherContent.colPrimaryOnContainerPressed
-        : root.selected ? Appearance.launcherContent.colPrimaryOnContainer : Appearance.launcherContent.colPrimary
-    property color colOnCheck: root.down ? Appearance.launcherContent.colOnPrimaryOnContainerActive
-        : (root.keyboardDown && !root.hovered) ? Appearance.launcherContent.colOnPrimaryOnContainerPressed
-        : root.selected ? Appearance.launcherContent.colOnPrimaryOnContainer : Appearance.launcherContent.m3onPrimary
+    property color colCheck: root.down ? root.contentColors.colPrimaryOnContainerActive
+        : (root.keyboardDown && !root.hovered) ? root.contentColors.colPrimaryOnContainerPressed
+        : root.selected ? root.contentColors.colPrimaryOnContainer : root.contentColors.colPrimary
+    property color colOnCheck: root.down ? root.contentColors.colOnPrimaryOnContainerActive
+        : (root.keyboardDown && !root.hovered) ? root.contentColors.colOnPrimaryOnContainerPressed
+        : root.selected ? root.contentColors.colOnPrimaryOnContainer : root.contentColors.m3onPrimary
 
     // Separator divider line
     Item {
@@ -88,7 +89,7 @@ RippleButton {
             anchors.centerIn: parent
             width: parent.width - 40
             height: 1
-            color: Appearance.launcherContent.colOutlineVariant
+            color: root.contentColors.colOutlineVariant
         }
     }
 
@@ -96,9 +97,9 @@ RippleButton {
     // shows its name without them, so they are held only on the fills a row
     // that is not picked paints: the panel, the ripple's color under a
     // press, and the pressed fill under a key pressed on it.
-    readonly property color colHighlight: root.selected ? Appearance.launcherContent.colPrimaryInk
-        : root.down ? Appearance.launcherContent.colPrimaryInkOnRipple
-        : root.keyboardDown ? Appearance.launcherContent.colPrimaryInkPressed : Appearance.launcherContent.colPrimaryInk
+    readonly property color colHighlight: root.selected ? root.contentColors.colPrimaryInk
+        : root.down ? root.contentColors.colPrimaryInkOnRipple
+        : root.keyboardDown ? root.contentColors.colPrimaryInkPressed : root.contentColors.colPrimaryInk
     readonly property string highlightPrefix: `<u><font color="${root.colHighlight}">`
     readonly property string highlightSuffix: `</font></u>`
     // Note that this highlighting is independent from the search
@@ -237,8 +238,8 @@ RippleButton {
             StyledText {
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 color: root.selected ? root.colOnFill
-                    : root.down ? Appearance.launcherContent.colSubtextOnRipple
-                    : root.keyboardDown ? Appearance.launcherContent.colSubtextPressed : Appearance.launcherContent.colSubtextRead
+                    : root.down ? root.contentColors.colSubtextOnRipple
+                    : root.keyboardDown ? root.contentColors.colSubtextPressed : root.contentColors.colSubtextRead
                 visible: root.itemType && root.itemType != Translation.tr("App")
                 text: root.itemType
             }
@@ -317,8 +318,8 @@ RippleButton {
                     implicitHeight: 34
                     implicitWidth: 34
 
-                    colBackgroundHover: Appearance.launcherContent.colActionHover
-                    colRipple: Appearance.launcherContent.colActionRipple
+                    colBackgroundHover: root.contentColors.colActionHover
+                    colRipple: root.contentColors.colActionRipple
 
                     contentItem: Item {
                         id: actionContentItem
@@ -329,8 +330,8 @@ RippleButton {
                             sourceComponent: MaterialSymbol {
                                 text: actionButton.iconName || "video_settings"
                                 font.pixelSize: Appearance.font.pixelSize.hugeass
-                                color: actionButton.down ? Appearance.launcherContent.colOnActionActive :
-                                    (actionButton.hovered ? Appearance.launcherContent.colOnActionHover : root.colForeground)
+                                color: actionButton.down ? root.contentColors.colOnActionActive :
+                                    (actionButton.hovered ? root.contentColors.colOnActionHover : root.colForeground)
                             }
                         }
                         Loader {

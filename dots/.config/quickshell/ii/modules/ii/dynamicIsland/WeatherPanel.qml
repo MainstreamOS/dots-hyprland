@@ -4,12 +4,11 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 
 ColumnLayout {
     id: root
+    property var contentColors: Appearance.islandContent
     spacing: 2
-    readonly property color elevatedSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
 
     Rectangle {
         Layout.fillWidth: true
@@ -18,7 +17,7 @@ ColumnLayout {
         topRightRadius: Appearance?.rounding?.normal ?? 17
         bottomLeftRadius: 5
         bottomRightRadius: 5
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         ColumnLayout {
             anchors.fill: parent
@@ -39,7 +38,7 @@ ColumnLayout {
                     StyledText {
                         Layout.fillWidth: true
                         text: Weather.cityName || Translation.tr("Weather")
-                        color: Appearance.colors.colOnSurfaceVariant
+                        color: root.contentColors.colOnSurfaceVariant
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
@@ -50,7 +49,7 @@ ColumnLayout {
 
                         StyledText {
                             text: Weather.data.temp
-                            color: Appearance.colors.colOnLayer0
+                            color: root.contentColors.colOnLayer0
                             font.pixelSize: 32
                             font.weight: Font.Medium
                         }
@@ -58,7 +57,7 @@ ColumnLayout {
                         StyledText {
                             Layout.fillWidth: true
                             text: Weather.condition
-                            color: Appearance.colors.colOnSurfaceVariant
+                            color: root.contentColors.colOnSurfaceVariant
                             font.pixelSize: 12
                             elide: Text.ElideRight
                             Layout.alignment: Qt.AlignVCenter
@@ -70,11 +69,12 @@ ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
                     text: !Weather.lastReply ? "cloud" : Weather.lastReply.current?.is_day === 0 && Weather.lastReply.current?.weather_code <= 1
                         ? "bedtime" : Icons.getWeatherIcon(Weather.data.wCode) || "cloud"
-                    color: Appearance.colors.colOnLayer0
+                    color: root.contentColors.colOnLayer0
                     iconSize: 44
                 }
 
                 IslandButton {
+                    contentColors: root.contentColors
                     Layout.alignment: Qt.AlignVCenter
                     implicitHeight: 28
                     implicitWidth: 28
@@ -92,16 +92,16 @@ ColumnLayout {
 
                 RowLayout {
                     spacing: 4
-                    MaterialSymbol { text: "thermostat"; iconSize: 14; color: Appearance.colors.colSubtext }
-                    StyledText { text: Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike); font.pixelSize: 11; color: Appearance.colors.colSubtext }
+                    MaterialSymbol { text: "thermostat"; iconSize: 14; color: root.contentColors.colSubtext }
+                    StyledText { text: Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike); font.pixelSize: 11; color: root.contentColors.colSubtext }
                 }
 
-                StyledText { text: "·"; font.pixelSize: 11; color: Appearance.colors.colSubtext }
+                StyledText { text: "·"; font.pixelSize: 11; color: root.contentColors.colSubtext }
 
                 RowLayout {
                     spacing: 4
-                    MaterialSymbol { text: "air"; iconSize: 14; color: Appearance.colors.colSubtext }
-                    StyledText { text: Weather.data.wind; font.pixelSize: 11; color: Appearance.colors.colSubtext }
+                    MaterialSymbol { text: "air"; iconSize: 14; color: root.contentColors.colSubtext }
+                    StyledText { text: Weather.data.wind; font.pixelSize: 11; color: root.contentColors.colSubtext }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -109,8 +109,8 @@ ColumnLayout {
                 RowLayout {
                     visible: Weather.data.humidity && Weather.data.humidity !== "--"
                     spacing: 4
-                    MaterialSymbol { text: "humidity_mid"; iconSize: 14; color: Appearance.colors.colSubtext }
-                    StyledText { text: Weather.data.humidity; font.pixelSize: 11; color: Appearance.colors.colSubtext }
+                    MaterialSymbol { text: "humidity_mid"; iconSize: 14; color: root.contentColors.colSubtext }
+                    StyledText { text: Weather.data.humidity; font.pixelSize: 11; color: root.contentColors.colSubtext }
                 }
             }
         }
@@ -123,7 +123,7 @@ ColumnLayout {
         topRightRadius: 5
         bottomLeftRadius: Appearance?.rounding?.normal ?? 17
         bottomRightRadius: Appearance?.rounding?.normal ?? 17
-        color: root.elevatedSurface
+        color: Appearance.surfaces.raised
 
         RowLayout {
             anchors.fill: parent
@@ -146,7 +146,7 @@ ColumnLayout {
                         StyledText {
                             Layout.alignment: Qt.AlignHCenter
                             text: DateTime.formatTimeOfDay(forecastHour.modelData.time)
-                            color: Appearance.colors.colSubtext
+                            color: root.contentColors.colSubtext
                             font.pixelSize: 11
                         }
 
@@ -155,13 +155,13 @@ ColumnLayout {
                             text: !forecastHour.modelData.isDay && forecastHour.modelData.code <= 1
                                 ? "bedtime" : Icons.getWeatherIcon(Weather.wmoToWwo(forecastHour.modelData.code)) || "cloud"
                             iconSize: 20
-                            color: Appearance.colors.colOnLayer0
+                            color: root.contentColors.colOnLayer0
                         }
 
                         StyledText {
                             Layout.alignment: Qt.AlignHCenter
                             text: forecastHour.modelData.temperature
-                            color: Appearance.colors.colOnLayer0
+                            color: root.contentColors.colOnLayer0
                             font.pixelSize: 13
                             font.weight: Font.Medium
                         }
@@ -169,8 +169,8 @@ ColumnLayout {
                         RowLayout {
                             Layout.alignment: Qt.AlignHCenter
                             spacing: 2
-                            MaterialSymbol { text: "water_drop"; iconSize: 10; color: Appearance.colors.colPrimary }
-                            StyledText { text: forecastHour.modelData.rain; color: Appearance.colors.colSubtext; font.pixelSize: 10 }
+                            MaterialSymbol { text: "water_drop"; iconSize: 10; color: root.contentColors.colPrimary }
+                            StyledText { text: forecastHour.modelData.rain; color: root.contentColors.colSubtext; font.pixelSize: 10 }
                         }
                     }
                 }
@@ -183,7 +183,7 @@ ColumnLayout {
                 wrapMode: Text.WordWrap
                 text: Weather.refreshing ? Translation.tr("Loading forecast…") : Translation.tr("Hourly forecast unavailable")
                 font.pixelSize: 12
-                color: Appearance.colors.colOnSurfaceVariant
+                color: root.contentColors.colOnSurfaceVariant
             }
         }
     }
