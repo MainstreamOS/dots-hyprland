@@ -55,6 +55,8 @@ ShellRoot {
         ConflictKiller.load()
         Cliphist.refresh()
         BluetoothStatus.startProfileReconnect()
+        // Recover early tray clients even when the island's System panel is lazy.
+        TrayService.reregisterStatusNotifierItems()
         Wallpapers.load()
         Updates.load()
         ReleaseUpdates.load()
