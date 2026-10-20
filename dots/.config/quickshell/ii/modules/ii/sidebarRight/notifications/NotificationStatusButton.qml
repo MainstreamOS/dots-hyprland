@@ -14,7 +14,8 @@ GroupButton {
 
     buttonRadius: baseHeight / 2
     buttonRadiusPressed: Appearance.rounding.small
-    colBackground: Appearance.colors.colLayer2
+    // The Dynamic Island's row-surface buttons, inside the sidebar's raised card.
+    colBackground: Appearance.surfaces.row
     colBackgroundHover: Appearance.colors.colLayer2Hover
     colBackgroundActive: Appearance.colors.colLayer2Active
     property color colText: toggled ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer1

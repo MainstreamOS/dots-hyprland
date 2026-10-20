@@ -147,7 +147,7 @@ MouseArea { // Notification group area
         id: background
         anchors.left: parent.left
         width: parent.width
-        color: popup ? Appearance.colors.colBackgroundSurfaceContainer : Appearance.colors.colLayer2
+        color: popup ? Appearance.colors.colBackgroundSurfaceContainer : Appearance.surfaces.row
         // A popup stands on its own on the screen, so it squares off with the
         // windows; in the sidebar's list it is a card like the others there.
         radius: popup && !RoundedCorners.on ? 0 : Appearance.rounding.normal
