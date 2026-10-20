@@ -150,7 +150,7 @@ FocusScope {
                 implicitHeight: headerRow.implicitHeight + 16
                 radius: 14
                 color: ColorUtils.mix(
-                    ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94),
+                    Appearance.surfaces.raised,
                     Appearance.colors.colSecondaryContainer, 0.75)
 
                 RowLayout {

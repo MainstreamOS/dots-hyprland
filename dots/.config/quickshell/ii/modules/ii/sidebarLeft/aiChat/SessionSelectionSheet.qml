@@ -315,7 +315,7 @@ SheetBase {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+            color: Appearance.surfaces.row
             StyledListView {
                 id: saveSessionListView
                 anchors.fill: parent
@@ -406,7 +406,7 @@ SheetBase {
             Layout.fillHeight: true
             visible: root.filteredChats.length > 0 && !root.confirmingLoad
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+            color: Appearance.surfaces.row
             StyledListView {
                 id: sessionListView
                 anchors.fill: parent

@@ -23,7 +23,7 @@ Rectangle {
 
     implicitHeight: 40
     radius: 12
-    color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+    color: Appearance.surfaces.raised
     border.width: 1
     border.color: textInput.activeFocus ? ColorUtils.transparentize(Appearance.colors.colPrimary, 0.65) : "transparent"
 

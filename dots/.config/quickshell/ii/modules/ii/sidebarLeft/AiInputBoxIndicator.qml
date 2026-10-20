@@ -1,6 +1,5 @@
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import qs.services
 import QtQuick
 import QtQuick.Layouts
@@ -16,8 +15,8 @@ Item {
     property real maxTextWidth: 160
     property color textColor: Appearance.m3colors.m3onSurface
     property color iconColor: Appearance.m3colors.m3onSurface
-    property color colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
-    property color colBackgroundHover: ColorUtils.mix(Appearance.colors.colLayer2Hover, Appearance.colors.colOnLayer1, 0.94)
+    property color colBackground: Appearance.surfaces.raised
+    property color colBackgroundHover: Appearance.surfaces.raisedHover
 
     readonly property real labelPadding: button.leftPadding + button.rightPadding + rowLayout.spacing * 2
         + (cIcon.visible ? cIcon.width : materialIcon.implicitWidth) + chevron.implicitWidth

@@ -61,7 +61,7 @@ SheetBase {
         Layout.fillWidth: true
         Layout.fillHeight: true
         radius: 14
-        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+        color: Appearance.surfaces.row
 
         // Model List
         StyledListView {

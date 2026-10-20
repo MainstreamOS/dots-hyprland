@@ -3,7 +3,6 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 
 Rectangle {
     id: root
@@ -13,7 +12,7 @@ Rectangle {
 
     implicitHeight: controls.implicitHeight + 16
     radius: 14
-    color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+    color: Appearance.surfaces.raised
 
     Flickable {
         id: viewport
