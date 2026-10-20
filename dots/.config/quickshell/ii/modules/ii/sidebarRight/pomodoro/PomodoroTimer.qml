@@ -82,7 +82,8 @@ Item {
                     text: TimerService.pomodoroRunning ? Translation.tr("Pause") : (TimerService.pomodoroSecondsLeft === TimerService.pomodoroLapDuration) ? Translation.tr("Start") : Translation.tr("Resume")
                     color: TimerService.pomodoroRunning ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                 }
-                implicitHeight: 35
+                implicitHeight: 32
+                buttonRadius: 10
                 implicitWidth: 90
                 font.pixelSize: Appearance.font.pixelSize.larger
                 onClicked: TimerService.togglePomodoro()
@@ -91,22 +92,23 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 35
+                implicitHeight: 32
+                buttonRadius: 10
                 implicitWidth: 90
 
                 onClicked: TimerService.resetPomodoro()
                 enabled: (TimerService.pomodoroSecondsLeft < TimerService.pomodoroLapDuration) || TimerService.pomodoroCycle > 0 || TimerService.pomodoroBreak
 
                 font.pixelSize: Appearance.font.pixelSize.larger
-                colBackground: Appearance.colors.colErrorContainer
-                colBackgroundHover: Appearance.colors.colErrorContainerHover
-                colRipple: Appearance.colors.colErrorContainerActive
+                colBackground: Appearance.surfaces.row
+                colBackgroundHover: Appearance.colors.colLayer2Hover
+                colRipple: Appearance.colors.colLayer2Active
 
                 contentItem: StyledText {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
                     text: Translation.tr("Reset")
-                    color: Appearance.colors.colOnErrorContainer
+                    color: Appearance.colors.colOnLayer1
                 }
             }
         }

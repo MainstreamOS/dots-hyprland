@@ -180,7 +180,8 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 35
+                implicitHeight: 32
+                buttonRadius: 10
                 implicitWidth: 90
                 font.pixelSize: Appearance.font.pixelSize.larger
 
@@ -192,14 +193,14 @@ Item {
                 }
                 enabled: TimerService.stopwatchTime > 0 || Persistent.states.timer.stopwatch.laps.length > 0
 
-                colBackground: TimerService.stopwatchRunning ? Appearance.colors.colLayer2 : Appearance.colors.colErrorContainer
-                colBackgroundHover: TimerService.stopwatchRunning ? Appearance.colors.colLayer2Hover : Appearance.colors.colErrorContainerHover
-                colRipple: TimerService.stopwatchRunning ? Appearance.colors.colLayer2Active : Appearance.colors.colErrorContainerActive
+                colBackground: TimerService.stopwatchRunning ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.row
+                colBackgroundHover: TimerService.stopwatchRunning ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
+                colRipple: TimerService.stopwatchRunning ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
 
                 contentItem: StyledText {
                     horizontalAlignment: Text.AlignHCenter
                     text: TimerService.stopwatchRunning ? Translation.tr("Lap") : Translation.tr("Reset")
-                    color: TimerService.stopwatchRunning ? Appearance.colors.colOnLayer2 : Appearance.colors.colOnErrorContainer
+                    color: TimerService.stopwatchRunning ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
                 }
             }
         }

@@ -125,7 +125,8 @@ Item {
                     text: TimerService.countdownRunning ? Translation.tr("Pause") : (TimerService.countdownSecondsLeft === TimerService.countdownDuration) ? Translation.tr("Start") : Translation.tr("Resume")
                     color: TimerService.countdownRunning ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                 }
-                implicitHeight: 35
+                implicitHeight: 32
+                buttonRadius: 10
                 implicitWidth: 90
                 font.pixelSize: Appearance.font.pixelSize.larger
                 onClicked: TimerService.toggleCountdown()
@@ -134,22 +135,23 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 35
+                implicitHeight: 32
+                buttonRadius: 10
                 implicitWidth: 90
 
                 onClicked: TimerService.resetCountdown()
                 enabled: TimerService.countdownSecondsLeft < TimerService.countdownDuration
 
                 font.pixelSize: Appearance.font.pixelSize.larger
-                colBackground: Appearance.colors.colErrorContainer
-                colBackgroundHover: Appearance.colors.colErrorContainerHover
-                colRipple: Appearance.colors.colErrorContainerActive
+                colBackground: Appearance.surfaces.row
+                colBackgroundHover: Appearance.colors.colLayer2Hover
+                colRipple: Appearance.colors.colLayer2Active
 
                 contentItem: StyledText {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
                     text: Translation.tr("Reset")
-                    color: Appearance.colors.colOnErrorContainer
+                    color: Appearance.colors.colOnLayer1
                 }
             }
         }
