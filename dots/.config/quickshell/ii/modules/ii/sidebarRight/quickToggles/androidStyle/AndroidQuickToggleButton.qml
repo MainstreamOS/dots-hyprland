@@ -59,9 +59,11 @@ GroupButton {
     horizontalPadding: padding
     verticalPadding: padding
 
-    colBackground: Appearance.colors.colLayer2
-    colBackgroundToggled: (altAction && expandedSize) ? Appearance.colors.colLayer2 : Appearance.colors.colPrimary
-    colBackgroundToggledHover: (altAction && expandedSize) ? Appearance.colors.colLayer2Hover : Appearance.colors.colPrimaryHover
+    // The Dynamic Island's tile surfaces: the tile raised, its icon bubble on the row surface when off.
+    colBackground: Appearance.surfaces.raised
+    colBackgroundHover: Appearance.surfaces.raisedHover
+    colBackgroundToggled: (altAction && expandedSize) ? Appearance.surfaces.raised : Appearance.colors.colPrimary
+    colBackgroundToggledHover: (altAction && expandedSize) ? Appearance.surfaces.raisedHover : Appearance.colors.colPrimaryHover
     colBackgroundToggledActive: (altAction && expandedSize) ? Appearance.colors.colLayer2Active : Appearance.colors.colPrimaryActive
     buttonRadius: toggled ? Appearance.rounding.large : height / 2
     buttonRadiusPressed: Appearance.rounding.normal
@@ -104,7 +106,7 @@ GroupButton {
                 implicitWidth: height
                 radius: root.radius - root.verticalPadding
                 color: {
-                    const baseColor = root.toggled ? Appearance.colors.colPrimary : Appearance.colors.colLayer3
+                    const baseColor = root.toggled ? Appearance.colors.colPrimary : Appearance.surfaces.row
                     const transparentizeAmount = (root.altAction && root.expandedSize) ? 0 : 1
                     return ColorUtils.transparentize(baseColor, transparentizeAmount)
                 }
