@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
+import Quickshell.Widgets
 
 SheetBase {
     id: root
@@ -37,17 +37,20 @@ SheetBase {
     onRowActivated: index => root.selectMode(root.modes[index].id)
 
     // Mode List
-    Rectangle {
+    // A grouped list, as in the Dynamic Island: rows 2 px apart in one rounded group that fits them,
+    // scrolling when the sheet is too short for all of them.
+    ClippingRectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        radius: 14
-        color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+        Layout.preferredHeight: modeListView.contentHeight
+        Layout.maximumHeight: modeListView.contentHeight
+        radius: Appearance.rounding.normal - 3
+        color: "transparent"
         StyledListView {
             id: modeListView
             anchors.fill: parent
-            anchors.margins: 6
             clip: true
-            spacing: 6
+            spacing: 2
 
             model: root.modes
 
