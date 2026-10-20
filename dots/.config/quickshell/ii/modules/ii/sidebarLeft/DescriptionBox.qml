@@ -16,7 +16,7 @@ Item { // Tag suggestion description
 
     Rectangle {
         id: tagDescriptionBackground
-        color: Appearance.colors.colLayer2
+        color: Appearance.surfaces.raised
         anchors.fill: parent
         radius: Appearance.rounding.verysmall
         implicitHeight: descriptionRow.implicitHeight + 5 * 2

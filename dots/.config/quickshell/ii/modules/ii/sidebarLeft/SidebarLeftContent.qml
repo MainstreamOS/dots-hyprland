@@ -317,6 +317,8 @@ Item {
             implicitWidth: swipeView.implicitWidth
             implicitHeight: swipeView.implicitHeight
             radius: Appearance.rounding.normal
+            // The pages' own layer: raised things stand out on it as in the Island, and the pages'
+            // recessed wells (the row surface) stay visible below it.
             color: Appearance.colors.colLayer1
 
             SwipeView { // Content pages
