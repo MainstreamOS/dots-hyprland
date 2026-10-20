@@ -94,7 +94,7 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 implicitHeight: todoContentRowLayout.implicitHeight
-                color: Appearance.surfaces.raised
+                color: Appearance.surfaces.row
 
                 MouseArea {
                     anchors.fill: parent

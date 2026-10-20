@@ -10,7 +10,8 @@ import QtQuick.Layouts
 Rectangle {
     id: root
     radius: Appearance.rounding.normal
-    color: Appearance.colors.colLayer1
+    // A card on the Dynamic Island's raised surface, as its panels' cards are.
+    color: Appearance.surfaces.raised
 
     NotificationList {
         anchors.fill: parent

@@ -99,7 +99,7 @@ Item {
                 width: lapsList.width
                 implicitHeight: lapRow.implicitHeight + verticalPadding * 2
                 implicitWidth: lapRow.implicitWidth + horizontalPadding * 2
-                color: Appearance.surfaces.raised
+                color: Appearance.surfaces.row
                 radius: Appearance.rounding.small
 
                 RowLayout {
