@@ -7,7 +7,6 @@ import Quickshell
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 import Qt.labs.synchronizer
 
 Item {
@@ -331,14 +330,8 @@ Item {
                 }
 
                 clip: true
-                layer.enabled: true
-                layer.effect: OpacityMask {
-                    maskSource: Rectangle {
-                        width: swipeView.width
-                        height: swipeView.height
-                        radius: Appearance.rounding.small
-                    }
-                }
+                // The pages inset their own rounded cards. Keep text drawn
+                // directly instead of filtering the whole page through a mask.
             }
         }
 

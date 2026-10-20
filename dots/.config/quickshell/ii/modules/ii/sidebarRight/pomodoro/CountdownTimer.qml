@@ -91,7 +91,7 @@ Item {
                         horizontalAlignment: TextInput.AlignHCenter
                         font.pixelSize: 40
                         font.hintingPreference: Font.PreferDefaultHinting
-                        renderType: ScreenScale.renderTypeFor(Screen.name)
+                        renderType: Text.NativeRendering
                         color: Appearance.m3colors.m3onSurface
 
                         Keys.onReturnPressed: timeItem.applyEdit()

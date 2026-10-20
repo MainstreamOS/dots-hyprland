@@ -7,7 +7,6 @@ import qs.modules.ii.sidebarLeft.aiChat
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 
@@ -727,16 +726,9 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             Layout.fillHeight: true
             radius: 14
             color: Appearance.surfaces.row
-            layer.enabled: true
-            layer.effect: OpacityMask {
-                // The mask is stretched over the area, so its size sets the corner
-                // shape; it takes the page's size, as the sidebar's page view does.
-                maskSource: Rectangle {
-                    width: root.width
-                    height: root.height
-                    radius: Appearance.rounding.small
-                }
-            }
+            // The header and list are inset from the rounded well's edge.
+            // Clip scrolling content without rasterizing the text into a mask.
+            clip: true
 
             Rectangle {
                 id: statusBg

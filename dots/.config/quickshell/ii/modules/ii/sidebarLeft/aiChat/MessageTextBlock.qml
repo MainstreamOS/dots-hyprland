@@ -300,7 +300,7 @@ ColumnLayout {
                 width: chunkColumn.width
                 readOnly: true
                 selectByMouse: root.enableMouseSelection
-                renderType: ScreenScale.renderTypeFor(Screen.name)
+                renderType: Text.NativeRendering
                 font.family: Appearance.font.family.reading
                 font.hintingPreference: Font.PreferNoHinting // Prevent weird bold text
                 font.pixelSize: Appearance.font.pixelSize.small

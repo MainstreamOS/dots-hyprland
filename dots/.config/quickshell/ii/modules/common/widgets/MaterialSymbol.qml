@@ -7,8 +7,7 @@ StyledText {
     property real fill: 0
     property real truncatedFill: fill.toFixed(1) // Reduce memory consumption spikes from constant font remapping
     property real truncatedOpsz: Math.round(iconSize / 4) * 4
-    // Not the screen-scale choice StyledText makes, and deliberately so. These
-    // glyphs animate their own outline: FILL runs 0 to 1 on a click and opsz
+    // These glyphs animate their own outline: FILL runs 0 to 1 on a click and opsz
     // changes with the icon size. Distance-field glyphs are cached by glyph
     // index, which a variable axis does not change, so the cache keeps serving
     // the outline it first rasterized and the fill animation tears while an

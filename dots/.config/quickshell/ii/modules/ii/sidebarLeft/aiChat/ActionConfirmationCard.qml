@@ -309,7 +309,7 @@ Rectangle {
                 width: previewFlickable.width
                 textFormat: TextEdit.PlainText
                 wrapMode: TextEdit.WrapAnywhere
-                renderType: ScreenScale.renderTypeFor(Screen.name, font.pixelSize)
+                renderType: Text.NativeRendering
                 font.family: Appearance.font.family.monospace
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 font.hintingPreference: Font.PreferDefaultHinting

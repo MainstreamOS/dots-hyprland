@@ -24,7 +24,7 @@ Item {
         anchors.right: parent.right
         readOnly: true
         selectByMouse: root.enableMouseSelection
-        renderType: ScreenScale.renderTypeFor(Screen.name)
+        renderType: Text.NativeRendering
         font.family: Appearance.font.family.reading
         font.pixelSize: Appearance.font.pixelSize.small
         selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
