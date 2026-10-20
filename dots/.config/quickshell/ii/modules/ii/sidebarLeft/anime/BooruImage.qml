@@ -54,7 +54,7 @@ Button {
         implicitWidth: root.rowHeight * modelData.aspect_ratio
         implicitHeight: root.rowHeight
         radius: imageRadius
-        color: Appearance.colors.colLayer2
+        color: Appearance.surfaces.raised
     }
 
     contentItem: Item {

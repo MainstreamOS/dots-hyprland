@@ -9,7 +9,7 @@ import QtQuick.Layouts
 RippleButton {
     id: root
     property string displayText: ""
-    colBackground: Appearance.colors.colLayer2
+    colBackground: Appearance.surfaces.raised
 
     implicitWidth: contentItem.implicitWidth + horizontalPadding * 2
     implicitHeight: contentItem.implicitHeight + verticalPadding * 2

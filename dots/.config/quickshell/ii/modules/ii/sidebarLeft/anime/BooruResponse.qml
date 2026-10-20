@@ -50,7 +50,8 @@ Rectangle {
     }
 
     radius: Appearance.rounding.normal
-    color: Appearance.colors.colLayer1
+    // A card on the Dynamic Island's raised surface, so it stands off the page frame.
+    color: Appearance.surfaces.raised
 
     ColumnLayout {
         id: columnLayout
