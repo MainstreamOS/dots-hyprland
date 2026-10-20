@@ -95,18 +95,13 @@ Rectangle {
 
         spacing: 15
 
-        CalendarHeaderButton {
+        IslandButton {
             Layout.margins: 10
             Layout.rightMargin: 0
-            forceCircle: true
+            contentColors: Appearance.colors
+            symbol: "keyboard_arrow_up"
             downAction: () => {
                 root.setCollapsed(false);
-            }
-            contentItem: MaterialSymbol {
-                text: "keyboard_arrow_up"
-                iconSize: Appearance.font.pixelSize.larger
-                horizontalAlignment: Text.AlignHCenter
-                color: Appearance.colors.colOnLayer1
             }
         }
 
@@ -172,18 +167,13 @@ Rectangle {
                 }
             }
             // Collapse button
-            CalendarHeaderButton {
+            IslandButton {
                 anchors.left: parent.left
                 anchors.top: parent.top
-                forceCircle: true
+                contentColors: Appearance.colors
+                symbol: "keyboard_arrow_down"
                 downAction: () => {
                     root.setCollapsed(true);
-                }
-                contentItem: MaterialSymbol {
-                    text: "keyboard_arrow_down"
-                    iconSize: Appearance.font.pixelSize.larger
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Appearance.colors.colOnLayer1
                 }
             }
         }

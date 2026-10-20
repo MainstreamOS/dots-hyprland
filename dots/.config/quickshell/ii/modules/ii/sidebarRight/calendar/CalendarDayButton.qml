@@ -23,7 +23,8 @@ RippleButton {
     implicitHeight: 38;
 
     toggled: (isToday == 1)
-    buttonRadius: Appearance.rounding.small
+    // Round, as the Dynamic Island marks today.
+    buttonRadius: Appearance.rounding.full
 
     Popup {
         id: dayPopUp
@@ -61,7 +62,7 @@ RippleButton {
 
                     delegate: Rectangle {
                         width: parent.width
-                        color: Appearance.colors.colLayer2
+                        color: Appearance.surfaces.raised
                         radius: Appearance.rounding.small
                         implicitHeight: eventRow.implicitHeight + 16
 
@@ -112,7 +113,7 @@ RippleButton {
 
                     delegate: Rectangle {
                         width: parent.width
-                        color: Appearance.colors.colLayer2
+                        color: Appearance.surfaces.raised
                         radius: Appearance.rounding.small
                         implicitHeight: contentColumn.implicitHeight
 

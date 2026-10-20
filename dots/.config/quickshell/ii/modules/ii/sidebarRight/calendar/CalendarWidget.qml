@@ -57,43 +57,58 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: 5
-            CalendarHeaderButton {
+            IslandButton {
+                contentColors: Appearance.colors
+                implicitWidth: monthLabel.implicitWidth + 10 * 2
+                Behavior on implicitWidth {
+                    SmoothedAnimation {
+                        velocity: Appearance.animation.elementMove.velocity
+                    }
+                }
                 clip: true
-                buttonText: `${monthShift != 0 ? "• " : ""}${viewingDate.toLocaleDateString(Qt.locale(), "MMMM yyyy")}`
-                tooltipText: (monthShift === 0) ? "" : Translation.tr("Jump to current month")
                 downAction: () => {
                     monthShift = 0;
+                }
+                contentItem: StyledText {
+                    id: monthLabel
+                    text: `${monthShift != 0 ? "• " : ""}${viewingDate.toLocaleDateString(Qt.locale(), "MMMM yyyy")}`
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.pixelSize: Appearance.font.pixelSize.larger
+                    color: Appearance.colors.colOnLayer1
+                }
+                StyledToolTip {
+                    text: Translation.tr("Jump to current month")
+                    extraVisibleCondition: monthShift !== 0
                 }
             }
             Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: false
             }
-            CalendarHeaderButton {
-                forceCircle: true
+            IslandButton {
+                contentColors: Appearance.colors
                 visible: CalendarEvents.accountsAppAvailable
-                tooltipText: Translation.tr("Online Accounts")
+                symbol: "person_add"
                 downAction: () => {
                     Quickshell.execDetached(["gnome-online-accounts-gtk"]);
                 }
-                contentItem: MaterialSymbol {
-                    text: "person_add"
-                    iconSize: Appearance.font.pixelSize.larger
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Appearance.colors.colOnLayer1
+                StyledToolTip {
+                    text: Translation.tr("Online Accounts")
                 }
             }
-            CalendarHeaderButton {
-                forceCircle: true
-                tooltipText: Translation.tr("Sync calendars")
+            IslandButton {
+                contentColors: Appearance.colors
                 downAction: () => {
                     CalendarEvents.sync();
                 }
+                // Its own icon, so the icon can spin while the calendars sync.
                 contentItem: MaterialSymbol {
                     id: syncSymbol
                     text: "sync"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: 18
                     horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                     color: Appearance.colors.colOnLayer1
                     RotationAnimator {
                         target: syncSymbol
@@ -105,29 +120,22 @@ Item {
                         onRunningChanged: if (!running) syncSymbol.rotation = 0
                     }
                 }
+                StyledToolTip {
+                    text: Translation.tr("Sync calendars")
+                }
             }
-            CalendarHeaderButton {
-                forceCircle: true
+            IslandButton {
+                contentColors: Appearance.colors
+                symbol: "chevron_left"
                 downAction: () => {
                     monthShift--;
                 }
-                contentItem: MaterialSymbol {
-                    text: "chevron_left"
-                    iconSize: Appearance.font.pixelSize.larger
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Appearance.colors.colOnLayer1
-                }
             }
-            CalendarHeaderButton {
-                forceCircle: true
+            IslandButton {
+                contentColors: Appearance.colors
+                symbol: "chevron_right"
                 downAction: () => {
                     monthShift++;
-                }
-                contentItem: MaterialSymbol {
-                    text: "chevron_right"
-                    iconSize: Appearance.font.pixelSize.larger
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Appearance.colors.colOnLayer1
                 }
             }
         }

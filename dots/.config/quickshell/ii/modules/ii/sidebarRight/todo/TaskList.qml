@@ -13,7 +13,7 @@ Item {
     required property var taskList
     property string emptyPlaceholderIcon
     property string emptyPlaceholderText
-    property int todoListItemSpacing: 5
+    property int todoListItemSpacing: 2
     property int todoListItemPadding: 8
     property int listBottomPadding: 80
     property bool editable: false
@@ -67,6 +67,7 @@ Item {
         delegate: Item {
             id: todoItem
             required property var modelData
+            required property int index
             property bool pendingDoneToggle: false
             property bool pendingDelete: false
             property bool enableHeightAnimation: false
@@ -84,14 +85,16 @@ Item {
                 }
             }
 
-            Rectangle {
+            // The tasks read as one grouped list, as in the Dynamic Island.
+            GroupedRowBackground {
                 id: todoItemRectangle
+                index: todoItem.index
+                count: root.taskList.length
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 implicitHeight: todoContentRowLayout.implicitHeight
-                color: Appearance.colors.colLayer2
-                radius: Appearance.rounding.small
+                color: Appearance.surfaces.raised
 
                 MouseArea {
                     anchors.fill: parent
