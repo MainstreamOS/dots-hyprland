@@ -10,6 +10,7 @@ import Qt5Compat.GraphicalEffects
 import Quickshell.Io
 import Quickshell.Bluetooth
 import Quickshell
+import Quickshell.Widgets
 import Quickshell.Wayland
 import Quickshell.Hyprland
 
@@ -31,27 +32,28 @@ WindowDialog {
         Layout.leftMargin: -Appearance.rounding.large
         Layout.rightMargin: -Appearance.rounding.large
     }
-    StyledListView {
+    // A grouped list, as in the Dynamic Island: rows 2 px apart, the group's ends rounded by the clip.
+    ClippingRectangle {
         Layout.fillHeight: true
         Layout.fillWidth: true
-        Layout.topMargin: -15
-        Layout.bottomMargin: -16
-        Layout.leftMargin: -Appearance.rounding.large
-        Layout.rightMargin: -Appearance.rounding.large
+        radius: Appearance.rounding.normal - 3
+        color: "transparent"
+        StyledListView {
+            anchors.fill: parent
+            clip: true
+            spacing: 2
+            animateAppearance: false
 
-        clip: true
-        spacing: 0
-        animateAppearance: false
-
-        model: ScriptModel {
-            values: BluetoothStatus.friendlyDeviceList
-        }
-        delegate: BluetoothDeviceItem {
-            required property BluetoothDevice modelData
-            device: modelData
-            anchors {
-                left: parent?.left
-                right: parent?.right
+            model: ScriptModel {
+                values: BluetoothStatus.friendlyDeviceList
+            }
+            delegate: BluetoothDeviceItem {
+                required property BluetoothDevice modelData
+                device: modelData
+                anchors {
+                    left: parent?.left
+                    right: parent?.right
+                }
             }
         }
     }

@@ -1,5 +1,4 @@
 import qs.modules.common
-import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 
@@ -18,8 +17,9 @@ RippleButton {
         animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
     }
 
-    colBackground: ColorUtils.transparentize(Appearance.colors.colLayer3)
-    colBackgroundHover: active ? colBackground : Appearance.colors.colLayer3Hover
-    colRipple: Appearance.colors.colLayer3Active
-    buttonRadius: 0
+    // A row of a grouped list in the Dynamic Island's style; the list's clip rounds the group's ends.
+    colBackground: Appearance.surfaces.row
+    colBackgroundHover: active ? colBackground : Appearance.colors.colLayer2Hover
+    colRipple: Appearance.colors.colLayer2Active
+    buttonRadius: 4
 }

@@ -8,6 +8,7 @@ import qs.modules.common.functions as CF
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Widgets
 
 WindowDialog {
     id: root
@@ -31,24 +32,25 @@ WindowDialog {
         Layout.leftMargin: -Appearance.rounding.large
         Layout.rightMargin: -Appearance.rounding.large
     }
-    ListView {
+    // A grouped list, as in the Dynamic Island: rows 2 px apart, the group's ends rounded by the clip.
+    ClippingRectangle {
         Layout.fillHeight: true
         Layout.fillWidth: true
-        Layout.topMargin: -15
-        Layout.bottomMargin: -16
-        Layout.leftMargin: -Appearance.rounding.large
-        Layout.rightMargin: -Appearance.rounding.large
+        radius: Appearance.rounding.normal - 3
+        color: "transparent"
+        ListView {
+            anchors.fill: parent
+            clip: true
+            spacing: 2
 
-        clip: true
-        spacing: 0
-
-        model: ScriptModel {
-            values: shownNetworks.networks
-        }
-        delegate: WifiNetworkItem {
-            required property WifiAccessPoint modelData
-            wifiNetwork: modelData
-            width: ListView.view.width
+            model: ScriptModel {
+                values: shownNetworks.networks
+            }
+            delegate: WifiNetworkItem {
+                required property WifiAccessPoint modelData
+                wifiNetwork: modelData
+                width: ListView.view.width
+            }
         }
     }
     WindowDialogSeparator {}
