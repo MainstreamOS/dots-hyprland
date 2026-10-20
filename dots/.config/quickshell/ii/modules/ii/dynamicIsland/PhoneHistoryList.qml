@@ -117,12 +117,10 @@ ColumnLayout {
             colRipple: Appearance.colors.colLayer2Active
             onClicked: root.selected(modelData.id)
 
-            background: Rectangle {
+            background: GroupedRowBackground {
                 anchors.fill: parent
-                topLeftRadius: row.totalCount === 1 ? 14 : row.index === 0 ? 14 : 4
-                topRightRadius: row.totalCount === 1 ? 14 : row.index === 0 ? 14 : 4
-                bottomLeftRadius: row.totalCount === 1 ? 14 : row.index === row.totalCount - 1 ? 14 : 4
-                bottomRightRadius: row.totalCount === 1 ? 14 : row.index === row.totalCount - 1 ? 14 : 4
+                index: row.index
+                count: row.totalCount
                 color: row.buttonColor
                 Behavior on color {
                     animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)

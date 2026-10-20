@@ -11,7 +11,6 @@ RippleButton {
     property string subtitle: ""
     property bool compact: false
     readonly property bool iconOnly: text.length === 0 && subtitle.length === 0
-    readonly property color elevatedSurface: Appearance.surfaces.raised
     readonly property color ink: highlighted ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colOnLayer1
 
     implicitHeight: compact ? 42 : subtitle ? 58 : 34
@@ -21,7 +20,7 @@ RippleButton {
     leftPadding: iconOnly ? 0 : (compact ? 10 : 12)
     rightPadding: iconOnly ? 0 : (compact ? 10 : 12)
     buttonRadius: subtitle ? 12 : compact ? 9 : 10
-    colBackground: highlighted ? Appearance.colors.colPrimaryContainer : elevatedSurface
+    colBackground: highlighted ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.raised
     colBackgroundHover: highlighted ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
     colRipple: highlighted ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
 

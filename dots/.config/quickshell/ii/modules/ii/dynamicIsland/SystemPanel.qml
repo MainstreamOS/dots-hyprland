@@ -264,12 +264,10 @@ ColumnLayout {
                 }
                 property color colText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
 
-                background: Rectangle {
+                background: GroupedRowBackground {
                     anchors.fill: parent
-                    topLeftRadius: itemDelegate.index === 0 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                    topRightRadius: itemDelegate.index === 0 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                    bottomLeftRadius: itemDelegate.index === itemDelegate.totalCount - 1 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                    bottomRightRadius: itemDelegate.index === itemDelegate.totalCount - 1 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
+                    index: itemDelegate.index
+                    count: itemDelegate.totalCount
                     color: itemDelegate.color
 
                     Behavior on color {
@@ -552,12 +550,10 @@ ColumnLayout {
                     }
                     property color itemColText: isCurrent ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
 
-                    background: Rectangle {
+                    background: GroupedRowBackground {
                         anchors.fill: parent
-                        topLeftRadius: wifiItem.index === 0 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                        topRightRadius: wifiItem.index === 0 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                        bottomLeftRadius: wifiItem.index === wifiItem.totalCount - 1 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
-                        bottomRightRadius: wifiItem.index === wifiItem.totalCount - 1 ? (Appearance?.rounding?.normal ?? 17) - 3 : 4
+                        index: wifiItem.index
+                        count: wifiItem.totalCount
                         color: wifiItem.itemColor
 
                         Behavior on color {
