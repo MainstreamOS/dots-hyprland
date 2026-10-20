@@ -19,7 +19,7 @@ Rectangle {
     implicitWidth: compact ? 60 : 70
     implicitHeight: compact ? 28 : 34
     radius: compact ? 8 : 10
-    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+    color: Appearance.surfaces.row
 
     RowLayout {
         anchors.fill: parent

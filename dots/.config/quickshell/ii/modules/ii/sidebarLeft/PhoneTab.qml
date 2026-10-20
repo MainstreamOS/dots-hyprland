@@ -156,7 +156,7 @@ Item {
             Layout.fillWidth: true
             implicitHeight: 50
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+            color: Appearance.surfaces.raised
             // Cached contacts alone only head the Contacts page; they are not a phone.
             visible: (Phone.device !== null || (ContactService.records.length > 0 && tabBar.currentIndex === 1)) && (tabBar.currentIndex === 1 || tabBar.currentIndex === 2 || root.view === "list")
 
@@ -231,7 +231,7 @@ Item {
                     Layout.preferredHeight: 32
                     implicitWidth: switcherRow.implicitWidth + 6
                     radius: 10
-                    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                    color: Appearance.surfaces.row
 
                     RowLayout {
                         id: switcherRow
@@ -343,21 +343,11 @@ Item {
                     }
                 }
 
-                RippleButton {
-                    implicitWidth: 32
-                    implicitHeight: 32
-                    buttonRadius: 10
+                IslandButton {
+                    contentColors: Appearance.colors
                     enabled: Phone.reachable && Phone.canShare
-                    colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    symbol: "upload_file"
                     onClicked: root.openFileSheet(false)
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "upload_file"
-                        iconSize: 17
-                        color: Appearance.colors.colOnLayer1
-                    }
                     StyledToolTip {
                         text: Translation.tr("Send files to your phone\nOr drop them on this tab outside a conversation")
                     }

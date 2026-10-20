@@ -62,7 +62,7 @@ Item {
                 Layout.fillWidth: true
                 implicitHeight: 38
                 radius: Appearance.rounding.small
-                color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+                color: Appearance.surfaces.row
 
                 RowLayout {
                     anchors.fill: parent
@@ -115,7 +115,7 @@ Item {
                 implicitHeight: 38
                 implicitWidth: countBadge.implicitWidth + 20
                 radius: Appearance.rounding.small
-                color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+                color: Appearance.surfaces.raised
 
                 StyledText {
                     id: countBadge
@@ -194,7 +194,7 @@ Item {
                 implicitHeight: rowCol.implicitHeight + 16
                 radius: Appearance.rounding.small
                 clip: true
-                color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer0, 0.92)
+                color: Appearance.surfaces.raised
 
                 Behavior on implicitHeight {
                     NumberAnimation { duration: 160; easing.type: Easing.OutQuad }
@@ -291,7 +291,7 @@ Item {
                                         radius: 4
                                         color: row.isExpanded
                                             ? Appearance.colors.colPrimaryContainer
-                                            : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                            : Appearance.surfaces.row
 
                                         StyledText {
                                             id: multiBadgeLabel
@@ -333,7 +333,7 @@ Item {
                                 Layout.fillWidth: true
                                 implicitHeight: 34
                                 radius: Appearance.rounding.verysmall
-                                color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+                                color: Appearance.surfaces.row
 
                                 RowLayout {
                                     anchors.fill: parent

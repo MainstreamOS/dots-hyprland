@@ -259,7 +259,6 @@ Item {
     }
 
     readonly property bool sshfsMissing: Phone.mountError.length > 0 && Phone.sshfsMissing
-    readonly property color colCard: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
 
     function placePath(path): string {
         const p = String(path ?? "");
@@ -444,7 +443,7 @@ Item {
             implicitWidth: 64
             implicitHeight: 64
             radius: 20
-            color: root.colCard
+            color: Appearance.surfaces.raised
 
             MaterialSymbol {
                 anchors.centerIn: parent
@@ -564,7 +563,7 @@ Item {
                         }
                         return tileMouse.pressed
                             ? Appearance.colors.colLayer2Active
-                            : (tileMouse.containsMouse ? Appearance.colors.colLayer2Hover : root.colCard);
+                            : (tileMouse.containsMouse ? Appearance.colors.colLayer2Hover : Appearance.surfaces.raised);
                     }
 
                     Behavior on color {
@@ -594,7 +593,7 @@ Item {
                                 radius: 8
                                 color: tile.isActive
                                     ? Appearance.colors.colPrimary
-                                    : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                    : Appearance.surfaces.row
 
                                 MaterialSymbol {
                                     anchors.centerIn: parent
@@ -643,7 +642,7 @@ Item {
             Layout.fillWidth: true
             implicitHeight: 38
             radius: 10
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+            color: Appearance.surfaces.row
 
             RowLayout {
                 anchors.fill: parent
@@ -658,7 +657,7 @@ Item {
                     implicitHeight: 28
                     buttonRadius: 8
                     colBackground: root.canGoUp
-                        ? ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
+                        ? Appearance.surfaces.raised
                         : "transparent"
                     colBackgroundHover: Appearance.colors.colLayer2Hover
                     onClicked: root.up()
@@ -699,7 +698,7 @@ Item {
                     implicitHeight: 26
                     implicitWidth: toolCapsuleRow.implicitWidth + 6
                     radius: 8
-                    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.6)
+                    color: Appearance.surfaces.row
 
                     RowLayout {
                         id: toolCapsuleRow
@@ -818,7 +817,7 @@ Item {
                     implicitHeight: 26
                     implicitWidth: viewSwitcherRow.implicitWidth + 4
                     radius: 8
-                    color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.6)
+                    color: Appearance.surfaces.row
 
                     RowLayout {
                         id: viewSwitcherRow
@@ -892,7 +891,7 @@ Item {
             implicitHeight: 34
             radius: 10
             visible: root.searchOpen || root.searchQuery.length > 0
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+            color: Appearance.surfaces.row
 
             RowLayout {
                 anchors.fill: parent
@@ -988,7 +987,7 @@ Item {
                         implicitHeight: 22
                         implicitWidth: orderRow.implicitWidth + 10
                         buttonRadius: 6
-                        colBackground: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                        colBackground: Appearance.surfaces.row
                         colBackgroundHover: Appearance.colors.colLayer2Hover
                         onClicked: root.sortReversed = !root.sortReversed
                         contentItem: RowLayout {
@@ -1028,7 +1027,7 @@ Item {
                             buttonRadius: 6
                             colBackground: root.sortFieldKey === modelData.key
                                 ? Appearance.colors.colPrimaryContainer
-                                : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                : Appearance.surfaces.row
                             colBackgroundHover: Appearance.colors.colLayer2Hover
                             onClicked: {
                                 root.sortFieldKey = modelData.key;
@@ -1104,24 +1103,20 @@ Item {
                     required property string filePath
                     required property bool fileIsDir
                     required property var fileSize
-                    readonly property bool isFirst: entry.index === 0
-                    readonly property bool isLast: entry.index === (folderModel.count - 1)
                     readonly property string thumbSource: Phone.thumbnails[entry.filePath] ?? ""
                     width: fileList.width
                     implicitHeight: 48
                     readonly property bool isOpening: Phone.openingFilePath === entry.filePath
 
-                    Rectangle {
+                    GroupedRowBackground {
                         anchors.fill: parent
-                        topLeftRadius: entry.isFirst ? 16 : 4
-                        topRightRadius: entry.isFirst ? 16 : 4
-                        bottomLeftRadius: entry.isLast ? 16 : 4
-                        bottomRightRadius: entry.isLast ? 16 : 4
+                        index: entry.index
+                        count: folderModel.count
                         color: (root.selectionMode && root.isSelected(entry.filePath))
-                            ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, root.colCard, 0.35)
+                            ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.surfaces.raised, 0.35)
                             : (entryMouse.pressed
                                 ? Appearance.colors.colLayer2Active
-                                : (entryMouse.containsMouse ? Appearance.colors.colLayer2Hover : root.colCard))
+                                : (entryMouse.containsMouse ? Appearance.colors.colLayer2Hover : Appearance.surfaces.raised))
 
                         Behavior on color {
                             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
@@ -1183,7 +1178,7 @@ Item {
                                 ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.55)
                                 : isOpening
                                     ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.55)
-                                    : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                    : Appearance.surfaces.row
 
                             Image {
                                 anchors.fill: parent
@@ -1228,21 +1223,11 @@ Item {
                             color: isOpening ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
                         }
 
-                        RippleButton {
+                        IslandButton {
                             visible: !entry.fileIsDir
-                            implicitWidth: 30
-                            implicitHeight: 30
-                            buttonRadius: 9
-                            colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
-                            colBackgroundHover: Appearance.colors.colLayer2Hover
+                            contentColors: Appearance.colors
+                            symbol: "download"
                             onClicked: Phone.saveCopy(entry.filePath, "", false, "files")
-                            contentItem: MaterialSymbol {
-                                anchors.centerIn: parent
-                                horizontalAlignment: Text.AlignHCenter
-                                text: "download"
-                                iconSize: 16
-                                color: Appearance.colors.colOnLayer1
-                            }
                             StyledToolTip {
                                 text: Translation.tr("Save to Downloads")
                             }
@@ -1281,10 +1266,10 @@ Item {
                         anchors.margins: 3
                         radius: 14
                         color: (root.selectionMode && root.isSelected(gridEntry.filePath))
-                            ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, root.colCard, 0.35)
+                            ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.surfaces.raised, 0.35)
                             : (gridMouse.pressed
                                 ? Appearance.colors.colLayer2Active
-                                : (gridMouse.containsMouse ? Appearance.colors.colLayer2Hover : root.colCard))
+                                : (gridMouse.containsMouse ? Appearance.colors.colLayer2Hover : Appearance.surfaces.raised))
 
                         Behavior on color {
                             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
@@ -1326,7 +1311,7 @@ Item {
                                 clip: true
                                 color: gridEntry.fileIsDir
                                     ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.45)
-                                    : ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.5)
+                                    : Appearance.surfaces.row
 
                                 Image {
                                     anchors.fill: parent
@@ -1428,21 +1413,11 @@ Item {
                                         }
                                     }
 
-                                    RippleButton {
+                                    IslandButton {
                                         visible: !gridEntry.fileIsDir
-                                        implicitWidth: 26
-                                        implicitHeight: 26
-                                        buttonRadius: 7
-                                        colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
-                                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                                        contentColors: Appearance.colors
+                                        symbol: "download"
                                         onClicked: Phone.saveCopy(gridEntry.filePath, "", false, "files")
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            horizontalAlignment: Text.AlignHCenter
-                                            text: "download"
-                                            iconSize: 14
-                                            color: Appearance.colors.colOnLayer1
-                                        }
                                         StyledToolTip {
                                             text: Translation.tr("Save to Downloads")
                                         }

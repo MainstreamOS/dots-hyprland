@@ -708,7 +708,7 @@ Item {
             Layout.fillWidth: true
             implicitHeight: 50
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+            color: Appearance.surfaces.raised
 
             RowLayout {
                 anchors.fill: parent
@@ -716,25 +716,15 @@ Item {
                 anchors.rightMargin: 8
                 spacing: 8
 
-                RippleButton {
-                    implicitWidth: 34
-                    implicitHeight: 34
-                    buttonRadius: 10
-                    colBackground: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                IslandButton {
+                    contentColors: Appearance.colors
+                    symbol: "arrow_back"
                     onClicked: {
                         root.attachments = [];
                         root.activeReplyMessage = null;
                         root.threadSearchOpen = false;
                         root.stopMedia();
                         root.back();
-                    }
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "arrow_back"
-                        iconSize: 18
-                        color: Appearance.colors.colOnLayer1
                     }
                 }
 
@@ -809,29 +799,14 @@ Item {
                     loading: visible
                 }
 
-                RippleButton {
+                IslandButton {
                     visible: !root.composing && !(Phone.threadLoading && Phone.threadMessages.length <= 1)
-                    implicitWidth: 34
-                    implicitHeight: 34
-                    buttonRadius: 10
-                    colBackground: root.threadSearchOpen
-                        ? Appearance.colors.colPrimaryContainer
-                        : ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.88)
-                    colBackgroundHover: root.threadSearchOpen
-                        ? Appearance.colors.colPrimaryContainerHover
-                        : Appearance.colors.colLayer2Hover
+                    contentColors: Appearance.colors
+                    highlighted: root.threadSearchOpen
+                    symbol: "search"
                     onClicked: {
                         root.threadSearchOpen = !root.threadSearchOpen;
                         if (root.threadSearchOpen) threadSearchInput.forceActiveFocus();
-                    }
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        horizontalAlignment: Text.AlignHCenter
-                        text: "search"
-                        iconSize: 17
-                        color: root.threadSearchOpen
-                            ? Appearance.colors.colOnPrimaryContainer
-                            : Appearance.colors.colSubtext
                     }
                     StyledToolTip {
                         text: Translation.tr("Search in conversation")
@@ -845,7 +820,7 @@ Item {
             visible: root.threadSearchOpen && !root.composing
             implicitHeight: 36
             radius: 11
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+            color: Appearance.surfaces.row
 
             RowLayout {
                 anchors.fill: parent
@@ -911,7 +886,7 @@ Item {
             visible: root.composing
             implicitHeight: recipientField.implicitHeight + 18
             radius: Appearance.rounding.small
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+            color: Appearance.surfaces.row
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -946,17 +921,13 @@ Item {
                     id: suggestion
                     required property int index
                     required property var modelData
-                    readonly property bool isFirst: suggestion.index === 0
-                    readonly property bool isLast: suggestion.index === (root.suggestions.length - 1)
                     Layout.fillWidth: true
                     implicitHeight: 42
 
-                    Rectangle {
+                    GroupedRowBackground {
                         anchors.fill: parent
-                        topLeftRadius: suggestion.isFirst ? 14 : 4
-                        topRightRadius: suggestion.isFirst ? 14 : 4
-                        bottomLeftRadius: suggestion.isLast ? 14 : 4
-                        bottomRightRadius: suggestion.isLast ? 14 : 4
+                        index: suggestion.index
+                        count: root.suggestions.length
                         color: suggMouse.containsMouse ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer2
                     }
 
@@ -1022,7 +993,7 @@ Item {
             Layout.fillHeight: true
             visible: !root.composing
             radius: 14
-            color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.55)
+            color: Appearance.surfaces.row
             clip: true
 
             layer.enabled: root.reactionBarOpen
@@ -1884,7 +1855,7 @@ Item {
                 topRightRadius: root.activeReplyMessage !== null ? 4 : 14
                 bottomLeftRadius: 14
                 bottomRightRadius: 14
-                color: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
+                color: Appearance.surfaces.raised
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 6
