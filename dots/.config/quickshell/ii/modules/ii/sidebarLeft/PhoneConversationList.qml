@@ -63,8 +63,8 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: 38
-                radius: Appearance.rounding.small
-                color: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
+                radius: 10
+                color: Appearance.surfaces.raised
 
                 RowLayout {
                     anchors.fill: parent
@@ -160,21 +160,16 @@ Item {
                 required property var modelData
                 readonly property string title: Phone.conversationTitle(row.modelData)
                 readonly property bool unread: !Phone.isOutgoing(row.modelData) && !row.modelData.read
-                readonly property bool isFirst: row.index === 0
-                readonly property bool isLast: row.index === (list.count - 1)
 
                 width: list.width
                 implicitHeight: 64
 
-                Rectangle {
+                GroupedRowBackground {
                     id: rowBg
                     anchors.fill: parent
-                    topLeftRadius: row.isFirst ? 16 : 4
-                    topRightRadius: row.isFirst ? 16 : 4
-                    bottomLeftRadius: row.isLast ? 16 : 4
-                    bottomRightRadius: row.isLast ? 16 : 4
-                    readonly property color readSurface: ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colOnLayer1, 0.94)
-                    readonly property color unreadSurface: ColorUtils.mix(Appearance.colors.colPrimaryContainer, readSurface, 0.55)
+                    // The Dynamic Island's grouped rows, raised on the page frame.
+                    index: row.index
+                    count: list.count
                     color: {
                         if (rowMouse.pressed) {
                             return row.unread
@@ -186,7 +181,7 @@ Item {
                                 ? ColorUtils.mix(Appearance.colors.colPrimaryContainerHover, Appearance.colors.colLayer2Hover, 0.55)
                                 : Appearance.colors.colLayer2Hover;
                         }
-                        return row.unread ? unreadSurface : readSurface;
+                        return row.unread ? Appearance.surfaces.unread : Appearance.surfaces.raised;
                     }
 
                     Behavior on color {
@@ -284,30 +279,13 @@ Item {
             }
         }
 
-        RippleButton {
+        IslandButton {
             Layout.fillWidth: true
-            implicitHeight: 36
-            buttonRadius: Appearance.rounding.small
+            contentColors: Appearance.colors
             enabled: Phone.reachable
-            colBackground: ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colLayer1, 0.45)
-            colBackgroundHover: Appearance.colors.colLayer2Hover
+            symbol: "send_to_mobile"
+            text: Translation.tr("Drop files anywhere to send to %1").arg(Phone.device?.name ?? Translation.tr("your phone"))
             onClicked: root.sendFilesRequested()
-
-            contentItem: RowLayout {
-                anchors.centerIn: parent
-                spacing: 7
-                MaterialSymbol {
-                    text: "send_to_mobile"
-                    iconSize: 15
-                    color: Appearance.colors.colSubtext
-                }
-                StyledText {
-                    text: Translation.tr("Drop files anywhere to send to %1").arg(Phone.device?.name ?? Translation.tr("your phone"))
-                    font.pixelSize: 11
-                    font.weight: Font.Medium
-                    color: Appearance.colors.colSubtext
-                }
-            }
         }
     }
 
