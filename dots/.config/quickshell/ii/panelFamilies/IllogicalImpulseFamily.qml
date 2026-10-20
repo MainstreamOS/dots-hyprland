@@ -51,6 +51,7 @@ Scope {
     PanelLoader { component: Polkit {} }
     PanelLoader { component: RegionSelector {} }
     PanelLoader { component: ScreenCorners {} }
+    PanelLoader { component: ScrollingIndicators {} }
     PanelLoader { component: ScreenTranslator {} }
     PanelLoader { component: SessionScreen {} }
     PanelLoader { component: SidebarLeft {} }

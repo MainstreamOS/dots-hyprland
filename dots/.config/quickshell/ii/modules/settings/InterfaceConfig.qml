@@ -598,6 +598,18 @@ ContentPage {
     }
 
     ContentSection {
+        icon: "swap_horiz"
+        title: Translation.tr("Workspace navigation")
+        ConfigSwitch {
+            buttonIcon: "swap_horiz"
+            text: Translation.tr("Show navigation arrows")
+            tooltipText: Translation.tr("Show arrows for scrolling and monocle windows on the desktop and in the launcher.")
+            checked: Config.options.interactions.showWorkspaceNavigationArrows
+            onCheckedChanged: Config.options.interactions.showWorkspaceNavigationArrows = checked
+        }
+    }
+
+    ContentSection {
         icon: "overview_key"
         title: Translation.tr("Launcher Overview")
 

@@ -58,6 +58,8 @@ Singleton {
     // Written by the dock; a pinned dock reserves an exclusive zone, an
     // unpinned one reveals over other surfaces.
     property bool dockPinned: false
+    // Live dock windows by output, including auto-hidden docks when revealed.
+    property var dockWindows: ({})
     // Written by the left sidebar; pinned, it reserves an exclusive zone.
     property bool sidebarLeftPinned: false
     // Written by the left sidebar: whether it is currently detached into a floating window.

@@ -267,9 +267,17 @@ Scope { // Scope
 
             Component.onCompleted: {
                 GlobalFocusGrab.addPersistent(dockRoot);
+                registeredScreen = screen.name;
+                GlobalStates.dockWindows = Object.assign({}, GlobalStates.dockWindows, {[registeredScreen]: dockRoot});
             }
+            property string registeredScreen: ""
             Component.onDestruction: {
                 GlobalFocusGrab.removePersistent(dockRoot);
+                if (GlobalStates.dockWindows[registeredScreen] === dockRoot) {
+                    const windows = Object.assign({}, GlobalStates.dockWindows);
+                    delete windows[registeredScreen];
+                    GlobalStates.dockWindows = windows;
+                }
             }
 
             // Keep revealed briefly after the overview closes: its full-screen
