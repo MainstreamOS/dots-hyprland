@@ -18,9 +18,9 @@ Item {
     Keys.onPressed: (event) => {
         if ((event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) && event.modifiers === Qt.NoModifier) {
             if (event.key === Qt.Key_PageDown) {
-                tabBar.incrementCurrentIndex();
+                swipeView.incrementCurrentIndex();
             } else if (event.key === Qt.Key_PageUp) {
-                tabBar.decrementCurrentIndex();
+                swipeView.decrementCurrentIndex();
             }
             event.accepted = true;
         }
@@ -54,19 +54,21 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.leftMargin: 5
+        anchors.rightMargin: 5
         spacing: 0
 
-        SecondaryTabBar {
+        SegmentedTabBar {
             id: tabBar
+            // Level with the calendar's month header and the collapse button beside it.
+            Layout.topMargin: 10
+            implicitHeight: 30
+            radius: 10
+            iconSize: 16
+            labelSize: 13
+            model: root.tabButtonList
             currentIndex: swipeView.currentIndex
-
-            Repeater {
-                model: root.tabButtonList
-                delegate: SecondaryTabButton {
-                    buttonText: modelData.name
-                    buttonIcon: modelData.icon
-                }
-            }
+            onActivated: index => swipeView.setCurrentIndex(index)
         }
 
         SwipeView {
@@ -76,7 +78,6 @@ Item {
             Layout.fillHeight: true
             spacing: 10
             clip: true
-            currentIndex: tabBar.currentIndex
 
             // To Do tab
             TaskList {
@@ -176,7 +177,7 @@ Item {
                     Todo.addTask(todoInput.text, date)
                     todoInput.text = ""
                     root.showAddDialog = false
-                    tabBar.setCurrentIndex(0) // Show unfinished tasks
+                    swipeView.setCurrentIndex(0) // Show unfinished tasks
                 }
             }
 

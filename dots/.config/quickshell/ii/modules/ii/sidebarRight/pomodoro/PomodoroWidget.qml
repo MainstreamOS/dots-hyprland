@@ -17,9 +17,9 @@ Item {
     Keys.onPressed: (event) => {
         if ((event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) && event.modifiers === Qt.NoModifier) { // Switch tabs
             if (event.key === Qt.Key_PageDown) {
-                tabBar.incrementCurrentIndex();
+                swipeView.incrementCurrentIndex();
             } else if (event.key === Qt.Key_PageUp) {
-                tabBar.decrementCurrentIndex();
+                swipeView.decrementCurrentIndex();
             }
             event.accepted = true
         } else if (event.key === Qt.Key_Space || event.key === Qt.Key_S) { // Pause/resume with Space or S
@@ -48,19 +48,22 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.leftMargin: 5
+        anchors.rightMargin: 5
         spacing: 0
 
-        SecondaryTabBar {
+        SegmentedTabBar {
             id: tabBar
+            // Level with the calendar's month header and the collapse button beside it.
+            Layout.topMargin: 10
+            implicitHeight: 30
+            radius: 10
+            iconSize: 16
+            labelSize: 13
+            model: root.tabButtonList
+            running: [TimerService.pomodoroRunning, TimerService.stopwatchRunning, TimerService.countdownRunning]
             currentIndex: swipeView.currentIndex
-
-            Repeater {
-                model: root.tabButtonList
-                delegate: SecondaryTabButton {
-                    buttonText: modelData.name
-                    buttonIcon: modelData.icon
-                }
-            }
+            onActivated: index => swipeView.setCurrentIndex(index)
         }
 
         SwipeView {
@@ -70,7 +73,6 @@ Item {
             Layout.fillHeight: true
             spacing: 10
             clip: true
-            currentIndex: tabBar.currentIndex
 
             // Tabs
             PomodoroTimer {}

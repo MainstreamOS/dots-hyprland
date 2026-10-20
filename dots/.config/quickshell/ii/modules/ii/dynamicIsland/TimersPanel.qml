@@ -81,110 +81,18 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
 
-                Rectangle {
-                    Layout.preferredHeight: 28
+                SegmentedTabBar {
+                    Layout.fillWidth: false
                     Layout.preferredWidth: 236
-                    radius: 8
-                    color: Appearance.surfaces.row
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: 2
-                        spacing: 2
-
-                        RippleButton {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            buttonRadius: 6
-                            colBackground: root.currentMode === 0 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 0 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
-                            colRipple: root.currentMode === 0 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
-                            onClicked: root.currentMode = 0
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "hourglass_top"
-                                    iconSize: 13
-                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Timer")
-                                    font.pixelSize: 11
-                                    font.weight: root.currentMode === 0 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                Rectangle {
-                                    visible: TimerService.countdownRunning && root.currentMode !== 0
-                                    width: 5; height: 5; radius: 2.5
-                                    color: Appearance.islandContent.colPrimary
-                                }
-                            }
-                        }
-
-                        RippleButton {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            buttonRadius: 6
-                            colBackground: root.currentMode === 1 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 1 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
-                            colRipple: root.currentMode === 1 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
-                            onClicked: root.currentMode = 1
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "timer"
-                                    iconSize: 13
-                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Stopwatch")
-                                    font.pixelSize: 11
-                                    font.weight: root.currentMode === 1 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 1 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                Rectangle {
-                                    visible: TimerService.stopwatchRunning && root.currentMode !== 1
-                                    width: 5; height: 5; radius: 2.5
-                                    color: Appearance.islandContent.colPrimary
-                                }
-                            }
-                        }
-
-                        RippleButton {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            buttonRadius: 6
-                            colBackground: root.currentMode === 2 ? Appearance.colors.colPrimaryContainer : "transparent"
-                            colBackgroundHover: root.currentMode === 2 ? Appearance.colors.colPrimaryContainerHover : Appearance.surfaces.row
-                            colRipple: root.currentMode === 2 ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
-                            onClicked: root.currentMode = 2
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "search_activity"
-                                    iconSize: 13
-                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Focus")
-                                    font.pixelSize: 11
-                                    font.weight: root.currentMode === 2 ? Font.DemiBold : Font.Medium
-                                    color: root.currentMode === 2 ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colSubtext
-                                }
-                                Rectangle {
-                                    visible: TimerService.pomodoroRunning && root.currentMode !== 2
-                                    width: 5; height: 5; radius: 2.5
-                                    color: Appearance.islandContent.colPrimary
-                                }
-                            }
-                        }
-                    }
+                    contentColors: Appearance.islandContent
+                    model: [
+                        {"name": Translation.tr("Timer"), "icon": "hourglass_top"},
+                        {"name": Translation.tr("Stopwatch"), "icon": "timer"},
+                        {"name": Translation.tr("Focus"), "icon": "search_activity"}
+                    ]
+                    running: [TimerService.countdownRunning, TimerService.stopwatchRunning, TimerService.pomodoroRunning]
+                    currentIndex: root.currentMode
+                    onActivated: index => root.currentMode = index
                 }
 
                 Item { Layout.fillWidth: true }
