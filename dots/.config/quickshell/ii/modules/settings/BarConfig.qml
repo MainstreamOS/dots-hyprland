@@ -160,6 +160,7 @@ ContentPage {
 
             ContentSubsection {
                 title: Translation.tr("Date Format")
+                Layout.fillWidth: false
 
                 ConfigSelectionArray {
                     currentValue: Config.options.time.dateFormat
@@ -180,9 +181,9 @@ ContentPage {
                         Quickshell.execDetached(["bash", "-c", `command -v pixie-sddm-set-state >/dev/null 2>&1 && pixie-sddm-set-state dateFormat ${JSON.stringify(newValue)} || true`]);
                     }
                     options: [
-                        { displayName: Translation.tr("Date First dd/MM"),  value: "ddd, dd/MM" },
-                        { displayName: Translation.tr("Date First dd.MM"),  value: "ddd, dd.MM" },
-                        { displayName: Translation.tr("Month First MM/dd"), value: "ddd, MM/dd" },
+                        { displayName: Translation.tr("dd/MM"), value: "ddd, dd/MM" },
+                        { displayName: Translation.tr("dd.MM"), value: "ddd, dd.MM" },
+                        { displayName: Translation.tr("MM/dd"), value: "ddd, MM/dd" },
                     ]
                 }
             }
