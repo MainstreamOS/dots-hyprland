@@ -5,8 +5,10 @@ Item {
     id: root
     property real size: 20
     property color color: Appearance.dockContent.colOnLayer0
-    readonly property real dotSpacing: Math.round(size / 5)
-    readonly property real dotSize: (size - dotSpacing * 2) / 3
+    property real dotSpacing: -1
+    readonly property real resolvedSpacing: Math.max(0, Math.min(Math.max(0, (size - 3) / 2),
+        dotSpacing >= 0 ? dotSpacing : Math.round(size / 5)))
+    readonly property real dotSize: Math.max(0, (size - resolvedSpacing * 2) / 3)
     implicitWidth: size
     implicitHeight: size
 
@@ -14,7 +16,7 @@ Item {
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
         columns: 3
-        spacing: root.dotSpacing
+        spacing: root.resolvedSpacing
         Repeater {
             model: 9
             Rectangle {

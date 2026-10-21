@@ -1587,6 +1587,11 @@ Singleton {
             : Math.round(dockLauncherIconMin + (dockLauncherIconMax - dockLauncherIconMin) * 0.25)
         readonly property real dockLauncherIconSize: (Config.options?.dock.launcherIconSize ?? -1) >= 0
             ? Math.max(dockLauncherIconMin, Math.min(dockLauncherIconMax, Config.options.dock.launcherIconSize)) : dockLauncherIconStock
+        readonly property real dockLauncherDotSpacingMax: 30
+        readonly property real dockLauncherDotSpacingStock: Math.round(dockLauncherDotSpacingMax * 0.27)
+        readonly property real dockLauncherDotSpacing: Math.min(dockLauncherDotSpacingMax,
+            Math.max(0, Config.options.dock.launcherDotSpacing >= 0
+                ? Config.options.dock.launcherDotSpacing : dockLauncherDotSpacingStock))
         // The bottom of the settings track. A screen too short even for this
         // has nothing left to give up, so it truncates rather than drawing
         // icons no slider could have asked for.

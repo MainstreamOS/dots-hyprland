@@ -330,10 +330,19 @@ ContentPage {
             }
         }
 
-        ConfigResetButton {
-            visible: Config.options.dock.launcherIconSize >= 0
-            buttonText: Translation.tr("Reset launcher icon")
-            onClicked: Config.options.dock.launcherIconSize = -1
+        ConfigSlider {
+            visible: Config.options.dock.showOverviewButton
+            text: Translation.tr("Launcher dot spacing")
+            buttonIcon: "space_bar"
+            from: 0
+            to: Appearance.sizes.dockLauncherDotSpacingMax
+            stopIndicatorValues: [Math.min(to, Appearance.sizes.dockLauncherDotSpacingStock)]
+            value: Appearance.sizes.dockLauncherDotSpacing
+            onMoved: {
+                const stepped = Math.round(value);
+                const wanted = stepped === Appearance.sizes.dockLauncherDotSpacingStock ? -1 : stepped;
+                if (wanted !== Config.options.dock.launcherDotSpacing) Config.options.dock.launcherDotSpacing = wanted;
+            }
         }
 
         ConfigSlider {
@@ -383,6 +392,7 @@ ContentPage {
         // the style it was last left for and is no reason to offer a reset.
         ConfigResetButton {
             visible: (Config.options.dock.iconSize >= 0
+                || Config.options.dock.launcherIconSize >= 0 || Config.options.dock.launcherDotSpacing >= 0
                 || (Config.options.dock.cornerStyle !== "span"
                     && (Config.options.dock.radius >= 0 || Config.options.dock.topRadius >= 0)))
             Layout.leftMargin: 8
@@ -390,6 +400,8 @@ ContentPage {
             buttonText: Translation.tr("Reset to default shape")
             onClicked: {
                 Config.options.dock.iconSize = -1
+                Config.options.dock.launcherIconSize = -1
+                Config.options.dock.launcherDotSpacing = -1
                 Config.options.dock.radius = -1
                 Config.options.dock.topRadius = -1
             }

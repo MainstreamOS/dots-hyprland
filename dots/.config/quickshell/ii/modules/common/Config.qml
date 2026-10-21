@@ -878,6 +878,7 @@ Singleton {
                 property real topRadiusNotch: -2
                 // A hidden end button takes its neighboring separator with it.
                 property real launcherIconSize: -1
+                property real launcherDotSpacing: -1
                 property bool showOverviewButton: true
                 property bool showPinButton: true
                 // "none" | "minimal" | "dashes" | "dots" | "badge". Dashes tighten to dots past three;

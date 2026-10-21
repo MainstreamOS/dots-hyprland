@@ -846,6 +846,7 @@ Scope { // Scope
                                 contentItem: Item {
                                     DockLauncherIcon {
                                         anchors.centerIn: parent
+                                        dotSpacing: Appearance.sizes.dockLauncherDotSpacing
                                         size: Math.min(Appearance.sizes.dockLauncherIconSize,
                                             Math.min(parent.width, parent.height))
                                         color: dockRoot.content.colOnLayer0
