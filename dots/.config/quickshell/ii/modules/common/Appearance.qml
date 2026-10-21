@@ -1579,6 +1579,14 @@ Singleton {
         // meaning on every screen.
         property real dockIconSize: (Config.options?.dock.iconSize ?? -1) >= 0
             ? Config.options.dock.iconSize : root.sizes.dockIconDefault
+        // Keep the three controls independent. The icon itself clamps its gap
+        // to its rendered size; the settings range and stock marks stay fixed.
+        readonly property real dockLauncherIconMin: 8
+        readonly property real dockLauncherIconMax: 64
+        readonly property real dockLauncherIconStock: dockSpans ? Math.round(dockIconDefault * 0.6)
+            : Math.round(dockLauncherIconMin + (dockLauncherIconMax - dockLauncherIconMin) * 0.25)
+        readonly property real dockLauncherIconSize: (Config.options?.dock.launcherIconSize ?? -1) >= 0
+            ? Math.max(dockLauncherIconMin, Math.min(dockLauncherIconMax, Config.options.dock.launcherIconSize)) : dockLauncherIconStock
         // The bottom of the settings track. A screen too short even for this
         // has nothing left to give up, so it truncates rather than drawing
         // icons no slider could have asked for.

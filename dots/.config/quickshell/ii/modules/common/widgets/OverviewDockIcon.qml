@@ -50,14 +50,11 @@ Rectangle {
         y: root.edge === "top" ? 1 - height
             : root.edge === "bottom" ? parent.height - 1 : (parent.height - height) / 2
     }
-    Grid {
+    DockLauncherIcon {
         anchors.centerIn: parent
         visible: root.applications
-        columns: 3; spacing: 4
-        Repeater {
-            model: root.applications ? 9 : 0
-            Rectangle { width: 4; height: 4; radius: Appearance.rounding.full; color: Appearance.overviewDock.foreground }
-        }
+        size: 20
+        color: Appearance.overviewDock.foreground
     }
     HoverHandler { id: iconHover }
     StyledToolTip {

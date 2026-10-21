@@ -829,20 +829,25 @@ Scope { // Scope
                             DockButton {
                                 id: applicationsDockButton
                                 visible: dockRoot.showOverviewButton
-                                Layout.fillHeight: !dockRoot.dockVertical
-                                Layout.fillWidth: dockRoot.dockVertical
+                                // Like the list delegates, keep a fixed size rather than
+                                // stretching into the dock's edge and shadow space.
+                                Layout.fillHeight: false
+                                Layout.fillWidth: false
+                                Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                                Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.hyprlandGapsOut)
+                                Layout.bottomMargin: dockRoot.itemMargin("bottom", Appearance.sizes.hyprlandGapsOut)
+                                Layout.leftMargin: dockRoot.itemMargin("left", Appearance.sizes.hyprlandGapsOut)
+                                Layout.rightMargin: dockRoot.itemMargin("right", Appearance.sizes.hyprlandGapsOut)
                                 onClicked: GlobalStates.overviewOpen = !GlobalStates.overviewOpen
                                 topInset: dockRoot.dockVertical ? 0 : dockRoot.buttonInset
                                 bottomInset: topInset
                                 leftInset: !dockRoot.dockVertical ? 0 : dockRoot.buttonInset
                                 rightInset: leftInset
                                 contentItem: Item {
-                                    MaterialSymbol {
-                                        anchors.fill: parent
-                                        horizontalAlignment: Text.AlignHCenter
-                                        // Sized from the whole button, as before the Overview icon shared it.
-                                        font.pixelSize: Math.min(applicationsDockButton.width, applicationsDockButton.height) / 2
-                                        text: "apps"
+                                    DockLauncherIcon {
+                                        anchors.centerIn: parent
+                                        size: Math.min(Appearance.sizes.dockLauncherIconSize,
+                                            Math.min(parent.width, parent.height))
                                         color: dockRoot.content.colOnLayer0
                                     }
                                 }

@@ -316,6 +316,27 @@ ContentPage {
         }
 
         ConfigSlider {
+            visible: Config.options.dock.showOverviewButton
+            text: Translation.tr("Launcher icon size")
+            buttonIcon: "apps"
+            from: Appearance.sizes.dockLauncherIconMin
+            to: Appearance.sizes.dockLauncherIconMax
+            stopIndicatorValues: [Appearance.sizes.dockLauncherIconStock]
+            value: Appearance.sizes.dockLauncherIconSize
+            onMoved: {
+                const stepped = Math.round(value);
+                const wanted = stepped === Appearance.sizes.dockLauncherIconStock ? -1 : stepped;
+                if (wanted !== Config.options.dock.launcherIconSize) Config.options.dock.launcherIconSize = wanted;
+            }
+        }
+
+        ConfigResetButton {
+            visible: Config.options.dock.launcherIconSize >= 0
+            buttonText: Translation.tr("Reset launcher icon")
+            onClicked: Config.options.dock.launcherIconSize = -1
+        }
+
+        ConfigSlider {
             text: Translation.tr("Top roundness")
             visible: Config.options.dock.cornerStyle !== "float" && Config.options.dock.cornerStyle !== "span"
             stopIndicatorValues: [Appearance.rounding.dockTopStock]
