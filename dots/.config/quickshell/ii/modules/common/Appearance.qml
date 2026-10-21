@@ -1618,7 +1618,7 @@ Singleton {
             ? dockGlowReachMax * dockGlowIntensity / 100 : 0
         // Growing nothing needs no room: off collapses the scale, and with it
         // the headroom the dock reserves and the size its icons rasterize at.
-        property real dockMaxScale: root.sizes.dockHoverEffect === "off" ? 1
+        property real dockMaxScale: ["off", "bubble"].includes(root.sizes.dockHoverEffect) ? 1
             : 1 + dockHoverMagnify / 100
         // The room a magnified icon needs beyond the dock to be drawn whole.
         // It grows away from the screen from the edge it sits on, so it climbs
@@ -1636,7 +1636,7 @@ Singleton {
         // transparent, masked out of the pointer, and the space the dock
         // claims from other windows is measured from its own height elsewhere.
         function dockMagnifyHeadroomFor(iconSize) {
-            if (root.sizes.dockHoverEffect === "off") return 0;
+            if (["off", "bubble"].includes(root.sizes.dockHoverEffect)) return 0;
             const peak = 1 + root.sizes.dockHoverMagnifyMax / 100;
             return iconSize * (peak - 1) + (root.sizes.dockHoverEffect === "glow" ? root.sizes.dockGlowReachMax * peak : 0);
         }

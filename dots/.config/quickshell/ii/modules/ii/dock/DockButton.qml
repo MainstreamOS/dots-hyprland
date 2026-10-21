@@ -1,9 +1,15 @@
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Layouts
 
 RippleButton {
+    id: buttonRoot
+    readonly property bool bubble: Appearance.sizes.dockHoverEffect === "bubble"
+    property bool bubbleHovered: hovered
+    rippleEnabled: !bubble
+
     Layout.fillHeight: !dockRoot.dockVertical
     Layout.fillWidth: dockRoot.dockVertical
     Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
@@ -24,6 +30,20 @@ RippleButton {
     colBackgroundHover: dockRoot.content.settled.colLayer1Hover
     colRipple: dockRoot.content.settled.colLayer1Active
 
+    Rectangle {
+        anchors.centerIn: parent
+        width: Math.min(buttonRoot.dockButtonSize, dockRoot.fittedIconSize + 8)
+        height: width
+        radius: 12
+        visible: buttonRoot.bubble
+        color: buttonRoot.bubbleHovered ? ColorUtils.applyAlpha(dockRoot.content.colOnLayer0, 0.12) : "transparent"
+        z: -1
+        Behavior on color {
+            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+        }
+    }
+
+    background.visible: !bubble
     background.implicitHeight: dockButtonSize
     background.implicitWidth: dockButtonSize
 }

@@ -152,6 +152,7 @@ ContentPage {
                     { displayName: Translation.tr("None"), icon: "block", value: "off" },
                     { displayName: Translation.tr("Magnify"), icon: "zoom_in", value: "magnify" },
                     { displayName: Translation.tr("Glow"), icon: "blur_on", value: "glow" },
+                    { displayName: Translation.tr("Bubble"), icon: "bubble_chart", value: "bubble" },
                 ]
                 currentIndex: {
                     const idx = model.findIndex(item => item.value === Config.options.dock.hoverEffect);
@@ -182,7 +183,7 @@ ContentPage {
         // and range: the wave has room to be dramatic, the glow's lift is an
         // accent and the track keeps it one.
         ConfigSlider {
-            visible: Appearance.sizes.dockHoverEffect !== "off"
+            visible: ["magnify", "glow"].includes(Appearance.sizes.dockHoverEffect)
             text: Translation.tr("Magnify amount")
             buttonIcon: "zoom_in"
             stopIndicatorValues: [Appearance.sizes.dockHoverMagnifyStock]

@@ -892,7 +892,7 @@ Singleton {
                 // the dock takes the edge facing the bar and moves with it.
                 property string position: "bottom"
                 property bool monochromeIcons: false
-                // "magnify" | "glow" | "off"
+                // "magnify" | "glow" | "bubble" | "off"
                 property string hoverEffect: "glow"
                 // Percent grown on hover, per effect; -1 uses the effect's own default.
                 property real hoverMagnify: -1

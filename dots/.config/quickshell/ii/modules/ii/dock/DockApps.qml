@@ -217,7 +217,7 @@ Item {
     // grows nothing never reads the mouse, and its bindings stay cold.
     function hoverScaleFor(itemPos, itemSize, isSeparator) {
         const effect = Appearance.sizes.dockHoverEffect;
-        if (effect === "off" || !listHovered || previewShow) return 1.0;
+        if (effect === "off" || effect === "bubble" || !listHovered || previewShow) return 1.0;
         if (effect === "glow")
             return !isSeparator && pointerIsOver(itemPos, itemSize) ? maxScale : 1.0;
         const itemCenter = itemPos + itemSize / 2;
@@ -318,7 +318,7 @@ Item {
                 dockRoot.dockVertical ? height : width, isSeparator)
             // Gated on the mode first, so the halo's only consumer is also the
             // only one paying the per-motion arithmetic behind it.
-            pointerOver: Appearance.sizes.dockHoverEffect === "glow"
+            pointerOver: ["glow", "bubble"].includes(Appearance.sizes.dockHoverEffect)
                 && root.pointerIsOver(dockRoot.dockVertical ? y : x, dockRoot.dockVertical ? height : width)
         }
     }

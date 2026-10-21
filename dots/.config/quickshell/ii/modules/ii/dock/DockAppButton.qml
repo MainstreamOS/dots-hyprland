@@ -143,10 +143,11 @@ DockButton {
     }
     // Set by the list, not by a MouseArea here — see pointerIsOver in DockApps.
     property bool pointerOver: false
+    bubbleHovered: root.pointerOver
     // How much of the halo is showing. The button owns this rather than the
     // loader that draws it, because its own stacking has to follow the fade
     // out as well as the fade in.
-    property real glowFade: root.pointerOver ? 1 : 0
+    property real glowFade: Appearance.sizes.dockHoverEffect === "glow" && root.pointerOver ? 1 : 0
     Behavior on glowFade {
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }
