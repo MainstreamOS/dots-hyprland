@@ -265,10 +265,6 @@ Item {
 
     Layout.fillHeight: !dockRoot.dockVertical
     Layout.fillWidth: dockRoot.dockVertical
-    Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.hyprlandGapsOut)
-    Layout.bottomMargin: dockRoot.itemMargin("bottom", Appearance.sizes.hyprlandGapsOut)
-    Layout.leftMargin: dockRoot.itemMargin("left", Appearance.sizes.hyprlandGapsOut)
-    Layout.rightMargin: dockRoot.itemMargin("right", Appearance.sizes.hyprlandGapsOut)
     implicitWidth: dockRoot.dockVertical ? 0 : listView.implicitWidth
     implicitHeight: dockRoot.dockVertical ? listView.implicitHeight : 0
 

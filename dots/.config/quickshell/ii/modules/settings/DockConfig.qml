@@ -355,6 +355,22 @@ ContentPage {
         }
 
         ConfigSlider {
+            visible: Config.options.dock.cornerStyle === "float"
+            text: Translation.tr("Screen-edge padding")
+            buttonIcon: "padding"
+            from: 0
+            to: Appearance.sizes.dockEdgePaddingMax
+            stopIndicatorValues: [Appearance.sizes.dockEdgePaddingStock]
+            value: Config.options.dock.edgePadding >= 0
+                ? Appearance.sizes.dockEdgeGap : Appearance.sizes.dockEdgePaddingStock
+            onMoved: {
+                const stepped = Math.round(value);
+                const wanted = stepped === Appearance.sizes.dockEdgePaddingStock ? -1 : stepped;
+                if (wanted !== Config.options.dock.edgePadding) Config.options.dock.edgePadding = wanted;
+            }
+        }
+
+        ConfigSlider {
             text: Translation.tr("Top roundness")
             visible: Config.options.dock.cornerStyle !== "float" && Config.options.dock.cornerStyle !== "span"
             stopIndicatorValues: [Appearance.rounding.dockTopStock]
@@ -400,7 +416,8 @@ ContentPage {
         // Hug shows neither roundness, so what those two hold belongs to
         // the style it was last left for and is no reason to offer a reset.
         ConfigResetButton {
-            visible: (Config.options.dock.iconSize >= 0
+            visible: ((Config.options.dock.cornerStyle === "float" && Config.options.dock.edgePadding >= 0)
+                || Config.options.dock.iconSize >= 0
                 || Config.options.dock.launcherIconSize >= 0 || Config.options.dock.launcherDotSpacing >= 0
                 || (Config.options.dock.cornerStyle !== "span"
                     && (Config.options.dock.radius >= 0 || Config.options.dock.topRadius >= 0)))
@@ -411,6 +428,7 @@ ContentPage {
                 Config.options.dock.iconSize = -1
                 Config.options.dock.launcherIconSize = -1
                 Config.options.dock.launcherDotSpacing = -1
+                Config.options.dock.edgePadding = -1
                 Config.options.dock.radius = -1
                 Config.options.dock.topRadius = -1
             }

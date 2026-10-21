@@ -879,6 +879,7 @@ Singleton {
                 property real topRadiusRect: -2
                 property real topRadiusNotch: -2
                 // A hidden end button takes its neighboring separator with it.
+                property real edgePadding: -1
                 property real launcherIconSize: -1
                 property real launcherDotSpacing: -1
                 property bool showOverviewButton: true

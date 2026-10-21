@@ -61,11 +61,6 @@ Scope { // Scope
             readonly property real rowSpacing: 3
             readonly property real listSpacing: 2
             readonly property real buttonInset: Appearance.sizes.hyprlandGapsOut + dockRow.padding
-            // A row item's margin on one side: the body inset in Overview,
-            // otherwise `gap` on the side that faces away from the screen edge.
-            function itemMargin(side, gap) {
-                return dockEdge === ({ top: "bottom", bottom: "top", left: "right", right: "left" })[side] ? gap : 0;
-            }
             // Which corners face the screen and which face the desktop, and
             // whether the pair on the edge curves outward into it.
             // Float leaves a gap from the edge. Between the
@@ -114,7 +109,7 @@ Scope { // Scope
             // on the center side. Hugging leaves no gap on the edge side: the
             // concave corners have nothing to curve into if the dock floats
             // away from it.
-            readonly property real edgeGap: dockHugging ? 0 : Appearance.sizes.dockEdgeGap
+            readonly property real edgeGap: Appearance.sizes.dockEdgeGap
             // The room between the body and the desktop-facing side of the
             // part that slides, which the Hug strip's curves hang in.
             readonly property real deskInset: Appearance.sizes.dockDeskInset + spanOverhang
@@ -756,40 +751,19 @@ Scope { // Scope
                             rows: dockRoot.dockVertical ? -1 : 1
                             columnSpacing: dockRoot.rowSpacing
                             rowSpacing: dockRoot.rowSpacing
-                            // The row keeps to the room the other styles have,
-                            // clear of the Hug strip's curves, so the icons sit
-                            // where they would on any other dock.
-                            anchors.topMargin: dockRoot.dockEdge === "bottom" ? dockRoot.spanOverhang : 0
-                            anchors.bottomMargin: dockRoot.dockEdge === "top" ? dockRoot.spanOverhang : 0
-                            anchors.leftMargin: dockRoot.dockEdge === "right" ? dockRoot.spanOverhang : 0
-                            anchors.rightMargin: dockRoot.dockEdge === "left" ? dockRoot.spanOverhang : 0
-                            states: [
-                                State {
-                                    name: "horizontal"
-                                    when: !dockRoot.dockVertical
-                                    AnchorChanges {
-                                        target: dockRow
-                                        anchors { top: dockRow.parent.top; bottom: dockRow.parent.bottom; left: undefined; right: undefined; horizontalCenter: dockRow.parent.horizontalCenter; verticalCenter: undefined }
-                                    }
-                                },
-                                State {
-                                    name: "vertical"
-                                    when: dockRoot.dockVertical
-                                    AnchorChanges {
-                                        target: dockRow
-                                        anchors { top: undefined; bottom: undefined; left: dockRow.parent.left; right: dockRow.parent.right; horizontalCenter: undefined; verticalCenter: dockRow.parent.verticalCenter }
-                                    }
-                                }
-                            ]
+                            // Center the button band on the painted body, not on the window's room
+                            // for the edge gap and shadow; the launcher and list share it on every edge.
+                            readonly property real crossSize: Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize)
+                                - padding * 2 + dockRoot.buttonInset * 2
+                            width: dockRoot.dockVertical ? crossSize : implicitWidth
+                            height: dockRoot.dockVertical ? implicitHeight : crossSize
+                            x: (parent.width - width + dockRoot.bodyInsetLeft - dockRoot.bodyInsetRight) / 2
+                            y: (parent.height - height + dockRoot.bodyInsetTop - dockRoot.bodyInsetBottom) / 2
                             property real padding: 5
 
                             VerticalButtonGroup {
                                 visible: dockRoot.showPinButton
                                 Layout.alignment: dockRoot.dockVertical ? Qt.AlignHCenter : Qt.AlignVCenter
-                                Layout.topMargin: dockRoot.dockEdge === "bottom" ? Appearance.sizes.hyprlandGapsOut : 0 // why does this work
-                                Layout.bottomMargin: dockRoot.dockEdge === "top" ? Appearance.sizes.hyprlandGapsOut : 0
-                                Layout.leftMargin: dockRoot.dockEdge === "right" ? Appearance.sizes.hyprlandGapsOut : 0
-                                Layout.rightMargin: dockRoot.dockEdge === "left" ? Appearance.sizes.hyprlandGapsOut : 0
                                 GroupButton {
                                     // Pin button. Sized off the icons like the
                                     // overview button at the far end, so the two
@@ -836,10 +810,6 @@ Scope { // Scope
                                 Layout.fillHeight: false
                                 Layout.fillWidth: false
                                 Layout.alignment: Qt.AlignTop | Qt.AlignLeft
-                                Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.hyprlandGapsOut)
-                                Layout.bottomMargin: dockRoot.itemMargin("bottom", Appearance.sizes.hyprlandGapsOut)
-                                Layout.leftMargin: dockRoot.itemMargin("left", Appearance.sizes.hyprlandGapsOut)
-                                Layout.rightMargin: dockRoot.itemMargin("right", Appearance.sizes.hyprlandGapsOut)
                                 onClicked: GlobalStates.overviewOpen = !GlobalStates.overviewOpen
                                 topInset: dockRoot.dockVertical ? 0 : dockRoot.buttonInset
                                 bottomInset: topInset
@@ -847,7 +817,8 @@ Scope { // Scope
                                 rightInset: leftInset
                                 contentItem: Item {
                                     DockLauncherIcon {
-                                        anchors.centerIn: parent
+                                        x: (parent.width - width) / 2
+                                        y: (parent.height - height) / 2
                                         dotSpacing: Appearance.sizes.dockLauncherDotSpacing
                                         size: Math.min(Appearance.sizes.dockLauncherIconSize,
                                             Math.min(parent.width, parent.height))

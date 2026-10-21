@@ -1454,7 +1454,12 @@ Singleton {
         readonly property bool dockSpans: Config.options?.dock.cornerStyle === "span"
         readonly property string dockHoverEffect: Config.options?.dock.hoverEffect ?? ""
         readonly property bool dockShowBackground: Config.options?.dock.showBackground ?? true
-        readonly property real dockEdgeGap: hyprlandGapsOut
+        readonly property real dockEdgePaddingMax: root.overviewDock.edgeGap
+        readonly property real dockEdgePaddingStock: Math.min(dockEdgePaddingMax,
+            Config.options.dock.cornerStyle === "float" ? hyprlandGapsOut : 0)
+        readonly property real dockEdgeGap: Config.options?.dock.cornerStyle !== "float" ? 0
+            : (Config.options?.dock.edgePadding ?? -1) >= 0
+            ? Math.min(dockEdgePaddingMax, Config.options.dock.edgePadding) : hyprlandGapsOut
         readonly property real dockDeskInset: elevationMargin
         property bool barShown: root.barShownOnFile
         property string dockEdge: {

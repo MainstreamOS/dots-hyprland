@@ -12,10 +12,6 @@ RippleButton {
 
     Layout.fillHeight: !dockRoot.dockVertical
     Layout.fillWidth: dockRoot.dockVertical
-    Layout.topMargin: dockRoot.itemMargin("top", Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
-    Layout.bottomMargin: dockRoot.itemMargin("bottom", Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
-    Layout.leftMargin: dockRoot.itemMargin("left", Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
-    Layout.rightMargin: dockRoot.itemMargin("right", Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
     // The square base size both orientations derive from — the pill's
     // thickness minus its inner padding on each side, so buttons and list
     // delegates span the row's cross axis exactly at any configured dock

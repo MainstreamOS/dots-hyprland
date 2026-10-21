@@ -173,13 +173,10 @@ DockButton {
 
     Loader {
         active: isSeparator
-        anchors {
-            fill: parent
-            topMargin: dockRoot.dockVertical ? 0 : dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
-            bottomMargin: dockRoot.dockVertical ? 0 : dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
-            leftMargin: dockRoot.dockVertical ? dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal : 0
-            rightMargin: dockRoot.dockVertical ? dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal : 0
-        }
+        anchors.centerIn: parent
+        anchors.alignWhenCentered: false
+        width: item?.implicitWidth ?? 0
+        height: item?.implicitHeight ?? 0
         sourceComponent: DockSeparator {}
     }
 

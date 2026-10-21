@@ -2791,5 +2791,6 @@
   "Minimal and badges": "",
   "Launcher icon size": "",
   "Launcher dot spacing": "",
-  "Icon separators": ""
+  "Icon separators": "",
+  "Screen-edge padding": ""
 }
