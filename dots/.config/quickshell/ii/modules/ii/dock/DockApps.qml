@@ -131,6 +131,7 @@ Item {
     // Drag-to-reorder and style-switch state
     property bool dragging: false
     property bool _reordering: false
+    property bool _showSeparators: true
     property bool _suppressTranslateAnim: false
     property int dragSourceIndex: -1
     // Main-axis scalars: X on a horizontal dock, Y on a vertical one.
@@ -141,8 +142,30 @@ Item {
         if (!dragging || slotSize <= 0) return dragSourceIndex;
         var delta = dragCursorPos - dragStartCursorPos;
         var slots = Math.round(delta / slotSize);
-        var pinnedCount = Config.options.dock.pinnedApps.length;
-        return Math.max(0, Math.min(dragSourceIndex + slots, pinnedCount - 1));
+        const pins = Config.options.dock.pinnedApps;
+        if (dockRoot.showIconSeparators) return Math.max(0, Math.min(dragSourceIndex + slots, pins.length - 1));
+        const visible = pins.map((id, index) => ({id, index})).filter(pin => pin.id !== "SEPARATOR");
+        const source = visible.findIndex(pin => pin.index === dragSourceIndex);
+        if (source < 0) return dragSourceIndex;
+        return visible[Math.max(0, Math.min(source + slots, visible.length - 1))].index;
+    }
+
+    // Change the model with transitions held, so separator toggles do not
+    // animate every app leaving and returning to the list.
+    function applySeparators() {
+        root.cancelDrag();
+        root._reordering = true;
+        root._showSeparators = dockRoot.showIconSeparators;
+        listView.forceLayout();
+        Qt.callLater(() => {
+            listView.forceLayout();
+            reorderSettleTimer.restart();
+        });
+    }
+    Component.onCompleted: applySeparators()
+    Connections {
+        target: dockRoot
+        function onShowIconSeparatorsChanged() { root.applySeparators(); }
     }
 
     // Timer to re-enable animations after the model has fully settled.
@@ -295,7 +318,7 @@ Item {
 
         model: ScriptModel {
             objectProp: "appId"
-            values: TaskbarApps.apps
+            values: root._showSeparators ? TaskbarApps.apps : TaskbarApps.appsWithoutSeparator
         }
         delegate: DockAppButton {
             id: delegateButton

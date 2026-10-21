@@ -162,11 +162,11 @@ DockButton {
         x: dockRoot.dockVertical ? 0 : root.dragTranslate
         y: dockRoot.dockVertical ? root.dragTranslate : 0
         Behavior on x {
-            enabled: !root.isDragged && !appListRoot._suppressTranslateAnim
+            enabled: !root.isDragged && !!appListRoot && !appListRoot._suppressTranslateAnim
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
         Behavior on y {
-            enabled: !root.isDragged && !appListRoot._suppressTranslateAnim
+            enabled: !root.isDragged && !!appListRoot && !appListRoot._suppressTranslateAnim
             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
         }
     }

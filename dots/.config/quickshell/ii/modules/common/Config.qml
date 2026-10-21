@@ -31,6 +31,8 @@ Singleton {
             { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
         ]
     })
+
+
     property bool ready: false
     property int readWriteDelay: 50 // milliseconds
     property bool blockWrites: false
@@ -866,7 +868,7 @@ Singleton {
                 // Settings labels "hug" as Notch and "span" as Hug. hug sits flush with its
                 // edge corners curving outward; span runs the whole edge facing the bar.
                 // Any other value is drawn as rect.
-                property string cornerStyle: "float" // "float" | "overview" | "hug" | "rect" | "span"
+                property string cornerStyle: "float" // "float" | "hug" | "rect" | "span"
                 // Corners facing the desktop; below zero they follow radius. The edge pair's
                 // shape comes from the style.
                 property real topRadius: -1
@@ -881,6 +883,7 @@ Singleton {
                 property real launcherDotSpacing: -1
                 property bool showOverviewButton: true
                 property bool showPinButton: true
+                property bool showIconSeparators: true
                 // "none" | "minimal" | "dashes" | "dots" | "badge". Dashes tighten to dots past three;
                 // each mark style also offers a "-badge" variant showing the count.
                 property string indicatorStyle: "dashes"

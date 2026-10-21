@@ -210,7 +210,7 @@ ContentPage {
                 }
             }
             ConfigSwitch {
-                    buttonIcon: "apps"
+                buttonIcon: "apps"
                 text: Translation.tr("Show overview button")
                 checked: Config.options.dock.showOverviewButton
                 onCheckedChanged: {
@@ -230,12 +230,30 @@ ContentPage {
                 }
             }
             ConfigSwitch {
-                    buttonIcon: "keep"
+                buttonIcon: "keep"
                 text: Translation.tr("Show pin button")
                 checked: Config.options.dock.showPinButton
                 onCheckedChanged: {
                     Config.options.dock.showPinButton = checked;
                 }
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "colors"
+                text: Translation.tr("Tint app icons")
+                checked: Config.options.dock.monochromeIcons
+                onCheckedChanged: {
+                    Config.options.dock.monochromeIcons = checked;
+                }
+            }
+            ConfigSwitch {
+                buttonIcon: "splitscreen_left"
+                text: Translation.tr("Icon separators")
+                checked: Config.options.dock.showIconSeparators
+                onCheckedChanged: Config.options.dock.showIconSeparators = checked
             }
         }
 
@@ -275,15 +293,6 @@ ContentPage {
                         { displayName: Translation.tr("Per window"), value: "perStream" },
                     ]
                 }
-            }
-        }
-
-        ConfigSwitch {
-            buttonIcon: "colors"
-            text: Translation.tr("Tint app icons")
-            checked: Config.options.dock.monochromeIcons
-            onCheckedChanged: {
-                Config.options.dock.monochromeIcons = checked;
             }
         }
     }

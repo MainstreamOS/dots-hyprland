@@ -53,6 +53,7 @@ Scope { // Scope
             // strip lands on the bar instead of the screen edge. The shared
             // resolver flips a configured edge the bar holds.
             readonly property string dockEdge: Appearance.sizes.dockEdge
+            readonly property bool showIconSeparators: Config.options.dock.showIconSeparators
             readonly property bool showPinButton: Config.options.dock.showPinButton
             readonly property bool showOverviewButton: Config.options.dock.showOverviewButton
             readonly property bool showBackground: Appearance.sizes.dockShowBackground
@@ -232,7 +233,7 @@ Scope { // Scope
             // as an error. The constants below mirror the row further down and
             // are named for the lines they come from.
             readonly property int appButtonCount: TaskbarApps.appsWithoutSeparator.length
-            readonly property int hairlineCount: TaskbarApps.apps.length - dockRoot.appButtonCount
+            readonly property int hairlineCount: showIconSeparators ? TaskbarApps.apps.length - dockRoot.appButtonCount : 0
             readonly property real fittedIconSize: {
                 const showPin = dockRoot.showPinButton;
                 const showOverview = dockRoot.showOverviewButton;
@@ -242,7 +243,8 @@ Scope { // Scope
                 // and the overview button its own 15. Plus the row padding and
                 // the one hairline inside the list.
                 const perButton = 17;
-                const fixed = 5 * 2 + 1 + dockRoot.appButtonCount * perButton + dockRoot.hairlineCount * 3 + (showPin ? 1 + 6 : 0) + (showOverview ? 15 + 1 + 6 : 0);
+                const separatorSpace = dockRoot.showIconSeparators ? 7 : 3;
+                const fixed = 5 * 2 + 1 + dockRoot.appButtonCount * perButton + dockRoot.hairlineCount * 3 + (showPin ? separatorSpace : 0) + (showOverview ? 15 + separatorSpace : 0);
                 const slots = (showPin ? 1 : 0) + (showOverview ? 1 : 0) + dockRoot.appButtonCount;
                 if (slots <= 0)
                     return Appearance.sizes.dockIconSize;
@@ -820,12 +822,12 @@ Scope { // Scope
                                     }
                                 }
                             }
-                            DockSeparator { visible: dockRoot.showPinButton }
+                            DockSeparator { visible: dockRoot.showPinButton && dockRoot.showIconSeparators }
                             DockApps {
                                 id: dockApps
                                 buttonPadding: dockRow.padding
                             }
-                            DockSeparator { visible: dockRoot.showOverviewButton }
+                            DockSeparator { visible: dockRoot.showOverviewButton && dockRoot.showIconSeparators }
                             DockButton {
                                 id: applicationsDockButton
                                 visible: dockRoot.showOverviewButton
