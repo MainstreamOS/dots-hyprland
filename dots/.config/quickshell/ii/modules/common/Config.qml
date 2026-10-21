@@ -879,8 +879,8 @@ Singleton {
                 // A hidden end button takes its neighboring separator with it.
                 property bool showOverviewButton: true
                 property bool showPinButton: true
-                // "none" | "dashes" | "dots" | "badge". Dashes tighten to dots past three;
-                // the badge shows the count.
+                // "none" | "minimal" | "dashes" | "dots" | "badge". Dashes tighten to dots past three;
+                // each mark style also offers a "-badge" variant showing the count.
                 property string indicatorStyle: "dashes"
                 // Per mode like the other color slots; empty uses the accent.
                 property string badgeColorDark: ""

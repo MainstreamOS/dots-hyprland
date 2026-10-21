@@ -81,8 +81,10 @@ ContentPage {
                 Layout.preferredWidth: 220
                 model: [
                     { displayName: Translation.tr("None"), icon: "block", value: "none" },
+                    { displayName: Translation.tr("Minimal"), icon: "fiber_manual_record", value: "minimal" },
                     { displayName: Translation.tr("Dashes"), icon: "remove", value: "dashes" },
                     { displayName: Translation.tr("Dots"), icon: "more_horiz", value: "dots" },
+                    { displayName: Translation.tr("Minimal and badges"), icon: "fiber_manual_record", value: "minimal-badge" },
                     { displayName: Translation.tr("Count badge"), icon: "counter_2", value: "badge" },
                     { displayName: Translation.tr("Dashes and badges"), icon: "line_end_circle", value: "dashes-badge" },
                     { displayName: Translation.tr("Dots and badges"), icon: "pending", value: "dots-badge" }
@@ -431,7 +433,7 @@ ContentPage {
         }
 
         ColorField {
-            visible: ["badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
+            visible: ["badge", "minimal-badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
             text: Translation.tr("Badge text")
             allowEmpty: true
             buttonIcon: "format_color_text"
@@ -444,7 +446,7 @@ ContentPage {
         }
 
         ColorField {
-            visible: ["badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
+            visible: ["badge", "minimal-badge", "dashes-badge", "dots-badge"].includes(Config.options.dock.indicatorStyle)
             text: Translation.tr("Badge background")
             allowEmpty: true
             buttonIcon: "counter_2"

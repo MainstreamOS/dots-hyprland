@@ -40,6 +40,7 @@ DockButton {
             || Config.options.dock.indicatorStyle === "dots-badge")
     readonly property bool showsBadge: !isFolder
         && (Config.options.dock.indicatorStyle === "badge"
+            || Config.options.dock.indicatorStyle === "minimal-badge"
             || Config.options.dock.indicatorStyle === "dashes-badge"
             || Config.options.dock.indicatorStyle === "dots-badge")
         && windowCount >= 2
@@ -316,6 +317,27 @@ DockButton {
 
             Behavior on scale {
                 NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
+            }
+
+            // One small mark for any number of windows, clipped at the screen
+            // edge just like the running mark in the Activities overview dock.
+            Item {
+                anchors.centerIn: parent
+                width: root.iconSize + 8
+                height: width
+                clip: true
+                visible: (Config.options.dock.indicatorStyle === "minimal" || Config.options.dock.indicatorStyle === "minimal-badge") && root.windowCount > 0 && !root.isFolder
+
+                Rectangle {
+                    width: 4
+                    height: 4
+                    radius: Appearance.rounding.full
+                    color: dockRoot.content.colOnLayer0
+                    x: dockRoot.dockEdge === "left" ? 1 - width
+                        : dockRoot.dockEdge === "right" ? parent.width - 1 : (parent.width - width) / 2
+                    y: dockRoot.dockEdge === "top" ? 1 - height
+                        : dockRoot.dockEdge === "bottom" ? parent.height - 1 : (parent.height - height) / 2
+                }
             }
 
             // Hover glow. Declared before the icon so it is drawn behind it —
