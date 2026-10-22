@@ -166,6 +166,9 @@ _cfgmig_window_rounding() {
 #
 # DeepSeek: the stock custom model now ships with its own icon. extraModels is
 # a stored list, so the old entry keeps the spark until it is changed here.
+# A file without the launcher size and dot-spacing keys predates them: keep what
+# the old glyph drew, a grid a third of the button (the icon plus 15, stock 40 or
+# 27 on Hug) with gaps an eighth of the grid. Explicit values, including -1, stay.
 _CFGMIG_JQ='
 def dated: (.appearance | type) == "object" and (.appearance | has("roundCornersRestore"));
 def magnify_stock: (.dock == null or (.dock | type) == "object")
@@ -177,6 +180,13 @@ def corners_left: $rounding == 0
   and ((.appearance.fakeScreenRounding // 2) | type == "number" and . != 0);
 def deepseek: type == "object" and .name == "Custom: DS R1 Dstl. LLaMA 70B"
   and .model == "deepseek/deepseek-r1-distill-llama-70b:free" and .icon == "spark-symbolic";
+def old_launcher: ((has("dock") | not) or (.dock | type) == "object")
+  and (((.dock // {}) | has("launcherIconSize") | not)
+    or ((.dock // {}) | has("launcherDotSpacing") | not));
+def old_launcher_size: (.dock // {}) as $d
+  | (if ($d.iconSize | type) == "number" and $d.iconSize >= 0 then $d.iconSize
+     elif $d.cornerStyle == "span" then 27 else 40 end)
+  | ((. + 15) / 3 | round);
 # Anything but an object is not a file the shell wrote, and is left as it is.
 if type != "object" then {m: [], d: .} else
 (if dated then [] else
@@ -184,7 +194,8 @@ if type != "object" then {m: [], d: .} else
     (if corners_left then "corners" else empty end)] end) as $old
 | (if (.ai | type) == "object" and (.ai.extraModels | type) == "array"
       and any(.ai.extraModels[]; deepseek) then ["deepseek"] else [] end) as $icon
-| ($old + $icon) as $steps
+| (if old_launcher then ["dock-launcher"] else [] end) as $desktop
+| ($old + $icon + $desktop) as $steps
 | def has_step($s): $steps | any(. == $s);
   {m: $steps, d: (.
     | if has_step("magnify") then .dock.hoverEffect = "magnify" | .dock.hoverMagnify = 135 else . end
@@ -192,6 +203,11 @@ if type != "object" then {m: [], d: .} else
         .appearance.roundCornersRestore = {barCornerStyle: -1,
           fakeScreenRounding: (.appearance.fakeScreenRounding // 2), windowRounding: -1}
         | .appearance.fakeScreenRounding = 0
+      else . end
+    | if has_step("dock-launcher") then
+        old_launcher_size as $size
+        | if ((.dock // {}) | has("launcherIconSize")) then . else .dock.launcherIconSize = $size end
+        | if (.dock | has("launcherDotSpacing")) then . else .dock.launcherDotSpacing = $size / 8 end
       else . end
     | if has_step("deepseek") then
         .ai.extraModels |= map(if deepseek then .icon = "deepseek-symbolic" else . end)
@@ -255,6 +271,7 @@ _cfgmig_config_json() {
     case "$s" in
       magnify) _cfgmig_note "Kept your Dock's Magnify strength" ;;
       corners) _cfgmig_note "Squared the screen corners, since Rounded Corners is off" ;;
+      dock-launcher) _cfgmig_note "Kept your Dock launcher size and dot spacing" ;;
     esac
   done
   return 0

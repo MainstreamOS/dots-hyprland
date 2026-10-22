@@ -33,6 +33,30 @@ Singleton {
     })
     readonly property var defaultIslandPanels: ["system", "media", "notifications", "weather", "timers", "calendar", "call", "text", "resources", "localsend"]
 
+    // A stored file without these controls predates the launcher sliders and keeps
+    // its old size; first run and Reset to defaults use the new stock sizes.
+    function migrateDockLauncher() {
+        let stored;
+        try { stored = JSON.parse(configFileView.text()); } catch (e) { return false; }
+        if (!stored || typeof stored !== "object" || Array.isArray(stored)) return false;
+        const saved = stored.dock;
+        if (saved !== undefined && (!saved || typeof saved !== "object" || Array.isArray(saved))) return false;
+        let changed = false;
+        // The old glyph drew its grid at a third of the button, the icon plus 15,
+        // with gaps an eighth of the grid. Stock icons were 40, and 27 on Hug.
+        const icon = saved?.iconSize >= 0 ? saved.iconSize : (saved?.cornerStyle === "span" ? 27 : 40);
+        const size = Math.round((icon + 15) / 3);
+        if (saved?.launcherIconSize === undefined) {
+            root.options.dock.launcherIconSize = size;
+            changed = true;
+        }
+        if (saved?.launcherDotSpacing === undefined) {
+            root.options.dock.launcherDotSpacing = size / 8;
+            changed = true;
+        }
+        return changed;
+    }
+
     function pickBarMode(mode) {
         if (mode === "island") root.options.bar.vertical = false;
         root.options.bar.mode = mode;
@@ -326,7 +350,8 @@ Singleton {
             const scrubbed = root.scrubRetiredBarModules()
             const united = root.migrateWeatherUnits()
             const kept = root.keepFullSessionMenu()
-            if (seeded || scrubbed || united || kept) fileWriteTimer.restart()
+            const launcher = root.migrateDockLauncher()
+            if (seeded || scrubbed || united || kept || launcher) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
