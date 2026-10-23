@@ -121,6 +121,10 @@ Singleton {
 
             property string hyprlandInstanceSignature: ""
 
+            property JsonObject launcher: JsonObject {
+                property list<string> recentApps: []
+            }
+
             property JsonObject bluetooth: JsonObject {
                 // Explicit Disconnect stays in effect across shell reloads.
                 property list<string> manualDisconnects: []

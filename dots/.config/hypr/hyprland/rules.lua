@@ -470,11 +470,15 @@ hl.layer_rule({ match = { namespace = "quickshell:lockWindowPusher" }, no_anim =
 hl.layer_rule({ match = { namespace = "quickshell:notificationPopup" }, animation = "fade"})
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, ignore_alpha = 1})
-hl.layer_rule({ match = { namespace = "quickshell:overview" }, no_anim = true})
-hl.layer_rule({ match = { namespace = "quickshell:windowOverview" }, no_anim = true})
+-- Higher arrangement orders are painted first. Keep the launcher and its
+-- backdrop before the dock so its visible buttons stay above both surfaces.
+-- The dock still reserves its edge before the pinned sidebar below.
+hl.layer_rule({ match = { namespace = "quickshell:dock.*" }, order = 1})
+hl.layer_rule({ match = { namespace = "quickshell:overview" }, order = 2, no_anim = true})
+hl.layer_rule({ match = { namespace = "quickshell:windowOverview" }, order = 2, no_anim = true})
 -- The dim grows from a pixel to the screen on every open; animated, that
 -- reads as blur spreading outward. It appears in one step, like the launcher.
-hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, no_anim = true})
+hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, order = 3, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:osk" }, animation = "slide bottom"})
 hl.layer_rule({ match = { namespace = "quickshell:polkit" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:popup" }, xray = false}) -- No weird color for bar tooltips (this in theory should suffice)

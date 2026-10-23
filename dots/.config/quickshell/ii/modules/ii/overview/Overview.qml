@@ -3,6 +3,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import Qt.labs.synchronizer
+import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -11,10 +12,14 @@ import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import "scrolling.js" as Scrolling
+import "launcher-layout.js" as LauncherLayout
 
 Scope {
     id: overviewScope
     property bool dontAutoCancelSearch: false
+    // Keep app-use history even before the scrolling launcher is first opened.
+    Component.onCompleted: RecentApps.rememberActive()
 
     // The compositor's edge reservations come from a snapshot that layer
     // open and close events do not refresh, and a mapped layer changing
@@ -41,58 +46,43 @@ Scope {
     // always-alive full-screen surface already captures outside clicks, so the
     // grab was redundant and its races broke the dock launcher button.
 
-    // Fallback for D-Bus-activated / splash-then-real apps whose real
-    // window bypasses the exec_cmd workspace rule. Each drop registers
-    // a class hint for 5s; openwindow events that match a hint get
-    // silently moved to the target workspace.
-    property var _pendingSpawns: ({})
-
-    function _addSpawnWatch(hint, ws) {
-        if (!hint || ws <= 0) return
-        const key = String(hint).toLowerCase().replace(/^.*\//, "")
-        if (!key) return
-        const updated = _pendingSpawns
-        updated[key] = { targetWs: ws, expiresAt: Date.now() + 5000 }
-        _pendingSpawns = updated
-        _spawnWatchExpire.restart()
+    WorkspaceLaunchTracker {
+        id: launchTracker
+        onWindowResolved: (address, workspace, currentWorkspace) => {
+            if (workspace > 0) {
+                if (workspace !== currentWorkspace)
+                    Hyprland.dispatch(`hl.dsp.window.move({ workspace = ${workspace}, follow = false, window = "address:${address}" })`);
+                return;
+            }
+            overviewScope.dismissExternal(address);
+        }
     }
 
-    Timer {
-        id: _spawnWatchExpire
-        interval: 1000
-        repeat: true
-        running: Object.keys(overviewScope._pendingSpawns).length > 0
-        onTriggered: {
-            const now = Date.now()
-            const updated = overviewScope._pendingSpawns
-            let dirty = false
-            for (const k in updated) {
-                if (updated[k].expiresAt < now) { delete updated[k]; dirty = true }
+    function dismissExternal(address) {
+        for (const panel of overviewVariants.instances) {
+            if (!panel.monitorIsFocused) continue;
+            if (panel.useScrollingLauncher) {
+                const launcher = panel.scrollingLauncherItem;
+                if (!launcher || (!GlobalStates.overviewOpen && !launcher.restoringView)) continue;
+                if (!address && (launcher.placementPending || launcher.activationPending)) continue;
+                launcher.dismissExternal(address);
+            } else if (GlobalStates.overviewOpen) {
+                GlobalStates.overviewOpen = false;
             }
-            if (dirty) overviewScope._pendingSpawns = updated
         }
     }
 
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name !== "openwindow") return
-            if (Object.keys(overviewScope._pendingSpawns).length === 0) return
-            // event.data: ADDR,WORKSPACE_NAME,CLASS,TITLE
-            const parts = String(event.data).split(",")
-            if (parts.length < 3) return
-            const addr = parts[0]
-            const klass = parts[2].toLowerCase()
-            const wsNum = parseInt(parts[1], 10)
-            for (const watched in overviewScope._pendingSpawns) {
-                if (klass.indexOf(watched) === -1 && watched.indexOf(klass) === -1) continue
-                const target = overviewScope._pendingSpawns[watched].targetWs
-                if (wsNum === target) continue
-                Hyprland.dispatch(
-                    `hl.dsp.window.move({ workspace = ${target}, follow = false, window = "address:0x${addr}" })`
-                )
-                // Don't delete — multi-window apps may open more within 5s.
-            }
+            if (event.name !== "openwindow" && event.name !== "activespecialv2") return;
+            const parts = String(event.data).split(",");
+            if (!parts[0]) return;
+            const address = event.name === "openwindow" ? `0x${parts[0]}` : "";
+            // Resolve launch identity first: shared runtimes and portal dialogs
+            // use other classes than the desktop entry that was dropped.
+            if (address && launchTracker.classify(address)) return;
+            if (GlobalStates.overviewOpen || address) overviewScope.dismissExternal(address);
         }
     }
 
@@ -107,6 +97,13 @@ Scope {
         required property ShellScreen modelData
         screen: modelData
         property string searchingText: ""
+        property bool useScrollingLauncher: false
+        property string launcherLayout: "scrolling"
+        readonly property var scrollingLauncherItem: scrollingLauncher.item
+        readonly property string currentWorkspaceLayout: HyprlandData.workspaceById[
+            panelWindow.monitorData?.activeWorkspace?.id ?? panelWindow.monitor?.activeWorkspace?.id]?.tiledLayout ?? ""
+        readonly property bool preloadScrollingLauncher: (Config.options.overview.keepSurfaceAlive ?? true)
+            && Config.options.overview.enable && Scrolling.usesLayout(currentWorkspaceLayout)
         // What the drawer opens as. Without the workspace previews the
         // short list would sit alone under the search box, so it starts
         // on the full list instead unless that was turned off.
@@ -155,9 +152,18 @@ Scope {
         // the always-alive surface fix, our overview can't rely on "newly
         // mapped above fullscreen" semantics, so we need Overlay layer.
         WlrLayershell.layer: WlrLayer.Overlay
-        // Exclusive while open holds the keyboard (search/Escape) now that the
-        // focus grab is gone; None while closed (click-through surface).
-        WlrLayershell.keyboardFocus: (GlobalStates.overviewOpen && monitorIsFocused) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+        // Exclusive brings keyboard focus to search; yield to OnDemand once focused,
+        // since Hyprland routes all pointer input to exclusive surfaces (dock unclickable).
+        property bool keyboardPrimed: false
+        WlrLayershell.keyboardFocus: (GlobalStates.overviewOpen && monitorIsFocused && !((scrollingLauncher.item?.placementPending ?? false) || (scrollingLauncher.item?.activationPending ?? false)
+                || (overviewLoader.item?.placementPending ?? false)))
+            ? (keyboardPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive) : WlrKeyboardFocus.None
+        Connections {
+            target: panelWindow.contentItem.Window
+            function onActiveChanged() {
+                if (panelWindow.contentItem.Window.active) panelWindow.keyboardPrimed = true;
+            }
+        }
         color: "transparent"
 
         // Full-screen so the dim overlay covers app windows behind the overview.
@@ -171,6 +177,10 @@ Scope {
         // wherever the click lands, so the surface lies under every place a
         // click can land, exclusive zones included.
         exclusionMode: ExclusionMode.Ignore
+        // One screen unit for native sizes and text, never a scaled layer, so the
+        // launcher keeps its proportions at every output scale.
+        readonly property real launcherUiScale: LauncherLayout.screenScale(width, height)
+
         // Content keeps clear of whatever holds an edge. The compositor's
         // resolved reservation covers the bar, a pinned dock, a pinned sidebar
         // or keyboard, and anything third party, on this screen alone and only
@@ -180,6 +190,20 @@ Scope {
         // with neither the dock nor the bar on top, the content starts a
         // dock's thickness down, as it does under a top dock.
         readonly property var monitorData: HyprlandData.monitors.find(m => m.id === panelWindow.monitor?.id)
+        // Both layouts consume one workspace sizing result, including the
+        // sidebar reservation that belongs inside the miniature desktop.
+        readonly property var workspaceLayout: {
+            const reserved = (monitorData?.reserved ?? [0, 0, 0, 0]).slice();
+            if (GlobalStates.sidebarLeftScreen === screen.name) {
+                const edge = Appearance.sizes.sidebarLeftEdge === "right" ? 2 : 0;
+                reserved[edge] = Math.max(0, reserved[edge] - GlobalStates.sidebarLeftZone);
+            }
+            return LauncherLayout.workspaceGrid({
+                monitor: monitorData ?? { width: screen.width, height: screen.height, scale: 1, transform: 0 },
+                reserved, rows: Config.options.overview.rows, columns: Config.options.overview.columns,
+                size: Config.options.overview.size, unit: launcherUiScale, elevation: Appearance.sizes.elevationMargin
+            });
+        }
         function edgeClearance(edge) {
             const index = { left: 0, top: 1, right: 2, bottom: 3 }[edge];
             let c = panelWindow.monitorData?.reserved?.[index] ?? 0;
@@ -200,24 +224,57 @@ Scope {
             target: GlobalStates
             function onOverviewOpenChanged() {
                 if (!GlobalStates.overviewOpen) {
+                    panelWindow.keyboardPrimed = false;
                     searchWidget.disableExpandAnimation();
                     overviewScope.dontAutoCancelSearch = false;
                     // Reset drawer state
                     panelWindow.resetDrawer();
                     flickable.contentY = 0;
                 } else {
+                    panelWindow.keyboardPrimed = panelWindow.contentItem.Window.active;
+                    panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
+                    panelWindow.useScrollingLauncher = Config.options.overview.enable && Scrolling.usesLayout(panelWindow.launcherLayout);
                     if (!overviewScope.dontAutoCancelSearch) {
                         searchWidget.cancelSearch();
                     }
                     // Reset drawer state on open.
                     panelWindow.resetDrawer();
-                    // Focus the search box (Exclusive keyboardFocus delivers keys).
-                    Qt.callLater(() => searchWidget.focusSearchInput());
+                    // Focus the search box as the surface takes keyboard focus.
+                    Qt.callLater(() => {
+                        if (panelWindow.useScrollingLauncher && panelWindow.monitorIsFocused) scrollingLauncher.item?.begin(!overviewScope.dontAutoCancelSearch);
+                        else searchWidget.focusSearchInput();
+                    });
                 }
             }
         }
 
+        onMonitorIsFocusedChanged: {
+            if (GlobalStates.overviewOpen && monitorIsFocused && useScrollingLauncher)
+                Qt.callLater(() => scrollingLauncher.item?.begin(!overviewScope.dontAutoCancelSearch));
+        }
+
+        function closeScrollingLauncher() {
+            if (scrollingLauncher.item) scrollingLauncher.item.close();
+            else GlobalStates.overviewOpen = false;
+        }
+
+        function launchAppOnWorkspace(app, ws) {
+            if (ws <= 0 || !app) return;
+            if (app._isFolder === true) {
+                for (const id of app.appIds || []) {
+                    const entry = AppSearch.guessDesktopEntry(id);
+                    if (entry) launchTracker.launch(entry, ws);
+                }
+            } else {
+                launchTracker.launch(app, ws);
+            }
+        }
+
         function setSearchingText(text) {
+            if (panelWindow.useScrollingLauncher) {
+                scrollingLauncher.item?.setSearchingText(text);
+                return;
+            }
             searchWidget.setSearchingText(text);
             searchWidget.focusFirstItem();
         }
@@ -256,14 +313,20 @@ Scope {
                 }
             }
 
+        LauncherBackdrop {
+            id: launcherBackdrop
+            anchors.fill: parent
+            screen: panelWindow.screen
+        }
+
         // Floating icon that follows the cursor during app drag
         Rectangle {
             id: dragFloatIcon
             z: 9999
             visible: false
-            width: 56
-            height: 56
-            radius: Appearance.rounding.normal
+            width: 56 * panelWindow.launcherUiScale
+            height: width
+            radius: Appearance.rounding.normal * panelWindow.launcherUiScale
             color: Appearance.colors.colSecondaryContainer
             opacity: 0.92
             property var app: null
@@ -276,7 +339,7 @@ Scope {
                     ? Quickshell.iconPath(AppSearch.guessIcon(
                           dragFloatIcon.app.id || dragFloatIcon.app.icon), "image-missing")
                     : ""
-                implicitSize: 40
+                implicitSize: 40 * panelWindow.launcherUiScale
             }
 
             // Folder ghost — mini 2x2 grid of contained app icons,
@@ -284,7 +347,7 @@ Scope {
             Grid {
                 anchors.centerIn: parent
                 columns: 2
-                spacing: 2
+                spacing: 2 * panelWindow.launcherUiScale
                 visible: dragFloatIcon.isFolder
 
                 Repeater {
@@ -292,7 +355,7 @@ Scope {
                     IconImage {
                         required property var modelData
                         source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
-                        implicitSize: 18
+                        implicitSize: 18 * panelWindow.launcherUiScale
                     }
                 }
             }
@@ -329,33 +392,7 @@ Scope {
                     : -1
                 if (ws <= 0 || !app) return
 
-                // exec_cmd's two-arg form carries the workspace rule
-                // on the spawned env; _addSpawnWatch is the fallback
-                // for D-Bus / splash flows that bypass the rule.
-                // Lua escape order: \\ first, then " — otherwise the
-                // newly-added \" gets re-escaped.
-                function dispatchExec(parts, hint) {
-                    if (!parts || parts.length === 0) return
-                    const cmd = parts.map(p => p.includes(" ") ? `"${p}"` : p).join(" ")
-                    const lua = cmd
-                        .replace(/\\/g, "\\\\")
-                        .replace(/"/g, '\\"')
-                    Hyprland.dispatch(`hl.dsp.exec_cmd("${lua}", { workspace = "${ws} silent" })`)
-                    overviewScope._addSpawnWatch(hint || parts[0], ws)
-                }
-
-                if (app._isFolder === true) {
-                    const ids = app.appIds || []
-                    for (let i = 0; i < ids.length; i++) {
-                        const entry = AppSearch.guessDesktopEntry(ids[i])
-                        const hint = entry?.startupClass || entry?.id || ids[i]
-                        dispatchExec(entry ? entry.command : null, hint)
-                    }
-                    return
-                }
-
-                const hint = app.startupClass || app.id || (app.command ? app.command[0] : null)
-                dispatchExec(app.command, hint)
+                panelWindow.launchAppOnWorkspace(app, ws);
             }
 
             function onAppDragCancelled() {
@@ -420,8 +457,41 @@ Scope {
                 interval: 50
                 onTriggered: {
                     GlobalStates.hotCornerTriggered();
-                    GlobalStates.overviewOpen = false;
+                    overviewScope.dismissOverview();
                 }
+            }
+        }
+
+        Loader {
+            id: scrollingLauncher
+            anchors.fill: parent
+            anchors.topMargin: panelWindow.edgeClearance("top")
+            anchors.bottomMargin: panelWindow.edgeClearance("bottom") + 16
+            anchors.leftMargin: panelWindow.edgeClearance("left") + 24
+            anchors.rightMargin: panelWindow.edgeClearance("right") + 24
+            // Stays alive between opens (captures detach while closed) and is built
+            // when layout information arrives rather than inside its first open.
+            active: panelWindow.useScrollingLauncher || panelWindow.preloadScrollingLauncher
+            // An idle launcher is hidden by its parent's zero opacity but stays visible
+            // to Qt, so its app grid is populated before the first open.
+            visible: (panelWindow.useScrollingLauncher || panelWindow.preloadScrollingLauncher)
+                && panelWindow.monitorIsFocused
+            onLoaded: Qt.callLater(() => {
+                item?.prepare();
+                if (GlobalStates.overviewOpen && panelWindow.monitorIsFocused)
+                    item?.begin(!overviewScope.dontAutoCancelSearch);
+            })
+            sourceComponent: ScrollingLauncher {
+                screen: panelWindow.screen
+                layout: panelWindow.launcherLayout
+                screenCenterX: panelWindow.width / 2 - scrollingLauncher.x
+                screenCenterY: panelWindow.height / 2 - scrollingLauncher.y
+                screenScale: panelWindow.launcherUiScale
+                workspaceLayout: panelWindow.workspaceLayout
+                dockBackdropSource: launcherBackdrop.blurSource
+                dockBackdropRect: launcherBackdrop.dockBackdropRect
+                rendering: opened || contentFade.opacity > 0
+                onAppDropped: (app, workspace) => panelWindow.launchAppOnWorkspace(app, workspace)
             }
         }
 
@@ -437,7 +507,8 @@ Scope {
             contentWidth: columnLayout.implicitWidth
             contentHeight: columnLayout.implicitHeight
             clip: true
-            visible: true
+            visible: !panelWindow.useScrollingLauncher
+            enabled: !panelWindow.useScrollingLauncher
             // Disable scrolling when workspacesOnly mode is active —
             // there's nothing below the workspace previews in that view,
             // so allowing the flickable to scroll just lets the user
@@ -477,7 +548,7 @@ Scope {
                             searchWidget.cancelSearch();
                             Qt.callLater(() => { searchWidget.focusSearchInput(); });
                         } else {
-                            GlobalStates.overviewOpen = false;
+                            overviewScope.dismissOverview();
                         }
                     } else if (event.key === Qt.Key_Left) {
                         if (!panelWindow.searchingText)
@@ -538,7 +609,7 @@ Scope {
                 Loader {
                     id: overviewLoader
                     Layout.alignment: Qt.AlignHCenter
-                    active: GlobalStates.overviewOpen && panelWindow.monitorIsFocused && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
+                    active: GlobalStates.overviewOpen && !panelWindow.useScrollingLauncher && panelWindow.monitorIsFocused && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
                     Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
                     opacity: appDrawer.expanded ? 0 : 1
                     Behavior on opacity {
@@ -625,7 +696,7 @@ Scope {
             id: wheelOverlay
             anchors.fill: flickable
             z: 100
-            enabled: GlobalStates.overviewOpen
+            enabled: GlobalStates.overviewOpen && !panelWindow.useScrollingLauncher
             acceptedButtons: Qt.NoButton
             propagateComposedEvents: true
 
@@ -673,7 +744,7 @@ Scope {
                 // Scroll up   → scroll grid back up, or fall through once at the top.
                 if (!appDrawer.expanded && panelWindow.searchingText === ""
                         && (scrollingDown || !appDrawer.isGridAtTop())) {
-                    if (scrollingDown && appDrawer.isGridAtBottom()) {
+                    if (appDrawer.collapsible && scrollingDown && appDrawer.isGridAtBottom()) {
                         appDrawer.expanded = true;
                         flickable.contentY = 0;
                         event.accepted = true;
@@ -727,9 +798,19 @@ Scope {
 
     }   // end Variants
 
+    function dismissOverview() {
+        for (const panel of overviewVariants.instances) {
+            if (panel.monitorIsFocused && panel.useScrollingLauncher && GlobalStates.overviewOpen) {
+                panel.closeScrollingLauncher();
+                return;
+            }
+        }
+        GlobalStates.overviewOpen = false;
+    }
+
     function toggleClipboard() {
         if (GlobalStates.overviewOpen && overviewScope.dontAutoCancelSearch) {
-            GlobalStates.overviewOpen = false;
+            overviewScope.dismissOverview();
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
@@ -739,7 +820,7 @@ Scope {
 
     function toggleEmojis() {
         if (GlobalStates.overviewOpen && overviewScope.dontAutoCancelSearch) {
-            GlobalStates.overviewOpen = false;
+            overviewScope.dismissOverview();
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
@@ -749,7 +830,8 @@ Scope {
 
     function toggleSearch() {
         if (GlobalStates.wallpaperSelectorOpen || GlobalStates.sessionOpen) return;
-        if (!IslandLauncher.toggle()) GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+        if (GlobalStates.overviewOpen) overviewScope.dismissOverview();
+        else if (!IslandLauncher.toggle()) GlobalStates.overviewOpen = true;
     }
 
     IpcHandler {
@@ -759,11 +841,12 @@ Scope {
             overviewScope.toggleSearch();
         }
         function workspacesToggle() {
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            if (GlobalStates.overviewOpen) overviewScope.dismissOverview();
+            else GlobalStates.overviewOpen = true;
         }
         function close() {
             IslandLauncher.close();
-            GlobalStates.overviewOpen = false;
+            overviewScope.dismissOverview();
         }
         function open() {
             if (GlobalStates.wallpaperSelectorOpen || GlobalStates.sessionOpen) return;
@@ -790,7 +873,7 @@ Scope {
         description: "Closes overview on press"
 
         onPressed: {
-            GlobalStates.overviewOpen = false;
+            overviewScope.dismissOverview();
         }
     }
     GlobalShortcut {
@@ -798,7 +881,8 @@ Scope {
         description: "Toggles overview on press"
 
         onPressed: {
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            if (GlobalStates.overviewOpen) overviewScope.dismissOverview();
+            else GlobalStates.overviewOpen = true;
         }
     }
     GlobalShortcut {

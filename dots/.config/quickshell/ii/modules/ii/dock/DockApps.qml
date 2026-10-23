@@ -53,6 +53,7 @@ Item {
     // preview's per-window buttons and by DockAppButton's single-window
     // fast path (see its onClicked for why 1 window skips the preview).
     function focusToplevel(tl) {
+        GlobalStates.overviewOpen = false;
         // Handing focus to a window is a deliberate exit from whatever the
         // shared grab was holding open. Left armed, the grab's whitelist
         // collapses with the sidebar's focus and it spends the user's next

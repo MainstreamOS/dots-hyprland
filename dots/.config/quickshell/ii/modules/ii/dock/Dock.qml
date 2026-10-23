@@ -58,6 +58,13 @@ Scope { // Scope
             readonly property bool showPinButton: Config.options.dock.showPinButton
             readonly property bool showOverviewButton: Config.options.dock.showOverviewButton
             readonly property bool showBackground: Appearance.sizes.dockShowBackground
+            readonly property rect backdropGeometry: {
+                const x = dockMouseArea.x + dockHoverRegion.x + dockBackground.x
+                    + dockSurface.x + dockVisualBackground.x;
+                const y = dockMouseArea.y + dockHoverRegion.y + dockBackground.y
+                    + dockSurface.y + dockVisualBackground.y;
+                return Qt.rect(x, y, dockVisualBackground.width, dockVisualBackground.height);
+            }
             readonly property real bodyPadding: 5
             readonly property real rowSpacing: 3
             readonly property real listSpacing: 2
@@ -136,8 +143,12 @@ Scope { // Scope
                 : dockEdge === "top" ? Edges.Bottom
                 : dockEdge === "left" ? Edges.Right : Edges.Left
 
+            // Closing the launcher leaves its blurred surface mapped through
+            // the fade and shrink. Stay above it until its configured size lands.
+            readonly property bool overLauncher: GlobalStates.overviewOpen
+                || (GlobalStates.launcherDimWindows[dockRoot.screen?.name ?? ""]?.surfaceShown ?? false)
             readonly property bool overWindowOverview: GlobalStates.windowOverviewScreen === (dockRoot.screen?.name ?? "")
-            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || GlobalStates.overviewOpen || overWindowOverview || revealGrace.running
+            property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || overLauncher || overWindowOverview || revealGrace.running
 
             // The dock is raised above the launcher's dim while the launcher
             // is open, and there it takes the colors that read over the dim.
@@ -197,7 +208,7 @@ Scope { // Scope
 
             // A floating dock stays centered on the screen. The overviews also
             // cover the sidebar, so their dock reaches over its reserved strip.
-            readonly property real sidebarReach: (!root.pinned || GlobalStates.overviewOpen || dockRoot.overWindowOverview)
+            readonly property real sidebarReach: (!root.pinned || dockRoot.overLauncher || dockRoot.overWindowOverview)
                 && GlobalStates.sidebarLeftScreen === (perScreen.modelData?.name ?? "")
                 ? GlobalStates.sidebarLeftZone : 0
             margins {
@@ -299,7 +310,7 @@ Scope { // Scope
             implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + dockRoot.magnifyHeadroom
             WlrLayershell.namespace: "quickshell:dock" + (dockRoot.dockEdge === "bottom" ? ""
                 : dockRoot.dockEdge.charAt(0).toUpperCase() + dockRoot.dockEdge.slice(1))
-            WlrLayershell.layer: GlobalStates.overviewOpen || dockRoot.overWindowOverview ? WlrLayer.Overlay : WlrLayer.Top
+            WlrLayershell.layer: dockRoot.overLauncher || dockRoot.overWindowOverview ? WlrLayer.Overlay : WlrLayer.Top
             color: "transparent"
 
             mask: Region {

@@ -415,16 +415,6 @@ Singleton {
     // it, so the launcher does not turn one way while the dock beside it
     // turns the other. A side that only carries marks is not enough here:
     // this is where names are read.
-    readonly property color launcherPanelBackground: ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
-    readonly property LauncherSurfaceContent launcherPanelContent: LauncherSurfaceContent {
-        m3: root.m3colors
-        palette: root.colors
-        backdrops: [ColorUtils.composite(root.launcherPanelBackground, root.wallpaperAverage)]
-        stockBackdrops: [root.m3colors.m3background]
-        adaptive: root._judgeLauncherEnabled && root.autoIconContrast
-        holdsFills: true
-        flipped: adaptive && ColorUtils.inkTurns(root.m3colors.m3onSurface, backdrops, backdrops)
-    }
     readonly property LauncherSurfaceContent launcherContent: LauncherSurfaceContent {
         m3: root.m3colors
         palette: root.colors
@@ -434,6 +424,23 @@ Singleton {
         holdsFills: true
         flipped: root.followsDock(backdrops, textContrast, root.dockOverLauncherContent)
             ? root.dockOverLauncherContent.flipped : root.contentFlipped(backdrops, backdrops)
+    }
+    // These previews sit on the theme's opaque background, like Alt+Tab,
+    // rather than on the dock's configurable material.
+    readonly property LauncherSurfaceContent workspaceLauncherContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        adaptive: false
+    }
+    readonly property color launcherPanelBackground: ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
+    readonly property LauncherSurfaceContent launcherPanelContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [ColorUtils.composite(root.launcherPanelBackground, root.wallpaperAverage)]
+        stockBackdrops: [root.m3colors.m3background]
+        adaptive: root._judgeLauncherEnabled && root.autoIconContrast
+        holdsFills: true
+        flipped: adaptive && ColorUtils.inkTurns(root.m3colors.m3onSurface, backdrops, backdrops)
     }
     readonly property LauncherSurfaceContent islandLauncherContent: LauncherSurfaceContent {
         m3: root.m3colors

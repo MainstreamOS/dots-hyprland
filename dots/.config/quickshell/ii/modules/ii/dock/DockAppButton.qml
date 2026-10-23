@@ -274,6 +274,7 @@ DockButton {
         } else {
             // Only here: opening a folder or toggling a window preview is not a
             // launch, and animating those would say something happened that did not.
+            GlobalStates.overviewOpen = false;
             launchAnims.play(Config.options.dock.launchAnimation);
             root.desktopEntry?.execute();
         }

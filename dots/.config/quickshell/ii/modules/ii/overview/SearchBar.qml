@@ -11,7 +11,13 @@ import qs.modules.common.functions
 RowLayout {
     id: root
     property var contentColors: Appearance.launcherContent
-    spacing: 6
+    property bool quietStyle: false
+    property real uiScale: 1
+    spacing: 6 * root.uiScale
+    readonly property real actionSize: 40 * uiScale
+    readonly property real searchIconSize: 22 * uiScale
+    readonly property real preferredWidth: searchInput.implicitWidth + searchIconSize
+        + 8 * uiScale + actionSize * 3 + spacing * 4 + 4 * uiScale
     property bool animateWidth: false
     property alias searchInput: searchInput
     property string searchingText
@@ -42,8 +48,10 @@ RowLayout {
     
     MaterialShapeWrappedMaterialSymbol {
         id: searchIcon
+        visible: !root.quietStyle
         Layout.alignment: Qt.AlignVCenter
-        iconSize: Appearance.font.pixelSize.huge
+        iconSize: Appearance.font.pixelSize.huge * root.uiScale
+        padding: 6 * root.uiScale
         color: root.contentColors.colSecondaryContainer
         colSymbol: root.contentColors.colOnSecondaryContainer
         shape: switch(root.searchPrefixType) {
@@ -68,23 +76,36 @@ RowLayout {
             default: return "search";
         }
     }
+    MaterialSymbol {
+        visible: root.quietStyle
+        Layout.minimumWidth: root.searchIconSize
+        Layout.maximumWidth: root.searchIconSize
+        Layout.minimumHeight: root.searchIconSize
+        Layout.maximumHeight: root.searchIconSize
+        Layout.leftMargin: 8 * root.uiScale
+        Layout.alignment: Qt.AlignVCenter
+        text: searchIcon.text
+        iconSize: 22 * root.uiScale
+        color: root.contentColors.colOnLayer0
+    }
     ToolbarTextField { // Search box
         id: searchInput
-        Layout.topMargin: 4
-        Layout.bottomMargin: 4
+        Layout.topMargin: 4 * root.uiScale
+        Layout.bottomMargin: 4 * root.uiScale
         Layout.fillWidth: root.fillSearchWidth
         Layout.minimumWidth: root.fillSearchWidth ? 0 : -1
-        implicitHeight: 40
+        implicitHeight: 40 * root.uiScale
         focus: root.inputFocused
-        font.pixelSize: Appearance.font.pixelSize.small
-        colBackground: root.contentColors.colLayer1
-        radius: RoundedCorners.on ? Appearance.rounding.full : 0
-        color: root.contentColors.colOnLayer1Field
-        placeholderTextColor: root.contentColors.colSubtextField
+        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+        padding: 10 * root.uiScale
+        colBackground: root.quietStyle ? "transparent" : root.contentColors.colLayer1
+        radius: RoundedCorners.on ? Appearance.rounding.full * root.uiScale : 0
+        color: root.quietStyle ? root.contentColors.colOnLayer0 : root.contentColors.colOnLayer1Field
+        placeholderTextColor: root.quietStyle ? root.contentColors.colSubtext : root.contentColors.colSubtextField
         selectedTextColor: root.contentColors.colOnSecondaryContainer
         selectionColor: root.contentColors.colSecondaryContainer
         placeholderText: Translation.tr("Search, calculate or run")
-        implicitWidth: root.searchingText == "" ? Appearance.sizes.searchWidthCollapsed : Appearance.sizes.searchWidth
+        implicitWidth: (root.searchingText == "" ? Appearance.sizes.searchWidthCollapsed : Appearance.sizes.searchWidth) * root.uiScale
 
         Behavior on implicitWidth {
             id: searchWidthBehavior
@@ -101,6 +122,7 @@ RowLayout {
 
         Keys.onPressed: event => {
             root.keyPressed(event);
+            if (event.accepted) return;
             if (event.key === Qt.Key_Tab && root.completeFirstResult) {
                 if (LauncherSearch.results.length === 0) return;
                 const tabbedText = LauncherSearch.results[0].name;
@@ -111,9 +133,11 @@ RowLayout {
         }
     }
 
-    IconToolbarButton {
-        Layout.topMargin: 4
-        Layout.bottomMargin: 4
+    SearchActionButton {
+        uiScale: root.uiScale
+        fixedWidth: root.quietStyle ? root.actionSize : 0
+        Layout.topMargin: 4 * root.uiScale
+        Layout.bottomMargin: 4 * root.uiScale
         colBackgroundHover: root.contentColors.colLayer1Hover
         colRipple: root.contentColors.colLayer1Active
         colText: (hovered || down) ? root.contentColors.colOnSurfaceVariantHover : root.contentColors.colOnSurfaceVariant
@@ -134,10 +158,12 @@ RowLayout {
         }
     }
 
-    IconToolbarButton {
+    SearchActionButton {
+        uiScale: root.uiScale
+        fixedWidth: root.quietStyle ? root.actionSize : 0
         id: songRecButton
-        Layout.topMargin: 4
-        Layout.bottomMargin: 4
+        Layout.topMargin: 4 * root.uiScale
+        Layout.bottomMargin: 4 * root.uiScale
         toggled: SongRec.running
         onClicked: SongRec.toggleRunning()
         text: "music_cast"
@@ -177,10 +203,12 @@ RowLayout {
         }
     }
 
-    IconToolbarButton {
-        Layout.topMargin: 4
-        Layout.bottomMargin: 4
-        Layout.rightMargin: 4
+    SearchActionButton {
+        uiScale: root.uiScale
+        fixedWidth: root.quietStyle ? root.actionSize : 0
+        Layout.topMargin: 4 * root.uiScale
+        Layout.bottomMargin: 4 * root.uiScale
+        Layout.rightMargin: 4 * root.uiScale
         colBackgroundHover: root.contentColors.colLayer1Hover
         colRipple: root.contentColors.colLayer1Active
         colText: (hovered || down) ? root.contentColors.colOnSurfaceVariantHover : root.contentColors.colOnSurfaceVariant

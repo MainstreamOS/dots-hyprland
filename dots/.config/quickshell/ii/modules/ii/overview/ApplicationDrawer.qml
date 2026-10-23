@@ -4,6 +4,7 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
@@ -21,6 +22,11 @@ Item {
     property string searchText: ""
     property string sortMode: "name" // "name", "recent"
     property string filterCategory: "all" // "all", "favorites"
+    // A flat, ordered list for the recent-app row. The main drawer builds its
+    // own list, including folders, when no source is supplied.
+    property var appSource: null
+    property string emptyText: Translation.tr("No applications found")
+    property string panelTitle: ""
 
     property real collapsedHeight: 400 // Better initial height
     property real availableHeight: 0
@@ -44,6 +50,23 @@ Item {
     }
     property real iconSize: root.expanded ? 75 : 50
     property real spacing: root.expanded ? 45 : 30
+    property int visibleRows: 0
+    property bool headerInteractive: false
+    property bool wheelScrolling: false
+    property bool workspaceStyle: false
+    property real uiScale: 1
+    property string wallpaper: ""
+    property real surfaceRadius: Appearance.rounding.dockBody
+    property var contentColors: Appearance.drawerContent
+    property color colBackground: workspaceStyle ? Appearance.m3colors.m3background
+        : Appearance.sizes.dockShowBackground ? Appearance.colors.colDockBackground : "transparent"
+    property real hoverElevation: workspaceStyle && drawerHover.hovered && !_isDraggingApp && !folderPopupVisible ? 1 : 0
+    Behavior on hoverElevation { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
+    property real wheelVelocity: 0
+    property double lastWheelTime: 0
+    property bool compactCells: false
+    property real appLabelSize: Appearance.font.pixelSize.smaller * uiScale
+    readonly property real rowHeight: appGrid.cellHeight
 
     // Drag-to-workspace signals — Overview.qml listens to these.
     // All positions are in scene (window-root) coordinates.
@@ -89,12 +112,15 @@ Item {
     implicitHeight: root.expanded ? root.expandedHeight : root.collapsedHeight
 
     Behavior on implicitHeight {
+        enabled: !root.workspaceStyle || GlobalStates.overviewOpen
         NumberAnimation {
             duration: Appearance.animation.elementResize.duration
             easing.type: Appearance.animation.elementResize.type
             easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
         }
     }
+
+    function prepareGrid() { appGrid.forceLayout(); }
 
     Connections {
         target: AppFolderManager
@@ -156,6 +182,7 @@ Item {
 
     // Filter and sort apps, mixing in folder items when not searching
     function getFilteredApps() {
+        if (root.appSource !== null) return root.appSource;
         // Reference _folderRevision so QML re-evaluates when folders change
         const rev = root._folderRevision;
 
@@ -228,51 +255,96 @@ Item {
     // Resets the grid scroll position to the top.
     // Called by Overview whenever the drawer is opened or closed.
     function resetScroll() {
+        appGrid.cancelFlick();
+        wheelVelocity = 0;
+        lastWheelTime = 0;
         appGrid.contentY = 0;
     }
 
+    HoverHandler { id: drawerHover; enabled: root.workspaceStyle }
     StyledRectangularShadow {
         target: drawerBackground
+        spread: root.uiScale
+        blur: Appearance.sizes.elevationMargin * root.uiScale * (root.workspaceStyle ? 1.4 + root.hoverElevation * 0.4 : 0.9)
+        offset: Qt.vector2d(0, (root.workspaceStyle ? 4 + root.hoverElevation * 2 : 1) * root.uiScale)
         // Nothing to cast a shadow once the surface is gone.
-        visible: Appearance.sizes.dockShowBackground
+        visible: root.workspaceStyle || Appearance.sizes.dockShowBackground
         // Scaled by the surface's own alpha, so a see-through list is not sat
         // on a shadow as heavy as a solid one's.
-        color: Appearance.colors.colDockShadow
+        color: root.workspaceStyle ? Appearance.colors.colShadow : Appearance.colors.colDockShadow
     }
 
     Rectangle {
         id: drawerBackground
         anchors.fill: parent
-        // The dock's surface, so the two read as one material: whatever color
-        // pick, transparency and roundness the dock was given, this takes,
-        // and it steps away with the dock when the background is switched off.
-        radius: Appearance.rounding.dockBody
-        color: Appearance.sizes.dockShowBackground
-            ? Appearance.colors.colDockBackground : "transparent"
-        border.width: Appearance.sizes.dockShowBackground ? 1 : 0
-        border.color: Appearance.colors.colDrawerBorder
+        // Each launcher supplies its material; the standalone list follows
+        // the dock unless its caller chooses another surface.
+        radius: root.surfaceRadius
+        color: root.colBackground
 
+        Item {
+            anchors.fill: parent
+            visible: root.workspaceStyle && root.wallpaper !== ""
+            layer.enabled: visible
+            layer.effect: MultiEffect { maskEnabled: true; maskSource: wallpaperMask }
+            Rectangle {
+                id: wallpaperMask
+                anchors.fill: parent
+                radius: drawerBackground.radius
+                layer.enabled: root.workspaceStyle
+                visible: false
+            }
+            Image {
+                anchors.fill: parent
+                source: root.workspaceStyle ? root.wallpaper : ""
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                sourceSize.width: Math.ceil(root.width * Screen.devicePixelRatio)
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: Appearance.m3colors.m3background
+                opacity: 0.9
+            }
+        }
+        // Draw above the wallpaper so both launcher layouts keep the dock's outline.
+        Rectangle {
+            anchors.fill: parent
+            radius: drawerBackground.radius
+            color: "transparent"
+            border.width: Appearance.sizes.dockShowBackground ? 1.5 * root.uiScale : 0
+            border.color: Appearance.colors.colDockBackgroundBorder
+        }
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: root.expanded ? 20 : 15
-            spacing: 10
+            anchors.margins: (root.expanded ? 20 : 15) * root.uiScale
+            spacing: 10 * root.uiScale
+
+            LauncherTitlePill {
+                visible: root.panelTitle.length > 0
+                text: root.panelTitle
+                uiScale: root.uiScale
+                Layout.alignment: Qt.AlignLeft
+                Layout.maximumWidth: parent.width
+            }
 
             // Header with search and controls
             RowLayout {
+                visible: !root.workspaceStyle
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 8 * root.uiScale
 
                 MaterialSymbol {
                     text: "apps"
                     iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.drawerContent.colOnLayer0
+                    color: root.contentColors.colOnLayer0
                 }
 
                 StyledText {
                     text: root.expanded ? Translation.tr("All Applications") : Translation.tr("Applications")
-                    font.pixelSize: Appearance.font.pixelSize.larger
+                    font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
                     font.weight: Font.Medium
-                    color: Appearance.drawerContent.colOnLayer0
+                    color: root.contentColors.colOnLayer0
                 }
 
                 Item { Layout.fillWidth: true }
@@ -280,7 +352,14 @@ Item {
                 MaterialSymbol {
                     text: root.expanded ? "expand_less" : "expand_more"
                     iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.drawerContent.colSubtext
+                    color: root.contentColors.colSubtext
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: root.headerInteractive
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.expanded = !root.expanded
+                    }
                 }
             }
 
@@ -312,7 +391,7 @@ Item {
                 }
 
                 placeholderText: Translation.tr("Search applications...")
-                placeholderTextColor: Appearance.drawerContent.m3outlineField
+                placeholderTextColor: root.contentColors.m3outlineField
                 padding: 10
 
                 font {
@@ -320,15 +399,15 @@ Item {
                     pixelSize: Appearance.font.pixelSize.small
                 }
 
-                color: Appearance.drawerContent.m3onSurfaceField
-                selectedTextColor: Appearance.drawerContent.m3onSecondaryContainer
-                selectionColor: Appearance.drawerContent.colSecondaryContainer
+                color: root.contentColors.m3onSurfaceField
+                selectedTextColor: root.contentColors.m3onSecondaryContainer
+                selectionColor: root.contentColors.colSecondaryContainer
 
                 background: Rectangle {
                     radius: Appearance.rounding.small
-                    color: Appearance.drawerContent.colLayer1
+                    color: root.contentColors.colLayer1
                     border.width: 1
-                    border.color: searchField.activeFocus ? Appearance.drawerContent.colPrimaryOnField : Appearance.drawerContent.colOutlineVariant
+                    border.color: searchField.activeFocus ? root.contentColors.colPrimaryOnField : root.contentColors.colOutlineVariant
 
                     Behavior on border.color {
                         ColorAnimation {
@@ -339,7 +418,7 @@ Item {
 
                 cursorDelegate: Rectangle {
                     width: 1
-                    color: Appearance.drawerContent.colPrimaryOnField
+                    color: root.contentColors.colPrimaryOnField
                     radius: 1
                     visible: searchField.activeFocus
                 }
@@ -355,7 +434,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "close"
                     iconSize: Appearance.font.pixelSize.normal
-                    color: Appearance.drawerContent.m3outlineField
+                    color: root.contentColors.m3outlineField
                     visible: searchField.text.length > 0
 
                     MouseArea {
@@ -379,7 +458,7 @@ Item {
                 id: gridContainer
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumHeight: root.expanded ? 100 : 40
+                Layout.minimumHeight: (root.expanded ? 100 : 40) * root.uiScale
                 clip: true
 
                 // Whether there is content below the current scroll position in collapsed mode.
@@ -397,17 +476,22 @@ Item {
                 GridView {
                     id: appGrid
                     anchors.fill: parent
-                    cellWidth: Math.max(root.expanded ? 120 : 80, (parent.width - (root.columns - 1) * root.spacing - 30) / root.columns)
-                    cellHeight: cellWidth * 1.3
+                    // GridView fits whole cells. Rounding up a fractional
+                    // cell can silently put the last column on the next row.
+                    cellWidth: root.visibleRows > 0 ? Math.max(1, Math.floor(width / Math.max(1, root.columns)))
+                        : Math.max(root.expanded ? 120 : 80, (parent.width - (root.columns - 1) * root.spacing - 30) / root.columns)
+                    cellHeight: root.visibleRows > 0 ? height / root.visibleRows : cellWidth * 1.3
                     interactive: false
                     boundsBehavior: Flickable.StopAtBounds
+                    flickDeceleration: 1800 * root.uiScale
+                    maximumFlickVelocity: 2400 * root.uiScale
 
                     // A wheel over the collapsed grid expands it rather than
                     // scrolling, so a bar there would promise the wrong thing.
                     // A grid that cannot be collapsed only ever scrolls, and
                     // then it is the one hint that more apps are below.
                     ScrollBar.vertical: ScrollBar {
-                        policy: (root.expanded && !root.collapsible)
+                        policy: (root.wheelScrolling || (root.expanded && !root.collapsible))
                             ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                     }
 
@@ -419,10 +503,10 @@ Item {
                     // Show "no results" message
                     Label {
                         anchors.centerIn: parent
-                        visible: appGrid.count === 0 && root.searchText.length > 0
-                        text: Translation.tr("No applications found")
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        color: Appearance.drawerContent.colSubtextRead
+                        visible: appGrid.count === 0 && (root.searchText.length > 0 || root.appSource !== null)
+                        text: root.emptyText
+                        font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                        color: root.contentColors.colSubtextRead
                     }
 
                     delegate: RippleButton {
@@ -434,31 +518,31 @@ Item {
 
                         width: appGrid.cellWidth
                         height: appGrid.cellHeight
-                        buttonRadius: Appearance.rounding.normal
+                        buttonRadius: Appearance.rounding.normal * root.uiScale
                         colBackground: {
                             if (isDragTarget)
-                                return ColorUtils.transparentize(Appearance.drawerContent.colPrimary, 0.5);
+                                return ColorUtils.transparentize(root.contentColors.colPrimary, 0.5);
                             if (appButton.down || appButton.keyboardDown)
-                                return Appearance.drawerContent.colSecondaryContainerActive;
+                                return root.contentColors.colSecondaryContainerActive;
                             if (appButton.hovered || appButton.focus)
-                                return Appearance.drawerContent.colSecondaryContainer;
-                            return ColorUtils.transparentize(Appearance.drawerContent.colSecondaryContainer, 1);
+                                return root.contentColors.colSecondaryContainer;
+                            return ColorUtils.transparentize(root.contentColors.colSecondaryContainer, 1);
                         }
-                        colBackgroundHover: Appearance.drawerContent.colSecondaryContainer
-                        colRipple: Appearance.drawerContent.colSecondaryContainerActive
+                        colBackgroundHover: root.contentColors.colSecondaryContainer
+                        colRipple: root.contentColors.colSecondaryContainerActive
                         // The name is held against whichever of those fills is
                         // painted under it, and the button paints the hover fill
                         // over any other while the pointer is on the tile.
                         property color colName: {
                             if (appButton.hovered)
-                                return Appearance.drawerContent.colOnLayer0Hover;
+                                return root.contentColors.colOnLayer0Hover;
                             if (isDragTarget)
-                                return Appearance.drawerContent.colOnLayer0Drop;
+                                return root.contentColors.colOnLayer0Drop;
                             if (appButton.down || appButton.keyboardDown)
-                                return Appearance.drawerContent.colOnLayer0Active;
+                                return root.contentColors.colOnLayer0Active;
                             if (appButton.focus)
-                                return Appearance.drawerContent.colOnLayer0Hover;
-                            return Appearance.drawerContent.colOnLayer0;
+                                return root.contentColors.colOnLayer0Hover;
+                            return root.contentColors.colOnLayer0;
                         }
 
                         PointingHandInteraction {}
@@ -491,23 +575,23 @@ Item {
                         // ── Folder visual ──────────────────────────────
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 8
-                            spacing: 6
+                            anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
+                            spacing: (root.compactCells ? 4 : 6) * root.uiScale
                             visible: modelData._isFolder === true
 
                             Rectangle {
                                 Layout.alignment: Qt.AlignHCenter
                                 Layout.preferredWidth: root.iconSize
                                 Layout.preferredHeight: root.iconSize
-                                radius: Appearance.rounding.normal
-                                color: Appearance.drawerContent.colLayer1
-                                border.width: 1
-                                border.color: Appearance.drawerContent.colLayer0BorderOnLayer1
+                                radius: Appearance.rounding.normal * root.uiScale
+                                color: root.contentColors.colLayer1
+                                border.width: root.uiScale
+                                border.color: root.contentColors.colLayer0BorderOnLayer1
 
                                 Grid {
                                     anchors.centerIn: parent
                                     columns: 2
-                                    spacing: 2
+                                    spacing: 2 * root.uiScale
 
                                     Repeater {
                                         model: modelData._isFolder ? modelData.appIds.slice(0, 4) : []
@@ -525,20 +609,20 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignHCenter
                                 text: modelData.name
-                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                font.pixelSize: root.appLabelSize
                                 color: appButton.colName
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 wrapMode: Text.WordWrap
-                                maximumLineCount: 2
+                                maximumLineCount: root.compactCells ? 1 : 2
                             }
                         }
 
                         // ── App visual ─────────────────────────────────
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 8
-                            spacing: 6
+                            anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
+                            spacing: (root.compactCells ? 4 : 6) * root.uiScale
                             visible: !modelData._isFolder
 
                             IconImage {
@@ -557,22 +641,22 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignHCenter
                                 text: modelData.name
-                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                font.pixelSize: root.appLabelSize
                                 color: appButton.colName
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 wrapMode: Text.WordWrap
-                                maximumLineCount: 2
+                                maximumLineCount: root.compactCells ? 1 : 2
                             }
                         }
 
                         // Drag-target highlight ring
                         Rectangle {
                             anchors.fill: parent
-                            radius: Appearance.rounding.normal
+                            radius: Appearance.rounding.normal * root.uiScale
                             color: "transparent"
-                            border.width: 2
-                            border.color: Appearance.drawerContent.colPrimary
+                            border.width: 2 * root.uiScale
+                            border.color: root.contentColors.colPrimary
                             visible: appButton.isDragTarget
                         }
 
@@ -595,14 +679,37 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     preventStealing: true
 
+                    onWheel: event => {
+                        if (!root.wheelScrolling) { event.accepted = false; return; }
+                        if (!event.angleDelta.y && event.pixelDelta.y) {
+                            // Touchpad streams already include their own momentum.
+                            appGrid.cancelFlick();
+                            root.scrollGrid(event.pixelDelta.y, 1);
+                        } else {
+                            const delta = event.angleDelta.y / 120 * 80 * root.uiScale;
+                            const now = Date.now();
+                            const previous = now - root.lastWheelTime < 180 && Math.sign(delta) === Math.sign(root.wheelVelocity)
+                                ? root.wheelVelocity * 0.6 : 0;
+                            root.wheelVelocity = Math.max(-2400 * root.uiScale, Math.min(2400 * root.uiScale, previous + delta * 10));
+                            root.lastWheelTime = now;
+                            appGrid.flick(0, root.wheelVelocity);
+                        }
+                        event.accepted = true;
+                    }
+
+                    function itemAt(x, y) {
+                        if (x < 0 || y < 0 || x >= width || y >= height) return null;
+                        return appGrid.itemAt(x + appGrid.contentX, y + appGrid.contentY);
+                    }
                     property var _app: null
                     property int _appIndex: -1
                     property real _startX: 0
                     property real _startY: 0
                     property bool _dragging: false
-                    readonly property real _threshold: 20
+                    readonly property real _threshold: 20 * root.uiScale
 
                     onPressed: (mouse) => {
+                        appGrid.cancelFlick();
                         _dragging = false
                         _app = null
                         _appIndex = -1
@@ -610,9 +717,7 @@ Item {
                         _startY = mouse.y
                         root._dragHoverIndex = -1
 
-                        const item = appGrid.itemAt(
-                            mouse.x + appGrid.contentX,
-                            mouse.y + appGrid.contentY)
+                        const item = itemAt(mouse.x, mouse.y)
 
                         if (mouse.button === Qt.RightButton) {
                             const data = item ? item.modelData : null
@@ -652,10 +757,8 @@ Item {
                             // Track which grid cell we're hovering over.
                             // Folders can't be merged into anything, so skip the
                             // merge-target highlight when dragging a folder.
-                            const hoverItem = appGrid.itemAt(
-                                mouse.x + appGrid.contentX,
-                                mouse.y + appGrid.contentY)
-                            if (!_app._isFolder && hoverItem && hoverItem.index !== _appIndex) {
+                            const hoverItem = itemAt(mouse.x, mouse.y)
+                            if (root.appSource === null && !_app._isFolder && hoverItem && hoverItem.index !== _appIndex) {
                                 root._dragHoverIndex = hoverItem.index
                             } else {
                                 root._dragHoverIndex = -1
@@ -666,11 +769,9 @@ Item {
                     onReleased: (mouse) => {
                         if (_dragging) {
                             // Check if we're dropping onto another grid item
-                            const hoverItem = appGrid.itemAt(
-                                mouse.x + appGrid.contentX,
-                                mouse.y + appGrid.contentY)
+                            const hoverItem = itemAt(mouse.x, mouse.y)
 
-                            if (!_app._isFolder && hoverItem && hoverItem.index !== _appIndex && hoverItem.modelData) {
+                            if (root.appSource === null && !_app._isFolder && hoverItem && hoverItem.index !== _appIndex && hoverItem.modelData) {
                                 const target = hoverItem.modelData
                                 const draggedApp = _app
 
@@ -695,9 +796,7 @@ Item {
                         } else if (_app && mouse.button === Qt.LeftButton) {
                             // Plain click
                             if (_app._isFolder) {
-                                const item = appGrid.itemAt(
-                                    mouse.x + appGrid.contentX,
-                                    mouse.y + appGrid.contentY)
+                                const item = itemAt(mouse.x, mouse.y)
                                 if (item) {
                                     const center = item.mapToItem(folderPopupOverlay, item.width / 2, item.height / 2)
                                     root._folderSourceX = center.x

@@ -24,7 +24,22 @@ Scope {
         readonly property bool dimShown: GlobalStates.overviewOpen && dimWindow.monitorIsFocused && dimWindow.width > 1
         readonly property string screenName: modelData?.name ?? ""
         onDimShownChanged: GlobalStates.setLauncherDim(dimWindow.screenName, dimWindow.dimShown)
-        Component.onDestruction: GlobalStates.setLauncherDim(dimWindow.screenName, false)
+        // Track the configured extent, not just the fade target: shrinking the
+        // layer surface takes another compositor configure after the fade ends.
+        readonly property bool surfaceShown: visible && width > 1 && height > 1
+        property string registeredScreen: ""
+        Component.onCompleted: {
+            registeredScreen = screenName;
+            GlobalStates.launcherDimWindows = Object.assign({}, GlobalStates.launcherDimWindows, {[registeredScreen]: dimWindow});
+        }
+        Component.onDestruction: {
+            if (GlobalStates.launcherDimWindows[registeredScreen] === dimWindow) {
+                const windows = Object.assign({}, GlobalStates.launcherDimWindows);
+                delete windows[registeredScreen];
+                GlobalStates.launcherDimWindows = windows;
+                GlobalStates.setLauncherDim(registeredScreen, false);
+            }
+        }
 
         WlrLayershell.namespace: "quickshell:overviewDim"
         // Use Overlay layer (not Top) so the dim stays visible during fullscreen

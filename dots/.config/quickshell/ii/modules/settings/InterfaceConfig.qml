@@ -667,6 +667,30 @@ ContentPage {
             }
         }
         ContentSubsection {
+            title: Translation.tr("Scrolling and monocle launcher")
+            ConfigSpinBox {
+                icon: "view_agenda"
+                text: Translation.tr("Visible workspaces")
+                value: Config.options.overview.scrollingWorkspaces
+                from: 1
+                to: 8
+                stepSize: 1
+                onValueChanged: Config.options.overview.scrollingWorkspaces = value
+            }
+            ConfigSwitch {
+                buttonIcon: "history"
+                text: Translation.tr("Show recently used apps")
+                checked: Config.options.overview.scrollingShowRecentApps
+                onCheckedChanged: Config.options.overview.scrollingShowRecentApps = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "swap_horiz"
+                text: Translation.tr("Workspaces on the right")
+                checked: Config.options.overview.scrollingSwapSides
+                onCheckedChanged: Config.options.overview.scrollingSwapSides = checked
+            }
+        }
+        ContentSubsection {
             title: Translation.tr("Performance")
 
             ConfigSwitch {

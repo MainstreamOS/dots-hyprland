@@ -14,6 +14,7 @@ import Quickshell.Hyprland
 RippleButton {
     id: root
     property var contentColors: Appearance.launcherContent
+    property real uiScale: 1
     property LauncherSearchResult entry
     property string query
     property bool isSeparator: entry?.isSeparator ?? false
@@ -39,9 +40,9 @@ RippleButton {
     visible: root.entryShown
     enabled: !root.isSeparator
     focusPolicy: root.isSeparator ? Qt.NoFocus : Qt.StrongFocus
-    property int horizontalMargin: 10
-    property int buttonHorizontalPadding: 10
-    property int buttonVerticalPadding: 6
+    property real horizontalMargin: 10 * uiScale
+    property real buttonHorizontalPadding: 10 * uiScale
+    property real buttonVerticalPadding: 6 * uiScale
     property bool keyboardDown: false
     property bool keyboardSelected: false
     property var dismiss: () => { GlobalStates.overviewOpen = false; }
@@ -49,7 +50,7 @@ RippleButton {
 
     implicitHeight: root.isSeparator ? separatorItem.implicitHeight : (rowLayout.implicitHeight + root.buttonVerticalPadding * 2)
     implicitWidth: root.isSeparator ? separatorItem.implicitWidth : (rowLayout.implicitWidth + root.buttonHorizontalPadding * 2)
-    buttonRadius: root.isSeparator ? 0 : Appearance.rounding.normal
+    buttonRadius: root.isSeparator ? 0 : Appearance.rounding.normal * root.uiScale
     // A press that does not hover the row, as a touch does, paints the
     // ripple's own color, so the text keeps the fills it is held on.
     colBackground: root.isSeparator ? "transparent" :
@@ -83,12 +84,12 @@ RippleButton {
         visible: root.isSeparator
         anchors.left: parent.left
         anchors.right: parent.right
-        implicitHeight: 13
+        implicitHeight: 13 * root.uiScale
 
         Rectangle {
             anchors.centerIn: parent
-            width: parent.width - 40
-            height: 1
+            width: parent.width - 40 * root.uiScale
+            height: root.uiScale
             color: root.contentColors.colOutlineVariant
         }
     }
@@ -179,7 +180,7 @@ RippleButton {
     RowLayout {
         id: rowLayout
         visible: !root.isSeparator
-        spacing: iconLoader.sourceComponent === null ? 0 : 10
+        spacing: iconLoader.sourceComponent === null ? 0 : 10 * root.uiScale
         anchors.fill: parent
         anchors.leftMargin: root.horizontalMargin + root.buttonHorizontalPadding
         anchors.rightMargin: root.horizontalMargin + root.buttonHorizontalPadding
@@ -206,8 +207,8 @@ RippleButton {
             id: iconImageComponent
             IconImage {
                 source: Quickshell.iconPath(root.iconName, "image-missing")
-                width: 35
-                height: 35
+                width: 35 * root.uiScale
+                height: 35 * root.uiScale
             }
         }
 
@@ -215,7 +216,7 @@ RippleButton {
             id: materialSymbolComponent
             MaterialSymbol {
                 text: root.materialSymbol
-                iconSize: 30
+                iconSize: 30 * root.uiScale
                 color: root.colForeground
             }
         }
@@ -224,7 +225,7 @@ RippleButton {
             id: bigTextComponent
             StyledText {
                 text: root.bigText
-                font.pixelSize: Appearance.font.pixelSize.larger
+                font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
                 color: root.colForeground
             }
         }
@@ -236,7 +237,7 @@ RippleButton {
             Layout.alignment: Qt.AlignVCenter
             spacing: 0
             StyledText {
-                font.pixelSize: Appearance.font.pixelSize.smaller
+                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                 color: root.selected ? root.colOnFill
                     : root.down ? root.contentColors.colSubtextOnRipple
                     : root.keyboardDown ? root.contentColors.colSubtextPressed : root.contentColors.colSubtextRead
@@ -256,7 +257,7 @@ RippleButton {
                             id: activeText
                             anchors.centerIn: parent
                             text: "check"
-                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                             color: root.colOnCheck
                         }
                     }
@@ -273,7 +274,7 @@ RippleButton {
                     Layout.fillWidth: true
                     id: nameText
                     textFormat: Text.StyledText // RichText also works, but StyledText ensures elide work
-                    font.pixelSize: Appearance.font.pixelSize.small
+                    font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                     font.family: Appearance.font.family[root.fontType]
                     color: root.colForeground
                     horizontalAlignment: Text.AlignLeft
@@ -287,7 +288,7 @@ RippleButton {
                     Layout.fillWidth: true
                     entry: root.cliphistRawString
                     maxWidth: contentColumn.width
-                    maxHeight: 140
+                    maxHeight: 140 * root.uiScale
                 }
             }
         }
@@ -297,7 +298,7 @@ RippleButton {
             Layout.fillWidth: false
             visible: root.selected
             id: clickAction
-            font.pixelSize: Appearance.font.pixelSize.normal
+            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
             color: root.colOnFill
             horizontalAlignment: Text.AlignRight
             text: root.itemClickActionName
@@ -307,7 +308,7 @@ RippleButton {
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: root.buttonVerticalPadding
             Layout.bottomMargin: -root.buttonVerticalPadding // Why is this necessary? Good question.
-            spacing: 4
+            spacing: 4 * root.uiScale
             Repeater {
                 model: (root.entry.actions ?? []).slice(0, 4)
                 delegate: RippleButton {
@@ -315,8 +316,8 @@ RippleButton {
                     required property var modelData
                     property var iconType: modelData.iconType
                     property string iconName: modelData.iconName ?? ""
-                    implicitHeight: 34
-                    implicitWidth: 34
+                    implicitHeight: 34 * root.uiScale
+                    implicitWidth: 34 * root.uiScale
 
                     colBackgroundHover: root.contentColors.colActionHover
                     colRipple: root.contentColors.colActionRipple
@@ -329,7 +330,7 @@ RippleButton {
                             active: actionButton.iconType === LauncherSearchResult.IconType.Material || actionButton.iconName === ""
                             sourceComponent: MaterialSymbol {
                                 text: actionButton.iconName || "video_settings"
-                                font.pixelSize: Appearance.font.pixelSize.hugeass
+                                font.pixelSize: Appearance.font.pixelSize.hugeass * root.uiScale
                                 color: actionButton.down ? root.contentColors.colOnActionActive :
                                     (actionButton.hovered ? root.contentColors.colOnActionHover : root.colForeground)
                             }
@@ -339,7 +340,7 @@ RippleButton {
                             active: actionButton.iconType === LauncherSearchResult.IconType.System && actionButton.iconName !== ""
                             sourceComponent: IconImage {
                                 source: Quickshell.iconPath(actionButton.iconName)
-                                implicitSize: 20
+                                implicitSize: 20 * root.uiScale
                             }
                         }
                     }

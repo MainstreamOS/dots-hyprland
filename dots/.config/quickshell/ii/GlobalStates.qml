@@ -88,6 +88,9 @@ Singleton {
     property string windowOverviewScreen: ""
     // A dock app clicked over the Alt+Tab overview, which picks among its windows there.
     signal windowOverviewAppClicked(var app)
+    // Live dim surfaces by output; the dock stays above them until the
+    // compositor has finished shrinking the closing surface.
+    property var launcherDimWindows: ({})
     // The screens the launcher's dim is shown on, by name, as the dim sets
     // them when it starts to fade in or out. It covers the focused screen
     // alone, and only once its surface spans that screen, which can land a
@@ -172,7 +175,12 @@ Singleton {
     property string wallpaperSelectorMonitor: ""
     property var wallpaperSelectorScreen: null
     onWallpaperSelectorOpenChanged: {
-        if (root.wallpaperSelectorOpen) return;
+        if (root.wallpaperSelectorOpen) {
+            // Release the launcher's exclusive surface before the picker grabs
+            // focus. The scrolling launcher also skips restoring focus here.
+            root.overviewOpen = false;
+            return;
+        }
         root.wallpaperSelectorMonitor = "";
         root.wallpaperSelectorScreen = null;
     }
