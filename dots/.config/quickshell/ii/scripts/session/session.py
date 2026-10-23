@@ -239,6 +239,10 @@ def workspace_selector(ws: dict) -> str:
     name = (ws.get("name") or "").strip()
     if isinstance(wid, int) and wid >= 1:
         return str(wid)
+    # The default (-99) and a scratchpad named "special" share this label.
+    # Keep minimized windows on the default instead of recreating its alias.
+    if wid == -99 or name == "special:special":
+        return "special"
     if name.startswith("special:"):
         return name
     if name:
@@ -463,10 +467,16 @@ def lua_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
 
 
+def restore_workspace(window: dict) -> str:
+    """Older snapshots saved the default scratchpad's ambiguous display name."""
+    ws = window.get("workspace") or ""
+    return "special" if ws == "special:special" else ws
+
+
 def build_rules(window: dict) -> str:
     rules: list[str] = []
 
-    ws = window.get("workspace") or ""
+    ws = restore_workspace(window)
     if ws:
         # "silent" keeps the target workspace (special ones included) from
         # popping open over the fresh session.
@@ -562,7 +572,7 @@ def group_windows(windows: list[dict]) -> list[list[dict]]:
 def place(addr: str, window: dict) -> None:
     """Move an already-mapped window to where it was saved."""
     sel = f"address:{addr}"
-    ws = window.get("workspace") or ""
+    ws = restore_workspace(window)
     if ws:
         # follow = false moves it silently, so the active workspace doesn't
         # flip under the user while the session is still coming up.

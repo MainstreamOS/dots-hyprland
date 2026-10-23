@@ -476,7 +476,7 @@ Scope {
                                         TapHandler {
                                             acceptedButtons: Qt.RightButton
                                             onTapped: {
-                                                Hyprland.dispatch('hl.dsp.workspace.toggle_special("special")');
+                                                Hyprland.dispatch('hl.dsp.workspace.toggle_special()');
                                                 closeTimer.stop();
                                                 window.opened = false;
                                                 IslandState.alertOpen = false;

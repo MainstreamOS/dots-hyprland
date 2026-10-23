@@ -224,7 +224,9 @@ end
 
 -- Minimizing puts a window on the scratchpad, the special workspace that opens
 -- over the desktop, without following it there.
-local SCRATCHPAD = "special:special"
+-- Hyprland labels both the default scratchpad and one named "special" as
+-- special:special. Its fixed default ID keeps title-bar gestures unambiguous.
+local SCRATCHPAD = -99
 
 local function toScratchpad()
     return hl.dsp.window.move({ workspace = "special", follow = false })
@@ -276,7 +278,7 @@ function MainstreamTitleBarStep(direction)
         return hl.dsp.no_op()
     end
     local up = direction == "up"
-    if w.workspace and w.workspace.name == SCRATCHPAD then
+    if w.workspace and w.workspace.id == SCRATCHPAD then
         if up then return MainstreamTitleBarMinimize() end
         return hl.dsp.no_op()
     end

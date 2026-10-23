@@ -70,7 +70,7 @@ ButtonMouseArea {
         if (mouse.button == Qt.LeftButton)
             switchWorkspaceToHovered();
         else if (mouse.button == Qt.RightButton && enableRightClick)
-            Hyprland.dispatch('hl.dsp.workspace.toggle_special("special")');
+            Hyprland.dispatch('hl.dsp.workspace.toggle_special()');
     }
     property bool enableWheel: true
     onWheel: event => {

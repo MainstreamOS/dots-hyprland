@@ -165,7 +165,7 @@ for i = 1, 6 do
  hl.bind(keycombos[i], hl.dsp.window.move({workspace = prefix[i].."1"}) )
 end
 
-hl.bind("SUPER + ALT + S", hl.dsp.window.move({workspace = "special:special", follow = false}), {description = "Send to scratchpad"} )
+hl.bind("SUPER + ALT + S", hl.dsp.window.move({workspace = "special", follow = false}), {description = "Send to scratchpad"} )
 hl.bind("CTRL + SUPER + S", function()
  local w = hl.get_active_window()
  if w and w.workspace and w.workspace.special then
@@ -232,8 +232,10 @@ for i = 1, 4 do
  hl.bind(keycombos[i], hl.dsp.focus({workspace = prefix[i].."1"}) )
 end
 --## Special
-hl.bind("SUPER + S", hl.dsp.workspace.toggle_special("special"), {description = "Toggle scratchpad"} )
-hl.bind("SUPER + mouse:275", hl.dsp.workspace.toggle_special("special") )
+-- No name selects the default scratchpad, matching window.move("special").
+-- The name "special" can resolve to a different workspace with the same label.
+hl.bind("SUPER + S", hl.dsp.workspace.toggle_special(), {description = "Toggle scratchpad"} )
+hl.bind("SUPER + mouse:275", hl.dsp.workspace.toggle_special() )
 for i = 1, 4 do
  local key = {"BracketLeft","BracketRight","Up","Down"}
  local prefix = {"-1","+1","r-5","r+5"}
