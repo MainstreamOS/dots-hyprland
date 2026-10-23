@@ -199,6 +199,7 @@ Scope { // Scope
         sourceComponent: PanelWindow { // Window
             id: panelWindow
             visible: GlobalStates.sidebarLeftOpen
+            contentItem.visible: !GlobalStates.scrollOverviewOpen
             
             property bool extend: false
             property real sidebarWidth: panelWindow.extend ? Appearance.sizes.sidebarWidthExtended : Appearance.sizes.sidebarWidth
@@ -219,7 +220,7 @@ Scope { // Scope
             implicitWidth: Appearance.sizes.sidebarWidthExtended + Appearance.sizes.elevationMargin
             WlrLayershell.namespace: "quickshell:sidebarLeft"
             // Hyprland 0.49: OnDemand is Exclusive, Exclusive just breaks click-outside-to-close
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            WlrLayershell.keyboardFocus: GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
             color: "transparent"
 
             readonly property bool onRight: Appearance.sizes.sidebarLeftEdge === "right"
@@ -240,6 +241,11 @@ Scope { // Scope
 
             mask: Region {
                 item: sidebarLeftBackground
+                Region {
+                    intersection: Intersection.Intersect
+                    width: GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
+                    height: panelWindow.height
+                }
             }
 
             // Pinned, the sidebar stays up while the desktop is used: it
@@ -318,9 +324,9 @@ Scope { // Scope
             property var contentParent: detachedSidebarBackground
             color: "transparent"
 
-            visible: GlobalStates.sidebarLeftOpen
+            visible: GlobalStates.sidebarLeftOpen && !GlobalStates.scrollOverviewOpen
             onVisibleChanged: {
-                if (!visible) GlobalStates.sidebarLeftOpen = false;
+                if (!visible && !GlobalStates.scrollOverviewOpen) GlobalStates.sidebarLeftOpen = false;
             }
             
             Rectangle {

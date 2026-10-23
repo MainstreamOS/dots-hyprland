@@ -14,6 +14,11 @@ Scope {
     PanelWindow {
         id: panelWindow
         visible: GlobalStates.sidebarRightOpen
+        contentItem.visible: !GlobalStates.scrollOverviewOpen
+        mask: Region {
+            width: GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
+            height: panelWindow.height
+        }
 
         function hide() {
             GlobalStates.sidebarRightOpen = false;
@@ -22,7 +27,7 @@ Scope {
         exclusiveZone: 0
         implicitWidth: sidebarWidth
         WlrLayershell.namespace: "quickshell:sidebarRight"
-        WlrLayershell.keyboardFocus: GlobalStates.sidebarRightOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: GlobalStates.sidebarRightOpen && !GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         color: "transparent"
 
         readonly property bool onLeft: Appearance.sizes.sidebarRightEdge === "left"

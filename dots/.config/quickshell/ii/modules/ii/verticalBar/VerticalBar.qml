@@ -31,6 +31,7 @@ Scope {
             component: PanelWindow { // Bar window
                 id: barRoot
                 screen: barLoader.modelData
+                contentItem.visible: !GlobalStates.scrollOverviewOpen
 
                 property var brightnessMonitor: Brightness.getMonitorForScreen(barLoader.modelData)
                 
@@ -80,6 +81,11 @@ Scope {
                     Region { item: barContent.floatSurfaces[0] ?? null }
                     Region { item: barContent.floatSurfaces[1] ?? null }
                     Region { item: barContent.floatSurfaces[2] ?? null }
+                    Region {
+                        intersection: Intersection.Intersect
+                        width: GlobalStates.scrollOverviewOpen ? 0 : barRoot.width
+                        height: barRoot.height
+                    }
                 }
                 color: "transparent"
 

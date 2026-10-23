@@ -24,6 +24,7 @@ Scope {
             readonly property var workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor?.name === monitor?.name)
             readonly property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
             visible: GlobalStates.barOpen && !GlobalStates.screenLocked && !hasFullscreenWindow
+            contentItem.visible: !GlobalStates.scrollOverviewOpen
             onVisibleChanged: {
                 if (!visible) {
                     closeTimer.stop();
@@ -51,7 +52,8 @@ Scope {
             // reinclude the island as the pointer moves between surfaces,
             // Inline editors borrow focus only while visible, and yield it
             // while another popup or modal screen is open.
-            WlrLayershell.keyboardFocus: window.drawerRequested ? WlrKeyboardFocus.OnDemand
+            WlrLayershell.keyboardFocus: GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.None
+                : window.drawerRequested ? WlrKeyboardFocus.OnDemand
                 : window.expanded && !GlobalStates.overviewOpen && !GlobalStates.sessionOpen
                     && GlobalFocusGrab.dismissable.length === 0 && (content.item?.needsKeyboardFocus ?? false)
                     ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
@@ -65,6 +67,11 @@ Scope {
                 Region { item: window.notch ? leftFlare : null }
                 Region { item: window.notch ? rightFlare : null }
                 Region { item: Config.options.bar.autoHide.enable ? edgeReveal : null }
+                Region {
+                    intersection: Intersection.Intersect
+                    width: GlobalStates.scrollOverviewOpen ? 0 : window.width
+                    height: window.height
+                }
             }
             property bool opened: false
             property bool drawerMode: false

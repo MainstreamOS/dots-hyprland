@@ -69,6 +69,9 @@ Scope {
                 property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor && w.monitor.name === monitor.name)
                 property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
                 visible: !hasFullscreenWindow
+                // Keep the reserved area while the native overview hides the
+                // chrome, so its workspace previews retain their geometry.
+                contentItem.visible: !GlobalStates.scrollOverviewOpen
                 exclusionMode: ExclusionMode.Ignore
                 // Reserving nothing, the bar also ignores the zones others
                 // reserve (-1), so a pinned sidebar cannot push it aside.
@@ -102,6 +105,11 @@ Scope {
                     Region { item: barContent.floatSurfaces[0] ?? null }
                     Region { item: barContent.floatSurfaces[1] ?? null }
                     Region { item: barContent.floatSurfaces[2] ?? null }
+                    Region {
+                        intersection: Intersection.Intersect
+                        width: GlobalStates.scrollOverviewOpen ? 0 : barRoot.width
+                        height: barRoot.height
+                    }
                 }
                 color: "transparent"
 

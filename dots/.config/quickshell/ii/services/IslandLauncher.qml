@@ -11,7 +11,7 @@ Singleton {
     id: root
     readonly property bool enabled: Appearance.sizes.barIsIsland && Config.options.bar.island.appDrawer
     readonly property string focusedScreen: Hyprland.focusedMonitor?.name ?? ""
-    readonly property bool available: enabled && GlobalStates.barOpen && !GlobalStates.screenLocked
+    readonly property bool available: enabled && GlobalStates.barOpen && !GlobalStates.screenLocked && !GlobalStates.scrollOverviewOpen
         && Quickshell.screens.some(screen => screen.name === focusedScreen)
         && (!Config.options.bar.screenList.length || Config.options.bar.screenList.includes(focusedScreen))
         && !Hyprland.workspaces.values.some(workspace => workspace.monitor?.name === focusedScreen && workspace.active

@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
+import qs
 import Quickshell
 import Quickshell.Hyprland
 
@@ -82,9 +83,9 @@ Singleton {
             : root.dismissable.some(w => !w?.contentItem.Window.window?.visible)
                 || root.dismissable.every(w => !w?.focusable) || root.dismissable.some(w => hasActive(w?.contentItem))
                 ? [...root.dismissable, ...root.persistent] : [...root.dismissable]
-        active: root.dismissable.length > 0
+        active: root.dismissable.length > 0 && !GlobalStates.scrollOverviewOpen
         onCleared: () => {
-            root.dismiss();
+            if (!GlobalStates.scrollOverviewOpen) root.dismiss();
         }
     }
 

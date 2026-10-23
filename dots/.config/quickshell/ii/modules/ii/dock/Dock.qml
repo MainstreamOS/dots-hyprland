@@ -47,6 +47,7 @@ Scope { // Scope
                     // Window
                     screen: perScreen.modelData
                     visible: !GlobalStates.screenLocked
+                    contentItem.visible: !GlobalStates.scrollOverviewOpen
 
             // The dock never shares an edge with the bar: a dock stacked on
             // it gets displaced by the bar's exclusive zone and the hover
@@ -305,6 +306,11 @@ Scope { // Scope
                 item: dockRoot.dockSpans ? spanStripMask : dockMouseArea
                 Region { item: dockRoot.dockSpans ? spanIconBand : null }
                 Region { item: dockRoot.dockSpans && Config.options.dock.hoverToReveal ? spanRevealSliver : null }
+                Region {
+                    intersection: Intersection.Intersect
+                    width: GlobalStates.scrollOverviewOpen ? 0 : dockRoot.width
+                    height: dockRoot.height
+                }
             }
 
             // How far along the edge the icons reach, with the room every
