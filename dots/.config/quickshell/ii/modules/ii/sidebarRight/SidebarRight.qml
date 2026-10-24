@@ -1,6 +1,7 @@
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.utils
 import QtQuick
 import Quickshell.Io
 import Quickshell
@@ -14,9 +15,9 @@ Scope {
     PanelWindow {
         id: panelWindow
         visible: GlobalStates.sidebarRightOpen
-        contentItem.visible: !GlobalStates.scrollOverviewOpen
+        contentItem.visible: !GlobalStates.scrollOverviewOpen || GlobalStates.scrollOverviewSidebarPreviews
         mask: Region {
-            width: GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
+            width: GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
             height: panelWindow.height
         }
 
@@ -27,7 +28,7 @@ Scope {
         exclusiveZone: 0
         implicitWidth: sidebarWidth
         WlrLayershell.namespace: "quickshell:sidebarRight"
-        WlrLayershell.keyboardFocus: GlobalStates.sidebarRightOpen && !GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: GlobalStates.sidebarRightOpen && !GlobalStates.overviewOpen && !GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         color: "transparent"
 
         readonly property bool onLeft: Appearance.sizes.sidebarRightEdge === "left"
@@ -39,17 +40,24 @@ Scope {
             bottom: true
         }
 
-        onVisibleChanged: {
-            if (visible) {
+        function syncFocusGrab() {
+            if (visible && !GlobalStates.overviewOpen && !GlobalStates.scrollOverviewOpen) {
                 GlobalFocusGrab.addDismissable(panelWindow);
             } else {
                 GlobalFocusGrab.removeDismissable(panelWindow);
             }
         }
+        onVisibleChanged: panelWindow.syncFocusGrab()
+        Connections {
+            target: GlobalStates
+            function onOverviewOpenChanged() { Qt.callLater(panelWindow.syncFocusGrab); }
+            function onScrollOverviewOpenChanged() { Qt.callLater(panelWindow.syncFocusGrab); }
+        }
         Connections {
             target: GlobalFocusGrab
             function onDismissed() {
-                panelWindow.hide();
+                if (!GlobalStates.overviewOpen && !GlobalStates.scrollOverviewOpen)
+                    panelWindow.hide();
             }
         }
 
@@ -76,6 +84,12 @@ Scope {
             }
 
             sourceComponent: SidebarRightContent {}
+        }
+        SidebarPreviewSource {
+            side: "right"
+            namespace: "quickshell:sidebarRight"
+            panel: panelWindow
+            sourceItem: sidebarContentLoader
         }
     }
 

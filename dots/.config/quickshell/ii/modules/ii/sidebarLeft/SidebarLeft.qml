@@ -2,6 +2,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.common.utils
 import QtQuick
 import Quickshell.Io
 import Quickshell
@@ -199,7 +200,7 @@ Scope { // Scope
         sourceComponent: PanelWindow { // Window
             id: panelWindow
             visible: GlobalStates.sidebarLeftOpen
-            contentItem.visible: !GlobalStates.scrollOverviewOpen
+            contentItem.visible: !GlobalStates.scrollOverviewOpen || GlobalStates.scrollOverviewSidebarPreviews
             
             property bool extend: false
             property real sidebarWidth: panelWindow.extend ? Appearance.sizes.sidebarWidthExtended : Appearance.sizes.sidebarWidth
@@ -220,7 +221,7 @@ Scope { // Scope
             implicitWidth: Appearance.sizes.sidebarWidthExtended + Appearance.sizes.elevationMargin
             WlrLayershell.namespace: "quickshell:sidebarLeft"
             // Hyprland 0.49: OnDemand is Exclusive, Exclusive just breaks click-outside-to-close
-            WlrLayershell.keyboardFocus: GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
+            WlrLayershell.keyboardFocus: GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen ? WlrKeyboardFocus.None : WlrKeyboardFocus.OnDemand
             color: "transparent"
 
             readonly property bool onRight: Appearance.sizes.sidebarLeftEdge === "right"
@@ -243,7 +244,7 @@ Scope { // Scope
                 item: sidebarLeftBackground
                 Region {
                     intersection: Intersection.Intersect
-                    width: GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
+                    width: GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
                     height: panelWindow.height
                 }
             }
@@ -254,7 +255,7 @@ Scope { // Scope
             // the click there and back. Unpinned, it closes on a click outside
             // again. Super+A and Escape still close it either way.
             function syncFocusGrab() {
-                if (panelWindow.visible && !root.pin)
+                if (panelWindow.visible && !root.pin && !GlobalStates.overviewOpen && !GlobalStates.scrollOverviewOpen)
                     GlobalFocusGrab.addDismissable(panelWindow);
                 else
                     GlobalFocusGrab.removeDismissable(panelWindow);
@@ -270,14 +271,25 @@ Scope { // Scope
                 }
             }
             Connections {
+                target: GlobalStates
+                function onOverviewOpenChanged() { Qt.callLater(panelWindow.syncFocusGrab); }
+                function onScrollOverviewOpenChanged() { Qt.callLater(panelWindow.syncFocusGrab); }
+            }
+            Connections {
                 target: GlobalFocusGrab
                 function onDismissed() {
-                    if (!root.pin)
+                    if (!root.pin && !GlobalStates.overviewOpen && !GlobalStates.scrollOverviewOpen)
                         panelWindow.hide();
                 }
             }
 
             // Content
+            SidebarPreviewSource {
+                side: "left"
+                namespace: "quickshell:sidebarLeft"
+                panel: panelWindow
+                sourceItem: sidebarLeftBackground
+            }
             StyledRectangularShadow {
                 target: sidebarLeftBackground
                 radius: sidebarLeftBackground.radius

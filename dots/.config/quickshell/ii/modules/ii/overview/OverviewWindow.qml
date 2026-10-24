@@ -17,6 +17,7 @@ Item { // Window
     property var toplevel
     property var windowData
     property var monitorData
+    property var workspaceReserved: monitorData?.reserved ?? [0, 0, 0, 0]
     property var scale
     property bool restrictToWorkspace: true
     property real widthRatio: {
@@ -30,11 +31,11 @@ Item { // Window
         return (widgetHeight * monitorData.scale) / (monitorHeight * widgetMonitor.scale);
     }
     property real initX: {
-        return Math.max((windowData?.at[0] - (monitorData?.x ?? 0) - monitorData?.reserved[0]) * widthRatio * root.scale, 0) + xOffset;
+        return Math.max((windowData?.at[0] - (monitorData?.x ?? 0) - workspaceReserved[0]) * widthRatio * root.scale, 0) + xOffset;
     }
 
     property real initY: {
-        return Math.max((windowData?.at[1] - (monitorData?.y ?? 0) - monitorData?.reserved[1]) * heightRatio * root.scale, 0) + yOffset;
+        return Math.max((windowData?.at[1] - (monitorData?.y ?? 0) - workspaceReserved[1]) * heightRatio * root.scale, 0) + yOffset;
     }
     property real xOffset: 0
     property real yOffset: 0

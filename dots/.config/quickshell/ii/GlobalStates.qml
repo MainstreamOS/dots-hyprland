@@ -107,6 +107,9 @@ Singleton {
     // corner re-entry (e.g. the workspaceNumber overlay on a Super press) doesn't
     // re-ripple / re-dispatch while the plugin overview is already up.
     property bool scrollOverviewOpen: false
+    // Older plugins also draw sidebar layers at full size. Only keep those
+    // layers painted when the plugin advertises its in-card-only rendering.
+    property bool scrollOverviewSidebarPreviews: false
     // Where the right click on the desktop landed, and whether its menu is up.
     property bool desktopMenuOpen: false
     property var desktopMenuScreen: null
@@ -314,10 +317,13 @@ Singleton {
             // this flag, so the screen corners hide for the overview's lifetime
             // without anything having to be saved and put back.
             if (event.name === "scrolloverview") {
-                if (event.data === "open") {
+                if (event.data === "sidebar-previews") {
+                    root.scrollOverviewSidebarPreviews = true;
+                } else if (event.data === "open") {
                     root.scrollOverviewOpen = true;
                 } else if (event.data === "close") {
                     root.scrollOverviewOpen = false;
+                    root.scrollOverviewSidebarPreviews = false;
                 }
             }
 

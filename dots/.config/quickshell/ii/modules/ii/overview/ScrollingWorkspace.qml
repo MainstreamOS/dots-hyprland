@@ -366,6 +366,18 @@ Item {
             }
         }
     }
+    WorkspaceSidebarPreview {
+        visible: hasPreviews && !root.empty
+        x: root.cardX; y: root.cardY
+        width: root.cardWidth; height: root.cardHeight
+        radius: root.cardRadius
+        z: 3
+        screenName: root.controller.screen.name
+        previewScale: root.viewportScale
+        originX: -(root.cardWidth - root.controller.screen.width * root.viewportScale) / (2 * root.viewportScale)
+        originY: -(root.cardHeight - root.controller.screen.height * root.viewportScale) / (2 * root.viewportScale)
+        onActivated: root.controller.activateWorkspace(root.workspaceId)
+    }
     Rectangle {
         x: root.cardX - 2 * root.uiScale; y: root.cardY - 2 * root.uiScale
         width: root.cardWidth + 4 * root.uiScale; height: root.cardHeight + 4 * root.uiScale

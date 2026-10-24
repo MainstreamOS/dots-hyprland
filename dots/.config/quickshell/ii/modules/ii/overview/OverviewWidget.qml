@@ -25,6 +25,16 @@ Item {
     property var windowByAddress: HyprlandData.windowByAddress
     property var windowAddresses: HyprlandData.addresses
     property var monitorData: HyprlandData.monitors.find(m => m.id === root.monitor?.id)
+    // The sidebar belongs in the miniature desktop rather than being cropped
+    // away with the bar/dock reservations.
+    readonly property var previewReserved: {
+        const reserved = (root.monitorData?.reserved ?? [0, 0, 0, 0]).slice();
+        if (GlobalStates.sidebarLeftScreen === root.screen.name) {
+            const edge = Appearance.sizes.sidebarLeftEdge === "right" ? 2 : 0;
+            reserved[edge] = Math.max(0, reserved[edge] - GlobalStates.sidebarLeftZone);
+        }
+        return reserved;
+    }
     // Per-workspace scale that fits the whole grid on screen: `size` (1–100%)
     // picks how much of the largest-that-fits to use. 100% fills ~90% of the
     // screen; the scale shrinks automatically as rows/columns grow so the grid
@@ -35,11 +45,11 @@ Item {
     property color activeBorderColor: Appearance.launcherContent.colSecondaryOnTile
 
     property real workspaceImplicitWidth: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.height - monitorData?.reserved[0] - monitorData?.reserved[2]) * root.scale / monitor.scale) :
-        ((monitor.width - monitorData?.reserved[0] - monitorData?.reserved[2]) * root.scale / monitor.scale)
+        ((monitor.height - root.previewReserved[0] - root.previewReserved[2]) * root.scale / monitor.scale) :
+        ((monitor.width - root.previewReserved[0] - root.previewReserved[2]) * root.scale / monitor.scale)
     property real workspaceImplicitHeight: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.width - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale) :
-        ((monitor.height - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale)
+        ((monitor.width - root.previewReserved[1] - root.previewReserved[3]) * root.scale / monitor.scale) :
+        ((monitor.height - root.previewReserved[1] - root.previewReserved[3]) * root.scale / monitor.scale)
     // Nothing in here is rounder than the dock. The workspaces on the grid's
     // outside edge take its roundness outright; the corners inside the grid,
     // and the windows drawn within them further down, keep their own smaller
@@ -239,8 +249,9 @@ Item {
                     property int workspaceRowIndex: getWsRow(windowData?.workspace.id)
                     xOffset: (root.workspaceImplicitWidth + workspaceSpacing) * workspaceColIndex
                     yOffset: (root.workspaceImplicitHeight + workspaceSpacing) * workspaceRowIndex
-                    property real xWithinWorkspaceWidget: Math.max((windowData?.at[0] - (monitor?.x ?? 0) - monitorData?.reserved[0]) * root.scale, 0)
-                    property real yWithinWorkspaceWidget: Math.max((windowData?.at[1] - (monitor?.y ?? 0) - monitorData?.reserved[1]) * root.scale, 0)
+                    workspaceReserved: monitorId === root.monitor?.id ? root.previewReserved : (monitorData?.reserved ?? [0, 0, 0, 0])
+                    property real xWithinWorkspaceWidget: Math.max((windowData?.at[0] - (monitor?.x ?? 0) - workspaceReserved[0]) * root.scale, 0)
+                    property real yWithinWorkspaceWidget: Math.max((windowData?.at[1] - (monitor?.y ?? 0) - workspaceReserved[1]) * root.scale, 0)
 
                     // Radius
                     property real minRadius: Math.min(Appearance.rounding.small, root.largeWorkspaceRadius)
@@ -334,7 +345,7 @@ Item {
                                 // drop maps into that room; spreading it over the whole screen put a
                                 // window dropped near the top under the bar. The config turns the
                                 // spot into the move to make, with the title bar kept within reach.
-                                const reserved = monitorData?.reserved ?? [0, 0, 0, 0]
+                                const reserved = window.workspaceReserved
                                 const roomX = reserved[0] + percentageX * (root.screen.width - reserved[0] - reserved[2])
                                 const roomY = reserved[1] + percentageY * (root.screen.height - reserved[1] - reserved[3])
                                 Hyprland.dispatch(`MainstreamFloatMoveWithinReach("address:${window.windowData?.address}", ${Math.round(roomX)}, ${Math.round(roomY)})`)
@@ -359,6 +370,28 @@ Item {
                             alternativeVisibleCondition: dragArea.containsMouse && !window.Drag.active && !window.closing
                             text: `${windowData?.title}\n[${windowData?.class}] ${windowData?.xwayland ? "[XWayland] " : ""}`
                         }
+                    }
+                }
+            }
+
+            Repeater {
+                model: root.workspacesShown
+                delegate: WorkspaceSidebarPreview {
+                    required property int index
+                    readonly property int workspaceId: root.workspaceGroup * root.workspacesShown + index + 1
+                    visible: hasPreviews && root.windows.some(window => window.mapped && !window.hidden && window.workspace.id === workspaceId)
+                    screenName: root.screen.name
+                    previewScale: root.scale
+                    originX: root.previewReserved[0]
+                    originY: root.previewReserved[1]
+                    x: (root.workspaceImplicitWidth + root.workspaceSpacing) * root.getWsColumn(workspaceId)
+                    y: (root.workspaceImplicitHeight + root.workspaceSpacing) * root.getWsRow(workspaceId)
+                    width: root.workspaceImplicitWidth
+                    height: root.workspaceImplicitHeight
+                    z: root.windowZ + 10
+                    onActivated: {
+                        GlobalStates.overviewOpen = false;
+                        Hyprland.dispatch(`hl.dsp.focus({ workspace = ${workspaceId} })`);
                     }
                 }
             }
