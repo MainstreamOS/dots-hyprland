@@ -268,7 +268,8 @@ ContentPage {
         }
 
         ConfigRow {
-            
+            visible: !root.island
+
             ContentSubsection {
                 title: Translation.tr("Corner style")
                 visible: !root.island
@@ -309,20 +310,16 @@ ContentPage {
     // round is the one on screen — a slider for an edge the bar isn't drawing
     // would move nothing.
     ContentSection {
+        id: shapeSection
         icon: "rounded_corner"
         title: Translation.tr("Shape")
-        // A header over an empty room: with no style that shapes a surface
-        // active and Pills off, every control here is put away, so the section
-        // goes with them. Unless a radius still holds a non-stock value, which
-        // keeps the reset within reach of the state it exists to clear.
-        visible: (root.island ? Appearance.sizes.islandShape !== "rect" : Appearance.sizes.barFloats)
-            || (!root.island && !Config.options.bar.borderless)
-            || (!root.island && Config.options.bar.widgetRadius >= 0)
-            || Config.options.bar.floatRadius >= 0
-            || (!root.island && (Config.options.bar.floatWidth >= 0 || Config.options.bar.notchWidth >= 0))
+        readonly property bool surfaceShape: Appearance.sizes.barFloats
+        readonly property bool widgetShape: !root.island && !Config.options.bar.borderless
+        // Saved values from other styles must not leave an empty section.
+        visible: shapeSection.surfaceShape || shapeSection.widgetShape
 
         ConfigSwitch {
-            visible: Appearance.sizes.barFloats && !root.island
+            visible: shapeSection.surfaceShape && !root.island
             buttonIcon: "view_column_2"
             text: Translation.tr("Split into three")
             checked: Config.options.bar.floatSplit
@@ -335,7 +332,7 @@ ContentPage {
         // and the strip has nowhere left to put them.
         ConfigSlider {
             text: Config.options.bar.floatSplit ? Translation.tr("Spread") : Translation.tr("Width")
-            visible: Appearance.sizes.barFloats && !root.island
+            visible: shapeSection.surfaceShape && !root.island
             stopIndicatorValues: [Appearance.sizes.barFloatWidthMax]
             buttonIcon: "width"
             // The floor chases the widgets, so a crowded strip can push it to
@@ -354,7 +351,7 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Corner roundness")
-            visible: Appearance.sizes.barFloats
+            visible: shapeSection.surfaceShape
             stopIndicatorValues: [Appearance.rounding.barFloatStock]
             buttonIcon: "rounded_corner"
             from: 0
@@ -369,7 +366,7 @@ ContentPage {
 
         ConfigSlider {
             text: Translation.tr("Widget pills")
-            visible: !root.island && !Config.options.bar.borderless
+            visible: shapeSection.widgetShape
             stopIndicatorValues: [Appearance.rounding.barWidgetStock]
             buttonIcon: "rounded_corner"
             from: 0
@@ -382,15 +379,12 @@ ContentPage {
             }
         }
 
-        // Landing a slider on its mark freezes today's stock number; this
-        // hands the radius back to the interface outright, so if what it
-        // decides ever moves, a reset bar moves with it. Checked flat rather
-        // than by the active style, because a radius set under one style
-        // waits out the others.
+        // Only offer a reset for controls the current style actually shows.
         ConfigResetButton {
-            visible: (!root.island && Config.options.bar.widgetRadius >= 0)
-                || Config.options.bar.floatRadius >= 0
-                || (!root.island && (Config.options.bar.floatWidth >= 0 || Config.options.bar.notchWidth >= 0))
+            visible: (shapeSection.widgetShape && Config.options.bar.widgetRadius >= 0)
+                || (shapeSection.surfaceShape && Config.options.bar.floatRadius >= 0)
+                || (!root.island && shapeSection.surfaceShape
+                    && Config.options.bar[Appearance.sizes.barIsNotch ? "notchWidth" : "floatWidth"] >= 0)
             Layout.leftMargin: 8
             Layout.topMargin: 2
             buttonText: Translation.tr("Reset to default shape")
