@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "次を要約してください: %1",
   "Switch AI model": "AIモデルを切り替え",
   "The clipboard text was cut to 50,000 characters.": "クリップボードのテキストは50,000文字に切り詰められました。",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "モデルがこのリクエストを拒否しました。",
   "Thinking Process (%1)...": "思考プロセス（%1）...",
   "Thinking Process...": "思考プロセス...",

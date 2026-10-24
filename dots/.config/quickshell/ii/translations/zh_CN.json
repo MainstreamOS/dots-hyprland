@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "请总结以下内容：%1",
   "Switch AI model": "切换 AI 模型",
   "The clipboard text was cut to 50,000 characters.": "剪贴板文本已被截断为 50,000 个字符。",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "模型拒绝了此请求。",
   "Thinking Process (%1)...": "思考过程（%1）...",
   "Thinking Process...": "思考过程...",

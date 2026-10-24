@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Résumez ceci : %1",
   "Switch AI model": "Changer de modèle d'IA",
   "The clipboard text was cut to 50,000 characters.": "Le texte du presse-papiers a été tronqué à 50 000 caractères.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "Le modèle a refusé cette requête.",
   "Thinking Process (%1)...": "Processus de réflexion (%1)...",
   "Thinking Process...": "Processus de réflexion...",

@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Bunu özetle: %1",
   "Switch AI model": "Yapay zeka modelini değiştir",
   "The clipboard text was cut to 50,000 characters.": "Pano metni 50.000 karaktere kısaltıldı.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "Model bu isteği reddetti.",
   "Thinking Process (%1)...": "Düşünme Süreci (%1)...",
   "Thinking Process...": "Düşünme Süreci...",

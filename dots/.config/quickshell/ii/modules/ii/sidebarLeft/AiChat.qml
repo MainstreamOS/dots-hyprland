@@ -3,6 +3,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import qs.modules.common.utils
 import qs.modules.ii.sidebarLeft.aiChat
 import QtQuick
 import QtQuick.Controls
@@ -120,20 +121,6 @@ Item {
             return false;
         Ai.addMessage(Translation.tr("Execution mode set to %1").arg(AiModes.name(id)), Ai.interfaceRole);
         return true;
-    }
-
-    // The clipboard can hold a whole log; laying out megabytes in the input
-    // would stall the sidebar.
-    function clipboardTextCapped(): string {
-        const text = Quickshell.clipboardText ?? "";
-        if (text.length <= root.clipboardInsertLimit)
-            return text;
-        let end = root.clipboardInsertLimit;
-        const last = text.charCodeAt(end - 1);
-        if (last >= 0xD800 && last <= 0xDBFF)
-            end -= 1;
-        root.postNotice(Translation.tr("The clipboard text was cut to 50,000 characters."));
-        return text.slice(0, end);
     }
 
     function formatTokenCount(count): string {
@@ -394,23 +381,14 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         return sent;
     }
 
-    Process {
-        id: decodeImageAndAttachProc
-        property string imageDecodePath: Directories.cliphistDecode
-        property string imageDecodeFileName: "image"
-        property string imageDecodeFilePath: `${imageDecodePath}/${imageDecodeFileName}`
-        function handleEntry(entry: string) {
-            imageDecodeFileName = parseInt(entry.match(/^(\d+)\t/)[1]);
-            decodeImageAndAttachProc.exec(["bash", "-c", '[ -f "$1" ] || printf \'%s\\n\' "$2" | "$3" decode > "$1"',
-                "_", imageDecodeFilePath, entry, Cliphist.cliphistBinary]);
-        }
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                Ai.attachFile(imageDecodeFilePath);
-            } else {
-                console.error("[AiChat] Failed to decode image in clipboard content");
-            }
-        }
+    ClipboardPaste {
+        id: clipboardPaste
+        target: messageInputField
+        context: String(Ai._loadGeneration)
+        textLimit: root.clipboardInsertLimit
+        onFilesReady: paths => Ai.attachFile(paths[0])
+        onFailed: message => root.postNotice(message)
+        onTruncated: root.postNotice(Translation.tr("The clipboard text was cut to 50,000 characters."))
     }
 
     Process {
@@ -1797,6 +1775,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                     StyledTextArea { // The actual TextArea (inside ScrollView to enable scrolling)
                         id: messageInputField
+                        pasteHandler: plain => clipboardPaste.request(plain)
                         implicitWidth: 0
                         implicitHeight: contentHeight + topPadding + bottomPadding
                         width: inputScrollView.availableWidth
@@ -1978,35 +1957,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     messageInputField.accept();
                                     event.accepted = true;
                                 }
-                            } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_V) {
-                                // Intercept Ctrl+V to handle image/file pasting
-                                if (event.modifiers & Qt.ShiftModifier) {
-                                    // Let Shift+Ctrl+V = plain paste
-                                    event.accepted = true;
-                                    if (messageInputField.readOnly)
-                                        return;
-                                    const pasted = root.clipboardTextCapped();
-                                    if (messageInputField.selectedText.length > 0)
-                                        messageInputField.remove(messageInputField.selectionStart, messageInputField.selectionEnd);
-                                    messageInputField.insert(messageInputField.cursorPosition, pasted);
-                                    return;
-                                }
-                                // Try image paste first
-                                const currentClipboardEntry = Cliphist.entries[0];
-                                const cleanCliphistEntry = StringUtils.cleanCliphistEntry(currentClipboardEntry);
-                                if (/^\d+\t\[\[.*binary data.*\d+x\d+.*\]\]$/.test(currentClipboardEntry)) {
-                                    // First entry = currently copied entry = image?
-                                    decodeImageAndAttachProc.handleEntry(currentClipboardEntry);
-                                    event.accepted = true;
-                                    return;
-                                } else if (cleanCliphistEntry.startsWith("file://")) {
-                                    // First entry = currently copied entry = image?
-                                    const fileName = decodeURIComponent(cleanCliphistEntry);
-                                    Ai.attachFile(fileName);
-                                    event.accepted = true;
-                                    return;
-                                }
-                                event.accepted = false; // No image, let text pasting proceed
                             } else if (event.key === Qt.Key_Escape) {
                                 if (voiceProc.running) {
                                     voiceProc.cancelRecording();

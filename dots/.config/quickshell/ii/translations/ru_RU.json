@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Кратко перескажи это: %1",
   "Switch AI model": "Сменить ИИ-модель",
   "The clipboard text was cut to 50,000 characters.": "Текст из буфера обмена обрезан до 50 000 символов.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "Модель отклонила этот запрос.",
   "Thinking Process (%1)...": "Процесс размышления (%1)...",
   "Thinking Process...": "Процесс размышления...",

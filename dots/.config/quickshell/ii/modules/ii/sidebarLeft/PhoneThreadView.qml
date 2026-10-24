@@ -3,6 +3,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import qs.modules.common.utils
 import qs.modules.ii.sidebarLeft.aiChat
 import "../../../services/PhoneReactions.js" as PhoneReactions
 import QtQuick
@@ -69,6 +70,17 @@ Item {
         const draft = root.drafts[key] ?? {text: "", attachments: [], reply: null};
         root.drafts = Object.assign({}, root.drafts, {[key]: Object.assign({}, draft, {attachments: draft.attachments.concat([path])})});
     }
+    ClipboardPaste {
+        id: clipboardPaste
+        target: input
+        context: root.draftKey()
+        onFilesReady: paths => {
+            root.attachments = root.attachments.concat(paths.filter(path => !root.attachments.includes(path)));
+        }
+        onFailed: message => root.notice(message)
+        onTruncated: root.notice(Translation.tr("The clipboard text was cut to 50,000 characters."))
+    }
+
     property string gifTarget: ""
 
     function saveDraft(): void {
@@ -1899,6 +1911,7 @@ Item {
                     }
                     StyledTextArea {
                         id: input
+                        pasteHandler: plain => clipboardPaste.request(plain)
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         verticalAlignment: TextEdit.AlignVCenter

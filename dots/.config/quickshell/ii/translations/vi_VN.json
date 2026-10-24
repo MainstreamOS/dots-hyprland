@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Hãy tóm tắt nội dung này: %1",
   "Switch AI model": "Đổi model AI",
   "The clipboard text was cut to 50,000 characters.": "Văn bản trong bộ nhớ tạm đã bị cắt còn 50.000 ký tự.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "Model đã từ chối yêu cầu này.",
   "Thinking Process (%1)...": "Quá trình suy nghĩ (%1)...",
   "Thinking Process...": "Quá trình suy nghĩ...",

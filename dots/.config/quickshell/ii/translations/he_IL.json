@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "סכם את זה: %1",
   "Switch AI model": "החלף מודל בינה מלאכותית",
   "The clipboard text was cut to 50,000 characters.": "הטקסט מלוח ההעתקה נחתך ל-50,000 תווים.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "המודל סירב לבקשה הזו.",
   "Thinking Process (%1)...": "תהליך חשיבה (%1)...",
   "Thinking Process...": "תהליך חשיבה...",

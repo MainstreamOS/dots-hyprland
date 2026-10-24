@@ -22,16 +22,23 @@ ContextMenuPopup {
     contentItem: ColumnLayout {
         spacing: 0
 
+        // Mouse focus would clear the field's selection and disable Cut/Copy
+        // before the button finishes its click.
         ContextMenuItem {
+            focusPolicy: Qt.TabFocus
             iconName: "content_cut"
             label: Translation.tr("Cut")
             enabled: !root.secret && !root.target.readOnly && root.target.selectedText.length > 0
             onClicked: {
-                root.target.cut()
+                if (typeof root.target.cutSelection === "function")
+                    root.target.cutSelection()
+                else
+                    root.target.cut()
                 root.close()
             }
         }
         ContextMenuItem {
+            focusPolicy: Qt.TabFocus
             iconName: "content_copy"
             label: Translation.tr("Copy")
             enabled: !root.secret && root.target.selectedText.length > 0
@@ -41,11 +48,15 @@ ContextMenuPopup {
             }
         }
         ContextMenuItem {
+            focusPolicy: Qt.TabFocus
             iconName: "content_paste"
             label: Translation.tr("Paste")
-            enabled: !root.target.readOnly && root.target.canPaste
+            enabled: !root.target.readOnly && (typeof root.target.pasteHandler === "function" || root.target.canPaste)
             onClicked: {
-                root.target.paste()
+                if (typeof root.target.pasteHandler === "function")
+                    root.target.pasteHandler(false)
+                else
+                    root.target.paste()
                 root.close()
             }
         }
@@ -53,6 +64,7 @@ ContextMenuPopup {
         ContextMenuSeparator {}
 
         ContextMenuItem {
+            focusPolicy: Qt.TabFocus
             iconName: "select_all"
             label: Translation.tr("Select all")
             enabled: root.target.length > 0

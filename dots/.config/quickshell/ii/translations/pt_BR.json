@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Resuma isto: %1",
   "Switch AI model": "Trocar modelo de IA",
   "The clipboard text was cut to 50,000 characters.": "O texto da área de transferência foi cortado em 50.000 caracteres.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "O modelo recusou esta solicitação.",
   "Thinking Process (%1)...": "Processo de raciocínio (%1)...",
   "Thinking Process...": "Processo de raciocínio...",

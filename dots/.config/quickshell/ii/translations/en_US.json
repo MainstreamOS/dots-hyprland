@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Summarize this: %1",
   "Switch AI model": "Switch AI model",
   "The clipboard text was cut to 50,000 characters.": "The clipboard text was cut to 50,000 characters.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "The model declined this request.",
   "Thinking Process (%1)...": "Thinking Process (%1)...",
   "Thinking Process...": "Thinking Process...",

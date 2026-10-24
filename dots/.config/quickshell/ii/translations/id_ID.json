@@ -2718,6 +2718,7 @@
   "Summarize this: %1": "Ringkas ini: %1",
   "Switch AI model": "Ganti model AI",
   "The clipboard text was cut to 50,000 characters.": "Teks papan klip dipotong menjadi 50.000 karakter.",
+  "Could not read the clipboard. Try copying it again.": "Could not read the clipboard. Try copying it again.",
   "The model declined this request.": "Model menolak permintaan ini.",
   "Thinking Process (%1)...": "Proses Berpikir (%1)...",
   "Thinking Process...": "Proses Berpikir...",
