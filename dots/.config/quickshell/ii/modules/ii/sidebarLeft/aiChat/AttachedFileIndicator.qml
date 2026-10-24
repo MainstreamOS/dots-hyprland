@@ -125,7 +125,9 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             sourceComponent: Item {
                 implicitHeight: root.imageHeight * root.scale
-                implicitWidth: imagePreview.implicitWidth
+                // The still image has no source for GIFs, so its implicit
+                // width is zero even while the animated preview is playing.
+                implicitWidth: root.imageWidth * root.scale
 
                 AnimatedImage {
                     id: gifPreview
