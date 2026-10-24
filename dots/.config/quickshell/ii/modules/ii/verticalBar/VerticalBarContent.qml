@@ -77,6 +77,10 @@ Item { // Bar content region
     // flattening pass and the texture it costs.
     readonly property bool notchSeamFix: notchFlares
         && Appearance.colors.colBarBackground.a < 1
+    // Fade the outline with the notch, using the bar's own material.
+    readonly property color surfaceOutline: root.notchSeamFix
+        ? ColorUtils.applyAlpha(Appearance.colors.colBarBackgroundBorder, 1)
+        : Appearance.colors.colBarBackgroundBorder
     readonly property bool floatSplit: root.floatStyles
         && Config.options.bar.floatSplit
     readonly property real floatPad: Appearance.rounding.screenRounding
@@ -419,12 +423,14 @@ Item { // Bar content region
         implicitSize: Appearance.rounding.barFloat
         color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
             : Appearance.colors.colBarBackground
+        outlineWidth: Config.options.bar.showBackground ? 1 : 0
+        outlineColor: root.surfaceOutline
     }
 
     component BarEndFlares: Item {
         BarFlare { // Above the strip
             anchors.bottom: parent.top
-            anchors.bottomMargin: -1
+            anchors.bottomMargin: -2
             anchors.left: !Config.options.bar.bottom ? parent.left : undefined
             anchors.right: Config.options.bar.bottom ? parent.right : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
@@ -432,7 +438,7 @@ Item { // Bar content region
         }
         BarFlare { // Below it
             anchors.top: parent.bottom
-            anchors.topMargin: -1
+            anchors.topMargin: -2
             anchors.left: !Config.options.bar.bottom ? parent.left : undefined
             anchors.right: Config.options.bar.bottom ? parent.right : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.TopRight
@@ -493,11 +499,9 @@ Item { // Bar content region
                 bottomLeftRadius: Config.options.bar.bottom ? floatSurface.bottomEndRadius : floatSurface.edgeCornerRadius
                 topRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.topEndRadius
                 bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.bottomEndRadius
-                // The curves are drawn as their own pieces and carry no outline,
-                // so an outline on the body would stop in mid air where each one
-                // begins. Hugging means one continuous surface or none.
-                border.width: Config.options.bar.showBackground && !root.isNotch ? 1 : 0
-                border.color: Appearance.colors.colBarBackgroundBorder
+                // The end curves continue this outline around the notch.
+                border.width: Config.options.bar.showBackground ? 1 : 0
+                border.color: root.surfaceOutline
 
                 Loader {
                     anchors.fill: parent
@@ -604,11 +608,9 @@ Item { // Bar content region
         bottomLeftRadius: Config.options.bar.bottom ? barBackground.endRadius : barBackground.edgeCornerRadius
         topRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
         bottomRightRadius: Config.options.bar.bottom ? barBackground.edgeCornerRadius : barBackground.endRadius
-        // No outline while the curves at the ends are drawn beside the body:
-        // they carry none of their own, so the body's would stop in mid air
-        // where each one begins.
-        border.width: Config.options.bar.cornerStyle === 1 && Config.options.bar.showBackground ? 1 : 0
-        border.color: Appearance.colors.colBarBackgroundBorder
+        // The end curves continue this outline around the notch.
+        border.width: root.floatStyles && Config.options.bar.showBackground ? 1 : 0
+        border.color: root.surfaceOutline
 
         Loader {
             anchors.fill: parent
