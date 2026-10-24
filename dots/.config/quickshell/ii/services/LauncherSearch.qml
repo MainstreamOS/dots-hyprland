@@ -15,6 +15,28 @@ Singleton {
     id: root
 
     property string query: ""
+    property string pasteTargetAddress: ""
+
+    function activeWindowAddress() {
+        const top = ToplevelManager.activeToplevel;
+        return top?.HyprlandToplevel ? `0x${top.HyprlandToplevel.address}` : "";
+    }
+
+    Connections {
+        target: GlobalStates
+        function onOverviewOpenChanged() {
+            // Layer-shell focus does not change activeToplevel. Remember the
+            // app before the picker closes and focus follows the pointer.
+            if (GlobalStates.overviewOpen) root.pasteTargetAddress = root.activeWindowAddress();
+        }
+    }
+
+    Connections {
+        target: IslandLauncher
+        function onOpenedChanged() {
+            if (IslandLauncher.opened) root.pasteTargetAddress = root.activeWindowAddress();
+        }
+    }
 
     function ensurePrefix(prefix) {
         if ([Config.options.search.prefix.action, Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis, Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch,].some(i => root.query.startsWith(i))) {
@@ -247,32 +269,13 @@ Singleton {
                     verb: Translation.tr("Paste"),
                     type: typeLabel,
                     execute: () => {
+                        // Read the saved target only on selection, so changing
+                        // focus does not rebuild the emoji result objects.
+                        const target = root.pasteTargetAddress || root.activeWindowAddress();
                         Emojis.recordUsage(emoji);
                         Quickshell.clipboardText = emoji;
-                        // Capture the underlying toplevel's address now,
-                        // BEFORE the launcher's close animation lets
-                        // Hyprland's "last window" pointer drift to some
-                        // other toplevel (which is what focuscurrentorlast
-                        // was hitting — wrong app every time).
-                        // ToplevelManager.activeToplevel tracks
-                        // wlr-foreign-toplevel-management, which ignores
-                        // layer-shell focus, so it still points at the
-                        // app the user was on when they hit Super+. .
-                        const top = ToplevelManager.activeToplevel;
-                        const addr = top && top.HyprlandToplevel ? `0x${top.HyprlandToplevel.address}` : "";
-                        const emojiArg = StringUtils.shellSingleQuoteEscape(emoji);
-                        // Poll activewindow until focus actually lands on the
-                        // captured toplevel — a fixed sleep was racy under load.
-                        // Ceiling is 25 × 20ms = 500ms; we wtype anyway after.
-                        const cmd = addr
-                            ? `hyprctl dispatch 'hl.dsp.focus({ window = "address:${addr}" })' >/dev/null 2>&1; `
-                              + `for _ in $(seq 1 25); do `
-                              + `[ "$(hyprctl activewindow -j 2>/dev/null | jq -r .address 2>/dev/null)" = "${addr}" ] && break; `
-                              + `sleep 0.02; `
-                              + `done; `
-                              + `wtype -- '${emojiArg}'`
-                            : `sleep ${Cliphist.pasteDelay} && wtype -- '${emojiArg}'`;
-                        Quickshell.execDetached(["bash", "-c", cmd]);
+                        Quickshell.execDetached(["python3", Quickshell.shellPath("scripts/clipboard/insert-text.py"),
+                            "--window", target, "--", emoji]);
                     }
                 });
             }
