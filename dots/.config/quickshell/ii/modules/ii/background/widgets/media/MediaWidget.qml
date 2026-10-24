@@ -24,7 +24,7 @@ AbstractBackgroundWidget {
 
     readonly property var playerList: MprisController.players
     property MprisPlayer currentPlayer: MprisController.activePlayer
-    property var artUrl: currentPlayer?.trackArtUrl
+    property var artUrl: currentPlayer?.trackArtUrl ?? ""
     property string artDownloadLocation: Directories.coverArt
     property string artFileName: Qt.md5(artUrl)
     property string artFilePath: `${artDownloadLocation}/${artFileName}`
@@ -94,8 +94,10 @@ AbstractBackgroundWidget {
 
     property string displayedArtFilePath: {
         if (!root.artUrl || root.artReloading) return ""
-        if (root.artUrl.startsWith("file://")) return root.artUrl
-        return Qt.resolvedUrl(artFilePath)
+        if (root.artUrl.startsWith("data:") || root.artUrl.startsWith("file:/")) return root.artUrl
+        if (root.artUrl.startsWith("/")) return FileUtils.fileUrl(root.artUrl)
+        if (root.artUrl.startsWith("http://") || root.artUrl.startsWith("https://")) return Qt.resolvedUrl(artFilePath)
+        return ""
     }
     onDisplayedArtFilePathChanged: root.artMissing = false
 
@@ -105,8 +107,9 @@ AbstractBackgroundWidget {
     onArtFilePathChanged: updateArt()
 
     function updateArt() {
-        if (!root.artUrl || root.artUrl.length === 0 || root.artUrl.startsWith("file://"))
-            return
+        if (!root.artUrl.startsWith("http://") && !root.artUrl.startsWith("https://")) return
+        // Finish the current atomic fetch before starting the newest cover.
+        if (coverArtDownloader.running) return
         coverArtDownloader.targetFile = root.artUrl
         coverArtDownloader.artFilePath = root.artFilePath
         coverArtDownloader.running = true
@@ -120,6 +123,10 @@ AbstractBackgroundWidget {
         // Art that was missing when the images looked is loaded again once it
         // has arrived; a failed download leaves the placeholder.
         onExited: (exitCode, exitStatus) => {
+            if (coverArtDownloader.targetFile !== root.artUrl) {
+                root.updateArt()
+                return
+            }
             if (exitCode === 0 && root.artMissing) {
                 root.artReloading = true
                 Qt.callLater(() => root.artReloading = false)
