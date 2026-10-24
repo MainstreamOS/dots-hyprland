@@ -59,7 +59,12 @@ Singleton {
         "America/Winnipeg", "America/Toronto", "America/Halifax", "America/St_Johns"
     ]
 
+    property var systemTimezones: []
+    readonly property bool active: Config.options.background.widgets.worldClock.enable
+
     readonly property var timezoneList: {
+        if (root.systemTimezones.length > 0)
+            return Array.from(new Set(root.systemTimezones.concat(Array.from(root.timezones)))).sort()
         if (typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function") {
             try {
                 return Intl.supportedValuesOf("timeZone")
@@ -70,11 +75,22 @@ Singleton {
         return root.fallbackTimezones
     }
 
+    Process {
+        running: root.active && root.systemTimezones.length === 0
+        command: ["python3", Quickshell.shellPath("scripts/widgets/world-clock.py"), "--list"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (!text.trim()) return
+                root.systemTimezones = JSON.parse(text)
+            }
+        }
+    }
+
     function labelFor(tz) {
         const parts = tz.split("/")
         const city = (parts[parts.length - 1] ?? tz).replace(/_/g, " ")
         const region = parts[0] ?? ""
-        return region ? `${city} (${region})` : city
+        return parts.length > 1 ? `${city} (${region})` : city
     }
 
     readonly property var comboModel: root.timezoneList.map(tz => ({ label: root.labelFor(tz), tz: tz, icon: "" }))
@@ -87,8 +103,8 @@ Singleton {
 
     // How many clocks the widget shows, and the zone behind each one. The
     // stored list can be shorter than the count (an older config, or a count
-    // raised in Settings), so the defaults fill in the rest, and a zone name
-    // ends up inside a shell command below, so only real zone names pass.
+    // raised in Settings), so the defaults fill in the rest. Malformed
+    // stored names fall back to a default; unknown zones show a placeholder.
     readonly property int clockCount: Math.min(Math.max(Config.options?.background?.widgets?.worldClock?.clockCount ?? 4, 1), root.maxClocks)
     readonly property list<string> timezones: {
         const stored = Config.options?.background?.widgets?.worldClock?.timezones ?? []
@@ -116,6 +132,7 @@ Singleton {
     }
 
     onTimezonesChanged: root.refreshOffsets()
+    onActiveChanged: root.refreshOffsets()
     Component.onCompleted: root.refreshOffsets()
 
     readonly property string ampmToken: {
@@ -129,51 +146,51 @@ Singleton {
     property var now: new Date()
     Timer {
         interval: 1000
-        running: true
+        running: root.active
         repeat: true
+        triggeredOnStart: true
         onTriggered: root.now = new Date()
     }
 
-    property var offsetsMinutes: []
+    property var offsetCache: ({})
     property bool offsetsStale: false
 
     // The query is started again only once the previous run has ended:
     // stopping and starting a Process in the same breath can lose the start,
     // which left a newly picked city on the old city's offset.
     function refreshOffsets() {
+        if (!root.active) return
         if (offsetProc.running) {
             root.offsetsStale = true
             return
         }
+        offsetProc.zones = Array.from(root.timezones)
         offsetProc.running = true
     }
 
     Timer {
         interval: 5 * 60 * 1000
-        running: true
+        running: root.active
         repeat: true
         onTriggered: root.refreshOffsets()
     }
 
     Process {
         id: offsetProc
-        command: ["bash", "-c", root.timezones.map(tz => `TZ='${tz}' date +%z`).join("; ")]
+        property var zones: []
+        command: ["python3", Quickshell.shellPath("scripts/widgets/world-clock.py"), "--", ...zones]
         stdout: StdioCollector {
-            id: offsetCollector
             onStreamFinished: {
-                const lines = offsetCollector.text.trim().split("\n")
-                root.offsetsMinutes = lines.map(line => {
-                    const m = line.trim().match(/^([+-])(\d{2})(\d{2})$/)
-                    if (!m) return 0
-                    const sign = m[1] === "-" ? -1 : 1
-                    return sign * (parseInt(m[2]) * 60 + parseInt(m[3]))
-                })
+                if (!text.trim()) return
+                // Results belong to the queried zone, even if the user has
+                // chosen another city while the helper was running.
+                root.offsetCache = Object.assign({}, root.offsetCache, JSON.parse(text))
             }
         }
         onExited: {
             if (root.offsetsStale) {
                 root.offsetsStale = false
-                offsetProc.running = true
+                root.refreshOffsets()
             }
         }
     }
@@ -183,12 +200,14 @@ Singleton {
     }
 
     function cityDate(index) {
-        const offsetMin = root.offsetsMinutes[index] ?? 0
+        const offsetMin = root.offsetCache[root.timezones[index]]
+        if (offsetMin === undefined || offsetMin === null) return null
         return new Date(root.now.getTime() + offsetMin * 60000)
     }
 
     function timeStringFor(index) {
         const cd = root.cityDate(index)
+        if (!cd) return "--:--"
         let h = cd.getUTCHours()
         let m = cd.getUTCMinutes()
         if (root.use24h) {
@@ -202,7 +221,8 @@ Singleton {
     }
 
     function offsetLabelFor(index) {
-        const offsetMin = root.offsetsMinutes[index] ?? 0
+        const offsetMin = root.offsetCache[root.timezones[index]]
+        if (offsetMin === undefined || offsetMin === null) return "--"
         const sign = offsetMin >= 0 ? "+" : "-"
         const abs = Math.abs(offsetMin)
         const h = Math.floor(abs / 60)
@@ -212,6 +232,7 @@ Singleton {
 
     function isDaytimeFor(index) {
         const cd = root.cityDate(index)
+        if (!cd) return true
         const h = cd.getUTCHours()
         return h >= 6 && h < 18
     }
