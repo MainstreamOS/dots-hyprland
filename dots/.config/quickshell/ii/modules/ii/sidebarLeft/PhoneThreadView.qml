@@ -26,7 +26,11 @@ Item {
     property bool fullscreenVideo: false
     property bool fullscreenImage: false
     property var fullscreenMedia: null
-    property bool gifPickerOpen: false
+    property bool composerPickerOpen: false
+    property string pickerDraftKey: ""
+    property string pickerText: ""
+    property int pickerSelectionStart: 0
+    property int pickerSelectionEnd: 0
     readonly property bool recordingVoice: voiceRecordProc.recording
     readonly property int recordingSeconds: voiceRecordProc.seconds
     property var activeReplyMessage: null
@@ -94,7 +98,24 @@ Item {
         input.text = draft?.text || "";
         root.attachments = draft?.attachments?.slice() || [];
         root.activeReplyMessage = draft?.reply || null;
+        root.heldKey = root.draftKey();
     }
+
+    // The conversation the composer's text, files and reply were loaded for.
+    property string heldKey: ""
+    // However the conversation changes, the Island's handoffs included, the
+    // composer is filed under the one it was loaded for before the new one's
+    // draft comes out, so nothing typed for one recipient is sent to another.
+    function switchDraft(): void {
+        if (root.heldKey.length > 0 && root.heldKey !== root.draftKey()) {
+            root.drafts = Object.assign({}, root.drafts, {[root.heldKey]: {
+                text: input.text, attachments: root.attachments.slice(), reply: root.activeReplyMessage
+            }});
+        }
+        root.restoreDraft();
+    }
+    onComposingChanged: root.switchDraft()
+    Component.onCompleted: root.heldKey = root.draftKey()
 
     function quoteSummaryFor(msg): var {
         if (!msg) {
@@ -241,8 +262,33 @@ Item {
         }
     }
 
-    function toggleGifPicker(): void {
-        root.gifPickerOpen = !root.gifPickerOpen;
+    function toggleComposerPicker(): void {
+        if (!root.composerPickerOpen)
+            root.rememberPickerSelection();
+        root.composerPickerOpen = !root.composerPickerOpen;
+    }
+
+    function rememberPickerSelection(): void {
+        root.pickerDraftKey = root.draftKey();
+        root.pickerText = input.text;
+        root.pickerSelectionStart = input.selectionStart;
+        root.pickerSelectionEnd = input.selectionEnd;
+    }
+
+    function insertEmoji(emoji: string): void {
+        if (!input.enabled || input.readOnly || root.pickerDraftKey !== root.draftKey())
+            return;
+        // Searching in the picker moves focus away from the composer; keep
+        // the insertion point unless the draft was edited in the meantime.
+        if (input.activeFocus || root.pickerText !== input.text)
+            root.rememberPickerSelection();
+        const start = root.pickerSelectionStart;
+        if (root.pickerSelectionEnd > start)
+            input.remove(start, root.pickerSelectionEnd);
+        input.insert(start, emoji);
+        input.cursorPosition = start + emoji.length;
+        root.rememberPickerSelection();
+        input.forceActiveFocus();
     }
 
     // A file that cannot be sent right away stays with the message being written.
@@ -254,7 +300,7 @@ Item {
             root.addToDraft(target, path);
             return;
         }
-        root.gifPickerOpen = false;
+        root.composerPickerOpen = false;
         // A picked GIF goes out with the caption through send(), so the draft is
         // cleared only once the phone confirms; if it cannot go, it stays attached.
         if (directSend && !root.composing && !root.pendingSend && root.attachments.length === 0) {
@@ -678,9 +724,15 @@ Item {
             mediaPlayer.source = FileUtils.mediaUrl(path);
             mediaPlayer.play();
         }
+        function onDeviceIdChanged() {
+            root.composerPickerOpen = false;
+            root.switchDraft();
+        }
+        function onReachableChanged() { if (!Phone.reachable) root.composerPickerOpen = false; }
         function onOpenThreadChanged() {
+            root.composerPickerOpen = false;
             root.stopMedia();
-            root.activeReplyMessage = null;
+            root.switchDraft();
             root.threadSearchOpen = false;
             messageList.wasAtBottom = true;
             root.snapToBottom();
@@ -1753,10 +1805,12 @@ Item {
             }
         }
 
-        PhoneGifPicker {
+        PhoneComposerPicker {
             Layout.fillWidth: true
-            visible: root.gifPickerOpen
-            onClosed: root.gifPickerOpen = false
+            visible: root.composerPickerOpen
+            enabled: Phone.reachable && !root.recordingVoice
+            onEmojiChosen: emoji => root.insertEmoji(emoji)
+            onClosed: root.composerPickerOpen = false
             onDownloadStarted: root.gifTarget = root.draftKey()
             onGifChosen: (path, directSend) => root.attachOrSendGif(path, directSend)
         }
@@ -1897,21 +1951,24 @@ Item {
                         implicitHeight: 32
                         buttonRadius: 9
                         enabled: Phone.reachable && !root.recordingVoice
-                        onClicked: root.toggleGifPicker()
+                        focusPolicy: Qt.TabFocus
+                        onClicked: root.toggleComposerPicker()
                         contentItem: MaterialSymbol {
                             anchors.centerIn: parent
                             horizontalAlignment: Text.AlignHCenter
-                            text: "gif_box"
+                            text: "add"
                             iconSize: 18
-                            color: root.gifPickerOpen ? Appearance.colors.colPrimary : (parent.enabled ? Appearance.colors.colSubtext : ColorUtils.transparentize(Appearance.colors.colSubtext, 0.5))
+                            color: root.composerPickerOpen ? Appearance.colors.colPrimary : (parent.enabled ? Appearance.colors.colSubtext : ColorUtils.transparentize(Appearance.colors.colSubtext, 0.5))
                         }
                         StyledToolTip {
-                            text: Translation.tr("Search and send GIFs")
+                            text: Translation.tr("Emojis and GIFs")
                         }
                     }
                     StyledTextArea {
                         id: input
                         pasteHandler: plain => clipboardPaste.request(plain)
+                        onCursorPositionChanged: if (root.composerPickerOpen && activeFocus) root.rememberPickerSelection()
+                        onSelectedTextChanged: if (root.composerPickerOpen && activeFocus) root.rememberPickerSelection()
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         verticalAlignment: TextEdit.AlignVCenter
@@ -1927,8 +1984,8 @@ Item {
                                 root.send();
                                 event.accepted = true;
                             } else if (event.key === Qt.Key_Escape) {
-                                if (root.gifPickerOpen) {
-                                    root.gifPickerOpen = false;
+                                if (root.composerPickerOpen) {
+                                    root.composerPickerOpen = false;
                                     event.accepted = true;
                                 } else if (root.activeReplyMessage !== null) {
                                     root.cancelReply();

@@ -37,7 +37,7 @@ Singleton {
 
     function recordUsage(emoji: string) {
         // Update frequency
-        const map = root.frequencyMap;
+        const map = Object.assign({}, root.frequencyMap);
         map[emoji] = (map[emoji] || 0) + 1;
         root.frequencyMap = map;
 

@@ -20,6 +20,7 @@ Rectangle {
     property bool searching: false
     property bool downloading: false
     property bool targetDirect: false
+    property bool showCloseButton: true
 
     implicitHeight: 290
     radius: Appearance.rounding.normal - 2
@@ -189,6 +190,7 @@ Rectangle {
             }
 
             RippleButton {
+                visible: root.showCloseButton
                 implicitWidth: 32
                 implicitHeight: 32
                 buttonRadius: Appearance.rounding.full
