@@ -701,6 +701,20 @@ Variants {
                 }
             }
 
+            // This spans the screen rather than following wallpaper parallax.
+            // Keep it below the movable cards, in screen coordinates.
+            FadeLoader {
+                shown: Config.options.background.widgets.visualizer.enable
+                sourceComponent: VisualizerWidget {
+                    screenWidth: bgRoot.screen.width
+                    screenHeight: bgRoot.screen.height
+                    scaledScreenWidth: bgRoot.screen.width
+                    scaledScreenHeight: bgRoot.screen.height
+                    wallpaperScale: 1
+                    wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
+                }
+            }
+
             WidgetCanvas {
                 id: widgetCanvas
                 width: parent.width
@@ -734,18 +748,6 @@ Variants {
                         duration: Appearance.animation.elementMove.duration
                         easing.type: Appearance.animation.elementMove.type
                         easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
-                    }
-                }
-
-                FadeLoader {
-                    shown: Config.options.background.widgets.visualizer.enable
-                    sourceComponent: VisualizerWidget {
-                        screenWidth: bgRoot.screen.width
-                        screenHeight: bgRoot.screen.height
-                        scaledScreenWidth: bgRoot.screen.width
-                        scaledScreenHeight: bgRoot.screen.height
-                        wallpaperScale: 1
-                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
                     }
                 }
 
