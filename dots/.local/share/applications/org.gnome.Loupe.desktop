@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Image Viewer
-Exec=sh -c "command -v loupe >/dev/null 2>&1 && exec loupe \\"\\$@\\" || exec flatpak run org.gnome.Loupe \\"\\$@\\"" loupe %U
+Exec=gapplication launch org.gnome.Loupe %U
 Icon=org.gnome.Loupe
 Type=Application
 DBusActivatable=true
