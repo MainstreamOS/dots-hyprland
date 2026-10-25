@@ -8,12 +8,18 @@ import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import "placement.js" as Placement
 
 Item {
     id: root
     required property var screen
+    property real uiScale: 1
+    required property var workspaceLayout
+    property Item dockBackdropSource: null
+    property rect dockBackdropRect: Qt.rect(0, 0, 1, 1)
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     readonly property var toplevels: ToplevelManager.toplevels
     // Clamp to avoid lock-screen temp workspace (2147483647 - N) leaking into UI
@@ -25,47 +31,32 @@ Item {
     property var windowByAddress: HyprlandData.windowByAddress
     property var windowAddresses: HyprlandData.addresses
     property var monitorData: HyprlandData.monitors.find(m => m.id === root.monitor?.id)
-    // The sidebar belongs in the miniature desktop rather than being cropped
-    // away with the bar/dock reservations.
-    readonly property var previewReserved: {
-        const reserved = (root.monitorData?.reserved ?? [0, 0, 0, 0]).slice();
-        if (GlobalStates.sidebarLeftScreen === root.screen.name) {
-            const edge = Appearance.sizes.sidebarLeftEdge === "right" ? 2 : 0;
-            reserved[edge] = Math.max(0, reserved[edge] - GlobalStates.sidebarLeftZone);
-        }
-        return reserved;
-    }
-    // Per-workspace scale that fits the whole grid on screen: `size` (1–100%)
-    // picks how much of the largest-that-fits to use. 100% fills ~90% of the
-    // screen; the scale shrinks automatically as rows/columns grow so the grid
-    // never overflows. The default 5×2 at 100% resolves to the historic 0.18.
-    property real scale: (Config.options.overview.size / 100)
-                         * Math.min(0.9 / Math.max(1, Config.options.overview.columns),
-                                    0.9 / Math.max(1, Config.options.overview.rows))
+    readonly property var previewReserved: workspaceLayout.reserved
+    readonly property real scale: workspaceLayout.previewScale
     property color activeBorderColor: Appearance.launcherContent.colSecondaryOnTile
-
-    property real workspaceImplicitWidth: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.height - root.previewReserved[0] - root.previewReserved[2]) * root.scale / monitor.scale) :
-        ((monitor.width - root.previewReserved[0] - root.previewReserved[2]) * root.scale / monitor.scale)
-    property real workspaceImplicitHeight: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.width - root.previewReserved[1] - root.previewReserved[3]) * root.scale / monitor.scale) :
-        ((monitor.height - root.previewReserved[1] - root.previewReserved[3]) * root.scale / monitor.scale)
-    // Nothing in here is rounder than the dock. The workspaces on the grid's
-    // outside edge take its roundness outright; the corners inside the grid,
-    // and the windows drawn within them further down, keep their own smaller
-    // marks until the dock drops below them and then follow it down.
-    property real largeWorkspaceRadius: Appearance.rounding.dockBody
-    property real smallWorkspaceRadius: Math.min(Appearance.rounding.verysmall, largeWorkspaceRadius)
+    readonly property real workspaceImplicitWidth: workspaceLayout.cellWidth
+    readonly property real workspaceImplicitHeight: workspaceLayout.cellHeight
+    // Use the dock's radius at the reference size, scaling it along with the
+    // workspace outlines, window corners and gaps at other output scales.
+    property real largeWorkspaceRadius: Appearance.rounding.dockBody * uiScale
+    property real smallWorkspaceRadius: Math.min(Appearance.rounding.verysmall * uiScale, largeWorkspaceRadius)
 
     property real workspaceNumberMargin: 80
-    property real workspaceNumberSize: 250 * monitor.scale
+    property real workspaceNumberSize: 250 * (5 / 3) * uiScale
     property int workspaceZ: 0
     property int windowZ: 1
     property int windowDraggingZ: 99999
-    property real workspaceSpacing: 5
+    readonly property real workspaceSpacing: workspaceLayout.gap
 
     property int draggingFromWorkspace: -1
     property int draggingTargetWorkspace: -1
+    property Item dragWindow: null
+    property var dropInfo: null
+    property bool placementPending: false
+    property string placementAddress: ""
+    property int placementAttempts: 0
+    signal focusSearchRequested()
+    signal placementFinished(string address)
 
     // Set by Overview.qml during an app-drawer drag to highlight the hovered workspace
     property int appDragHoverWorkspace: -1
@@ -79,11 +70,112 @@ Item {
         const row = Math.floor(lp.y / cellH)
         if (col < 0 || col >= Config.options.overview.columns) return -1
         if (row < 0 || row >= Config.options.overview.rows) return -1
+        if (lp.x - col * cellW >= root.workspaceImplicitWidth
+                || lp.y - row * cellH >= root.workspaceImplicitHeight) return -1
         return root.workspaceGroup * root.workspacesShown + getWsInCell(row, col)
     }
 
-    implicitWidth: overviewBackground.implicitWidth + Appearance.sizes.elevationMargin * 2
-    implicitHeight: overviewBackground.implicitHeight + Appearance.sizes.elevationMargin * 2
+    function updateWindowDrag(sceneX, sceneY) {
+        const workspace = workspaceAtScenePoint(sceneX, sceneY);
+        draggingTargetWorkspace = workspace;
+        dropInfo = null;
+        if (!dragWindow || workspace < 1) return;
+        const point = windowSpace.mapFromItem(null, sceneX, sceneY);
+        const left = getWsColumn(workspace) * (workspaceImplicitWidth + workspaceSpacing);
+        const top = getWsRow(workspace) * (workspaceImplicitHeight + workspaceSpacing);
+        const reserved = monitorData?.reserved ?? [0, 0, 0, 0];
+        const size = dragWindow.windowData?.size ?? [1, 1];
+        const x = (monitorData?.x ?? 0) + Math.max(reserved[0], Math.min(
+            root.previewReserved[0] + (point.x - left - dragWindow.Drag.hotSpot.x) / scale,
+            screen.width - reserved[2] - size[0]));
+        const y = (monitorData?.y ?? 0) + Math.max(reserved[1], Math.min(
+            root.previewReserved[1] + (point.y - top - dragWindow.Drag.hotSpot.y) / scale,
+            screen.height - reserved[3] - size[1]));
+        let anchor = null, distance = Infinity;
+        if (!dragWindow.windowData?.floating) {
+            for (let i = 0; i < windowRepeater.count; i++) {
+                const tile = windowRepeater.itemAt(i);
+                if (!tile || tile === dragWindow || tile.closing || tile.windowData?.floating
+                        || tile.windowData?.workspace.id !== workspace) continue;
+                const dx = Math.max(tile.initX - point.x, 0, point.x - tile.initX - tile.width);
+                const dy = Math.max(tile.initY - point.y, 0, point.y - tile.initY - tile.height);
+                const d = dx * dx + dy * dy;
+                if (d < distance) { anchor = tile; distance = d; }
+            }
+        }
+        if (!anchor) {
+            dropInfo = { workspace, anchor: "", direction: "", x, y };
+            return;
+        }
+        if (HyprlandData.workspaceById[workspace]?.tiledLayout === "master") {
+            dropInfo = { workspace, anchor: anchor.address, direction: "", x, y,
+                indicator: { x: anchor.initX, y: anchor.initY, width: anchor.width, height: anchor.height } };
+            return;
+        }
+        const rx = (point.x - anchor.initX) / anchor.width;
+        const ry = (point.y - anchor.initY) / anchor.height;
+        const side = rx < 1 / 3 ? 0 : rx > 2 / 3 ? 1 : ry < 0.5 ? 2 : 3;
+        const slot = Math.min(workspaceImplicitWidth, workspaceImplicitHeight) * 0.06;
+        const indicator = side < 2
+            ? { x: anchor.initX + (side === 1 ? anchor.width : 0) - slot / 2,
+                y: top, width: slot, height: workspaceImplicitHeight }
+            : { x: anchor.initX, y: anchor.initY + (side === 3 ? anchor.height : 0) - slot / 2,
+                width: anchor.width, height: slot };
+        // Keep the slot inside its workspace even at the outside edges.
+        indicator.x = Math.max(left, Math.min(left + workspaceImplicitWidth - indicator.width, indicator.x));
+        indicator.y = Math.max(top, Math.min(top + workspaceImplicitHeight - indicator.height, indicator.y));
+        dropInfo = { workspace, anchor: anchor.address, direction: ["l", "r", "u", "d"][side], x, y, indicator };
+    }
+    function placeWindow(window, target) {
+        placementAddress = window.address;
+        placement.command = ["hyprctl", "repl", Placement.script(window.address, target.workspace,
+            target.anchor, target.direction, target.x, target.y)];
+        placementAttempts = 0;
+        placementPending = true;
+        placementStart.restart();
+    }
+    Timer {
+        id: placementStart
+        interval: 32
+        onTriggered: {
+            root.placementAttempts++;
+            placement.running = true;
+        }
+    }
+    Process {
+        id: placement
+        onExited: (code, status) => {
+            if (placementOutput.text.includes("overview-placement-focus-pending") && root.placementAttempts < 4) {
+                placementStart.restart();
+                return;
+            }
+            if (code !== 0 || placementOutput.text.includes("overview-placement-focus-pending"))
+                console.warn("Overview window placement failed:", placementErrors.text || placementOutput.text);
+            root.placementPending = false;
+            HyprlandData.refreshSoon();
+            root.placementFinished(root.placementAddress);
+            if (GlobalStates.overviewOpen) Qt.callLater(() => root.focusSearchRequested());
+        }
+        stdout: StdioCollector { id: placementOutput }
+        stderr: StdioCollector { id: placementErrors }
+    }
+
+    WorkspaceRenamePopup {
+        id: renamePopup
+        onClosed: if (GlobalStates.overviewOpen) root.focusSearchRequested()
+    }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        onTapped: eventPoint => {
+            const point = root.mapToItem(null, eventPoint.position.x, eventPoint.position.y);
+            const workspace = root.workspaceAtScenePoint(point.x, point.y);
+            renamePopup.openFor(workspace, eventPoint.position.x, eventPoint.position.y);
+        }
+    }
+
+    implicitWidth: overviewBackground.implicitWidth + Appearance.sizes.elevationMargin * root.uiScale * 2
+    implicitHeight: overviewBackground.implicitHeight + Appearance.sizes.elevationMargin * root.uiScale * 2
 
     property Component windowComponent: OverviewWindow {}
     property list<OverviewWindow> windowWidgets: []
@@ -98,6 +190,13 @@ Item {
         var normalCol = (ws - 1) % Config.options.overview.columns;
         return (Config.options.overview.orderRightLeft ? Config.options.overview.columns - normalCol - 1 : normalCol);
     }
+    // Top-left, top-right, bottom-left, bottom-right; the grid's outer corners are large.
+    function workspaceRadii(column, row) {
+        const radius = outer => outer ? root.largeWorkspaceRadius : root.smallWorkspaceRadius;
+        const left = column === 0, right = column === Config.options.overview.columns - 1;
+        const top = row === 0, bottom = row === Config.options.overview.rows - 1;
+        return Qt.vector4d(radius(left && top), radius(right && top), radius(left && bottom), radius(right && bottom));
+    }
     function getWsInCell(ri, ci) {
         // 1-indexed workspace, 0-indexed row and column index
         return (Config.options.overview.orderBottomUp ? Config.options.overview.rows - ri - 1 : ri) * Config.options.overview.columns + (Config.options.overview.orderRightLeft ? Config.options.overview.columns - ci - 1 : ci) + 1
@@ -105,18 +204,20 @@ Item {
 
     StyledRectangularShadow {
         target: overviewBackground
-        color: Appearance.colors.colLauncherShadow
+        color: Appearance.sizes.dockShowBackground ? Appearance.colors.colDockShadow : "transparent"
     }
-    Rectangle { // Background
+    LauncherWorkspaceSurface { // Background
         id: overviewBackground
-        property real padding: 10
+        property real padding: 10 * root.uiScale
         anchors.fill: parent
-        anchors.margins: Appearance.sizes.elevationMargin
+        anchors.margins: Appearance.sizes.elevationMargin * root.uiScale
 
         implicitWidth: workspaceColumnLayout.implicitWidth + padding * 2
         implicitHeight: workspaceColumnLayout.implicitHeight + padding * 2
-        radius: Appearance.rounding.dockBody
-        color: Appearance.colors.colLauncherPanel
+        radius: root.largeWorkspaceRadius
+        uiScale: root.uiScale
+        backdropSource: root.dockBackdropSource
+        backdropRect: root.dockBackdropRect
 
         Column { // Workspaces
             id: workspaceColumnLayout
@@ -139,25 +240,23 @@ Item {
                             required property int index
                             property int colIndex: index
                             property int workspaceValue: root.workspaceGroup * root.workspacesShown + getWsInCell(row.index, colIndex)
-                            property color defaultWorkspaceColor: Appearance.launcherContent.colSurfaceContainerLow
-                            property color hoveredWorkspaceColor: ColorUtils.mix(defaultWorkspaceColor, Appearance.launcherContent.colLayer1Hover, 0.1)
+                            property color hoveredWorkspaceColor: ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherContent.colLayer1Hover, 0.1)
                             property color hoveredBorderColor: Appearance.launcherContent.colLayer2Hover
                             property bool hoveredWhileDragging: false
                             property bool appDragHovered: root.appDragHoverWorkspace === workspaceValue
 
                             implicitWidth: root.workspaceImplicitWidth
                             implicitHeight: root.workspaceImplicitHeight
-                            color: (hoveredWhileDragging || appDragHovered) ? hoveredWorkspaceColor : defaultWorkspaceColor
-                            property bool workspaceAtLeft: colIndex === 0
-                            property bool workspaceAtRight: colIndex === Config.options.overview.columns - 1
-                            property bool workspaceAtTop: row.index === 0
-                            property bool workspaceAtBottom: row.index === Config.options.overview.rows - 1
-                            topLeftRadius: (workspaceAtLeft && workspaceAtTop) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                            topRightRadius: (workspaceAtRight && workspaceAtTop) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                            bottomLeftRadius: (workspaceAtLeft && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                            bottomRightRadius: (workspaceAtRight && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                            border.width: 2
-                            border.color: (hoveredWhileDragging || appDragHovered) ? hoveredBorderColor : "transparent"
+                            color: (hoveredWhileDragging || appDragHovered) ? hoveredWorkspaceColor
+                                : ColorUtils.applyAlpha(Appearance.launcherContent.colOnLayer0, 0.035)
+                            readonly property vector4d radii: root.workspaceRadii(colIndex, row.index)
+                            topLeftRadius: radii.x
+                            topRightRadius: radii.y
+                            bottomLeftRadius: radii.z
+                            bottomRightRadius: radii.w
+                            border.width: ((hoveredWhileDragging || appDragHovered) ? 2 : 1) * root.uiScale
+                            border.color: (hoveredWhileDragging || appDragHovered) ? hoveredBorderColor
+                                : ColorUtils.applyAlpha(Appearance.launcherContent.colOutlineVariant, 0.2)
 
                             StyledText {
                                 anchors.centerIn: parent
@@ -210,6 +309,7 @@ Item {
             implicitHeight: workspaceColumnLayout.implicitHeight
 
             Repeater { // Window repeater
+                id: windowRepeater
                 model: ScriptModel {
                     values: {
                         // console.log(JSON.stringify(ToplevelManager.toplevels.values.map(t => t), null, 2))
@@ -228,6 +328,7 @@ Item {
                     property var monitor: HyprlandData.monitors.find(m => m.id == monitorId)
                     property var address: `0x${modelData.HyprlandToplevel.address}`
                     toplevel: modelData
+                    uiScale: root.uiScale
                     monitorData: this.monitor
                     scale: root.scale
                     widgetMonitor: HyprlandData.monitors.find(m => m.id == root.monitor.id)
@@ -254,7 +355,7 @@ Item {
                     property real yWithinWorkspaceWidget: Math.max((windowData?.at[1] - (monitor?.y ?? 0) - workspaceReserved[1]) * root.scale, 0)
 
                     // Radius
-                    property real minRadius: Math.min(Appearance.rounding.small, root.largeWorkspaceRadius)
+                    property real minRadius: Math.min(Appearance.rounding.small * root.uiScale, root.largeWorkspaceRadius)
                     property bool workspaceAtLeft: workspaceColIndex === 0
                     property bool workspaceAtRight: workspaceColIndex === Config.options.overview.columns - 1
                     property bool workspaceAtTop: workspaceRowIndex === 0
@@ -289,6 +390,12 @@ Item {
                             window.settling = false
                         }
                     }
+                    Connections {
+                        target: root
+                        function onPlacementFinished(address) {
+                            if (address === window.address) updateWindowPosition.restart();
+                        }
+                    }
 
                     z: Drag.active ? root.windowDraggingZ : (root.windowZ + windowData?.floating + windowData?.fullscreen * 2)
                     Drag.hotSpot.x: width / 2
@@ -302,7 +409,7 @@ Item {
                         y: window.visibleTop
                         width: Math.max(0, window.visibleRight - window.visibleLeft)
                         height: Math.max(0, window.visibleBottom - window.visibleTop)
-                        enabled: !window.closing
+                        enabled: !window.closing && !root.placementPending
                         hoverEnabled: !window.closing
                         onEntered: hovered = true // For hover color change
                         onExited: hovered = false // For hover color change
@@ -315,6 +422,8 @@ Item {
                             const hotSpotX = mouse.x + dragArea.x
                             const hotSpotY = mouse.y + dragArea.y
                             root.draggingFromWorkspace = windowData?.workspace.id
+                            root.dragWindow = window
+                            root.dropInfo = null
                             window.pressed = true
                             window.Drag.active = true
                             window.Drag.source = window
@@ -322,34 +431,32 @@ Item {
                             window.Drag.hotSpot.y = hotSpotY
                             // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
                         }
+                        onPositionChanged: mouse => {
+                            if (!window.pressed || !drag.active) return;
+                            const point = window.mapToItem(null, mouse.x + dragArea.x, mouse.y + dragArea.y);
+                            root.updateWindowDrag(point.x, point.y);
+                        }
+                        onCanceled: {
+                            window.pressed = false;
+                            window.Drag.active = false;
+                            root.dragWindow = null;
+                            root.dropInfo = null;
+                            root.draggingFromWorkspace = -1;
+                            root.draggingTargetWorkspace = -1;
+                            updateWindowPosition.restart();
+                        }
                         onReleased: (mouse) => {
                             if (mouse.button !== Qt.LeftButton) return
-                            const targetWorkspace = root.draggingTargetWorkspace
-                            window.pressed = false
-                            window.Drag.active = false
-                            root.draggingFromWorkspace = -1
-                            if (targetWorkspace !== -1 && targetWorkspace !== windowData?.workspace.id) {
-                                window.settling = true
-                                Hyprland.dispatch(`hl.dsp.window.move({ workspace = ${targetWorkspace}, follow = false, window = "address:${window.windowData?.address}" })`)
-                                updateWindowPosition.restart()
-                            }
-                            else {
-                                if (!window.windowData?.floating) {
-                                    window.settling = true
-                                    updateWindowPosition.restart()
-                                    return
-                                }
-                                const percentageX = (window.x - xOffset) / root.workspaceImplicitWidth
-                                const percentageY = (window.y - yOffset) / root.workspaceImplicitHeight
-                                // The thumbnail shows the screen less what the panels reserve, so the
-                                // drop maps into that room; spreading it over the whole screen put a
-                                // window dropped near the top under the bar. The config turns the
-                                // spot into the move to make, with the title bar kept within reach.
-                                const reserved = window.workspaceReserved
-                                const roomX = reserved[0] + percentageX * (root.screen.width - reserved[0] - reserved[2])
-                                const roomY = reserved[1] + percentageY * (root.screen.height - reserved[1] - reserved[3])
-                                Hyprland.dispatch(`MainstreamFloatMoveWithinReach("address:${window.windowData?.address}", ${Math.round(roomX)}, ${Math.round(roomY)})`)
-                            }
+                            const target = root.dropInfo;
+                            window.pressed = false;
+                            window.Drag.active = false;
+                            root.draggingFromWorkspace = -1;
+                            root.dragWindow = null;
+                            root.dropInfo = null;
+                            root.draggingTargetWorkspace = -1;
+                            window.settling = true;
+                            if (target) root.placeWindow(window, target);
+                            else updateWindowPosition.restart();
                         }
                         onClicked: (event) => {
                             if (!windowData) return;
@@ -374,11 +481,25 @@ Item {
                 }
             }
 
+            Rectangle {
+                objectName: "windowDropIndicator"
+                readonly property var indicator: root.dropInfo?.indicator
+                visible: root.dragWindow !== null && !!indicator
+                x: indicator?.x ?? 0
+                y: indicator?.y ?? 0
+                width: indicator?.width ?? 0
+                height: indicator?.height ?? 0
+                radius: RoundedCorners.on ? Math.min(Appearance.rounding.small, width / 2, height / 2) : 0
+                color: ColorUtils.applyAlpha(Appearance.launcherContent.colPrimary, 0.3)
+                z: root.windowDraggingZ - 1
+            }
+
             Repeater {
                 model: root.workspacesShown
                 delegate: WorkspaceSidebarPreview {
                     required property int index
                     readonly property int workspaceId: root.workspaceGroup * root.workspacesShown + index + 1
+                    readonly property vector4d radii: root.workspaceRadii(root.getWsColumn(workspaceId), root.getWsRow(workspaceId))
                     visible: hasPreviews && root.windows.some(window => window.mapped && !window.hidden && window.workspace.id === workspaceId)
                     screenName: root.screen.name
                     previewScale: root.scale
@@ -388,11 +509,33 @@ Item {
                     y: (root.workspaceImplicitHeight + root.workspaceSpacing) * root.getWsRow(workspaceId)
                     width: root.workspaceImplicitWidth
                     height: root.workspaceImplicitHeight
+                    topLeftRadius: radii.x
+                    topRightRadius: radii.y
+                    bottomLeftRadius: radii.z
+                    bottomRightRadius: radii.w
                     z: root.windowZ + 10
                     onActivated: {
                         GlobalStates.overviewOpen = false;
                         Hyprland.dispatch(`hl.dsp.focus({ workspace = ${workspaceId} })`);
                     }
+                }
+            }
+
+            Repeater {
+                model: root.workspacesShown
+                delegate: LauncherTitlePill {
+                    required property int index
+                    readonly property int workspaceId: root.workspaceGroup * root.workspacesShown + index + 1
+                    readonly property string workspaceName: WorkspaceNames.nameFor(workspaceId)
+                    objectName: "workspaceNamePill"
+                    uiScale: root.uiScale
+                    visible: workspaceName.length > 0
+                    x: (root.workspaceImplicitWidth + root.workspaceSpacing) * root.getWsColumn(workspaceId) + 6 * root.uiScale
+                    y: (root.workspaceImplicitHeight + root.workspaceSpacing) * root.getWsRow(workspaceId) + 6 * root.uiScale
+                    width: Math.max(0, Math.min(root.workspaceImplicitWidth - 12 * root.uiScale, implicitWidth))
+                    height: Math.max(0, Math.min(26 * root.uiScale, root.workspaceImplicitHeight - 12 * root.uiScale))
+                    text: workspaceName
+                    z: root.windowDraggingZ - 2
                 }
             }
 
@@ -406,15 +549,12 @@ Item {
                 width: root.workspaceImplicitWidth
                 height: root.workspaceImplicitHeight
                 color: "transparent"
-                property bool workspaceAtLeft: colIndex === 0
-                property bool workspaceAtRight: colIndex === Config.options.overview.columns - 1
-                property bool workspaceAtTop: rowIndex === 0
-                property bool workspaceAtBottom: rowIndex === Config.options.overview.rows - 1
-                topLeftRadius: (workspaceAtLeft && workspaceAtTop) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                topRightRadius: (workspaceAtRight && workspaceAtTop) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                bottomLeftRadius: (workspaceAtLeft && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                bottomRightRadius: (workspaceAtRight && workspaceAtBottom) ? root.largeWorkspaceRadius : root.smallWorkspaceRadius
-                border.width: 2
+                readonly property vector4d radii: root.workspaceRadii(colIndex, rowIndex)
+                topLeftRadius: radii.x
+                topRightRadius: radii.y
+                bottomLeftRadius: radii.z
+                bottomRightRadius: radii.w
+                border.width: 2 * root.uiScale
                 border.color: root.activeBorderColor
                 Behavior on x {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)

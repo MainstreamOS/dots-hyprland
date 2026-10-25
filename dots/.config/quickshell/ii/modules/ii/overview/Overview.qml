@@ -537,8 +537,9 @@ Scope {
             ColumnLayout {
                 id: columnLayout
                 width: flickable.width
-                spacing: 20
-                property real cachedOverviewWidth: Math.min(1200, flickable.width - 40)
+                spacing: 20 * panelWindow.launcherUiScale
+                readonly property real drawerWidth: Math.min(1200 * panelWindow.launcherUiScale, flickable.width - 40 * panelWindow.launcherUiScale)
+                property real cachedOverviewWidth: drawerWidth
 
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
@@ -565,7 +566,7 @@ Scope {
                 // down out of line with where it sits otherwise.
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: panelWindow.drawerOwnsSearch ? 10 : 0
+                    Layout.preferredHeight: panelWindow.drawerOwnsSearch ? 10 * panelWindow.launcherUiScale : 0
                     visible: panelWindow.drawerOwnsSearch
 
                     Behavior on Layout.preferredHeight {
@@ -579,6 +580,9 @@ Scope {
 
                 SearchWidget {
                     id: searchWidget
+                    quietStyle: true
+                    uiScale: panelWindow.launcherUiScale
+                    maximumResultsHeight: 600 * uiScale
                     Layout.alignment: Qt.AlignHCenter
                     // Hidden when the app drawer has taken the search over.
                     // Also hidden when overview was opened in workspaces-only
@@ -630,19 +634,33 @@ Scope {
                     onWidthChanged: if (width > 0) columnLayout.cachedOverviewWidth = width
                     sourceComponent: OverviewWidget {
                         screen: panelWindow.screen
+                        uiScale: panelWindow.launcherUiScale
+                        workspaceLayout: panelWindow.workspaceLayout
+                        dockBackdropSource: launcherBackdrop.blurSource
+                        dockBackdropRect: launcherBackdrop.dockBackdropRect
                         visible: (panelWindow.searchingText == "")
+                        onFocusSearchRequested: searchWidget.focusSearchInput()
                     }
                 }
                     
                 ApplicationDrawer {
                     id: appDrawer
                     ownSearchField: panelWindow.drawerOwnsSearch
-                    collapsible: !panelWindow.drawerStartsExpanded
+                    collapsible: false
+                    workspaceStyle: true
+                    uiScale: panelWindow.launcherUiScale
+                    collapsedHeight: 400 * uiScale
+                    wallpaper: ""
+                    colBackground: Appearance.launcherPanelBackground
+                    contentColors: Appearance.launcherPanelContent
+                    surfaceRadius: Appearance.rounding.small * uiScale
+                    visibleRows: 3
+                    columns: 14
+                    iconSize: 50 * uiScale
+                    spacing: 10 * uiScale
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: false
-                    Layout.preferredWidth: appDrawer.expanded
-                        ? columnLayout.cachedOverviewWidth
-                        : Math.min(1200, flickable.width - 40)
+                    Layout.preferredWidth: availableWidth
                     // Hidden when:
                     //  - the user is searching (search results take priority), OR
                     //  - overview was opened in workspaces-only mode by the
@@ -673,7 +691,7 @@ Scope {
                         - (searchWidget.visible ? searchWidget.implicitHeight + columnLayout.spacing : 0)
                     availableWidth: appDrawer.expanded
                         ? columnLayout.cachedOverviewWidth
-                        : Math.min(1200, flickable.width - 40)
+                        : columnLayout.drawerWidth
                 }
             }
         }

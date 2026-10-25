@@ -12,6 +12,7 @@ import Quickshell.Wayland
 
 Item { // Window
     id: root
+    property real uiScale: 1
     property bool closing: false
     property bool captureSuppressed: false
     property var toplevel
@@ -60,13 +61,8 @@ Item { // Window
     readonly property real visibleRight: clipped ? Math.min(width, xOffset + workspaceWidth - x) : width
     readonly property real visibleBottom: clipped ? Math.min(height, yOffset + workspaceHeight - y) : height
 
-    property bool centerIcons: Config.options.overview.centerIcons
-    property real iconGapRatio: 0.06
-    property real iconToWindowRatio: centerIcons ? 0.35 : 0.15
     property real xwaylandIndicatorToIconRatio: 0.35
-    property real iconToWindowRatioCompact: 0.6
     property string iconPath: Quickshell.iconPath(AppSearch.guessIcon(windowData?.class), "image-missing")
-    property bool compactMode: Appearance.font.pixelSize.smaller * 4 > visibleArea.height || Appearance.font.pixelSize.smaller * 4 > visibleArea.width
 
     property bool indicateXWayland: windowData?.xwayland ?? false
 
@@ -170,32 +166,14 @@ Item { // Window
             hovered ? ColorUtils.transparentize(Appearance.colors.colLayer2Hover, 0.7) :
             ColorUtils.transparentize(Appearance.colors.colLayer2)
         border.color : ColorUtils.transparentize(Appearance.m3colors.m3outline, 0.88)
-        border.width : 1
+        border.width : root.uiScale
     }
 
-    StyledImage {
+    LauncherWindowBadge {
         id: windowIcon
-        property real baseSize: Math.min(visibleArea.width, visibleArea.height)
-        anchors {
-            top: root.centerIcons ? undefined : visibleArea.top
-            left: root.centerIcons ? undefined : visibleArea.left
-            centerIn: root.centerIcons ? visibleArea : undefined
-            margins: baseSize * root.iconGapRatio
-        }
-        property var iconSize: {
-            return baseSize * (root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio);
-        }
-        mipmap: true
-        Layout.alignment: Qt.AlignHCenter
+        objectName: "windowBadge"
+        uiScale: root.uiScale
+        boundsItem: visibleArea
         source: root.iconPath
-        width: iconSize
-        height: iconSize
-
-        Behavior on width {
-            animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
-        }
-        Behavior on height {
-            animation: Appearance.animation.elementMoveEnter.numberAnimation.createObject(this)
-        }
     }
 }
