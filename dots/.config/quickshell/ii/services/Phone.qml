@@ -796,7 +796,7 @@ Singleton {
 
     function finishAttachment(path, action, mime, uid, device): void {
         if (action === "open") {
-            Qt.openUrlExternally(FileUtils.fileUrl(path));
+            root.openLocal(path);
             root.opened(uid);
             return;
         }
@@ -871,11 +871,16 @@ Singleton {
         root.command({cmd: "cancelPreview"});
     }
 
+    // Straight into the default app, where the portal behind Qt.openUrlExternally can ask first.
+    function openLocal(path): void {
+        Quickshell.execDetached(["xdg-open", FileUtils.mediaUrl(path)]);
+    }
+
     // Remote files are copied atomically to a device/path/version-scoped cache.
     function openFile(path): void {
         if (!path) return;
         if (!root.mountPoint || !(path === root.mountPoint || path.startsWith(root.mountPoint + "/"))) {
-            Qt.openUrlExternally(FileUtils.fileUrl(path));
+            root.openLocal(path);
             return;
         }
         root.openingFilePath = path;
@@ -950,7 +955,7 @@ Singleton {
         case "file":
             if (event.device !== root.deviceId) break;
             root.openingFilePath = "";
-            if (event.path) Qt.openUrlExternally(FileUtils.fileUrl(event.path));
+            if (event.path) root.openLocal(event.path);
             break;
         case "filePreview":
             if (event.device !== root.deviceId || event.request !== root.filePreviewRequest) break;

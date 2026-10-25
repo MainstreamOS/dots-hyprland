@@ -169,7 +169,7 @@ Rectangle {
                 horizontalPadding: 12
                 colBackground: Appearance.colors.colPrimary
                 colBackgroundHover: Appearance.colors.colPrimaryHover
-                onClicked: Qt.openUrlExternally(FileUtils.fileUrl(root.save.path))
+                onClicked: Phone.openLocal(root.save.path)
 
                 contentItem: RowLayout {
                     spacing: 6

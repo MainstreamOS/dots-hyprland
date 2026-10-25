@@ -2387,7 +2387,7 @@ Item {
                     colBackground: ColorUtils.transparentize("black", 0.45)
                     colBackgroundHover: ColorUtils.transparentize("black", 0.25)
                     visible: imageOverlay.currentSource.length > 0
-                    onClicked: Qt.openUrlExternally(FileUtils.mediaUrl(imageOverlay.currentSource))
+                    onClicked: Phone.openLocal(imageOverlay.currentSource)
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
                         horizontalAlignment: Text.AlignHCenter
