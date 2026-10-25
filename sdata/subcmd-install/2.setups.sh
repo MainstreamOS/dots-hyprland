@@ -781,6 +781,32 @@ function setup_default_image_viewer(){
 showfun setup_default_image_viewer
 v setup_default_image_viewer
 
+# Set GNOME Fonts as default for font files. Without this a font opens in
+# whichever installed app lists the type first, such as FontForge.
+# Skipped if the desktop entry isn't installed.
+function setup_default_font_viewer(){
+  local desktop=org.gnome.font-viewer.desktop
+  if ! test -f /usr/share/applications/$desktop && ! test -f "$XDG_DATA_HOME/applications/$desktop"; then
+    echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping font viewer defaults.${STY_RST}"
+    return 0
+  fi
+  local font_types=(
+    font/ttf
+    font/otf
+    font/woff
+    font/collection
+    application/x-font-ttf
+    application/x-font-otf
+    application/x-font-pcf
+    application/x-font-type1
+  )
+  for mime in "${font_types[@]}"; do
+    v xdg-mime default "$desktop" "$mime"
+  done
+}
+showfun setup_default_font_viewer
+v setup_default_font_viewer
+
 # Set GNOME Papers as default for the document types it opens. Without this a
 # PDF opens in the browser, which is what claims the type when nothing else does.
 # Skipped if the desktop entry isn't installed.

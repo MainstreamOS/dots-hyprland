@@ -635,6 +635,13 @@ IMAGE_TYPES=(
 su -s /bin/bash "$u" -c "xdg-mime default org.gnome.Loupe.desktop ${IMAGE_TYPES[*]}" || true
 _pu_log "Loupe set as default image viewer."
 
+FONT_TYPES=(
+    font/ttf font/otf font/woff font/collection
+    application/x-font-ttf application/x-font-otf application/x-font-pcf application/x-font-type1
+)
+su -s /bin/bash "$u" -c "xdg-mime default org.gnome.font-viewer.desktop ${FONT_TYPES[*]}" || true
+_pu_log "Fonts set as default font viewer."
+
 # Set mpv as default video player for all the video types it handles
 VIDEO_TYPES=(
     video/3gp video/3gpp video/3gpp2 video/avi video/divx video/dv
