@@ -53,7 +53,12 @@ requested = set()
 loading_threads = set()
 subscribed = set()
 pairing_watched = set()
+watch_lock = threading.Lock()
+# Each phone's last listed entry, kept when a later look at it times out.
+last_entries = {}
 cache_dir = str(PHONE_CACHE)
+data_home = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 duration_cache_file = os.path.join(cache_dir, "durations.json")
 threads_cache_file = os.path.join(cache_dir, "threads.json")
 durations = {}
@@ -61,7 +66,10 @@ media_metadata = {}
 probed_empty = set()
 pending_saves = set()
 job_ids = itertools.count()
-io_queue = WorkQueue(workers=1, capacity=64, name="phone_bus")
+# Room for a phone's whole conversation list arriving at once after a reconnect.
+io_queue = WorkQueue(workers=1, capacity=1024, name="phone_bus")
+# Device refreshes never wait behind a mount, a file copy or a message burst.
+device_queue = WorkQueue(workers=1, capacity=4, name="phone_devices")
 media_queue = WorkQueue(workers=2, capacity=16, name="phone_media")
 # Thumbnails wait on the phone's network round trips, which a few overlap well.
 thumb_queue = WorkQueue(workers=3, capacity=64, name="phone_thumb")
@@ -85,7 +93,7 @@ def request_fields(cmd):
     return {key: cmd[key] for key in ("request", "device", "uid", "thread") if key in cmd}
 
 
-def background(function, *args, key=None):
+def background(function, *args, key=None, queue=None):
     job_key = key or (function.__name__, next(job_ids))
     def work():
         request_context.fields = {}
@@ -95,7 +103,7 @@ def background(function, *args, key=None):
             fail(function.__name__, error)
         finally:
             request_context.fields = {}
-    return io_queue.submit(job_key, work)
+    return (queue or io_queue).submit(job_key, work)
 
 
 
@@ -659,6 +667,20 @@ def start_backend():
               GLib.Variant("(su)", (BUS, 0)), GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 30000, None, done)
 
 
+def has_paired_phone():
+    """Whether rust-connect or KDE Connect has a phone paired, read from their own files."""
+    try:
+        with open(os.path.join(data_home, "rust-connect", "paired.json"), encoding="utf-8") as f:
+            if json.load(f):
+                return True
+    except (OSError, ValueError):
+        pass
+    try:
+        return os.path.getsize(os.path.join(config_home, "kdeconnect", "trusted_devices")) > 0
+    except OSError:
+        return False
+
+
 def backend_name():
     """Which daemon owns the KDE Connect bus name, for the shell's labels."""
     try:
@@ -673,10 +695,14 @@ def backend_name():
 
 
 def devices():
-    global known_reachable, backend, named_generation
+    global known_reachable, backend, named_generation, last_entries
     try:
         ids = call(ROOT, "org.kde.kdeconnect.daemon", "devices", GLib.Variant("(bb)", (False, True)), "(as)")[0]
     except GLib.Error as error:
+        if error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.TIMED_OUT):
+            # A busy daemon is not a missing one: keep what the shell shows and look again.
+            GLib.timeout_add(1000, lambda: (devices_soon(), False)[1])
+            return
         known_reachable = set()
         # QML marks every phone unreachable on this, so the next healthy list must be sent even if unchanged.
         last_sent.pop("devices", None)
@@ -695,6 +721,11 @@ def devices():
             props = call(path, "org.freedesktop.DBus.Properties", "GetAll", GLib.Variant("(s)", (DEVICE_IFACE,)), "(a{sv})")[0]
             plugins = list(call(path, DEVICE_IFACE, "loadedPlugins", None, "(as)")[0])
         except GLib.Error:
+            # A late answer keeps the phone as it was rather than dropping it from the list.
+            if device in last_entries:
+                out.append(last_entries[device])
+                if last_entries[device]["reachable"]:
+                    reachable.add(device)
             continue
         entry = {"id": device, "name": props.get("name", device), "type": props.get("type", "phone"),
                  "reachable": bool(props.get("isReachable", False)), "plugins": plugins, "charge": -1, "charging": False}
@@ -710,6 +741,7 @@ def devices():
         out.append(entry)
         watch(device)
     known_reachable = reachable
+    last_entries = {entry["id"]: entry for entry in out}
     emit_changed("devices", devices=out)
     pair_requests(ids)
 
@@ -740,9 +772,10 @@ def pair_requests(paired):
 
 def watch_pairing(device):
     """A phone that is not paired yet: only its pairing state matters."""
-    if device in pairing_watched:
-        return
-    pairing_watched.add(device)
+    with watch_lock:
+        if device in pairing_watched:
+            return
+        pairing_watched.add(device)
     conn.signal_subscribe(BUS, DEVICE_IFACE, "pairStateChanged", device_path(device), None,
                           Gio.DBusSignalFlags.NONE, lambda *a: devices_soon())
 
@@ -759,7 +792,7 @@ def devices_soon():
     def run():
         global refresh_pending
         refresh_pending = False
-        background(devices, key="devices")
+        background(devices, key="devices", queue=device_queue)
         return False
 
     refresh_pending = True
@@ -767,9 +800,10 @@ def devices_soon():
 
 
 def watch(device):
-    if device in subscribed:
-        return
-    subscribed.add(device)
+    with watch_lock:
+        if device in subscribed:
+            return
+        subscribed.add(device)
     path = device_path(device)
     for signal in ("conversationCreated", "conversationUpdated"):
         conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, signal, path, None, Gio.DBusSignalFlags.NONE,
@@ -1183,6 +1217,8 @@ def handle(line):
         accepted = preview_queue.submit(key, execute)
     elif kind in ("probe", "open", "mount"):
         accepted = media_queue.submit(key, execute)
+    elif kind == "devices":
+        accepted = device_queue.submit(key, execute)
     else:
         accepted = io_queue.submit(key, execute)
     if not accepted:
@@ -1234,7 +1270,9 @@ def main():
         conn.signal_subscribe(BUS, "org.kde.kdeconnect.daemon", signal, ROOT, None, Gio.DBusSignalFlags.NONE,
                               lambda *a: devices_soon())
     GLib.timeout_add_seconds(15, lambda: (devices_soon(), True)[1])
-    start_backend()
+    # A phone user's daemon starts with the shell; a first pairing starts it from the tab.
+    if has_paired_phone():
+        start_backend()
     channel = GLib.IOChannel.unix_new(sys.stdin.fileno())
     GLib.io_add_watch(channel, GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, on_stdin)
     try:

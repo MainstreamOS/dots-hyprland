@@ -28,8 +28,8 @@ Item {
         property int currentIndex: 0
     }
 
-    // Built in the background with the sidebar; the phone bridge starts only
-    // once the tab has been on screen.
+    // Opening the tab starts the phone daemon for a first pairing; the main
+    // shell keeps the bridge itself running.
     property bool onScreen: false
     onOnScreenChanged: if (onScreen) Phone.wanted = true
     Component.onCompleted: {

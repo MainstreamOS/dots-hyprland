@@ -63,7 +63,6 @@ Singleton {
     onContactsChanged: IslandPhoneHistory.enrichContacts(contacts)
     function contactFor(entry) { return ContactService.withContact(entry); }
     readonly property bool phoneWanted: root.enabled && Config.options.bar.island.phoneIntegration
-    Binding { target: Phone; property: "islandWanted"; value: root.phoneWanted }
     Binding { target: PhoneCalls; property: "islandWanted"; value: root.phoneWanted }
     property string phoneError: ""
     readonly property string phoneStatus: PhoneCalls.error || (PhoneCalls.devices.length || root.kdePhoneConnected

@@ -494,7 +494,6 @@ Singleton {
         if (root.phoneJobs.length >= 64) return false;
         job.id = String(++root.phoneSequence);
         root.phoneJobs = root.phoneJobs.concat([job]);
-        Phone.notificationsWanted = true;
         root.pumpPhoneJobs();
         return true;
     }

@@ -14,8 +14,8 @@ import "IslandPhoneHistory.js" as History
 /**
  * Paired phones through KDE Connect or rust-connect, for the Phone tab, the
  * Dynamic Island and phone notifications. scripts/phone/kdeconnect-bridge.py
- * is the shell's only client of their D-Bus API and runs while one of those
- * needs it.
+ * is the shell's only client of their D-Bus API, and the main shell keeps it
+ * running so no text is missed while the tab is closed.
  */
 Singleton {
     id: root
@@ -24,17 +24,19 @@ Singleton {
     property bool installed: false
     // Set by the tab once it has been on screen.
     property bool wanted: false
-    // Opening the Phone tab starts the phone daemon when none is running.
-    onWantedChanged: if (wanted && bridge.running && !backendAvailable) command({cmd: "start"})
-    // Set once a phone notification needs its actions or replies.
-    property bool notificationsWanted: false
-    // Set by the Dynamic Island while it shows phone events.
-    property bool islandWanted: false
+    onWantedChanged: if (wanted && bridge.running && !backendAvailable) root.startBackend()
+    // Set by the main shell, and by Settings while a page shows phone status.
+    property bool keepConnected: false
     property bool backendAvailable: false
     // "KDE Connect" or "rust-connect", whichever owns the bus name.
     property string backendName: "KDE Connect"
     readonly property bool connected: bridge.running && backendAvailable
-    readonly property bool bridgeWanted: root.wanted || root.notificationsWanted || root.islandWanted
+    readonly property bool bridgeWanted: root.wanted || root.keepConnected
+    // The bridge starts the daemon itself once a phone has paired; before that,
+    // only opening the tab does, since the daemon announces this computer.
+    function startBackend(): void {
+        if (root.wanted) root.command({cmd: "start"});
+    }
     property int backendGeneration: -1
     property int restartAttempts: 0
     readonly property string requestPrefix: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
@@ -308,7 +310,7 @@ Singleton {
     }
 
     function command(fields): string {
-        if (!bridge.running || (!root.backendAvailable && fields.cmd !== "devices")) return "";
+        if (!bridge.running || (!root.backendAvailable && fields.cmd !== "devices" && fields.cmd !== "start")) return "";
         const request = root.requestPrefix + "-" + (++root.requestSequence);
         bridge.write(JSON.stringify(Object.assign({}, fields, {request})) + "\n");
         return request;
@@ -1249,7 +1251,6 @@ Singleton {
     // Jobs for kde_notifications.py in the bridge; Notifications.qml answers
     // by job id through notificationResult.
     function notificationJob(job): bool {
-        root.notificationsWanted = true;
         return root.command({cmd: "notification", job}).length > 0;
     }
 
@@ -1375,6 +1376,7 @@ Singleton {
         onStarted: {
             root.backendGeneration = -1;
             root.command({cmd: "devices"});
+            root.startBackend();
             bridgeStable.restart();
         }
         stderr: SplitParser { onRead: line => console.warn("[Phone bridge]", line) }

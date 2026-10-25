@@ -20,7 +20,7 @@ ContentPage {
     // connected phones, without starting a second copy of the call helper.
     Binding {
         target: Phone
-        property: "islandWanted"
+        property: "keepConnected"
         when: root.visible
         value: root.island && Config.options.bar.island.phoneIntegration
     }
