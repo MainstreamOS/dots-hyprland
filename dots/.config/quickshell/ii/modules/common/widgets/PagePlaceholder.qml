@@ -27,6 +27,8 @@ Item {
 
     ColumnLayout {
         anchors.centerIn: parent
+        // Narrower than the page, so a long description wraps instead of running off it.
+        width: Math.min(implicitWidth, root.width - 40)
         spacing: 5
 
         MaterialShapeWrappedMaterialSymbol {
