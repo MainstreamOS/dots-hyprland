@@ -52,6 +52,7 @@ threads = {}
 requested = set()
 loading_threads = set()
 subscribed = set()
+pairing_watched = set()
 cache_dir = str(PHONE_CACHE)
 duration_cache_file = os.path.join(cache_dir, "durations.json")
 threads_cache_file = os.path.join(cache_dir, "threads.json")
@@ -710,6 +711,40 @@ def devices():
         watch(device)
     known_reachable = reachable
     emit_changed("devices", devices=out)
+    pair_requests(ids)
+
+
+def pair_requests(paired):
+    """Phones that asked to pair, with the code both screens show."""
+    try:
+        nearby = call(ROOT, "org.kde.kdeconnect.daemon", "devices", GLib.Variant("(bb)", (False, False)), "(as)")[0]
+    except GLib.Error:
+        nearby = []
+    requests = []
+    for device in nearby:
+        if device in paired:
+            continue
+        watch_pairing(device)
+        try:
+            props = call(device_path(device), "org.freedesktop.DBus.Properties", "GetAll",
+                         GLib.Variant("(s)", (DEVICE_IFACE,)), "(a{sv})")[0]
+        except GLib.Error:
+            continue
+        # KDE Connect's pair states: 2 is a request from the phone.
+        if props.get("pairState") == 2:
+            requests.append({"id": device, "name": props.get("name", device), "key": props.get("verificationKey", "")})
+    if emit_changed("pairRequests", requests=requests) and requests:
+        # A request lapses after about 25 s with no signal; look again then.
+        GLib.timeout_add_seconds(26, lambda: (devices_soon(), False)[1])
+
+
+def watch_pairing(device):
+    """A phone that is not paired yet: only its pairing state matters."""
+    if device in pairing_watched:
+        return
+    pairing_watched.add(device)
+    conn.signal_subscribe(BUS, DEVICE_IFACE, "pairStateChanged", device_path(device), None,
+                          Gio.DBusSignalFlags.NONE, lambda *a: devices_soon())
 
 
 refresh_pending = False
@@ -1095,6 +1130,9 @@ def handle_command(cmd):
             emit("duration", uid=uid, path=path, duration=probe_duration(path), thumb=video_thumbnail(path))
         elif kind == "notification":
             notification(cmd.get("job") or {})
+        elif kind in ("acceptPairing", "declinePairing"):
+            call(device_path(device), DEVICE_IFACE, "acceptPairing" if kind == "acceptPairing" else "cancelPairing")
+            devices_soon()
         else:
             raise ValueError("Unknown phone command")
     except Exception as error:

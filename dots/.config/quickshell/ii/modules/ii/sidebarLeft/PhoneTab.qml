@@ -152,6 +152,10 @@ Item {
         anchors.margins: root.padding
         spacing: 8
 
+        PhonePairCard {
+            Layout.fillWidth: true
+        }
+
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 50

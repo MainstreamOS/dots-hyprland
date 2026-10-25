@@ -97,6 +97,14 @@ Singleton {
             if (!root.contactsSynced.includes(id)) root.command({cmd: "contacts", device: id});
         root.contactsSynced = reachable;
     }
+    // Phones that asked to pair, each {id, name, key}; answered from the Phone tab.
+    property var pairRequests: []
+    function acceptPairing(id): void {
+        root.command({cmd: "acceptPairing", device: id});
+    }
+    function declinePairing(id): void {
+        root.command({cmd: "declinePairing", device: id});
+    }
     property string deviceId: ""
     readonly property var device: root.devices.find(d => d.id === root.deviceId) ?? null
     readonly property bool reachable: root.device?.reachable ?? false
@@ -950,7 +958,11 @@ Singleton {
             if (event.reset || !event.available) {
                 root.disconnectState();
                 root.devices = root.devices.map(d => Object.assign({}, d, {reachable: false}));
+                root.pairRequests = [];
             }
+            break;
+        case "pairRequests":
+            root.pairRequests = event.requests ?? [];
             break;
         case "file":
             if (event.device !== root.deviceId) break;
