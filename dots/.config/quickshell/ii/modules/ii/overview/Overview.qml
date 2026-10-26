@@ -306,11 +306,7 @@ Scope {
             opacity: (GlobalStates.overviewOpen && panelWindow.monitorIsFocused) ? 1 : 0
             property bool appDragging: false
             Behavior on opacity {
-                NumberAnimation {
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Appearance.animation.elementMoveFast.type
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
+                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
             }
 
         LauncherBackdrop {
@@ -570,11 +566,7 @@ Scope {
                     visible: panelWindow.drawerOwnsSearch
 
                     Behavior on Layout.preferredHeight {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementResize.duration
-                            easing.type: Appearance.animation.elementResize.type
-                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
-                        }
+                        animation: Appearance.animation.elementResize.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                 }
 
@@ -592,18 +584,10 @@ Scope {
                     Layout.maximumHeight: (panelWindow.drawerOwnsSearch || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
                     opacity: (panelWindow.drawerOwnsSearch || GlobalStates.overviewWorkspacesOnly) ? 0 : 1
                     Behavior on opacity {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementMoveFast.duration
-                            easing.type: Appearance.animation.elementMoveFast.type
-                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                        }
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     Behavior on Layout.maximumHeight {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementResize.duration
-                            easing.type: Appearance.animation.elementResize.type
-                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
-                        }
+                        animation: Appearance.animation.elementResize.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     Synchronizer on searchingText {
                         property alias source: panelWindow.searchingText
@@ -617,18 +601,10 @@ Scope {
                     Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
                     opacity: appDrawer.expanded ? 0 : 1
                     Behavior on opacity {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementMoveFast.duration
-                            easing.type: Appearance.animation.elementMoveFast.type
-                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                        }
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     Behavior on Layout.maximumHeight {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementResize.duration
-                            easing.type: Appearance.animation.elementResize.type
-                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
-                        }
+                        animation: Appearance.animation.elementResize.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     // Cache width so the drawer can match it after this loader deactivates
                     onWidthChanged: if (width > 0) columnLayout.cachedOverviewWidth = width
@@ -670,18 +646,10 @@ Scope {
                     Layout.maximumHeight: ((panelWindow.searchingText != "" && !panelWindow.drawerOwnsSearch) || GlobalStates.overviewWorkspacesOnly) ? 0 : implicitHeight
 
                     Behavior on opacity {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementMoveFast.duration
-                            easing.type: Appearance.animation.elementMoveFast.type
-                            easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                        }
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     Behavior on Layout.maximumHeight {
-                        NumberAnimation {
-                            duration: Appearance.animation.elementResize.duration
-                            easing.type: Appearance.animation.elementResize.type
-                            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
-                        }
+                        animation: Appearance.animation.elementResize.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
 
                     // The search box above is part of the same column, so the
