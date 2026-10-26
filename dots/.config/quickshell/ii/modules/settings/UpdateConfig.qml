@@ -845,7 +845,8 @@ ContentPage {
                 id: advancedToggle
                 buttonIcon: "tune"
                 text: Translation.tr("Show advanced options")
-                checked: false
+                checked: Config.options.updates.showAdvanced
+                onCheckedChanged: Config.options.updates.showAdvanced = checked
             }
             Item { Layout.fillWidth: true }
         }
