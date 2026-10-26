@@ -732,6 +732,24 @@ EOF
     TOPGRADE_USER_ENV+=("PATH=$TOPGRADE_SHIM:$PATH")
 }
 
+# topgrade updates what `cargo install` put in ~/.cargo only through cargo-update, and
+# warns without it. Only local-path installs, which nothing updates, leave the step out.
+prepare_cargo_step() {
+    local crates="$ORIG_HOME/.cargo/.crates.toml"
+    [[ -s "$crates" ]] || return 0
+    if ! grep -qE '\((registry|sparse|git)\+' "$crates"; then
+        TG_DISABLED+=(cargo)
+        return 0
+    fi
+    command -v cargo-install-update >/dev/null 2>&1 && return 0
+    [[ -x "$ORIG_HOME/.cargo/bin/cargo-install-update" ]] && return 0
+    # Arch's package, with Arch's cargo, after this run's -Syu: never a partial upgrade.
+    [[ "$SKIP_SYSTEM" -eq 0 ]] && pacman -T cargo >/dev/null 2>&1 || return 0
+    echo "── $(t "Installing cargo-update, so topgrade can update the tools installed with cargo.")"
+    pacman_tx -S --needed --noconfirm cargo-update </dev/null \
+        || echo ">>> $(t "cargo-update could not be installed, so topgrade will skip the tools installed with cargo.")"
+}
+
 if [[ "$SKIP_EXTRAS" -eq 0 && "$BOOT_HELD" -eq 1 ]]; then
     echo ""
     echo "── $(t "Developer extras: waiting for the system packages, which were held back.")"
@@ -758,6 +776,7 @@ elif [[ "$SKIP_EXTRAS" -eq 0 ]] && command -v topgrade >/dev/null 2>&1; then
     if [[ "$SKIP_SYSTEM" -eq 0 ]] && [[ -e /usr/share/libalpm/hooks/needrestart.hook || -e /etc/pacman.d/hooks/needrestart.hook ]]; then
         TG_DISABLED+=(restarts)
     fi
+    prepare_cargo_step
     # The Advanced field's words go first: a bare word after --disable would join its list.
     TG_ARGS=("${TOPGRADE_EXTRA_ARGS[@]}" --cleanup --yes)
     for _step in "${TG_DISABLED[@]}"; do
