@@ -26,10 +26,8 @@ Item {
     readonly property int effectiveActiveWorkspaceId: Math.max(1, Math.min(100, monitor?.activeWorkspace?.id ?? 1))
     readonly property int workspacesShown: Config.options.overview.rows * Config.options.overview.columns
     readonly property int workspaceGroup: Math.floor((effectiveActiveWorkspaceId - 1) / workspacesShown)
-    property bool monitorIsFocused: (Hyprland.focusedMonitor?.name == monitor.name)
     property var windows: HyprlandData.windowList
     property var windowByAddress: HyprlandData.windowByAddress
-    property var windowAddresses: HyprlandData.addresses
     property var monitorData: HyprlandData.monitors.find(m => m.id === root.monitor?.id)
     readonly property var previewReserved: workspaceLayout.reserved
     readonly property real scale: workspaceLayout.previewScale
@@ -41,7 +39,6 @@ Item {
     property real largeWorkspaceRadius: Appearance.rounding.dockBody * uiScale
     property real smallWorkspaceRadius: Math.min(Appearance.rounding.verysmall * uiScale, largeWorkspaceRadius)
 
-    property real workspaceNumberMargin: 80
     property real workspaceNumberSize: 250 * (5 / 3) * uiScale
     property int workspaceZ: 0
     property int windowZ: 1
@@ -177,9 +174,6 @@ Item {
     implicitWidth: overviewBackground.implicitWidth + Appearance.sizes.elevationMargin * root.uiScale * 2
     implicitHeight: overviewBackground.implicitHeight + Appearance.sizes.elevationMargin * root.uiScale * 2
 
-    property Component windowComponent: OverviewWindow {}
-    property list<OverviewWindow> windowWidgets: []
-    
     function getWsRow(ws) {
         // 1-indexed workspace, 0-indexed row
         var normalRow = Math.floor((ws - 1) / Config.options.overview.columns) % Config.options.overview.rows;
