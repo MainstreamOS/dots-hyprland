@@ -127,7 +127,7 @@ ApplicationWindow {
         root.confirmShown = false
         root.busy = true
         root.resultKind = ""
-        root.status = Translation.tr("Removing ") + root.confirmName + "…"
+        root.status = Translation.tr("Removing %1…").arg(root.confirmName)
         removeProc.running = true
     }
 
@@ -142,7 +142,7 @@ ApplicationWindow {
                 } catch (e) {
                     root.apps = []
                     root.resultKind = "error"
-                    root.status = Translation.tr("Couldn't read the app list: ") + e
+                    root.status = Translation.tr("Couldn't read the app list: %1").arg(e)
                 }
                 root.loading = false
             }
@@ -178,7 +178,7 @@ ApplicationWindow {
                 while ((m = re.exec(previewProc.errBuf)) !== null)
                     if (needed.indexOf(m[1]) < 0) needed.push(m[1])
                 root.confirmReason = needed.length > 0
-                    ? Translation.tr("Other software on your system still needs it: ") + needed.join(", ")
+                    ? Translation.tr("Other software on your system still needs it: %1").arg(needed.join(", "))
                     : (root.cleanText(previewProc.errBuf)
                         || Translation.tr("This app can't be removed on its own."))
             }
@@ -197,7 +197,7 @@ ApplicationWindow {
             root.busy = false
             if (exitCode === 0) {
                 root.resultKind = "success"
-                root.status = removeProc.appName + Translation.tr(" was removed.")
+                root.status = Translation.tr("%1 was removed.").arg(removeProc.appName)
                 // Drop the app's launcher override (custom icon/name) too,
                 // then refresh once the entry is gone.
                 if (root.confirmDid.length > 0) {
@@ -212,7 +212,7 @@ ApplicationWindow {
             } else {
                 root.resultKind = "error"
                 root.status = root.cleanText(removeProc.errBuf)
-                    || (Translation.tr("Couldn't remove ") + removeProc.appName + ".")
+                    || Translation.tr("Couldn't remove %1.").arg(removeProc.appName)
             }
         }
     }
@@ -539,8 +539,8 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: root.confirmBlocked
-                        ? Translation.tr("Can't remove ") + root.confirmName
-                        : Translation.tr("Remove ") + root.confirmName + "?"
+                        ? Translation.tr("Can't remove %1").arg(root.confirmName)
+                        : Translation.tr("Remove %1?").arg(root.confirmName)
                     font.pixelSize: Appearance.font.pixelSize.larger
                     font.weight: Font.Medium
                     color: Appearance.colors.colOnLayer1

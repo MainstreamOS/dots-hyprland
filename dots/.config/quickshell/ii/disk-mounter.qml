@@ -203,7 +203,7 @@ ApplicationWindow {
                 try {
                     parsed = JSON.parse(this.text)
                 } catch (e) {
-                    root.status = Translation.tr("Failed to read drive list: ") + e
+                    root.status = Translation.tr("Failed to read drive list: %1").arg(e)
                     return
                 }
                 const systemParttypes = new Set([
@@ -412,7 +412,7 @@ ApplicationWindow {
                 statusClearTimer.restart()
             } else {
                 root.resultKind = "error"
-                root.status = lastLine || (Translation.tr("Failed (exit ") + code + ")")
+                root.status = lastLine || Translation.tr("Failed (exit %1)").arg(code)
             }
         }
     }
@@ -429,7 +429,7 @@ ApplicationWindow {
             const lastLine = trimmed.split("\n").pop() || ""
             if (code === 0) {
                 root.resultKind = "success"
-                root.status = lastLine || (Translation.tr("Removed ") + unmountProc.lastMountpoint)
+                root.status = lastLine || Translation.tr("Removed %1").arg(unmountProc.lastMountpoint)
                 // Refresh: the unmounted drive should leave Mounted AND
                 // come back into Available (for block devices).
                 scanProc.running = true
@@ -437,7 +437,7 @@ ApplicationWindow {
                 statusClearTimer.restart()
             } else {
                 root.resultKind = "error"
-                root.status = lastLine || (Translation.tr("Unmount failed (exit ") + code + ")")
+                root.status = lastLine || Translation.tr("Unmount failed (exit %1)").arg(code)
             }
         }
     }
@@ -575,7 +575,7 @@ ApplicationWindow {
         mountProc.outputBuf = ""
         root.busy = true
         root.resultKind = ""
-        root.status = Translation.tr("Connecting to ") + host + "…"
+        root.status = Translation.tr("Connecting to %1…").arg(host)
         // stdinEnabled must be flipped on BEFORE running goes true so the
         // child process has a connected stdin handle to read from.
         mountProc.stdinEnabled = mountProc.pendingPassword.length > 0
@@ -590,7 +590,7 @@ ApplicationWindow {
         unmountProc.lastMountpoint = mountpoint
         root.busy = true
         root.resultKind = ""
-        root.status = Translation.tr("Removing ") + mountpoint + "…"
+        root.status = Translation.tr("Removing %1…").arg(mountpoint)
         unmountProc.running = true
     }
 
@@ -636,9 +636,7 @@ ApplicationWindow {
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: Translation.tr("This drive will be ready every time you log in, as \"") +
-                                (root.newLabel || root.selectedExistingLabel || "Drive") +
-                                Translation.tr("\".")
+                            text: Translation.tr("This drive will be ready every time you log in, as \"%1\".").arg(root.newLabel || root.selectedExistingLabel || "Drive")
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: Appearance.colors.colSubtext
                             wrapMode: Text.WordWrap
@@ -751,9 +749,7 @@ ApplicationWindow {
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: Translation.tr("Unlocks just for this session — the drive locks again when removed or on reboot, and mounts as \"") +
-                                (root.newLabel || root.selectedExistingLabel || "Drive") +
-                                Translation.tr("\" whenever you unlock it.")
+                            text: Translation.tr("Unlocks just for this session — the drive locks again when removed or on reboot, and mounts as \"%1\" whenever you unlock it.").arg(root.newLabel || root.selectedExistingLabel || "Drive")
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: Appearance.colors.colSubtext
                             wrapMode: Text.WordWrap
