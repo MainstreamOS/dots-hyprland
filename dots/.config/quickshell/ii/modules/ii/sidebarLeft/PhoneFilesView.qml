@@ -18,6 +18,9 @@ Item {
     property string folder: ""
     property string activeKey: "camera"
     property string viewMode: "list"
+    // Camera & Media and Screenshots show their pictures as a plain grid, with no list to switch to.
+    readonly property bool galleryMode: root.activeKey === "camera" || root.activeKey === "screenshots"
+    readonly property string shownView: root.galleryMode ? "grid" : root.viewMode
     property bool fullscreenVideo: false
     property bool fullscreenImage: false
     property var fullscreenMedia: null
@@ -245,7 +248,7 @@ Item {
         if (!visible || fullscreenImage || fullscreenVideo || !Phone.mounted || root.folder.length === 0) return;
         const count = folderModel.count;
         const paths = [];
-        const view = root.viewMode === "list" ? fileList : fileGrid;
+        const view = root.shownView === "list" ? fileList : fileGrid;
         const start = Math.max(0, view.indexAt(1, view.contentY + 1));
         // The screen in view first, then the next one, so scrolling finds them ready.
         for (let i = start; i < Math.min(count, start + 48); i++) {
@@ -814,6 +817,7 @@ Item {
                 }
 
                 Rectangle {
+                    visible: !root.galleryMode
                     implicitHeight: 26
                     implicitWidth: viewSwitcherRow.implicitWidth + 4
                     radius: 8
@@ -1090,12 +1094,12 @@ Item {
                 id: fileList
                 onMovementEnded: thumbScanTimer.restart()
                 onContentYChanged: thumbScanTimer.restart()
-                visible: root.viewMode === "list"
+                visible: root.shownView === "list"
                 anchors.fill: parent
                 clip: true
                 spacing: 2
                 popin: false
-                model: root.viewMode === "list" ? folderModel : null
+                model: root.shownView === "list" ? folderModel : null
                 delegate: Item {
                     id: entry
                     required property int index
@@ -1240,12 +1244,12 @@ Item {
                 id: fileGrid
                 onMovementEnded: thumbScanTimer.restart()
                 onContentYChanged: thumbScanTimer.restart()
-                visible: root.viewMode === "grid"
+                visible: root.shownView === "grid"
                 anchors.fill: parent
                 clip: true
-                cellWidth: Math.floor(fileGrid.width / 2)
-                cellHeight: 156
-                model: root.viewMode === "grid" ? folderModel : null
+                cellWidth: Math.floor(fileGrid.width / (root.galleryMode ? 3 : 2))
+                cellHeight: root.galleryMode ? fileGrid.cellWidth : 156
+                model: root.shownView === "grid" ? folderModel : null
 
                 ScrollBar.vertical: StyledScrollBar {}
 
@@ -1263,8 +1267,8 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 3
-                        radius: 14
+                        anchors.margins: root.galleryMode ? 1 : 3
+                        radius: root.galleryMode ? 0 : 14
                         color: (root.selectionMode && root.isSelected(gridEntry.filePath))
                             ? ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.surfaces.raised, 0.35)
                             : (gridMouse.pressed
@@ -1304,8 +1308,8 @@ Item {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                topLeftRadius: 14
-                                topRightRadius: 14
+                                topLeftRadius: root.galleryMode ? 0 : 14
+                                topRightRadius: root.galleryMode ? 0 : 14
                                 bottomLeftRadius: 0
                                 bottomRightRadius: 0
                                 clip: true
@@ -1376,9 +1380,26 @@ Item {
                                     iconSize: gridEntry.fileIsDir ? 32 : 24
                                     color: gridEntry.fileIsDir ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
                                 }
+
+                                StyledText {
+                                    visible: root.galleryMode && !gridEntry.isOpening
+                                        && (gridEntry.fileIsDir || !(root.isImageFile(gridEntry.filePath) || root.isVideoFile(gridEntry.filePath)))
+                                    anchors {
+                                        left: parent.left
+                                        right: parent.right
+                                        bottom: parent.bottom
+                                        margins: 6
+                                    }
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: gridEntry.fileName
+                                    elide: Text.ElideMiddle
+                                    font.pixelSize: 10
+                                    color: Appearance.colors.colOnLayer1
+                                }
                             }
 
                             Rectangle {
+                                visible: !root.galleryMode
                                 Layout.fillWidth: true
                                 implicitHeight: 44
                                 bottomLeftRadius: 14
