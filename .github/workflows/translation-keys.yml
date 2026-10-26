@@ -6,16 +6,14 @@ on:
       - "sdata/lib/tr.sh"
       - "sdata/lib/tr-keys.py"
       - "sdata/update/**"
-      - "dots/.config/quickshell/ii/translations/en_US.json"
-      - "dots/.config/quickshell/ii/translations/tools/translation-manager.py"
+      - "dots/.config/quickshell/ii/**"
       - "dots/.local/share/nautilus-python/extensions/**"
   pull_request:
     paths:
       - "sdata/lib/tr.sh"
       - "sdata/lib/tr-keys.py"
       - "sdata/update/**"
-      - "dots/.config/quickshell/ii/translations/en_US.json"
-      - "dots/.config/quickshell/ii/translations/tools/translation-manager.py"
+      - "dots/.config/quickshell/ii/**"
       - "dots/.local/share/nautilus-python/extensions/**"
 
 jobs:
@@ -35,3 +33,9 @@ jobs:
             --translations-dir dots/.config/quickshell/ii/translations \
             --source-dir dots/.config/quickshell \
             --check-extensions
+      - name: Every string QML/JS hands to Translation.tr() has its key in en_US.json
+        run: |
+          python3 dots/.config/quickshell/ii/translations/tools/translation-manager.py \
+            --translations-dir dots/.config/quickshell/ii/translations \
+            --source-dir dots/.config/quickshell/ii \
+            --check-qml

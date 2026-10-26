@@ -76,8 +76,6 @@ class TranslationManager:
                             except Exception:
                                 clean_text = text
                             
-                            # Clean text (remove extra whitespace)
-                            clean_text = clean_text.strip()
                             if clean_text:
                                 translatable_texts.add(clean_text)
                                 
@@ -277,6 +275,8 @@ def main():
                        help="Skip all confirmation prompts (auto-confirm)")
     parser.add_argument("--check-extensions", action="store_true",
                        help="Only check that the Files extensions' texts are keys in en_US.json (or --language), without writing")
+    parser.add_argument("--check-qml", action="store_true",
+                       help="Only check that all QML/JS Translation.tr() texts are keys in en_US.json (or --language), without writing")
     
     args = parser.parse_args()
     
@@ -302,6 +302,14 @@ def main():
         for text in missing:
             print(f"Missing from {lang}.json: \"{text}\"")
         print(f"Checked {len(manager.extension_files())} Files extension file(s), {len(missing)} missing key(s)")
+        sys.exit(1 if missing else 0)
+
+    if args.check_qml:
+        lang = args.language or "en_US"
+        missing = sorted(manager.extract_translatable_texts() - set(manager.load_translation_file(lang)))
+        for text in missing:
+            print(f"Missing from {lang}.json: \"{text}\"")
+        print(f"Checked QML/JS and extension files, {len(missing)} missing key(s)")
         sys.exit(1 if missing else 0)
     
     try:
