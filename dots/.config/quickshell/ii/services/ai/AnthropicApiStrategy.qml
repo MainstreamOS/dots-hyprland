@@ -40,17 +40,14 @@ ApiStrategy {
                 "content": message.role === "assistant" ? Ai.historyText(message) : message.rawContent
             };
         });
-        const attachment = ctx.attachment?.path ?? "";
-        const lastUser = Helpers.lastUserIndex(messages);
-        const file = Helpers.filePlaceholders();
-        if (attachment.length > 0 && lastUser >= 0) {
-            // run-request.sh fills in the file's type and contents.
-            messages[lastUser].content = [
+        const files = Helpers.historyFiles(ctx, path => root.acceptsAttachment(path));
+        for (const file of files) {
+            messages[file.index].content = [
                 {
-                    "type": Helpers.extension(attachment) === "pdf" ? "document" : "image",
+                    "type": Helpers.extension(file.path) === "pdf" ? "document" : "image",
                     "source": { "type": "base64", "media_type": file.mime, "data": file.data }
                 },
-                { "type": "text", "text": messages[lastUser].content }
+                { "type": "text", "text": messages[file.index].content }
             ];
         }
         // Empty text blocks are rejected, and a stopped reply can leave one behind.
@@ -89,7 +86,7 @@ ApiStrategy {
         }
 
         const options = ["--report-exit", "--body", "--secret-header", "x-api-key", "", "API_KEY"];
-        if (attachment.length > 0) options.push("--inline-file", attachment, "--file-token", file.token);
+        options.push(...Helpers.fileOptions(files));
         return {
             options: options,
             argv: ["curl", "--no-buffer", "--silent", "--show-error", model.endpoint,

@@ -80,6 +80,30 @@ function filePlaceholders() {
     return { token: token, mime: token + "_MIME__", data: token + "_B64__", uri: token + "_URI__" };
 }
 
+// API requests resend each user turn's file, including on follow-up and regenerate.
+function historyFiles(ctx, acceptsAttachment) {
+    const messages = ctx.messages ?? [];
+    const attachment = ctx.attachment?.path ?? "";
+    const lastUser = lastUserIndex(messages);
+    const files = [];
+    messages.forEach((message, index) => {
+        const current = index === lastUser && attachment.length > 0;
+        const path = current ? attachment : (message.role === "user" ? (message.localFilePath ?? "") : "");
+        if (path.length === 0 || (!current && !acceptsAttachment(path))) return;
+        files.push(Object.assign(filePlaceholders(), { index: index, path: path, current: current }));
+    });
+    return files;
+}
+
+function fileOptions(files) {
+    const options = [];
+    for (const file of files) {
+        if (file.current) options.push("--inline-file", file.path, "--file-token", file.token);
+        else options.push("--earlier-file", file.path, file.token);
+    }
+    return options;
+}
+
 function basename(path) {
     return String(path ?? "").split("/").pop() || String(path ?? "");
 }

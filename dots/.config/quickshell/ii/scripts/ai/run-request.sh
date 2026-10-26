@@ -6,7 +6,8 @@
 # run-request.sh [--workdir DIR] [--filter FORMAT] [--diff] [--report-exit]
 #                [--stdin | --body] [--tail-bytes N] [--timeout SECONDS]
 #                [--secret-header NAME PREFIX ENVVAR]... [--upload-gemini PATH]
-#                [--inline-file PATH] [--file-token TOKEN] -- PROGRAM [ARGS...]
+#                [--inline-file PATH] [--file-token TOKEN]
+#                [--earlier-file PATH TOKEN]... -- PROGRAM [ARGS...]
 #
 # Secrets arrive in the environment and prompts on stdin, never in argv,
 # which every local user can read in /proc. An attached file's type, contents
@@ -76,6 +77,8 @@ timeout_s=""
 upload_path=""
 inline_path=""
 file_token=""
+earlier_paths=()
+earlier_tokens=()
 secret_names=()
 secret_prefixes=()
 secret_vars=()
@@ -104,6 +107,11 @@ while [ $# -gt 0 ]; do
         --upload-gemini) [ $# -ge 2 ] || usage_error "missing value for $1"; upload_path=$2; shift 2 ;;
         --inline-file) [ $# -ge 2 ] || usage_error "missing value for $1"; inline_path=$2; shift 2 ;;
         --file-token) [ $# -ge 2 ] || usage_error "missing value for $1"; file_token=$2; shift 2 ;;
+        --earlier-file)
+            [ $# -ge 3 ] || usage_error "--earlier-file needs PATH TOKEN"
+            [[ $3 =~ ^[A-Za-z0-9_]+$ ]] || usage_error "invalid --earlier-file token"
+            earlier_paths+=("$2"); earlier_tokens+=("$3")
+            shift 3 ;;
         --) shift; break ;;
         *) usage_error "unknown option $1" ;;
     esac
@@ -209,18 +217,59 @@ if [ -n "$upload_path" ]; then
     fi
 fi
 
-if [ -n "$inline_path" ] && [ "$input" = body ]; then
-    attached_mime "$inline_path"
-    sed -i -e "s|${file_token}_MIME__|$mime|g" -- "$tmpdir/body"
-    placeholder=${file_token}_B64__
+# Fills a file's type and contents into the body where its token's placeholders stand.
+inline_file() {
+    sed -i -e "s|${2}_MIME__|$mime|g" -- "$tmpdir/body"
+    local placeholder=${2}_B64__ offset
     offset=$(LC_ALL=C grep -bo -F -- "$placeholder" "$tmpdir/body" | head -n 1 | cut -d : -f 1)
     if [ -n "$offset" ]; then
         {
             head -c "$offset" -- "$tmpdir/body"
-            base64 -w 0 -- "$inline_path"
+            base64 -w 0 -- "$1"
             tail -c "+$((offset + ${#placeholder} + 1))" -- "$tmpdir/body"
         } > "$tmpdir/body.new" && mv -f -- "$tmpdir/body.new" "$tmpdir/body"
     fi
+}
+
+if [ "${#earlier_paths[@]}" -gt 0 ] && [ "$input" = body ]; then
+    # Files from earlier turns go with the conversation again. One moved or
+    # deleted since only loses its own block, never the whole request.
+    gone=()
+    for i in "${!earlier_paths[@]}"; do
+        mime=$(file -b --mime-type -- "${earlier_paths[i]}" 2>/dev/null)
+        if [ ! -f "${earlier_paths[i]}" ] || ! safe_value "$mime"; then
+            gone+=("${earlier_tokens[i]}")
+        fi
+    done
+    if [ "${#gone[@]}" -gt 0 ]; then
+        python3 -c 'import json, sys
+path, gone = sys.argv[1], sys.argv[2:]
+def mentions(node):
+    return any(t in json.dumps(node) for t in gone)
+def prune(node):
+    # Innermost first, so only the block holding the file goes, not its message.
+    if isinstance(node, list):
+        kept = [prune(x) for x in node]
+        return [x for x in kept if not (isinstance(x, dict) and mentions(x))]
+    if isinstance(node, dict):
+        return {k: prune(v) for k, v in node.items()}
+    return node
+with open(path) as f:
+    body = prune(json.load(f))
+with open(path, "w") as f:
+    json.dump(body, f)' "$tmpdir/body" "${gone[@]}" || fail_early "The conversation's earlier files could not be prepared."
+    fi
+    for i in "${!earlier_paths[@]}"; do
+        mime=$(file -b --mime-type -- "${earlier_paths[i]}" 2>/dev/null)
+        if [ -f "${earlier_paths[i]}" ] && safe_value "$mime"; then
+            inline_file "${earlier_paths[i]}" "${earlier_tokens[i]}"
+        fi
+    done
+fi
+
+if [ -n "$inline_path" ] && [ "$input" = body ]; then
+    attached_mime "$inline_path"
+    inline_file "$inline_path" "$file_token"
 fi
 
 filter_cmd=()
