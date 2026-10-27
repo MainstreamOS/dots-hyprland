@@ -316,7 +316,15 @@ Item {
                 Layout.preferredHeight: content.artSide
                 visible: content.artSide >= 72
 
+                // The same raised shadow the island's player card sits on,
+                // so the cover lifts off the page instead of lying flat on it.
+                StyledRectangularShadow {
+                    target: artLoader
+                    visible: artLoader.active
+                }
                 Loader {
+                    id: artLoader
+                    readonly property real radius: Appearance.rounding.normal
                     anchors.fill: parent
                     active: artFrame.visible
                     sourceComponent: roundedArtComponent
