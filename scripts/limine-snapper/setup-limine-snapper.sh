@@ -345,6 +345,8 @@ command -v limine-snapper-sync >/dev/null 2>&1 || error "limine-snapper-sync not
 
 info "Seeding Limine header and generator config..."
 with_boot_lock write_limine_header
+# Before the rename, so the generator keeps updating the entry already here.
+bash "$_LSN_DIR/mark-os-entry.sh"
 upsert_shell_setting "/etc/default/limine" "TARGET_OS_NAME" '"Mainstream OS\\"'
 # Off. The probe reads this ESP only, so the entries it generated were the
 # systemd-boot this script had just superseded and an "EFI fallback" pointing at

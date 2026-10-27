@@ -955,6 +955,8 @@ function _limine_configure_generator_defaults(){
   # /etc/os-release PRETTY_NAME. This makes the boot menu stable even if
   # branding overlays change later.
   if command -v limine-update >/dev/null 2>&1 || command -v limine-mkinitcpio >/dev/null 2>&1 || [[ -f /etc/default/limine ]]; then
+    # Before the rename, so the generator keeps updating the entry already there.
+    sudo bash "${REPO_ROOT}/scripts/limine-snapper/mark-os-entry.sh"
     _limine_default_upsert "TARGET_OS_NAME" '"Mainstream OS\\"'
     # Off, because every entry this probe produced here was a dead one. It
     # reads this ESP only, so on a machine that just had its bootloader
