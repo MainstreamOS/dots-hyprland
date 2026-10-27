@@ -68,11 +68,12 @@ Singleton {
     }
 
     function hasActive(element) {
-        return element?.activeFocus || Array.from(
-            element?.children
-        ).some(
-            (child) => hasActive(child)
-        );
+        // Following the focused item's parents avoids watching every child
+        // while a sidebar's notification delegates are being created.
+        for (let focused = element?.Window.window?.activeFocusItem; focused; focused = focused.parent) {
+            if (focused === element) return true;
+        }
+        return false;
     }
 
     HyprlandFocusGrab {
