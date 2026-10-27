@@ -350,14 +350,7 @@ Item {
 
                     // Radius
                     property real minRadius: Math.min(Appearance.rounding.small * root.uiScale, root.largeWorkspaceRadius)
-                    property bool workspaceAtLeft: workspaceColIndex === 0
-                    property bool workspaceAtRight: workspaceColIndex === Config.options.overview.columns - 1
-                    property bool workspaceAtTop: workspaceRowIndex === 0
-                    property bool workspaceAtBottom: workspaceRowIndex === Config.options.overview.rows - 1
-                    property bool workspaceAtTopLeft: (workspaceAtLeft && workspaceAtTop) 
-                    property bool workspaceAtTopRight: (workspaceAtRight && workspaceAtTop) 
-                    property bool workspaceAtBottomLeft: (workspaceAtLeft && workspaceAtBottom) 
-                    property bool workspaceAtBottomRight: (workspaceAtRight && workspaceAtBottom) 
+                    workspaceRadii: root.workspaceRadii(workspaceColIndex, workspaceRowIndex)
                     property real distanceFromLeftEdge: xWithinWorkspaceWidget
                     // Held at 0 for a window cut at the edge, whose cut corner
                     // then takes the workspace's own radius.
@@ -368,10 +361,10 @@ Item {
                     property real distanceFromTopRightCorner: Math.max(distanceFromRightEdge, distanceFromTopEdge)
                     property real distanceFromBottomLeftCorner: Math.max(distanceFromLeftEdge, distanceFromBottomEdge)
                     property real distanceFromBottomRightCorner: Math.max(distanceFromRightEdge, distanceFromBottomEdge)
-                    topLeftRadius: Math.max((workspaceAtTopLeft ? root.largeWorkspaceRadius : root.smallWorkspaceRadius) - distanceFromTopLeftCorner, minRadius)
-                    topRightRadius: Math.max((workspaceAtTopRight ? root.largeWorkspaceRadius : root.smallWorkspaceRadius) - distanceFromTopRightCorner, minRadius)
-                    bottomLeftRadius: Math.max((workspaceAtBottomLeft ? root.largeWorkspaceRadius : root.smallWorkspaceRadius) - distanceFromBottomLeftCorner, minRadius)
-                    bottomRightRadius: Math.max((workspaceAtBottomRight ? root.largeWorkspaceRadius : root.smallWorkspaceRadius) - distanceFromBottomRightCorner, minRadius)
+                    topLeftRadius: Math.max(workspaceRadii.x - distanceFromTopLeftCorner, minRadius)
+                    topRightRadius: Math.max(workspaceRadii.y - distanceFromTopRightCorner, minRadius)
+                    bottomLeftRadius: Math.max(workspaceRadii.z - distanceFromBottomLeftCorner, minRadius)
+                    bottomRightRadius: Math.max(workspaceRadii.w - distanceFromBottomRightCorner, minRadius)
 
                     Timer {
                         id: updateWindowPosition

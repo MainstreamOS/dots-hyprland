@@ -55,6 +55,7 @@ Item { // Window
     // own place there, so the cut follows every move and animation.
     property real workspaceWidth: 0
     property real workspaceHeight: 0
+    property vector4d workspaceRadii
     readonly property bool clipped: restrictToWorkspace && workspaceWidth > 0 && workspaceHeight > 0
     readonly property real visibleLeft: clipped ? Math.max(0, xOffset - x) : 0
     readonly property real visibleTop: clipped ? Math.max(0, yOffset - y) : 0
@@ -79,19 +80,15 @@ Item { // Window
 
     layer.enabled: true
     layer.effect: OpacityMask {
-        maskSource: Item {
+        maskSource: WorkspacePreviewMask {
             width: root.width
             height: root.height
-            Rectangle {
-                x: root.visibleLeft
-                y: root.visibleTop
-                width: Math.max(0, root.visibleRight - root.visibleLeft)
-                height: Math.max(0, root.visibleBottom - root.visibleTop)
-                topLeftRadius: root.topLeftRadius
-                topRightRadius: root.topRightRadius
-                bottomRightRadius: root.bottomRightRadius
-                bottomLeftRadius: root.bottomLeftRadius
-            }
+            windowRect: Qt.vector4d(root.visibleLeft, root.visibleTop,
+                Math.max(0, root.visibleRight - root.visibleLeft), Math.max(0, root.visibleBottom - root.visibleTop))
+            windowRadii: Qt.vector4d(root.topLeftRadius, root.topRightRadius, root.bottomLeftRadius, root.bottomRightRadius)
+            workspaceRect: Qt.vector4d(root.xOffset - root.x, root.yOffset - root.y, root.workspaceWidth, root.workspaceHeight)
+            workspaceRadii: root.workspaceRadii
+            workspaceClipped: root.clipped ? 1 : 0
         }
     }
 
