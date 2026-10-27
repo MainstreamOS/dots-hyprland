@@ -79,8 +79,9 @@ ListView {
                 const restY = root.originY + root.contentHeight - root.height;
                 targetY = Math.max(Math.min(root.originY, restY), Math.min(base - delta * scrollFactor, restY));
             } else if (root.wheelBottomReach < 0) {
-                const maxY = Math.max(0, root.contentHeight - root.height);
-                targetY = Math.max(0, Math.min(base - delta * scrollFactor, maxY));
+                const minY = root.originY;
+                const maxY = minY + Math.max(0, root.contentHeight - root.height);
+                targetY = Math.max(minY, Math.min(base - delta * scrollFactor, maxY));
             } else {
                 targetY = root.clampToWheelRange(base - delta * scrollFactor);
             }
