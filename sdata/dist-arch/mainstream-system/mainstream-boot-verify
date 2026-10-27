@@ -67,8 +67,9 @@ pinned() {
 # Sets the caller's n and sec: the section count and where the table starts.
 pe_table() {
     local pe opt
-    pe=$(od -An -t u4 -j 60 -N 4 -- "$1" | tr -d ' ')
-    [[ $(od -An -c -j "$pe" -N 4 -- "$1" | tr -d ' ') == 'PE\0\0' ]] || return 1
+    [[ $(head -c 2 -- "$1") == MZ ]] || return 1
+    pe=$(od -An -t u4 -j 60 -N 4 -- "$1" 2>/dev/null | tr -d ' ')
+    [[ $(od -An -c -j "$pe" -N 4 -- "$1" 2>/dev/null | tr -d ' ') == 'PE\0\0' ]] || return 1
     n=$(od -An -t u2 -j $((pe + 6)) -N 2 -- "$1" | tr -d ' ')
     opt=$(od -An -t u2 -j $((pe + 20)) -N 2 -- "$1" | tr -d ' ')
     sec=$((pe + 24 + opt))
@@ -77,7 +78,6 @@ pe_table() {
 pe_complete() {
     local f=$1 size n sec i raw ptr max=0
     size=$(stat -c %s -- "$f") || return 1
-    [[ $(head -c 2 -- "$f") == MZ ]] || return 1
     pe_table "$f" || return 1
     for ((i = 0; i < n; i++)); do
         read -r raw ptr < <(od -An -t u4 -j $((sec + i * 40 + 16)) -N 8 -- "$f")
@@ -125,6 +125,17 @@ from_installed_kernel() {
     read -r off len <<<"$at"
     size=$(stat -c %s -- "$k") || return 1
     ((len >= size)) && cmp -s -n "$size" -i "$off:0" -- "$f" "$k"
+}
+# Another entry pins this file to what it holds now: limine-entry-tool's fresh
+# entry, when a renamed OS left an older entry for the same file behind.
+vouched() {
+    local now off h rel
+    [[ -f $ESP/$1 ]] || return 1
+    now=$(b2sum <"$ESP/$1" | cut -c1-128) || return 1
+    while read -r off h rel; do
+        [[ ${rel,,} == "${1,,}" && ${h,,} == "$now" ]] && return 0
+    done < <(pinned)
+    return 1
 }
 # The entries that would not start: missing, or not matching their pin.
 problems() {
@@ -243,7 +254,7 @@ repair() {
     while read -r off h rel; do
         mine "$rel" && ((!SECURE_BOOT)) || continue
         f=$ESP/$rel ok=0
-        from_installed_kernel "$f" && ok=1
+        { from_installed_kernel "$f" || vouched "$rel"; } && ok=1
         if ((!ok)) && intact "$BACKUP/$rel"; then
             rm -f -- "$f"
             if (($(stat -c %s -- "$BACKUP/$rel") < $(free_bytes))) \

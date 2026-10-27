@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=16
+pkgrel=17
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
