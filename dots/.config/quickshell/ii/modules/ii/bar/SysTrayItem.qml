@@ -199,7 +199,7 @@ MouseArea {
         grabPending = true;
         if (trayIcon.status !== Image.Ready || !(root.QsWindow.window?.visible ?? false))
             return;
-        const started = trayIcon.grabToImage(result => {
+        const started = TrayIconCapture.grab(trayIcon, result => {
             if (g !== root.grabGeneration)
                 return;
             root.grabPending = false;
