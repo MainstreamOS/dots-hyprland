@@ -1128,7 +1128,10 @@ Item {
             width: Math.min(parent.width * 0.6, 500)
             height: root.expanded
                 ? Math.min(parent.height * 0.7, 520)
-                : Math.min(parent.height * 0.6, 400)
+                // Keep a full row above the footer in the compact drawer.
+                : Math.min(parent.height, 32 + folderHeader.implicitHeight + 1
+                    + folderGrid.cellHeight + folderCardLayout.spacing * 2
+                    + (folderGridContainer.hasOverflow ? folderMoreBar.implicitHeight + folderCardLayout.spacing : 0))
             radius: Appearance.rounding.normal
             color: Appearance.m3colors.m3surfaceContainerHigh
             clip: true
@@ -1152,12 +1155,14 @@ Item {
             }
 
             ColumnLayout {
+                id: folderCardLayout
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 12
 
                 // Folder header
                 RowLayout {
+                    id: folderHeader
                     Layout.fillWidth: true
                     spacing: 8
 
@@ -1214,8 +1219,6 @@ Item {
                     GridView {
                         id: folderGrid
                         anchors.fill: parent
-                        // Reserve space for the "show more" bar when overflowing
-                        anchors.bottomMargin: parent.hasOverflow ? 40 : 0
                         cellWidth: 110
                         cellHeight: 130
                         interactive: root.expanded
@@ -1322,7 +1325,7 @@ Item {
                     // Drag overlay for folder grid — same pattern as main grid
                     MouseArea {
                         id: folderDragOverlay
-                        anchors.fill: parent
+                        anchors.fill: folderGrid
                         z: 1
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         cursorShape: Qt.PointingHandCursor
@@ -1429,56 +1432,44 @@ Item {
                             }
                         }
                     }
+                }
 
-                    // "Show more" indicator — visible when collapsed and folder has > 2 rows
-                    Rectangle {
-                        anchors {
-                            left: parent.left
-                            right: parent.right
-                            bottom: parent.bottom
-                        }
-                        height: 36
-                        visible: folderGridContainer.hasOverflow
-                        color: "transparent"
+                // A separate layout row keeps the footer below the icons and
+                // outside the grid's drag handler, which consumes pointer events.
+                Rectangle {
+                    id: folderMoreBar
+                    Layout.fillWidth: true
+                    implicitHeight: 36
+                    visible: folderGridContainer.hasOverflow
+                    color: "transparent"
 
-                        // Fade gradient over the bottom of the grid
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "transparent" }
-                                GradientStop { position: 0.4; color: Appearance.m3colors.m3surfaceContainerHigh }
-                            }
-                        }
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 4
 
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            StyledText {
-                                text: (folderGridContainer.folderAppCount - folderGridContainer.folderColumns)
-                                    + " more"
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.colors.colPrimary
-                            }
-
-                            MaterialSymbol {
-                                text: "expand_more"
-                                iconSize: Appearance.font.pixelSize.normal
-                                color: Appearance.colors.colPrimary
-                            }
+                        StyledText {
+                            text: (folderGridContainer.folderAppCount - folderGridContainer.folderColumns)
+                                + " more"
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colPrimary
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            z: 10
-                            onClicked: {
-                                // Expand the drawer and keep the folder open
-                                const folder = root.openFolder
-                                root.expanded = true
-                                root.openFolder = folder
-                                root.folderPopupVisible = true
-                            }
+                        MaterialSymbol {
+                            text: "expand_more"
+                            iconSize: Appearance.font.pixelSize.normal
+                            color: Appearance.colors.colPrimary
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            // Expand the drawer and keep the folder open
+                            const folder = root.openFolder
+                            root.expanded = true
+                            root.openFolder = folder
+                            root.folderPopupVisible = true
                         }
                     }
                 }
