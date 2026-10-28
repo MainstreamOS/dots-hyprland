@@ -95,6 +95,7 @@ Item {
     // Folder state
     property int _dragHoverIndex: -1
     property bool folderPopupVisible: false
+    property bool folderPopupExpanded: false
     property var openFolder: null
     property bool folderNameDialogVisible: false
     property string _pendingFolderApp1Id: ""
@@ -147,6 +148,16 @@ Item {
     // Handle dock requesting to open a folder
     Connections {
         target: GlobalStates
+        function onOverviewOpenChanged() {
+            if (!GlobalStates.overviewOpen) {
+                root.expanded = false;
+                root.folderPopupExpanded = false;
+                root.folderPopupVisible = false;
+                root.openFolder = null;
+                root.folderNameDialogVisible = false;
+                root.resetScroll();
+            }
+        }
         function onOpenFolderIdChanged() {
             const raw = GlobalStates.openFolderId;
             if (!raw) return;
@@ -159,7 +170,6 @@ Item {
                 root._pendingFolderApp1Id = "";
                 root._pendingFolderApp2Id = "";
                 root.folderNameDialogVisible = true;
-                root.expanded = true;
                 return;
             }
 
@@ -168,6 +178,7 @@ Item {
                 // No source icon when triggered from dock — animate from center
                 root._folderSourceX = root.width / 2;
                 root._folderSourceY = root.height / 2;
+                root.folderPopupExpanded = false;
                 root.openFolder = {
                     _isFolder: true,
                     id: folder.id,
@@ -175,7 +186,6 @@ Item {
                     appIds: folder.appIds.slice()
                 };
                 root.folderPopupVisible = true;
-                root.expanded = true;
             }
         }
     }
@@ -495,10 +505,7 @@ Item {
                             ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
                     }
 
-                    model: ScriptModel {
-                        values: root.getFilteredApps()
-                        objectProp: "id"
-                    }
+                    model: root.getFilteredApps()
 
                     // Show "no results" message
                     Label {
@@ -555,6 +562,7 @@ Item {
                                     const center = appButton.mapToItem(folderPopupOverlay, appButton.width / 2, appButton.height / 2);
                                     root._folderSourceX = center.x;
                                     root._folderSourceY = center.y;
+                                    root.folderPopupExpanded = false;
                                     root.openFolder = modelData;
                                     root.folderPopupVisible = true;
                                 } else {
@@ -573,81 +581,88 @@ Item {
                         }
 
                         // ── Folder visual ──────────────────────────────
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
-                            spacing: (root.compactCells ? 4 : 6) * root.uiScale
-                            visible: modelData._isFolder === true
+                        Component {
+                            id: folderVisualComponent
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
+                                spacing: (root.compactCells ? 4 : 6) * root.uiScale
 
-                            Rectangle {
-                                Layout.alignment: Qt.AlignHCenter
-                                Layout.preferredWidth: root.iconSize
-                                Layout.preferredHeight: root.iconSize
-                                radius: Appearance.rounding.normal * root.uiScale
-                                color: root.contentColors.colLayer1
-                                border.width: root.uiScale
-                                border.color: root.contentColors.colLayer0BorderOnLayer1
+                                Rectangle {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: root.iconSize
+                                    Layout.preferredHeight: root.iconSize
+                                    radius: Appearance.rounding.normal * root.uiScale
+                                    color: root.contentColors.colLayer1
+                                    border.width: root.uiScale
+                                    border.color: root.contentColors.colLayer0BorderOnLayer1
 
-                                Grid {
-                                    anchors.centerIn: parent
-                                    columns: 2
-                                    spacing: 2 * root.uiScale
+                                    Grid {
+                                        anchors.centerIn: parent
+                                        columns: 2
+                                        spacing: 2 * root.uiScale
 
-                                    Repeater {
-                                        model: modelData._isFolder ? modelData.appIds.slice(0, 4) : []
+                                        Repeater {
+                                            model: appButton.modelData._isFolder ? appButton.modelData.appIds.slice(0, 4) : []
 
-                                        IconImage {
-                                            required property var modelData
-                                            source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
-                                            implicitSize: root.iconSize * 0.38
+                                            IconImage {
+                                                required property var modelData
+                                                source: Quickshell.iconPath(AppSearch.guessIcon(modelData), "image-missing")
+                                                implicitSize: root.iconSize * 0.38
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            StyledText {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignHCenter
-                                text: modelData.name
-                                font.pixelSize: root.appLabelSize
-                                color: appButton.colName
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                                wrapMode: Text.WordWrap
-                                maximumLineCount: root.compactCells ? 1 : 2
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: appButton.modelData.name
+                                    font.pixelSize: root.appLabelSize
+                                    color: appButton.colName
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: root.compactCells ? 1 : 2
+                                }
                             }
                         }
 
                         // ── App visual ─────────────────────────────────
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
-                            spacing: (root.compactCells ? 4 : 6) * root.uiScale
-                            visible: !modelData._isFolder
+                        Component {
+                            id: appVisualComponent
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: (root.compactCells ? 4 : 8) * root.uiScale
+                                spacing: (root.compactCells ? 4 : 6) * root.uiScale
 
-                            IconImage {
-                                Layout.alignment: Qt.AlignHCenter
-                                source: !modelData._isFolder
-                                    ? Quickshell.iconPath(AppSearch.guessIcon(modelData.id || modelData.icon), "application-x-executable")
-                                    : ""
-                                implicitSize: root.iconSize
-                                onStatusChanged: {
-                                    if (status === Image.Error)
-                                        source = Quickshell.iconPath("application-x-executable", "")
+                                IconImage {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    source: Quickshell.iconPath(AppSearch.guessIcon(appButton.modelData.id || appButton.modelData.icon), "application-x-executable")
+                                    implicitSize: root.iconSize
+                                    onStatusChanged: {
+                                        if (status === Image.Error)
+                                            source = Quickshell.iconPath("application-x-executable", "")
+                                    }
+                                }
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: appButton.modelData.name
+                                    font.pixelSize: root.appLabelSize
+                                    color: appButton.colName
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: root.compactCells ? 1 : 2
                                 }
                             }
+                        }
 
-                            StyledText {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignHCenter
-                                text: modelData.name
-                                font.pixelSize: root.appLabelSize
-                                color: appButton.colName
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                                wrapMode: Text.WordWrap
-                                maximumLineCount: root.compactCells ? 1 : 2
-                            }
+                        Loader {
+                            anchors.fill: parent
+                            sourceComponent: appButton.modelData._isFolder === true ? folderVisualComponent : appVisualComponent
                         }
 
                         // Drag-target highlight ring
@@ -805,6 +820,7 @@ Item {
                                     root._folderSourceX = folderPopupOverlay.width / 2
                                     root._folderSourceY = folderPopupOverlay.height / 2
                                 }
+                                root.folderPopupExpanded = false
                                 root.openFolder = _app
                                 root.folderPopupVisible = true
                             } else {
@@ -1089,6 +1105,7 @@ Item {
         onVisibleChanged: {
             if (!visible && !root._folderDragActive) {
                 root.openFolder = null;
+                root.expanded = false;
             }
         }
         opacity: {
@@ -1113,6 +1130,7 @@ Item {
                 anchors.fill: parent
                 preventStealing: true
                 propagateComposedEvents: false
+                onWheel: (event) => event.accepted = true
                 onClicked: {
                     if (!root._folderDragActive) {
                         root.folderPopupVisible = false;
@@ -1126,7 +1144,7 @@ Item {
             id: folderCard
             anchors.centerIn: parent
             width: Math.min(parent.width * 0.6, 500)
-            height: root.expanded
+            height: root.folderPopupExpanded
                 ? Math.min(parent.height * 0.7, 520)
                 // Keep a full row above the footer in the compact drawer.
                 : Math.min(parent.height, 32 + folderHeader.implicitHeight + 1
@@ -1135,6 +1153,11 @@ Item {
             radius: Appearance.rounding.normal
             color: Appearance.m3colors.m3surfaceContainerHigh
             clip: true
+
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                onWheel: (event) => event.accepted = true
+            }
 
             // Scale value animated between 0 (collapsed at icon) and 1 (full size)
             property real _scaleVal: root.folderPopupVisible || root._folderDragActive ? 1 : 0
@@ -1214,27 +1237,37 @@ Item {
                     // How many columns fit and whether the grid overflows 1 row (collapsed)
                     readonly property int folderColumns: Math.max(1, Math.floor(width / 110))
                     readonly property int folderAppCount: folderGrid.count
-                    readonly property bool hasOverflow: !root.expanded && folderAppCount > folderColumns
+                    readonly property bool hasOverflow: !root.folderPopupExpanded && folderAppCount > folderColumns
 
                     GridView {
                         id: folderGrid
                         anchors.fill: parent
                         cellWidth: 110
                         cellHeight: 130
-                        interactive: root.expanded
+                        interactive: root.folderPopupExpanded
                         boundsBehavior: Flickable.StopAtBounds
 
-                        model: ScriptModel {
-                            objectProp: "id"
-                            values: {
-                                if (!root.openFolder || !root.openFolder.appIds) return [];
-                                const apps = [];
-                                for (let i = 0; i < root.openFolder.appIds.length; i++) {
-                                    const app = root.getAppById(root.openFolder.appIds[i]);
-                                    if (app) apps.push(app);
+                        WheelHandler {
+                            target: folderGrid
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: (event) => {
+                                if (root.folderPopupExpanded) {
+                                    const dy = (event.angleDelta.y / 120 * 40) || event.pixelDelta.y;
+                                    const maxContentY = Math.max(0, folderGrid.contentHeight - folderGrid.height);
+                                    folderGrid.contentY = Math.max(0, Math.min(folderGrid.contentY - dy, maxContentY));
                                 }
-                                return apps;
+                                event.accepted = true;
                             }
+                        }
+
+                        model: {
+                            if (!root.openFolder || !root.openFolder.appIds) return [];
+                            const apps = [];
+                            for (let i = 0; i < root.openFolder.appIds.length; i++) {
+                                const app = root.getAppById(root.openFolder.appIds[i]);
+                                if (app) apps.push(app);
+                            }
+                            return apps;
                         }
 
                         delegate: RippleButton {
@@ -1465,11 +1498,8 @@ Item {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            // Expand the drawer and keep the folder open
-                            const folder = root.openFolder
-                            root.expanded = true
-                            root.openFolder = folder
-                            root.folderPopupVisible = true
+                            // Expand the folder card and keep it open
+                            root.folderPopupExpanded = true;
                         }
                     }
                 }
