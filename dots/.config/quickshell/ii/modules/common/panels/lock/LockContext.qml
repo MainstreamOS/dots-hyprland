@@ -19,6 +19,8 @@ Scope {
     property string currentText: ""
     property bool unlockInProgress: false
     property bool showFailure: false
+    // Last informational/error message PAM sent (e.g. pam_faillock's lockout notice)
+    property string pamMessage: ""
     property bool fingerprintsConfigured: false
     property var targetAction: LockContext.ActionEnum.Unlock
     property bool alsoInhibitIdle: false
@@ -71,6 +73,7 @@ Scope {
     function tryUnlock(alsoInhibitIdle = false) {
         root.alsoInhibitIdle = alsoInhibitIdle;
         root.unlockInProgress = true;
+        root.pamMessage = "";
         pam.start();
     }
 
@@ -157,10 +160,13 @@ Scope {
         onPamMessage: {
             if (this.responseRequired) {
                 this.respond(root.currentText);
+            } else if (this.message) {
+                // e.g. pam_faillock: "The account is locked due to 3 failed logins."
+                root.pamMessage = this.message;
             }
         }
 
-        // pam_unix won't send any important messages so all we need is the completion status.
+        // Besides the completion status, keep any message PAM sent so a lockout isn't shown as a wrong password.
         onCompleted: result => {
             if (result == PamResult.Success) {
                 root.unlocked(root.targetAction);
