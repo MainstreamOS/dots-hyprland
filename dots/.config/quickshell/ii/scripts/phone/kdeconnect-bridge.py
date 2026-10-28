@@ -38,7 +38,8 @@ DEVICE_IFACE = "org.kde.kdeconnect.device"
 CONVERSATIONS_IFACE = "org.kde.kdeconnect.device.conversations"
 SFTP_IFACE = "org.kde.kdeconnect.device.sftp"
 CALL_TIMEOUT = 2000
-MOUNT_TIMEOUT = 30000
+# Reconnect sync can delay credentials; the daemon then needs time to mount.
+MOUNT_TIMEOUT = 60000
 MMS_MAX_BYTES = 800 * 1024
 MMS_TARGET_BYTES = 700 * 1024
 MMS_PASSTHROUGH_BYTES = 750 * 1024
@@ -48,6 +49,8 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".heic", ".heif", ".avif
 conn = None
 # Messages by thread and message id, for every thread a request has loaded.
 threads = {}
+# Which cached histories belong in the last refreshed list, including offline.
+listed_threads = {}
 # Threads the tab asked for; loading the thread list reports every other one too.
 requested = set()
 loading_threads = set()
@@ -152,6 +155,9 @@ def load_threads():
             data = json.load(f)
         if not isinstance(data, dict):
             return
+        for device, ids in data.get("_lists", {}).items():
+            if isinstance(ids, list):
+                listed_threads[device] = {int(tid) for tid in ids}
         for key_str, msgs in data.items():
             if ":" not in key_str or not isinstance(msgs, list):
                 continue
@@ -171,6 +177,7 @@ def save_threads():
     try:
         payload = {f"{dev}:{tid}": sorted(bucket.values(), key=lambda m: m.get("date", 0))[-100:]
                    for (dev, tid), bucket in list(threads.items()) if bucket}
+        payload["_lists"] = {device: sorted(ids) for device, ids in list(listed_threads.items())}
         with atomic_file(threads_cache_file, prefix="threads-") as output:
             json.dump(payload, output, separators=(",", ":"))
     except Exception:
@@ -812,6 +819,8 @@ def watch(device):
                           lambda *a, d=device: admit(on_loaded, d, a[5], on_drop=lambda: resync_soon(d)))
     conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "conversationRemoved", path, None, Gio.DBusSignalFlags.NONE,
                           lambda *a, d=device: admit(remove_thread, d, a[5].unpack()[0], on_drop=lambda: resync_soon(d)))
+    conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "conversationListReset", path, None, Gio.DBusSignalFlags.NONE,
+                          lambda *a, d=device: admit(refresh_conversation_list, d, on_drop=lambda: resync_soon(d)))
     # The full file of an attachment; its name is the attachment's unique id.
     conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "attachmentReceived", path, None, Gio.DBusSignalFlags.NONE,
                           lambda *a, d=device: attachment_received(d, a[5].unpack()))
@@ -896,6 +905,8 @@ def resync_soon(device):
 
 def remove_thread(device, tid):
     threads.pop((device, int(tid)), None)
+    if device in listed_threads:
+        listed_threads[device].discard(int(tid))
     requested.discard((device, int(tid)))
     loading_threads.discard((device, int(tid)))
     save_threads_soon()
@@ -911,6 +922,7 @@ def on_message(device, params):
     prev_max_date = max((m.get("date", 0) for m in bucket.values()), default=0)
     is_new = msg["uid"] not in bucket
     bucket[msg["uid"]] = msg
+    listed_threads.setdefault(device, set()).add(tid)
     save_threads_soon()
     if (device, tid) not in loading_threads or is_new or msg.get("date", 0) >= prev_max_date:
         # Live: an incoming message the phone received while this bridge was running.
@@ -941,23 +953,43 @@ def load_active(device):
     return items
 
 
+def refresh_conversation_list(device):
+    # A reset starts a new listing, not a deletion of cached histories. The
+    # phone can still deliver another thread later without a completion marker.
+    try:
+        items = load_active(device)
+    except Exception:
+        resync_soon(device)
+        return
+    listed_threads[device] = {int(m["thread"]) for m in items}
+    save_threads_soon()
+    emit("conversations", device=device, items=sorted(items, key=lambda m: m.get("date", 0), reverse=True))
+
+
 def conversations(device):
     path = device_path(device)
+    active_available = True
     try:
         items = load_active(device)
     except Exception:
         items = []
+        active_available = False
 
-    # activeConversations can be empty or partial after a restart; the thread cache fills it in.
+    # Offline history remains useful. A connected phone's current list must
+    # not be filled from that history: deleted threads would return forever.
     thread_map = {}
-    for (d, tid), bucket in threads.items():
-        if d == device and bucket:
-            thread_map[tid] = max(bucket.values(), key=lambda m: m.get("date", 0))
+    if device not in known_reachable or not active_available:
+        for (d, tid), bucket in threads.items():
+            if d == device and bucket and (device not in listed_threads or tid in listed_threads[device]):
+                thread_map[tid] = max(bucket.values(), key=lambda m: m.get("date", 0))
     for m in items:
         tid = int(m["thread"])
         if tid not in thread_map or m.get("date", 0) >= thread_map[tid].get("date", 0):
             thread_map[tid] = m
     sorted_items = sorted(thread_map.values(), key=lambda m: m.get("date", 0), reverse=True)
+    if device in known_reachable and active_available:
+        listed_threads[device] = set(thread_map)
+        save_threads_soon()
     emit("conversations", device=device, items=sorted_items)
 
     # Push any cached thread histories immediately so opening a thread is instant.
@@ -968,8 +1000,9 @@ def conversations(device):
             msgs = sorted(existing.values(), key=lambda x: x["date"])[-100:]
             emit("thread", device=device, thread=tid, messages=msgs, loaded=len(msgs), cached=True)
 
-    # Asks the phone for anything newer; it arrives as message events.
-    call(path, CONVERSATIONS_IFACE, "requestAllConversationThreads")
+    # A connected phone supplies a fresh listing; offline views keep the cache.
+    if device in known_reachable:
+        call(path, CONVERSATIONS_IFACE, "requestAllConversationThreads")
 
 
 def thread(device, thread_id, count):
