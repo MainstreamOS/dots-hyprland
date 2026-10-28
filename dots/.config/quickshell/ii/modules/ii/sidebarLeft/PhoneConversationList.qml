@@ -15,9 +15,19 @@ Item {
     signal sendFilesRequested()
 
     property string searchQuery: ""
+    property bool showHidden: false
+    readonly property var displayedConversations: root.showHidden ? Phone.hiddenConversations : Phone.visibleConversations
+
+    Connections {
+        target: Phone
+        function onDeviceIdChanged() {
+            root.showHidden = false;
+            conversationMenu.close();
+        }
+    }
 
     readonly property var filteredConversations: {
-        const all = Phone.conversations ?? [];
+        const all = root.displayedConversations;
         const deduped = [];
         const seenThreads = new Set();
         for (const item of all) {
@@ -116,6 +126,25 @@ Item {
 
             RippleButton {
                 implicitHeight: 38
+                implicitWidth: 38
+                buttonRadius: Appearance.rounding.small
+                colBackground: root.showHidden ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.raised
+                Accessible.name: root.showHidden ? Translation.tr("Show conversations") : Translation.tr("Show hidden conversations")
+                onClicked: root.showHidden = !root.showHidden
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.showHidden ? "visibility" : "visibility_off"
+                    iconSize: 18
+                    color: root.showHidden ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                }
+                StyledToolTip {
+                    text: parent.Accessible.name
+                }
+            }
+
+            RippleButton {
+                implicitHeight: 38
                 implicitWidth: composeRow.implicitWidth + 24
                 buttonRadius: Appearance.rounding.small
                 enabled: Phone.reachable
@@ -194,7 +223,14 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.opened(row.modelData.thread)
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: mouse => {
+                        if (mouse.button === Qt.RightButton) {
+                            conversationMenu.thread = row.modelData.thread;
+                            const point = rowMouse.mapToItem(root, mouse.x, mouse.y);
+                            conversationMenu.openAt(point.x, point.y);
+                        } else root.opened(row.modelData.thread);
+                    }
                 }
 
                 RowLayout {
@@ -289,10 +325,36 @@ Item {
         }
     }
 
+    ContextMenuPopup {
+        id: conversationMenu
+        property int thread: -1
+        width: 260
+        implicitHeight: menuColumn.implicitHeight + topPadding + bottomPadding
+        focus: true
+        contentItem: ColumnLayout {
+            id: menuColumn
+            spacing: 2
+            ContextMenuItem {
+                enabled: conversationMenu.thread >= 0
+                iconName: root.showHidden ? "visibility" : "visibility_off"
+                label: root.showHidden ? Translation.tr("Unhide conversation") : Translation.tr("Hide on this desktop")
+                Accessible.name: label
+                onClicked: {
+                    conversationMenu.close();
+                    Phone.setConversationHidden(conversationMenu.thread, !root.showHidden);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Only affects this desktop. New incoming messages show the conversation again.")
+                }
+            }
+        }
+    }
+
     PagePlaceholder {
-        shown: Phone.conversations.length === 0
-        icon: "sms"
-        title: Phone.conversationsLoaded ? Translation.tr("No conversations") : Translation.tr("Loading conversations")
+        shown: root.displayedConversations.length === 0
+        icon: root.showHidden ? "visibility_off" : "sms"
+        title: root.showHidden ? Translation.tr("No hidden conversations")
+            : Phone.conversationsLoaded ? Translation.tr("No conversations") : Translation.tr("Loading conversations")
         description: Phone.reachable ? "" : Translation.tr("Your phone is not reachable right now.")
     }
 }

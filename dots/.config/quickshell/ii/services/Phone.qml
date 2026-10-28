@@ -10,6 +10,7 @@ import Quickshell.Io
 import "PhoneReactions.js" as PhoneReactions
 import "PhoneIdentity.js" as Identity
 import "IslandPhoneHistory.js" as History
+import "PhoneConversationVisibility.js" as ConversationVisibility
 
 /**
  * Paired phones through KDE Connect or rust-connect, for the Phone tab, the
@@ -124,6 +125,20 @@ Singleton {
     // a message sent through KDE Connect. One it reports replaces its copy.
     property var localSent: []
     property var savedLocalSent: ({})
+    readonly property var visibleConversations: ConversationVisibility.conversations(
+        root.conversations, root.savedLocalSent._hiddenConversations, root.deviceId, false)
+    readonly property var hiddenConversations: ConversationVisibility.conversations(
+        root.conversations, root.savedLocalSent._hiddenConversations, root.deviceId, true)
+
+    function setConversationHidden(thread, hidden): void {
+        root.saveConversationVisibility(ConversationVisibility.setHidden(
+            root.savedLocalSent._hiddenConversations, root.deviceId, thread, hidden));
+    }
+    function saveConversationVisibility(state): void {
+        if (state === root.savedLocalSent._hiddenConversations) return;
+        root.savedLocalSent = Object.assign({}, root.savedLocalSent, {_hiddenConversations: state});
+        saveSentTimer.restart();
+    }
     property bool threadLoading: false
     property var pendingTarget: null
 
@@ -1023,6 +1038,8 @@ Singleton {
             break;
         }
         case "message": {
+            root.saveConversationVisibility(ConversationVisibility.afterMessage(
+                root.savedLocalSent._hiddenConversations, event));
             if (event.message) {
                 const key = "kde:/modules/kdeconnect/devices/" + event.device + ":" + event.message.uid;
                 if (event.live || root.recentMessages.some(m => m.sourceIds?.includes(key)))
