@@ -875,15 +875,8 @@ Scope {
         name: "searchToggleRelease"
         description: "Toggles search on release"
 
-        onPressed: {
-            GlobalStates.superReleaseMightTrigger = true;
-        }
-
+        // Hyprland's native release bind already suppresses Super combinations.
         onReleased: {
-            if (!GlobalStates.superReleaseMightTrigger) {
-                GlobalStates.superReleaseMightTrigger = true;
-                return;
-            }
             overviewScope.toggleSearch();
         }
     }

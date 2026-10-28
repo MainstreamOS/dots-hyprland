@@ -22,10 +22,11 @@ end
 --#!
 --##! Desktop
 -- These absolutely need to be on top, or they won't work consistently
-hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:searchToggleRelease"), {description = "Toggle search"} )
-hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:searchToggleRelease"))
-hl.bind("SUPER + SUPER_L", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel") )
-hl.bind("SUPER + SUPER_R", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel") )
+-- Native release binds suppress the launcher when Super was used in another shortcut.
+hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:searchToggleRelease"), {release = true, description = "Toggle search"} )
+hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:searchToggleRelease"), {release = true} )
+hl.bind("SUPER + SUPER_L", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel"), {release = true} )
+hl.bind("SUPER + SUPER_R", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel"), {release = true} )
 
 hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), {ignore_mods = true, transparent = true} )
 hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), {ignore_mods = true, transparent = true} )

@@ -294,7 +294,7 @@ QtObject {
         { has: "exec_cmd(terminal)", name: Translation.tr("Open the terminal") },
     ]
     readonly property var globalNameRules: [
-        { has: "searchToggleRelease", name: Translation.tr("Toggle search") },
+        { has: "searchToggle", name: Translation.tr("Toggle search") },
         { has: "workspaceNumber", name: Translation.tr("Show workspace numbers") },
         { has: "sidebarLeftToggleDetach", name: Translation.tr("Detach the left sidebar") },
         { has: "regionOcr", name: Translation.tr("Copy text from the screen") },
