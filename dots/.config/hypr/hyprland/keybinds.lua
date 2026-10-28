@@ -113,7 +113,21 @@ hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), {mouse = true, description 
 for i = 1, 6 do
  local arrowkey = {"Left","Right","Up","Down","BracketLeft","BracketRight"}
  local focusdir = {"l","r","u","d","l","r"}
- hl.bind("SUPER + "..arrowkey[i], hl.dsp.focus({direction = focusdir[i]}) )
+ local colscroll = {"move -col", "move +col"}
+ if i <= 2 then
+  -- In the scrolling layout SUPER+Left/Right scrolls the view by one column instead of
+  -- directional focus. One handler picks the action, so both can never fire on one press.
+  hl.bind("SUPER + "..arrowkey[i], function()
+   local ws = hl.get_active_workspace()
+   if ws ~= nil and ws.tiled_layout == "scrolling" then
+    hl.dispatch(hl.dsp.layout(colscroll[i]))
+   else
+    hl.dispatch(hl.dsp.focus({direction = focusdir[i]}))
+   end
+  end)
+ else
+  hl.bind("SUPER + "..arrowkey[i], hl.dsp.focus({direction = focusdir[i]}) )
+ end
 end
 --#/# bind = SUPER + SHIFT + ←/↑/→/↓,, -- Move in direction
 for i = 1, 4 do
@@ -196,6 +210,25 @@ hl.bind("SUPER + SHIFT + L", hl.dsp.exec_cmd("systemctl suspend || loginctl susp
 
 hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl poweroff || loginctl poweroff") )
 
+--##! Screen
+--# Zoom
+local function zoomfunction(value)
+ local zoomvalue = hl.get_config("cursor:zoom_factor")
+ if (zoomvalue + value) > 3.0 then
+ hl.config({cursor = {zoom_factor = 3.0}})
+ elseif (zoomvalue + value) < 1.0 then
+ hl.config({cursor = {zoom_factor = 1.0}})
+ else
+ hl.config({cursor = {zoom_factor = zoomvalue + value}})
+ end
+end
+hl.bind("SUPER + Minus", function() zoomfunction(-0.3) end, {repeating = true, description = "Zoom out"} )
+hl.bind("SUPER + Equal", function() zoomfunction(0.3) end, {repeating = true, description = "Zoom in"} )
+
+--# Zoom with keypad
+hl.bind("SUPER + code:82", function() zoomfunction(-0.3) end, {repeating = true} )
+hl.bind("SUPER + code:86", function() zoomfunction(0.3) end, {repeating = true} )
+
 --#!
 --##! Workspace
 --# Switching
@@ -215,7 +248,21 @@ for i = 1, 4 do
  local key = {"CTRL + SUPER + ", "CTRL + SUPER + ALT + "}
  local keycombos = {key[1].."Right", key[1].."Left", key[2].."Right", key[2].."Left"}
  local prefix = {"r+","r-","m+","m-"}
+ local colmsg = {"swapcol r", "swapcol l"}
+ if i <= 2 then
+ -- In the scrolling layout CTRL+SUPER+Left/Right swaps the column with its neighbour instead of
+ -- switching workspace. One handler picks the action, so both can never fire on one press.
+ hl.bind(keycombos[i], function()
+ local ws = hl.get_active_workspace()
+ if ws ~= nil and ws.tiled_layout == "scrolling" then
+ hl.dispatch(hl.dsp.layout(colmsg[i]))
+ else
+ hl.dispatch(hl.dsp.focus({workspace = prefix[i].."1"}))
+ end
+ end)
+ else
  hl.bind(keycombos[i], hl.dsp.focus({workspace = prefix[i].."1"}) )
+ end
 end
 --#/# bind = SUPER + Page_↑/↓,, -- Focus left/right
 for i = 1, 4 do
@@ -262,28 +309,34 @@ hl.bind("SUPER + O", function()
     end
 end, {description = "Toggle Scrolling overview"})
 
+--# Columns
+-- SUPER+ALT is used where the plain SUPER key already belongs to an unguarded
+-- bind (Period = emoji, P = pin, E/C/X = apps, L = lock), so nothing double-fires.
+-- Everything here is guarded with on_layout, so it only acts in the scrolling layout.
+-- SUPER+Left/Right and CTRL+SUPER+Left/Right also focus windows or switch workspaces in
+-- other layouts, so their real binds live in the Window and Workspace sections, where
+-- one handler picks the action by layout. Listed here for the cheatsheet.
+--#/# bind = SUPER + ←/→,, -- Scroll view one column left/right
+--#/# bind = CTRL + SUPER + ←/→,, -- Swap column left/right
+
+--# Restructuring
+hl.bind("SUPER + ALT + P", on_layout("scrolling", "promote"), {description = "Promote window to its own column"} )
+hl.bind("SUPER + ALT + E", on_layout("scrolling", "expel"), {description = "Expel window to its own column"} )
+hl.bind("SUPER + ALT + C", on_layout("scrolling", "consume"), {description = "Consume window into previous column"} )
+hl.bind("SUPER + ALT + X", on_layout("scrolling", "consume_or_expel next"), {description = "Consume or expel window"} )
+hl.bind("SUPER + ALT + L", on_layout("scrolling", "inhibit_scroll"), {description = "Toggle scroll lock"} )
+
+--# Nudge and column width
+--#/# binde = SUPER + ALT + ←/→,, -- Nudge view left/right
+hl.bind("SUPER + ALT + Left", on_layout("scrolling", "move -200"), {repeating = true} )
+hl.bind("SUPER + ALT + Right", on_layout("scrolling", "move +200"), {repeating = true} )
+-- SUPER+ALT+Equal is already taken (notification test), so width uses CTRL+SUPER.
+hl.bind("CTRL + SUPER + Minus", on_layout("scrolling", "colresize -conf"), {description = "Previous column width preset"} )
+hl.bind("CTRL + SUPER + Equal", on_layout("scrolling", "colresize +conf"), {description = "Next column width preset"} )
+
 --##! Monocle Layout
 hl.bind("SUPER + J", on_layout("monocle", "cyclenext"), {description = "Next window"} )
 hl.bind("SUPER + K", on_layout("monocle", "cycleprev"), {description = "Previous window"} )
-
---##! Screen
---# Zoom
-local function zoomfunction(value)
- local zoomvalue = hl.get_config("cursor:zoom_factor")
- if (zoomvalue + value) > 3.0 then
- hl.config({cursor = {zoom_factor = 3.0}})
- elseif (zoomvalue + value) < 1.0 then
- hl.config({cursor = {zoom_factor = 1.0}})
- else
- hl.config({cursor = {zoom_factor = zoomvalue + value}})
- end
-end
-hl.bind("SUPER + Minus", function() zoomfunction(-0.3) end, {repeating = true, description = "Zoom out"} )
-hl.bind("SUPER + Equal", function() zoomfunction(0.3) end, {repeating = true, description = "Zoom in"} )
-
---# Zoom with keypad
-hl.bind("SUPER + code:82", function() zoomfunction(-0.3) end, {repeating = true} )
-hl.bind("SUPER + code:86", function() zoomfunction(0.3) end, {repeating = true} )
 
 --#!
 --##! Apps
