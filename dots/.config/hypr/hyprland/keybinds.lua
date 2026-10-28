@@ -310,7 +310,7 @@ hl.bind("SUPER + O", function()
 end, {description = "Toggle Scrolling overview"})
 
 --# Columns
--- SUPER+ALT is used where the plain SUPER key already belongs to an unguarded
+-- CTRL+SUPER is used where the plain SUPER key already belongs to an unguarded
 -- bind (Period = emoji, P = pin, E/C/X = apps, L = lock), so nothing double-fires.
 -- Everything here is guarded with on_layout, so it only acts in the scrolling layout.
 -- SUPER+Left/Right and CTRL+SUPER+Left/Right also focus windows or switch workspaces in
@@ -320,11 +320,11 @@ end, {description = "Toggle Scrolling overview"})
 --#/# bind = CTRL + SUPER + ←/→,, -- Swap column left/right
 
 --# Restructuring
-hl.bind("SUPER + ALT + P", on_layout("scrolling", "promote"), {description = "Promote window to its own column"} )
-hl.bind("SUPER + ALT + E", on_layout("scrolling", "expel"), {description = "Expel window to its own column"} )
-hl.bind("SUPER + ALT + C", on_layout("scrolling", "consume"), {description = "Consume window into previous column"} )
-hl.bind("SUPER + ALT + X", on_layout("scrolling", "consume_or_expel next"), {description = "Consume or expel window"} )
-hl.bind("SUPER + ALT + L", on_layout("scrolling", "inhibit_scroll"), {description = "Toggle scroll lock"} )
+hl.bind("CTRL + SUPER + P", on_layout("scrolling", "promote"), {description = "Promote window to its own column"} )
+hl.bind("CTRL + SUPER + E", on_layout("scrolling", "expel"), {description = "Expel window to its own column"} )
+hl.bind("CTRL + SUPER + C", on_layout("scrolling", "consume"), {description = "Consume window into previous column"} )
+hl.bind("CTRL + SUPER + X", on_layout("scrolling", "consume_or_expel next"), {description = "Consume or expel window"} )
+hl.bind("CTRL + SUPER + L", on_layout("scrolling", "inhibit_scroll"), {description = "Toggle scroll lock"} )
 
 --# Nudge and column width
 --#/# binde = SUPER + ALT + ←/→,, -- Nudge view left/right
