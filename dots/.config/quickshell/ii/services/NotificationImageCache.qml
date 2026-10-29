@@ -10,11 +10,13 @@ import qs.modules.common.functions
 
 // Notification image-provider URLs belong to the running shell. Copy their
 // pixels while the notification is alive, so history survives shell reloads.
-// A copy is named after its image, so an updated notification reuses it, and
-// copies nothing refers to any more are removed by prune().
+// A supplied content hash can be reused across runs. Provider URLs are only
+// identities within this generation: Quickshell reuses their IDs on restart.
+// Copies nothing refers to any more are removed by prune().
 Singleton {
     id: root
     readonly property string directory: FileUtils.trimFileProtocol(Directories.cache) + "/notifications/images"
+    readonly property string generation: Qt.md5(Date.now() + ":" + Math.random())
     property bool directoryReady: false
     property var pending: []
     property var current: null
@@ -29,7 +31,9 @@ Singleton {
         if (!/^(image:\/\/qsimage\/|file:\/\/|\/)/.test(source)) return;
         if (current?.notificationId === notificationId && current.source === source) return;
         if (pending.some(job => job.notificationId === notificationId && job.source === source)) return;
-        const name = (/^[0-9a-f]{8,64}$/i.test(imageKey || "") ? imageKey : Qt.md5(source)) + ".png";
+        const name = (/^[0-9a-f]{8,64}$/i.test(imageKey || "")
+            ? "hash-" + imageKey.toLowerCase()
+            : "image-" + Qt.md5(root.generation + ":" + source)) + ".png";
         if (copied[name]) {
             Qt.callLater(() => root.stored(notificationId, source, "file://" + directory + "/" + name));
             return;
@@ -38,6 +42,16 @@ Singleton {
         if (!directoryReady) {
             if (!prepare.running) prepare.running = true;
         } else pump();
+    }
+    function historySource(source, imageKey) {
+        const prefix = "file://" + directory + "/";
+        if (!source.startsWith(prefix)) return source;
+        const name = source.slice(prefix.length);
+        // Old URL-derived filenames could already hold another notification's
+        // pixels. Keep the text, but only trust old artwork with a content hash.
+        if (/^[0-9a-f]{32}\.png$/i.test(name)
+            && name.toLowerCase() !== String(imageKey || "").toLowerCase() + ".png") return "";
+        return source;
     }
     function pump() {
         if (current || !directoryReady || !pending.length) return;

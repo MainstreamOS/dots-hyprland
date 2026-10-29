@@ -83,7 +83,6 @@ Singleton {
         property string image: cachedImage || sourceImage
         onSourceImageChanged: {
             cachedImage = "";
-            NotificationImageCache.store(notificationId, sourceImage, iconHash);
         }
         property bool ready: false
         Component.onCompleted: {
@@ -354,6 +353,9 @@ Singleton {
         // Quickshell mutates a replacement in place; NotificationServer's
         // notification signal only fires when a new server ID is allocated.
         notif.time = Date.now();
+        // Image and hints change separately. Copy after both have settled so
+        // new pixels cannot be saved under the previous image's content hash.
+        NotificationImageCache.store(notif.notificationId, notif.sourceImage, notif.iconHash);
         if (!notif.sourceImage && notif.iconHash && notif.lastImageHash === notif.iconHash) {
             notif.cachedImage = notif.lastImage;
         } else if (!notif.sourceImage) notif.cachedImage = "";
@@ -664,6 +666,8 @@ Singleton {
             saved = (Array.isArray(saved) ? saved : []).filter(entry => (entry.appName || entry.summary || entry.body)
                 && (!entry.phoneKey || keyed.get(entry.phoneKey) === entry));
             root.list = (Array.isArray(saved) ? saved : []).map((notif) => {
+                const image = NotificationImageCache.historySource(
+                    root.imageSource(notif.image), notif.iconHash);
                 return notifComponent.createObject(root, {
                     "notificationId": notif.notificationId,
                     "savedActions": notif.actions || [],
@@ -680,9 +684,9 @@ Singleton {
                     "appIcon": notif.appIcon,
                     "appName": notif.appName,
                     "body": notif.body,
-                    "image": notif.image?.startsWith("image://qsimage/") ? "" : root.imageSource(notif.image),
-                    "lastImage": notif.image?.startsWith("file:") ? notif.image : "",
-                    "lastImageHash": notif.iconHash || "",
+                    "image": image.startsWith("image://qsimage/") ? "" : image,
+                    "lastImage": image.startsWith("file:") ? image : "",
+                    "lastImageHash": image ? notif.iconHash || "" : "",
                     "summary": notif.summary,
                     "time": notif.time,
                     "urgency": notif.urgency,
