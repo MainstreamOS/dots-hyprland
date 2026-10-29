@@ -196,6 +196,17 @@
       "requires": "blur"
     },
     {
+      "key": "blurVariant",
+      "group": "blur",
+      "label": "Blur style",
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 10,
+      "hypr": "decoration:blur:variant",
+      "requires": "blur"
+    },
+    {
       "key": "shadow",
       "group": "shadow",
       "label": "Shadows",

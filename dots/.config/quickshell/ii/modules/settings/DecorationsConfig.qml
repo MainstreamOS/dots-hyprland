@@ -34,6 +34,7 @@ ContentPage {
     property real blurNoiseValue: 0.05
     property real blurVibrancyValue: 0.5
     property bool blurXrayEnabled: true
+    property int  blurVariantValue: 0
     property real activeOpacityValue: 1.0
     property real inactiveOpacityValue: 1.0
     property bool dimInactiveEnabled: true
@@ -187,6 +188,38 @@ ContentPage {
     // hand-written config or an imported theme still round-trips.
     readonly property var blurLadder: [[2, 1], [3, 1], [4, 2], [6, 2], [8, 2], [8, 3], [10, 3], [12, 3], [12, 4], [16, 4]]
 
+    property var supportedBlurVariants: []
+    readonly property var blurStyles: [
+        { displayName: Translation.tr("Default") + " (Kawase)", value: 0 },
+        { displayName: Translation.tr("Frost"), value: 1 },
+        { displayName: Translation.tr("Ripple"), value: 2 },
+        { displayName: Translation.tr("Drops"), value: 3 },
+        { displayName: Translation.tr("Water"), value: 4 },
+        { displayName: Translation.tr("Fluid jar"), value: 5 },
+        { displayName: Translation.tr("Prism"), value: 6 },
+        { displayName: Translation.tr("Heat shimmer"), value: 7 },
+        { displayName: Translation.tr("Acrylic"), value: 8 },
+        { displayName: Translation.tr("Aurora"), value: 9 },
+        { displayName: Translation.tr("Haze"), value: 10 },
+    ].filter(style => root.supportedBlurVariants.includes(style.value))
+
+    // Forks can offer more styles than stock Hyprland. Only offer values the
+    // running compositor accepts rather than relying on its version number.
+    Process {
+        id: blurVariantsReader
+        running: true
+        command: ["hyprctl", "descriptions", "-j"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const option = JSON.parse(text).find(o => o.name === "decoration:blur:variant");
+                    root.supportedBlurVariants = (option?.map ?? [])
+                        .reduce((values, entry) => values.concat(Object.values(entry)), []);
+                } catch (e) { root.supportedBlurVariants = []; }
+            }
+        }
+    }
+
     // Nearest ladder step to an arbitrary pair, compared on log2(size·2^passes)
     // — the spread of the blur in pixels — so off-ladder values from elsewhere
     // land on the step that looks most like them.
@@ -313,6 +346,7 @@ ContentPage {
         if (values.blurNoise !== undefined) root.blurNoiseValue = values.blurNoise
         if (values.blurVibrancy !== undefined) root.blurVibrancyValue = values.blurVibrancy
         if (values.blurXray !== undefined) root.blurXrayEnabled = values.blurXray
+        if (values.blurVariant !== undefined) root.blurVariantValue = values.blurVariant
         if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
         if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
         if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
@@ -1018,6 +1052,42 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
 
         // Greyed rather than hidden when blur is off, so the settings stay
         // where they were found rather than moving as things are toggled.
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            visible: root.blurStyles.length > 0
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+
+            OptionalMaterialSymbol {
+                icon: "blur_circular"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Blur style")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.blurStyles
+                currentIndex: root.blurStyles.findIndex(style => style.value === root.blurVariantValue)
+                onActivated: index => {
+                    const chosen = root.blurStyles[index].value;
+                    if (chosen === root.blurVariantValue) return;
+                    root.blurVariantValue = chosen;
+                    root.setDecoration([`blurVariant=${chosen}`]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Blur styles can increase GPU usage, especially animated styles.")
+                }
+            }
+        }
+
         ConfigSlider {
             text: Translation.tr("Strength")
             stopIndicatorValues: (root.decoDefaults.blurSize !== undefined && root.decoDefaults.blurPasses !== undefined)
@@ -1092,6 +1162,8 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 text: Translation.tr("Blur what is on the desktop rather than the windows stacked underneath")
             }
         }
+
+
     }
 
     // ── Dim ───────────────────────────────────────────────────────────────────
