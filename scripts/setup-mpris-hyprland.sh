@@ -9,7 +9,7 @@
 #   - the Rust native host          -> /usr/bin/mpris-hyprland-host
 #   - the system native-messaging manifest (covers Firefox + forks incl. Zen)
 #   - the WebExtension .xpi          -> /usr/share/mpris-hyprland/
-#   - browser policies that auto-install the extension unsigned (Zen/forks)
+#   - browser policies that auto-install the signed extension (Firefox/Zen)
 #
 # makepkg -s pulls the build deps (rust/cargo/zip/git) itself, so no toolchain
 # needs to be pre-installed — which is why the old cargo-preflight version was
@@ -63,7 +63,7 @@ note "building + installing the package (makepkg -s pulls rust/cargo/zip/git; -r
 
 printf "${C_G}[mpris-hyprland]${C_RST} installed.\n"
 note "the WebExtension auto-installs on the next browser launch via the shipped"
-note "policy (Zen and other unbranded forks). Restart the browser, then check"
+note "policy (Firefox and Zen). Restart the browser, then check"
 note "about:addons / about:policies#active."
-note "Vanilla Mozilla Firefox enforces signing — there, load it manually from"
-note "about:debugging or use an AMO-signed build (see the package README)."
+note "Release packages require Mozilla-signed Firefox and matching Chromium bundles."
+note "Other forks may need their policy entry configured (see the package README)."
