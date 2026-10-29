@@ -199,6 +199,7 @@ Scope { // Scope
         
         sourceComponent: PanelWindow { // Window
             id: panelWindow
+            readonly property bool nativeTextRendering: true
             visible: GlobalStates.sidebarLeftOpen
             contentItem.visible: !GlobalStates.scrollOverviewOpen || GlobalStates.scrollOverviewSidebarPreviews
             
@@ -332,6 +333,7 @@ Scope { // Scope
 
         sourceComponent: FloatingWindow {
             id: detachedSidebarRoot
+            readonly property bool nativeTextRendering: true
             title: Translation.tr("Sidebar")
             property var contentParent: detachedSidebarBackground
             color: "transparent"

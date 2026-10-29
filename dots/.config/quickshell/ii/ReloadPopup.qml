@@ -81,7 +81,7 @@ Scope {
 					}
 
 					Text {
-						renderType: Text.NativeRendering
+						renderType: Text.QtRendering
 						font.family: "Google Sans Flex"
 						font.pointSize: 14
 						text: root.failed ? "Quickshell: Reload failed" : "Quickshell reloaded"
@@ -89,7 +89,7 @@ Scope {
 					}
 
 					Text {
-						renderType: Text.NativeRendering
+						renderType: Text.QtRendering
 						font.family: "JetBrains Mono NF"
 						font.pointSize: 11
 						text: root.errorString

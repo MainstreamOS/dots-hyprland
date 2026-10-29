@@ -1,5 +1,6 @@
 import qs.modules.common
 import QtQuick
+import Quickshell
 import QtQuick.Controls
 
 /**
@@ -7,7 +8,7 @@ import QtQuick.Controls
  */
 TextInput {
     color: Appearance.colors.colOnLayer1
-    renderType: Text.NativeRendering
+    renderType: (QsWindow.window?.nativeTextRendering ?? false) ? Text.NativeRendering : Text.QtRendering
     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
     selectionColor: Appearance.colors.colSecondaryContainer
     font {

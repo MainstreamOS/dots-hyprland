@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import QtQuick.Layouts
 import QtQuick.Controls
 import qs.modules.common
@@ -22,7 +23,7 @@ TextField {
         hintingPreference: Font.PreferFullHinting
         variableAxes: Appearance.font.variableAxes.main
     }
-    renderType: Text.NativeRendering
+    renderType: (QsWindow.window?.nativeTextRendering ?? false) ? Text.NativeRendering : Text.QtRendering
     selectedTextColor: Appearance.colors.colOnSecondaryContainer
     selectionColor: Appearance.colors.colSecondaryContainer
 

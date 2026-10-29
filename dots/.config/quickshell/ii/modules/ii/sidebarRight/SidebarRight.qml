@@ -14,6 +14,7 @@ Scope {
 
     PanelWindow {
         id: panelWindow
+        readonly property bool nativeTextRendering: true
         visible: GlobalStates.sidebarRightOpen
         contentItem.visible: !GlobalStates.scrollOverviewOpen || GlobalStates.scrollOverviewSidebarPreviews
         mask: Region {

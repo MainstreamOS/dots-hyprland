@@ -39,7 +39,7 @@ TextArea {
         }
     }
 
-    renderType: Text.NativeRendering
+    renderType: (QsWindow.window?.nativeTextRendering ?? false) ? Text.NativeRendering : Text.QtRendering
     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
     selectionColor: Appearance.colors.colSecondaryContainer
     placeholderTextColor: Appearance.m3colors.m3outline

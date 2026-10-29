@@ -1,5 +1,6 @@
 import qs.modules.common
 import QtQuick
+import Quickshell
 
 Text {
     id: root
@@ -7,9 +8,10 @@ Text {
     property real animationDistanceX: 0
     property real animationDistanceY: 6
 
-    // Rasterize at the window's actual device pixel ratio, including fractional
-    // scales. Screen.devicePixelRatio may be rounded even when the window is not.
-    renderType: Text.NativeRendering
+    // Sidebars opt into native glyphs without changing ordinary interface text.
+    // Large display text still rasterizes at its final size, as before.
+    renderType: (QsWindow.window?.nativeTextRendering ?? false) || font.pixelSize > 40
+        ? Text.NativeRendering : Text.QtRendering
     verticalAlignment: Text.AlignVCenter
     property bool shouldUseNumberFont: /^\d+$/.test(root.text)
     property var defaultFont: shouldUseNumberFont ? Appearance.font.family.numbers : Appearance.font.family.main
