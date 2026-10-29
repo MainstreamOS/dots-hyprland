@@ -739,11 +739,15 @@ ContentPage {
                     ]
                 }
             }
+            Item { Layout.fillWidth: true }
             ColumnLayout {
+                Layout.alignment: Qt.AlignRight
                 ContentSubsectionLabel {
                     text: Translation.tr("Translator")
                 }
                 ConfigSelectionArray {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: naturalWidth
                     currentValue: Config.options.sidebar.translator.enable ? 1 : 0
                     onSelected: newValue => {
                         Config.options.sidebar.translator.enable = (newValue === 1);
@@ -772,11 +776,15 @@ ContentPage {
                     ]
                 }
             }
+            Item { Layout.fillWidth: true }
             ColumnLayout {
+                Layout.alignment: Qt.AlignRight
                 ContentSubsectionLabel {
                     text: Translation.tr("Phone")
                 }
                 ConfigSelectionArray {
+                    Layout.fillWidth: false
+                    Layout.preferredWidth: naturalWidth
                     currentValue: Config.options.sidebar.phone.enable ? 1 : 0
                     onSelected: newValue => {
                         Config.options.sidebar.phone.enable = (newValue === 1);
