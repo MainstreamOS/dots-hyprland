@@ -186,7 +186,8 @@ hl.bind("CTRL + SUPER + S", function()
  if w and w.workspace and w.workspace.special then
  local m = hl.get_active_monitor()
  local t = m and m.active_workspace
- if t then return hl.dispatch(hl.dsp.window.move({workspace = tostring(t.id), follow = true}) ) end
+ local destination = require("hyprland.workspace").selector(t)
+ if destination then return hl.dispatch(hl.dsp.window.move({workspace = destination, follow = true}) ) end
  end
  hl.dispatch(hl.dsp.window.move({workspace = "special", follow = false}) )
 end, {description = "Minimize / restore window"} )

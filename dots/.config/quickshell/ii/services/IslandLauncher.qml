@@ -14,8 +14,7 @@ Singleton {
     readonly property bool available: enabled && GlobalStates.barOpen && !GlobalStates.screenLocked && !GlobalStates.scrollOverviewOpen
         && Quickshell.screens.some(screen => screen.name === focusedScreen)
         && (!Config.options.bar.screenList.length || Config.options.bar.screenList.includes(focusedScreen))
-        && !Hyprland.workspaces.values.some(workspace => workspace.monitor?.name === focusedScreen && workspace.active
-            && workspace.toplevels.values.some(toplevel => toplevel.wayland?.fullscreen))
+        && !HyprlandData.activeWorkspaceHasFullscreen(focusedScreen)
     property bool opened: false
     property string screenName: ""
     signal focusRequested()

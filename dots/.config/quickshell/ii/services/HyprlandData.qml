@@ -24,6 +24,32 @@ Singleton {
 
     // Convenient stuff
 
+    function isSpecialWorkspace(workspace) {
+        if (workspace?.type) return workspace.type === "special";
+        if (workspace?.address) return workspace.address.startsWith("special:");
+        return (workspace?.id ?? 0) < 0 || workspace?.name?.startsWith("special:") === true;
+    }
+
+    function workspaceAddress(workspace) {
+        if (workspace?.address) return workspace.address;
+        return workspace?.id ? String(workspace.id) : "";
+    }
+
+    // Upstream's workspace/toplevel IPC cache can miss an openwindow event
+    // when 0.57 sends an address instead of the renamed display label. Use
+    // Wayland's fullscreen flag and our JSON membership, not that cache.
+    function activeWorkspaceHasFullscreen(monitorName = "") {
+        return ToplevelManager.toplevels.values.some(toplevel => {
+            if (!toplevel.fullscreen) return false;
+            const win = root.clientForToplevel(toplevel);
+            const monitor = root.monitors.find(m => m.id === win?.monitor && (!monitorName || m.name === monitorName));
+            if (!monitor) return false;
+            const active = root.isSpecialWorkspace(monitor.specialWorkspace) ? monitor.specialWorkspace : monitor.activeWorkspace;
+            const address = root.workspaceAddress(active);
+            return address !== "" && address === root.workspaceAddress(win?.workspace);
+        });
+    }
+
     function toplevelsForWorkspace(workspace) {
         return ToplevelManager.toplevels.values.filter(toplevel => {
             const address = `0x${toplevel.HyprlandToplevel?.address}`;

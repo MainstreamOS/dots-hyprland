@@ -21,8 +21,7 @@ Scope {
             required property var modelData
             screen: modelData
             readonly property HyprlandMonitor monitor: Hyprland.monitorFor(window.screen)
-            readonly property var workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor?.name === monitor?.name)
-            readonly property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
+            readonly property bool hasFullscreenWindow: HyprlandData.activeWorkspaceHasFullscreen(modelData.name)
             visible: GlobalStates.barOpen && !GlobalStates.screenLocked && !hasFullscreenWindow
             contentItem.visible: !GlobalStates.scrollOverviewOpen
             onVisibleChanged: {

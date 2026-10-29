@@ -66,8 +66,7 @@ Scope {
                 // reach the sliver that brings the bar back.
                 readonly property bool concealed: Config.options.bar.autoHide.enable && !barRoot.mustShow
                 readonly property HyprlandMonitor monitor: Hyprland.monitorFor(barRoot.screen)
-                property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(w => w.monitor && w.monitor.name === monitor.name)
-                property bool hasFullscreenWindow: workspacesForMonitor.some(w => w.active && w.toplevels.values.some(t => t.wayland?.fullscreen))
+                property bool hasFullscreenWindow: HyprlandData.activeWorkspaceHasFullscreen(monitor?.name)
                 visible: !hasFullscreenWindow
                 // Keep the reserved area while the native overview hides the
                 // chrome, so its workspace previews retain their geometry.

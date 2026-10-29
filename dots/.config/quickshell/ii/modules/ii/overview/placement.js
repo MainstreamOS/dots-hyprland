@@ -8,6 +8,7 @@ function quote(text) {
 // top/bottom inserts into its stack), in one eval so focus cannot change midway.
 function script(address, workspace, anchor, direction, x, y) {
     return `(function()
+        local Workspace = require("hyprland.workspace")
         local selector = ${quote("address:" + address)}
         local w = hl.get_window(selector)
         if not w or not w.mapped then return end
@@ -15,7 +16,8 @@ function script(address, workspace, anchor, direction, x, y) {
         local previousWorkspace = hl.get_active_workspace(w.monitor.id)
         local cursor = hl.get_cursor_pos()
         local originalWidth = w.layout and w.layout.column and w.layout.column.width
-        local destination = ${typeof workspace === "number" ? workspace : quote(workspace)}
+        local destination = Workspace.normalizeSelector(${typeof workspace === "number" ? workspace : quote(workspace)})
+        if not destination then return end
         local a = hl.get_window(${quote("address:" + anchor)})
         local side = ${quote(direction)}
         local function focus(window)
@@ -28,10 +30,11 @@ function script(address, workspace, anchor, direction, x, y) {
             return window.layout and window.layout.column and window.layout.column.index
         end
         local function restore()
-            if previousWorkspace and w.workspace.id ~= previousWorkspace.id then
-                hl.dispatch(hl.dsp.focus({workspace = previousWorkspace.id}))
-                if previous and previous.mapped and previous.workspace.id == previousWorkspace.id then focus(previous) end
-            elseif previous and previous.mapped and previous.workspace.id ~= w.workspace.id then
+            local previousDestination = Workspace.selector(previousWorkspace)
+            if previousDestination and not Workspace.same(w.workspace, previousWorkspace) then
+                hl.dispatch(hl.dsp.focus({workspace = previousDestination}))
+                if previous and previous.mapped and Workspace.same(previous.workspace, previousWorkspace) then focus(previous) end
+            elseif previous and previous.mapped and not Workspace.same(previous.workspace, w.workspace) then
                 focus(previous)
             end
             if cursor then hl.dispatch(hl.dsp.cursor.move({x = cursor.x, y = cursor.y})) end
@@ -41,13 +44,12 @@ function script(address, workspace, anchor, direction, x, y) {
             print("overview-placement-focus-pending")
             return
         end
-        if (type(destination) == "number" and w.workspace.id ~= destination)
-            or (type(destination) == "string" and w.workspace.name ~= destination) then
+        if Workspace.selector(w.workspace) ~= destination then
             hl.dispatch(hl.dsp.window.move({workspace = destination, follow = false, window = selector}))
         end
         if w.floating then
             hl.dispatch(hl.dsp.window.move({x = ${Math.round(x)}, y = ${Math.round(y)}, window = selector}))
-        elseif a and a.mapped and a ~= w and a.workspace.id == w.workspace.id then
+        elseif a and a.mapped and a ~= w and Workspace.same(a.workspace, w.workspace) then
             if a.layout and a.layout.name == "scrolling" and column(w) ~= nil then
                 local stacking = side == "u" or side == "d"
                 local sameColumn = column(w) == column(a)

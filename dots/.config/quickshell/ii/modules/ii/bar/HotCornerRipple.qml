@@ -30,8 +30,7 @@ Variants {
         // The corners step aside for a fullscreen window, a game above all, as the bar
         // does; hidden rather than click-through, so no surface is left on top of it.
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(ripplePanel.screen)
-        readonly property bool hasFullscreenWindow: Hyprland.workspaces.values.some(w => w.active
-            && w.monitor?.name === ripplePanel.monitor?.name && w.toplevels.values.some(t => t.wayland?.fullscreen))
+        readonly property bool hasFullscreenWindow: HyprlandData.activeWorkspaceHasFullscreen(modelData.name)
         visible: !hasFullscreenWindow
 
         // Three independent ripple progress values so we can stagger

@@ -70,9 +70,7 @@ Item {
         // across multiple instances of the same app.
         const fullAddr = `0x${addr}`;
         const win = HyprlandData.windowByAddress[fullAddr];
-        const wsName = win?.workspace?.name ?? "";
-        const wsId = win?.workspace?.id ?? 0;
-        const isSpecial = wsName.startsWith("special") || wsId < 0;
+        const isSpecial = HyprlandData.isSpecialWorkspace(win?.workspace);
         if (!isSpecial) {
             Hyprland.dispatch(
                 `hl.dsp.focus({window = "address:${fullAddr}"})`
@@ -85,8 +83,9 @@ Item {
             `(function() ` +
                 `local m = hl.get_active_monitor(); ` +
                 `local t = m and m.active_workspace; ` +
-                `if t then ` +
-                    `return hl.dsp.window.move({workspace = tostring(t.id), follow = true, window = "address:${fullAddr}"}) ` +
+                `local destination = require("hyprland.workspace").selector(t); ` +
+                `if destination then ` +
+                    `return hl.dsp.window.move({workspace = destination, follow = true, window = "address:${fullAddr}"}) ` +
                 `end ` +
             `end)()`
         );

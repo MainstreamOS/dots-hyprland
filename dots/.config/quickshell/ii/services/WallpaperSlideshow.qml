@@ -67,8 +67,7 @@ Singleton {
     // property so the walk over every toplevel happens once a cycle instead of
     // on every window event.
     function _anythingFullscreen() {
-        return Hyprland.workspaces.values.some(ws =>
-            ws.active && ws.toplevels.values.some(w => w.wayland?.fullscreen))
+        return HyprlandData.activeWorkspaceHasFullscreen()
     }
 
     property var _recent: []

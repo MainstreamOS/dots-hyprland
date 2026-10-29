@@ -15,7 +15,7 @@ Scope {
         && !GlobalStates.sessionLocked && !GlobalStates.overviewOpen
         && !GlobalStates.scrollOverviewOpen && GlobalStates.windowOverviewScreen === ""
     readonly property bool scrolling: enabled && HyprlandData.monitors.some(m =>
-        !m.specialWorkspace?.id && m.dpmsStatus !== false
+        !HyprlandData.isSpecialWorkspace(m.specialWorkspace) && m.dpmsStatus !== false
         && HyprlandData.workspaceById[m.activeWorkspace?.id]?.tiledLayout === "scrolling"
         && !HyprlandData.workspaceById[m.activeWorkspace?.id]?.hasfullscreen)
 
@@ -45,7 +45,7 @@ Scope {
             readonly property var monitor: HyprlandData.monitors.find(m => m.name === modelData.name)
             readonly property var workspace: HyprlandData.workspaceById[monitor?.activeWorkspace?.id]
             readonly property bool enabled: root.enabled && monitor?.dpmsStatus !== false
-                && !monitor?.specialWorkspace?.id && ["scrolling", "monocle"].includes(workspace?.tiledLayout) && !workspace.hasfullscreen
+                && !HyprlandData.isSpecialWorkspace(monitor?.specialWorkspace) && ["scrolling", "monocle"].includes(workspace?.tiledLayout) && !workspace.hasfullscreen
             readonly property bool monocle: workspace?.tiledLayout === "monocle"
             readonly property var tiledWindows: !enabled ? [] : HyprlandData.windowList.filter(win =>
                 win.workspace?.id === workspace.id && win.monitor === monitor.id
