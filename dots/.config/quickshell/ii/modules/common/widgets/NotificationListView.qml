@@ -8,6 +8,7 @@ import Quickshell
 StyledListView { // Scrollable window
     id: root
     property bool popup: false
+    animateRemovalDisplacement: root.popup
 
     spacing: 3
 

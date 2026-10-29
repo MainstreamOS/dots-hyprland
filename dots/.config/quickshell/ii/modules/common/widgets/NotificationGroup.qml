@@ -208,12 +208,12 @@ MouseArea { // Notification group area
                     Layout.fillWidth: true
                     property real fontSize: Appearance.font.pixelSize.smaller
                     property bool showAppName: root.multipleNotifications
-                    implicitHeight: Math.max(topTextRow.implicitHeight, expandButton.implicitHeight)
+                    implicitHeight: Math.max(topTextRow.implicitHeight, groupActions.implicitHeight)
 
                     RowLayout {
                         id: topTextRow
                         anchors.left: parent.left
-                        anchors.right: expandButton.left
+                        anchors.right: groupActions.left
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 5
                         StyledText {
@@ -240,18 +240,39 @@ MouseArea { // Notification group area
                             color: Appearance.colors.colSubtext
                         }
                     }
-                    NotificationGroupExpandButton {
-                        id: expandButton
+                    RowLayout {
+                        id: groupActions
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        count: root.notificationCount
-                        expanded: root.expanded
-                        fontSize: topRow.fontSize
-                        onClicked: { root.toggleExpanded() }
-                        altAction: () => { root.toggleExpanded() }
+                        spacing: 4
+                        RippleButton {
+                            id: clearAppButton
+                            visible: !root.popup
+                            implicitHeight: topRow.fontSize + 8
+                            implicitWidth: implicitHeight
+                            buttonRadius: Appearance.rounding.full
+                            Accessible.name: Translation.tr("Clear") + " — " + (root.notificationGroup?.appName ?? "")
+                            onClicked: Notifications.discardNotificationsForApp(root.notificationGroup.appName)
+                            contentItem: MaterialSymbol {
+                                text: "delete_sweep"
+                                iconSize: Appearance.font.pixelSize.normal
+                                color: Appearance.colors.colSubtext
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            StyledToolTip { text: clearAppButton.Accessible.name }
+                        }
+                        NotificationGroupExpandButton {
+                            id: expandButton
+                            count: root.notificationCount
+                            expanded: root.expanded
+                            fontSize: topRow.fontSize
+                            onClicked: { root.toggleExpanded() }
+                            altAction: () => { root.toggleExpanded() }
 
-                        StyledToolTip {
-                            text: Translation.tr("Tip: right-clicking a group\nalso expands it")
+                            StyledToolTip {
+                                text: Translation.tr("Tip: right-clicking a group\nalso expands it")
+                            }
                         }
                     }
                 }
@@ -268,6 +289,7 @@ MouseArea { // Notification group area
                         implicitHeight: root.scrollExpandedGroup ? root.expandedViewportHeight : contentHeight
                         cacheBuffer: root.scrollExpandedGroup ? 64 : 320
                         animateAppearance: !root.scrollExpandedGroup
+                        animateRemovalDisplacement: root.popup
                         boundsBehavior: Flickable.StopAtBounds
                         // The card clips its rows, so a centered column keeps the
                         // slide rather than fading them.
@@ -279,6 +301,7 @@ MouseArea { // Notification group area
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                         }
                         model: ScriptModel {
+                            objectProp: "notificationId"
                             values: root.expanded ? root.notifications.slice().reverse() :
                                 root.notifications.slice().reverse().slice(0, 2)
                         }

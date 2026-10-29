@@ -415,22 +415,31 @@ Singleton {
     }
 
     function discardNotification(id) {
-        console.log("[Notifications] Discarding notification with ID: " + id);
-        const index = root.list.findIndex((notif) => notif.notificationId === id);
-        const notifServerIndex = notifServer.trackedNotifications.values.findIndex((notif) => notif.id + root.idOffset === id);
-        if (index !== -1) {
-            const removed = root.list[index];
-            removed.clearTimer();
-            root.list.splice(index, 1);
-            // Cards showing it are still bound until the list change and their remove animation finish.
-            removed.destroy(1000);
+        root.discardNotifications([id]);
+    }
+
+    function discardNotificationsForApp(appName) {
+        root.discardNotifications(root.list.filter(notif => notif.appName === appName)
+            .map(notif => notif.notificationId));
+    }
+
+    function discardNotifications(ids) {
+        if (ids.length === 0) return;
+        const targets = new Set(ids);
+        const removed = root.list.filter(notif => targets.has(notif.notificationId));
+        if (removed.length > 0) {
+            for (const notif of removed) {
+                notif.clearTimer();
+                // Cards remain bound through the list's remove transition.
+                notif.destroy(1000);
+            }
+            root.list = root.list.filter(notif => !targets.has(notif.notificationId));
             root.saveSoon();
-            triggerListChange()
         }
-        if (notifServerIndex !== -1) {
-            notifServer.trackedNotifications.values[notifServerIndex].dismiss()
-        }
-        root.discard(id); // Emit signal
+        const tracked = notifServer.trackedNotifications.values
+            .filter(notif => targets.has(notif.id + root.idOffset));
+        for (const notif of tracked) notif.dismiss();
+        for (const id of ids) root.discard(id);
         pruneImagesTimer.restart();
     }
 

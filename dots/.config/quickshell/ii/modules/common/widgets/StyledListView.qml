@@ -18,6 +18,7 @@ ListView {
     property bool popin: true
     property bool animateAppearance: true
     property bool animateMovement: false
+    property bool animateRemovalDisplacement: true
     // Accumulated scroll destination so wheel deltas stack while animating
     property real scrollTargetY: 0
     // Off while the list moves itself in small steps that must land at once.
@@ -190,7 +191,7 @@ ListView {
 
     // This is movement when something is removed, not removing animation!
     removeDisplaced: Transition {
-        enabled: animateAppearance
+        enabled: root.animateAppearance && root.animateRemovalDisplacement
         animations: [
             Appearance?.animation.elementMove.numberAnimation.createObject(this, {
                 property: "y",
