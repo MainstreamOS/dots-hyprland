@@ -488,7 +488,7 @@ Item {
                     anchors.fill: parent
                     // GridView fits whole cells. Rounding up a fractional
                     // cell can silently put the last column on the next row.
-                    cellWidth: root.visibleRows > 0 ? Math.max(1, Math.floor(width / Math.max(1, root.columns)))
+                    cellWidth: root.visibleRows > 0 || root.expanded ? Math.max(1, Math.floor(width / Math.max(1, root.columns)))
                         : Math.max(root.expanded ? 120 : 80, (parent.width - (root.columns - 1) * root.spacing - 30) / root.columns)
                     cellHeight: root.visibleRows > 0 ? height / root.visibleRows : cellWidth * 1.3
                     interactive: false
@@ -1105,7 +1105,7 @@ Item {
         onVisibleChanged: {
             if (!visible && !root._folderDragActive) {
                 root.openFolder = null;
-                root.expanded = false;
+                root.folderPopupExpanded = false;
             }
         }
         opacity: {

@@ -120,8 +120,8 @@ Item {
         workspacesOnly: GlobalStates.overviewWorkspacesOnly, count: visibleCount, shown: shownCount,
         swapped, recentApps: showRecentApps
     })
-    // Furniture follows the fitted body; search uses the shared screen scale.
-    readonly property real uiScale: geometry.scale
+    // Text and controls follow the desktop's scale, independently of preview fit.
+    readonly property real uiScale: screenScale
     readonly property real gap: geometry.gap
     readonly property real slotHeight: geometry.slotHeight
     readonly property real previewWidth: geometry.previewWidth

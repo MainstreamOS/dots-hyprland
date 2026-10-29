@@ -1,11 +1,5 @@
 .pragma library
 
-// Both launchers use the same screen unit. Apply it to native sizes/fonts,
-// never to a rendered layer, so fractional display scales keep text sharp.
-function screenScale(width, height) {
-    return Math.max(0.01, Math.min(width / 2304, height / 1296));
-}
-
 function workspaceGrid(o) {
     const monitor = o.monitor;
     const reserved = o.reserved;
@@ -30,8 +24,8 @@ function workspaceGrid(o) {
 }
 
 function scrolling(o) {
-    // Work in screen units once, fit the composition once, then return native
-    // coordinates. Display scale cannot alter the layout's proportions.
+    // Fit workspace previews and panels to the available logical screen area.
+    // Text and controls retain their native logical sizes in the callers.
     const unit = o.unit;
     const width = o.width / unit, height = o.height / unit;
     const aspect = o.aspect;

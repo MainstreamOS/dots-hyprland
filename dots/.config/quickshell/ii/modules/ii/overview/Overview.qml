@@ -178,9 +178,9 @@ Scope {
         // wherever the click lands, so the surface lies under every place a
         // click can land, exclusive zones included.
         exclusionMode: ExclusionMode.Ignore
-        // One screen unit for native sizes and text, never a scaled layer, so the
-        // launcher keeps its proportions at every output scale.
-        readonly property real launcherUiScale: LauncherLayout.screenScale(width, height)
+        // Use logical sizes and let the desktop's display scale size the UI.
+        // Workspace previews still fit within the available screen area.
+        readonly property real launcherUiScale: 1
 
         // Content keeps clear of whatever holds an edge. The compositor's
         // resolved reservation covers the bar, a pinned dock, a pinned sidebar
@@ -632,9 +632,11 @@ Scope {
                     colBackground: Appearance.launcherPanelBackground
                     contentColors: Appearance.launcherPanelContent
                     surfaceRadius: Appearance.rounding.small * uiScale
-                    visibleRows: 3
-                    columns: 14
-                    iconSize: 50 * uiScale
+                    // The app-only view uses naturally sized rows instead of
+                    // spreading three rows over the full expanded panel.
+                    visibleRows: expanded ? 0 : 3
+                    columns: expanded ? Math.max(6, Math.floor((availableWidth - 60 * uiScale) / (135 * uiScale))) : 14
+                    iconSize: (expanded ? 75 : 50) * uiScale
                     spacing: 10 * uiScale
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: false
