@@ -1328,6 +1328,7 @@ Singleton {
                 property int adviseUpdateThreshold: 75 // packages
                 property int stronglyAdviseUpdateThreshold: 200 // packages
                 property bool showAdvanced: false
+                property bool disableTips: false
 
                 // The Update page's advanced switches, kept from one update to the next.
                 property JsonObject advanced: JsonObject {
@@ -1351,6 +1352,11 @@ Singleton {
                 }
             }
             
+            property JsonObject recovery: JsonObject {
+                property bool showAdvanced: false
+                property bool disableTips: false
+            }
+
             property JsonObject wallpaperSelector: JsonObject {
                 property bool useSystemFileDialog: false
             }

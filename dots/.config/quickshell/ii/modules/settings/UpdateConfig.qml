@@ -622,6 +622,8 @@ ContentPage {
     }
 
     ContentSection {
+        id: tipsSection
+        visible: !Config.options.updates.disableTips
         icon: "lightbulb"
         title: Translation.tr("Tips & Info")
 
@@ -754,7 +756,8 @@ ContentPage {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 200
+            // Give the output the space previously occupied by the tips and gap.
+            implicitHeight: 200 + (Config.options.updates.disableTips ? tipsSection.implicitHeight + root.sectionSpacing : 0)
             radius: Appearance.rounding.small
             color: Appearance.colors.colLayer0
             clip: true
@@ -997,8 +1000,8 @@ ContentPage {
             }
             ConfigRow {
                 uniform: true
-                visible: root.aurHelperPresent
                 ConfigSwitch {
+                    visible: root.aurHelperPresent
                     buttonIcon: "block"
                     text: Translation.tr("Disable AUR (yay/paru)")
                     checked: root.flagSkipAur
@@ -1006,6 +1009,16 @@ ContentPage {
                     StyledToolTip {
                         text: Translation.tr("Skip the AUR update step. On by default — Mainstream doesn't use the AUR and ships no AUR helper. Untick only if you installed yay or paru yourself and want AUR packages updated too.")
                     }
+                }
+                Item {
+                    visible: !root.aurHelperPresent
+                    Layout.fillWidth: true
+                }
+                ConfigSwitch {
+                    buttonIcon: "lightbulb"
+                    text: Translation.tr("Disable tips")
+                    checked: Config.options.updates.disableTips
+                    onCheckedChanged: Config.options.updates.disableTips = checked
                 }
             }
 

@@ -11,6 +11,11 @@ ContentPage {
     id: root
     forceWidth: true
 
+    // The advanced controls replace terminal space, keeping the page's total
+    // height the same whether their options are expanded or collapsed.
+    readonly property real advancedControlsHeight: advancedOptionsRow.implicitHeight + advancedOptionsRow.parent.spacing
+        + (Config.options.recovery.showAdvanced ? advancedOptions.implicitHeight + advancedOptions.Layout.topMargin + advancedOptions.parent.spacing : 0)
+
     property string outputText: ""
     property bool isRunning: false
     property bool restoreSuccess: false
@@ -142,6 +147,8 @@ ContentPage {
     }
 
     ContentSection {
+        id: tipsSection
+        visible: !Config.options.recovery.disableTips
         icon: "healing"
         title: Translation.tr("If something breaks")
 
@@ -232,7 +239,9 @@ ContentPage {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 200
+            // Recover hidden instructions' space, then allow for the new controls.
+            implicitHeight: Math.max(80, 200 + (Config.options.recovery.disableTips ? tipsSection.implicitHeight + root.sectionSpacing : 0)
+                - root.advancedControlsHeight)
             radius: Appearance.rounding.small
             color: Appearance.colors.colLayer0
             clip: true
@@ -293,6 +302,17 @@ ContentPage {
         }
 
         ConfigRow {
+            id: advancedOptionsRow
+            ConfigSwitch {
+                buttonIcon: "tune"
+                text: Translation.tr("Show advanced options")
+                checked: Config.options.recovery.showAdvanced
+                onCheckedChanged: Config.options.recovery.showAdvanced = checked
+            }
+            Item { Layout.fillWidth: true }
+        }
+
+        ConfigRow {
             // Inline password field. Submitted via sudo -S stdin in
             // startRestore() \u2014 same UX as the Update panel. Visible
             // field clears the moment the user clicks Restore so the
@@ -348,6 +368,20 @@ ContentPage {
                 onClicked: root.outputText = ""
             }
         }
+
+        ContentSubsection {
+            id: advancedOptions
+            title: Translation.tr("Advanced")
+            visible: Config.options.recovery.showAdvanced
+
+            ConfigSwitch {
+                buttonIcon: "lightbulb"
+                text: Translation.tr("Disable tips")
+                checked: Config.options.recovery.disableTips
+                onCheckedChanged: Config.options.recovery.disableTips = checked
+            }
+        }
+
     }
 
     // Success overlay — parented to Overlay.overlay (the QtQuick.Controls

@@ -8,6 +8,7 @@ StyledFlickable {
     property real baseWidth: 600
     property bool forceWidth: false
     property real bottomContentPadding: 100
+    property alias sectionSpacing: contentColumn.spacing
 
     default property alias contentData: contentColumn.data
 
