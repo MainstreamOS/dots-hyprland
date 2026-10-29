@@ -75,6 +75,8 @@ hl.window_rule({match = {title = "^([Pp]icture[-\\s]?[Ii]n[-\\s]?[Pp]icture)(.*)
 hl.window_rule({match = {title = "^([Pp]icture[-\\s]?[Ii]n[-\\s]?[Pp]icture)(.*)$" }, pin = true})
 
 -- Screen sharing
+-- Let the portal picker use its compact preferred size instead of a tiled slot.
+hl.window_rule({name = "screen-sharing-picker", match = {class = "^hyprland-share-picker$" }, float = true, center = true})
 hl.window_rule({match = {title = ".*is sharing (a window|your screen).*" }, float = true})
 hl.window_rule({match = {title = ".*is sharing (a window|your screen).*" }, pin = true})
 hl.window_rule({match = {title = ".*is sharing (a window|your screen).*" }, move = {"(monitor_w*.5-window_w*.5)", "(monitor_h-window_h-12)"} })
