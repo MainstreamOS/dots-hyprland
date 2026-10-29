@@ -28,6 +28,28 @@ Scope { // Scope
             id: perScreen
             required property var modelData
 
+            // Keep the reserved strip on Top while the interactive Dock rises
+            // over a launcher. Moving the reservation between layers makes
+            // pinned sidebars get arranged before it and grow behind the UI.
+            PanelWindow {
+                screen: perScreen.modelData
+                visible: root.pinned && !GlobalStates.screenLocked
+                color: "transparent"
+                implicitWidth: 1
+                implicitHeight: 1
+                anchors {
+                    top: Appearance.sizes.dockEdge !== "bottom"
+                    bottom: Appearance.sizes.dockEdge !== "top"
+                    left: Appearance.sizes.dockEdge !== "right"
+                    right: Appearance.sizes.dockEdge !== "left"
+                }
+                exclusiveZone: dockWindowLoader.item?.reservedThickness ?? 0
+                WlrLayershell.namespace: "quickshell:dockReservation"
+                WlrLayershell.layer: WlrLayer.Top
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+                mask: Region {}
+            }
+
             Loader {
                 id: dockWindowLoader
                 active: true
@@ -206,14 +228,17 @@ Scope { // Scope
                 right: dockRoot.dockEdge !== "left"
             }
 
-            // A floating dock stays centered on the screen. The overviews also
-            // cover the sidebar, so their dock reaches over its reserved strip.
-            readonly property real sidebarReach: (!root.pinned || dockRoot.overLauncher || dockRoot.overWindowOverview)
-                && GlobalStates.sidebarLeftScreen === (perScreen.modelData?.name ?? "")
+            // This non-reserving surface spans the sidebar's reserved strip
+            // too, keeping the Dock centered exactly as its pinned surface was.
+            readonly property real sidebarReach: GlobalStates.sidebarLeftScreen === (perScreen.modelData?.name ?? "")
                 ? GlobalStates.sidebarLeftZone : 0
             margins {
-                left: Appearance.sizes.sidebarLeftEdge === "left" && dockRoot.anchors.left ? -dockRoot.sidebarReach : 0
-                right: Appearance.sizes.sidebarLeftEdge === "right" && dockRoot.anchors.right ? -dockRoot.sidebarReach : 0
+                left: (Appearance.sizes.sidebarLeftEdge === "left" && dockRoot.anchors.left ? -dockRoot.sidebarReach : 0)
+                    - (dockRoot.dockEdge === "left" ? dockRoot.reservedThickness : 0)
+                right: (Appearance.sizes.sidebarLeftEdge === "right" && dockRoot.anchors.right ? -dockRoot.sidebarReach : 0)
+                    - (dockRoot.dockEdge === "right" ? dockRoot.reservedThickness : 0)
+                top: dockRoot.dockEdge === "top" ? -dockRoot.reservedThickness : 0
+                bottom: dockRoot.dockEdge === "bottom" ? -dockRoot.reservedThickness : 0
             }
 
             // How much of this screen the row may run along. The surface is
@@ -275,7 +300,9 @@ Scope { // Scope
             // actually resize takes all the others down with it.
             readonly property real magnifyHeadroom: Appearance.sizes.dockMagnifyHeadroomFor(dockRoot.fittedIconSize)
 
-            exclusiveZone: root.pinned ? Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize) + Appearance.sizes.dockEdgeGap : 0
+            readonly property real reservedThickness: root.pinned
+                ? Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize) + Appearance.sizes.dockEdgeGap : 0
+            exclusiveZone: 0
 
             Component.onCompleted: {
                 GlobalFocusGrab.addPersistent(dockRoot);
