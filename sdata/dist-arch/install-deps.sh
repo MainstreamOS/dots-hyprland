@@ -159,22 +159,32 @@ showfun setup-mainstream-repo
 v setup-mainstream-repo
 
 # A -S dependency install does not process replaces[], and its conflict prompt
-# defaults to no under --noconfirm. Do the phone-backend replacement as a normal
-# system upgrade once our repo is available, before entering those installs.
-replace-kdeconnect-backend() {
-  pacman -Qq kdeconnect &>/dev/null || return 0
+# defaults to no under --noconfirm. Replace stock packages in one normal system
+# upgrade once our repo is available, before entering those installs. Never
+# remove GTK separately: installed apps must keep a working toolkit throughout.
+replace-mainstream-system-packages() {
+  local old replacement pair
+  local pending=()
+  for pair in kdeconnect:rust-connect gtk4:gtk4-live-css; do
+    old=${pair%%:*}
+    pacman -Qq "$old" &>/dev/null && pending+=("$pair")
+  done
+  [ "${#pending[@]}" -gt 0 ] || return 0
   if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
-    printf '%s\n' 'KDE Connect is installed. Run sudo pacman -Syu after enabling the Mainstream repo to replace it with Rust Connect, then retry without skipping the system update.' >&2
+    printf '%s\n' 'Stock packages need Mainstream replacements. Run sudo pacman -Syu after enabling the Mainstream repo, then retry without skipping the system update.' >&2
     return 1
   fi
   retry x sudo pacman -Syu --noconfirm || return 1
-  if pacman -Qq kdeconnect &>/dev/null || ! pacman -Qq rust-connect &>/dev/null; then
-    printf '%s\n' 'The Mainstream repository has not provided the KDE Connect replacement yet. Keep KDE Connect installed and retry after the updated Rust Connect package is published.' >&2
-    return 1
-  fi
+  for pair in "${pending[@]}"; do
+    old=${pair%%:*}; replacement=${pair#*:}
+    if pacman -Qq "$old" &>/dev/null || ! pacman -Qq "$replacement" &>/dev/null; then
+      printf 'The Mainstream repository has not provided %s to replace %s yet. Keep the existing package installed and retry after the replacement is published.\n' "$replacement" "$old" >&2
+      return 1
+    fi
+  done
 }
-showfun replace-kdeconnect-backend
-v replace-kdeconnect-backend
+showfun replace-mainstream-system-packages
+v replace-mainstream-system-packages
 
 showfun implicitize_old_dependencies
 v implicitize_old_dependencies

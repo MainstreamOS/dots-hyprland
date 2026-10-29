@@ -2,13 +2,14 @@
 groups=(mainstream)
 pkgname=mainstream-fonts-themes
 pkgver=1.0
-pkgrel=9
+pkgrel=10
 pkgdesc='Mainstream OS Fonts and Theming Dependencies'
 provides=('illogical-impulse-fonts-themes')
 replaces=('illogical-impulse-fonts-themes')
 arch=(any)
 license=(None)
 depends=(
+  gtk4-live-css
   adw-gtk-theme-git
   kvantum
   qt6ct

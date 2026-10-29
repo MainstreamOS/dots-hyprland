@@ -295,7 +295,7 @@ banner widget {
   background-color: transparent;
 }
 
-.boxed-list row:insensitive {
+.boxed-list row:disabled {
   background-color: @card_bg_color;
 }
 
