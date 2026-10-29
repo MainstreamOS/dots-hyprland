@@ -10,6 +10,10 @@
 -- .conf config, and the greeter is the first thing anyone sees. Support for
 -- the format goes away entirely in 0.57.
 
+-- The greeter is not a desktop session. Keep its environment and targets out
+-- of the user systemd manager (0.57 starts the session target automatically).
+hl.env("HYPRLAND_NO_SD_VARS", "1")
+
 -- SDDM and the user session run separate Hyprland instances. Recover the last
 -- logged-in user's saved Num Lock state before the greeter configures input.
 local function persistedNumlockState()

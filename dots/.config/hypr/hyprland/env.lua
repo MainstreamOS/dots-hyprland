@@ -1,5 +1,9 @@
 local home_dir = os.getenv("HOME")
 
+-- execs.lua owns the ordered session startup, including stale-session cleanup.
+-- 0.57 otherwise starts the target asynchronously before that cleanup runs.
+hl.env("HYPRLAND_NO_SD_TARGET", "1")
+
 -- Wayland
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 -- GTK 4.24 hangs a background-effect object on every window but only fills in
