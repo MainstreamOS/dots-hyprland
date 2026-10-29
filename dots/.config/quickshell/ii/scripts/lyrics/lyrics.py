@@ -11,19 +11,18 @@ Prints a single line:
     rate_limited§<seconds>                LRCLIB asked for no requests until then
 """
 import email.utils
-import http.client
 import json
+import math
 import os
 import re
+import subprocess
 import sys
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 
 API = "https://lrclib.net/api"
 HOMEPAGE = "https://mainstreamos.org"
-TIMEOUT = 10
+TIMEOUT = 5
 # Used when LRCLIB asks for a pause without saying how long.
 DEFAULT_RETRY_AFTER = 60
 
@@ -32,6 +31,10 @@ class RateLimited(Exception):
     def __init__(self, seconds: int):
         super().__init__(seconds)
         self.seconds = seconds
+
+
+class RequestFailure(OSError):
+    pass
 
 
 def _installed_version():
@@ -72,19 +75,29 @@ def _retry_after(value) -> int:
 def _get(endpoint: str, params: dict, user_agent: str):
     """The decoded JSON answer, or None when LRCLIB has no such record."""
     query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-    request = urllib.request.Request(
-        f"{API}/{endpoint}?{query}",
-        headers={"User-Agent": user_agent, "Accept": "application/json"},
+    # curl races IPv4/IPv6 connections and negotiates HTTP/2. urllib tries
+    # addresses serially, which can strand a lookup on a stalled network path.
+    # Keep retries in the shared service so two lyric views never double them.
+    response = subprocess.run(
+        ["curl", "--silent", "--show-error", "--compressed",
+         "--connect-timeout", "2", "--max-time", str(TIMEOUT),
+         "--max-filesize", "2097152", "--proto", "=https",
+         "--user-agent", user_agent, "--header", "Accept: application/json",
+         "--write-out", "\n%{http_code}\n%header{retry-after}",
+         f"{API}/{endpoint}?{query}"],
+        capture_output=True, text=True, timeout=TIMEOUT + 1,
     )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        if error.code == 429:
-            raise RateLimited(_retry_after(error.headers.get("Retry-After")))
-        raise
+    if response.returncode:
+        raise RequestFailure(f"curl exited with status {response.returncode}")
+    body, status, retry_after = response.stdout.rsplit("\n", 2)
+    code = int(status)
+    if code == 404:
+        return None
+    if code in (429, 503):
+        raise RateLimited(_retry_after(retry_after))
+    if code != 200:
+        raise RequestFailure(f"HTTP {code}")
+    return json.loads(body)
 
 
 _TIMESTAMP = re.compile(r"\[(\d+):(\d+(?:[.:]\d+)?)\]")
@@ -129,7 +142,9 @@ def fetch_lrclib(title: str, artist: str, duration: float) -> list:
     there is no exact song to ask for and the search is the only request.
     """
     user_agent = _user_agent()
-    if duration > 0:
+    # Browser streams and long videos can report lengths outside LRCLIB's
+    # accepted 1–3600 second range. Search still works without a duration.
+    if math.isfinite(duration) and 1 <= round(duration) <= 3600:
         params = {"track_name": title, "artist_name": artist, "duration": round(duration)}
         record = _get("get", params, user_agent)
         if isinstance(record, dict) and record.get("instrumental"):
@@ -159,9 +174,11 @@ def main():
     except RateLimited as limit:
         print(f"rate_limited§{limit.seconds}", flush=True)
         return
-    except (OSError, ValueError, http.client.HTTPException):
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         # Unreachable, timed out, a server error or an answer that was not
         # JSON: nothing says the song has no lyrics.
+        detail = str(error) if isinstance(error, RequestFailure) else type(error).__name__
+        print(f"Lyrics lookup failed: {detail}", file=sys.stderr, flush=True)
         print("offline", flush=True)
         return
     if not lines:

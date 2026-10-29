@@ -90,7 +90,7 @@ Item {
             }
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
-                visible: LyricsService.status === "offline"
+                visible: root.unreachable
                 color: root.activeColor
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 font.underline: retryArea.containsMouse

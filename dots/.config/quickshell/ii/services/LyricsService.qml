@@ -63,8 +63,25 @@ Singleton {
             root.cache.delete(root.cache.keys().next().value);
     }
 
-    // Set when LRCLIB answers 429: no request at all goes out before this.
+    // Server-requested cooldown, shared by both views and all songs.
     property real retryAt: 0
+    readonly property var retryDelays: [750, 1500]
+    property int retryCount: 0
+
+    function scheduleRetry(key) {
+        if (!root.shown || key !== root.trackKey || key !== root.loadedKey
+                || root.retryCount >= root.retryDelays.length)
+            return;
+        const delay = root.retryDelays[root.retryCount++];
+        root.armRetry(Math.max(delay, root.retryAt - Date.now()));
+    }
+
+    function armRetry(delay) {
+        // Spread retries after a busy server recovers, without shortening
+        // Retry-After. A song gets at most two automatic retries.
+        retryTimer.interval = Math.ceil(delay * (1 + Math.random() * 0.2));
+        retryTimer.restart();
+    }
 
     function buildSlots(idx) {
         let result = []
@@ -146,16 +163,21 @@ Singleton {
 
     // Asks again for the song on show after LRCLIB could not be reached.
     function retry() {
-        if (root.status === "offline")
+        if (root.status === "offline" || root.status === "rate_limited") {
+            retryTimer.stop();
+            root.retryCount = 0;
             root.lookUp();
+        }
     }
 
     function retryWhenAllowed() {
-        retryTimer.interval = Math.max(1000, root.retryAt - Date.now());
-        retryTimer.restart();
+        if (root.shown && root.retryCount < root.retryDelays.length)
+            root.armRetry(Math.max(1000, root.retryAt - Date.now()));
     }
 
     onTrackKeyChanged: {
+        retryTimer.stop();
+        root.retryCount = 0;
         if (root.trackKey === root.loadedKey)
             return;
         // What is on show belongs to another song now. Metadata tends to
@@ -165,7 +187,12 @@ Singleton {
     }
 
     // Metadata still arriving is left to the settle timer, so it gets one lookup.
-    onShownChanged: if (!settleTimer.running) root.lookUp()
+    onShownChanged: {
+        if (!root.shown)
+            retryTimer.stop();
+        else if (!settleTimer.running)
+            root.lookUp();
+    }
 
     Timer {
         id: settleTimer
@@ -204,7 +231,7 @@ Singleton {
     function request(key, command) {
         // Back on a song whose lookup is still under way: its answer is the
         // one wanted, so it is left to finish rather than asked for twice.
-        if (lyricsProc.running && !lyricsProc.stopping && lyricsProc.requestKey === key) {
+        if (lyricsProc.running && !lyricsProc.stopping && !lyricsProc.answered && lyricsProc.requestKey === key) {
             root.queued = null;
             return;
         }
@@ -234,6 +261,7 @@ Singleton {
         lyricsProc.answered = false;
         lyricsProc.stopping = false;
         lyricsProc.command = next.command;
+        retryTimer.stop();
         lyricsProc.running = true;
         watchdog.restart();
     }
@@ -246,14 +274,17 @@ Singleton {
             root.retryAt = Date.now() + (isNaN(seconds) ? 60 : Math.max(1, seconds)) * 1000;
             if (key === root.loadedKey) {
                 root.show(key, "rate_limited", []);
-                root.retryWhenAllowed();
+                root.scheduleRetry(key);
             }
             return;
         }
         const current = key === root.trackKey && key === root.loadedKey;
         if (trimmed === "no_info" || trimmed === "offline") {
-            if (current)
+            if (current) {
                 root.show(key, trimmed, []);
+                if (trimmed === "offline")
+                    root.scheduleRetry(key);
+            }
             return;
         }
 
@@ -274,8 +305,11 @@ Singleton {
         // coming back to it does not ask again.
         const status = lines.length > 0 ? "ok" : "not_found";
         root.remember(key, { status: status, lines: lines });
-        if (current)
+        if (current) {
+            retryTimer.stop();
+            root.retryCount = 0;
             root.show(key, status, lines);
+        }
     }
 
     Process {
@@ -295,8 +329,10 @@ Singleton {
             // Stopped, or gone without a word: either way no answer came,
             // unless the same song is already waiting to be asked about again.
             if (!lyricsProc.answered && lyricsProc.requestKey === root.loadedKey && root.status === "loading"
-                    && root.queued?.key !== lyricsProc.requestKey)
+                    && root.queued?.key !== lyricsProc.requestKey) {
                 root.show(root.loadedKey, "offline", []);
+                root.scheduleRetry(root.loadedKey);
+            }
             if (root.queued)
                 root.startQueued();
         }
