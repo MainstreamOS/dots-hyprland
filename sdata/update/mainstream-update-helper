@@ -25,6 +25,7 @@
 #   100  completed with errors: snap or extras failed, or [mainstream] was switched off
 #   105  held: the EFI partition is too full to rebuild the boot image safely; no package changed
 #   106  the boot menu would not start the system and could not be repaired; do not restart
+#   107  Hyprland's Lua configs must be installed before upgrading to 0.57
 #   4    pacman refused: Arch's Qt moved past the desktop's pin; no package changed
 #   N    pacman, AUR or flatpak exit code on a primary failure
 
@@ -372,6 +373,24 @@ boot_postcheck() {
     return 0
 }
 
+# Read-only: migration belongs to updatems (backups/deferred files included),
+# not to a package transaction which could stop before its dotfiles phase.
+hyprland_lua_preflight() {
+    local version="$1" user_config="$2" greeter_config="$3" file
+    [[ -n "$version" ]] || return 0
+    (( $(vercmp "$version" 0.57.0) >= 0 )) || return 0
+    for file in "$user_config" "$greeter_config"; do
+        # A machine without the Hyprland greeter has nothing to migrate there.
+        [[ "$file" == "$greeter_config" && ! -d "${file%/*}" ]] && continue
+        if [[ ! -s "$file" ]] || { command -v luac >/dev/null && ! luac -p "$file"; }; then
+            echo ">>> $(tf "Hyprland 0.57 requires a working Lua configuration: %s" "$file")"
+            echo ">>> $(t "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.")"
+            return 1
+        fi
+    done
+    return 0
+}
+
 # ── 0. Boot menu, before anything can rebuild the boot image ────────────────
 # Mends an entry Limine would refuse and keeps a copy of the working image. It
 # holds the package step when the EFI partition is too full and no copy exists.
@@ -397,6 +416,12 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
     reboot_marker PLAN "$PLAN_OUT"
     if [[ "${PLAN_OUT%%$'\n'*}" == 1 ]]; then
         echo ">>> $(t "This update replaces parts of the running desktop. A reboot will be needed when it finishes.")"
+    fi
+    # The plan refreshed the databases, but no packages have changed yet.
+    _hypr_target=$(LC_ALL=C pacman -Si hyprland 2>/dev/null | awk '/^Version[[:space:]]*:/ {print $3; exit}')
+    if ! hyprland_lua_preflight "$_hypr_target" "$ORIG_HOME/.config/hypr/hyprland.lua" \
+            /var/lib/sddm/.config/hypr/hyprland.lua; then
+        exit 107
     fi
     BOOT_TOUCHED=1
     pacman_tx -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
@@ -534,6 +559,11 @@ elif [[ "$SKIP_AUR" -eq 0 && "$PKG_STEP_FAILED" -eq 1 ]]; then
     echo "── $(t "AUR: deferred — the system package update failed.")"
     AUR_NOTE=deferred
 elif [[ "$SKIP_AUR" -eq 0 ]]; then
+    _hypr_target=$(LC_ALL=C pacman -Si hyprland 2>/dev/null | awk '/^Version[[:space:]]*:/ {print $3; exit}')
+    if ! hyprland_lua_preflight "$_hypr_target" "$ORIG_HOME/.config/hypr/hyprland.lua" \
+            /var/lib/sddm/.config/hypr/hyprland.lua; then
+        exit 107
+    fi
     BOOT_TOUCHED=1
     echo ""
     echo "═══════════════════════════════════════════════════════════"
