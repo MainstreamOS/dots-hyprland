@@ -1149,6 +1149,7 @@ Singleton {
                 property real size: 100 // Percent of the largest grid that fits the screen (100 = fill)
                 property real rows: 2
                 property real columns: 5
+                property bool useScrollingLauncher: true
                 property int scrollingWorkspaces: 3
                 property bool scrollingSwapSides: false
                 property bool scrollingShowRecentApps: true

@@ -103,7 +103,8 @@ Scope {
         readonly property string currentWorkspaceLayout: HyprlandData.workspaceById[
             panelWindow.monitorData?.activeWorkspace?.id ?? panelWindow.monitor?.activeWorkspace?.id]?.tiledLayout ?? ""
         readonly property bool preloadScrollingLauncher: (Config.options.overview.keepSurfaceAlive ?? true)
-            && Config.options.overview.enable && Scrolling.usesLayout(currentWorkspaceLayout)
+            && Config.options.overview.enable && Config.options.overview.useScrollingLauncher
+            && Scrolling.usesLayout(currentWorkspaceLayout)
         // What the drawer opens as. Without the workspace previews the
         // short list would sit alone under the search box, so it starts
         // on the full list instead unless that was turned off.
@@ -233,7 +234,8 @@ Scope {
                 } else {
                     panelWindow.keyboardPrimed = panelWindow.contentItem.Window.active;
                     panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
-                    panelWindow.useScrollingLauncher = Config.options.overview.enable && Scrolling.usesLayout(panelWindow.launcherLayout);
+                    panelWindow.useScrollingLauncher = Config.options.overview.enable
+                        && Config.options.overview.useScrollingLauncher && Scrolling.usesLayout(panelWindow.launcherLayout);
                     if (!overviewScope.dontAutoCancelSearch) {
                         searchWidget.cancelSearch();
                     }

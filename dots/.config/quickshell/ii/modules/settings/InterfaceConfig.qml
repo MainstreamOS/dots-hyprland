@@ -668,7 +668,14 @@ ContentPage {
         }
         ContentSubsection {
             title: Translation.tr("Scrolling and monocle launcher")
+            ConfigSwitch {
+                buttonIcon: "check"
+                text: Translation.tr("Enable")
+                checked: Config.options.overview.useScrollingLauncher
+                onCheckedChanged: Config.options.overview.useScrollingLauncher = checked
+            }
             ConfigSpinBox {
+                visible: Config.options.overview.useScrollingLauncher
                 icon: "view_agenda"
                 text: Translation.tr("Visible workspaces")
                 value: Config.options.overview.scrollingWorkspaces
@@ -679,6 +686,7 @@ ContentPage {
             }
             ConfigSwitch {
                 buttonIcon: "history"
+                visible: Config.options.overview.useScrollingLauncher
                 text: Translation.tr("Show recently used apps")
                 checked: Config.options.overview.scrollingShowRecentApps
                 onCheckedChanged: Config.options.overview.scrollingShowRecentApps = checked
@@ -686,6 +694,7 @@ ContentPage {
             ConfigSwitch {
                 buttonIcon: "swap_horiz"
                 text: Translation.tr("Workspaces on the right")
+                visible: Config.options.overview.useScrollingLauncher
                 checked: Config.options.overview.scrollingSwapSides
                 onCheckedChanged: Config.options.overview.scrollingSwapSides = checked
             }
