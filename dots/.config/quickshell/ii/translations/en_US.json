@@ -3232,5 +3232,16 @@
   "Welcome! Let's start with the basics": "Welcome! Let's start with the basics",
   "Widget appearance": "Widget appearance",
   "Windows appear and leave without moving": "Windows appear and leave without moving",
-  "With the overview switched off there are no workspace previews, so the launcher opens on the full list of apps.\nTurn this off to open on the short list and reach the rest yourself.": "With the overview switched off there are no workspace previews, so the launcher opens on the full list of apps.\nTurn this off to open on the short list and reach the rest yourself."
+  "With the overview switched off there are no workspace previews, so the launcher opens on the full list of apps.\nTurn this off to open on the short list and reach the rest yourself.": "With the overview switched off there are no workspace previews, so the launcher opens on the full list of apps.\nTurn this off to open on the short list and reach the rest yourself.",
+  "Account locked, retry in %1 min": "Account locked, retry in %1 min",
+  "Account locked, try again later": "Account locked, try again later",
+  "Disable tips": "Disable tips",
+  "Hide on this desktop": "Hide on this desktop",
+  "No hidden conversations": "No hidden conversations",
+  "Only affects this desktop. New incoming messages show the conversation again.": "Only affects this desktop. New incoming messages show the conversation again.",
+  "Show conversations": "Show conversations",
+  "Show hidden conversations": "Show hidden conversations",
+  "Unhide conversation": "Unhide conversation",
+  "Hyprland 0.57 requires a working Lua configuration: %s": "Hyprland 0.57 requires a working Lua configuration: %s",
+  "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.": "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update."
 }
