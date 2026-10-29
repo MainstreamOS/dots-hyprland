@@ -158,6 +158,24 @@ esac
 showfun setup-mainstream-repo
 v setup-mainstream-repo
 
+# A -S dependency install does not process replaces[], and its conflict prompt
+# defaults to no under --noconfirm. Do the phone-backend replacement as a normal
+# system upgrade once our repo is available, before entering those installs.
+replace-kdeconnect-backend() {
+  pacman -Qq kdeconnect &>/dev/null || return 0
+  if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
+    printf '%s\n' 'KDE Connect is installed. Run sudo pacman -Syu after enabling the Mainstream repo to replace it with Rust Connect, then retry without skipping the system update.' >&2
+    return 1
+  fi
+  retry x sudo pacman -Syu --noconfirm || return 1
+  if pacman -Qq kdeconnect &>/dev/null || ! pacman -Qq rust-connect &>/dev/null; then
+    printf '%s\n' 'The Mainstream repository has not provided the KDE Connect replacement yet. Keep KDE Connect installed and retry after the updated Rust Connect package is published.' >&2
+    return 1
+  fi
+}
+showfun replace-kdeconnect-backend
+v replace-kdeconnect-backend
+
 showfun implicitize_old_dependencies
 v implicitize_old_dependencies
 
