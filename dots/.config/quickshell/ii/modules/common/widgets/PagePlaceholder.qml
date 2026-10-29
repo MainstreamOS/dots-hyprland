@@ -28,7 +28,7 @@ Item {
     ColumnLayout {
         anchors.centerIn: parent
         // Narrower than the page, so a long description wraps instead of running off it.
-        width: Math.min(implicitWidth, root.width - 40)
+        width: Math.max(0, Math.min(implicitWidth, root.width - 40))
         spacing: 5
 
         MaterialShapeWrappedMaterialSymbol {
@@ -41,7 +41,8 @@ Item {
         StyledText {
             id: widgetNameText
             visible: title !== ""
-            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
             font {
                 family: Appearance.font.family.title
                 pixelSize: Appearance.font.pixelSize.larger
@@ -49,11 +50,13 @@ Item {
             }
             color: Appearance.m3colors.m3outline
             horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
         }
         StyledText {
             id: widgetDescriptionText
             visible: description !== ""
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             font.pixelSize: Appearance.font.pixelSize.small
             color: Appearance.m3colors.m3outline
             horizontalAlignment: Text.AlignLeft

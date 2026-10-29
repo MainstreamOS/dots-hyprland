@@ -364,7 +364,7 @@ Item {
             Layout.fillHeight: true
             currentIndex: {
                 if (tabBar.currentIndex === 1) return 2;
-                if (tabBar.currentIndex === 2 && Phone.canBrowse) return 3;
+                if (tabBar.currentIndex === 2 && Phone.canBrowse && Phone.reachable) return 3;
                 if (Phone.device === null && Phone.conversations.length === 0) return 0;
                 if (tabBar.currentIndex === 0 && (Phone.canMessage || Phone.conversations.length > 0)) return 1;
                 return 4;
@@ -376,7 +376,8 @@ Item {
                     title: Phone.connected ? Translation.tr("Connect your phone") : Translation.tr("Looking for your phone")
                     description: Translation.tr("1. Install the free KDE Connect app on your phone. On Android, get it from the Google Play Store or F-Droid. On iPhone, get it from the App Store.\n2. Connect the phone to the same Wi-Fi network as this computer.\n3. Open KDE Connect on the phone, tap this computer in its list, then tap the button to pair with it. Pairing connects the two over Wi-Fi. It does not use Bluetooth or a cable.\n4. A request then appears at the top of this tab. Check that its code matches the one on your phone, then click Accept.")
                 }
-                // rust-connect has no pairing window of its own; KDE Connect's app may be installed.
+                // The compatibility command opens Rust Connect's local web UI;
+                // with the original backend it opens KDE Connect's desktop app.
                 Process {
                     id: pairingApp
                     property bool found: false
@@ -390,7 +391,8 @@ Item {
                     anchors.bottomMargin: 40
                     visible: Phone.connected && pairingApp.found
                     materialIcon: "devices"
-                    mainText: Translation.tr("Open KDE Connect")
+                    mainText: Phone.backendName === "rust-connect"
+                        ? Translation.tr("Open Rust Connect") : Translation.tr("Open KDE Connect")
                     onClicked: Quickshell.execDetached(["kdeconnect-app"])
                 }
             }
@@ -433,8 +435,12 @@ Item {
             Item {
                 PagePlaceholder {
                     icon: "smartphone"
-                    title: Translation.tr("Connected to %1").arg(Phone.device?.name || Translation.tr("phone"))
-                    description: Translation.tr("This phone does not offer message history or remote file browsing. Use the send-file button to share files when supported.")
+                    title: Phone.reachable
+                        ? Translation.tr("Connected to %1").arg(Phone.device?.name || Translation.tr("phone"))
+                        : Translation.tr("%1 is not reachable right now.").arg(Phone.device?.name || Translation.tr("The phone"))
+                    description: Phone.reachable
+                        ? Translation.tr("This phone does not offer message history or remote file browsing. Use the send-file button to share files when supported.")
+                        : Translation.tr("Keep your phone and this computer on the same Wi-Fi network, then open KDE Connect on your phone. Bluetooth pairing alone does not connect messages or files.")
                 }
             }
         }
