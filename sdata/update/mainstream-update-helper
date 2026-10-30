@@ -83,7 +83,7 @@ LEGACY_SUDOERS="/etc/sudoers.d/00-mainstream-update-active"
 rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
 
 cleanup() {
-    rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS" "${REBOOT_SESSION_LIST:-}"
+    rm -f "$TEMP_SUDOERS" "$LEGACY_SUDOERS"
     [[ -n "${TOPGRADE_SHIM:-}" ]] && rm -rf "$TOPGRADE_SHIM"
     # A stopped update can leave pacman's lock behind. Clear it only when nothing
     # holds it open, since libalpm keeps it open while a transaction owns it.
@@ -194,8 +194,8 @@ on_stop() {
         boot_postcheck
     fi
     # A stopped run may already have installed what needs a reboot.
-    [[ -n "${REBOOT_SESSION_LIST:-}" ]] \
-        && reboot_marker "" "$(reboot_check verdict "$HELPER_STARTED_AT" "$REBOOT_SESSION_LIST")"
+    declare -F reboot_marker >/dev/null \
+        && reboot_marker "" "$(reboot_check verdict "$HELPER_STARTED_AT")"
     exit 143
 }
 trap on_stop INT TERM HUP
@@ -266,13 +266,6 @@ reboot_marker() {  # $1 = PLAN|""  $2 = the check's output
     reasons="${reasons% }"
     printf '@@MAINSTREAM-UPDATE-REBOOT%s %s%s\n' "${1:+-$1}" "${flag:-0}" "${reasons:+ $reasons}"
 }
-# Recorded before anything is replaced: afterwards the files the session still
-# holds are gone from disk and from the package database.
-REBOOT_SESSION_LIST="$(mktemp)"
-if [[ -r "$REBOOT_CHECK" ]]; then
-    _reboot_check_run session > "$REBOOT_SESSION_LIST" || true
-    chmod 0644 "$REBOOT_SESSION_LIST" 2>/dev/null || true
-fi
 
 # ── Parse flags ─────────────────────────────────────────────────────────────
 SKIP_SYSTEM=0
@@ -412,7 +405,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
     # Says up front whether arriving packages replace parts of the running desktop.
     # --noconfirm: stdin is /dev/null, so a provider prompt would read EOF and empty
     # the plan. The repeated database refresh is deliberate.
-    PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm </dev/null 2>/dev/null | reboot_check plan "$REBOOT_SESSION_LIST")"
+    PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm </dev/null 2>/dev/null | reboot_check plan)"
     reboot_marker PLAN "$PLAN_OUT"
     if [[ "${PLAN_OUT%%$'\n'*}" == 1 ]]; then
         echo ">>> $(t "This update replaces parts of the running desktop. A reboot will be needed when it finishes.")"
@@ -957,7 +950,7 @@ status_for() {
 }
 # Judged from what this run actually installed and from what is already
 # replaced beneath the session, whichever step did it.
-VERDICT_OUT="$(reboot_check verdict "$HELPER_STARTED_AT" "$REBOOT_SESSION_LIST")"
+VERDICT_OUT="$(reboot_check verdict "$HELPER_STARTED_AT")"
 reboot_marker "" "$VERDICT_OUT"
 REBOOT_NEEDED=0; [[ "${VERDICT_OUT%%$'\n'*}" == 1 ]] && REBOOT_NEEDED=1
 
