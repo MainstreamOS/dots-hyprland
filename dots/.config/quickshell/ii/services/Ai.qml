@@ -599,8 +599,7 @@ Singleton {
             "terminalLogin": "dir=\"" + root.antigravityDir + "\"; mkdir -p \"$dir\" && cd \"$dir\" && rm -f login.exit && agy",
             // The login lives in the system keyring, so the CLI is the only
             // reliable judge; listing models fails at once when signed out.
-            "readyCheck": "timeout 20 agy models >/dev/null 2>&1",
-            "features": "agy models 2>/dev/null | grep -qiE 'argon|gemini-4' && echo 'feature ultra'"
+            "readyCheck": "timeout 20 agy models >/dev/null 2>&1"
         }
     })
     // The sign-in's code pipe and exit file and the chat's own runs all live
@@ -698,17 +697,11 @@ Singleton {
         return root.cliPlans[fmt].firstPick;
     }
 
-    readonly property bool _antigravityHasUltra: (root.cliPlanState["antigravity-cli"]?.features ?? []).includes("ultra")
-    readonly property var _antigravityPlanModels: {
-        const out = {
-            "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini Flash", thinkingLevel: "" },
-            "gemini-plan-3-1-pro": { alias: "gemini-3.1-pro", name: "Gemini Pro", thinkingLevel: "" },
-        };
-        if (root._antigravityHasUltra) {
-            out["gemini-plan-4-argon"] = { alias: "gemini-4-argon", name: "Gemini 4 Argon", thinkingLevel: "" };
-        }
-        return out;
-    }
+    readonly property var _antigravityPlanModels: ({
+        "gemini-plan-3-8-flash": { alias: "gemini-3.8-flash", name: "Gemini Flash", thinkingLevel: "" },
+        "gemini-plan-3-1-pro": { alias: "gemini-3.1-pro", name: "Gemini Pro", thinkingLevel: "" },
+        "gemini-plan-4-argon": { alias: "gemini-4-argon", name: "Gemini 4 Argon", thinkingLevel: "" },
+    })
 
     readonly property var cliPlanModels: ({
         "claude-code": {
@@ -720,7 +713,7 @@ Singleton {
         },
         "codex-cli": root._codexPlanModels,
         // Google serves personal accounts through Antigravity; supports Gemini 3
-        // and Gemini 4 (Ultra only) with dynamic reasoning effort.
+        // and Gemini 4 with dynamic reasoning effort.
         "antigravity-cli": root._antigravityPlanModels,
     })
     readonly property var cliPlans: ({
@@ -762,9 +755,7 @@ Singleton {
             readyDescription: Translation.tr("Plan | Your Google account. Pick it to use its models"),
             setupHomepage: "https://antigravity.google/product/antigravity-cli",
             modelDescription: Translation.tr("Plan | %1 through your Google account. No API key needed"),
-            signedIn: root._antigravityHasUltra
-                ? Translation.tr("Signed in. Gemini Flash, Gemini Pro, and Gemini 4 Argon are in the picker now. Adjust thinking level with /think.")
-                : Translation.tr("Signed in. Gemini Flash and Gemini Pro are in the picker now. Adjust thinking level with /think."),
+            signedIn: Translation.tr("Signed in. Gemini Flash, Gemini Pro, and Gemini 4 Argon are in the picker now. Adjust thinking level with /think."),
             icon: "antigravity-symbolic",
             endpoint: "https://antigravity.google",
             homepage: "https://antigravity.google",

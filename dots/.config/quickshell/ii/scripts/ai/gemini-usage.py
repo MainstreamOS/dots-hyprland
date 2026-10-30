@@ -218,6 +218,9 @@ def usage(target_model):
             break
 
     if not quota:
+        # No quota entry for Argon means this account has none, rather than another model's.
+        if target_model and "argon" in target_lower:
+            return {"planType": "google_account", "session": {"utilization": 100.0, "resets_at": None}, "weekly": None}
         for m in models.values():
             qi = m.get("quotaInfo") if isinstance(m, dict) else None
             if qi and qi.get("remainingFraction") is not None:
