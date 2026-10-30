@@ -81,10 +81,13 @@ Singleton {
         preferredPlayer = dedicatedPlayingPlayer.dbusName;
         if (panels.includes("media") && !alertOpen && !calls.length && selected !== "localsend") selected = "media";
     }
-    // An alert leaves its panel selected, so each opening starts from here: the media player
-    // while a dedicated one is playing, otherwise the system panel.
+    // An alert leaves its panel selected, so each opening starts from here: the call panel
+    // while a call is active, the media player while a dedicated one is playing, otherwise
+    // the system panel.
     function showDefaultPanel() {
-        if (panels.includes("media") && dedicatedPlayingPlayer) {
+        if (panels.includes("call") && calls.length > 0) {
+            selected = "call";
+        } else if (panels.includes("media") && dedicatedPlayingPlayer) {
             preferredPlayer = dedicatedPlayingPlayer.dbusName;
             selected = "media";
         } else if (panels.includes("system")) {

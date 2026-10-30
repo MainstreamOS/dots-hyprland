@@ -149,6 +149,8 @@ Scope {
                 window.drawerMode = false;
                 if (!expanded && IslandState.selected !== "localsend" && !IslandState.alertOpen)
                     IslandState.showDefaultPanel();
+                else if (!expanded && IslandState.calls.length > 0 && IslandState.panels.includes("call") && IslandState.selected !== "call" && IslandState.selected !== "localsend")
+                    IslandState.selected = "call";
                 opened = true;
             }
             function toggleSidebar(left) {
