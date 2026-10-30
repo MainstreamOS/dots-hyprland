@@ -68,6 +68,17 @@ while IFS= read -r line; do
     # Limine addresses the partition by GUID, which an MBR disk does not have.
     [[ $PARTUUID =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || continue
 
+    # If limine.conf already has this partition's Windows Boot Manager registered,
+    # avoid mounting the partition or waking dormant drives altogether.
+    if grep -qi "bootmgfw" "$ESP_PATH/limine.conf" 2>/dev/null \
+        && grep -qiF "$PARTUUID" "$ESP_PATH/limine.conf" 2>/dev/null; then
+        found=$((found + 1))
+        name="Windows"
+        [[ $found -gt 1 ]] && name="Windows ($found)"
+        say "$name is already in the menu."
+        continue
+    fi
+
     mp=$(findmnt -rno TARGET -S "PARTUUID=$PARTUUID" 2>/dev/null | head -n1)
     if [[ -z $mp ]]; then
         mp="/run/mainstream-esp-$PARTUUID"
@@ -87,11 +98,6 @@ while IFS= read -r line; do
     found=$((found + 1))
     name="Windows"
     [[ $found -gt 1 ]] && name="Windows ($found)"
-    if grep -qi "bootmgfw" "$ESP_PATH/limine.conf" 2>/dev/null \
-        && grep -qiF "$PARTUUID" "$ESP_PATH/limine.conf" 2>/dev/null; then
-        say "$name is already in the menu."
-        continue
-    fi
     if limine-entry-tool --add-efi "$name" "$loader" \
         --comment "Windows Boot Manager" --priority 15 --quiet --no-mutex --no-hooks; then
         say "Added a '$name' entry for the install on $KNAME."
