@@ -3243,5 +3243,6 @@
   "Show hidden conversations": "Show hidden conversations",
   "Unhide conversation": "Unhide conversation",
   "Hyprland 0.57 requires a working Lua configuration: %s": "Hyprland 0.57 requires a working Lua configuration: %s",
-  "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.": "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update."
+  "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.": "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.",
+  "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue.": "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue."
 }

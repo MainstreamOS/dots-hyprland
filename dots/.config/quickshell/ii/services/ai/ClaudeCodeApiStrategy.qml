@@ -65,7 +65,7 @@ ApiStrategy {
         else argv.push("--append-system-prompt", root.askNote);
 
         const attachedLine = attachment.length > 0 ? Translation.tr("Attached file: %1").arg(attachment) : "";
-        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine);
+        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine, sessionId);
         const env = {};
         if (model.requires_key) env.ANTHROPIC_API_KEY = ctx.apiKey ?? Ai.apiKeys?.[model.key_id] ?? "";
         return {

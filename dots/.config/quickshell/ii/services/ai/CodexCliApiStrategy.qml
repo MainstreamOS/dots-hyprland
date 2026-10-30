@@ -27,7 +27,7 @@ ApiStrategy {
         const sessionId = ctx.regenerate ? "" : root.sessionId;
         const effort = root.effortFor(ctx.thinkingLevel, Ai.codexEfforts(model.model ?? ""));
         const attachedLine = (attachment.length > 0 && !image) ? Translation.tr("Attached file: %1").arg(attachment) : "";
-        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine);
+        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine, sessionId);
         const options = ["--workdir", ctx.dirs.codex, "--stdin", "--filter", "codex", "--report-exit"];
         root._requestInfo = { mode: mode, modelName: model.name ?? "", granted: granted, bridged: bridged };
 

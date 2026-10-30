@@ -31,14 +31,17 @@ function attachmentPath(ctx) {
 
 // The prompt a CLI receives on stdin. A regenerate starts a fresh CLI
 // conversation, since a CLI cannot drop a turn from its own history, so the
-// earlier turns travel with it as a compact transcript.
-function cliPrompt(ctx, historyText, earlierLabel, attachedLine) {
+// earlier turns travel with it as a compact transcript, as they do whenever
+// there is no CLI session to resume.
+function cliPrompt(ctx, historyText, earlierLabel, attachedLine, sessionId) {
     const messages = ctx?.messages ?? [];
     const last = lastUserIndex(messages);
     let prompt = last >= 0 ? (messages[last].rawContent ?? "") : "";
     if (attachedLine.length > 0)
         prompt += (prompt.length > 0 ? "\n\n" : "") + attachedLine;
-    if (!ctx?.regenerate || last <= 0)
+    if (last <= 0)
+        return prompt;
+    if (!ctx?.regenerate && (sessionId ?? "").length > 0)
         return prompt;
 
     const turns = [];
@@ -49,6 +52,7 @@ function cliPrompt(ctx, historyText, earlierLabel, attachedLine) {
         const assistant = message.role === "assistant";
         const text = String(assistant ? historyText(message) : (message.rawContent ?? "")).trim();
         if (text.length === 0) continue;
+        if (assistant && text.startsWith("**Error**:")) continue;
         const turn = (assistant ? "Assistant: " : "User: ") + text;
         turns.push(turn);
         size += turn.length + 2;

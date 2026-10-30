@@ -2034,6 +2034,8 @@ Singleton {
                 return;
             }
         }
+        // A CLI's session holds none of the turns answered under another model.
+        if (modelId !== root.currentModelId) root._resetCliSessions();
         // A plan's own models are absent from the picker until that plan is in
         // use, so a switch into one writes the selection and lets the models
         // follow it in rather than failing the membership check below.

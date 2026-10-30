@@ -54,7 +54,7 @@ ApiStrategy {
         argv.push("--print=");
 
         const attachedLine = attachment.length > 0 ? Translation.tr("Attached file: %1").arg(attachment) : "";
-        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine);
+        const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine, sessionId);
         return {
             // The CLI treats the folder it runs in as the workspace the model
             // may read; an empty folder of its own keeps the user's files out.
@@ -86,6 +86,9 @@ ApiStrategy {
         if (root.isSignInError(detail)) {
             sink.loginLapsed();
             sink.error(Translation.tr("Gemini could not use your Google sign-in. Log in again to keep chatting."));
+        } else if (/quota reached|resource_exhausted/i.test(detail)) {
+            const tip = /Argon|Pro/.test(root._requestInfo.modelName ?? "");
+            sink.error(tip ? detail + "\n\n" + Translation.tr("Tip: Switch to another model in the picker to keep going.") : detail);
         } else {
             sink.error(detail);
         }
@@ -221,10 +224,11 @@ ApiStrategy {
         const state = sink.state;
         state.gotResult = true;
         sink.endThink();
-        if (result.conversation_id) sink.setSessionId(result.conversation_id);
         if (result.status !== "SUCCESS") {
+            sink.setSessionId("");
             root.fail(sink, String(result.error || result.status || JSON.stringify(result)));
         } else {
+            if (result.conversation_id) sink.setSessionId(result.conversation_id);
             if (!state.streamed && result.response) root.emitText(sink, result.response);
             const denied = result.denied_actions ?? [];
             if (Array.isArray(denied) && denied.length > 0) root.handleDenials(denied, sink);
