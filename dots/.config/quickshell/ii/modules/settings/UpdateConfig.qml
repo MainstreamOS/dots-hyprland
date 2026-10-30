@@ -89,6 +89,17 @@ ContentPage {
     readonly property bool flagEdge: Config.options.updates.advanced.edge
     property string customArgs: ""
 
+    // Hidden from startup, the tips have no width to wrap at and report too little
+    // height, so a floor keeps the terminal's full space on a cold reopen.
+    property real cachedTipsHeight: 268
+
+    // Notices above the terminal come out of its height, so they never push the
+    // password box off-screen.
+    readonly property real extraNoticesHeight:
+        (pendingNoticeBox.visible ? pendingNoticeBox.implicitHeight + (pendingNoticeBox.parent ? pendingNoticeBox.parent.spacing : 4) : 0)
+        + (reloginNoticeBox.visible ? reloginNoticeBox.implicitHeight + (reloginNoticeBox.parent ? reloginNoticeBox.parent.spacing : 4) : 0)
+        + (outputTrimmedText.visible ? outputTrimmedText.implicitHeight + (outputTrimmedText.parent ? outputTrimmedText.parent.spacing : 4) : 0)
+
     // Cleared as soon as it is written to the launcher's stdin.
     property string pendingPassword: ""
 
@@ -623,9 +634,13 @@ ContentPage {
 
     ContentSection {
         id: tipsSection
-        visible: !Config.options.updates.disableTips
+        visible: !Config.options.updates.disableTips && !Config.options.updates.showAdvanced
         icon: "lightbulb"
         title: Translation.tr("Tips & Info")
+        onImplicitHeightChanged: {
+            if (visible && implicitHeight > root.cachedTipsHeight)
+                root.cachedTipsHeight = implicitHeight;
+        }
 
         ContentSubsection {
             title: Translation.tr("Before & after the update")
@@ -717,6 +732,7 @@ ContentPage {
         // A normal run finishes it: the root half runs after the dotfiles step
         // even with no new release. Hidden during a pending reboot, like the password field.
         NoticeBox {
+            id: pendingNoticeBox
             Layout.fillWidth: true
             visible: root.systemHalfPending && !root.isRunning && !root.awaitingReboot
             materialIcon: "update"
@@ -739,6 +755,7 @@ ContentPage {
 
         // A reboot logs in again as well, so its reminder covers this one.
         NoticeBox {
+            id: reloginNoticeBox
             Layout.fillWidth: true
             visible: root.reloginNeeded && !root.rebootRequired
             materialIcon: "logout"
@@ -746,6 +763,7 @@ ContentPage {
         }
 
         StyledText {
+            id: outputTrimmedText
             visible: root.outputTrimmed
             Layout.fillWidth: true
             wrapMode: Text.Wrap
@@ -755,9 +773,14 @@ ContentPage {
         }
 
         Rectangle {
+            id: outputBox
             Layout.fillWidth: true
-            // Give the output the space previously occupied by the tips and gap.
-            implicitHeight: 200 + (Config.options.updates.disableTips ? tipsSection.implicitHeight + root.sectionSpacing : 0)
+            // Give the output the space previously occupied by the tips and gap,
+            // unless the advanced options are expanded and taking that space.
+            // Deduct any visible notice bubbles above so the password row never gets pushed off-screen.
+            implicitHeight: Math.max(80, 200 + ((Config.options.updates.disableTips && !Config.options.updates.showAdvanced)
+                ? Math.max(tipsSection.implicitHeight, root.cachedTipsHeight) + root.sectionSpacing : 0)
+                - root.extraNoticesHeight)
             radius: Appearance.rounding.small
             color: Appearance.colors.colLayer0
             clip: true
