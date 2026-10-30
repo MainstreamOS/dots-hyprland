@@ -18,6 +18,16 @@ model_at() {
         | sed -n 's/.*printer-make-and-model ([^)]*) = //p' | head -n1
 }
 
+# If ipp-usb is neither running nor starting up, no port will ever answer.
+if command -v systemctl >/dev/null 2>&1; then
+    _ipp_state="$(systemctl is-active ipp-usb.service 2>/dev/null || true)"
+    if [[ "$_ipp_state" != "active" && "$_ipp_state" != "activating" ]] && ! pgrep -x ipp-usb >/dev/null 2>&1; then
+        exit 0
+    fi
+elif ! pgrep -x ipp-usb >/dev/null 2>&1; then
+    exit 0
+fi
+
 for _ in $(seq 1 20); do
     answered=0
     for port in $(seq 60000 60009); do
