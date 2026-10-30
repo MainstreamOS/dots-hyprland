@@ -109,6 +109,10 @@ ColumnLayout {
             return;
         }
         if (text.length === root._shownLength) return;
+        if (root.done) {
+            root.setFullText();
+            return;
+        }
         // Streamed code goes in a slice per event loop pass: laying out and
         // highlighting a long block at once would hold the shell for too long.
         if (PassBudget.remaining() <= 0) {
@@ -130,6 +134,7 @@ ColumnLayout {
 
     onSegmentContentChanged: root.syncCode()
     onContentRevisionChanged: root.syncCode()
+    onDoneChanged: if (root.done && root._ready) root.setFullText()
     onEditingChanged: if (!root.editing && root._ready) root.setFullText()
     // Nothing is shown before this point, so a block that arrives while the reply
     // streams starts empty and fills in slices instead of all at once.
@@ -350,16 +355,18 @@ ColumnLayout {
 
             ColumnLayout {
                 id: codeColumnLayout
-                anchors.fill: parent
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    top: parent.top
+                }
                 spacing: 0
                 ScrollView {
                     id: codeScrollView
                     Layout.fillWidth: true
-                    // Layout.fillHeight: true
-                    implicitWidth: parent.width
                     implicitHeight: codeTextArea.implicitHeight + 1
-                    contentWidth: codeTextArea.width - 1
-                    // contentHeight: codeTextArea.contentHeight
+                    contentWidth: codeTextArea.width
+                    contentHeight: codeTextArea.implicitHeight
                     clip: true
                     ScrollBar.vertical.policy: ScrollBar.AlwaysOff
 
@@ -396,7 +403,7 @@ ColumnLayout {
 
                     StyledTextArea { // Code
                         id: codeTextArea
-                        Layout.fillWidth: true
+                        width: Math.max(codeScrollView.availableWidth, contentWidth)
                         readOnly: !editing
                         selectByMouse: enableMouseSelection || editing
                         renderType: Text.NativeRendering
