@@ -180,6 +180,7 @@ fi
 # (return 1). We DON'T abort on the first failure — best effort, refresh
 # what we can.
 RC=0
+_unit_installed=0
 # Everything installed here runs as root later, and it comes out of a tree the
 # user owns. A symlink or a file others can write is how a checkout that looks
 # like a release turns into something else on the way in.
@@ -209,6 +210,7 @@ _install_file() {
         return 0
     fi
     if install -D -m "$mode" -o root -g root "$src" "$dst"; then
+        [[ "$dst" == */systemd/* ]] && _unit_installed=1
         ok "$(tf "%s refreshed -> %s" "$label" "$dst")"
     else
         warn "$(tf "%s install failed (src=%s dst=%s)" "$label" "$src" "$dst")"
@@ -500,15 +502,21 @@ systemctl start mainstream-printer-setup.service 2>/dev/null || true
 # pacman -Syu fails for every repo, core and extra included, so a fix shipped
 # as a package could never arrive. The key, the tools and the units themselves
 # are in ROOT_FILES.
-systemctl daemon-reload 2>/dev/null || true
-# Installs made while the unit disabled its own timer after one success have
-# no watchdog left, so enabling here is what puts a stranded machine back
-# under one.
-if systemctl enable --now pacman-keyring-init.timer 2>/dev/null; then
-    ok "$(t "Keyring check timer enabled")"
+if [[ "${UPDATEMS_SYS_FORCE:-0}" -ne 1 && "${_unit_installed:-0}" -ne 1 ]] \
+   && systemctl is-enabled --quiet pacman-keyring-init.timer 2>/dev/null \
+   && systemctl is-active --quiet pacman-keyring-init.timer 2>/dev/null; then
+    : # Already enabled and active; avoid expensive multi-second daemon-reload
 else
-    warn "$(t "Could not enable pacman-keyring-init.timer")"
-    RC=1
+    systemctl daemon-reload 2>/dev/null || true
+    # Installs made while the unit disabled its own timer after one success have
+    # no watchdog left, so enabling here is what puts a stranded machine back
+    # under one.
+    if systemctl enable --now pacman-keyring-init.timer 2>/dev/null; then
+        ok "$(t "Keyring check timer enabled")"
+    else
+        warn "$(t "Could not enable pacman-keyring-init.timer")"
+        RC=1
+    fi
 fi
 
 if [[ -x /usr/local/bin/mainstream-keyring-init ]] \
