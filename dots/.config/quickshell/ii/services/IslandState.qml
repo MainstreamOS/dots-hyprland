@@ -184,11 +184,9 @@ Singleton {
         if (selected === "localsend") selected = panels.includes(panelBeforeTransfer) ? panelBeforeTransfer : (panels[0] ?? "");
     }
     function alert(panel) {
-        if (!enabled || !panels.includes(panel) || !Config.options.bar.island.automaticAlerts
-            || IslandPhonePrivacy.suppressed || Notifications.silent) return;
+        if (!enabled || !panels.includes(panel) || Notifications.silent) return;
+        if (["call", "text"].includes(panel) && (!Config.options.bar.island.automaticAlerts || IslandPhonePrivacy.suppressed || !phoneWanted)) return;
         if ((panel === "call" && !callAvailable) || (panel === "text" && !textAvailable)) return;
-        // With phone services off, the phone's events are not the Island's to show.
-        if (["call", "text"].includes(panel) && !phoneWanted) return;
         // Calls and texts retain priority for their alert's duration. A later
         // mirrored notification must not replace the phone event's panel.
         if (panel === "notifications" && (calls.length || (alertOpen && ["call", "text"].includes(selected)))) return;
@@ -222,8 +220,13 @@ Singleton {
     }
     onPhoneNotificationsChanged: {
         const id = phoneNotifications[0]?.id || "";
-        if (id && id !== lastPhoneNotification && !calls.length && phoneWanted) alert("notifications");
+        if (id && id !== lastPhoneNotification && !calls.length && phoneWanted && !IslandPhonePrivacy.suppressed && Config.options.bar.island.automaticAlerts) alert("notifications");
         lastPhoneNotification = id;
+    }
+    onNotificationsChanged: {
+        if (alertOpen && selected === "notifications" && notifications.length === 0) {
+            alertOpen = false;
+        }
     }
     function dismissNotification(entry) {
         if (entry.notificationId !== undefined) Notifications.discardNotification(entry.notificationId);
@@ -232,7 +235,11 @@ Singleton {
     Connections {
         target: Notifications
         function onNotify(notification) {
-            if (!notification.phoneOrigin || !root.phoneWanted || root.calls.length || NotificationPolicy.panelFor(notification) !== "notifications") return;
+            if (NotificationPolicy.panelFor(notification) !== "notifications") return;
+            if (notification.phoneOrigin
+                ? (!root.phoneWanted || IslandPhonePrivacy.suppressed || !Config.options.bar.island.automaticAlerts)
+                : !Config.options.bar.island.desktopNotifications) return;
+            if (root.calls.length) return;
             root.alert("notifications");
         }
     }

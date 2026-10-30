@@ -663,6 +663,7 @@ Singleton {
                     property bool showContactPicture: true
                     property bool phoneIntegration: true
                     property bool automaticAlerts: true
+                    property bool desktopNotifications: true
                     property bool suppressWhileStreaming: false
                     property bool suppressForDiscord: true
                     property bool suppressForObs: true

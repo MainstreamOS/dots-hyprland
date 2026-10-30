@@ -31,9 +31,11 @@ Singleton {
             }))
             : savedActions
         property bool popup: false
-        // The Island shows phone notifications itself while the bar is the island.
-        readonly property bool islandOwned: phoneOrigin && Appearance.sizes.barIsIsland && Config.options.bar.island.phoneIntegration
-            && (IslandPhonePrivacy.suppressed || IslandPanels.enabled(islandPanel))
+        // The Island shows notifications itself while the bar is the island. A call
+        // holds its panel, so desktop notifications stay pop-ups until it ends.
+        readonly property bool islandOwned: Appearance.sizes.barIsIsland && (phoneOrigin
+            ? Config.options.bar.island.phoneIntegration && (IslandPhonePrivacy.suppressed || IslandPanels.enabled(islandPanel))
+            : Config.options.bar.island.desktopNotifications && IslandState.calls.length === 0 && IslandPanels.enabled(islandPanel))
         function clearTimer() {
             timer?.stop();
             timer?.destroy();
@@ -381,8 +383,14 @@ Singleton {
                 });
             }
             if (counted) root.unread++;
-        } else if (counted && newNotifObject.islandOwned && !root.popupInhibited) {
-            root.unread++;
+        } else if (newNotifObject.islandOwned && !root.popupInhibited) {
+            if (newNotifObject.isTransient && notification.expireTimeout != 0) {
+                newNotifObject.timer = notifTimerComponent.createObject(root, {
+                    "notificationId": newNotifObject.notificationId,
+                    "interval": notification.expireTimeout < 0 ? (Config?.options.notifications.timeout ?? 7000) : notification.expireTimeout,
+                });
+            }
+            if (counted) root.unread++;
         }
     }
 

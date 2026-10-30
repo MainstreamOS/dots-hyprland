@@ -65,6 +65,12 @@ ContentPage {
             onCheckedChanged: Config.options.bar.island.automaticAlerts = checked
         }
         ConfigSwitch {
+            buttonIcon: "notifications"
+            text: Translation.tr("Show desktop notifications in the Island")
+            checked: Config.options.bar.island.desktopNotifications
+            onCheckedChanged: Config.options.bar.island.desktopNotifications = checked
+        }
+        ConfigSwitch {
             visible: Config.options.bar.island.phoneIntegration
             buttonIcon: "screen_share"
             text: Translation.tr("Disable calls, messages, and phone notifications while streaming")

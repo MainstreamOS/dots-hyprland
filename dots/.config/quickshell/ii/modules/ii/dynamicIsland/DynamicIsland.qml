@@ -161,7 +161,7 @@ Scope {
                 return IslandState.panels.includes(panel) ? panel : (IslandState.panels[0] ?? "");
             }
             property string displayedPanel: window.validPanel(IslandState.selected)
-            readonly property bool automatic: !drawerMode && Config.options.bar.island.automaticAlerts && IslandState.alertOpen && Hyprland.focusedMonitor?.name === screen.name
+            readonly property bool automatic: !drawerMode && IslandState.alertOpen && Hyprland.focusedMonitor?.name === screen.name
             readonly property bool expanded: visible && (drawerRequested || (!drawerMode && (IslandState.panels.length > 0 || (IslandState.selected === "localsend" && IslandPanels.enabled("localsend"))) && (opened || automatic || panelBusy)))
             readonly property bool bottom: Config.options.bar.bottom
             readonly property bool notch: Appearance.sizes.islandShape === "notch"
