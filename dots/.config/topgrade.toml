@@ -1,9 +1,12 @@
 [misc]
 sudo_command = "pkexec"
+show_distribution_summary = false
 # hyprpm: our plugins are rebuilt by pacman hooks, so hyprpm has no repos and
 # `hyprpm update` exits 1, which topgrade treats as a failure.
 # uv: only builds the color venv at install, and the install deletes its cache.
 # A permission error in `uv cache prune` could fail the whole extras pass.
 # antigravity / antigravity_cli: Antigravity's update is handled directly by
 # mainstream-update-helper (via yay for the desktop app and agy update for the CLI).
-disable = ["hyprpm", "uv", "antigravity", "antigravity_cli"]
+# vscode: VS Code auto-updates its extensions internally; disabling here avoids
+# Electron flag parsing warnings in headless CLI mode.
+disable = ["hyprpm", "uv", "antigravity", "antigravity_cli", "vscode"]
