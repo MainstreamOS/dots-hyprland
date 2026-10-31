@@ -41,6 +41,7 @@ import os
 import re
 import select
 import socket
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -61,6 +62,7 @@ SNAPSHOT_VERSION = 3
 # Tunables. Env-only on purpose — not worth config-file surface.
 STAGGER_MS = int(os.environ.get("QS_RESTORE_STAGGER_MS", "150"))
 WAIT_TIMEOUT_S = float(os.environ.get("QS_RESTORE_WAIT_TIMEOUT", "20"))
+PORTAL_TIMEOUT_S = float(os.environ.get("QS_RESTORE_PORTAL_TIMEOUT", "6"))
 SETTLE_MS = int(os.environ.get("QS_RESTORE_SETTLE_MS", "1200"))
 # Prefix, not exact name: the bar layer is "quickshell:bar" in the default
 # layout but other layouts (vertical bar) and surfaces (dock, background)
@@ -553,6 +555,38 @@ def wait_for_shell() -> str:
     return f"timeout after {WAIT_TIMEOUT_S:.0f}s"
 
 
+def wait_for_portal() -> str:
+    """Block until xdg-desktop-portal answers appearance settings queries.
+
+    Restored apps (Libadwaita/GTK4, Electron/Chromium) query the
+    org.freedesktop.appearance color-scheme setting at startup. If launched
+    before the portal backend is ready, they permanently fall back to light mode.
+    """
+    if PORTAL_TIMEOUT_S <= 0:
+        return "gate disabled"
+    deadline = time.monotonic() + PORTAL_TIMEOUT_S
+    while time.monotonic() < deadline:
+        try:
+            res = subprocess.run(
+                [
+                    "gdbus", "call", "--session",
+                    "--dest", "org.freedesktop.portal.Desktop",
+                    "--object-path", "/org/freedesktop/portal/desktop",
+                    "--method", "org.freedesktop.portal.Settings.Read",
+                    "org.freedesktop.appearance", "color-scheme",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=1.0,
+            )
+            if res.returncode == 0 and "uint32" in res.stdout:
+                return "ready"
+        except Exception:
+            pass
+        time.sleep(0.1)
+    return f"timeout after {PORTAL_TIMEOUT_S:.0f}s"
+
+
 def group_windows(windows: list[dict]) -> list[list[dict]]:
     """Windows that shared a process at capture time, kept in saved order. Such
     a process is launched once however many windows it had: a browser or a GTK
@@ -648,6 +682,9 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
     outcome = wait_for_shell()
     log("restore", f"shell wait: {outcome} (prefix={PAINT_PREFIX})")
+
+    portal_outcome = wait_for_portal()
+    log("restore", f"portal wait: {portal_outcome}")
 
     # Count what's already running AFTER the wait, so apps the user (or an
     # autostart) launched during the gate aren't double-spawned, and remember
