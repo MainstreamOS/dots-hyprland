@@ -228,17 +228,20 @@ Scope { // Scope
                 right: dockRoot.dockEdge !== "left"
             }
 
-            // This non-reserving surface spans the sidebar's reserved strip
-            // too, keeping the Dock centered exactly as its pinned surface was.
-            readonly property real sidebarReach: GlobalStates.sidebarLeftScreen === (perScreen.modelData?.name ?? "")
-                ? GlobalStates.sidebarLeftZone : 0
+            // Ignoring other reservations is what keeps the Dock still as a pinned
+            // sidebar opens: it never waits on the compositor to move that room.
+            // Only the bar's own strip along the Dock's axis is kept clear.
+            exclusionMode: ExclusionMode.Ignore
+            function axisClearance(edge, index) {
+                if (edge === Appearance.sizes.sidebarLeftEdge)
+                    return Appearance.sizes.barEdge === edge && !Config.options.bar.autoHide.enable ? Appearance.sizes.verticalBarWidth : 0;
+                return dockRoot.monitorData?.reserved?.[index] ?? 0;
+            }
             margins {
-                left: (Appearance.sizes.sidebarLeftEdge === "left" && dockRoot.anchors.left ? -dockRoot.sidebarReach : 0)
-                    - (dockRoot.dockEdge === "left" ? dockRoot.reservedThickness : 0)
-                right: (Appearance.sizes.sidebarLeftEdge === "right" && dockRoot.anchors.right ? -dockRoot.sidebarReach : 0)
-                    - (dockRoot.dockEdge === "right" ? dockRoot.reservedThickness : 0)
-                top: dockRoot.dockEdge === "top" ? -dockRoot.reservedThickness : 0
-                bottom: dockRoot.dockEdge === "bottom" ? -dockRoot.reservedThickness : 0
+                left: dockRoot.dockVertical ? 0 : dockRoot.axisClearance("left", 0)
+                right: dockRoot.dockVertical ? 0 : dockRoot.axisClearance("right", 2)
+                top: dockRoot.dockVertical ? dockRoot.axisClearance("top", 1) : 0
+                bottom: dockRoot.dockVertical ? dockRoot.axisClearance("bottom", 3) : 0
             }
 
             // How much of this screen the row may run along. The surface is
@@ -302,7 +305,6 @@ Scope { // Scope
 
             readonly property real reservedThickness: root.pinned
                 ? Appearance.sizes.dockHeightFor(dockRoot.fittedIconSize) + Appearance.sizes.dockEdgeGap : 0
-            exclusiveZone: 0
 
             Component.onCompleted: {
                 GlobalFocusGrab.addPersistent(dockRoot);
