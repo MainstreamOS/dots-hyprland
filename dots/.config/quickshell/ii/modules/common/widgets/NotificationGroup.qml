@@ -87,11 +87,15 @@ MouseArea { // Notification group area
             }
         }
         onFinished: () => {
+            const name = root.notificationGroup?.appName ?? "";
             root.notifications.forEach((notif) => {
                 Qt.callLater(() => {
                     Notifications.discardNotification(notif.notificationId);
                 });
             });
+            if (name) {
+                IslandState.dismissNotificationsForApp(name);
+            }
         }
     }
 
@@ -252,7 +256,12 @@ MouseArea { // Notification group area
                             implicitWidth: implicitHeight
                             buttonRadius: Appearance.rounding.full
                             Accessible.name: Translation.tr("Clear") + " — " + (root.notificationGroup?.appName ?? "")
-                            onClicked: Notifications.discardNotificationsForApp(root.notificationGroup.appName)
+                            onClicked: {
+                                const name = root.notificationGroup?.appName ?? "";
+                                const ids = (root.notificationGroup?.notifications ?? []).map(n => n.notificationId);
+                                if (ids.length > 0) Notifications.discardNotifications(ids);
+                                if (name) IslandState.dismissNotificationsForApp(name);
+                            }
                             contentItem: MaterialSymbol {
                                 text: "delete_sweep"
                                 iconSize: Appearance.font.pixelSize.normal

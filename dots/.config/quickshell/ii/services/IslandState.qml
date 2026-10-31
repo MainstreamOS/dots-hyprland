@@ -235,6 +235,24 @@ Singleton {
         if (entry.notificationId !== undefined) Notifications.discardNotification(entry.notificationId);
         else dismissedPhoneNotifications = [...dismissedPhoneNotifications, entry.id].slice(-100);
     }
+    function dismissNotificationsForApp(appName) {
+        if (!appName) return;
+        const lower = appName.toLowerCase();
+        const matchingPhone = PhoneCalls.notifications.filter(n => {
+            const name = (n.appName || "iPhone").toLowerCase();
+            const source = (n.sourceApp || "").toLowerCase();
+            return name === lower || source === lower || (lower === "iphone" && !n.appName);
+        });
+        if (matchingPhone.length > 0) {
+            const ids = matchingPhone.map(n => n.id);
+            dismissedPhoneNotifications = [...dismissedPhoneNotifications, ...ids].slice(-100);
+        }
+    }
+    function dismissAllNotifications() {
+        if (PhoneCalls.notifications.length > 0) {
+            dismissedPhoneNotifications = [...dismissedPhoneNotifications, ...PhoneCalls.notifications.map(n => n.id)].slice(-100);
+        }
+    }
     Connections {
         target: Notifications
         function onNotify(notification) {
@@ -244,6 +262,9 @@ Singleton {
                 : !Config.options.bar.island.desktopNotifications) return;
             if (root.calls.length) return;
             root.alert("notifications");
+        }
+        function onDiscardAll() {
+            root.dismissAllNotifications();
         }
     }
     function action(id, name) {

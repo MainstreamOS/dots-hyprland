@@ -426,11 +426,6 @@ Singleton {
         root.discardNotifications([id]);
     }
 
-    function discardNotificationsForApp(appName) {
-        root.discardNotifications(root.list.filter(notif => notif.appName === appName)
-            .map(notif => notif.notificationId));
-    }
-
     function discardNotifications(ids) {
         if (ids.length === 0) return;
         const targets = new Set(ids);
@@ -442,6 +437,7 @@ Singleton {
                 notif.destroy(1000);
             }
             root.list = root.list.filter(notif => !targets.has(notif.notificationId));
+            root.triggerListChange();
             root.saveSoon();
         }
         const tracked = notifServer.trackedNotifications.values
