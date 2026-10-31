@@ -205,6 +205,34 @@ Singleton {
         return ContactService.nameFor(address, "", root.deviceId);
     }
 
+    // Who an address is under the Phone tab's privacy switches.
+    function privateName(address): string {
+        const privacy = Config.options.sidebar.phone.privacy;
+        const number = root.addressText(address);
+        const name = root.nameFor(address);
+        if (privacy.showContactName && name && name !== number) return name;
+        if (privacy.showPhoneNumber && number) return number;
+        return number ? Translation.tr("Private contact") : Translation.tr("Unknown");
+    }
+
+    // A contact as the privacy switches allow it to be named. Pass "" for a contact with no name.
+    function privateContactName(name, number): string {
+        const privacy = Config.options.sidebar.phone.privacy;
+        if (privacy.showContactName && name) return name;
+        if (privacy.showPhoneNumber && number) return number;
+        return Translation.tr("Private contact");
+    }
+
+    function privateTitle(message): string {
+        const addresses = message?.addresses ?? [];
+        if (addresses.length === 0) return message?.sender ? root.privateName(message.sender) : Translation.tr("Unknown");
+        return [...new Set(addresses.map(root.privateName))].join(", ");
+    }
+
+    function privateInitial(title): string {
+        return /^[\d+(]/.test(title) || title.length === 0 || title === Translation.tr("Private contact") ? "#" : title.charAt(0).toUpperCase();
+    }
+
     function pictureFor(address): string {
         return ContactService.pictureFor(address, "", root.deviceId);
     }

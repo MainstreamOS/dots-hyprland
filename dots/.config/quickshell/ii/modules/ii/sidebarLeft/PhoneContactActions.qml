@@ -14,7 +14,12 @@ Rectangle {
     signal callRequested(string number)
     signal messageRequested(string number, string name)
     required property string number
-    property string name: number
+    property string name: ""
+    // The contact as the Phone tab's privacy switches allow it to be named. A name that is only
+    // this number, as the call list can give, counts as the number.
+    readonly property bool named: name.length > 0 && name.replace(/\D/g, "") !== number.replace(/\D/g, "")
+    readonly property string label: Config.options.sidebar.phone.privacy.showPhoneNumber ? number
+        : Config.options.sidebar.phone.privacy.showContactName && named ? name : Translation.tr("contact")
     property bool compact: false
     implicitWidth: compact ? 60 : 70
     implicitHeight: compact ? 28 : 34
@@ -32,7 +37,7 @@ Rectangle {
             enabled: actions.canCall && !!Contacts.dialNumber(actions.number)
             colBackground: "transparent"
             colBackgroundHover: Appearance.colors.colLayer2Hover
-            Accessible.name: Translation.tr("Call %1").arg(actions.name)
+            Accessible.name: Translation.tr("Call %1").arg(actions.label)
             onClicked: actions.callRequested(actions.number)
             contentItem: MaterialSymbol {
                 text: "call"
@@ -41,7 +46,7 @@ Rectangle {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
-            StyledToolTip { text: Translation.tr("Call %1").arg(actions.number) }
+            StyledToolTip { text: Translation.tr("Call %1").arg(actions.label) }
         }
         Rectangle {
             Layout.preferredWidth: 2
@@ -58,7 +63,7 @@ Rectangle {
             enabled: actions.canMessage && /^\+?[0-9]+$/.test(Contacts.dialNumber(actions.number))
             colBackground: "transparent"
             colBackgroundHover: Appearance.colors.colLayer2Hover
-            Accessible.name: Translation.tr("Message %1").arg(actions.name)
+            Accessible.name: Translation.tr("Message %1").arg(actions.label)
             onClicked: actions.messageRequested(actions.number, actions.name)
             contentItem: MaterialSymbol {
                 text: "chat_bubble"
@@ -67,7 +72,7 @@ Rectangle {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
-            StyledToolTip { text: Translation.tr("Message %1").arg(actions.number) }
+            StyledToolTip { text: Translation.tr("Message %1").arg(actions.label) }
         }
     }
 }

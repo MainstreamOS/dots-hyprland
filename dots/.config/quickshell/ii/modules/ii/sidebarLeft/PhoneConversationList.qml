@@ -44,9 +44,10 @@ Item {
         const q = root.searchQuery.trim().toLowerCase();
         if (q.length === 0) return deduped;
         return deduped.filter(item => {
-            const title = String(Phone.conversationTitle(item) ?? "").toLowerCase();
-            const preview = String(Phone.previewText(item) ?? "").toLowerCase();
-            const addr = String((item.addresses && item.addresses[0]) || item.sender || "").toLowerCase();
+            const privacy = Config.options.sidebar.phone.privacy;
+            const title = Phone.privateTitle(item).toLowerCase();
+            const preview = privacy.showMessage ? String(Phone.previewText(item) ?? "").toLowerCase() : "";
+            const addr = privacy.showPhoneNumber ? Phone.addressText(item.addresses?.[0] ?? item.sender).toLowerCase() : "";
             return title.includes(q) || preview.includes(q) || addr.includes(q);
         });
     }
@@ -187,7 +188,7 @@ Item {
                 id: row
                 required property int index
                 required property var modelData
-                readonly property string title: Phone.conversationTitle(row.modelData)
+                readonly property string title: Phone.privateTitle(row.modelData)
                 readonly property bool unread: !Phone.isOutgoing(row.modelData) && !row.modelData.read
 
                 width: list.width
@@ -249,17 +250,17 @@ Item {
                         Image {
                             id: avatarImg
                             anchors.fill: parent
-                            source: Phone.conversationPicture(row.modelData)
+                            source: Config.options.sidebar.phone.privacy.showContactPicture ? Phone.conversationPicture(row.modelData) : ""
                             fillMode: Image.PreserveAspectCrop
                             sourceSize: Qt.size(84, 84)
                             asynchronous: true
-                            visible: status === Image.Ready
+                            visible: Config.options.sidebar.phone.privacy.showContactPicture && status === Image.Ready
                         }
 
                         StyledText {
                             anchors.centerIn: parent
-                            visible: avatarImg.status !== Image.Ready
-                            text: /^[\d+(]/.test(row.title) || row.title.length === 0 ? "#" : row.title.charAt(0).toUpperCase()
+                            visible: !avatarImg.visible
+                            text: Phone.privateInitial(row.title)
                             font.pixelSize: Appearance.font.pixelSize.normal
                             font.weight: Font.DemiBold
                             color: Appearance.colors.colOnLayer2
@@ -295,8 +296,9 @@ Item {
                             spacing: 8
                             StyledText {
                                 Layout.fillWidth: true
-                                text: (Phone.isOutgoing(row.modelData) ? Translation.tr("You: ") : "")
-                                    + Phone.previewText(row.modelData)
+                                text: !Config.options.sidebar.phone.privacy.showMessage
+                                    ? Translation.tr("Message contents hidden")
+                                    : (Phone.isOutgoing(row.modelData) ? Translation.tr("You: ") : "") + Phone.previewText(row.modelData)
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
                                 font.pixelSize: Appearance.font.pixelSize.small

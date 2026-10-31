@@ -28,7 +28,7 @@ function directory(records, deviceId) {
             previous.numbers = [...new Set(previous.numbers.concat(numbers))];
             previous.picture = previous.picture || record.picture || "";
         } else {
-            contacts.set(key, {key, deviceId: device, name: name || numbers[0], numbers,
+            contacts.set(key, {key, deviceId: device, name: name || numbers[0], named: !!name, numbers,
                 picture: record.picture || ""});
         }
     }

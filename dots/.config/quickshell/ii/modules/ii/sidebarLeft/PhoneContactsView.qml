@@ -221,19 +221,19 @@ Item {
                             Image {
                                 id: avatarImg
                                 anchors.fill: parent
-                                source: row.modelData.picture || ""
+                                source: Config.options.sidebar.phone.privacy.showContactPicture ? (row.modelData.picture || "") : ""
                                 fillMode: Image.PreserveAspectCrop
                                 sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio), Math.ceil(height * Screen.devicePixelRatio))
                                 asynchronous: true
                                 smooth: true
                                 mipmap: true
-                                visible: avatarImg.status === Image.Ready
+                                visible: Config.options.sidebar.phone.privacy.showContactPicture && avatarImg.status === Image.Ready
                             }
 
                             StyledText {
                                 anchors.centerIn: parent
-                                visible: avatarImg.status !== Image.Ready
-                                text: Contacts.initials(row.modelData.name)
+                                visible: !avatarImg.visible
+                                text: Config.options.sidebar.phone.privacy.showContactName && row.modelData.named ? Contacts.initials(row.modelData.name) : "#"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 color: Appearance.colors.colOnPrimaryContainer
@@ -261,7 +261,7 @@ Item {
 
                                     StyledText {
                                         Layout.fillWidth: true
-                                        text: row.modelData.name
+                                        text: Phone.privateContactName(row.modelData.named ? row.modelData.name : "", row.primaryNumber)
                                         textFormat: Text.PlainText
                                         font.pixelSize: 13
                                         font.weight: Font.DemiBold
@@ -278,14 +278,16 @@ Item {
                                     StyledText {
                                         Layout.fillWidth: true
                                         textFormat: Text.PlainText
-                                        text: row.primaryNumber || Translation.tr("No number listed")
+                                        text: Config.options.sidebar.phone.privacy.showPhoneNumber
+                                            ? (row.primaryNumber || Translation.tr("No number listed"))
+                                            : Translation.tr("Number hidden")
                                         font.pixelSize: 11
                                         color: Appearance.colors.colSubtext
                                         elide: Text.ElideRight
                                     }
 
                                     Rectangle {
-                                        visible: row.secondaryCount > 0
+                                        visible: Config.options.sidebar.phone.privacy.showPhoneNumber && row.secondaryCount > 0
                                         implicitHeight: 16
                                         implicitWidth: multiBadgeLabel.implicitWidth + 8
                                         radius: 4
@@ -314,14 +316,14 @@ Item {
                             onCallRequested: number => root.call(number)
                             onMessageRequested: (number, name) => root.message(number, name)
                             number: row.primaryNumber
-                            name: row.modelData.name
+                            name: row.modelData.named ? row.modelData.name : ""
                             visible: !!number
                         }
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true
-                        visible: row.isExpanded && row.secondaryCount > 0
+                        visible: Config.options.sidebar.phone.privacy.showPhoneNumber && row.isExpanded && row.secondaryCount > 0
                         spacing: 4
 
                         Repeater {
@@ -362,7 +364,7 @@ Item {
                                         onCallRequested: number => root.call(number)
                                         onMessageRequested: (number, name) => root.message(number, name)
                                         number: secondaryRow.modelData
-                                        name: row.modelData.name
+                                        name: row.modelData.named ? row.modelData.name : ""
                                         compact: true
                                     }
                                 }

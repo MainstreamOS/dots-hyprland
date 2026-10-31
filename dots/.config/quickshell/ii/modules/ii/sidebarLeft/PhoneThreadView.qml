@@ -339,8 +339,9 @@ Item {
         const query = recipientField.text.trim().toLowerCase();
         if (!root.composing || query.length === 0) return [];
         const digits = query.replace(/\D/g, "");
-        return root.contactList.filter(c => c.name.toLowerCase().includes(query)
-            || (digits.length >= 3 && c.number.includes(digits))).slice(0, 5);
+        const privacy = Config.options.sidebar.phone.privacy;
+        return root.contactList.filter(c => (privacy.showContactName && c.name.toLowerCase().includes(query))
+            || (privacy.showPhoneNumber && digits.length >= 3 && c.number.includes(digits))).slice(0, 5);
     }
 
     function send(): void {
@@ -664,9 +665,9 @@ Item {
 
     readonly property string threadPhoneSubtitle: {
         const s = root.threadSummary;
-        if (!s) return "SMS";
-        const addr = String((s.addresses && s.addresses[0]) || s.sender || "").trim();
-        const title = String(Phone.conversationTitle(s) || "").trim();
+        if (!s || !Config.options.sidebar.phone.privacy.showPhoneNumber) return "SMS";
+        const addr = Phone.addressText(s.addresses?.[0] ?? s.sender).trim();
+        const title = Phone.privateTitle(s).trim();
         if (addr.length > 0 && addr !== title) return `${addr} · SMS`;
         return "SMS";
     }
@@ -808,21 +809,18 @@ Item {
                         Image {
                             id: headerAvatar
                             anchors.fill: parent
-                            source: Phone.conversationPicture(root.threadSummary)
+                            source: Config.options.sidebar.phone.privacy.showContactPicture ? Phone.conversationPicture(root.threadSummary) : ""
                             fillMode: Image.PreserveAspectCrop
                             sourceSize: Qt.size(68, 68)
                             asynchronous: false
                             cache: true
-                            visible: status === Image.Ready
+                            visible: Config.options.sidebar.phone.privacy.showContactPicture && status === Image.Ready
                         }
 
                         StyledText {
                             anchors.centerIn: parent
-                            visible: headerAvatar.status !== Image.Ready
-                            text: {
-                                const t = Phone.conversationTitle(root.threadSummary);
-                                return /^[\d+(]/.test(t) || t.length === 0 ? "#" : t.charAt(0).toUpperCase();
-                            }
+                            visible: !headerAvatar.visible
+                            text: Phone.privateInitial(Phone.privateTitle(root.threadSummary))
                             font.pixelSize: Appearance.font.pixelSize.small
                             font.weight: Font.DemiBold
                             color: Appearance.colors.colOnSecondaryContainer
@@ -835,8 +833,7 @@ Item {
 
                         StyledText {
                             Layout.fillWidth: true
-                            text: root.composing ? Translation.tr("New message")
-                                : Phone.conversationTitle(root.threadSummary)
+                            text: root.composing ? Translation.tr("New message") : Phone.privateTitle(root.threadSummary)
                             elide: Text.ElideRight
                             font.pixelSize: Appearance.font.pixelSize.normal
                             font.weight: Font.DemiBold
@@ -1021,17 +1018,17 @@ Item {
                             Image {
                                 id: suggAvatar
                                 anchors.fill: parent
-                                source: suggestion.modelData.picture ?? ""
+                                source: Config.options.sidebar.phone.privacy.showContactPicture ? (suggestion.modelData.picture ?? "") : ""
                                 fillMode: Image.PreserveAspectCrop
                                 sourceSize: Qt.size(56, 56)
                                 asynchronous: true
-                                visible: status === Image.Ready
+                                visible: Config.options.sidebar.phone.privacy.showContactPicture && status === Image.Ready
                             }
 
                             StyledText {
                                 anchors.centerIn: parent
-                                visible: suggAvatar.status !== Image.Ready
-                                text: /^[\d+(]/.test(suggestion.modelData.name) || suggestion.modelData.name.length === 0 ? "#" : suggestion.modelData.name.charAt(0).toUpperCase()
+                                visible: !suggAvatar.visible
+                                text: !Config.options.sidebar.phone.privacy.showContactName ? "#" : /^[\d+(]/.test(suggestion.modelData.name) || suggestion.modelData.name.length === 0 ? "#" : suggestion.modelData.name.charAt(0).toUpperCase()
                                 font.pixelSize: Appearance.font.pixelSize.smaller
                                 font.weight: Font.DemiBold
                                 color: Appearance.colors.colOnSecondaryContainer
@@ -1041,7 +1038,15 @@ Item {
                         StyledText {
                             Layout.fillWidth: true
                             verticalAlignment: Text.AlignVCenter
-                            text: `${suggestion.modelData.name}  ·  ${suggestion.modelData.number}`
+                            text: {
+                                const privacy = Config.options.sidebar.phone.privacy;
+                                const name = privacy.showContactName ? suggestion.modelData.name : "";
+                                const num = privacy.showPhoneNumber ? suggestion.modelData.number : "";
+                                if (name && num) return `${name}  ·  ${num}`;
+                                if (name) return name;
+                                if (num) return num;
+                                return Translation.tr("Private contact");
+                            }
                             elide: Text.ElideRight
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: Appearance.colors.colOnLayer1
@@ -1219,7 +1224,7 @@ Item {
 
                     Rectangle {
                         id: quoteCap
-                        visible: bubbleRow.hasQuote
+                        visible: Config.options.sidebar.phone.privacy.showMessage && bubbleRow.hasQuote
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
@@ -1252,7 +1257,7 @@ Item {
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
-                                        text: bubbleRow.quoteAuthorName
+                                        text: Config.options.sidebar.phone.privacy.showContactName ? bubbleRow.quoteAuthorName : Translation.tr("Private contact")
                                         font.pixelSize: Appearance.font.pixelSize.smallest
                                         font.weight: Font.DemiBold
                                         color: Appearance.colors.colPrimary
@@ -1261,7 +1266,7 @@ Item {
                                 }
                                 StyledText {
                                     Layout.fillWidth: true
-                                    text: bubbleRow.quoteSnippetDisplay
+                                    text: !Config.options.sidebar.phone.privacy.showMessage ? Translation.tr("Message contents hidden") : bubbleRow.quoteSnippetDisplay
                                     font.pixelSize: Appearance.font.pixelSize.smaller
                                     color: bubbleRow.outgoing ? Appearance.chatBubble.mineTextFaint : Appearance.chatBubble.theirsTextFaint
                                     elide: Text.ElideRight
@@ -1270,7 +1275,7 @@ Item {
                             }
 
                             ClippingRectangle {
-                                visible: bubbleRow.quoteThumbPath.length > 0
+                                visible: Config.options.sidebar.phone.privacy.showMessage && bubbleRow.quoteThumbPath.length > 0
                                 implicitWidth: 32
                                 implicitHeight: 32
                                 radius: 7
@@ -1386,7 +1391,7 @@ Item {
 
                         // A click opens the full file from the phone; the corner button saves it.
                         Repeater {
-                            model: bubbleRow.modelData.attachments
+                            model: Config.options.sidebar.phone.privacy.showMessage ? bubbleRow.modelData.attachments : []
                             delegate: Item {
                                 id: attachmentItem
                                 required property int index
@@ -1638,10 +1643,12 @@ Item {
                             readonly property string linked: StringUtils.linkify(bubbleRow.displayBody)
                             Layout.fillWidth: true
                             Layout.maximumWidth: messageList.width * 0.82 - 20
-                            visible: bubbleRow.displayBody.length > 0
-                            text: bodyText.linked.length > 0 ? bodyText.linked : bubbleRow.displayBody
+                            visible: !Config.options.sidebar.phone.privacy.showMessage || bubbleRow.displayBody.length > 0
+                            text: !Config.options.sidebar.phone.privacy.showMessage
+                                ? Translation.tr("Message contents hidden")
+                                : (bodyText.linked.length > 0 ? bodyText.linked : bubbleRow.displayBody)
                             wrapMode: Text.Wrap
-                            textFormat: bodyText.linked.length > 0 ? Text.StyledText : Text.PlainText
+                            textFormat: (!Config.options.sidebar.phone.privacy.showMessage || bodyText.linked.length === 0) ? Text.PlainText : Text.StyledText
                             font.pixelSize: Appearance.font.pixelSize.small
                             color: bubbleRow.textColor
                             linkColor: bubbleRow.outgoing ? Appearance.chatBubble.mineText : Appearance.colors.colPrimary
@@ -1654,7 +1661,7 @@ Item {
                             }
                         }
                         Repeater {
-                            model: bubbleRow.previewUrls
+                            model: Config.options.sidebar.phone.privacy.showMessage ? bubbleRow.previewUrls : []
                             delegate: PhoneLinkPreview {
                                 required property string modelData
                                 Layout.fillWidth: true
@@ -1831,15 +1838,17 @@ Item {
                 color: ColorUtils.mix(Appearance.colors.colSecondaryContainer, Appearance.colors.colLayer0Base, 0.55)
 
                 readonly property var quoteSummary: root.quoteSummaryFor(root.activeReplyMessage)
+                // With message contents hidden, the quote names only who is being answered.
+                readonly property bool showContents: Config.options.sidebar.phone.privacy.showMessage
                 readonly property string replyTargetAuthor: {
                     if (!root.activeReplyMessage) return "";
                     const base = Phone.isOutgoing(root.activeReplyMessage)
                         ? Translation.tr("yourself")
-                        : (Phone.nameFor(root.activeReplyMessage.sender) || Phone.conversationTitle(root.threadSummary) || Translation.tr("message"));
-                    const prov = quoteSummary?.provider ?? "";
+                        : (root.activeReplyMessage.sender ? Phone.privateName(root.activeReplyMessage.sender) : Phone.privateTitle(root.threadSummary));
+                    const prov = showContents ? (quoteSummary?.provider ?? "") : "";
                     return prov.length > 0 ? `${base} · ${prov}` : base;
                 }
-                readonly property string replyTargetThumb: quoteSummary?.thumbSource ?? ""
+                readonly property string replyTargetThumb: showContents ? (quoteSummary?.thumbSource ?? "") : ""
 
                 RowLayout {
                     id: replyComposerRow
@@ -1869,7 +1878,7 @@ Item {
                         }
                         StyledText {
                             Layout.fillWidth: true
-                            text: String(replyComposerCap.quoteSummary?.snippet ?? "")
+                            text: replyComposerCap.showContents ? String(replyComposerCap.quoteSummary?.snippet ?? "") : Translation.tr("Message contents hidden")
                             font.pixelSize: Appearance.font.pixelSize.smaller
                             color: ColorUtils.transparentize(Appearance.colors.colOnSecondaryContainer, 0.3)
                             elide: Text.ElideRight
@@ -2474,7 +2483,7 @@ Item {
             onReact: emoji => root.handleReactionSelected(emoji)
             onReply: root.startReply(root.activeReactionMessage)
             onCopyText: {
-                if (root.activeReactionMessage?.body) {
+                if (Config.options.sidebar.phone.privacy.showMessage && root.activeReactionMessage?.body) {
                     Quickshell.clipboardText = root.activeReactionMessage.body;
                     root.notice(Translation.tr("Text copied"));
                 }

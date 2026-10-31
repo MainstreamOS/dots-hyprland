@@ -1238,6 +1238,12 @@ Singleton {
                     property bool enable: true
                     // Fetches the page of each link in a message shown on screen.
                     property bool linkPreviews: true
+                    property JsonObject privacy: JsonObject {
+                        property bool showContactName: true
+                        property bool showPhoneNumber: true
+                        property bool showMessage: true
+                        property bool showContactPicture: true
+                    }
                 }
                 property JsonObject media: JsonObject {
                     property bool enable: true

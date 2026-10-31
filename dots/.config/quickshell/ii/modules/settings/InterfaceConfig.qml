@@ -818,6 +818,36 @@ ContentPage {
                     text: Translation.tr("Shows a card for each link, which loads the linked page from the web when the message is on screen")
                 }
             }
+
+            ContentSubsectionLabel {
+                Layout.topMargin: 10
+                text: Translation.tr("Contact privacy")
+            }
+
+            ConfigSwitch {
+                buttonIcon: "person"
+                text: Translation.tr("Show contact name")
+                checked: Config.options.sidebar.phone.privacy.showContactName
+                onCheckedChanged: Config.options.sidebar.phone.privacy.showContactName = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "call"
+                text: Translation.tr("Show phone number")
+                checked: Config.options.sidebar.phone.privacy.showPhoneNumber
+                onCheckedChanged: Config.options.sidebar.phone.privacy.showPhoneNumber = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "chat"
+                text: Translation.tr("Show message contents")
+                checked: Config.options.sidebar.phone.privacy.showMessage
+                onCheckedChanged: Config.options.sidebar.phone.privacy.showMessage = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "account_circle"
+                text: Translation.tr("Show contact picture")
+                checked: Config.options.sidebar.phone.privacy.showContactPicture
+                onCheckedChanged: Config.options.sidebar.phone.privacy.showContactPicture = checked
+            }
         }
 
         ContentSubsection {
