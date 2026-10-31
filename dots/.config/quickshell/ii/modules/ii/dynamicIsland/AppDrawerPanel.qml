@@ -61,6 +61,7 @@ Item {
 
         SearchBar {
             id: searchBar
+            quietStyle: true
             contentColors: Appearance.islandLauncherContent
             Layout.fillWidth: true
             Layout.fillHeight: false
