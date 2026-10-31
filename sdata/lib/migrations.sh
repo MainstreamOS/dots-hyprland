@@ -42,6 +42,35 @@ migrate_custom_general_plugin_block() {
     fi
 }
 
+# rust-connect moved to hyprland-session.target, so it starts once Wayland is
+# exported. systemd reads [Install] only when enabling, so a machine enabled
+# earlier keeps starting it from default.target until it is enabled again.
+#
+# Called from here rather than by name: the update that brings this in is run
+# by the exp-update from before it. It runs ahead of the file copy, so the
+# drop-in systemd has to read is put in place first.
+migrate_rust_connect_session_target() {
+    local repo_root="${1:-}"
+    local old="$HOME/.config/systemd/user/default.target.wants/rust-connect.service"
+    local dropin="$HOME/.config/systemd/user/rust-connect.service.d/session.conf"
+    local shipped="${repo_root}/dots/.config/systemd/user/rust-connect.service.d/session.conf"
+
+    [[ -L "$old" ]] || return 0
+    [[ -f "$dropin" ]] || { [[ -f "$shipped" ]] || return 0; }
+
+    if [[ "${DRY_RUN:-false}" == true ]]; then
+        echo "[DRY-RUN] Would enable rust-connect again, so it starts with the session"
+        return 0
+    fi
+
+    [[ -f "$dropin" ]] || install -Dm644 "$shipped" "$dropin" || return 0
+    systemctl --user daemon-reload 2>/dev/null
+    systemctl --user reenable rust-connect.service >/dev/null 2>&1 \
+        || echo "Could not move rust-connect to the session target; it keeps starting early" >&2
+    return 0
+}
+migrate_rust_connect_session_target "${REPO_ROOT:-}"
+
 # The update that brings the Decorations carry in is run by the exp-update from
 # before it, which read its own script before the pull. That runner sources
 # this file after the pull and before it copies anything, which makes this the
