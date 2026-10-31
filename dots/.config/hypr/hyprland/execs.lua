@@ -18,10 +18,10 @@ hl.on("hyprland.start", function ()
         -- what it wants, so the ones an earlier session left are stopped first.
         "(\"$HOME/.config/hypr/hyprland/scripts/stop_stale_session.sh\" --login || true)",
         -- Reset any portal failure state (e.g. start-limit-hit from early PAM activation before display was ready)
-        "(systemctl --user reset-failed xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service 2>/dev/null || true)",
+        "(systemctl --user reset-failed xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-xapp.service 2>/dev/null || true)",
         "systemctl --user start --no-block hyprland-session.target",
         -- Restart portals now that DISPLAY/WAYLAND_DISPLAY and session target are ready.
-        "(systemctl --user restart xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service 2>/dev/null || true)",
+        "(systemctl --user restart xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-xapp.service 2>/dev/null || true)",
         -- Apps wait, bounded, for the shell's tray, as Discord shows no icon if it
         -- starts without one. Kept in the chain so they never start before the stop.
         "{ (gdbus wait --session --timeout 10 org.kde.StatusNotifierWatcher; systemctl --user start --no-block hyprland-autostart.target) & }",
