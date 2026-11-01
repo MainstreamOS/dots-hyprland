@@ -1,4 +1,3 @@
-pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import qs.services
@@ -10,35 +9,9 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: 4
     Repeater {
-        model: IslandPanels.order.filter(id => id !== "localsend")
-        delegate: RowLayout {
-            id: row
-            required property string modelData
-            required property int index
-            Layout.fillWidth: true
-            spacing: 4
-            ConfigSwitch {
-                text: IslandPanels.entry(row.modelData)?.name ?? row.modelData
-                buttonIcon: IslandPanels.entry(row.modelData)?.icon ?? "widgets"
-                checked: IslandPanels.enabled(row.modelData)
-                onCheckedChanged: IslandPanels.setEnabled(row.modelData, checked)
-            }
-            RippleButton {
-                implicitWidth: 32
-                implicitHeight: 32
-                enabled: row.index > 0
-                Accessible.name: Translation.tr("Move up")
-                onClicked: IslandPanels.move(row.modelData, -1)
-                contentItem: MaterialSymbol { anchors.centerIn: parent; text: "arrow_upward"; iconSize: 18 }
-            }
-            RippleButton {
-                implicitWidth: 32
-                implicitHeight: 32
-                enabled: row.index < IslandPanels.order.length - 2
-                Accessible.name: Translation.tr("Move down")
-                onClicked: IslandPanels.move(row.modelData, 1)
-                contentItem: MaterialSymbol { anchors.centerIn: parent; text: "arrow_downward"; iconSize: 18 }
-            }
+        model: IslandPanels.shownOrder
+        delegate: IslandPanelRow {
+            count: IslandPanels.shownOrder.length
         }
     }
     ConfigSwitch {
@@ -46,6 +19,12 @@ ColumnLayout {
         text: Translation.tr("LocalSend when dragging files")
         checked: IslandPanels.enabled("localsend")
         onCheckedChanged: IslandPanels.setEnabled("localsend", checked)
+    }
+    Repeater {
+        model: IslandPanels.hiddenOrder
+        delegate: IslandPanelRow {
+            count: IslandPanels.hiddenOrder.length
+        }
     }
     ConfigResetButton {
         buttonText: Translation.tr("Reset panels")

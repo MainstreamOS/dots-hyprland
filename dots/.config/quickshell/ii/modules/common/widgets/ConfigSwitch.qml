@@ -18,6 +18,8 @@ RippleButton {
     // tooltip entirely; set to any non-empty string to show a tooltip
     // when the user hovers the switch row.
     property string tooltipText: ""
+    // Controls that sit just before the switch, inside the row.
+    property alias trailingControls: trailing.data
 
     Layout.fillWidth: true
     implicitHeight: contentItem.implicitHeight + 8 * 2
@@ -40,6 +42,11 @@ RippleButton {
             font.pixelSize: root.font.pixelSize
             color: Appearance.colors.colOnSecondaryContainer
             opacity: root.enabled ? 1 : 0.4
+        }
+        RowLayout {
+            id: trailing
+            visible: children.length > 0
+            spacing: 4
         }
         StyledSwitch {
             id: switchWidget
