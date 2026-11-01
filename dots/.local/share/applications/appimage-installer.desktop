@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Install AppImage
+Comment=Install an AppImage as an app
+Exec=qs -c ii ipc call appimage install %f
+Icon=application-x-executable
+Type=Application
+NoDisplay=true
+MimeType=application/vnd.appimage;application/x-iso9660-appimage;
+StartupNotify=false

@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-basic
 pkgver=1.0
-pkgrel=23
+pkgrel=24
 pkgdesc='Mainstream OS Basic Dependencies'
 provides=('illogical-impulse-basic')
 replaces=('illogical-impulse-basic')
@@ -34,6 +34,7 @@ depends=(
   cryptsetup
   libxcrypt-compat
   fuse2
+  squashfs-tools
   less
   clinfo
   power-profiles-daemon

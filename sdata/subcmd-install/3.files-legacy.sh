@@ -109,6 +109,12 @@ fi
 
 # Set Nautilus as default file manager and ensure XDG user dirs exist
 xdg-mime default org.gnome.Nautilus.desktop inode/directory
+# AppImages open in Mainstream's installer unless something other than Gear Lever was chosen.
+case "$(xdg-mime query default application/vnd.appimage 2>/dev/null)" in
+  ""|it.mijorus.gearlever.desktop)
+    xdg-mime default appimage-installer.desktop application/vnd.appimage application/x-iso9660-appimage
+    ;;
+esac
 xdg-user-dirs-update
 
 install_dir "dots/.local/share/icons" "${XDG_DATA_HOME}"/icons

@@ -685,6 +685,15 @@ function setup_default_file_manager(){
 showfun setup_default_file_manager
 v setup_default_file_manager
 
+# AppImages open in Mainstream's installer, even where another tool had claimed them.
+function setup_default_appimage_installer(){
+  for mime in application/vnd.appimage application/x-iso9660-appimage; do
+    v xdg-mime default appimage-installer.desktop "$mime"
+  done
+}
+showfun setup_default_appimage_installer
+v setup_default_appimage_installer
+
 # Set Chromium as the default browser. Nothing set one before, on either
 # install path, so https and mailto went to whichever entry registered them
 # first: on a machine with any browser installed that browser also became the

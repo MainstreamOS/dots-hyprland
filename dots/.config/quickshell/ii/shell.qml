@@ -124,6 +124,15 @@ ShellRoot {
         }
     }
 
+    // Launcher entries can't name a path under the home folder, so the file's handler comes through here.
+    IpcHandler {
+        target: "appimage"
+        function install(path: string): void {
+            Quickshell.execDetached(["env", `MAINSTREAM_APPIMAGE=${path}`, "qs", "-p",
+                CF.FileUtils.trimFileProtocol(Quickshell.shellPath("appimage-installer.qml"))]);
+        }
+    }
+
     IpcHandler {
         target: "updates"
 

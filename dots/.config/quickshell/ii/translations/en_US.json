@@ -3319,5 +3319,20 @@
   "Showing the largest %1.": "Showing the largest %1.",
   "Largest files": "Largest files",
   "The biggest files in Home, leaving out the hidden folders apps keep their data in.": "The biggest files in Home, leaving out the hidden folders apps keep their data in.",
-  "Storage": "Storage"
+  "Storage": "Storage",
+  "Install AppImage": "Install AppImage",
+  "No AppImage was given to install.": "No AppImage was given to install.",
+  "This file couldn't be read.": "This file couldn't be read.",
+  "The AppImage couldn't be installed.": "The AppImage couldn't be installed.",
+  "Choose where to install": "Choose where to install",
+  "Version %1": "Version %1",
+  "Install to": "Install to",
+  "This app is already installed. Installing replaces the copy you have.": "This app is already installed. Installing replaces the copy you have.",
+  "The file moves here and the app appears in your launcher. You can remove it later from Uninstall Apps.": "The file moves here and the app appears in your launcher. You can remove it later from Uninstall Apps.",
+  "AppImages don't come from Mainstream's software sources, so only install ones you trust.": "AppImages don't come from Mainstream's software sources, so only install ones you trust.",
+  "%1 is in your launcher now.": "%1 is in your launcher now.",
+  "Reinstall": "Reinstall",
+  "Install": "Install",
+  "File missing": "File missing",
+  "The AppImage and its launcher entry will be deleted.": "The AppImage and its launcher entry will be deleted."
 }

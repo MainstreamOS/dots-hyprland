@@ -623,6 +623,7 @@ su -s /bin/bash "$u" -c "xdg-user-dirs-update --force" || true
 
 # Set Nautilus as default file manager
 su -s /bin/bash "$u" -c "xdg-mime default org.gnome.Nautilus.desktop inode/directory" || true
+su -s /bin/bash "$u" -c "xdg-mime default appimage-installer.desktop application/vnd.appimage application/x-iso9660-appimage" || true
 
 # Set Loupe as default image viewer for all common image types.
 # xdg-mime takes a list, and one call per type meant a hundred-odd forks of su,
