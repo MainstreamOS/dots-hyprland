@@ -172,7 +172,7 @@ Item {
     HoverHandler { id: workspaceHover; blocking: false }
     StyledRectangularShadow {
         target: backdrop
-        color: Appearance.sizes.dockShowBackground ? Appearance.colors.colDockShadow : "transparent"
+        color: Appearance.sizes.dockShowBackground ? Appearance.dockStockShadow : "transparent"
     }
     LauncherWorkspaceSurface {
         id: backdrop

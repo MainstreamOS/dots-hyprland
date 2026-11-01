@@ -196,7 +196,7 @@ Item {
 
     StyledRectangularShadow {
         target: overviewBackground
-        color: Appearance.sizes.dockShowBackground ? Appearance.colors.colDockShadow : "transparent"
+        color: Appearance.sizes.dockShowBackground ? Appearance.dockStockShadow : "transparent"
     }
     LauncherWorkspaceSurface { // Background
         id: overviewBackground

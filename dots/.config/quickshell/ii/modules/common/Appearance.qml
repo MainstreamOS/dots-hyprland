@@ -360,7 +360,10 @@ Singleton {
     }
     readonly property color launcherBackdrop: laidOverDim(colors.colLauncherPanel, colors.colLauncherShadow,
         true)
-    readonly property color drawerBackdrop: laidOverDim(colors.colDockBackground, colors.colDockShadow,
+    // The app list is part of the launcher, so it takes the dock's color but not
+    // the see-through a dock preset or slider sets.
+    readonly property color drawerSurface: ColorUtils.applyAlpha(colors.colDockBackground, colors.dockStockAlpha)
+    readonly property color drawerBackdrop: laidOverDim(drawerSurface, dockStockShadow,
         root.sizes.dockShowBackground)
     readonly property color launcherStockBackdrop: laidOverDim(ColorUtils.applyAlpha(m3colors.m3surfaceContainer, colors.layer0StockAlpha),
         colors.colShadow, true)
@@ -430,7 +433,7 @@ Singleton {
     // They take the wallpaper's hue instead, at their own lightness so nothing brightens,
     // unless the dock's color was picked by hand.
     readonly property color launcherWorkspaceBackground: {
-        const surface = colors.colDockBackground
+        const surface = drawerSurface
         const average = wallpaperAverage
         if (colors.dockPick !== "" || average.hslSaturation <= 0)
             return surface

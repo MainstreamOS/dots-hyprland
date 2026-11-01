@@ -9,12 +9,12 @@ import Quickshell
 import Quickshell.Io
 
 /**
- * LauncherBlur — the launcher's frost stays at the shipped depth.
+ * LauncherBlur: the launcher's frost stays as shipped.
  *
- * The compositor has one blur depth for everything it frosts, read at draw
- * time, and the launcher's dim is frosted by the compositor. So the depth the
- * Blur depth sliders choose for windows reached the launcher too, and a light
- * setting meant for a window edge left the launcher barely frosted.
+ * The compositor has one blur for everything it frosts, read at draw time, and
+ * the launcher's dim is frosted by the compositor. So the depth and style the
+ * window blur settings choose reached the launcher too: a light setting left
+ * it barely frosted, and turning blur off for windows left it with none.
  *
  * While the launcher is open the compositor is handed the stock blur depth with
  * nothing that recolors, since the wallpaper there is meant to be only blurred,
@@ -36,7 +36,7 @@ Singleton {
     readonly property string decorationsPy: `${configDir}/quickshell/ii/scripts/themes/decorations.py`
     readonly property string generalConf: `${configDir}/hypr/hyprland/general.lua`
     readonly property string flagDir: `${configDir}/hypr/custom`
-    readonly property string depthKeys: "blurSize,blurPasses,blurNoise,blurVibrancy"
+    readonly property string depthKeys: "blur,blurVariant,blurSize,blurPasses,blurNoise,blurVibrancy"
 
     // The blur's color settings, which Settings doesn't offer, at what leaves a color alone.
     readonly property var colorRows: [
@@ -67,6 +67,8 @@ Singleton {
     // Written the way decorations.py writes a value, so the same depth reads
     // the same whichever of the two sent it.
     function _lua(value, kind) {
+        if (kind === "bool")
+            return value ? "true" : "false"
         if (kind === "int")
             return String(Math.round(Number(value)))
         const text = Number(value).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
@@ -100,8 +102,8 @@ Singleton {
         for (const m of (text ?? "").match(/\{[^{}]*\}/g) ?? []) {
             try {
                 const o = JSON.parse(m)
-                const v = o.int ?? o.float
-                if (typeof v !== "number") continue
+                const v = o.int ?? o.float ?? o.bool
+                if (typeof v !== "number" && typeof v !== "boolean") continue
                 inOrder.push(v)
                 if (typeof o.option === "string") byName[o.option] = v
             } catch (e) {}

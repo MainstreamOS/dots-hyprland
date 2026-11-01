@@ -59,7 +59,7 @@ Item {
     property real surfaceRadius: Appearance.rounding.dockBody
     property var contentColors: Appearance.drawerContent
     property color colBackground: workspaceStyle ? Appearance.m3colors.m3background
-        : Appearance.sizes.dockShowBackground ? Appearance.colors.colDockBackground : "transparent"
+        : Appearance.sizes.dockShowBackground ? Appearance.drawerSurface : "transparent"
     property real hoverElevation: workspaceStyle && drawerHover.hovered && !_isDraggingApp && !folderPopupVisible ? 1 : 0
     Behavior on hoverElevation { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
     property real wheelVelocity: 0
@@ -281,7 +281,7 @@ Item {
         visible: root.workspaceStyle || Appearance.sizes.dockShowBackground
         // Scaled by the surface's own alpha, so a see-through list is not sat
         // on a shadow as heavy as a solid one's.
-        color: root.workspaceStyle ? Appearance.colors.colShadow : Appearance.colors.colDockShadow
+        color: root.workspaceStyle ? Appearance.colors.colShadow : Appearance.dockStockShadow
     }
 
     Rectangle {
