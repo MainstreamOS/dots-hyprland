@@ -74,7 +74,7 @@ AbstractBackgroundWidget {
             shown: root.clockStyle === "digital" && (root.shouldShow)
             fade: false
             sourceComponent: DigitalClock {
-                colText: root.colText
+                colText: Config.options.background.widgets.clock.digital.color || root.colText
                 textHorizontalAlignment: root.textHorizontalAlignment
             }
         }

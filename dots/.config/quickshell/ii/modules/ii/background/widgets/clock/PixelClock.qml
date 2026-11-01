@@ -6,6 +6,7 @@ import Qt5Compat.GraphicalEffects
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import qs.modules.ii.background.widgets
 
@@ -21,8 +22,9 @@ Item {
     readonly property string glyphTopRight: DateTime.digitH1
     readonly property string glyphBottomLeft: DateTime.digitM0
     readonly property string glyphBottomRight: DateTime.digitM1
-    readonly property color tintSoft: Appearance.colors.colPrimaryContainer
-    readonly property color tintBold: Appearance.colors.colPrimary
+    readonly property string accent: Config.options.background.widgets.clock.pixel.accent
+    readonly property color tintSoft: root.accent ? ColorUtils.mix(root.accent, Appearance.m3colors.m3background, 0.55) : Appearance.colors.colPrimaryContainer
+    readonly property color tintBold: root.accent || Appearance.colors.colPrimary
 
     readonly property real fringeSize: isVertical ? root.width * 0.026 : root.height * 0.03
     readonly property real tileW: isVertical ? root.width * 0.66 : root.width * 0.327

@@ -412,6 +412,26 @@ ContentPage {
                 }
             }
 
+            ColorField {
+                text: Translation.tr("Color")
+                allowEmpty: true
+                buttonIcon: "palette"
+                value: Config.options.background.widgets.clock.digital.color
+                fallback: String(Appearance.colors.colOnLayer0)
+                onEdited: newValue => {
+                    Config.options.background.widgets.clock.digital.color = newValue;
+                }
+            }
+
+            ConfigResetButton {
+                visible: Config.options.background.widgets.clock.digital.color !== ""
+                Layout.leftMargin: 8
+                buttonText: Translation.tr("Use the default color")
+                onClicked: {
+                    Config.options.background.widgets.clock.digital.color = "";
+                }
+            }
+
             FontPicker {
                 value: Config.options.background.widgets.clock.digital.font.family
                 onFontSelected: family => {
@@ -749,6 +769,26 @@ ContentPage {
                     { displayName: Translation.tr("Vertical"),   icon: "swap_vert",  value: "vertical" },
                     { displayName: Translation.tr("Horizontal"), icon: "swap_horiz", value: "horizontal" }
                 ]
+            }
+
+            ColorField {
+                text: Translation.tr("Accent color")
+                allowEmpty: true
+                buttonIcon: "palette"
+                value: Config.options.background.widgets.clock.pixel.accent
+                fallback: String(Appearance.colors.colPrimary)
+                onEdited: newValue => {
+                    Config.options.background.widgets.clock.pixel.accent = newValue;
+                }
+            }
+
+            ConfigResetButton {
+                visible: Config.options.background.widgets.clock.pixel.accent !== ""
+                Layout.leftMargin: 8
+                buttonText: Translation.tr("Use the default color")
+                onClicked: {
+                    Config.options.background.widgets.clock.pixel.accent = "";
+                }
             }
         }
 

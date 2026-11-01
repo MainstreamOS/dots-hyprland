@@ -524,6 +524,7 @@ Singleton {
                             property bool showDate: true
                             property bool animateChange: true
                             property bool vertical: false
+                            property string color: "" // "" picks whichever of light or dark reads best on the wallpaper
                             property JsonObject font: JsonObject {
                                 property string family: "Google Sans Flex"
                                 property real weight: 350
@@ -534,6 +535,7 @@ Singleton {
                         }
                         property JsonObject pixel: JsonObject {
                             property string orientation: "vertical" // "vertical", "horizontal"
+                            property string accent: "" // "" follows the theme
                         }
                         property JsonObject quote: JsonObject {
                             property bool enable: false
