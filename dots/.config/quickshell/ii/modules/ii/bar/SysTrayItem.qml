@@ -19,18 +19,45 @@ MouseArea {
     readonly property real backdropLuminance: ColorUtils.relativeLuminance(root.backdrop)
     // Read once per image, so a new backdrop is judged without a new read.
     property var iconSample: null
-    // Each pixel that shows, as r, g, b, a in 0..1, their summed alpha, and
-    // whether the icon is one plain white or gray.
+    // What shows of the current icon, as shares of its square. Apps pad their icons
+    // differently, so each is drawn at the size that makes this match the others.
+    property var iconBounds: null
+    function snapped(value) {
+        const dpr = root.QsWindow.window?.devicePixelRatio ?? 1;
+        return Math.round(value * dpr) / dpr;
+    }
+    // Judged by area, so a tall thin icon doesn't come out smaller than a square.
+    readonly property real iconSize: {
+        const bounds = root.iconBounds;
+        if (!bounds)
+            return root.implicitWidth;
+        return root.snapped(Math.min(17.5 / bounds.span, root.implicitWidth / Math.max(bounds.width, bounds.height), 2 * root.implicitWidth));
+    }
+    // Each pixel that shows, as r, g, b, a in 0..1, their summed alpha, whether
+    // the icon is one plain white or gray, and the bounds of its solid part.
     function sampleOf(data) {
         const px = [];
         let total = 0;
         let mr = 0;
         let mg = 0;
         let mb = 0;
+        const side = Math.sqrt(data.length / 4);
+        let left = side;
+        let right = -1;
+        let top = side;
+        let bottom = -1;
         for (let i = 0; i < data.length; i += 4) {
             const a = data[i + 3] / 255;
             if (a < 0.1)
                 continue;
+            if (a >= 0.3) {
+                const x = (i / 4) % side;
+                const y = Math.floor(i / 4 / side);
+                left = Math.min(left, x);
+                right = Math.max(right, x);
+                top = Math.min(top, y);
+                bottom = Math.max(bottom, y);
+            }
             const r = data[i] / 255;
             const g = data[i + 1] / 255;
             const b = data[i + 2] / 255;
@@ -49,13 +76,21 @@ MouseArea {
                 oneColor += px[i + 3];
         }
         const plain = oneColor / total >= 0.85 && Math.max(mr, mg, mb) - Math.min(mr, mg, mb) < 0.15;
-        return { px, total, plain };
+        const width = (right - left + 1) / side;
+        const height = (bottom - top + 1) / side;
+        const bounds = right < 0 ? null : {
+            width, height,
+            span: Math.sqrt(width * height),
+            centerX: (left + right + 1) / 2 / side,
+            centerY: (top + bottom + 1) / 2 / side
+        };
+        return { px, total, plain, bounds };
     }
     // True when almost nothing stands off the backdrop (a white glyph on a light
     // group). An outline or a color of its own keeps the icon as the app drew it.
     readonly property bool iconLost: {
         const sample = root.iconSample;
-        if (!Appearance.autoIconContrast || !sample)
+        if (!Appearance.autoIconContrast || Config.options.tray.monochromeIcons || !sample)
             return false;
         const bg = Qt.color(root.backdrop);
         const lbg = root.backdropLuminance;
@@ -173,10 +208,6 @@ MouseArea {
         }
     }
 
-    // Follows the setting, not Appearance.autoIconContrast, which also drops out
-    // while a palette settles; the pixels already read are then re-judged.
-    readonly property bool sampling: (Config.options?.appearance.autoIconContrast ?? true)
-        && !Config.options.tray.monochromeIcons
     // Grabbed from the drawn icon, never re-requested: a canvas request runs on
     // Qt's image reader thread, where QIcon::fromTheme races the bar's own icon
     // loads and corrupts the shell's memory.
@@ -188,7 +219,7 @@ MouseArea {
         const g = ++grabGeneration;
         if (!retrying)
             captureRetry.left = 20;
-        if (!sampling || trayIcon.status === Image.Null || trayIcon.status === Image.Error) {
+        if (trayIcon.status === Image.Null || trayIcon.status === Image.Error) {
             grabPending = false;
             grab = null;
             iconSample = null;
@@ -210,7 +241,6 @@ MouseArea {
         if (!started && captureRetry.left-- > 0)
             captureRetry.restart();
     }
-    onSamplingChanged: capture()
     Component.onCompleted: capture()
     Connections {
         target: root.QsWindow.window
@@ -245,6 +275,10 @@ MouseArea {
             const old = root.iconSample?.px;
             if (!old || old.length !== sample.px.length || sample.px.some((v, i) => v !== old[i]))
                 root.iconSample = sample;
+            // A badge or an animation frame doesn't make it a different icon.
+            const was = root.iconBounds;
+            if (sample.bounds && (!was || Math.abs(sample.bounds.span - was.span) > 0.15 * was.span))
+                root.iconBounds = sample.bounds;
             unloadImage(src);
             root.grab = null;
         }
@@ -261,9 +295,10 @@ MouseArea {
             id: trayIcon
             visible: !Config.options.tray.monochromeIcons
             source: root.item.icon
-            anchors.centerIn: parent
-            width: parent.width
-            height: parent.height
+            x: root.snapped((parent.width - width) / 2 + (0.5 - (root.iconBounds?.centerX ?? 0.5)) * width)
+            y: root.snapped((parent.height - height) / 2 + (0.5 - (root.iconBounds?.centerY ?? 0.5)) * height)
+            width: root.iconSize
+            height: root.iconSize
             onStatusChanged: root.capture()
             onSourceChanged: root.capture()
         }
