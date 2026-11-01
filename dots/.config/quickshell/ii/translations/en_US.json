@@ -3259,5 +3259,11 @@
   "Click to pick a time": "Click to pick a time",
   "Clock time (click it to change)": "Clock time (click it to change)",
   "Try a time like 3:45": "Try a time like 3:45",
-  "Left sidebar": "Left sidebar"
+  "Left sidebar": "Left sidebar",
+  "Depth effect": "Depth effect",
+  "Lets what is in front in your wallpaper pass in front of the clock. The first time downloads about 75 MB. Not available with video wallpapers.": "Lets what is in front in your wallpaper pass in front of the clock. The first time downloads about 75 MB. Not available with video wallpapers.",
+  "Setting up the clock depth effect": "Setting up the clock depth effect",
+  "This downloads about 75 MB the first time": "This downloads about 75 MB the first time",
+  "The clock depth effect could not be set up": "The clock depth effect could not be set up",
+  "Turn it off and on again in Settings to try again": "Turn it off and on again in Settings to try again"
 }

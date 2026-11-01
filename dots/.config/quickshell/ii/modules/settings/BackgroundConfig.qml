@@ -295,6 +295,17 @@ ContentPage {
             }
         }
 
+        ConfigSwitch {
+            buttonIcon: "layers"
+            visible: Config.options.background.widgets.clock.enable && !Config.options.background.widgets.clock.showOnlyWhenLocked
+            text: Translation.tr("Depth effect")
+            tooltipText: Translation.tr("Lets what is in front in your wallpaper pass in front of the clock. The first time downloads about 75 MB. Not available with video wallpapers.")
+            checked: Config.options.background.widgets.clock.depthEffect
+            onCheckedChanged: {
+                Config.options.background.widgets.clock.depthEffect = checked;
+            }
+        }
+
         ConfigRow {
             visible: Config.options.background.widgets.clock.enable
             ContentSubsection {

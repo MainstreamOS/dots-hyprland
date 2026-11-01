@@ -758,6 +758,47 @@ Variants {
                     }
                 }
 
+                // Before the other widgets, so the depth cutout above it goes over the clock alone.
+                FadeLoader {
+                    id: clockLoader
+                    shown: Config.options.background.widgets.clock.enable
+                    sourceComponent: ClockWidget {
+                        screenWidth: bgRoot.screen.width
+                        screenHeight: bgRoot.screen.height
+                        scaledScreenWidth: bgRoot.screen.width
+                        scaledScreenHeight: bgRoot.screen.height
+                        wallpaperScale: 1
+                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
+                        hasActiveMusic: widgetCanvas.hasActiveMusic
+                    }
+                }
+
+                ClockDepthCutout {
+                    x: wallpaper.x - widgetCanvas.x
+                    y: wallpaper.y - widgetCanvas.y
+                    width: wallpaper.width
+                    height: wallpaper.height
+                    drift: wallpaper.width > 0 && wallpaper.height > 0
+                        ? Math.abs(widgetCanvas.parallaxFactor - 1) / 2
+                            * Math.max(bgRoot.parallaxTotalPixelsX / wallpaper.width, bgRoot.parallaxTotalPixelsY / wallpaper.height)
+                        : 0
+                    picture: CF.FileUtils.trimFileProtocol(wallpaper.source.toString())
+                    allowed: !bgRoot.wallpaperSwapPending && !swapAnimation.running && !GlobalStates.screenLocked
+                    wanted: Config.options.background.widgets.clock.depthEffect
+                        && Config.options.background.widgets.clock.enable
+                        && !Config.options.background.widgets.clock.showOnlyWhenLocked
+                        && !bgRoot.wallpaperIsVideo
+                    // Measured against the centered picture, so parallax doesn't move it.
+                    region: {
+                        const clock = clockLoader.item;
+                        if (!clock || wallpaper.width <= 0 || wallpaper.height <= 0)
+                            return Qt.rect(0, 0, 0, 0);
+                        return Qt.rect((clock.x - widgetCanvas.baseWallpaperOffsetX) / wallpaper.width,
+                            (clock.y - widgetCanvas.baseWallpaperOffsetY) / wallpaper.height,
+                            clock.width / wallpaper.width, clock.height / wallpaper.height);
+                    }
+                }
+
                 FadeLoader {
                     shown: Config.options.background.widgets.calendar.enable
                     sourceComponent: CalendarWidget {
@@ -779,19 +820,6 @@ Variants {
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
                         wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
-                    }
-                }
-
-                FadeLoader {
-                    shown: Config.options.background.widgets.clock.enable
-                    sourceComponent: ClockWidget {
-                        screenWidth: bgRoot.screen.width
-                        screenHeight: bgRoot.screen.height
-                        scaledScreenWidth: bgRoot.screen.width
-                        scaledScreenHeight: bgRoot.screen.height
-                        wallpaperScale: 1
-                        wallpaperItem: bgRoot.wallpaperIsVideo ? null : wallpaper
-                        hasActiveMusic: widgetCanvas.hasActiveMusic
                     }
                 }
 

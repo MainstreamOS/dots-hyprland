@@ -498,6 +498,8 @@ Singleton {
                     property JsonObject clock: JsonObject {
                         property bool enable: true
                         property bool showOnlyWhenLocked: false
+                        // Lets what is in front in the wallpaper pass in front of the clock.
+                        property bool depthEffect: false
                         property string placementStrategy: "leastBusy" // "free", "leastBusy", "mostBusy"
                         property real x: 0.2
                         property real y: 0.2
