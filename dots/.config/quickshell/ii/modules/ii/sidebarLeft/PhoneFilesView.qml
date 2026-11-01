@@ -16,7 +16,8 @@ Item {
 
     // The folder on show and the place it was opened from, as local paths.
     property string folder: ""
-    property string activeKey: "camera"
+    // Opens on the general files rather than the photos, which may be private.
+    property string activeKey: "storage"
     property string viewMode: "list"
     // Camera & Media and Screenshots show their pictures as a plain grid, with no list to switch to.
     readonly property bool galleryMode: root.activeKey === "camera" || root.activeKey === "screenshots"
@@ -367,7 +368,7 @@ Item {
 
     onStorageRootChanged: {
         if (root.storageRoot.length > 0 && (root.folder.length === 0 || !root.folder.startsWith(root.storageRoot))) {
-            root.openQuickPlace(root.activeKey || "camera");
+            root.openQuickPlace(root.activeKey || "storage");
         }
     }
 
@@ -377,12 +378,12 @@ Item {
             if (!root.isMounted) {
                 root.folder = "";
             } else if (root.storageRoot.length > 0) {
-                root.openQuickPlace(root.activeKey || "camera");
+                root.openQuickPlace(root.activeKey || "storage");
             }
         }
         function onMountPointChanged() {
             if (Phone.mounted && root.storageRoot.length > 0) {
-                root.openQuickPlace(root.activeKey || "camera");
+                root.openQuickPlace(root.activeKey || "storage");
             }
         }
         // A refresh of the same storage keeps a folder the user browsed to; until then the
@@ -390,13 +391,13 @@ Item {
         function onPlacesChanged() {
             if (Phone.mounted && root.storageRoot.length > 0
                 && !(root.browsed && root.folder.startsWith(root.storageRoot + "/"))) {
-                root.openQuickPlace(root.activeKey || "camera");
+                root.openQuickPlace(root.activeKey || "storage");
             }
         }
         function onDeviceIdChanged() {
             root.folder = "";
             if (Phone.mounted && root.storageRoot.length > 0) {
-                root.openQuickPlace(root.activeKey || "camera");
+                root.openQuickPlace(root.activeKey || "storage");
             }
         }
     }
@@ -409,7 +410,7 @@ Item {
 
     Component.onCompleted: {
         if (Phone.mounted && root.storageRoot.length > 0) {
-            root.openQuickPlace("camera");
+            root.openQuickPlace(root.activeKey);
         } else {
             root.autoMountIfReachable();
         }
@@ -425,7 +426,7 @@ Item {
     onVisibleChanged: {
         if (visible) {
             if (Phone.mounted && root.storageRoot.length > 0) {
-                root.openQuickPlace(root.activeKey || "camera");
+                root.openQuickPlace(root.activeKey || "storage");
             } else {
                 root.autoMountIfReachable();
             }
