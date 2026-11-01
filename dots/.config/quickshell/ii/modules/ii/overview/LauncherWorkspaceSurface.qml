@@ -30,7 +30,7 @@ Rectangle {
         Rectangle {
             anchors.fill: parent
             radius: root.radius
-            color: Appearance.colors.colDockBackground
+            color: Appearance.launcherWorkspaceBackground
             border.width: 1.5 * root.uiScale
             border.color: Appearance.colors.colDockBackgroundBorder
         }
