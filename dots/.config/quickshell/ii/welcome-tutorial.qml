@@ -48,14 +48,15 @@ ApplicationWindow {
     title: Translation.tr("Welcome to Mainstream")
 
     property int currentCard: 0
-    readonly property int cardCount: 13   // bump as you add more cards
+    readonly property int cardCount: 14   // bump as you add more cards
     // The window's own title doubles as each page's heading, so a page that
     // names itself does not spend a line of its own saying so.
     readonly property string cardTitle: {
         switch (root.currentCard) {
         case 0: return Translation.tr("Welcome! Let's start with the basics");
-        case 1: return Translation.tr("Pick your desktop's style");
-        case 2: return Translation.tr("Pick how your windows look");
+        case 1: return Translation.tr("Pick your bar");
+        case 2: return Translation.tr("Pick your desktop's style");
+        case 3: return Translation.tr("Pick how your windows look");
         case root.installCardIndex: return Translation.tr("Get set up for what you do");
         case root.cardCount - 1: return Translation.tr("One last thing");
         }
@@ -90,7 +91,7 @@ ApplicationWindow {
     }
 
     // Install page (card 2): which apps the user ticked to install in the background.
-    readonly property int installCardIndex: 3
+    readonly property int installCardIndex: 4
     property var installSelections: ({ "gaming": false, "gamescope": false, "resolve": false, "resolve-studio": false, "obs": false,
                                         "gimp": false, "krita": false, "libreoffice": false, "onlyoffice": false, "sunshine": false, "moonlight": false, "blender": false, "vr": false })
     function toggleInstall(key) {
@@ -354,6 +355,7 @@ ApplicationWindow {
                 // animations) up front. Once shown, a card stays loaded so
                 // navigating back to it is instant.
                 LazyCard { sourceComponent: card0Comp }
+                LazyCard { sourceComponent: cardBarChoiceComp }
                 LazyCard { sourceComponent: cardStyleComp }
                 LazyCard { sourceComponent: cardWindowsComp }
                 LazyCard { sourceComponent: cardInstallComp }
@@ -370,6 +372,7 @@ ApplicationWindow {
             }
 
             Component { id: card0Comp; Card0Setup {} }
+            Component { id: cardBarChoiceComp; CardBarChoice {} }
             Component { id: cardStyleComp; CardStyle {} }
             Component { id: cardWindowsComp; CardWindows {} }
             Component { id: cardInstallComp; Card1Install {} }
@@ -511,7 +514,7 @@ ApplicationWindow {
 
 
     // Whether the compositor frosts what sits behind the bar and the dock.
-    // Read again on arriving at the two pages that draw it, since the windows
+    // Read again on arriving at the pages that draw it, since the windows
     // page can turn blur off.
     property bool layerBlur: true
     Process {
@@ -527,7 +530,7 @@ ApplicationWindow {
         }
     }
     onCurrentCardChanged: {
-        if (currentCard <= 1) {
+        if (currentCard <= 2) {
             layerBlurReader.running = false;
             layerBlurReader.running = true;
         }
@@ -536,7 +539,7 @@ ApplicationWindow {
         }
     }
 
-    // ---- Style page (card 1) ----
+    // ---- Style page ----
     // One pick sets both halves, so a tile reads the bar and speaks for the
     // pair. Settings can still move each on its own, and the bar carries a
     // fourth style, Rect, which none of these tiles offers and none lights.
@@ -591,6 +594,28 @@ ApplicationWindow {
             root.applyDockStyle("float");
         }
         root.fitWindowsToHug(name === "hug");
+    }
+
+    // The Island's three shapes each go with the dock drawn the same way, stored
+    // under the dock's own names.
+    readonly property var islandDockStyles: ({ float: "float", notch: "hug", rect: "rect" })
+    function applyIslandDockStyle(name) {
+        Config.options.bar.island.shape = name;
+        root.applyDockStyle(root.islandDockStyles[name]);
+        root.fitWindowsToHug(false);
+    }
+
+    // Picking one sets its dock too, so the next page opens on a matched pair.
+    function applyBarMode(mode) {
+        if ((mode === "island") === Appearance.sizes.barIsIsland) return;
+        if (mode === "island") {
+            if (Config.options.bar.vertical) Appearance.sizes.placeBar(Config.options.bar.bottom, false);
+            Config.pickBarMode("island");
+            root.applyIslandDockStyle(Appearance.sizes.islandShape);
+        } else {
+            Config.pickBarMode("bar");
+            root.applyBarDockStyle(root.barDockStyle || "float");
+        }
     }
 
     // ---- Window corners under Hug ----
@@ -1098,7 +1123,8 @@ ApplicationWindow {
     // would make every picture change together and show one shape many times.
     component StyleMockup : Item {
         id: mock
-        property string styleName: "float"   // "float" | "hug" | "notch"
+        property string styleName: "float"   // "float" | "hug" | "notch" | "rect"
+        property bool island: false
 
         readonly property bool isFloat: styleName === "float"
         readonly property bool isNotch: styleName === "notch"
@@ -1130,7 +1156,7 @@ ApplicationWindow {
             // ── The bar, along the top ──────────────────────────────────
             Rectangle {
                 id: barBody
-                readonly property int sideInset: mock.isFloat ? 8 : (mock.isNotch ? 28 : 0)
+                readonly property int sideInset: mock.island ? 78 : (mock.isFloat ? 8 : (mock.isNotch ? 28 : 0))
                 x: sideInset
                 y: mock.isFloat ? 8 : 0
                 width: parent.width - sideInset * 2
@@ -1140,7 +1166,7 @@ ApplicationWindow {
                 // corners. Notch stops short of them and the pieces beside it
                 // make that turn instead, so its top pair is square: rounding
                 // it as well would cut a wedge out of where the two meet.
-                topLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 0 : screen.radius)
+                topLeftRadius: mock.isFloat ? 6 : (mock.isHug ? screen.radius : 0)
                 topRightRadius: topLeftRadius
                 bottomLeftRadius: mock.isFloat ? 6 : (mock.isNotch ? 8 : 0)
                 bottomRightRadius: bottomLeftRadius
@@ -1149,7 +1175,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     spacing: 7
                     Repeater {
-                        model: 3
+                        model: mock.island ? 1 : 3
                         delegate: Rectangle {
                             width: 20; height: 4; radius: 2
                             color: mock.markColor
@@ -1704,7 +1730,7 @@ ApplicationWindow {
     }
 
 
-    // ── Card 1: Style ───────────────────────────────────────────────────
+    // ── Style ──────────────────────────────────────────────────────────
     // One tile sets the bar and the dock together, with the color the two
     // share underneath. Nothing is written until a tile is pressed, and the
     // lit one is read back from the settings.
@@ -1800,6 +1826,7 @@ ApplicationWindow {
         required property string styleName
         required property string label
         required property bool selected
+        property bool island: false
 
         Layout.fillWidth: true
         Layout.preferredWidth: 1
@@ -1826,6 +1853,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 8
                     styleName: tile.styleName
+                    island: tile.island
                 }
             }
 
@@ -2342,28 +2370,31 @@ ApplicationWindow {
             opacity: (1 - pointer.demo.rippleT) * 0.85 * pointer.demo.cursorAlpha
         }
 
-        // The pointer, drawn rather than taken from the icon font.
-        Shape {
+        PointerShape {
             x: pointer.demo.cursorX
             y: pointer.demo.cursorY
-            width: 13
-            height: 20
             opacity: pointer.demo.cursorAlpha
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                fillColor: "white"
-                strokeColor: "black"
-                strokeWidth: 1.2
-                joinStyle: ShapePath.RoundJoin
-                startX: 0; startY: 0
-                PathLine { x: 0; y: 16 }
-                PathLine { x: 4; y: 12.5 }
-                PathLine { x: 7; y: 19 }
-                PathLine { x: 9.5; y: 18 }
-                PathLine { x: 6.5; y: 11.5 }
-                PathLine { x: 11.5; y: 11.5 }
-                PathLine { x: 0; y: 0 }
-            }
+        }
+    }
+
+    // The pointer, drawn rather than taken from the icon font.
+    component PointerShape : Shape {
+        width: 13
+        height: 20
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: "white"
+            strokeColor: "black"
+            strokeWidth: 1.2
+            joinStyle: ShapePath.RoundJoin
+            startX: 0; startY: 0
+            PathLine { x: 0; y: 16 }
+            PathLine { x: 4; y: 12.5 }
+            PathLine { x: 7; y: 19 }
+            PathLine { x: 9.5; y: 18 }
+            PathLine { x: 6.5; y: 11.5 }
+            PathLine { x: 11.5; y: 11.5 }
+            PathLine { x: 0; y: 0 }
         }
     }
 
@@ -2452,6 +2483,241 @@ ApplicationWindow {
                     fillMode: Image.PreserveAspectCrop
                     sourcePath: Config.options.background.wallpaperPath
                     sourceSize: Images.wallpaperPreviewSourceSize
+                }
+            }
+        }
+    }
+
+    // ── Bar choice card ─────────────────────────────────────────────────────
+    // Half the page for each kind of bar, with what it does under its picture.
+    component BarChoiceTile : MouseArea {
+        id: choice
+        required property string label
+        required property string description
+        required property bool selected
+        default property alias preview: previewSlot.data
+
+        signal picked()
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.preferredWidth: 1
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: choice.picked()
+
+        PickFrame {
+            anchors.fill: parent
+            radius: Appearance.rounding.normal
+            selected: choice.selected
+            hovered: choice.containsMouse
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 12
+
+                Item {
+                    id: previewSlot
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: width * 9 / 16
+                }
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    ColumnLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 10
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: 8
+                            RadioMark { selected: choice.selected }
+                            StyledText {
+                                text: choice.label
+                                font.pixelSize: Appearance.font.pixelSize.large
+                                font.weight: Font.Medium
+                                color: Appearance.colors.colOnLayer1
+                            }
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            // Room for three lines, so the two radios stay level when
+                            // one description runs longer.
+                            Layout.minimumHeight: font.pixelSize * 4.5
+                            verticalAlignment: Text.AlignTop
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            color: Appearance.colors.colSubtext
+                            text: choice.description
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    component IsleSideButton : Rectangle {
+        required property IslandPiece isle
+        required property string symbol
+        Layout.preferredWidth: 36 * isle.unit
+        Layout.fillHeight: true
+        radius: 10 * isle.unit
+        color: isle.raised
+        MaterialSymbol {
+            anchors.centerIn: parent
+            text: parent.symbol
+            iconSize: 8
+            color: parent.isle.ink
+        }
+    }
+
+    component IsleArrow : Rectangle {
+        required property IslandPiece isle
+        required property string symbol
+        property bool pointed: false
+        readonly property bool pressed: pointed && isle.arrowPressed
+        Layout.preferredWidth: 28 * isle.unit
+        Layout.preferredHeight: 28 * isle.unit
+        radius: 8 * isle.unit
+        color: pressed ? isle.accent : (pointed ? isle.row : "transparent")
+        scale: pressed ? 0.88 : 1
+        Behavior on color { ColorAnimation { duration: 90 } }
+        Behavior on scale { NumberAnimation { duration: 90 } }
+        MaterialSymbol {
+            anchors.centerIn: parent
+            text: parent.symbol
+            iconSize: 10
+            color: parent.pressed ? Appearance.colors.colOnPrimary : parent.isle.ink
+        }
+    }
+
+    component PointerMove : ParallelAnimation {
+        id: move
+        required property CardBarChoice demo
+        required property real toX
+        required property real toY
+        property int moveTime: 600
+        NumberAnimation { target: move.demo; property: "cursorX"; to: move.toX; duration: move.moveTime; easing.type: Easing.InOutCubic }
+        NumberAnimation { target: move.demo; property: "cursorY"; to: move.toY; duration: move.moveTime; easing.type: Easing.InOutCubic }
+    }
+
+    component CardBarChoice : Item {
+        id: cardBarChoice
+
+        // Pointer and Island state for the looping demo, the pointer in shares
+        // of the picture so it holds at any size.
+        readonly property real restX: 0.74
+        readonly property real restY: 0.7
+        property real cursorX: restX
+        property real cursorY: restY
+        property bool demoExpanded: false
+        property int demoPanel: 0
+        property bool demoPointedArrow: false
+        property bool demoArrowPressed: false
+
+        SequentialAnimation {
+            loops: Animation.Infinite
+            running: cardBarChoice.visible
+            onStopped: {
+                cardBarChoice.demoExpanded = false;
+                cardBarChoice.demoPanel = 0;
+                cardBarChoice.demoPointedArrow = false;
+                cardBarChoice.demoArrowPressed = false;
+                cardBarChoice.cursorX = cardBarChoice.restX;
+                cardBarChoice.cursorY = cardBarChoice.restY;
+            }
+            PauseAnimation { duration: 700 }
+            PointerMove { demo: cardBarChoice; toX: 0.47; toY: 0.03; moveTime: 700 }
+            ScriptAction { script: cardBarChoice.demoExpanded = true }
+            PauseAnimation { duration: 1100 }
+            PointerMove {
+                demo: cardBarChoice
+                toX: islandStage.islandNextArrow.x / islandStage.width
+                toY: islandStage.islandNextArrow.y / islandStage.height
+            }
+            ScriptAction { script: cardBarChoice.demoPointedArrow = true }
+            PauseAnimation { duration: 300 }
+            ScriptAction { script: cardBarChoice.demoArrowPressed = true }
+            PauseAnimation { duration: 170 }
+            ScriptAction {
+                script: {
+                    cardBarChoice.demoArrowPressed = false;
+                    cardBarChoice.demoPanel = 1;
+                }
+            }
+            PauseAnimation { duration: 1500 }
+            ScriptAction { script: cardBarChoice.demoArrowPressed = true }
+            PauseAnimation { duration: 170 }
+            ScriptAction {
+                script: {
+                    cardBarChoice.demoArrowPressed = false;
+                    cardBarChoice.demoPanel = 2;
+                }
+            }
+            PauseAnimation { duration: 1700 }
+            ScriptAction { script: cardBarChoice.demoPointedArrow = false }
+            PointerMove { demo: cardBarChoice; toX: cardBarChoice.restX; toY: cardBarChoice.restY; moveTime: 650 }
+            PauseAnimation { duration: 450 }
+            ScriptAction { script: cardBarChoice.demoExpanded = false }
+            PauseAnimation { duration: 320 }
+            ScriptAction { script: cardBarChoice.demoPanel = 0 }
+            PauseAnimation { duration: 700 }
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 16
+
+            BarChoiceTile {
+                label: Translation.tr("Traditional bar")
+                description: Translation.tr("A bar along the edge of your screen, with your workspaces, clock, media, system tray and quick controls always in view")
+                selected: !Appearance.sizes.barIsIsland
+                onPicked: root.applyBarMode("bar")
+
+                BarDockStage {
+                    anchors.fill: parent
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+                    blur: root.layerBlur
+                    island: false
+                    barEdge: "top"
+                    dockEdge: "bottom"
+                    barShape: root.barDockStyle || "float"
+                    dockShape: barShape
+                }
+            }
+
+            BarChoiceTile {
+                label: Translation.tr("Dynamic Island")
+                description: Translation.tr("A small island that stays out of your way. Hover over it and it opens into panels for system controls, media, notifications, your calendar and more")
+                selected: Appearance.sizes.barIsIsland
+                onPicked: root.applyBarMode("island")
+
+                BarDockStage {
+                    id: islandStage
+                    anchors.fill: parent
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+                    blur: root.layerBlur
+                    island: true
+                    barEdge: "top"
+                    dockEdge: "bottom"
+                    dockShape: Appearance.sizes.islandShape
+                    islandExpanded: cardBarChoice.demoExpanded
+                    islandPanel: cardBarChoice.demoPanel
+                    islandPointedArrow: cardBarChoice.demoPointedArrow
+                    islandArrowPressed: cardBarChoice.demoArrowPressed
+
+                    PointerShape {
+                        x: cardBarChoice.cursorX * islandStage.width
+                        y: cardBarChoice.cursorY * islandStage.height
+                        scale: cardBarChoice.demoArrowPressed ? 0.68 : 0.8
+                        transformOrigin: Item.TopLeft
+                        Behavior on scale { NumberAnimation { duration: 90 } }
+                    }
                 }
             }
         }
@@ -2871,12 +3137,20 @@ ApplicationWindow {
     component BarDockStage : DesktopFrame {
         id: bds
         property bool blur: true
+        property bool island: Appearance.sizes.barIsIsland
+        property bool islandExpanded: false
+        property int islandPanel: 0
+        property bool islandPointedArrow: false
+        readonly property point islandNextArrow: islandDrawn.nextArrow
+        property bool islandArrowPressed: false
+        property string barEdge: Appearance.sizes.barEdge
+        property string dockEdge: Appearance.sizes.dockEdge
 
         // Named the way Settings names them, so the dock's stored "hug" is the
         // notch and its "span" is Hug. Anything else is drawn as rect, as the
         // bar and the dock themselves draw it.
-        readonly property string barShape: root.barDockStyle || "rect"
-        readonly property string dockShape: ({ float: "float", overview: "float", hug: "notch", span: "hug" })[Config.options.dock.cornerStyle] ?? "rect"
+        property string barShape: root.barDockStyle || "rect"
+        property string dockShape: ({ float: "float", overview: "float", hug: "notch", span: "hug" })[Config.options.dock.cornerStyle] ?? "rect"
         readonly property bool dockShown: Config.options.dock.enable
 
         Item {
@@ -2884,12 +3158,19 @@ ApplicationWindow {
             anchors.fill: parent
             visible: false
             EdgeMount {
-                edge: Appearance.sizes.barEdge
-                BarPiece { shape: bds.barShape; retract: parent.retract; maskOnly: true }
+                edge: bds.barEdge
+                BarPiece { visible: !bds.island; shape: bds.barShape; retract: parent.retract; maskOnly: true }
+                IslandPiece {
+                    visible: bds.island
+                    shape: Appearance.sizes.islandShape
+                    retract: parent.retract
+                    expanded: bds.islandExpanded
+                    maskOnly: true
+                }
             }
             EdgeMount {
                 visible: bds.dockShown
-                edge: Appearance.sizes.dockEdge
+                edge: bds.dockEdge
                 DockPiece { shape: bds.dockShape; retract: parent.retract; maskOnly: true }
             }
         }
@@ -2909,13 +3190,436 @@ ApplicationWindow {
         }
 
         EdgeMount {
-            edge: Appearance.sizes.barEdge
-            BarPiece { shape: bds.barShape; retract: parent.retract }
+            edge: bds.barEdge
+            BarPiece { visible: !bds.island; shape: bds.barShape; retract: parent.retract }
+            IslandPiece {
+                id: islandDrawn
+                visible: bds.island
+                shape: Appearance.sizes.islandShape
+                retract: parent.retract
+                expanded: bds.islandExpanded
+                panel: bds.islandPanel
+                pointedArrow: bds.islandPointedArrow
+                arrowPressed: bds.islandArrowPressed
+            }
         }
         EdgeMount {
             visible: bds.dockShown
-            edge: Appearance.sizes.dockEdge
+            edge: bds.dockEdge
             DockPiece { shape: bds.dockShape; retract: parent.retract }
+        }
+    }
+
+    // The Dynamic Island along the top of its box, in the shapes Settings offers.
+    // Open, it shows one of two panels under its tabs, growing the way the real
+    // one does.
+    component IslandPiece : Item {
+        id: isle
+        property string shape: "notch"
+        property real retract: 0
+        property bool maskOnly: false
+        property bool expanded: false
+        property int panel: 0
+        // Whether the demo's pointer is on the next arrow, and clicking it.
+        property bool pointedArrow: false
+        property bool arrowPressed: false
+        anchors.fill: parent
+
+        readonly property real thick: 20
+        readonly property real expandedWidth: isle.width * 0.36
+        // Open, everything is the real Island's own measurements at this scale.
+        readonly property real unit: isle.expandedWidth / 472
+        readonly property real expandedHeight: 286 * isle.unit
+        // Where the demo's pointer clicks.
+        readonly property point nextArrow: Qt.point((isle.width + isle.expandedWidth) / 2 - 78 * isle.unit, isle.gap + 34 * isle.unit)
+        readonly property real slide: isle.retract * (isle.thick + isle.gap + 12)
+        property real gap: isle.shape === "float" ? 8 : 0
+        property real edgeRadius: isle.shape === "float" ? 10 : 0
+        property real farRadius: isle.shape === "rect" ? 0 : 10
+        property real swoop: isle.shape === "notch" ? 1 : 0
+        Behavior on gap { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on edgeRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on farRadius { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+        Behavior on swoop { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+
+        readonly property color fill: isle.maskOnly ? "white" : Appearance.colors.colBarBackground
+        readonly property color ink: Appearance.islandContent.colOnLayer0
+        readonly property color raised: Appearance.surfaces.raised
+        readonly property color row: Appearance.surfaces.row
+        readonly property color mark: ColorUtils.transparentize(isle.ink, 0.45)
+        readonly property color accent: Appearance.islandContent.colPrimary
+
+        Item {
+            id: isleBox
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: isle.gap - isle.slide
+            width: isle.expanded ? isle.expandedWidth : 92
+            height: isle.expanded ? isle.expandedHeight : isle.thick
+            Behavior on width { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+            Behavior on height { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+
+            RectangularShadow {
+                anchors.fill: parent
+                visible: !isle.maskOnly && isle.shape === "float" && Config.options.bar.floatStyleShadow
+                radius: isle.farRadius
+                blur: 8
+                offset: Qt.vector2d(0, 1)
+                color: Appearance.colors.colBarShadow
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: isle.fill
+                topLeftRadius: isle.edgeRadius
+                topRightRadius: isle.edgeRadius
+                bottomLeftRadius: isle.farRadius
+                bottomRightRadius: isle.farRadius
+            }
+
+            // The clock it rests on.
+            Row {
+                visible: !isle.maskOnly
+                anchors.centerIn: parent
+                spacing: 4
+                opacity: isle.expanded ? 0 : 1
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Rectangle { width: 22; height: 5; radius: 2.5; color: isle.mark }
+                Rectangle { width: 12; height: 5; radius: 2.5; color: isle.mark }
+            }
+
+            // Held at full size and clipped by the box, so the morph reveals the
+            // contents rather than squeezing them.
+            Item {
+                visible: !isle.maskOnly
+                anchors.fill: parent
+                clip: true
+                opacity: isle.expanded ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                Item {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 16 * isle.unit
+                    width: isle.expandedWidth - 32 * isle.unit
+                    height: isle.expandedHeight - 32 * isle.unit
+
+                    // The real Island's navigation row: a sidebar button at each end, and
+                    // between them the arrows either side of the current panel's name.
+                    RowLayout {
+                        id: isleNav
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        height: 36 * isle.unit
+                        spacing: 8 * isle.unit
+                        IsleSideButton { isle: isle; symbol: "left_panel_open" }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: 12 * isle.unit
+                            color: isle.raised
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 4 * isle.unit
+                                anchors.rightMargin: 4 * isle.unit
+                                spacing: 4 * isle.unit
+                                IsleArrow { isle: isle; symbol: "chevron_left" }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 28 * isle.unit
+                                    radius: 8 * isle.unit
+                                    color: isle.row
+                                    Row {
+                                        anchors.centerIn: parent
+                                        anchors.verticalCenterOffset: 1
+                                        spacing: 2
+                                        MaterialSymbol {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: ["tune", "music_note", "notifications"][isle.panel]
+                                            iconSize: 7
+                                            color: isle.accent
+                                        }
+                                        StyledText {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: [Translation.tr("System"), Translation.tr("Media"), Translation.tr("Notifications")][isle.panel]
+                                            font.pixelSize: 7
+                                            font.weight: Font.DemiBold
+                                            color: isle.ink
+                                        }
+                                    }
+                                }
+                                IsleArrow { isle: isle; symbol: "chevron_right"; pointed: isle.pointedArrow }
+                            }
+                        }
+                        IsleSideButton { isle: isle; symbol: "right_panel_open" }
+                    }
+
+                    // System: four tiles over the volume and microphone sliders and
+                    // the tray, drawn in the proportions the real panel has.
+                    ColumnLayout {
+                        anchors { left: parent.left; right: parent.right; top: isleNav.bottom; topMargin: 10 * isle.unit }
+                        spacing: 6 * isle.unit
+                        opacity: isle.panel === 0 ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 160 } }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            uniformCellWidths: true
+                            rowSpacing: 6 * isle.unit
+                            columnSpacing: 6 * isle.unit
+                            Repeater {
+                                model: [["wifi", true], ["speaker", true], ["bluetooth", true], ["nightlight", false]]
+                                Rectangle {
+                                    id: isleTile
+                                    required property var modelData
+                                    readonly property bool on: modelData[1]
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 44 * isle.unit
+                                    radius: isleTile.on ? 17 * isle.unit : height / 2
+                                    color: isle.raised
+                                    Rectangle {
+                                        id: isleTileIcon
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: 6 * isle.unit
+                                        width: 32 * isle.unit
+                                        height: width
+                                        radius: isleTile.on ? 12 * isle.unit : width / 2
+                                        color: isleTile.on ? isle.accent : isle.row
+                                        MaterialSymbol {
+                                            anchors.centerIn: parent
+                                            text: isleTile.modelData[0]
+                                            iconSize: 8
+                                            color: isleTile.on ? Appearance.colors.colOnPrimary : isle.ink
+                                        }
+                                    }
+                                    Column {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: isleTileIcon.right
+                                        anchors.leftMargin: 6 * isle.unit
+                                        spacing: 2
+                                        Rectangle { width: isleTile.width * 0.38; height: 2.5; radius: 1.25; color: isle.ink }
+                                        Rectangle { width: isleTile.width * 0.26; height: 2; radius: 1; color: isle.mark }
+                                    }
+                                }
+                            }
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2 * isle.unit
+                            Repeater {
+                                model: [["volume_up", 0.62], ["mic", 0.4]]
+                                Rectangle {
+                                    id: isleSlider
+                                    required property var modelData
+                                    required property int index
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 36 * isle.unit
+                                    topLeftRadius: index === 0 ? 17 * isle.unit : 4 * isle.unit
+                                    topRightRadius: topLeftRadius
+                                    bottomLeftRadius: index === 1 ? 17 * isle.unit : 4 * isle.unit
+                                    bottomRightRadius: bottomLeftRadius
+                                    color: isle.raised
+                                    MaterialSymbol {
+                                        id: isleSliderIcon
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: 12 * isle.unit
+                                        text: isleSlider.modelData[0]
+                                        iconSize: 8
+                                        color: isle.ink
+                                    }
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: isleSliderIcon.right
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: 8 * isle.unit
+                                        anchors.rightMargin: 12 * isle.unit
+                                        height: 3
+                                        radius: 1.5
+                                        color: isle.row
+                                        Rectangle {
+                                            width: parent.width * isleSlider.modelData[1]
+                                            height: parent.height
+                                            radius: 1.5
+                                            color: isle.accent
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredHeight: 28 * isle.unit
+                            Layout.preferredWidth: isleTray.width + 20 * isle.unit
+                            radius: height / 2
+                            color: isle.raised
+                            Row {
+                                id: isleTray
+                                anchors.centerIn: parent
+                                spacing: 3
+                                Repeater {
+                                    model: 4
+                                    Rectangle { width: 4; height: 4; radius: 2; color: isle.mark }
+                                }
+                            }
+                        }
+                    }
+
+                    // Media: the player card over the player selector.
+                    ColumnLayout {
+                        anchors { left: parent.left; right: parent.right; top: isleNav.bottom; topMargin: 10 * isle.unit }
+                        spacing: 8 * isle.unit
+                        opacity: isle.panel === 1 ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 160 } }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 160 * isle.unit
+                            radius: 23 * isle.unit
+                            color: isle.raised
+                            Rectangle {
+                                id: isleCover
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: 16 * isle.unit
+                                width: 128 * isle.unit
+                                height: width
+                                radius: 17 * isle.unit
+                                color: isle.accent
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "music_note"
+                                    iconSize: 18
+                                    color: Appearance.colors.colOnPrimary
+                                }
+                            }
+                            ColumnLayout {
+                                anchors { left: isleCover.right; right: parent.right; top: isleCover.top; bottom: isleCover.bottom; leftMargin: 14 * isle.unit; rightMargin: 16 * isle.unit }
+                                spacing: 2
+                                Rectangle { Layout.preferredWidth: parent.width * 0.8; implicitHeight: 3; radius: 1.5; color: isle.ink }
+                                Rectangle { Layout.preferredWidth: parent.width * 0.5; implicitHeight: 2; radius: 1; color: isle.mark }
+                                Item { Layout.fillHeight: true }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 2
+                                    radius: 1
+                                    color: isle.row
+                                    Rectangle { width: parent.width * 0.4; height: parent.height; radius: 1; color: isle.accent }
+                                }
+                                Row {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    spacing: 3
+                                    Repeater {
+                                        model: ["skip_previous", "pause", "skip_next"]
+                                        MaterialSymbol {
+                                            required property string modelData
+                                            text: modelData
+                                            iconSize: 9
+                                            color: isle.ink
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 32 * isle.unit
+                            radius: 12 * isle.unit
+                            color: isle.raised
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: 12 * isle.unit
+                                width: parent.width * 0.3
+                                height: 2.5
+                                radius: 1.25
+                                color: isle.mark
+                            }
+                        }
+                    }
+
+                    // Notifications: one notification, then stepping through them with
+                    // its action beside the count.
+                    ColumnLayout {
+                        anchors { left: parent.left; right: parent.right; top: isleNav.bottom; topMargin: 10 * isle.unit }
+                        spacing: 8 * isle.unit
+                        opacity: isle.panel === 2 ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 160 } }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 158 * isle.unit
+                            radius: 17 * isle.unit
+                            color: isle.raised
+                            Rectangle {
+                                id: isleNoteIcon
+                                x: 12 * isle.unit
+                                y: 12 * isle.unit
+                                width: 32 * isle.unit
+                                height: width
+                                radius: width / 2
+                                color: isle.accent
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "chat_bubble"
+                                    iconSize: 7
+                                    color: Appearance.colors.colOnPrimary
+                                }
+                            }
+                            Column {
+                                anchors { left: isleNoteIcon.right; verticalCenter: isleNoteIcon.verticalCenter; leftMargin: 8 * isle.unit }
+                                spacing: 2
+                                Rectangle { width: 46; height: 2.5; radius: 1.25; color: isle.ink }
+                                Rectangle { width: 26; height: 2; radius: 1; color: isle.mark }
+                            }
+                            MaterialSymbol {
+                                anchors { right: parent.right; rightMargin: 12 * isle.unit; verticalCenter: isleNoteIcon.verticalCenter }
+                                text: "close"
+                                iconSize: 8
+                                color: isle.mark
+                            }
+                            Column {
+                                anchors { left: parent.left; right: parent.right; top: isleNoteIcon.bottom; margins: 12 * isle.unit }
+                                spacing: 3
+                                Rectangle { width: parent.width; height: 2; radius: 1; color: isle.mark }
+                                Rectangle { width: parent.width * 0.86; height: 2; radius: 1; color: isle.mark }
+                                Rectangle { width: parent.width * 0.5; height: 2; radius: 1; color: isle.mark }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 34 * isle.unit
+                            spacing: 6 * isle.unit
+                            MaterialSymbol { text: "chevron_left"; iconSize: 8; color: isle.mark }
+                            Rectangle {
+                                Layout.preferredWidth: 42 * isle.unit
+                                Layout.preferredHeight: 24 * isle.unit
+                                radius: 6 * isle.unit
+                                color: isle.row
+                                StyledText {
+                                    anchors.centerIn: parent
+                                    text: "1 / 3"
+                                    font.pixelSize: 6
+                                    color: isle.ink
+                                }
+                            }
+                            MaterialSymbol { text: "chevron_right"; iconSize: 8; color: isle.ink }
+                            Item { Layout.fillWidth: true }
+                            Rectangle {
+                                Layout.preferredWidth: 96 * isle.unit
+                                Layout.preferredHeight: 28 * isle.unit
+                                radius: height / 2
+                                color: isle.raised
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: parent.width * 0.5
+                                    height: 2.5
+                                    radius: 1.25
+                                    color: isle.ink
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        NotchSwoops {
+            piece: isleBox
+            edgeY: -isle.slide
+            opacity: isle.swoop
+            color: isle.fill
         }
     }
 
@@ -3951,6 +4655,7 @@ ApplicationWindow {
 
     component CardStyle : Item {
         id: cardStyle
+        readonly property bool island: Appearance.sizes.barIsIsland
 
         RowLayout {
             anchors.fill: parent
@@ -3979,6 +4684,45 @@ ApplicationWindow {
                 spacing: 0
 
                 StyleSection {
+                    visible: cardStyle.island
+                    title: Translation.tr("Island and Dock shape")
+                    symbol: "screenshot_monitor"
+                    Layout.fillHeight: false
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        uniformCellSizes: true
+
+                        Repeater {
+                            model: [["float", Translation.tr("Float")], ["notch", Translation.tr("Notch")], ["rect", Translation.tr("Rect")]]
+                            StyleTile {
+                                required property var modelData
+                                island: true
+                                styleName: modelData[0]
+                                label: modelData[1]
+                                selected: Appearance.sizes.islandShape === modelData[0]
+                                onPicked: root.applyIslandDockStyle(modelData[0])
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        text: ({
+                            float: Translation.tr("The Island and the dock float clear of the screen's edges"),
+                            notch: Translation.tr("Flush with the edge, curving back into it at either end"),
+                            rect: Translation.tr("Flush with the edge, with square corners")
+                        })[Appearance.sizes.islandShape]
+                    }
+                }
+
+                StyleSection {
+                    visible: !cardStyle.island
                     title: Translation.tr("Bar and Dock shape")
                     symbol: "screenshot_monitor"
                     Layout.fillHeight: false
@@ -4069,7 +4813,7 @@ ApplicationWindow {
                 Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
 
                 StyleSection {
-                    title: Translation.tr("Bar and Dock position")
+                    title: cardStyle.island ? Translation.tr("Island and Dock position") : Translation.tr("Bar and Dock position")
                     symbol: "swap_horiz"
                     Layout.fillHeight: false
 
@@ -4081,7 +4825,7 @@ ApplicationWindow {
 
                         StyledText {
                             Layout.preferredWidth: 44
-                            text: Translation.tr("Bar")
+                            text: cardStyle.island ? Translation.tr("Island") : Translation.tr("Bar")
                             color: Appearance.colors.colOnLayer1
                         }
                         ConfigSelectionArray {
@@ -4092,9 +4836,9 @@ ApplicationWindow {
                             onSelected: newValue => Appearance.sizes.placeBar((newValue & 1) !== 0, (newValue & 2) !== 0)
                             options: [
                                 { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: 0 },
-                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2 },
+                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2, enabled: !cardStyle.island },
                                 { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: 1 },
-                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3 }
+                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3, enabled: !cardStyle.island }
                             ]
                         }
 
