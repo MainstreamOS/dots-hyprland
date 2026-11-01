@@ -22,7 +22,7 @@ SCRIPTS_PHONE_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPTS_PHONE_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_PHONE_DIR)
 from contacts import ContactRegistry
-from attachments import attachment_file, remember_attachment, copy_phone_file
+from attachments import attachment_file, remember_attachment, forget_attachments, copy_phone_file
 from phone_runtime import (PHONE_CACHE, WorkQueue, atomic_file, image_extension, jpeg_exif_thumbnail, render,
                            sweep_caches, valid_device, valid_uid)
 from kde_notifications import NotificationIndex
@@ -51,6 +51,7 @@ conn = None
 threads = {}
 # Which cached histories belong in the last refreshed list, including offline.
 listed_threads = {}
+deleted_conversations = {}
 # Threads the tab asked for; loading the thread list reports every other one too.
 requested = set()
 loading_threads = set()
@@ -80,7 +81,6 @@ preview_queue = WorkQueue(workers=1, capacity=2, name="phone_preview")
 # Notification lookups read every phone notification object; keep them off the message queue.
 notify_queue = WorkQueue(workers=1, capacity=16, name="phone_notifications")
 notification_index = None
-started_ms = time.time() * 1000
 backend = "KDE Connect"
 named_generation = -1
 request_context = threading.local()
@@ -155,6 +155,9 @@ def load_threads():
             data = json.load(f)
         if not isinstance(data, dict):
             return
+        for device, cutoffs in data.get("_deleted", {}).items():
+            if isinstance(cutoffs, dict):
+                deleted_conversations[device] = {int(tid): int(before) for tid, before in cutoffs.items()}
         for device, ids in data.get("_lists", {}).items():
             if isinstance(ids, list):
                 listed_threads[device] = {int(tid) for tid in ids}
@@ -166,6 +169,8 @@ def load_threads():
             bucket = threads.setdefault((dev, tid), {})
             for m in msgs:
                 if isinstance(m, dict) and "uid" in m:
+                    if not message_allowed(dev, m):
+                        continue
                     if "addresses" in m:
                         m["addresses"] = dedup_addresses(m.get("addresses"))
                     bucket[m["uid"]] = m
@@ -173,15 +178,17 @@ def load_threads():
         pass
 
 
-def save_threads():
+def save_threads(strict=False):
     try:
         payload = {f"{dev}:{tid}": sorted(bucket.values(), key=lambda m: m.get("date", 0))[-100:]
                    for (dev, tid), bucket in list(threads.items()) if bucket}
         payload["_lists"] = {device: sorted(ids) for device, ids in list(listed_threads.items())}
+        payload["_deleted"] = deleted_conversations
         with atomic_file(threads_cache_file, prefix="threads-") as output:
             json.dump(payload, output, separators=(",", ":"))
     except Exception:
-        pass
+        if strict:
+            raise
 
 
 def save_soon(save):
@@ -611,6 +618,8 @@ def message(device, raw):
     if not isinstance(fields, (tuple, list)) or len(fields) < 9:
         return None
     event, body, addresses, date, kind, read, thread, uid, sub = fields[:9]
+    if not message_allowed(device, {"thread": thread, "date": date}):
+        return None
     attachments = []
     for part in (fields[9] if len(fields) > 9 else []):
         part = plain(part)
@@ -815,6 +824,8 @@ def watch(device):
     for signal in ("conversationCreated", "conversationUpdated"):
         conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, signal, path, None, Gio.DBusSignalFlags.NONE,
                               lambda *a, d=device: background(on_message, d, a[5]) or resync_soon(d))
+    conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "messageReceived", path, None, Gio.DBusSignalFlags.NONE,
+                          lambda *a, d=device: background(on_message, d, a[5], True) or resync_soon(d))
     conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "conversationLoaded", path, None, Gio.DBusSignalFlags.NONE,
                           lambda *a, d=device: admit(on_loaded, d, a[5], on_drop=lambda: resync_soon(d)))
     conn.signal_subscribe(BUS, CONVERSATIONS_IFACE, "conversationRemoved", path, None, Gio.DBusSignalFlags.NONE,
@@ -913,9 +924,9 @@ def remove_thread(device, tid):
     emit("removed", device=device, thread=int(tid))
 
 
-def on_message(device, params):
+def on_message(device, params, live=False):
     msg = message(device, params.unpack()[0])
-    if msg is None:
+    if msg is None or not message_allowed(device, msg):
         return
     tid = int(msg["thread"])
     bucket = threads.setdefault((device, tid), {})
@@ -925,8 +936,9 @@ def on_message(device, params):
     listed_threads.setdefault(device, set()).add(tid)
     save_threads_soon()
     if (device, tid) not in loading_threads or is_new or msg.get("date", 0) >= prev_max_date:
-        # Live: an incoming message the phone received while this bridge was running.
-        live = is_new and msg["type"] == 1 and msg.get("date", 0) >= started_ms
+        # History replies and reconnect recovery must not unhide conversations.
+        # Rust Connect identifies new arrivals explicitly; cache updates do not.
+        live = bool(live and msg["type"] == 1)
         emit("message", device=device, message=msg, live=live)
 
 
@@ -942,12 +954,80 @@ def on_loaded(device, params):
 
 
 def remember_message(device, m):
-    threads.setdefault((device, int(m["thread"])), {})[m["uid"]] = m
+    if message_allowed(device, m):
+        threads.setdefault((device, int(m["thread"])), {})[m["uid"]] = m
+
+
+def message_allowed(device, msg):
+    before = deleted_conversations.get(device, {}).get(int(msg["thread"]))
+    return before is None or int(msg.get("date", 0)) > before
+
+
+def apply_deletions(device, cutoffs):
+    saved = deleted_conversations.setdefault(device, {})
+    removed = set()
+    for tid, before in cutoffs.items():
+        tid, before = int(tid), int(before)
+        saved[tid] = max(saved.get(tid, before), before)
+        bucket = threads.get((device, tid), {})
+        for uid, msg in list(bucket.items()):
+            if not message_allowed(device, msg):
+                removed.update(a.get("uid") for a in msg.get("attachments", []) if a.get("uid"))
+                del bucket[uid]
+        if not bucket:
+            threads.pop((device, tid), None)
+            listed_threads.get(device, set()).discard(tid)
+            requested.discard((device, tid))
+            loading_threads.discard((device, tid))
+    retained = {a.get("uid") for (owner, _), bucket in threads.items() if owner == device
+                for msg in bucket.values() for a in msg.get("attachments", [])}
+    removed.difference_update(retained)
+    forget_attachments(device, removed)
+    for uid in removed:
+        media_metadata.pop(device + ":" + str(uid), None)
+        if valid_device(device) and valid_uid(str(uid)):
+            for ext in ("jpg", "jpeg", "png", "gif", "webp", "avif"):
+                try:
+                    os.unlink(os.path.join(cache_dir, device, f"{uid}.{ext}"))
+                except FileNotFoundError:
+                    pass
+
+
+def publish_deletions(device):
+    groups = {}
+    for tid, before in deleted_conversations.get(device, {}).items():
+        groups.setdefault(before, []).append(tid)
+    for before, tids in groups.items():
+        emit("conversationsDeleted", device=device, threads=sorted(tids), before=before)
+
+
+def sync_deletions(device):
+    # This also reconciles a shell crash between daemon deletion and its acknowledgement.
+    try:
+        cutoffs = call(device_path(device), CONVERSATIONS_IFACE, "deletionCutoffs", reply="(a{xx})")[0]
+    except GLib.Error:
+        # Offline views retain their durable local cutoffs. The next successful
+        # request reconciles any deletion completed by the daemon meanwhile.
+        cutoffs = {}
+    apply_deletions(device, cutoffs)
+    save_threads(strict=True)
+    publish_deletions(device)
+
+
+def delete_conversations(device, tids):
+    if not isinstance(tids, list) or not tids or len(tids) > 200 or any(type(tid) is not int or tid < 0 for tid in tids):
+        raise ValueError("Invalid conversation list")
+    tids = sorted(set(tids))
+    before = call(device_path(device), CONVERSATIONS_IFACE, "forgetConversations",
+                  GLib.Variant("(ax)", (tids,)), "(x)", timeout=30000)[0]
+    apply_deletions(device, {tid: before for tid in tids})
+    save_threads(strict=True)
+    emit("conversationsDeleted", device=device, threads=tids, before=before)
 
 
 def load_active(device):
     latest = call(device_path(device), CONVERSATIONS_IFACE, "activeConversations", None, "(av)")[0]
-    items = [m for m in (message(device, raw) for raw in latest) if m is not None]
+    items = [m for m in (message(device, raw) for raw in latest) if m is not None and message_allowed(device, m)]
     for m in items:
         remember_message(device, m)
     return items
@@ -961,13 +1041,21 @@ def refresh_conversation_list(device):
     except Exception:
         resync_soon(device)
         return
-    listed_threads[device] = {int(m["thread"]) for m in items}
+    listed_threads.setdefault(device, set()).update(int(m["thread"]) for m in items)
     save_threads_soon()
-    emit("conversations", device=device, items=sorted(items, key=lambda m: m.get("date", 0), reverse=True))
+    emit("conversations", device=device, items=listed_messages(device))
+
+
+def listed_messages(device):
+    return sorted((max(bucket.values(), key=lambda m: m.get("date", 0))
+                   for (owner, tid), bucket in threads.items() if owner == device and bucket
+                   and (device not in listed_threads or tid in listed_threads[device])),
+                  key=lambda m: m.get("date", 0), reverse=True)
 
 
 def conversations(device):
     path = device_path(device)
+    sync_deletions(device)
     active_available = True
     try:
         items = load_active(device)
@@ -975,13 +1063,11 @@ def conversations(device):
         items = []
         active_available = False
 
-    # Offline history remains useful. A connected phone's current list must
-    # not be filled from that history: deleted threads would return forever.
+    # The phone has no snapshot completion marker. Keep the previous list while
+    # its replies trickle in; only explicit removal or desktop deletion removes it.
     thread_map = {}
-    if device not in known_reachable or not active_available:
-        for (d, tid), bucket in threads.items():
-            if d == device and bucket and (device not in listed_threads or tid in listed_threads[device]):
-                thread_map[tid] = max(bucket.values(), key=lambda m: m.get("date", 0))
+    for m in listed_messages(device):
+        thread_map[int(m["thread"])] = m
     for m in items:
         tid = int(m["thread"])
         if tid not in thread_map or m.get("date", 0) >= thread_map[tid].get("date", 0):
@@ -1006,6 +1092,7 @@ def conversations(device):
 
 
 def thread(device, thread_id, count):
+    sync_deletions(device)
     tid = int(thread_id)
     count = max(1, min(int(count or 50), 500))
     requested.add((device, tid))
@@ -1167,6 +1254,8 @@ def handle_command(cmd):
             start_backend()
         elif kind == "conversations":
             conversations(device)
+        elif kind == "deleteConversations":
+            delete_conversations(device, cmd.get("threads"))
         elif kind == "thread":
             thread(device, cmd["thread"], cmd.get("count", 50))
         elif kind in ("reply", "send"):

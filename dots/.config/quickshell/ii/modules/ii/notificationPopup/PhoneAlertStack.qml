@@ -24,7 +24,8 @@ ColumnLayout {
     spacing: 6
 
     function addCard(entry) {
-        if (!entry || Date.now() - (entry.time || 0) > root.newestAlertAge)
+        if (!entry || Date.now() - (entry.time || 0) > root.newestAlertAge
+                || !Phone.keepMessages([entry], entry.deviceId).length)
             return;
         // A conversation is its phone plus its thread, or else its number. A name alone can
         // belong to two people, on one phone or on two.
@@ -55,6 +56,19 @@ ColumnLayout {
     }
 
     onShowsMessagesChanged: if (!root.showsMessages) messageCards.clear()
+
+    function purgeDeletedCards() {
+        for (let i = messageCards.count - 1; i >= 0; i--) {
+            const entry = JSON.parse(messageCards.get(i).json);
+            if (!Phone.keepMessages([entry], entry.deviceId).length) messageCards.remove(i);
+        }
+    }
+
+    Connections {
+        target: Phone
+        function onConversationsDeleted(device, threads, before) { root.purgeDeletedCards(); }
+        function onSavedLocalSentChanged() { root.purgeDeletedCards(); }
+    }
 
     ListModel {
         id: messageCards

@@ -139,6 +139,72 @@ Singleton {
         root.savedLocalSent = Object.assign({}, root.savedLocalSent, {_hiddenConversations: state});
         saveSentTimer.restart();
     }
+    property string deletionRequest: ""
+    readonly property bool deletingConversations: root.deletionRequest.length > 0
+    signal conversationsDeleted(string device, var threads, double before)
+
+    function deleteHiddenConversations(device, threads): void {
+        if (root.deletingConversations || device !== root.deviceId) return;
+        const hidden = (threads ?? []).filter(thread => ConversationVisibility.isHidden(
+            root.savedLocalSent._hiddenConversations, device, thread));
+        if (!hidden.length) return;
+        root.deletionRequest = root.command({cmd: "deleteConversations", device, threads: hidden});
+    }
+
+    function keepMessages(messages, device): var {
+        return ConversationVisibility.keptMessages(messages, root.savedLocalSent._deletedConversations, device);
+    }
+
+    function applyConversationDeletion(device, threads, before): void {
+        if (!device || !Array.isArray(threads) || !Number.isSafeInteger(before) || before <= 0) return;
+        const saved = ConversationVisibility.purgeSaved(root.savedLocalSent, device, threads, before);
+        const deleted = saved._deletedConversations;
+        const keep = message => !ConversationVisibility.isDeleted(deleted, device, message);
+        const removedAttachments = new Set();
+        const collect = messages => {
+            for (const message of messages ?? [])
+                if (!keep(message)) for (const attachment of message.attachments ?? [])
+                    removedAttachments.add(String(attachment.uid));
+        };
+        collect(root.savedLocalSent[device]);
+        collect((root.savedLocalSent._outgoingAttachments ?? []).filter(message => message.device === device));
+        if (device === root.deviceId) {
+            collect(root.conversations);
+            for (const messages of Object.values(root.threadCache)) collect(messages);
+        }
+        const keepAttachments = messages => {
+            for (const message of messages ?? [])
+                if (keep(message)) for (const attachment of message.attachments ?? [])
+                    removedAttachments.delete(String(attachment.uid));
+        };
+        keepAttachments(saved[device]);
+        if (device === root.deviceId) for (const messages of Object.values(root.threadCache)) keepAttachments(messages);
+        // Remove cache references only; outgoing attachments may be the user's
+        // original files, and are never unlinked by the shell.
+        const withoutAttachments = map => Object.fromEntries(Object.entries(map ?? {})
+            .filter(([uid]) => !removedAttachments.has(uid)));
+        saved._deviceAttachments = Object.assign({}, saved._deviceAttachments, {
+            [device]: withoutAttachments(saved._deviceAttachments?.[device])
+        });
+        root.savedLocalSent = saved;
+        saveSentTimer.restart();
+        root.recentMessages = root.recentMessages.filter(message => message.deviceId !== device || keep(message));
+        root.attachmentActions = Object.fromEntries(Object.entries(root.attachmentActions).filter(([, action]) =>
+            action.device !== device || !removedAttachments.has(String(action.uid))));
+        if (device === root.deviceId) {
+            root.localSent = saved[device];
+            root.conversations = root.conversations.filter(keep);
+            root.threadCache = Object.fromEntries(Object.entries(root.threadCache)
+                .map(([thread, messages]) => [thread, messages.filter(keep)]).filter(([, messages]) => messages.length));
+            root.threadMessages = root.threadMessages.filter(keep);
+            root.attachmentFiles = withoutAttachments(root.attachmentFiles);
+            root.attachmentThumbs = withoutAttachments(root.attachmentThumbs);
+            root.attachmentDurations = withoutAttachments(root.attachmentDurations);
+            if (threads.some(thread => Number(thread) === root.openThread) && !root.threadMessages.length)
+                root.closeConversation();
+        }
+        root.conversationsDeleted(device, threads, before);
+    }
     property bool threadLoading: false
     property var pendingTarget: null
 
@@ -987,7 +1053,7 @@ Singleton {
     // Newest first, one entry per conversation. A message sent to a new number
     // has thread -1 until the phone reports its thread, which then replaces it.
     function upsertConversation(message): void {
-        if (!message) return;
+        if (!message || ConversationVisibility.isDeleted(root.savedLocalSent._deletedConversations, root.deviceId, message)) return;
         const hasThread = thread => thread !== undefined && thread !== null && thread >= 0;
         const placeholder = m => m.thread < 0 && root.sameAddresses(m.addresses, message.addresses);
         if (!hasThread(message.thread)) {
@@ -1015,6 +1081,7 @@ Singleton {
         switch (event.event) {
         case "backend":
             root.backendAvailable = !!event.available;
+            if (!event.available) root.deletionRequest = "";
             if (event.name) root.backendName = event.name;
             if (event.reset || !event.available) {
                 root.disconnectState();
@@ -1054,7 +1121,7 @@ Singleton {
         }
         case "conversations": {
             if (event.device !== root.deviceId) break;
-            root.conversations = (event.items ?? []).slice().sort((a, b) => b.date - a.date);
+            root.conversations = root.keepMessages(event.items, event.device).sort((a, b) => b.date - a.date);
             root.messagesSynced(event.device, root.conversations);
             const allAtts = [];
             const nextCache = Object.assign({}, root.threadCache);
@@ -1082,6 +1149,7 @@ Singleton {
             break;
         }
         case "message": {
+            if (ConversationVisibility.isDeleted(root.savedLocalSent._deletedConversations, event.device, event.message)) break;
             root.saveConversationVisibility(ConversationVisibility.afterMessage(
                 root.savedLocalSent._hiddenConversations, event));
             if (event.message) {
@@ -1113,7 +1181,7 @@ Singleton {
         }
         case "thread": {
             if (event.device !== root.deviceId) break;
-            const threadMsgs = event.messages ?? [];
+            const threadMsgs = root.keepMessages(event.messages, event.device);
             root.messagesSynced(event.device, threadMsgs);
             const allAtts = [];
             for (const m of threadMsgs) {
@@ -1137,6 +1205,10 @@ Singleton {
             }
             break;
         }
+        case "conversationsDeleted":
+            root.applyConversationDeletion(event.device, event.threads, Number(event.before));
+            if (event.request === root.deletionRequest) root.deletionRequest = "";
+            break;
         case "removed":
             if (event.device !== root.deviceId) break;
             root.conversations = root.conversations.filter(m => m.thread !== event.thread);
@@ -1216,6 +1288,7 @@ Singleton {
             root.resolveSend(event.request, true);
             break;
         case "error":
+            if (event.context === "deleteConversations" && event.request === root.deletionRequest) root.deletionRequest = "";
             if (event.device && event.device !== root.deviceId && !root.pendingSends[event.request]) break;
             if (event.context === "preview") {
                 if (event.request !== root.filePreviewRequest) break;
@@ -1342,34 +1415,10 @@ Singleton {
         id: sentFileView
         path: Directories.phoneSentPath
         printErrors: false
-        onLoaded: {
-            try {
-                const data = JSON.parse(text());
-                root.savedLocalSent = (data && typeof data === "object" && !Array.isArray(data)) ? data : ({});
-                if (root.deviceId && data?._deviceAttachments?.[root.deviceId]) root.attachmentFiles = Object.assign({}, root.attachmentFiles, data._deviceAttachments[root.deviceId]);
-                if (root.deviceId && root.savedLocalSent[root.deviceId]) {
-                    const saved = root.savedLocalSent[root.deviceId];
-                    const existingUids = new Set((root.localSent ?? []).map(m => String(m.uid)));
-                    const additional = saved.filter(m => !existingUids.has(String(m.uid)));
-                    root.localSent = (root.localSent ?? []).concat(additional);
-                    root.registerLocalSentAttachments(root.localSent);
-                    for (const copy of root.localSent) root.upsertConversation(copy);
-                    if (root.openThread >= 0) {
-                        root.threadMessages = root.withLocal(root.threadMessages, root.openThread);
-                    }
-                }
-            } catch (e) {
-                root.savedLocalSent = ({});
-            }
-        }
-        onLoadFailed: error => {
-            if (error !== FileViewError.FileNotFound) {
-                console.warn("[Phone] Could not load sent messages:", error);
-            }
-            root.savedLocalSent = ({});
-        }
-        onSaved: Qt.callLater(root.writeDone)
-        onSaveFailed: Qt.callLater(root.writeDone)
+        onLoaded: Qt.callLater(root.sentStateLoaded, text())
+        onLoadFailed: error => Qt.callLater(root.sentStateLoadFailed, error)
+        onSaved: Qt.callLater(root.writeDone, true)
+        onSaveFailed: error => Qt.callLater(root.writeDone, false, error)
     }
 
     Timer {
@@ -1380,7 +1429,64 @@ Singleton {
     }
 
     property bool _writingSent: false
-    property bool _writeSentAgain: false
+    property bool _sentReady: false
+    property bool _readingSent: true
+    property bool _sentWarningShown: false
+    property string _savedSentText: ""
+    property string _writingSentText: ""
+
+    // A retry reloads FileView's disk snapshot without replacing newer memory.
+    // After a failed write FileView may still hold the attempted text, so merely
+    // calling setText with it again would skip the write.
+    Timer {
+        id: retrySentTimer
+        interval: 3000
+        onTriggered: sentFileView.reload()
+    }
+
+    function retrySentRead(error): void {
+        root._readingSent = true;
+        if (!root._sentWarningShown) {
+            console.warn("[Phone] Could not access saved messages; retrying:", error);
+            root._sentWarningShown = true;
+        }
+        retrySentTimer.restart();
+    }
+
+    function sentStateLoaded(text): void {
+        let data;
+        try {
+            data = JSON.parse(text);
+            if (!data || typeof data !== "object" || Array.isArray(data))
+                throw new Error("Expected a saved-message object");
+        } catch (error) {
+            root.retrySentRead(error);
+            return;
+        }
+        root._savedSentText = text;
+        root._readingSent = false;
+        root._sentWarningShown = false;
+        retrySentTimer.stop();
+        if (!root._sentReady) {
+            root.savedLocalSent = data;
+            root._sentReady = true;
+        } else {
+            root.writeSent();
+        }
+    }
+
+    function sentStateLoadFailed(error): void {
+        if (error !== FileViewError.FileNotFound) {
+            root.retrySentRead(error);
+            return;
+        }
+        root._savedSentText = "";
+        root._readingSent = false;
+        root._sentWarningShown = false;
+        retrySentTimer.stop();
+        if (!root._sentReady) root._sentReady = true;
+        else root.writeSent();
+    }
 
     function persistLocalSent(): void {
         if (!root.deviceId) return;
@@ -1390,22 +1496,25 @@ Singleton {
     }
 
     function writeSent(): void {
-        if (root._writingSent) {
-            root._writeSentAgain = true;
-            return;
-        }
+        if (!root._sentReady || root._readingSent) return;
+        if (root._writingSent) return;
         const text = JSON.stringify(root.savedLocalSent);
-        if (text === sentFileView.text()) return;
+        if (text === root._savedSentText) return;
         root._writingSent = true;
+        root._writingSentText = text;
         sentFileView.setText(text);
     }
 
-    function writeDone(): void {
+    function writeDone(success, error): void {
         root._writingSent = false;
-        if (root._writeSentAgain) {
-            root._writeSentAgain = false;
-            root.writeSent();
+        if (!success) {
+            root.retrySentRead(error);
+            return;
         }
+        root._savedSentText = root._writingSentText;
+        root._writingSentText = "";
+        root._sentWarningShown = false;
+        root.writeSent();
     }
 
     function registerLocalSentAttachments(messages): void {
@@ -1428,7 +1537,7 @@ Singleton {
 
     Process {
         id: bridge
-        running: root.bridgeWanted && root.installed && !restartBridge.running
+        running: root._sentReady && root.bridgeWanted && root.installed && !restartBridge.running
         stdinEnabled: true
         command: ["python3", "-I", FileUtils.trimFileProtocol(`${Directories.scriptPath}/phone/kdeconnect-bridge.py`)]
         stdout: SplitParser {
@@ -1443,6 +1552,7 @@ Singleton {
         stderr: SplitParser { onRead: line => console.warn("[Phone bridge]", line) }
         onExited: {
             root.backendAvailable = false;
+            root.deletionRequest = "";
             root.disconnectState();
             root.devices = root.devices.map(d => Object.assign({}, d, {reachable: false}));
             bridgeStable.stop();

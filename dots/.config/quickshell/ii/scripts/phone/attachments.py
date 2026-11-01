@@ -74,6 +74,31 @@ def remember_attachment(device, uid, path):
             _index_cache[str(index)] = ((stat.st_ino, stat.st_mtime_ns, stat.st_size), data)
 
 
+def forget_attachments(device, identifiers):
+    """Drop references to removed messages, never delete user-owned exported files."""
+    if not identifiers or not valid_device(device):
+        return
+    directory = PHONE_CACHE
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (directory / "attachments.lock").open("a+") as lock:
+        os.chmod(lock.name, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        index = directory / "attachments.json"
+        try:
+            data = json.loads(index.read_text())
+        except FileNotFoundError:
+            return
+        if not isinstance(data, dict):
+            raise ValueError("Invalid attachment index")
+        bucket = data.get(device, {})
+        for identifier in identifiers:
+            bucket.pop(identifier, None)
+        with atomic_file(index, prefix="attachments-") as output:
+            json.dump(data, output, separators=(",", ":"))
+        with _index_lock:
+            _index_cache.pop(str(index), None)
+
+
 def copy_phone_file(device, path, mount, cancelled=None):
     def check():
         if cancelled and cancelled():

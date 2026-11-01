@@ -31,3 +31,36 @@ function afterMessage(state, event) {
     if (event.live !== true || event.message?.type !== 1) return state;
     return setHidden(state, event.device, event.message.thread, false);
 }
+
+// A desktop deletion keeps a per-thread cutoff, so reconnects cannot refill it
+// from the phone's older history. Messages after the cutoff remain available.
+function isDeleted(state, device, message) {
+    const before = Number(state?.[device]?.[message?.thread]);
+    return before > 0 && Number(message?.date ?? message?.time ?? 0) <= before;
+}
+
+function deleteBefore(state, device, threads, before) {
+    if (!device || !Number.isSafeInteger(before) || before <= 0) return state;
+    const updated = Object.assign({}, state?.[device]);
+    for (const thread of threads ?? []) {
+        if (Number.isSafeInteger(Number(thread)) && Number(thread) >= 0)
+            updated[thread] = Math.max(Number(updated[thread]) || 0, before);
+    }
+    return Object.assign({}, state, {[device]: updated});
+}
+
+function keptMessages(items, state, device) {
+    return (items ?? []).filter(item => !isDeleted(state, device, item));
+}
+
+function purgeSaved(saved, device, threads, before) {
+    const deleted = deleteBefore(saved?._deletedConversations, device, threads, before);
+    const remaining = keptMessages(saved?.[device], deleted, device);
+    const outgoing = (saved?._outgoingAttachments ?? []).filter(item =>
+        item.device !== device || !isDeleted(deleted, device, item));
+    return Object.assign({}, saved, {
+        _deletedConversations: deleted,
+        [device]: remaining,
+        _outgoingAttachments: outgoing
+    });
+}

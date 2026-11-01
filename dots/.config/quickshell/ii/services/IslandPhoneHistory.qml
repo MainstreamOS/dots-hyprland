@@ -6,6 +6,7 @@ import qs.modules.common
 import qs.modules.common.functions
 import "IslandPhoneHistory.js" as History
 import "PhoneIdentity.js" as Identity
+import "PhoneConversationVisibility.js" as ConversationVisibility
 
 Singleton {
     id: root
@@ -26,6 +27,22 @@ Singleton {
     property bool writeAgain: false
     property var cachedAttachments: ({})
     property var pendingSynced: []
+
+    function keepMessages(items) {
+        return (items ?? []).filter(message => !ConversationVisibility.isDeleted(
+            Phone.savedLocalSent._deletedConversations, message.deviceId, message));
+    }
+
+    function purgeDeletedMessages() {
+        pendingMessages = keepMessages(pendingMessages);
+        pendingSynced = pendingSynced.map(batch => ({device: batch.device,
+            messages: Phone.keepMessages(batch.messages, batch.device)}));
+        if (!ready) return;
+        const remaining = keepMessages(messages);
+        if (remaining.length === messages.length) return;
+        messages = remaining;
+        save.restart();
+    }
 
     function refreshMessages(device, messages) {
         if (!root.ready) {
@@ -62,6 +79,7 @@ Singleton {
         Qt.callLater(root.rememberContactPictures, incoming);
     }
     function observeMessages(incoming) {
+        incoming = keepMessages(incoming);
         pendingMessages = incoming;
         capturePictureSources(incoming);
         if (!ready) return;
@@ -109,6 +127,10 @@ Singleton {
         function onMessagesSynced(device, messages) {
             root.refreshMessages(device, messages);
         }
+        function onConversationsDeleted(device, threads, before) {
+            root.purgeDeletedMessages();
+        }
+        function onSavedLocalSentChanged() { root.purgeDeletedMessages(); }
         function onAttachmentFilesChanged() { root.refreshAttachments(); }
         function onDeviceIdChanged() { root.refreshAttachments(); }
     }
@@ -172,6 +194,7 @@ Singleton {
     }
     function loaded() {
         ready = true;
+        root.purgeDeletedMessages();
         for (const batch of pendingSynced) root.refreshMessages(batch.device, batch.messages);
         pendingSynced = [];
         rememberContactPictures(pendingPhotos);

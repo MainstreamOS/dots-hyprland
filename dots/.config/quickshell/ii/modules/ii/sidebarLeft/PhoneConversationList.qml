@@ -16,12 +16,15 @@ Item {
 
     property string searchQuery: ""
     property bool showHidden: false
+    property var deleteThreads: []
+    onShowHiddenChanged: root.deleteThreads = []
     readonly property var displayedConversations: root.showHidden ? Phone.hiddenConversations : Phone.visibleConversations
 
     Connections {
         target: Phone
         function onDeviceIdChanged() {
             root.showHidden = false;
+            root.deleteThreads = [];
             conversationMenu.close();
         }
     }
@@ -145,6 +148,24 @@ Item {
             }
 
             RippleButton {
+                visible: root.showHidden
+                implicitHeight: 38
+                implicitWidth: 38
+                buttonRadius: Appearance.rounding.small
+                enabled: Phone.connected && !Phone.deletingConversations && Phone.hiddenConversations.length > 0
+                Accessible.name: Translation.tr("Delete hidden messages from this desktop")
+                onClicked: root.deleteThreads = Phone.hiddenConversations.map(message => message.thread)
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "delete_sweep"
+                    iconSize: 18
+                    color: Appearance.colors.colSubtext
+                }
+                StyledToolTip { text: parent.Accessible.name }
+            }
+
+            RippleButton {
                 implicitHeight: 38
                 implicitWidth: composeRow.implicitWidth + 24
                 buttonRadius: Appearance.rounding.small
@@ -168,6 +189,45 @@ Item {
                         font.pixelSize: Appearance.font.pixelSize.small
                         font.weight: Font.DemiBold
                         color: Appearance.colors.colOnPrimaryContainer
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: deleteConfirmation.implicitHeight + 24
+            visible: root.deleteThreads.length > 0
+            radius: Appearance.rounding.small
+            color: Appearance.surfaces.raised
+
+            ColumnLayout {
+                id: deleteConfirmation
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+                StyledText {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    text: Translation.tr("Delete messages in hidden conversations from this desktop? Messages on your phone are kept.")
+                    font.pixelSize: Appearance.font.pixelSize.small
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    IslandButton {
+                        contentColors: Appearance.colors
+                        text: Translation.tr("Cancel")
+                        onClicked: root.deleteThreads = []
+                    }
+                    IslandButton {
+                        contentColors: Appearance.colors
+                        text: Translation.tr("Delete")
+                        symbol: "delete"
+                        enabled: Phone.connected && !Phone.deletingConversations
+                        onClicked: {
+                            Phone.deleteHiddenConversations(Phone.deviceId, root.deleteThreads);
+                            root.deleteThreads = [];
+                        }
                     }
                 }
             }
