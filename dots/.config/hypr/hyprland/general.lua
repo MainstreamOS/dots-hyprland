@@ -229,7 +229,21 @@ if not loadAnimationProfile(animationsDir .. animationProfile .. ".lua") then
     loadAnimationProfile(animationsDir .. "expressive.lua")
 end
 
+-- By default Hyprland offers HDR to every fullscreen window on an HDR-capable output,
+-- which can black out the screen. Only the Fullscreen Only mode in Settings → Display asks for that.
+local function fullscreenHdrChosen()
+    local monitors = io.open((os.getenv("HOME") or "") .. "/.config/hypr/monitors.lua", "r")
+    if not monitors then return false end
+    local text = monitors:read("*a")
+    monitors:close()
+    return text:match("%-%-%s*ii_hdr_mode:%S+%s*=%s*1%f[%D]") ~= nil
+end
+
 hl.config({
+    render = {
+        cm_auto_hdr = fullscreenHdrChosen() and 1 or 0
+    },
+
     input = {
         kb_layout = kbLayout,
         kb_variant = kbVariant,

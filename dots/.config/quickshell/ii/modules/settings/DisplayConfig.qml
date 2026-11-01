@@ -594,7 +594,8 @@ print(json.dumps(result))
             if ((m.vrr ?? 0) !== 0)      lines.push(`    vrr = ${m.vrr},`);
             if (m.mirror)                lines.push(`    mirror = "${m.mirror}",`);
             // "Fullscreen Only" (1, default): don't write cm=hdr — Hyprland's
-            // render:cm_auto_hdr (default 1) handles fullscreen HDR switching.
+            // render:cm_auto_hdr, which general.lua turns on for this mode, handles
+            // fullscreen HDR switching.
             // "Always On" (2): write cm=hdr/hdredid as usual.
             if (isHdr && hdrMode === 1) {
                 // Skip cm = hdr so Hyprland only activates HDR for fullscreen apps
@@ -768,7 +769,7 @@ print(json.dumps(result))
                 // but the UI still needs to show HDR as the active color mode.
                 colorMode: (confHdrMode[name] === 1 && !confColorMode[name])
                     ? "hdr" : (confColorMode[name] ?? "auto"),
-                hdrMode: confHdrMode[name] ?? 0,
+                hdrMode: confHdrMode[name] ?? ((confColorMode[name] === "hdr" || confColorMode[name] === "hdredid") ? 2 : 0),
                 iccProfile: confIccProfile[name] ?? "",
                 // HDR luminance fallback chain: existing user value
                 // from monitors.lua → manufacturer-suggested defaults
@@ -2659,6 +2660,8 @@ except Exception:
                                             updates.bitdepth = 10;
                                             if (!(monitorSection.pending.hdrMode > 0))
                                                 updates.hdrMode = 1;
+                                        } else {
+                                            updates.hdrMode = 0;
                                         }
                                         displayConfigPage.updatePendingBatch(monitorSection.monName, updates);
                                     }
