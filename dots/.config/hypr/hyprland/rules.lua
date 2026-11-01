@@ -439,10 +439,12 @@ hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland|verticalBar
 -- pixel with nothing in between. Reading what is actually behind them puts the
 -- dim on both sides of the line, and the line has nothing left to show. The
 -- app list wears the dock's surface besides, so the two have to frost the same
--- way or they stop reading as one material. The dim itself is there to obscure
--- the apps behind the launcher; with xray it would frost the wallpaper and
--- leave every window legible through it.
+-- way or they stop reading as one material.
 hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overview[A-Za-z]*)" }, xray = false})
+-- The dim is what the launcher stands on, and it shows the wallpaper past the
+-- windows. Its blur is computed once and reused until the wallpaper changes.
+-- The surface is all but clear, so no alpha floor: it is blurred wherever it spans.
+hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, xray = true, ignore_alpha = 0})
 -- The island's antialiased edge must blend with the surface beneath it.
 -- X-ray blur injects wallpaper color there even when the body is fully opaque.
 hl.layer_rule({ match = { namespace = "quickshell:dynamicIsland" }, xray = false})

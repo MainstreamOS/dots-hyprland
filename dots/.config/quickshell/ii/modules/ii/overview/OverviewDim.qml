@@ -17,15 +17,13 @@ Scope {
         screen: modelData
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(dimWindow.screen)
         property bool monitorIsFocused: ((Hyprland.focusedMonitor?.id ?? monitor?.id) === monitor?.id)
-        // The surface grows before it fades in, so a slow configure from a
-        // busy compositor lands as a late fade rather than a pop partway.
         // The dock is raised above the dim and takes its colors from this
-        // very answer, so the two fade together.
+        // very answer, so the two change together.
         readonly property bool dimShown: GlobalStates.overviewOpen && dimWindow.monitorIsFocused && dimWindow.width > 1
         readonly property string screenName: modelData?.name ?? ""
         onDimShownChanged: GlobalStates.setLauncherDim(dimWindow.screenName, dimWindow.dimShown)
-        // Track the configured extent, not just the fade target: shrinking the
-        // layer surface takes another compositor configure after the fade ends.
+        // Track the configured extent: shrinking the layer surface takes another
+        // compositor configure.
         readonly property bool surfaceShown: visible && width > 1 && height > 1
         property string registeredScreen: ""
         Component.onCompleted: {
@@ -47,23 +45,14 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         exclusionMode: ExclusionMode.Ignore
-        color: Appearance.colors.colLauncherDimWindow
-        // Surface lifecycle — see Overview.qml for the full reasoning. The dim
-        // layer is click-through by design (empty mask), so keeping it visible
-        // permanently has no input-side effect; contentFade.opacity already
-        // makes it visually invisible while the overview is closed.
-        // The compositor blurs a mapped surface over its whole extent on
-        // every damaged frame, closed or not, so closed it is kept to one
-        // pixel, and only the screen that shows it spans. It stays full for
-        // a moment after the fade ends: a reopen inside that moment needs
-        // no configure at all, and a reopen can no longer land on the
-        // shrink itself, where the fade would start, drop as the one-pixel
-        // size arrived, and start again.
-        readonly property bool spanning: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused) || contentFade.opacity > 0 || shrinkHold.running
-        Timer {
-            id: shrinkHold
-            interval: 500
-        }
+        // The compositor's blur is all this surface shows, and it skips fully clear
+        // pixels, so this is the least alpha there is: at most one level of 255. Parked
+        // at a pixel while closed it stays clear, or that pixel shows the wallpaper.
+        color: dimWindow.surfaceShown ? Qt.rgba(0, 0, 0, 1 / 255) : "transparent"
+        // The layer is click-through by design (empty mask). The size alone turns
+        // the blur on and off: closed it is kept to one pixel, and only the screen
+        // that shows it spans.
+        readonly property bool spanning: GlobalStates.overviewOpen && dimWindow.monitorIsFocused
         visible: (Config.options.overview.keepSurfaceAlive ?? true)
             || spanning
 
@@ -78,26 +67,6 @@ Scope {
 
         // Purely visual — all input passes through
         mask: Region {}
-
-        Item {
-            id: contentFade
-            anchors.fill: parent
-            opacity: dimWindow.dimShown ? 1 : 0
-            onOpacityChanged: if (opacity === 0) shrinkHold.restart()
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: Appearance.animation.elementMoveFast.duration
-                    easing.type: Appearance.animation.elementMoveFast.type
-                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                }
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                color: Appearance.colors.colLauncherDim
-                opacity: Appearance.colors.launcherDimOpacity
-            }
-        }
     }
 
     }   // end Variants

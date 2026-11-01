@@ -311,12 +311,6 @@ Scope {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
             }
 
-        LauncherBackdrop {
-            id: launcherBackdrop
-            anchors.fill: parent
-            screen: panelWindow.screen
-        }
-
         // Floating icon that follows the cursor during app drag
         Rectangle {
             id: dragFloatIcon

@@ -12,12 +12,12 @@ import Quickshell.Io
  * LauncherBlur — the launcher's frost stays at the shipped depth.
  *
  * The compositor has one blur depth for everything it frosts, read at draw
- * time, and the launcher's dim is frosted by the compositor because it has to
- * blur the windows behind it, which the shell cannot sample. So the depth the
+ * time, and the launcher's dim is frosted by the compositor. So the depth the
  * Blur depth sliders choose for windows reached the launcher too, and a light
  * setting meant for a window edge left the launcher barely frosted.
  *
- * While the launcher is open the compositor is handed the stock blur depth,
+ * While the launcher is open the compositor is handed the stock blur depth with
+ * nothing that recolors, since the wallpaper there is meant to be only blurred,
  * and when it closes it gets back the depth it had when the launcher opened.
  * Both are read from and handed to the compositor directly, rather than
  * through a Python run each way. If something else changed the depth while
@@ -38,6 +38,13 @@ Singleton {
     readonly property string flagDir: `${configDir}/hypr/custom`
     readonly property string depthKeys: "blurSize,blurPasses,blurNoise,blurVibrancy"
 
+    // The blur's color settings, which Settings doesn't offer, at what leaves a color alone.
+    readonly property var colorRows: [
+        { key: "blurContrast", type: "float", default: 1, hypr: "decoration:blur:contrast" },
+        { key: "blurBrightness", type: "float", default: 1, hypr: "decoration:blur:brightness" },
+        { key: "blurVibrancyDarkness", type: "float", default: 0, hypr: "decoration:blur:vibrancy_darkness" }
+    ]
+
     function load() {} // For forcing singleton initialization
 
     // Each depth setting's option, kind and stock value, read once from the
@@ -50,7 +57,7 @@ Singleton {
             try {
                 const keys = root.depthKeys.split(",")
                 root.depthRows = JSON.parse(text()).keys.filter(row =>
-                    keys.includes(row.key) && row.hypr && row.default !== undefined)
+                    keys.includes(row.key) && row.hypr && row.default !== undefined).concat(root.colorRows)
             } catch (e) {
                 root.depthRows = []
             }
@@ -77,7 +84,7 @@ Singleton {
     function _stock() {
         const values = ({})
         for (const row of root.depthRows)
-            values[row.key] = row.default
+            values[row.key] = row.key === "blurVibrancy" ? 0 : row.default
         return values
     }
     function _same(a, b) {
@@ -169,8 +176,7 @@ Singleton {
     Connections {
         target: GlobalStates
         function onOverviewOpenChanged() {
-            // Only the depth moves; whether the blur reads through to the
-            // wallpaper is a look, not a strength, and stays the user's.
+            // Whether the blur reads through to the wallpaper stays the user's.
             if (GlobalStates.overviewOpen) {
                 if (root.phase === "pushed" || root.phase === "closing") {
                     root.phase = "pushed"

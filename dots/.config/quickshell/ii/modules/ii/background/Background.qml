@@ -633,9 +633,8 @@ Variants {
 
             Loader {
                 id: blurLoader
-                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running || GlobalStates.overviewOpen)
+                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running)
                 anchors.fill: wallpaper
-                // extraZoom only applies to the lock screen, not the overview
                 scale: GlobalStates.screenLocked ? Config.options.lock.blur.extraZoom : 1
                 Behavior on scale {
                     NumberAnimation {
@@ -672,10 +671,7 @@ Variants {
                         onTriggered: lockBlurThrottle.scheduleUpdate()
                     }
                     source: lockBlur.capped ? lockBlurThrottle : lockBlur.liveSource
-                    // Full lock radius when locked; slightly lighter blur for overview
-                    radius: GlobalStates.screenLocked
-                        ? Config.options.lock.blur.radius
-                        : (GlobalStates.overviewOpen ? Config.options.lock.blur.radius : 0)
+                    radius: GlobalStates.screenLocked ? Config.options.lock.blur.radius : 0
                     samples: Config.options.lock.blur.radius * 2 + 1
                     Behavior on radius {
                         NumberAnimation {
@@ -687,8 +683,7 @@ Variants {
 
                     Rectangle {
                         anchors.fill: parent
-                        // Lock screen: full dim; overview: lighter dim
-                        opacity: GlobalStates.screenLocked ? 1 : (GlobalStates.overviewOpen ? 0.85 : 0)
+                        opacity: GlobalStates.screenLocked ? 1 : 0
                         color: CF.ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
                         Behavior on opacity {
                             NumberAnimation {

@@ -321,20 +321,13 @@ Singleton {
         flipped: root.dockJoinsBar ? !root.dockOwnFlipped : root.dockOwnFlipped
     }
 
-    // The dim is laid over its window's faint clear color, and both over
-    // whatever the dim frosts. The launcher and the dock raised above the
-    // dim both lie on it.
-    function dimOver(dim, picture) {
-        return ColorUtils.composite(ColorUtils.applyAlpha(dim, colors.launcherDimOpacity),
-            ColorUtils.composite(colors.colLauncherDimWindow, picture))
-    }
-    // A surface laid over the dim, and the dim over the picture it frosts.
+    // A surface laid over the blurred wallpaper the launcher stands on.
     // The launcher sits in the middle of the screen, so there the picture is
     // read as a whole rather than along an edge. A surface's shadow is drawn
     // under all of it, not only around it, so a see-through surface shows it
     // too.
-    function laidOverDim(surface, shadow, dim, shown, picture) {
-        const under = dimOver(dim, picture ?? wallpaperAverage)
+    function laidOverDim(surface, shadow, shown, picture) {
+        const under = picture ?? wallpaperAverage
         return shown ? ColorUtils.composite(surface, ColorUtils.composite(shadow, under)) : under
     }
     // The dock's surface and shadow as they come, for the places the dock's
@@ -351,9 +344,9 @@ Singleton {
     // launcher keeps its panels clear of the dock's band, so nothing of it
     // lies under the dock.
     readonly property color dockOverLauncherBackdrop: laidOverDim(colors.colDockBackground, dockOwnShadow,
-        colors.colLauncherDim, root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
+        root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
     readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockOwnStockShadow,
-        colors.colLayer0Base, root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
+        root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
     // The dock as it is drawn while the launcher is open. The bar stays under
     // the dim and keeps following the dock at rest, so this one is judged by
     // itself alone.
@@ -366,13 +359,13 @@ Singleton {
         flipped: root.contentFlipped(backdrops, backdrops)
     }
     readonly property color launcherBackdrop: laidOverDim(colors.colLauncherPanel, colors.colLauncherShadow,
-        colors.colLauncherDim, true)
+        true)
     readonly property color drawerBackdrop: laidOverDim(colors.colDockBackground, colors.colDockShadow,
-        colors.colLauncherDim, root.sizes.dockShowBackground)
+        root.sizes.dockShowBackground)
     readonly property color launcherStockBackdrop: laidOverDim(ColorUtils.applyAlpha(m3colors.m3surfaceContainer, colors.layer0StockAlpha),
-        colors.colShadow, colors.colLayer0Base, true)
+        colors.colShadow, true)
     readonly property color drawerStockBackdrop: laidOverDim(dockStockSurface, dockStockShadow,
-        colors.colLayer0Base, root.sizes.dockShowBackground)
+        root.sizes.dockShowBackground)
     // The hairline around the dock's surface is its outline mixed into the
     // surface's own color at the surface's alpha, so it stands off the
     // surface only as far as the outline is from that color. Over the dim
@@ -393,8 +386,8 @@ Singleton {
         if (!content.adaptive || !root.sizes.dockShowBackground)
             return colors.dockBorder(outline)
         const surface = colors.colDockBackground
-        const under = ColorUtils.composite(shadow, dimOver(colors.colLauncherDim, picture))
-        const stockUnder = ColorUtils.composite(stockShadow, dimOver(colors.colLayer0Base, picture))
+        const under = ColorUtils.composite(shadow, picture)
+        const stockUnder = ColorUtils.composite(stockShadow, picture)
         const need = Math.min(content.markContrast,
             borderStanding(content.onStock(colors.colOutlineVariant), dockStockSurface, stockUnder))
         const stands = o => borderStanding(o, surface, under)
@@ -1088,20 +1081,6 @@ Singleton {
         // does with the dock.
         property color colLauncherShadow: ColorUtils.applyAlpha(colShadow, colShadow.a
             * (layer0StockAlpha > 0 ? Math.min(1, colLauncherPanel.a / layer0StockAlpha) : 1))
-        // What shows through a near-white layer reads as less than the same
-        // share through a near-black one, so light mode lets a little more of
-        // the frosted windows through to look as open.
-        readonly property real launcherDimOpacity: m3colors.darkmode ? 0.90 : 0.85
-        // A fifth of the way to the pick reads plainly in its hue, and it is
-        // about as far as the dim can go before a white pick in dark mode
-        // leaves the palette's text under 7:1 on it. Past that the dim stops
-        // reading as the mode's backdrop and starts reading as the pick's.
-        readonly property real launcherDimTint: 0.2
-        property color colLauncherDim: launcherPick !== "" ? ColorUtils.mix(launcherPick, colLayer0Base, launcherDimTint) : colLayer0Base
-        // The dim's window is cleared to a faint black under the dim, and the
-        // launcher is laid over that as well, so the window and the backdrop
-        // its content is judged against both take it from here.
-        readonly property color colLauncherDimWindow: Qt.rgba(0, 0, 0, 0.01)
         // Layer 1
         property color colLayer1Base: m3colors.m3surfaceContainerLow
         property color colLayer1: ColorUtils.solveOverlayColor(colLayer0Base, colLayer1Base, 1 - root.contentTransparency);

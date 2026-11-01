@@ -53,7 +53,7 @@ Item {
             layer.enabled: root.nearby
             visible: false
         }
-        // Share the launchers' cached wallpaper blur, without a dim overlay.
+        // The cached wallpaper blur, without a dim overlay.
         LauncherBackdrop {
             id: wallpaperBackdrop
             anchors.fill: parent
