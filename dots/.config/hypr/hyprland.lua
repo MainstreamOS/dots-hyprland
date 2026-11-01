@@ -41,6 +41,7 @@ if not dontLoadDefaultKeybinds then require("hyprland.keybinds") end
 -- machine still carrying the old copy of this in custom/general.lua is the one
 -- that loses, not the shipped one.
 require("hyprland.plugins")
+require("hyprland.scrolling")
 
 -- Custom overrides (sourced AFTER defaults so they win)
 tryRequire("custom.execs")

@@ -322,10 +322,19 @@ end, {description = "Toggle Scrolling overview"})
 --#/# bind = CTRL + SUPER + ←/→,, -- Swap column left/right
 
 --# Restructuring
-hl.bind("CTRL + SUPER + P", on_layout("scrolling", "promote"), {description = "Promote window to its own column"} )
-hl.bind("CTRL + SUPER + E", on_layout("scrolling", "expel"), {description = "Expel window to its own column"} )
-hl.bind("CTRL + SUPER + C", on_layout("scrolling", "consume"), {description = "Consume window into previous column"} )
-hl.bind("CTRL + SUPER + X", on_layout("scrolling", "consume_or_expel next"), {description = "Consume or expel window"} )
+-- These change how many columns there are without a window opening or closing.
+local Scrolling = require("hyprland.scrolling")
+local function restructure(msg)
+ local run = on_layout("scrolling", msg)
+ return function()
+  run()
+  Scrolling.fitSoon()
+ end
+end
+hl.bind("CTRL + SUPER + P", restructure("promote"), {description = "Promote window to its own column"} )
+hl.bind("CTRL + SUPER + E", restructure("expel"), {description = "Expel window to its own column"} )
+hl.bind("CTRL + SUPER + C", restructure("consume"), {description = "Consume window into previous column"} )
+hl.bind("CTRL + SUPER + X", restructure("consume_or_expel next"), {description = "Consume or expel window"} )
 hl.bind("CTRL + SUPER + L", on_layout("scrolling", "inhibit_scroll"), {description = "Toggle scroll lock"} )
 
 --# Nudge and column width
@@ -335,6 +344,8 @@ hl.bind("SUPER + ALT + Right", on_layout("scrolling", "move +200"), {repeating =
 -- SUPER+ALT+Equal is already taken (notification test), so width uses CTRL+SUPER.
 hl.bind("CTRL + SUPER + Minus", on_layout("scrolling", "colresize -conf"), {description = "Previous column width preset"} )
 hl.bind("CTRL + SUPER + Equal", on_layout("scrolling", "colresize +conf"), {description = "Next column width preset"} )
+hl.bind("CTRL + SUPER + F", on_layout("scrolling", "fit expand"), {description = "Expand column into the free space"} )
+hl.bind("CTRL + SUPER + A", on_layout("scrolling", "fit all"), {description = "Fit all columns on screen"} )
 
 --##! Monocle Layout
 hl.bind("SUPER + J", on_layout("monocle", "cyclenext"), {description = "Next window"} )

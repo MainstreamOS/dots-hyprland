@@ -3244,5 +3244,13 @@
   "Unhide conversation": "Unhide conversation",
   "Hyprland 0.57 requires a working Lua configuration: %s": "Hyprland 0.57 requires a working Lua configuration: %s",
   "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.": "Run updatems, then sudo updatems-system, and log out and back in to finish any deferred files before retrying this update.",
-  "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue.": "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue."
+  "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue.": "Tip: Your account still has quota on Gemini Flash. Switch models in the picker to continue.",
+  "Window width": "Window width",
+  "Halves (default)": "Halves (default)",
+  "Thirds": "Thirds",
+  "One window fills the screen, two take half each, and three or more take a third each": "One window fills the screen, two take half each, and three or more take a third each",
+  "One window fills the screen, and two or more take half each": "One window fills the screen, and two or more take half each",
+  "Keep the focused window centered": "Keep the focused window centered",
+  "Two-thirds": "Two-thirds",
+  "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it": "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it"
 }

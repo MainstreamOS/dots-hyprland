@@ -52,6 +52,34 @@ ContentPage {
     // Targets the Lua-config tree introduced in Hyprland 0.55.
     readonly property string hyprlandConf: Quickshell.env("HOME") + "/.config/hypr/hyprland.lua"
     readonly property string workspacesConf: Quickshell.env("HOME") + "/.config/hypr/workspaces.lua"
+    readonly property string scrollingDir: Quickshell.env("HOME") + "/.config/hypr/custom"
+
+    // How many windows fit across in the scrolling layout, kept in one-value files
+    // that hyprland/scrolling.lua reads on every reload.
+    property real scrollingColumns: 2
+    property bool scrollingCenter: false
+    FileView {
+        path: root.scrollingDir + "/scrolling.columns"
+        printErrors: false
+        onLoaded: root.scrollingColumns = parseFloat(text()) || 2
+    }
+    FileView {
+        path: root.scrollingDir + "/scrolling.center"
+        printErrors: false
+        onLoaded: root.scrollingCenter = text().trim() === "1"
+    }
+    function setScrollingColumns(columns) {
+        root.scrollingColumns = columns
+        Quickshell.execDetached(["sh", "-c",
+            'printf "%s\\n" "$1" > "$2" && hyprctl reload && hyprctl eval "MainstreamScrollingRefit()"',
+            "sh", String(columns), root.scrollingDir + "/scrolling.columns"])
+    }
+    function setScrollingCenter(center) {
+        root.scrollingCenter = center
+        Quickshell.execDetached(["sh", "-c",
+            'printf "%s\\n" "$1" > "$2" && hyprctl eval "hl.config({ scrolling = { focus_fit_method = $3 } })"',
+            "sh", center ? "1" : "0", root.scrollingDir + "/scrolling.center", center ? "0" : "1"])
+    }
     readonly property string rulesConf: Quickshell.env("HOME") + "/.config/hypr/custom/rules.lua"
     readonly property string customGeneralConf: Quickshell.env("HOME") + "/.config/hypr/custom/general.lua"
     // The global layout (dwindle/master/etc) lives in hyprland/general.lua's
@@ -655,6 +683,64 @@ ContentPage {
                     }
                 }
 
+                // ── Scrolling options ─────────────────────────────────────────────
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.columnSpan: 2
+                    spacing: 4
+                    visible: root.currentLayout === "scrolling"
+                        || (root.perWorkspace && root.workspaceLayouts.includes("scrolling"))
+
+                    ConfigRow {
+                        Layout.leftMargin: 8
+                        Layout.rightMargin: 8
+                        OptionalMaterialSymbol {
+                            icon: "view_column"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.leftMargin: 6
+                            text: Translation.tr("Window width")
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
+                        StyledComboBox {
+                            textRole: "displayName"
+                            Layout.fillWidth: false
+                            Layout.preferredWidth: 220
+                            model: [
+                                { displayName: Translation.tr("Halves (default)"), value: 2 },
+                                { displayName: Translation.tr("Two-thirds"), value: 1.5 },
+                                { displayName: Translation.tr("Thirds"), value: 3 }
+                            ]
+                            currentIndex: Math.max(0, model.findIndex(item => item.value === root.scrollingColumns))
+                            onActivated: index => root.setScrollingColumns(model[index].value)
+                        }
+                    }
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 6
+                        Layout.bottomMargin: 6
+                        Layout.leftMargin: 8
+                        Layout.rightMargin: 8
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                        text: root.scrollingColumns === 3
+                            ? Translation.tr("One window fills the screen, two take half each, and three or more take a third each")
+                            : root.scrollingColumns === 1.5
+                            ? Translation.tr("One window fills the screen, and two or more take two-thirds each, with the next one showing beside it")
+                            : Translation.tr("One window fills the screen, and two or more take half each")
+                    }
+                    ConfigSwitch {
+                        buttonIcon: "center_focus_strong"
+                        text: Translation.tr("Keep the focused window centered")
+                        checked: root.scrollingCenter
+                        onCheckedChanged: if (checked !== root.scrollingCenter) root.setScrollingCenter(checked)
+                    }
+                }
+
                 // ── Float ─────────────────────────────────────────────────
                 MouseArea {
                     id: floatCard
@@ -860,7 +946,6 @@ ContentPage {
                 }
 
             } // GridLayout
-
 
             // ── Per Workspace — centered in its own row ───────────────────────
             Item {
