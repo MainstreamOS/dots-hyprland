@@ -17,17 +17,22 @@ ColumnLayout {
     Layout.fillHeight: true
 
 
-    // 0: Timer (Countdown), 1: Stopwatch, 2: Pomodoro
-    property int currentMode: 0
-
-    Component.onCompleted: {
-        if (TimerService.countdownRunning) currentMode = 0;
-        else if (TimerService.stopwatchRunning) currentMode = 1;
-        else if (TimerService.pomodoroRunning) currentMode = 2;
-    }
+    // 0: Timer (Countdown), 1: Stopwatch, 2: Focus. The tabs show them as Timer, Focus, Stopwatch.
+    readonly property var tabModes: [0, 2, 1]
+    readonly property var modeKeys: ["timer", "stopwatch", "focus"]
+    readonly property int currentMode: Math.max(0, root.modeKeys.indexOf(Persistent.states.timer.tab))
 
     property bool isEditingCountdown: false
     readonly property bool needsKeyboardFocus: isEditingCountdown
+
+    readonly property bool showsEndTime: root.currentMode === 0 && TimerService.countdownToClock && !TimerService.countdownRunning
+
+    function startCountdownEdit() {
+        timeField.text = root.formatTime(TimerService.countdownDuration);
+        root.isEditingCountdown = true;
+        timeField.forceActiveFocus();
+        timeField.selectAll();
+    }
 
     function applyCountdownEdit() {
         if (!isEditingCountdown) return;
@@ -53,6 +58,10 @@ ColumnLayout {
         const m = Math.floor(s / 60).toString().padStart(2, '0');
         const sec = (s % 60).toString().padStart(2, '0');
         return `${m}:${sec}`;
+    }
+
+    function formatCountdown(seconds) {
+        return seconds >= 3600 ? TimerService.formatSeconds(seconds) : root.formatTime(seconds);
     }
 
     function format10ms(time10ms) {
@@ -87,12 +96,12 @@ ColumnLayout {
                     contentColors: Appearance.islandContent
                     model: [
                         {"name": Translation.tr("Timer"), "icon": "hourglass_top"},
-                        {"name": Translation.tr("Stopwatch"), "icon": "timer"},
-                        {"name": Translation.tr("Focus"), "icon": "search_activity"}
+                        {"name": Translation.tr("Focus"), "icon": "search_activity"},
+                        {"name": Translation.tr("Stopwatch"), "icon": "timer"}
                     ]
-                    running: [TimerService.countdownRunning, TimerService.stopwatchRunning, TimerService.pomodoroRunning]
-                    currentIndex: root.currentMode
-                    onActivated: index => root.currentMode = index
+                    running: [TimerService.countdownRunning, TimerService.pomodoroRunning, TimerService.stopwatchRunning]
+                    currentIndex: root.tabModes.indexOf(root.currentMode)
+                    onActivated: index => Persistent.states.timer.tab = root.modeKeys[root.tabModes[index]]
                 }
 
                 Item { Layout.fillWidth: true }
@@ -194,12 +203,21 @@ ColumnLayout {
                     }
                 }
 
+                ClockTimePicker {
+                    Layout.alignment: Qt.AlignVCenter
+                    visible: root.showsEndTime
+                    contentColors: Appearance.islandContent
+                    rowHeight: 24
+                    cornerRadius: 6
+                }
+
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     spacing: 2
 
                     Item {
+                        visible: !root.showsEndTime
                         implicitWidth: Math.max(digitsRow.implicitWidth, timeField.implicitWidth)
                         implicitHeight: Math.max(digitsRow.implicitHeight, timeField.implicitHeight)
 
@@ -212,7 +230,7 @@ ColumnLayout {
                             StyledText {
                                 text: {
                                     if (root.currentMode === 0) {
-                                        return root.formatTime(TimerService.countdownSecondsLeft);
+                                        return root.formatCountdown(TimerService.countdownSecondsLeft);
                                     }
                                     if (root.currentMode === 1) {
                                         const totalSeconds = Math.floor(TimerService.stopwatchTime / 100);
@@ -246,12 +264,7 @@ ColumnLayout {
                             anchors.fill: digitsRow
                             visible: root.currentMode === 0 && !root.isEditingCountdown && !TimerService.countdownRunning
                             cursorShape: Qt.IBeamCursor
-                            onClicked: {
-                                timeField.text = root.formatTime(TimerService.countdownDuration);
-                                root.isEditingCountdown = true;
-                                timeField.forceActiveFocus();
-                                timeField.selectAll();
-                            }
+                            onClicked: root.startCountdownEdit()
                         }
 
                         StyledTextInput {
@@ -267,20 +280,23 @@ ColumnLayout {
                             Keys.onEnterPressed: root.applyCountdownEdit()
                             Keys.onEscapePressed: root.isEditingCountdown = false
                             onActiveFocusChanged: {
-                                if (!activeFocus && root.isEditingCountdown)
+                                if (!activeFocus && root.isEditingCountdown) {
                                     root.applyCountdownEdit();
+                                    root.isEditingCountdown = false;
+                                }
                             }
                         }
                     }
 
                     StyledText {
+                        visible: !root.showsEndTime
                         text: {
                             if (root.currentMode === 0) {
                                 if (TimerService.countdownRunning) {
                                     const endsAt = Qt.formatTime(new Date(Date.now() + TimerService.countdownSecondsLeft * 1000), "h:mm AP");
-                                    return Translation.tr("Target: %1 · Ends at %2").arg(root.formatTime(TimerService.countdownDuration)).arg(endsAt);
+                                    return Translation.tr("Target: %1 · Ends at %2").arg(root.formatCountdown(TimerService.countdownDuration)).arg(endsAt);
                                 }
-                                return Translation.tr("Target duration: %1 (click digits to edit)").arg(root.formatTime(TimerService.countdownDuration));
+                                return Translation.tr("Target duration: %1 (click digits to edit)").arg(root.formatCountdown(TimerService.countdownDuration));
                             }
                             if (root.currentMode === 1) {
                                 const laps = TimerService.stopwatchLaps ?? [];
@@ -426,7 +442,23 @@ ColumnLayout {
             anchors.rightMargin: 10
             spacing: 6
 
+            SegmentedTabBar {
+                Layout.fillWidth: false
+                Layout.preferredWidth: 176
+                contentColors: Appearance.islandContent
+                model: [
+                    {"name": Translation.tr("Length"), "icon": "hourglass_top"},
+                    {"name": Translation.tr("Clock time"), "icon": "schedule"}
+                ]
+                currentIndex: TimerService.countdownToClock ? 1 : 0
+                onActivated: index => {
+                    root.isEditingCountdown = false;
+                    TimerService.setCountdownMode(index === 1);
+                }
+            }
+
             StyledText {
+                visible: !TimerService.countdownToClock
                 text: Translation.tr("Add:")
                 font.pixelSize: 11
                 font.weight: Font.Medium
@@ -443,6 +475,7 @@ ColumnLayout {
                 ]
                 delegate: RippleButton {
                     required property var modelData
+                    visible: !TimerService.countdownToClock
                     Layout.fillWidth: true
                     Layout.preferredHeight: 32
                     buttonRadius: 8

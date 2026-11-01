@@ -29,13 +29,27 @@ Item {
                 anchors.centerIn: parent
                 spacing: 0
 
+                ClockTimePicker {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: timeItem.showsEndTime
+                }
+
                 Item {
                     id: timeItem
+                    visible: !timeItem.showsEndTime
                     Layout.alignment: Qt.AlignHCenter
-                    implicitWidth: 120
+                    implicitWidth: 160
                     implicitHeight: 50
 
                     property bool editMode: false
+                    readonly property bool showsEndTime: TimerService.countdownToClock && !TimerService.countdownRunning
+
+                    function startEdit() {
+                        timeField.text = `${Math.floor(TimerService.countdownDuration / 60).toString().padStart(2, '0')}:${Math.floor(TimerService.countdownDuration % 60).toString().padStart(2, '0')}`;
+                        timeItem.editMode = true;
+                        timeField.forceActiveFocus();
+                        timeField.selectAll();
+                    }
 
                     function applyEdit() {
                         editMode = false;
@@ -57,11 +71,13 @@ Item {
                         visible: !timeItem.editMode
                         anchors.centerIn: parent
                         text: {
+                            if (TimerService.countdownSecondsLeft >= 3600)
+                                return TimerService.formatSeconds(TimerService.countdownSecondsLeft);
                             let minutes = Math.floor(TimerService.countdownSecondsLeft / 60).toString().padStart(2, '0');
                             let seconds = Math.floor(TimerService.countdownSecondsLeft % 60).toString().padStart(2, '0');
                             return `${minutes}:${seconds}`;
                         }
-                        font.pixelSize: 40
+                        font.pixelSize: TimerService.countdownSecondsLeft >= 3600 ? 32 : 40
                         color: Appearance.m3colors.m3onSurface
                     }
 
@@ -72,14 +88,8 @@ Item {
                         acceptedButtons: Qt.LeftButton
 
                         onClicked: (mouse) => {
-                            if (mouse.button === Qt.LeftButton && !TimerService.countdownRunning) {
-                                let minutes = Math.floor(TimerService.countdownDuration / 60).toString().padStart(2, '0');
-                                let seconds = Math.floor(TimerService.countdownDuration % 60).toString().padStart(2, '0');
-                                timeField.text = `${minutes}:${seconds}`;
-                                timeItem.editMode = true;
-                                timeField.forceActiveFocus();
-                                timeField.selectAll();
-                            }
+                            if (mouse.button === Qt.LeftButton && !TimerService.countdownRunning)
+                                timeItem.startEdit();
                         }
                     }
 
@@ -99,18 +109,37 @@ Item {
                         Keys.onEscapePressed: timeItem.editMode = false
 
                         onActiveFocusChanged: {
-                            if (!activeFocus && timeItem.editMode)
+                            if (!activeFocus && timeItem.editMode) {
                                 timeItem.applyEdit();
+                                timeItem.editMode = false;
+                            }
                         }
                     }
                 }
 
                 StyledText {
+                    visible: !timeItem.showsEndTime
                     Layout.alignment: Qt.AlignHCenter
-                    text: TimerService.countdownRunning ? Translation.tr("Running") : Translation.tr("Timer")
+                    text: TimerService.countdownRunning
+                        ? Translation.tr("Ends at %1").arg(Qt.formatTime(new Date(Date.now() + TimerService.countdownSecondsLeft * 1000), Config.options.time.format))
+                        : Translation.tr("Timer")
                     font.pixelSize: Appearance.font.pixelSize.normal
                     color: Appearance.colors.colSubtext
                 }
+            }
+        }
+
+        SegmentedTabBar {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 220
+            model: [
+                {"name": Translation.tr("Length"), "icon": "hourglass_empty"},
+                {"name": Translation.tr("Clock time"), "icon": "schedule"}
+            ]
+            currentIndex: TimerService.countdownToClock ? 1 : 0
+            onActivated: index => {
+                timeItem.editMode = false;
+                TimerService.setCountdownMode(index === 1);
             }
         }
 

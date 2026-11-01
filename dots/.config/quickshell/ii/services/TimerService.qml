@@ -69,7 +69,7 @@ Singleton {
                 notificationMessage = Translation.tr(`🔴 Focus: %1 minutes`).arg(Math.floor(focusTime / 60));
             }
 
-            Quickshell.execDetached(["notify-send", "Pomodoro", notificationMessage, "-a", "Shell"]);
+            Quickshell.execDetached(["notify-send", Translation.tr("Focus"), notificationMessage, "-a", "Shell"]);
             if (Config.options.sounds.pomodoro) {
                 Audio.playSystemSound("alarm-clock-elapsed")
             }
@@ -189,9 +189,50 @@ Singleton {
 
     function formatSeconds(totalSeconds) {
         const s = Math.max(0, Math.round(totalSeconds));
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return `${m}:${sec.toString().padStart(2, "0")}`;
+        const sec = (s % 60).toString().padStart(2, "0");
+        if (s < 3600)
+            return `${Math.floor(s / 60)}:${sec}`;
+        return `${Math.floor(s / 3600)}:${(Math.floor(s / 60) % 60).toString().padStart(2, "0")}:${sec}`;
+    }
+
+    // The next moment an "H:MM" time comes around, or null when it isn't one. An am or pm is
+    // still read so a time saved by an earlier version keeps working.
+    function nextClockTime(text) {
+        const m = text.trim().toLowerCase().match(/^(\d{1,2})(?::?(\d{2}))?\s*(?:([ap])\.?m?\.?)?$/);
+        if (!m)
+            return null;
+        const hour = parseInt(m[1]);
+        const minute = m[2] ? parseInt(m[2]) : 0;
+        if (hour > 23 || minute > 59 || (m[3] && (hour < 1 || hour > 12)))
+            return null;
+        const at = new Date();
+        at.setHours(m[3] ? hour % 12 + (m[3] === "p" ? 12 : 0) : hour, minute, 0, 0);
+        if (at <= new Date())
+            at.setDate(at.getDate() + 1);
+        return at;
+    }
+
+    function secondsUntilClockTime(text) {
+        const at = root.nextClockTime(text);
+        return at ? Math.round((at - new Date()) / 1000) : -1;
+    }
+
+    readonly property bool countdownToClock: Persistent.states.timer.countdown.mode === "clock"
+    // The time the timer is set to go off, or an hour or so from now with none picked yet.
+    readonly property var countdownEndParts: {
+        const at = root.nextClockTime(Persistent.states.timer.countdown.endTime)
+            ?? new Date(Math.ceil((Date.now() + 3600000) / 300000) * 300000);
+        return { hour: at.getHours(), minute: at.getMinutes() };
+    }
+
+    function setCountdownMode(clock) {
+        if (root.countdownRunning)
+            root.resetCountdown();
+        Persistent.states.timer.countdown.mode = clock ? "clock" : "length";
+    }
+
+    function setCountdownEndTime(hour, minute) {
+        Persistent.states.timer.countdown.endTime = `${hour}:${String(minute).padStart(2, "0")}`;
     }
 
     function addCountdownMinutes(minutes) {
@@ -205,6 +246,11 @@ Singleton {
     }
 
     function toggleCountdown() {
+        if (!root.countdownRunning && root.countdownToClock) {
+            root.setCountdownEndTime(root.countdownEndParts.hour, root.countdownEndParts.minute);
+            // Worked out at each start, so a pause doesn't move the time it goes off.
+            root.setCountdownTime(root.secondsUntilClockTime(Persistent.states.timer.countdown.endTime));
+        }
         Persistent.states.timer.countdown.running = !countdownRunning;
         if (Persistent.states.timer.countdown.running) {
             Persistent.states.timer.countdown.start = getCurrentTimeInSeconds() - (countdownDuration - countdownSecondsLeft);

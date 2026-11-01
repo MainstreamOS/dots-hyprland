@@ -8,10 +8,13 @@ import QtQuick.Layouts
 Item {
     id: root
     property var tabButtonList: [
-        {"name": Translation.tr("Pomodoro"), "icon": "search_activity"},
-        {"name": Translation.tr("Stopwatch"), "icon": "timer"},
-        {"name": Translation.tr("Timer"), "icon": "hourglass_empty"}
+        {"name": Translation.tr("Timer"), "icon": "hourglass_empty"},
+        {"name": Translation.tr("Focus"), "icon": "search_activity"},
+        {"name": Translation.tr("Stopwatch"), "icon": "timer"}
     ]
+    readonly property var tabKeys: ["timer", "focus", "stopwatch"]
+    readonly property int savedTab: Math.max(0, root.tabKeys.indexOf(Persistent.states.timer.tab))
+    onSavedTabChanged: if (swipeView.currentIndex !== root.savedTab) swipeView.setCurrentIndex(root.savedTab)
 
     // These are keybinds for stopwatch and pomodoro
     Keys.onPressed: (event) => {
@@ -24,20 +27,20 @@ Item {
             event.accepted = true
         } else if (event.key === Qt.Key_Space || event.key === Qt.Key_S) { // Pause/resume with Space or S
             if (tabBar.currentIndex === 0) {
-                TimerService.togglePomodoro()
-            } else if (tabBar.currentIndex === 1) {
-                TimerService.toggleStopwatch()
-            } else {
                 TimerService.toggleCountdown()
+            } else if (tabBar.currentIndex === 1) {
+                TimerService.togglePomodoro()
+            } else {
+                TimerService.toggleStopwatch()
             }
             event.accepted = true
         } else if (event.key === Qt.Key_R) { // Reset with R
             if (tabBar.currentIndex === 0) {
-                TimerService.resetPomodoro()
-            } else if (tabBar.currentIndex === 1) {
-                TimerService.stopwatchReset()
-            } else {
                 TimerService.resetCountdown()
+            } else if (tabBar.currentIndex === 1) {
+                TimerService.resetPomodoro()
+            } else {
+                TimerService.stopwatchReset()
             }
             event.accepted = true
         } else if (event.key === Qt.Key_L) { // Record lap with L
@@ -61,7 +64,7 @@ Item {
             iconSize: 16
             labelSize: 13
             model: root.tabButtonList
-            running: [TimerService.pomodoroRunning, TimerService.stopwatchRunning, TimerService.countdownRunning]
+            running: [TimerService.countdownRunning, TimerService.pomodoroRunning, TimerService.stopwatchRunning]
             currentIndex: swipeView.currentIndex
             onActivated: index => swipeView.setCurrentIndex(index)
         }
@@ -73,11 +76,13 @@ Item {
             Layout.fillHeight: true
             spacing: 10
             clip: true
+            currentIndex: root.savedTab
+            onCurrentIndexChanged: Persistent.states.timer.tab = root.tabKeys[currentIndex]
 
             // Tabs
+            CountdownTimer {}
             PomodoroTimer {}
             Stopwatch {}
-            CountdownTimer {}
         }
     }
 }

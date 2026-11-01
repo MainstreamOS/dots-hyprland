@@ -3252,5 +3252,11 @@
   "One window fills the screen, and two or more take half each": "One window fills the screen, and two or more take half each",
   "Keep the focused window centered": "Keep the focused window centered",
   "Two-thirds": "Two-thirds",
-  "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it": "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it"
+  "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it": "One window fills the screen, and two or more take two-thirds each, with the next one showing beside it",
+  "Ends at %1": "Ends at %1",
+  "Length": "Length",
+  "Clock time": "Clock time",
+  "Click to pick a time": "Click to pick a time",
+  "Clock time (click it to change)": "Clock time (click it to change)",
+  "Try a time like 3:45": "Try a time like 3:45"
 }

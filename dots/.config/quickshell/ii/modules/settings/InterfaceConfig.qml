@@ -1023,7 +1023,7 @@ ContentPage {
 
             ConfigSwitch {
                 buttonIcon: "av_timer"
-                text: Translation.tr("Pomodoro")
+                text: Translation.tr("Focus")
                 checked: Config.options.sounds.pomodoro
                 onCheckedChanged: {
                     Config.options.sounds.pomodoro = checked;

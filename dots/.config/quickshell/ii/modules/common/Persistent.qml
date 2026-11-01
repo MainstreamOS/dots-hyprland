@@ -234,6 +234,8 @@ Singleton {
             }
 
             property JsonObject timer: JsonObject {
+                // The tab the sidebar and the Island's panel both open on: "timer", "focus" or "stopwatch".
+                property string tab: "timer"
                 property JsonObject pomodoro: JsonObject {
                     property bool running: false
                     property int start: 0
@@ -249,6 +251,9 @@ Singleton {
                     property bool running: false
                     property int start: 0
                     property int duration: 600
+                    // "length" counts the duration down, "clock" counts down to endTime, a 24-hour "H:MM".
+                    property string mode: "length"
+                    property string endTime: ""
                 }
             }
         }
