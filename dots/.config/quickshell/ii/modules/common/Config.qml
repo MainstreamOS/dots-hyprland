@@ -713,6 +713,16 @@ Singleton {
                 // interface decides.
                 property real backgroundOpacity: -1
                 property real widgetOpacity: -1
+                // Frost and Glass: the wallpaper sampled behind the bar. The background opacity above tints it.
+                property JsonObject backdrop: JsonObject {
+                    property bool enable: false
+                    property real blur: 24
+                    // A milky layer of white over the blur, which is what makes it read as frost.
+                    property real haze: 0
+                    property real magnification: 1
+                    property real offsetX: 0
+                    property real offsetY: 0
+                }
                 // Empty lets the palette decide. One slot per mode, since a color picked
                 // against dark surfaces goes unreadable on light ones.
                 property string widgetColorDark: ""

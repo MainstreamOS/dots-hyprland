@@ -487,6 +487,16 @@ Item { // Bar content region
         // with the body has to reach further that way: flattening one clips to
         // its bounds. The body is pushed back in by the same amount, so the
         // surface's own edges stay where everything else expects them.
+        SurfaceBackdrop {
+            anchors.fill: parent
+            source: backdropSource.item
+            topLeftRadius: Config.options.bar.bottom ? floatSurface.topEndRadius : floatSurface.edgeCornerRadius
+            bottomLeftRadius: Config.options.bar.bottom ? floatSurface.bottomEndRadius : floatSurface.edgeCornerRadius
+            topRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.topEndRadius
+            bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.bottomEndRadius
+            trackX: root.x
+            trackY: floatSurface.y
+        }
         Item {
             anchors.fill: parent
             anchors.topMargin: -floatSurface.radius
@@ -580,6 +590,24 @@ Item { // Bar content region
     // body's ends fall inside it, since flattening one clips to its bounds. The
     // fade lives here rather than in the colours, so the lap between body and
     // curve is blended once instead of twice.
+    Loader {
+        id: backdropSource
+        active: Config.options.bar.backdrop.enable && Config.options.bar.showBackground
+        sourceComponent: ScreenWallpaperSource {}
+    }
+    SurfaceBackdrop {
+        visible: !root.floatSplit
+        source: backdropSource.item
+        x: barBackground.x
+        y: barBackground.y
+        width: barBackground.width
+        height: barBackground.height
+        topLeftRadius: barBackground.topLeftRadius
+        topRightRadius: barBackground.topRightRadius
+        bottomLeftRadius: barBackground.bottomLeftRadius
+        bottomRightRadius: barBackground.bottomRightRadius
+        trackX: root.x
+    }
     Item {
         id: barSurface
         anchors.fill: parent

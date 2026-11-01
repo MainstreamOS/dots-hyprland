@@ -409,6 +409,117 @@ ContentPage {
         }
     }
 
+    // Each preset fills in the settings below, which stay free to change.
+    readonly property var backdropPresets: [
+        { displayName: Translation.tr("Solid"), enable: false, opacity: 1, blur: 24, haze: 0, magnification: 1, offsetX: 0, offsetY: 0 },
+        { displayName: Translation.tr("Frost"), enable: true, opacity: 0.4, blur: 56, haze: 0.16, magnification: 1, offsetX: 0, offsetY: 0 },
+        { displayName: Translation.tr("Glass"), enable: true, opacity: 0.55, blur: 24, haze: 0, magnification: 1.25, offsetX: 24, offsetY: 12 },
+    ]
+    readonly property int backdropPresetIndex: {
+        const b = Config.options.bar.backdrop;
+        const near = (one, other) => Math.abs(one - other) < 0.01;
+        return root.backdropPresets.findIndex(p => p.enable === b.enable && near(p.opacity, Config.options.bar.backgroundOpacity)
+            && (!p.enable || (near(p.blur, b.blur) && near(p.haze, b.haze) && near(p.magnification, b.magnification)
+                && near(p.offsetX, b.offsetX) && near(p.offsetY, b.offsetY))));
+    }
+
+    ContentSection {
+        icon: "blur_on"
+        title: Translation.tr("Backdrop")
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "auto_awesome"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Blur preset")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.backdropPresetIndex >= 0 ? root.backdropPresets
+                    : root.backdropPresets.concat([{ displayName: Translation.tr("Custom") }])
+                currentIndex: root.backdropPresetIndex >= 0 ? root.backdropPresetIndex : root.backdropPresets.length
+                onActivated: index => {
+                    const preset = root.backdropPresets[index];
+                    if (!preset)
+                        return;
+                    const b = Config.options.bar.backdrop;
+                    b.enable = preset.enable;
+                    b.blur = preset.blur;
+                    b.haze = preset.haze;
+                    b.magnification = preset.magnification;
+                    b.offsetX = preset.offsetX;
+                    b.offsetY = preset.offsetY;
+                    Config.options.bar.backgroundOpacity = preset.opacity;
+                    Config.options.bar.showBackground = true;
+                }
+                StyledToolTip {
+                    text: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
+                        ? Translation.tr("Frost and Glass need a picture wallpaper. With a video one, the bar stays see-through instead.")
+                        : Translation.tr("Frost and Glass show a blurred copy of the wallpaper behind the bar, like the desktop widgets.")
+                }
+            }
+        }
+
+        ConfigSlider {
+            visible: Config.options.bar.backdrop.enable
+            text: Translation.tr("Blur amount")
+            value: Config.options.bar.backdrop.blur
+            usePercentTooltip: false
+            buttonIcon: "deblur"
+            from: 4
+            to: 64
+            onMoved: Config.options.bar.backdrop.blur = value
+        }
+        ConfigSlider {
+            visible: Config.options.bar.backdrop.enable
+            text: Translation.tr("Haze")
+            value: Config.options.bar.backdrop.haze
+            buttonIcon: "foggy"
+            from: 0
+            to: 0.5
+            onMoved: Config.options.bar.backdrop.haze = value
+        }
+        ConfigSlider {
+            visible: Config.options.bar.backdrop.enable
+            text: Translation.tr("Magnification")
+            value: Config.options.bar.backdrop.magnification
+            buttonIcon: "zoom_in"
+            from: 1
+            to: 2
+            onMoved: Config.options.bar.backdrop.magnification = value
+        }
+        ConfigSlider {
+            visible: Config.options.bar.backdrop.enable
+            text: Translation.tr("Horizontal offset")
+            value: Config.options.bar.backdrop.offsetX
+            usePercentTooltip: false
+            buttonIcon: "swap_horiz"
+            from: -200
+            to: 200
+            onMoved: Config.options.bar.backdrop.offsetX = Math.round(value)
+        }
+        ConfigSlider {
+            visible: Config.options.bar.backdrop.enable
+            text: Translation.tr("Vertical offset")
+            value: Config.options.bar.backdrop.offsetY
+            usePercentTooltip: false
+            buttonIcon: "swap_vert"
+            from: -200
+            to: 200
+            onMoved: Config.options.bar.backdrop.offsetY = Math.round(value)
+        }
+    }
+
     ContentSection {
         icon: "opacity"
         title: Translation.tr("Transparency")

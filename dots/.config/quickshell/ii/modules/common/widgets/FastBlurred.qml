@@ -12,11 +12,19 @@ Item {
 
     required property Item blurSource
     property real cardRadius: 30
+    property real topLeftRadius: cardRadius
+    property real topRightRadius: cardRadius
+    property real bottomLeftRadius: cardRadius
+    property real bottomRightRadius: cardRadius
     property color tint: "white"
     property real tintOpacity: 0.15
     property real blurRadius: Config.options.background.widgets.blur.radius ?? 24
     property real trackX: 0
     property real trackY: 0
+    // How much larger the picture shows behind the card, and how far it slides.
+    property real magnification: 1
+    property real offsetX: 0
+    property real offsetY: 0
 
     // The blur reaches past the card on every side so its edge pixels have real
     // picture to average instead of smearing the border inward.
@@ -27,7 +35,10 @@ Item {
         maskSource: Rectangle {
             width: root.width
             height: root.height
-            radius: root.cardRadius
+            topLeftRadius: root.topLeftRadius
+            topRightRadius: root.topRightRadius
+            bottomLeftRadius: root.bottomLeftRadius
+            bottomRightRadius: root.bottomRightRadius
         }
     }
 
@@ -37,8 +48,13 @@ Item {
     // alone would leave the backdrop showing a stale slice of picture.
     function refresh() {
         if (!blurSource) return;
-        const pt = root.mapToItem(blurSource, -oversample, -oversample);
-        shaderSource.sourceRect = Qt.rect(pt.x, pt.y, blur.width, blur.height);
+        const shown = Qt.size(blur.width / magnification, blur.height / magnification);
+        const center = root.mapToItem(blurSource, root.width / 2, root.height / 2);
+        // Kept on the picture, since past its edge there is only emptiness to sample.
+        const x = center.x - shown.width / 2 + offsetX;
+        const y = center.y - shown.height / 2 + offsetY;
+        shaderSource.sourceRect = Qt.rect(Math.max(0, Math.min(x, blurSource.width - shown.width)),
+            Math.max(0, Math.min(y, blurSource.height - shown.height)), shown.width, shown.height);
         shaderSource.scheduleUpdate();
     }
 
@@ -47,6 +63,9 @@ Item {
     onWidthChanged: refresh()
     onHeightChanged: refresh()
     onBlurRadiusChanged: refresh()
+    onMagnificationChanged: refresh()
+    onOffsetXChanged: refresh()
+    onOffsetYChanged: refresh()
     onBlurSourceChanged: refresh()
     Component.onCompleted: refresh()
 
@@ -87,7 +106,11 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: root.cardRadius
+        visible: root.tintOpacity > 0
+        topLeftRadius: root.topLeftRadius
+        topRightRadius: root.topRightRadius
+        bottomLeftRadius: root.bottomLeftRadius
+        bottomRightRadius: root.bottomRightRadius
         color: root.tint
         opacity: root.tintOpacity
     }

@@ -283,6 +283,21 @@ Scope {
                     topRightRadius: topLeftRadius
                     bottomLeftRadius: window.floating || !window.bottom ? radius : 0
                     bottomRightRadius: bottomLeftRadius
+                    Loader {
+                        id: backdropSource
+                        active: Config.options.bar.backdrop.enable
+                        sourceComponent: ScreenWallpaperSource {}
+                    }
+                    SurfaceBackdrop {
+                        anchors.fill: parent
+                        source: backdropSource.item
+                        topLeftRadius: surface.topLeftRadius
+                        topRightRadius: surface.topRightRadius
+                        bottomLeftRadius: surface.bottomLeftRadius
+                        bottomRightRadius: surface.bottomRightRadius
+                        trackX: surface.x
+                        trackY: surface.y
+                    }
                     Item {
                         id: shape
                         // Keep the translucent group's texture stable as well.

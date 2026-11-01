@@ -544,6 +544,20 @@ Variants {
                 height: bgRoot.scaledWallpaperHeight
             }
 
+            QtObject {
+                readonly property var placement: ({
+                    "path": bgRoot.wallpaperPath || Quickshell.shellPath("assets/images/default_wallpaper.webp"),
+                    "video": bgRoot.wallpaperIsVideo,
+                    "x": wallpaper.x,
+                    "y": wallpaper.y,
+                    "width": wallpaper.width,
+                    "height": wallpaper.height,
+                })
+                onPlacementChanged: WallpaperPlacement.publish(bgRoot.modelData.name, placement)
+                Component.onCompleted: WallpaperPlacement.publish(bgRoot.modelData.name, placement)
+                Component.onDestruction: WallpaperPlacement.publish(bgRoot.modelData.name, null)
+            }
+
             // mpvpaper draws a video wallpaper on its own surface, which this
             // panel cannot sample and which the compositor hides once a session
             // lock is up, leaving the lock nothing live to blur.

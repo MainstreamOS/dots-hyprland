@@ -782,6 +782,16 @@ Item { // Bar content region
         // flattening one clips to its bounds; the body is inset back by the same
         // amount, so the surface's own edges stay exactly where they were and
         // everything anchoring to this surface still lands right.
+        SurfaceBackdrop {
+            anchors.fill: parent
+            source: backdropSource.item
+            topLeftRadius: Config.options.bar.bottom ? floatSurface.leftEndRadius : floatSurface.edgeCornerRadius
+            topRightRadius: Config.options.bar.bottom ? floatSurface.rightEndRadius : floatSurface.edgeCornerRadius
+            bottomLeftRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.leftEndRadius
+            bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
+            trackX: floatSurface.x
+            trackY: root.y
+        }
         Item {
             anchors.fill: parent
             anchors.leftMargin: -floatSurface.radius
@@ -869,6 +879,24 @@ Item { // Bar content region
     // the body fall inside it: flattening a group clips to its bounds, and the
     // curves hang past the body's own. The fade lives here rather than in the
     // colors, so the lap between body and curve is blended once, not twice.
+    Loader {
+        id: backdropSource
+        active: Config.options.bar.backdrop.enable && Config.options.bar.showBackground
+        sourceComponent: ScreenWallpaperSource {}
+    }
+    SurfaceBackdrop {
+        visible: !root.floatSplit
+        source: backdropSource.item
+        x: barBackground.x
+        y: barBackground.y
+        width: barBackground.width
+        height: barBackground.height
+        topLeftRadius: barBackground.topLeftRadius
+        topRightRadius: barBackground.topRightRadius
+        bottomLeftRadius: barBackground.bottomLeftRadius
+        bottomRightRadius: barBackground.bottomRightRadius
+        trackY: root.y
+    }
     Item {
         id: barSurface
         anchors.fill: parent

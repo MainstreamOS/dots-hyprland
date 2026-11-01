@@ -3344,5 +3344,14 @@
   "Unread": "Unread",
   "Write a reply": "Write a reply",
   "Fade navigation arrows when not in use": "Fade navigation arrows when not in use",
-  "They stay faintly visible, and come back when the pointer reaches them.": "They stay faintly visible, and come back when the pointer reaches them."
+  "They stay faintly visible, and come back when the pointer reaches them.": "They stay faintly visible, and come back when the pointer reaches them.",
+  "Backdrop": "Backdrop",
+  "Blur preset": "Blur preset",
+  "Solid": "Solid",
+  "Glass": "Glass",
+  "Magnification": "Magnification",
+  "Horizontal offset": "Horizontal offset",
+  "Vertical offset": "Vertical offset",
+  "Frost and Glass need a picture wallpaper. With a video one, the bar stays see-through instead.": "Frost and Glass need a picture wallpaper. With a video one, the bar stays see-through instead.",
+  "Frost and Glass show a blurred copy of the wallpaper behind the bar, like the desktop widgets.": "Frost and Glass show a blurred copy of the wallpaper behind the bar, like the desktop widgets."
 }
