@@ -450,6 +450,9 @@ Singleton {
                     property string reading: "Readex Pro"
                     property string expressive: "Space Grotesk"
                 }
+                // Presets saved from Settings, the bar's and dock's shared and the windows' apart.
+                property list<var> backdropPresets: []
+                property list<var> windowBlurPresets: []
                 property JsonObject transparency: JsonObject {
                     property bool enable: true
                     property bool automatic: true

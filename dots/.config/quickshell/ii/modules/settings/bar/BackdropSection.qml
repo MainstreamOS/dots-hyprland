@@ -14,11 +14,12 @@ ContentSection {
     title: Translation.tr("Backdrop")
 
     // Each preset fills in the settings below, which stay free to change. Solid is the stock look.
-    readonly property var backdropPresets: [
+    readonly property var shippedPresets: [
         { displayName: Translation.tr("Solid"), enable: false, opacity: -1, blur: 24, haze: 0, magnification: 1, offsetX: 0, offsetY: 0 },
         { displayName: Translation.tr("Frost"), enable: true, opacity: 0.4, blur: 56, haze: 0.16, magnification: 1, offsetX: 0, offsetY: 0 },
         { displayName: Translation.tr("Glass"), enable: true, opacity: 0.55, blur: 24, haze: 0, magnification: 1.25, offsetX: 24, offsetY: 12 },
     ]
+    readonly property var backdropPresets: root.shippedPresets.concat(Array.from(Config.options.appearance.backdropPresets))
     readonly property int backdropPresetIndex: {
         const b = root.surface.backdrop;
         const near = (one, other) => Math.abs(one - other) < 0.01;
@@ -68,6 +69,24 @@ ContentSection {
                         ? Translation.tr("Frost and Glass need a picture wallpaper. With a video one, this stays see-through instead.")
                         : Translation.tr("Frost and Glass show a blurred copy of the wallpaper behind this surface, like the desktop widgets.")
                 }
+            }
+        }
+
+        SavePresetRow {
+            canSave: root.backdropPresetIndex < 0
+            canDelete: root.backdropPresetIndex >= root.shippedPresets.length
+            reservedNames: root.shippedPresets.map(preset => preset.displayName).concat([Translation.tr("Custom")])
+            onSaveRequested: name => {
+                const b = root.surface.backdrop;
+                Config.options.appearance.backdropPresets = Array.from(Config.options.appearance.backdropPresets)
+                    .filter(preset => preset.displayName !== name)
+                    .concat([{ displayName: name, enable: b.enable, opacity: root.surface.backgroundOpacity, blur: b.blur,
+                        haze: b.haze, magnification: b.magnification, offsetX: b.offsetX, offsetY: b.offsetY }]);
+            }
+            onDeleteRequested: {
+                const shown = root.backdropPresets[root.backdropPresetIndex];
+                Config.options.appearance.backdropPresets = Array.from(Config.options.appearance.backdropPresets)
+                    .filter(preset => preset.displayName !== shown.displayName);
             }
         }
 

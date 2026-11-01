@@ -7,6 +7,7 @@ import qs.modules.common
 import qs.modules.common.functions as CF
 import qs.modules.common.widgets
 import qs.modules.settings.windowrules
+import qs.modules.settings.bar
 
 ContentPage {
     id: root
@@ -208,7 +209,7 @@ ContentPage {
 
     // Each preset fills in the settings below, which stay free to change. The
     // opacity comes with it, since blur only shows through a see-through window.
-    readonly property var blurPresets: [
+    readonly property var shippedBlurPresets: [
         { displayName: Translation.tr("Solid"), blur: root.decoDefaults.blur ?? true, blurVariant: root.decoDefaults.blurVariant ?? 0,
             blurSize: root.decoDefaults.blurSize ?? 10, blurPasses: root.decoDefaults.blurPasses ?? 3, blurNoise: root.decoDefaults.blurNoise ?? 0,
             blurVibrancy: root.decoDefaults.blurVibrancy ?? 0.5, blurLensStrength: root.decoDefaults.blurLensStrength ?? 24,
@@ -219,6 +220,7 @@ ContentPage {
         { displayName: Translation.tr("Glass"), blur: true, blurVariant: 8, blurSize: 4, blurPasses: 2, blurNoise: 0,
             blurVibrancy: 0.8, blurLensStrength: 32, blurLensWidth: 96, blurClarity: 0.6, activeOpacity: 1, inactiveOpacity: 0.93 },
     ]
+    readonly property var blurPresets: root.shippedBlurPresets.concat(Array.from(Config.options.appearance.windowBlurPresets))
     function decorationValue(key) {
         return {
             "blur": root.blurEnabled, "blurVariant": root.blurVariantValue, "blurSize": root.blurSizeValue,
@@ -1129,6 +1131,27 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 StyledToolTip {
                     text: Translation.tr("Sets the blur and window opacity together. Everything below stays free to change.")
                 }
+            }
+        }
+
+        SavePresetRow {
+            visible: (canSave || canDelete) && root.supportedBlurVariants.includes(8)
+            canSave: root.blurPresetIndex < 0
+            canDelete: root.blurPresetIndex >= root.shippedBlurPresets.length
+            reservedNames: root.shippedBlurPresets.map(preset => preset.displayName).concat([Translation.tr("Custom")])
+            onSaveRequested: name => {
+                const entry = { displayName: name };
+                for (const key of ["blur", "blurVariant", "blurSize", "blurPasses", "blurNoise", "blurVibrancy", "blurLensStrength",
+                        "blurLensWidth", "blurClarity", "activeOpacity", "inactiveOpacity"])
+                    entry[key] = root.decorationValue(key);
+                Config.options.appearance.windowBlurPresets = Array.from(Config.options.appearance.windowBlurPresets)
+                    .filter(preset => preset.displayName !== name)
+                    .concat([entry]);
+            }
+            onDeleteRequested: {
+                const shown = root.blurPresets[root.blurPresetIndex];
+                Config.options.appearance.windowBlurPresets = Array.from(Config.options.appearance.windowBlurPresets)
+                    .filter(preset => preset.displayName !== shown.displayName);
             }
         }
 
