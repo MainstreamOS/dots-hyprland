@@ -898,6 +898,40 @@ ContentPage {
                 ]
             }
         }
+
+        ConfigSlider {
+            visible: Config.options.background.widgets.weather.enable
+            text: Translation.tr("Size")
+            buttonIcon: "format_size"
+            value: Config.options.background.widgets.weather.size
+            from: 0.5
+            to: 3
+            stopIndicatorValues: [1]
+            onMoved: {
+                Config.options.background.widgets.weather.size = Math.round(value * 20) / 20;
+            }
+        }
+
+        ColorField {
+            visible: Config.options.background.widgets.weather.enable
+            text: Translation.tr("Accent color")
+            allowEmpty: true
+            buttonIcon: "palette"
+            value: Config.options.background.widgets.weather.accent
+            fallback: String(Appearance.colors.colPrimary)
+            onEdited: newValue => {
+                Config.options.background.widgets.weather.accent = newValue;
+            }
+        }
+
+        ConfigResetButton {
+            visible: Config.options.background.widgets.weather.enable && Config.options.background.widgets.weather.accent !== ""
+            Layout.leftMargin: 8
+            buttonText: Translation.tr("Use the default color")
+            onClicked: {
+                Config.options.background.widgets.weather.accent = "";
+            }
+        }
     }
 
     ContentSection {

@@ -548,6 +548,8 @@ Singleton {
                         property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
                         property real x: 0.25
                         property real y: 0.2
+                        property real size: 1
+                        property string accent: "" // "" follows the theme
                     }
                     property JsonObject calendar: JsonObject {
                         property bool enable: false
