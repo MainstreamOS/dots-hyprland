@@ -608,6 +608,14 @@ ContentPage {
             checked: Config.options.interactions.showWorkspaceNavigationArrows
             onCheckedChanged: Config.options.interactions.showWorkspaceNavigationArrows = checked
         }
+        ConfigSwitch {
+            visible: Config.options.interactions.showWorkspaceNavigationArrows
+            buttonIcon: "blur_medium"
+            text: Translation.tr("Fade navigation arrows when not in use")
+            tooltipText: Translation.tr("They stay faintly visible, and come back when the pointer reaches them.")
+            checked: Config.options.interactions.fadeWorkspaceNavigationArrows
+            onCheckedChanged: Config.options.interactions.fadeWorkspaceNavigationArrows = checked
+        }
     }
 
     ContentSection {

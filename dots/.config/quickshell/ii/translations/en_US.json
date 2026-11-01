@@ -3342,5 +3342,7 @@
   "Calls your phone gets while it is connected show up here.": "Calls your phone gets while it is connected show up here.",
   "%1%": "%1%",
   "Unread": "Unread",
-  "Write a reply": "Write a reply"
+  "Write a reply": "Write a reply",
+  "Fade navigation arrows when not in use": "Fade navigation arrows when not in use",
+  "They stay faintly visible, and come back when the pointer reaches them.": "They stay faintly visible, and come back when the pointer reaches them."
 }

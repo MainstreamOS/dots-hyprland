@@ -9,6 +9,27 @@ RippleButton {
     property real uiScale: 1
     property bool pressedAtRest: true
 
+    // Faint rather than gone, since it still takes clicks where it sits.
+    readonly property bool fades: Config.options.interactions.fadeWorkspaceNavigationArrows
+    property bool recentlyUsed: true
+    function wake() {
+        root.recentlyUsed = true;
+        restTimer.restart();
+    }
+    onHoveredChanged: wake()
+    onClicked: wake()
+    onVisibleChanged: wake()
+    Timer {
+        id: restTimer
+        interval: 2000
+        running: true
+        onTriggered: if (!root.hovered) root.recentlyUsed = false
+    }
+    opacity: !root.enabled ? 0.4 : !root.fades || root.hovered || root.recentlyUsed ? 1 : 0.2
+    Behavior on opacity {
+        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+    }
+
     focusPolicy: Qt.NoFocus
     buttonRadius: RoundedCorners.on ? Appearance.rounding.small * uiScale : 0
     // These controls sit over windows, not a panel, so they use the surface itself;
