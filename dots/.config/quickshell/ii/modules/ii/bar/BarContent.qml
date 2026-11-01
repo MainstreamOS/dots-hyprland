@@ -30,6 +30,7 @@ Item { // Bar content region
         case "activeWindowPill": return comp_activeWindowPill;
         case "resources": return comp_resources;
         case "network": return comp_network;
+        case "phone": return comp_phone;
         case "media": return comp_media;
         case "workspaces": return comp_workspaces;
         case "clock": return comp_clock;
@@ -59,6 +60,7 @@ Item { // Bar content region
         case "activeWindowPill": return root.useShortenedForm === 0;
         case "media": return root.useShortenedForm < 2;
         case "network": return root.useShortenedForm < 2;
+        case "phone": return root.useShortenedForm < 2 && Phone.device !== null && Config.options.bar.island.phoneIntegration;
         case "utilButtons": return Config.options.bar.verbose && root.useShortenedForm === 0;
         case "battery": return root.useShortenedForm < 2 && Battery.available;
         case "volume": return root.useShortenedForm === 0;
@@ -369,6 +371,11 @@ Item { // Bar content region
     Component {
         id: comp_network
         NetworkSpeed {}
+    }
+
+    Component {
+        id: comp_phone
+        PhoneStatus {}
     }
 
     Component {

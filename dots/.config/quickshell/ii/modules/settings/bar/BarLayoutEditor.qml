@@ -18,6 +18,7 @@ Item {
         { id: "activeWindowPill", name: Translation.tr("Workspace title (pill)"), icon: "select_window" },
         { id: "resources",     name: Translation.tr("System resources"),  icon: "monitor_heart" },
         { id: "network",       name: Translation.tr("Network speed"),     icon: "network_check" },
+        { id: "phone",         name: Translation.tr("Phone"),             icon: "smartphone" },
         { id: "media",         name: Translation.tr("Media"),             icon: "music_note" },
         { id: "workspaces",    name: Translation.tr("Workspaces"),        icon: "workspaces" },
         { id: "clock",         name: Translation.tr("Clock & date"),      icon: "schedule" },

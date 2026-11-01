@@ -119,6 +119,7 @@ Item { // Bar content region
         case "sidebarButton": return comp_sidebarButton;
         case "resources": return comp_resources;
         case "network": return comp_network;
+        case "phone": return comp_phone;
         case "media": return comp_media;
         case "workspaces": return comp_workspaces;
         case "clock": return comp_clock;
@@ -145,6 +146,7 @@ Item { // Bar content region
     function moduleVisible(name) {
         switch (name) {
         case "battery": return Battery.available;
+        case "phone": return Phone.device !== null && Config.options.bar.island.phoneIntegration;
         default: return true;
         }
     }
@@ -229,6 +231,11 @@ Item { // Bar content region
             Layout.fillWidth: true
             Layout.fillHeight: false
         }
+    }
+
+    Component {
+        id: comp_phone
+        Bar.PhoneStatus {}
     }
 
     Component {

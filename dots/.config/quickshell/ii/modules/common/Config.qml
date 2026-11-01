@@ -26,6 +26,7 @@ Singleton {
             { "widgets": [ {"id": "battery", "enabled": true}, {"id": "weather", "enabled": true}, {"id": "releaseUpdates", "enabled": true} ] }
         ],
         "right": [
+            { "widgets": [ {"id": "phone", "enabled": true} ] },
             { "widgets": [ {"id": "timers", "enabled": true} ] },
             { "widgets": [ {"id": "media", "enabled": true} ] },
             { "widgets": [ {"id": "volume", "enabled": true}, {"id": "indicators", "enabled": true} ] }
@@ -51,6 +52,23 @@ Singleton {
         if (size !== Math.round(stock) || gap !== size / 8) {
             root.options.dock.launcherScale = size / stock;
             root.options.dock.launcherDotGap = gap / size;
+        }
+        return true;
+    }
+
+    // A layout saved before the phone widget gets it once. The widget only shows with a
+    // paired phone, and the ledger keeps one someone removed from coming back.
+    function seedPhoneWidget() {
+        let stored;
+        try { stored = JSON.parse(configFileView.text()); } catch (e) { return false; }
+        if (!stored?.bar?.layout || stored.bar.phoneWidgetSeeded) return false;
+        root.options.bar.phoneWidgetSeeded = true;
+        const present = ["left", "center", "right"].some(side => (stored.bar.layout[side] ?? [])
+            .some(group => (group.widgets ?? []).some(widget => widget.id === "phone")));
+        if (!present) {
+            const right = JSON.parse(JSON.stringify(root.options.bar.layout.right ?? []));
+            right.unshift({ "widgets": [{ "id": "phone", "enabled": true }] });
+            root.options.bar.layout.right = right;
         }
         return true;
     }
@@ -349,7 +367,8 @@ Singleton {
             const united = root.migrateWeatherUnits()
             const kept = root.keepFullSessionMenu()
             const launcher = root.migrateDockLauncher()
-            if (seeded || scrubbed || united || kept || launcher) fileWriteTimer.restart()
+            const phoneWidget = root.seedPhoneWidget()
+            if (seeded || scrubbed || united || kept || launcher || phoneWidget) fileWriteTimer.restart()
         }
         onLoadFailed: error => {
             if (error == FileViewError.FileNotFound) {
@@ -646,6 +665,8 @@ Singleton {
             }
 
             property JsonObject bar: JsonObject {
+                // Set once a saved layout has been offered the phone widget.
+                property bool phoneWidgetSeeded: false
                 property JsonObject autoHide: JsonObject {
                     property bool enable: false
                     property int hoverRegionWidth: 2
