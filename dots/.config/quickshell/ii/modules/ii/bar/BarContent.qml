@@ -791,6 +791,8 @@ Item { // Bar content region
             bottomRightRadius: Config.options.bar.bottom ? floatSurface.edgeCornerRadius : floatSurface.rightEndRadius
             trackX: floatSurface.x
             trackY: root.y
+            notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "bottom" : "top") : ""
+            notchSize: Appearance.rounding.barFloat
         }
         Item {
             anchors.fill: parent
@@ -896,6 +898,10 @@ Item { // Bar content region
         bottomLeftRadius: barBackground.bottomLeftRadius
         bottomRightRadius: barBackground.bottomRightRadius
         trackY: root.y
+        notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "bottom" : "top") : ""
+        notchSize: Appearance.rounding.barFloat
+        hugEdge: Config.options.bar.cornerStyle === 0 ? (Config.options.bar.bottom ? "bottom" : "top") : ""
+        hugSize: Appearance.rounding.screenRounding
     }
     Item {
         id: barSurface

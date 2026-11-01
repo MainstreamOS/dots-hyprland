@@ -552,6 +552,32 @@ Scope { // Scope
                         // body because the curves hang outside it and flattening clips to the
                         // bounds; the body is pushed back in by the same amount, so it lands
                         // where it always did.
+                        Loader {
+                            id: backdropSource
+                            active: Config.options.dock.backdrop.enable && dockRoot.showBackground
+                            sourceComponent: ScreenWallpaperSource {}
+                        }
+                        // Over the launcher's dim, the dock goes back to its plain
+                        // see-through surface, which the dim's own colors are worked out for.
+                        SurfaceBackdrop {
+                            settings: Config.options.dock.backdrop
+                            source: dockRoot.overLauncher || dockRoot.overWindowOverview ? null : backdropSource.item
+                            x: dockSurface.x + dockVisualBackground.x
+                            y: dockSurface.y + dockVisualBackground.y
+                            width: dockVisualBackground.width
+                            height: dockVisualBackground.height
+                            topLeftRadius: dockRoot.dockSpans ? 0 : dockVisualBackground.topLeftRadius
+                            topRightRadius: dockRoot.dockSpans ? 0 : dockVisualBackground.topRightRadius
+                            bottomLeftRadius: dockRoot.dockSpans ? 0 : dockVisualBackground.bottomLeftRadius
+                            bottomRightRadius: dockRoot.dockSpans ? 0 : dockVisualBackground.bottomRightRadius
+                            trackX: dockMouseArea.x + dockBackground.x
+                            trackY: dockMouseArea.y + dockBackground.y
+                            notchEdge: dockRoot.dockFlares ? dockRoot.dockEdge : ""
+                            notchSize: Math.min(Appearance.rounding.dock, Appearance.rounding.dockFlareFit)
+                            notchLap: dockRoot.flareLap
+                            hugEdge: dockRoot.dockSpans ? dockRoot.dockEdge : ""
+                            hugSize: dockRoot.spanCorner
+                        }
                         Item {
                             id: dockSurface
                             anchors.fill: parent

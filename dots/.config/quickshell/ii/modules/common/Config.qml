@@ -948,6 +948,15 @@ Singleton {
                 // to the palette, and colors are kept per mode.
                 property bool showBackground: true
                 property real backgroundOpacity: -1
+                // Frost and Glass, the same as the bar's.
+                property JsonObject backdrop: JsonObject {
+                    property bool enable: false
+                    property real blur: 24
+                    property real haze: 0
+                    property real magnification: 1
+                    property real offsetX: 0
+                    property real offsetY: 0
+                }
                 property string backgroundColorDark: ""
                 property string backgroundColorLight: ""
                 property real iconSize: -1

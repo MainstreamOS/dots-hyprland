@@ -297,6 +297,8 @@ Scope {
                         bottomRightRadius: surface.bottomRightRadius
                         trackX: surface.x
                         trackY: surface.y
+                        notchEdge: window.notch ? (window.bottom ? "bottom" : "top") : ""
+                        notchSize: Appearance.rounding.barFloat
                     }
                     Item {
                         id: shape

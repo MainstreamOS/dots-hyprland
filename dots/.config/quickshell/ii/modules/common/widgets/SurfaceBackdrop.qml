@@ -3,32 +3,77 @@ import qs.modules.common
 import qs.modules.common.widgets
 
 /**
- * The bar's Frost and Glass backdrop, cut to the surface it sits behind. The
- * surface's own color goes on top of it, so that color is the tint.
+ * A surface's Frost and Glass backdrop, cut to the surface it sits behind and
+ * the curves it grows. The surface's own color goes on top of it, so that color
+ * is the tint.
  */
 Loader {
     id: root
     property var source: null
+    // Whichever surface's config holds these values.
+    property var settings: Config.options.bar.backdrop
     property real topLeftRadius: 0
     property real topRightRadius: 0
     property real bottomLeftRadius: 0
     property real bottomRightRadius: 0
     property real trackX: 0
     property real trackY: 0
+    // The screen edge a notch's curves stand on, beside its two ends, and how far they lap it.
+    property string notchEdge: ""
+    property int notchSize: 0
+    property real notchLap: 2
+    // The screen edge a hugging strip lies along, with its curves at the screen's corners.
+    property string hugEdge: ""
+    property int hugSize: 0
+
+    readonly property var curves: {
+        const w = root.width;
+        const h = root.height;
+        const s = root.notchSize;
+        const lap = root.notchLap;
+        const r = root.hugSize;
+        const piece = (x, y, size, corner) => ({ "x": x, "y": y, "size": size, "corner": corner });
+        switch (root.notchEdge) {
+        case "top": return [piece(lap - s, 0, s, RoundCorner.CornerEnum.TopRight), piece(w - lap, 0, s, RoundCorner.CornerEnum.TopLeft)];
+        case "bottom": return [piece(lap - s, h - s, s, RoundCorner.CornerEnum.BottomRight), piece(w - lap, h - s, s, RoundCorner.CornerEnum.BottomLeft)];
+        case "left": return [piece(0, lap - s, s, RoundCorner.CornerEnum.BottomLeft), piece(0, h - lap, s, RoundCorner.CornerEnum.TopLeft)];
+        case "right": return [piece(w - s, lap - s, s, RoundCorner.CornerEnum.BottomRight), piece(w - s, h - lap, s, RoundCorner.CornerEnum.TopRight)];
+        }
+        switch (root.hugEdge) {
+        case "top": return [piece(0, h, r, RoundCorner.CornerEnum.TopLeft), piece(w - r, h, r, RoundCorner.CornerEnum.TopRight)];
+        case "bottom": return [piece(0, -r, r, RoundCorner.CornerEnum.BottomLeft), piece(w - r, -r, r, RoundCorner.CornerEnum.BottomRight)];
+        case "left": return [piece(w, 0, r, RoundCorner.CornerEnum.TopLeft), piece(w, h - r, r, RoundCorner.CornerEnum.BottomLeft)];
+        case "right": return [piece(-r, 0, r, RoundCorner.CornerEnum.TopRight), piece(-r, h - r, r, RoundCorner.CornerEnum.BottomRight)];
+        }
+        return [];
+    }
+    // How far past the surface the curves reach on each side.
+    readonly property real reachLeft: Math.max(0, ...curves.map(c => -c.x))
+    readonly property real reachTop: Math.max(0, ...curves.map(c => -c.y))
+    readonly property real reachRight: Math.max(0, ...curves.map(c => c.x + c.size - width))
+    readonly property real reachBottom: Math.max(0, ...curves.map(c => c.y + c.size - height))
 
     active: root.source?.available ?? false
-    sourceComponent: FastBlurred {
-        blurSource: root.source
-        tintOpacity: Config.options.bar.backdrop.haze
-        blurRadius: Config.options.bar.backdrop.blur
-        magnification: Config.options.bar.backdrop.magnification
-        offsetX: Config.options.bar.backdrop.offsetX
-        offsetY: Config.options.bar.backdrop.offsetY
-        topLeftRadius: root.topLeftRadius
-        topRightRadius: root.topRightRadius
-        bottomLeftRadius: root.bottomLeftRadius
-        bottomRightRadius: root.bottomRightRadius
-        trackX: root.trackX
-        trackY: root.trackY
+    sourceComponent: Item {
+        FastBlurred {
+            x: -root.reachLeft
+            y: -root.reachTop
+            width: root.width + root.reachLeft + root.reachRight
+            height: root.height + root.reachTop + root.reachBottom
+            blurSource: root.source.picture
+            tintOpacity: root.settings.haze
+            blurRadius: root.settings.blur
+            magnification: root.settings.magnification
+            offsetX: root.settings.offsetX
+            offsetY: root.settings.offsetY
+            cardRect: Qt.rect(root.reachLeft, root.reachTop, root.width, root.height)
+            cardCurves: root.curves.map(c => Object.assign({}, c, { "x": c.x + root.reachLeft, "y": c.y + root.reachTop }))
+            topLeftRadius: root.topLeftRadius
+            topRightRadius: root.topRightRadius
+            bottomLeftRadius: root.bottomLeftRadius
+            bottomRightRadius: root.bottomRightRadius
+            trackX: root.trackX
+            trackY: root.trackY
+        }
     }
 }

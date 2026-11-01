@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.modules.settings.bar
 import qs.modules.settings.services
 
 ContentPage {
@@ -433,6 +434,10 @@ ContentPage {
                 Config.options.dock.topRadius = -1
             }
         }
+    }
+
+    BackdropSection {
+        surface: Config.options.dock
     }
 
     ContentSection {

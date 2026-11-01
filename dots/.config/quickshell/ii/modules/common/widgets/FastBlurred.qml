@@ -21,6 +21,9 @@ Item {
     property real blurRadius: Config.options.background.widgets.blur.radius ?? 24
     property real trackX: 0
     property real trackY: 0
+    // The card's own part of this item, and the curves it grows beyond that.
+    property rect cardRect: Qt.rect(0, 0, width, height)
+    property var cardCurves: []
     // How much larger the picture shows behind the card, and how far it slides.
     property real magnification: 1
     property real offsetX: 0
@@ -32,13 +35,29 @@ Item {
 
     layer.enabled: true
     layer.effect: OpacityMask {
-        maskSource: Rectangle {
+        maskSource: Item {
             width: root.width
             height: root.height
-            topLeftRadius: root.topLeftRadius
-            topRightRadius: root.topRightRadius
-            bottomLeftRadius: root.bottomLeftRadius
-            bottomRightRadius: root.bottomRightRadius
+            Rectangle {
+                x: root.cardRect.x
+                y: root.cardRect.y
+                width: root.cardRect.width
+                height: root.cardRect.height
+                topLeftRadius: root.topLeftRadius
+                topRightRadius: root.topRightRadius
+                bottomLeftRadius: root.bottomLeftRadius
+                bottomRightRadius: root.bottomRightRadius
+            }
+            Repeater {
+                model: root.cardCurves
+                RoundCorner {
+                    required property var modelData
+                    x: modelData.x
+                    y: modelData.y
+                    implicitSize: modelData.size
+                    corner: modelData.corner
+                }
+            }
         }
     }
 
@@ -107,10 +126,6 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: root.tintOpacity > 0
-        topLeftRadius: root.topLeftRadius
-        topRightRadius: root.topRightRadius
-        bottomLeftRadius: root.bottomLeftRadius
-        bottomRightRadius: root.bottomRightRadius
         color: root.tint
         opacity: root.tintOpacity
     }
