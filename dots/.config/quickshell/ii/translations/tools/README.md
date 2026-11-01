@@ -1,296 +1,111 @@
-# Translation Management Tool Suite
+# Translation maintenance tools
 
-This suite is used to manage project translation files, automatically extract translatable texts, compare differences between language files, and provide maintenance functions.
+Reusable tools for contributors. Python 3 and Bash are the only requirements.
+Translation decisions belong in [TERMINOLOGY.md](../TERMINOLOGY.md);
+these tools validate structure and coverage, not linguistic quality.
 
-## Tool Components
+## Safe defaults
 
-### 1. `translation-manager.py` - Main Translation Manager
-- Extract translatable texts
-- Compare and update translation files
-- Interactive addition/removal of translation keys
+Every command is read-only unless **`sync --apply`** or **`update --apply`** is
+explicitly requested. Sync only appends keys missing from an existing locale,
+using `en_US.json` as the reference. It never removes keys, overwrites translated
+values, reorders existing keys, or creates a new locale. Review and translate the
+new English fallback values before committing them.
 
-### 2. `translation-cleaner.py` - Translation File Maintenance Tool
-- Clean unused translation keys
-- Synchronize key structure across different language files
+Static extraction cannot prove that an unobserved key is unused. Legacy,
+script-only, and dynamic keys must remain unless a contributor has independently
+confirmed their removal. `clean` is a coverage report, not a deletion command.
+The former `--yes` and `--no-backup` shortcuts now fail instead of approving writes.
 
-### 3. `manage-translations.sh` - Convenient Wrapper Script
-- Provides a unified command-line interface
-- Displays translation status
-- Simplifies common operations
+## Commands
 
-## Quick Start
+Run these examples from the repository root. Default paths are relative to the
+tool itself, so invoking the script by its absolute path works from any directory.
 
-### Using the Wrapper Script (Recommended)
+```sh
+# Coverage across QML/JS, Files extensions, updater scripts, and locale catalogs
+bash dots/.config/quickshell/ii/translations/tools/manage-translations.sh status
 
-```bash
-# Enter the tools directory
-cd .config/quickshell/translations/tools
+# Structural validation of all locales, with machine-readable output
+bash dots/.config/quickshell/ii/translations/tools/manage-translations.sh check --json
 
-# Show help
-./manage-translations.sh --help
+# Extract literal source keys to stdout; creates no temporary catalog
+bash dots/.config/quickshell/ii/translations/tools/manage-translations.sh extract
 
-# Show current translation status
-./manage-translations.sh status
+# Preview additions to one existing locale; no files are modified
+bash dots/.config/quickshell/ii/translations/tools/manage-translations.sh sync -l ko_KR
 
-# Extract translatable texts
-./manage-translations.sh extract
-
-# Update all translation files
-./manage-translations.sh update
-
-# Update a specific language
-./manage-translations.sh update -l zh_CN
-
-# Clean unused keys
-./manage-translations.sh clean
-
-# Synchronize keys across all language files
-./manage-translations.sh sync
+# Explicitly append missing en_US keys after reviewing the preview
+bash dots/.config/quickshell/ii/translations/tools/manage-translations.sh sync -l ko_KR --apply
 ```
 
-Or run from the project root:
-```bash
-# Run from the project root
-.config/quickshell/translations/tools/manage-translations.sh status
-.config/quickshell/translations/tools/manage-translations.sh update
+| Command | Behavior |
+| --- | --- |
+| No command / `status` | Report source coverage and missing/extra catalog keys. |
+| `check` | Run `catalog-qa.py`; accepts locale and catalog-directory options. |
+| `extract` | Print extracted keys as a JSON object. |
+| `sync` / `update` | Preview missing-key additions; only `--apply` writes. |
+| `clean` | Same read-only coverage report as `status`. |
+
+Use `--json` for machine-readable reports. `-l` / `--lang` selects one existing
+locale; `-t` / `--trans-dir` overrides the catalog directory. Source operations
+also accept `-s` / `--source-dir`, repeated `--scripts-dir` roots, and
+`--extensions-dir`. Always quote paths that contain spaces. Source-directory
+options and `--apply` are not accepted by `check`.
+
+Reports and checks return **0** on success, **1** for coverage or validation
+failures, and **2** for invalid arguments or a fatal input error. A sync preview
+returns 0 when it can produce a valid plan, even if that plan includes additions.
+Runtime input failures with `--json` are JSON; invalid CLI arguments are reported
+by the argument parser on stderr.
+
+## Direct entry points
+
+- `translation-manager.py`: default coverage report, `--extract-only`,
+  `--check-qml`, `--check-extensions`, `--check-scripts`, and `--sync [--apply]`.
+- `translation-cleaner.py`: compatibility entry point. `--clean` is read-only;
+  `--sync [--apply]` uses the same add-only synchronization. Only `en_US` is a
+  supported reference language.
+- `catalog-qa.py [LOCALE ...]`: placeholders, printf argument order, markup,
+  Markdown, URLs, paths, command flags, filenames, shortcuts, numbers, joining
+  whitespace, and protected literal names. Also accepts `--language LOCALE`,
+  `--translations-dir DIR`, and `--json`.
+
+QA allows Qt placeholders to move while preserving printf argument order.
+English-identical counts are review aids, not automatic translation failures.
+A successful check does not establish accuracy, natural wording, accessibility,
+or visual fit. Review source context and the terminology guidance as well.
+
+## Extraction and write guarantees
+
+The manager scans literal `Translation.tr(...)` calls in QML/JS, including calls
+inside template expressions; it skips comments, string examples, and dynamic
+arguments. It reads literal `tr(...)` calls and module-level `*_TEXT` values in
+Files extensions, plus static shell `t`/`tf` calls. Repo defaults include `sdata`
+and the shell scripts under `ii/scripts`. A custom source tree does not borrow
+extensions from the running desktop. Extraction is conservative and is not a
+full QML, JavaScript, or shell interpreter; review dynamic keys separately.
+
+Before applying synchronization, all selected catalogs must parse successfully,
+have unique keys and nonempty string values, and pass path checks. A changed
+catalog gets an adjacent, uniquely named `.bak` containing its exact original
+bytes and is replaced atomically. No-op catalogs retain their bytes and mtime.
+Keep or remove backups yourself after reviewing the result; they are not shipped.
+
+The five one-off `build_<locale>.py` scripts have been retired. Rejected archived
+drafts and converted Simplified Chinese are not translation sources. Write new
+locale values directly from English using the canonical guidance.
+
+## Tests
+
+Tests run only against temporary fixtures and never modify shipped catalogs:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s dots/.config/quickshell/ii/translations/tools -p 'test_*.py'
+bash -n dots/.config/quickshell/ii/translations/tools/manage-translations.sh
 ```
 
-## Detailed Usage
-
-### Translation Manager (`translation-manager.py`)
-
-Basic usage:
-```bash
-# Process all languages
-./translation-manager.py
-
-# Specify a particular language
-./translation-manager.py --language zh_CN
-
-# Extract translatable texts only
-./translation-manager.py --extract-only
-
-# Show extracted texts
-./translation-manager.py --extract-only --show-temp
-```
-
-Parameter description:
-- `--translations-dir`, `-t`: Translation files directory (default: `.config/quickshell/translations`)
-- `--source-dir`, `-s`: Source code directory (default: `.config/quickshell`)
-- `--language`, `-l`: Specify the language code to process
-- `--extract-only`, `-e`: Only extract translatable texts
-- `--show-temp`: Show the content of the temporary extraction file
-- `--check-extensions`: Only check that the Files extension's strings are keys in `en_US.json` (or `--language`), exiting nonzero when one is missing
-
-### Translation Cleaner (`translation-cleaner.py`)
-
-```bash
-# Clean unused translation keys
-./translation-cleaner.py --clean
-
-# Synchronize translation keys (using en_US as the base)
-./translation-cleaner.py --sync
-
-# Specify a different source language for syncing
-./translation-cleaner.py --sync --source-lang zh_CN
-
-# Clean without creating backups
-./translation-cleaner.py --clean --no-backup
-```
-
-## Workflow
-
-### Regular Translation Update Workflow
-
-1. **Check status**:
-   ```bash
-   ./manage-translations.sh status
-   ```
-
-2. **Update translations**:
-   ```bash
-   ./manage-translations.sh update
-   ```
-
-3. **Clean unused keys** (optional):
-   ```bash
-   ./manage-translations.sh clean
-   ```
-
-### Adding a New Language
-
-1. **Create a new language file**:
-   ```bash
-   ./manage-translations.sh update -l new_lang
-   ```
-
-2. **Synchronize key structure**:
-   ```bash
-   ./manage-translations.sh sync
-   ```
-
-### Cleanup After Large Refactoring
-
-1. **Backup translation files**:
-   ```bash
-   cp -r .config/quickshell/translations .config/quickshell/translations.backup
-   ```
-
-2. **Clean unused keys**:
-   ```bash
-   ./manage-translations.sh clean
-   ```
-
-3. **Synchronize all languages**:
-   ```bash
-   ./manage-translations.sh sync
-   ```
-
-## Supported Translatable Text Formats
-
-The tool recognizes the following formats for translatable texts:
-
-```qml
-// Basic format
-Translation.tr("Hello, world!")
-Translation.tr('Hello, world!')
-Translation.tr(`Hello, world!`)
-
-// With line breaks
-Translation.tr("Line 1\nLine 2")
-
-// With escape characters
-Translation.tr("Say \"Hello\"")
-
-// With parameter placeholders
-Translation.tr("Hello, %1!").arg(name)
-```
-
-The Files extension in the dots tree's `.local/share/nautilus-python/extensions/` reads the same translation files, so its strings count as used too: the text of `tr("...")` calls, and the strings held in module-level names ending in `_TEXT`, alone or as a dict's values, which reach `tr()` through a variable. On an installed shell only `mainstream-share.py` is read, from `~/.local/share/nautilus-python/extensions/`.
-
-```python
-tr("Share on Network...")
-TRY_AGAIN_TEXT = "Try again from the Sharing page in Settings."
-ERROR_TEXT = {"not-owner": "You can only share folders that belong to you."}
-```
-
-`./translation-manager.py --check-extensions` lists those strings that have no key in `en_US.json` and exits nonzero, without writing anything.
-
-## Example Output
-
-### Status Display
-```
-$ ./manage-translations.sh status
-Analyzing translation status...
-=== Current Project Status ===
-166 translatable texts extracted
-
-=== Translation File Status ===
-  en_US: 470 keys
-  zh_CN: 470 keys
-```
-
-### Update Translations
-```
-$ ./manage-translations.sh update -l zh_CN
-Updating translation files...
-==================================================
-Processing language: zh_CN
-==================================================
-Analysis result:
-  Missing keys: 5
-  Extra keys: 20
-
-Found 5 missing translation keys:
-1. "New feature text"
-2. "Another new text"
-...
-
-Add these 5 missing keys? (y/n): y
-5 keys added
-
-Found 20 extra translation keys:
-1. "Removed old text" -> "已删除的旧文本"
-...
-
-Delete these 20 extra keys? (y/n): y
-20 keys deleted
-
-Translation file saved
-```
-
-### Clean Unused Keys
-```
-$ ./manage-translations.sh clean
-Cleaning unused translation keys...
-Processing language: zh_CN
-Found 50 unused keys:
-  1. "old_unused_text"
-  2. "deprecated_message"
-  ...
-
-Delete these 50 unused keys? (y/n): y
-50 keys deleted
-Original key count: 470, after cleaning: 420
-```
-
-## Advanced Features
-
-### Custom Directory Structure
-
-```bash
-# Use custom directories
-./translation-manager.py \
-  --translations-dir /path/to/translations \
-  --source-dir /path/to/source
-```
-
-### Ignore Mark Feature
-
-For dynamic resources or special texts that should not be automatically cleaned, you can add `/*keep*/` at the end of the translation value. The tool will automatically ignore these keys and will not delete them during cleaning or syncing.
-
-Example:
-```json
-{
-  "dynamic_key": "Some dynamic value /*keep*/"
-}
-```
-
-## Notes
-
-1. **Backup is important**: The tool automatically creates backups before cleaning, but it is recommended to manually back up important files
-
-2. **Text extraction limitations**:
-   - ~~Only supports static strings, not dynamically constructed strings~~
-   - Dynamic resources (such as variable concatenation or runtime-generated text) cannot be automatically extracted. You need to manually add them to the translation file and use the `/*keep*/` mark for ignore management.
-   - Must use the `Translation.tr()` format
-
-3. **File encoding**: All files must use UTF-8 encoding
-
-4. **Key naming conventions**: It is recommended to use English for key names and avoid special characters
-
-## Troubleshooting
-
-### Common Issues
-
-**Q: Text does not appear after adding Translation.tr?**
-A: You need to import the translation feature in your QML file using `import "root:/"`, otherwise the translation text will not be displayed correctly.
-
-**Q: The number of extracted texts does not match expectations?**
-A: Check whether all translatable texts use the `Translation.tr()` format and ensure there are no dynamically constructed strings.
-
-**Q: Some translations are missing after syncing?**
-A: Check whether the source language file contains all necessary keys, and consider using a different source language for syncing.
-
-**Q: The cleaning operation deleted needed keys?**
-A: Restore from the automatically created backup file and check whether `Translation.tr()` is used correctly in the source code.
-
-### Restore Backup
-
-```bash
-# Restore a single file
-cp .config/quickshell/translations/zh_CN.json.backup .config/quickshell/translations/zh_CN.json
-
-# Restore all files
-cp .config/quickshell/translations.backup/* .config/quickshell/translations/
-```
+`test_catalog_qa.py` covers structural validation; `test_translation_tools.py`
+covers extraction, read-only defaults, explicit additions, backups, malformed
+input, paths with spaces, and rejected destructive legacy options.

@@ -17,8 +17,9 @@ NOTIFICATION_APP_NAME="Shell"
 TARGET_LOCALE="$1"
 MODEL="${2:-${GEMINI_MODEL:-gemini-3.8-flash}}"
 
-# Update the source keys for translation
-"${TRANSLATIONS_DIR}/tools/manage-translations.sh" update -l "$SOURCE_LOCALE" --yes
+# Check source coverage without rewriting shipped catalogs. Stop before any API
+# request if new source strings still need to be added to en_US.json.
+"${TRANSLATIONS_DIR}/tools/manage-translations.sh" status -l "$SOURCE_LOCALE" || exit $?
 mkdir -p "$TRANSLATIONS_TARGET_DIR"
 
 # Construct the prompt string
