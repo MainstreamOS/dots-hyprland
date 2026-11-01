@@ -218,6 +218,25 @@ if [[ -f "$conf" ]]; then
     fi
 fi
 
+# Older NVIDIA cards also black out in games, where Steam keeps its overlay hidden; only an
+# overlay on screen keeps the picture up (gamescope issue 1252). This one draws nothing, and
+# setting it for the session alone leaves MangoHud on the desktop as it was. Steam's own
+# performance overlay can't show on these cards while it is on.
+legacy_nvidia_overlay() {
+    local dropin_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/gamescope-session-plus@steam.service.d"
+    local dropin="$dropin_dir/50-mainstream-nvidia-overlay.conf"
+    if pacman -Qq 2>/dev/null | grep -qE '^nvidia-[0-9]+xx-utils$'; then
+        [[ -f "$dropin" ]] && return 0
+        mkdir -p "$dropin_dir"
+        printf '[Service]\nEnvironment=MANGOHUD_CONFIG=alpha=0.0,background_alpha=0.0,fps_only,font_size=10,hud_no_margin,offset_x=0,offset_y=0,text_outline=0\n' > "$dropin"
+    else
+        [[ -f "$dropin" ]] || return 0
+        rm -f "$dropin"
+    fi
+    systemctl --user daemon-reload 2>/dev/null || true
+}
+legacy_nvidia_overlay
+
 # 2b. Which screen the session comes up on. Left alone, gamescope-session-plus
 #     asks gamescope for "*,eDP-1", and the wildcard means whichever connector
 #     the driver enumerates first, which on a machine with several screens is
