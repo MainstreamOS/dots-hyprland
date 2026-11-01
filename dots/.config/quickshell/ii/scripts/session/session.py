@@ -55,6 +55,9 @@ ENDING_PATH = STATE_DIR / "ending"
 ENDING_MAX_AGE_S = 600
 LOG_PATH = STATE_DIR / "session.log"
 LOCK_PATH = STATE_DIR / "watch.lock"
+# Names of the network tunnels this user's sessions have had up, one per line.
+TUNNELS_PATH = STATE_DIR / "tunnels"
+NET_SYS = Path("/sys/class/net")
 CONFIG_PATH = Path.home() / ".config/illogical-impulse/config.json"
 
 SNAPSHOT_VERSION = 3
@@ -63,6 +66,8 @@ SNAPSHOT_VERSION = 3
 STAGGER_MS = int(os.environ.get("QS_RESTORE_STAGGER_MS", "150"))
 WAIT_TIMEOUT_S = float(os.environ.get("QS_RESTORE_WAIT_TIMEOUT", "20"))
 PORTAL_TIMEOUT_S = float(os.environ.get("QS_RESTORE_PORTAL_TIMEOUT", "6"))
+TUNNEL_TIMEOUT_S = float(os.environ.get("QS_RESTORE_TUNNEL_TIMEOUT", "12"))
+TUNNEL_QUIET_S = float(os.environ.get("QS_RESTORE_TUNNEL_QUIET", "2"))
 SETTLE_MS = int(os.environ.get("QS_RESTORE_SETTLE_MS", "1200"))
 # Prefix, not exact name: the bar layer is "quickshell:bar" in the default
 # layout but other layouts (vertical bar) and surfaces (dock, background)
@@ -336,6 +341,7 @@ def write_snapshot(windows: list[dict], allow_empty: bool = False) -> bool:
     except OSError as e:
         log("snapshot", f"write failed: {e}")
         return False
+    remember_tunnels()
     return True
 
 
@@ -587,6 +593,105 @@ def wait_for_portal() -> str:
     return f"timeout after {PORTAL_TIMEOUT_S:.0f}s"
 
 
+def tunnels_up() -> set[str]:
+    """Network tunnels that are up, whatever made them: WireGuard, OpenVPN,
+    Tailscale and the like all show as point-to-point interfaces."""
+    up: set[str] = set()
+    try:
+        names = os.listdir(NET_SYS)
+    except OSError:
+        return up
+    for name in names:
+        try:
+            flags = int((NET_SYS / name / "flags").read_text().strip(), 16)
+        except (OSError, ValueError):
+            continue
+        if flags & 0x1 and flags & 0x10:  # IFF_UP, IFF_POINTOPOINT
+            up.add(name)
+    return up
+
+
+def saved_tunnels() -> set[str]:
+    try:
+        return set(TUNNELS_PATH.read_text().split())
+    except OSError:
+        return set()
+
+
+def write_tunnels(names: set[str]) -> None:
+    tmp = TUNNELS_PATH.with_name(TUNNELS_PATH.name + ".tmp")
+    try:
+        tmp.write_text("".join(f"{name}\n" for name in sorted(names)))
+        os.replace(tmp, TUNNELS_PATH)
+    except OSError as e:
+        log("tunnels", f"write failed: {e}")
+
+
+def remember_tunnels() -> None:
+    """Only ever adds: a tunnel can close before a session's last save, which
+    must not read as the user having stopped using it."""
+    saved = saved_tunnels()
+    up = tunnels_up()
+    if up - saved:
+        write_tunnels(saved | up)
+
+
+def network_events() -> socket.socket | None:
+    """The kernel's notices of link, address and route changes."""
+    try:
+        sock = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
+    except OSError:
+        return None
+    try:
+        # RTMGRP_LINK, IPV4_IFADDR, IPV4_ROUTE, IPV6_IFADDR, IPV6_ROUTE
+        sock.bind((0, 0x1 | 0x10 | 0x40 | 0x100 | 0x400))
+    except OSError:
+        sock.close()
+        return None
+    return sock
+
+
+def wait_for_tunnels() -> str:
+    """Block until the tunnels earlier sessions used are back and the network
+    has gone quiet.
+
+    A tunnel coming up changes the network, and a Chromium or Electron app
+    loading a page right then aborts with ERR_NETWORK_CHANGED and can stay black
+    for good. VPN clients start with the session and raise the tunnel seconds
+    later, so nothing on the network says one is coming yet: only history does.
+    """
+    if TUNNEL_TIMEOUT_S <= 0:
+        return "gate disabled"
+    expected = saved_tunnels()
+    if not expected:
+        return "none expected"
+    events = network_events()
+    start = last_change = time.monotonic()
+    deadline = start + TUNNEL_TIMEOUT_S
+    try:
+        while True:
+            missing = expected - tunnels_up()
+            now = time.monotonic()
+            if not missing and now - last_change >= TUNNEL_QUIET_S:
+                return f"settled after {now - start:.1f}s"
+            if now >= deadline:
+                break
+            watched = [events] if events else []
+            if select.select(watched, [], [], min(0.2, deadline - now))[0]:
+                try:
+                    events.recv(65536)
+                except OSError:
+                    pass  # A full queue still means the network changed.
+                last_change = time.monotonic()
+    finally:
+        if events:
+            events.close()
+    if not missing:
+        return f"network still changing after {TUNNEL_TIMEOUT_S:.0f}s"
+    write_tunnels(expected - missing)
+    return f"gave up after {TUNNEL_TIMEOUT_S:.0f}s, forgot {' '.join(sorted(missing))}"
+
+
 def group_windows(windows: list[dict]) -> list[list[dict]]:
     """Windows that shared a process at capture time, kept in saved order. Such
     a process is launched once however many windows it had: a browser or a GTK
@@ -685,6 +790,9 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
     portal_outcome = wait_for_portal()
     log("restore", f"portal wait: {portal_outcome}")
+
+    if not args.dry_run:
+        log("restore", f"tunnel wait: {wait_for_tunnels()}")
 
     # Count what's already running AFTER the wait, so apps the user (or an
     # autostart) launched during the gate aren't double-spawned, and remember
