@@ -12,8 +12,8 @@ import "PhoneIdentity.js" as Identity
 Singleton {
     id: root
 
-    // Set by the Dynamic Island while it shows phone events.
-    property bool islandWanted: false
+    // Set while phone services are on, so calls reach the Dynamic Island or the bar's pop-ups.
+    property bool alertsWanted: false
     property var calls: []
     property var messages: []
     property var notifications: []
@@ -79,7 +79,7 @@ Singleton {
     }
     Process {
         id: watcher
-        readonly property bool wanted: Config.ready && (root.islandWanted || Phone.wanted || root.dialing || root.calls.length > 0)
+        readonly property bool wanted: Config.ready && (root.alertsWanted || Phone.wanted || root.dialing || root.calls.length > 0)
         running: wanted && !restart.running
         command: ["python3", root.helper, "watch"]
         stdout: SplitParser {

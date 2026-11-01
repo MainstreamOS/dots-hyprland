@@ -7,7 +7,7 @@ import qs.modules.common
 
 Singleton {
     id: root
-    readonly property bool monitoring: Appearance.sizes.barIsIsland && Config.options.bar.island.phoneIntegration
+    readonly property bool monitoring: Config.options.bar.island.phoneIntegration
         && Config.options.bar.island.suppressWhileStreaming
         && (Config.options.bar.island.suppressForDiscord || Config.options.bar.island.suppressForObs)
     property list<string> runningApps: []

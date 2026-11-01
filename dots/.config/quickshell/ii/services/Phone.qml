@@ -521,6 +521,22 @@ Singleton {
         }
     }
 
+    // A message card's conversation, on the phone it came from. That phone becomes the
+    // selected one first, so its thread number is never looked up on another phone.
+    function openEntryConversation(entry): void {
+        const device = entry?.deviceId || "";
+        if (device && device !== root.deviceId) {
+            if (!root.devices.some(d => d.id === device)) return;
+            root.selectDevice(device);
+        }
+        root.openTargetConversation({
+            deviceId: device,
+            thread: entry?.thread,
+            number: entry?.number || entry?.address || "",
+            name: entry?.name || ""
+        });
+    }
+
     function closeConversation(): void {
         root.openThread = -1;
         root.threadMessages = [];

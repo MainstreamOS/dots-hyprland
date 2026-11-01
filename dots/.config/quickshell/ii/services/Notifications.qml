@@ -36,6 +36,12 @@ Singleton {
         readonly property bool islandOwned: Appearance.sizes.barIsIsland && (phoneOrigin
             ? Config.options.bar.island.phoneIntegration && (IslandPhonePrivacy.suppressed || IslandPanels.enabled(islandPanel))
             : Config.options.bar.island.desktopNotifications && IslandState.calls.length === 0 && IslandPanels.enabled(islandPanel))
+        // Calls and messages the Island isn't showing get cards of their own above the pop-ups.
+        // Phone services off: KDE Connect's own alerts stay in the list without popping up.
+        readonly property bool phoneSilenced: phoneOrigin && !Config.options.bar.island.phoneIntegration
+        readonly property bool phoneCardOwned: !islandOwned && phoneOrigin
+            && Config.options.bar.island.phoneIntegration
+            && (IslandPhonePrivacy.suppressed || (Config.options.bar.island.automaticAlerts && ["call", "text"].includes(islandPanel)))
         function clearTimer() {
             timer?.stop();
             timer?.destroy();
@@ -374,7 +380,7 @@ Singleton {
         const notification = newNotifObject.notification;
         newNotifObject.clearTimer();
         newNotifObject.popup = false;
-        if (!root.popupInhibited && !newNotifObject.islandOwned) {
+        if (!root.popupInhibited && !newNotifObject.islandOwned && !newNotifObject.phoneCardOwned && !newNotifObject.phoneSilenced) {
             newNotifObject.popup = true;
             if (notification.expireTimeout != 0) {
                 newNotifObject.timer = notifTimerComponent.createObject(root, {

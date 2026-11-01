@@ -40,7 +40,7 @@ Singleton {
     readonly property var panels: {
         return IslandPanels.order.filter(id => id !== "localsend" && IslandPanels.enabled(id)
             && (!IslandPhonePrivacy.suppressed || !["call", "text"].includes(id))
-            && (id !== "call" || callAvailable) && (id !== "text" || textAvailable));
+            && (id !== "call" || (phoneWanted && callAvailable)) && (id !== "text" || (phoneWanted && textAvailable)));
     }
     onPanelsChanged: {
         if (!panels.includes(selected) && !(selected === "localsend" && IslandPanels.enabled("localsend"))) {
@@ -62,8 +62,8 @@ Singleton {
     readonly property var contacts: ContactService.records
     onContactsChanged: IslandPhoneHistory.enrichContacts(contacts)
     function contactFor(entry) { return ContactService.withContact(entry); }
-    readonly property bool phoneWanted: root.enabled && Config.options.bar.island.phoneIntegration
-    Binding { target: PhoneCalls; property: "islandWanted"; value: root.phoneWanted }
+    readonly property bool phoneWanted: Config.options.bar.island.phoneIntegration
+    Binding { target: PhoneCalls; property: "alertsWanted"; value: root.phoneWanted }
     property string phoneError: ""
     readonly property string phoneStatus: PhoneCalls.error || (PhoneCalls.devices.length || root.kdePhoneConnected
         ? Translation.tr("Phone services connected")

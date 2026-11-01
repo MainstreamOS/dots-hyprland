@@ -22,7 +22,7 @@ ContentPage {
         target: Phone
         property: "keepConnected"
         when: root.visible
-        value: root.island && Config.options.bar.island.phoneIntegration
+        value: Config.options.bar.island.phoneIntegration
     }
 
     ContentSection {
@@ -51,6 +51,18 @@ ContentPage {
             onCheckedChanged: Config.options.bar.island.appDrawer = checked
         }
         ConfigSwitch {
+            buttonIcon: "notifications"
+            text: Translation.tr("Show desktop notifications in the Island")
+            checked: Config.options.bar.island.desktopNotifications
+            onCheckedChanged: Config.options.bar.island.desktopNotifications = checked
+        }
+    }
+
+    ContentSection {
+        icon: "smartphone"
+        title: Translation.tr("Phone")
+
+        ConfigSwitch {
             buttonIcon: "phonelink"
             text: Translation.tr("Connect phone services")
             checked: Config.options.bar.island.phoneIntegration
@@ -63,12 +75,6 @@ ContentPage {
             text: Translation.tr("Show calls, messages, and phone notifications automatically")
             checked: Config.options.bar.island.automaticAlerts
             onCheckedChanged: Config.options.bar.island.automaticAlerts = checked
-        }
-        ConfigSwitch {
-            buttonIcon: "notifications"
-            text: Translation.tr("Show desktop notifications in the Island")
-            checked: Config.options.bar.island.desktopNotifications
-            onCheckedChanged: Config.options.bar.island.desktopNotifications = checked
         }
         ConfigSwitch {
             visible: Config.options.bar.island.phoneIntegration
@@ -92,8 +98,6 @@ ContentPage {
                 onCheckedChanged: Config.options.bar.island[modelData.key] = checked
             }
         }
-
-
     }
 
     ContentSection {

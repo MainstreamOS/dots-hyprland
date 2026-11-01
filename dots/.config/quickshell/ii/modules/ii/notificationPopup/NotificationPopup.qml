@@ -13,7 +13,7 @@ Scope {
 
     PanelWindow {
         id: root
-        visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked
+        visible: (Notifications.popupList.length > 0 || alertStack.hasCards) && !GlobalStates.screenLocked
         screen: Quickshell.screens.find(s => Config.options.notifications.forceMonitor.enable ? s.name === Config.options.notifications.forceMonitor.name : s.name === Hyprland.focusedMonitor?.name) ?? null
 
         readonly property string position: Appearance.sizes.notificationPosition
@@ -47,6 +47,7 @@ Scope {
 
         WlrLayershell.namespace: "quickshell:notificationPopup"
         WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: alertStack.replying ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         exclusiveZone: 0
 
         // Full height on every spot, so a stack taller than the screen still
@@ -69,18 +70,36 @@ Scope {
         // region follows the stack itself.
         mask: Region {
             item: stackArea
+            Region {
+                item: alertStack
+            }
+        }
+
+        // A click anywhere else lets go of the keyboard a reply is holding.
+        HyprlandFocusGrab {
+            windows: [root]
+            active: alertStack.replying
         }
 
         color: "transparent"
         implicitWidth: Appearance.sizes.notificationPopupWidth
+
+        readonly property real alertRoom: alertStack.hasCards ? alertStack.height + alertStack.spacing : 0
+
+        PhoneAlertStack {
+            id: alertStack
+            x: listview.x
+            width: listview.width
+            y: root.atBottom ? parent.height - height - root.edgeInset : root.edgeInset
+        }
 
         NotificationListView {
             id: listview
             anchors {
                 top: parent.top
                 bottom: parent.bottom
-                topMargin: root.atBottom ? 0 : root.edgeInset
-                bottomMargin: root.atBottom ? root.edgeInset : 0
+                topMargin: root.atBottom ? 0 : root.edgeInset + root.alertRoom
+                bottomMargin: root.atBottom ? root.edgeInset + root.alertRoom : 0
             }
             // The shadow's room goes on the side away from the screen edge.
             x: root.side === "left" ? root.edgeInset
