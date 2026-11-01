@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs before WirePlumber starts. It no longer moves the hardware volume of a card
+# under the soft mixer rule, so a level left low by an earlier session would stay.
+card=""
+while IFS= read -r line; do
+    if [[ $line =~ ^\ *([0-9]+)\ \[ ]]; then
+        card=${BASH_REMATCH[1]}
+    elif [[ $line =~ ^\ *MV-SILICON ]]; then
+        for control in Headphone Speaker PCM Master Mic; do
+            amixer -c "$card" -q sset "$control" 100% 2>/dev/null
+        done
+    fi
+done < /proc/asound/cards
+exit 0

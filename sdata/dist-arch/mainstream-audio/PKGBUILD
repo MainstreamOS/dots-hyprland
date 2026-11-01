@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-audio
 pkgver=1.0
-pkgrel=10
+pkgrel=11
 pkgdesc='Mainstream OS Audio Dependencies'
 provides=('illogical-impulse-audio')
 replaces=('illogical-impulse-audio')
@@ -20,17 +20,24 @@ depends=(
 )
 source=(
   '51-disable-hdmi-default.conf'
+  '52-soft-mixer-devices.conf'
+  'mainstream-soft-mixer-levels.conf'
+  'audio-soft-mixer-levels'
   'mainstream-audio-firstboot.service'
   'mainstream-audio-card-init@.service'
   'audio-firstboot'
   'audio-card-init'
   '89-mainstream-audio.rules'
 )
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 package() {
   install -Dm644 "$srcdir/51-disable-hdmi-default.conf" \
     "$pkgdir/etc/wireplumber/wireplumber.conf.d/51-disable-hdmi-default.conf"
+  install -Dm644 "$srcdir/52-soft-mixer-devices.conf" \
+    "$pkgdir/etc/wireplumber/wireplumber.conf.d/52-soft-mixer-devices.conf"
+  install -Dm644 "$srcdir/mainstream-soft-mixer-levels.conf" \
+    "$pkgdir/usr/lib/systemd/user/wireplumber.service.d/mainstream-soft-mixer-levels.conf"
   install -Dm644 "$srcdir/mainstream-audio-firstboot.service" \
     "$pkgdir/usr/lib/systemd/system/mainstream-audio-firstboot.service"
   install -Dm644 "$srcdir/mainstream-audio-card-init@.service" \
@@ -41,4 +48,6 @@ package() {
     "$pkgdir/usr/lib/mainstream/audio-firstboot"
   install -Dm755 "$srcdir/audio-card-init" \
     "$pkgdir/usr/lib/mainstream/audio-card-init"
+  install -Dm755 "$srcdir/audio-soft-mixer-levels" \
+    "$pkgdir/usr/lib/mainstream/audio-soft-mixer-levels"
 }
