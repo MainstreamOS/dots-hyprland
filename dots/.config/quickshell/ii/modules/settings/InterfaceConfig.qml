@@ -331,7 +331,7 @@ ContentPage {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6   // match ConfigSwitch's contentItem RowLayout spacing (10) minus ConfigRow's default (4)
-                text: Translation.tr("Trigger overview")
+                text: Translation.tr("Action")
                 color: Appearance.colors.colOnSecondaryContainer
             }
             StyledComboBox {
@@ -343,6 +343,7 @@ ContentPage {
                     { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
                     { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
                     { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" },
+                    { displayName: Translation.tr("Left sidebar"),       icon: "left_panel_open", value: "sidebar" }
                 ]
                 currentIndex: {
                     const idx = model.findIndex(item => item.value === Config.options.bar.hotCorners.trigger);

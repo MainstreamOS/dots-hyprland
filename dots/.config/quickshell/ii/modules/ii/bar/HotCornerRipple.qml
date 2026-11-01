@@ -19,7 +19,7 @@ Variants {
     property bool right: false
     property string trigger: "off"
     readonly property QtObject overviewAction: HotCornerOverviewAction { mode: root.trigger }
-    readonly property QtObject sidebarAction: HotCornerSidebarAction {}
+    readonly property QtObject sidebarAction: HotCornerSidebarAction { right: root.right }
     readonly property QtObject action: root.trigger === "sidebar" ? root.sidebarAction
         : (root.trigger === "default" || root.trigger === "scrolloverview") ? root.overviewAction : null
 

@@ -672,7 +672,7 @@ Singleton {
                 property bool floatStyleShadow: true // Show shadow behind bar when cornerStyle is 1 (Float) or 3 (Notch)
                 property JsonObject hotCorners: JsonObject {
                     // Top-left hot corner: "scrolloverview" (the scrolling overview plugin), "default"
-                    // (built-in overview) or "off" (clicks fall through to the bar).
+                    // (built-in overview), "sidebar" (toggle the left sidebar) or "off" (clicks fall through to the bar).
                     property string trigger: "scrolloverview"
                     // Top-right hot corner: "sidebar" (toggle the right sidebar) or "off".
                     property string rightTrigger: "sidebar"
