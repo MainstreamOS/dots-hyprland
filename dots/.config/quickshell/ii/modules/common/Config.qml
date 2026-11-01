@@ -516,6 +516,7 @@ Singleton {
                             property bool dateInClock: true
                             property bool constantlyRotate: false
                             property bool useSineCookie: false
+                            property real size: 1
                         }
                         property JsonObject digital: JsonObject {
                             property bool adaptiveAlignment: true
@@ -534,6 +535,7 @@ Singleton {
                         property JsonObject pixel: JsonObject {
                             property string orientation: "vertical" // "vertical", "horizontal"
                             property string accent: "" // "" follows the theme
+                            property real size: 1
                         }
                         property JsonObject quote: JsonObject {
                             property bool enable: false

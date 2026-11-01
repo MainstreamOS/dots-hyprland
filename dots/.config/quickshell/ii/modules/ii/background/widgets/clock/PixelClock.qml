@@ -15,8 +15,10 @@ Item {
 
     readonly property bool isVertical: Config.options.background.widgets.clock.pixel.orientation === "vertical"
 
-    implicitWidth: isVertical ? 276 : 420
-    implicitHeight: isVertical ? 252 : 150
+    // Everything below is laid out in shares of these.
+    readonly property real sizeScale: Config.options.background.widgets.clock.pixel.size
+    implicitWidth: (isVertical ? 276 : 420) * sizeScale
+    implicitHeight: (isVertical ? 252 : 150) * sizeScale
 
     readonly property string glyphTopLeft: DateTime.digitH0
     readonly property string glyphTopRight: DateTime.digitH1
@@ -53,7 +55,8 @@ Item {
         }
         return pts
     }
-    readonly property var fringeSamples: ringSamples(16, fringeSize)
+    // A bigger ring needs more samples to stay smooth.
+    readonly property var fringeSamples: ringSamples(Math.round(16 * Math.max(1, sizeScale)), fringeSize)
 
     StyledDropShadow {
         target: glyphStage

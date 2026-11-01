@@ -57,8 +57,16 @@ AbstractBackgroundWidget {
             fade: false
             sourceComponent: Column {
                 spacing: 10
-                CookieClock {
+                // Its hands and marks are sized in fixed pixels, so it is scaled as a whole.
+                Item {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    implicitWidth: cookieClock.implicitWidth * cookieClock.scale
+                    implicitHeight: cookieClock.implicitHeight * cookieClock.scale
+                    CookieClock {
+                        id: cookieClock
+                        anchors.centerIn: parent
+                        scale: Config.options.background.widgets.clock.cookie.size
+                    }
                 }
                 FadeLoader {
                     anchors.horizontalCenter: parent.horizontalCenter

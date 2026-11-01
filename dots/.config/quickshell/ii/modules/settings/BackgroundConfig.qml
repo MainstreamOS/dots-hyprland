@@ -494,6 +494,18 @@ ContentPage {
             visible: settingsClock.cookiePresent
             title: Translation.tr("Cookie clock settings")
 
+            ConfigSlider {
+                text: Translation.tr("Size")
+                buttonIcon: "format_size"
+                value: Config.options.background.widgets.clock.cookie.size
+                from: 0.5
+                to: 3
+                stopIndicatorValues: [1]
+                onMoved: {
+                    Config.options.background.widgets.clock.cookie.size = Math.round(value * 20) / 20;
+                }
+            }
+
             ConfigSwitch {
                 buttonIcon: "wand_stars"
                 text: Translation.tr("Auto styling with Gemini")
@@ -760,6 +772,19 @@ ContentPage {
         ContentSubsection {
             visible: settingsClock.stylePresent("pixel")
             title: Translation.tr("Pixel clock settings")
+
+            ConfigSlider {
+                text: Translation.tr("Size")
+                buttonIcon: "format_size"
+                value: Config.options.background.widgets.clock.pixel.size
+                from: 0.5
+                to: 3
+                stopIndicatorValues: [1]
+                onMoved: {
+                    Config.options.background.widgets.clock.pixel.size = Math.round(value * 20) / 20;
+                }
+            }
+
             ConfigSelectionArray {
                 currentValue: Config.options.background.widgets.clock.pixel.orientation
                 onSelected: newValue => {
