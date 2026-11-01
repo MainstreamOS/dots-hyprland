@@ -225,19 +225,13 @@ ContentPage {
         icon: "clock_loader_40"
         title: Translation.tr("Widget: Clock")
 
+        // The clock last picked here, desktop or locked, shows its settings and no other's,
+        // so the locked clock can still be tuned while the desktop wears a different one.
+        property string shownStyle: Config.options.background.widgets.clock.showOnlyWhenLocked
+            ? Config.options.background.widgets.clock.styleLocked : Config.options.background.widgets.clock.style
+        // A clock that is switched off is wearing no style, so the panels that dress one go with it.
         function stylePresent(styleName) {
-            // A clock that is switched off is wearing no style, so the panels
-            // that dress one go away with it.
-            if (!Config.options.background.widgets.clock.enable) {
-                return false;
-            }
-            if (!Config.options.background.widgets.clock.showOnlyWhenLocked && Config.options.background.widgets.clock.style === styleName) {
-                return true;
-            }
-            if (Config.options.background.widgets.clock.styleLocked === styleName) {
-                return true;
-            }
-            return false;
+            return Config.options.background.widgets.clock.enable && settingsClock.shownStyle === styleName;
         }
 
         readonly property bool digitalPresent: stylePresent("digital")
@@ -292,6 +286,7 @@ ContentPage {
             checked: Config.options.background.widgets.clock.showOnlyWhenLocked
             onCheckedChanged: {
                 Config.options.background.widgets.clock.showOnlyWhenLocked = checked;
+                settingsClock.shownStyle = checked ? Config.options.background.widgets.clock.styleLocked : Config.options.background.widgets.clock.style;
             }
         }
 
@@ -316,6 +311,7 @@ ContentPage {
                     currentValue: Config.options.background.widgets.clock.style
                     onSelected: newValue => {
                         Config.options.background.widgets.clock.style = newValue;
+                        settingsClock.shownStyle = newValue;
                     }
                     options: [
                         {
@@ -344,6 +340,7 @@ ContentPage {
                     currentValue: Config.options.background.widgets.clock.styleLocked
                     onSelected: newValue => {
                         Config.options.background.widgets.clock.styleLocked = newValue;
+                        settingsClock.shownStyle = newValue;
                     }
                     options: [
                         {
@@ -769,7 +766,9 @@ ContentPage {
                         Config.options.background.widgets.clock.quote.enable = checked;
                     }
                 }
+                // Only the cookie clock's quote is drawn in a font of its own to swap out.
                 ConfigSwitch {
+                    visible: settingsClock.cookiePresent
                     buttonIcon: "font_download"
                     text: Translation.tr("Use the clock's font")
                     checked: Config.options.background.widgets.clock.quote.followClock
