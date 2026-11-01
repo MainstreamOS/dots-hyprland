@@ -35,6 +35,9 @@ ContentPage {
     property real blurVibrancyValue: 0.5
     property bool blurXrayEnabled: true
     property int  blurVariantValue: 0
+    property real blurLensStrengthValue: 24
+    property real blurLensWidthValue: 48
+    property real blurClarityValue: 0.82
     property real activeOpacityValue: 1.0
     property real inactiveOpacityValue: 1.0
     property bool dimInactiveEnabled: true
@@ -203,6 +206,49 @@ ContentPage {
         { displayName: Translation.tr("Haze"), value: 10 },
     ].filter(style => root.supportedBlurVariants.includes(style.value))
 
+    // Each preset fills in the settings below, which stay free to change. The
+    // opacity comes with it, since blur only shows through a see-through window.
+    readonly property var blurPresets: [
+        { displayName: Translation.tr("Solid"), blur: root.decoDefaults.blur ?? true, blurVariant: root.decoDefaults.blurVariant ?? 0,
+            blurSize: root.decoDefaults.blurSize ?? 10, blurPasses: root.decoDefaults.blurPasses ?? 3, blurNoise: root.decoDefaults.blurNoise ?? 0,
+            blurVibrancy: root.decoDefaults.blurVibrancy ?? 0.5, blurLensStrength: root.decoDefaults.blurLensStrength ?? 24,
+            blurLensWidth: root.decoDefaults.blurLensWidth ?? 48, blurClarity: root.decoDefaults.blurClarity ?? 0.82,
+            activeOpacity: root.decoDefaults.activeOpacity ?? 1, inactiveOpacity: root.decoDefaults.inactiveOpacity ?? 1 },
+        { displayName: Translation.tr("Frost"), blur: true, blurVariant: 1, blurSize: 12, blurPasses: 3, blurNoise: 0.03,
+            blurVibrancy: 0.5, activeOpacity: 1, inactiveOpacity: 0.89 },
+        { displayName: Translation.tr("Glass"), blur: true, blurVariant: 8, blurSize: 4, blurPasses: 2, blurNoise: 0,
+            blurVibrancy: 0.8, blurLensStrength: 32, blurLensWidth: 96, blurClarity: 0.6, activeOpacity: 1, inactiveOpacity: 0.93 },
+    ]
+    function decorationValue(key) {
+        return {
+            "blur": root.blurEnabled, "blurVariant": root.blurVariantValue, "blurSize": root.blurSizeValue,
+            "blurPasses": root.blurPassesValue, "blurNoise": root.blurNoiseValue, "blurVibrancy": root.blurVibrancyValue,
+            "blurLensStrength": root.blurLensStrengthValue, "blurLensWidth": root.blurLensWidthValue,
+            "blurClarity": root.blurClarityValue, "activeOpacity": root.activeOpacityValue, "inactiveOpacity": root.inactiveOpacityValue,
+        }[key];
+    }
+    readonly property int blurPresetIndex: root.blurPresets.findIndex(preset => Object.keys(preset)
+        .filter(key => key !== "displayName")
+        .every(key => typeof preset[key] === "boolean" ? preset[key] === root.decorationValue(key)
+            : Math.abs(preset[key] - root.decorationValue(key)) < 0.01))
+    function applyBlurPreset(preset) {
+        const pairs = [];
+        const setters = {
+            "blur": value => root.blurEnabled = value, "blurVariant": value => root.blurVariantValue = value,
+            "blurSize": value => root.blurSizeValue = value, "blurPasses": value => root.blurPassesValue = value,
+            "blurNoise": value => root.blurNoiseValue = value, "blurVibrancy": value => root.blurVibrancyValue = value,
+            "blurLensStrength": value => root.blurLensStrengthValue = value, "blurLensWidth": value => root.blurLensWidthValue = value,
+            "blurClarity": value => root.blurClarityValue = value, "activeOpacity": value => root.activeOpacityValue = value,
+            "inactiveOpacity": value => root.inactiveOpacityValue = value,
+        };
+        for (const key of Object.keys(preset)) {
+            if (key === "displayName") continue;
+            setters[key](preset[key]);
+            pairs.push(`${key}=${preset[key]}`);
+        }
+        root.setDecoration(pairs);
+    }
+
     // Forks can offer more styles than stock Hyprland. Only offer values the
     // running compositor accepts rather than relying on its version number.
     Process {
@@ -347,6 +393,9 @@ ContentPage {
         if (values.blurVibrancy !== undefined) root.blurVibrancyValue = values.blurVibrancy
         if (values.blurXray !== undefined) root.blurXrayEnabled = values.blurXray
         if (values.blurVariant !== undefined) root.blurVariantValue = values.blurVariant
+        if (values.blurLensStrength !== undefined) root.blurLensStrengthValue = values.blurLensStrength
+        if (values.blurLensWidth !== undefined) root.blurLensWidthValue = values.blurLensWidth
+        if (values.blurClarity !== undefined) root.blurClarityValue = values.blurClarity
         if (values.activeOpacity !== undefined) root.activeOpacityValue = values.activeOpacity
         if (values.inactiveOpacity !== undefined) root.inactiveOpacityValue = values.inactiveOpacity
         if (values.dimInactive !== undefined) root.dimInactiveEnabled = values.dimInactive
@@ -1050,6 +1099,39 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         icon: "blur_on"
         title: Translation.tr("Window blur")
 
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            visible: root.supportedBlurVariants.includes(8)
+
+            OptionalMaterialSymbol {
+                icon: "auto_awesome"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Blur preset")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: root.blurPresetIndex >= 0 ? root.blurPresets
+                    : root.blurPresets.concat([{ displayName: Translation.tr("Custom") }])
+                currentIndex: root.blurPresetIndex >= 0 ? root.blurPresetIndex : root.blurPresets.length
+                onActivated: index => {
+                    if (root.blurPresets[index])
+                        root.applyBlurPreset(root.blurPresets[index]);
+                }
+                StyledToolTip {
+                    text: Translation.tr("Sets the blur and window opacity together. Everything below stays free to change.")
+                }
+            }
+        }
+
         // Greyed rather than hidden when blur is off, so the settings stay
         // where they were found rather than moving as things are toggled.
         ConfigRow {
@@ -1086,6 +1168,59 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                     text: Translation.tr("Blur styles can increase GPU usage, especially animated styles.")
                 }
             }
+        }
+
+        ConfigSlider {
+            visible: root.blurVariantValue === 8
+            text: Translation.tr("Magnification")
+            stopIndicatorValues: root.defaultMark("blurLensStrength")
+            buttonIcon: "zoom_in"
+            usePercentTooltip: false
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 0
+            to: 48
+            value: root.blurLensStrengthValue
+            onMoved: {
+                root.blurLensStrengthValue = value;
+                root.queueDecoration("blurLensStrength", value.toFixed(1));
+            }
+            StyledToolTip { text: Translation.tr("How far the lens bends what is behind the window, in pixels") }
+        }
+
+        ConfigSlider {
+            visible: root.blurVariantValue === 8
+            text: Translation.tr("Lens width")
+            stopIndicatorValues: root.defaultMark("blurLensWidth")
+            buttonIcon: "lens"
+            usePercentTooltip: false
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 4
+            to: 256
+            value: root.blurLensWidthValue
+            onMoved: {
+                root.blurLensWidthValue = value;
+                root.queueDecoration("blurLensWidth", value.toFixed(0));
+            }
+            StyledToolTip { text: Translation.tr("How far in from the window's edge the lens reaches") }
+        }
+
+        ConfigSlider {
+            visible: root.blurVariantValue === 8
+            text: Translation.tr("Clarity")
+            stopIndicatorValues: root.defaultMark("blurClarity")
+            buttonIcon: "visibility"
+            enabled: root.blurEnabled
+            opacity: root.blurEnabled ? 1 : 0.5
+            from: 0
+            to: 1
+            value: root.blurClarityValue
+            onMoved: {
+                root.blurClarityValue = value;
+                root.queueDecoration("blurClarity", value.toFixed(2));
+            }
+            StyledToolTip { text: Translation.tr("How much of the sharp picture shows through the middle of the glass") }
         }
 
         ConfigSlider {

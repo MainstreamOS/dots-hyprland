@@ -207,6 +207,39 @@
       "requires": "blur"
     },
     {
+      "key": "blurLensStrength",
+      "group": "blur",
+      "label": "Magnification",
+      "type": "float",
+      "default": 24.0,
+      "min": 0.0,
+      "max": 48.0,
+      "hypr": "decoration:blur:acrylic:refraction",
+      "requires": "blur"
+    },
+    {
+      "key": "blurLensWidth",
+      "group": "blur",
+      "label": "Lens width",
+      "type": "float",
+      "default": 48.0,
+      "min": 4.0,
+      "max": 256.0,
+      "hypr": "decoration:blur:acrylic:bulb",
+      "requires": "blur"
+    },
+    {
+      "key": "blurClarity",
+      "group": "blur",
+      "label": "Clarity",
+      "type": "float",
+      "default": 0.82,
+      "min": 0.0,
+      "max": 1.0,
+      "hypr": "decoration:blur:acrylic:clarity",
+      "requires": "blur"
+    },
+    {
       "key": "shadow",
       "group": "shadow",
       "label": "Shadows",

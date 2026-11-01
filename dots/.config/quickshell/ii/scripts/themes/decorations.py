@@ -126,10 +126,14 @@ def _insert_field(text, path, field, rendered):
     is not rewritten on update — so the line is added on first use instead.
     """
     start, end = 0, len(text)
-    for name in path:
+    for i, name in enumerate(path):
         span = _find_block(text, name, start, end)
         if span is None:
-            return None
+            # A nested table such as blur.acrylic is opened on first use too.
+            if i == 0:
+                return None
+            opened = _insert_field(text, path[:i], name, "{\n\0}")
+            return opened and _insert_field(opened, path, field, rendered)
         start, end = span
 
     indent, last_end, depth, pos = None, None, 0, start
@@ -150,9 +154,14 @@ def _insert_field(text, path, field, rendered):
             last_end = pos + len(line.rstrip())
         pos = nl + 1
 
+    closing = text[text.rfind("\n", 0, end) + 1:end]
+    closing = closing if not closing.strip() else ""
     if indent is None:
-        indent = "    "
+        indent = closing + "    " if text[start:end].strip() == "" and start != end else "    "
+    rendered = rendered.replace("\0", indent)
     if last_end is None:
+        if text[start:end].strip() == "":
+            return text[:start] + "\n" + indent + field + " = " + rendered + "\n" + closing + text[end:]
         return text[:start] + "\n" + indent + field + " = " + rendered + ",\n" + text[start:]
     # The block's final entry may have no trailing comma; it needs one now that
     # something follows it.
