@@ -80,7 +80,6 @@ Singleton {
             id: proc
             property string hash
             property string imagePath
-            property bool started: false
             property bool finished: false
 
             function finish(success: bool): void {
@@ -95,10 +94,7 @@ Singleton {
                 proc.destroy()
             }
 
-            onStarted: proc.started = true
             onExited: (exitCode, exitStatus) => proc.finish(exitCode === 0)
-            // A binary that fails to start never emits exited.
-            onRunningChanged: if (!running && !proc.started) proc.finish(false)
         }
     }
 }

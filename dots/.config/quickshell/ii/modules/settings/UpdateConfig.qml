@@ -64,9 +64,6 @@ ContentPage {
     // the clone's means it never ran. The relogin note marks changes that only load at login.
     property bool systemHalfPending: false
     property bool reloginNeeded: false
-    // A launcher that fails to start reports only through runningChanged, with
-    // no exited; this records whether exited fired.
-    property bool launcherExited: false
     readonly property string liveCheck: Quickshell.shellPath("scripts/update/update-live.sh")
     property bool snapshotsAvailable: true
     Process {
@@ -147,7 +144,6 @@ ContentPage {
         recordPredatesBoot = false;
         userStopped = false;
         replaying = false;
-        launcherExited = false;
     }
 
     function clearOutput() {
@@ -405,18 +401,9 @@ ContentPage {
                 write(root.pendingPassword + "\n");
                 root.pendingPassword = "";
                 stdinEnabled = false;
-                return;
-            }
-            // exited fires first on a normal end; stopping without it means the
-            // launcher never ran at all.
-            if (!running && root.isRunning && !root.launcherExited && !tailProc.running) {
-                root.isRunning = false;
-                root.pendingPassword = "";
-                root.outputText = Translation.tr("The update could not be started.");
             }
         }
         onExited: (exitCode, exitStatus) => {
-            root.launcherExited = true;
             root.pendingPassword = "";
             if (exitCode !== 0) {
                 root.isRunning = false;

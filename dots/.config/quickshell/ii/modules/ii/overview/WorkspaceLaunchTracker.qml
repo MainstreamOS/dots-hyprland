@@ -77,14 +77,6 @@ Scope {
             }
         }
         onExited: (code, status) => root.workerExited(code)
-        property bool didStart: false
-        onStarted: didStart = true
-        onRunningChanged: {
-            if (running) didStart = false;
-            else if (!didStart) Qt.callLater(() => {
-                if (!worker.running) root.workerExited(-1);
-            });
-        }
     }
 
     function workerExited(code): void {

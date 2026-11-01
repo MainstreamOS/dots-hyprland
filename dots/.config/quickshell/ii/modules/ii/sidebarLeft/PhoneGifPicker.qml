@@ -59,7 +59,7 @@ Rectangle {
 
     Process {
         id: gifSearchProc
-        // A failed start emits no exit signal or collected output.
+        // Picks up a query that arrived while this one was running.
         onRunningChanged: if (!running) Qt.callLater(root.searchFinished)
         stdout: StdioCollector {
             id: gifSearchOut
@@ -83,9 +83,6 @@ Rectangle {
     Process {
         id: downloadGifProc
         property string destPath: ""
-        onRunningChanged: if (!running) Qt.callLater(() => {
-            if (!downloadGifProc.running) root.downloading = false;
-        })
         onExited: exitCode => {
             root.downloading = false;
             if (exitCode === 0 && destPath.length > 0) {

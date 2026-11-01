@@ -1114,11 +1114,6 @@ Singleton {
         property string buf: ""
         property int catalogNeed: 0
         stdout: SplitParser { onRead: line => cliDetectProc.buf += line + "\n" }
-        // A start that failed ends with no exit.
-        onRunningChanged: if (!running && root._detecting) {
-            root._detecting = false;
-            root._detectNext();
-        }
         onExited: (code) => {
             root._detecting = false;
             const fmt = cliDetectProc.format;
@@ -2546,9 +2541,6 @@ Singleton {
             }
             onStarted: root._onProcessStarted(requestProc, requestProc.req)
             onExited: (exitCode, exitStatus) => root._onRequestExited(requestProc, requestProc.req, exitCode)
-            onRunningChanged: {
-                if (!running) root._onProcessNotRunning(requestProc, requestProc.req);
-            }
         }
     }
 
@@ -2563,9 +2555,6 @@ Singleton {
             }
             onStarted: root._onProcessStarted(commandProc, commandProc.req)
             onExited: (exitCode, exitStatus) => root._onRequestExited(commandProc, commandProc.req, exitCode)
-            onRunningChanged: {
-                if (!running) root._onProcessNotRunning(commandProc, commandProc.req);
-            }
         }
     }
 
@@ -2839,22 +2828,19 @@ Singleton {
     function _onRequestExited(proc, req, exitCode) {
         root._bury(proc);
         if (!req) return;
+        if (!req.started) {
+            req.failedToStart = true;
+            if (req !== root._req || req.finalized) return;
+            if (req.kind === "model" && !req.stopped)
+                req.sink.error(Translation.tr("Error starting request: %1").arg(proc.command[0] ?? ""));
+            root._finalize(req);
+            return;
+        }
         req.exited = true;
         if (req.exitCode === null) req.exitCode = exitCode;
         if (req !== root._req || req.finalized) return;
         if (req.kind === "command" || req.stopped || req.qHead >= req.lineQueue.length) root._finalize(req);
         else if (!drainTimer.running) drainTimer.start();
-    }
-
-    // Quickshell reports a process that never started only through running.
-    function _onProcessNotRunning(proc, req) {
-        if (!req || req.started) return;
-        req.failedToStart = true;
-        root._bury(proc);
-        if (req !== root._req || req.finalized) return;
-        if (req.kind === "model" && !req.stopped)
-            req.sink.error(Translation.tr("Error starting request: %1").arg(proc.command[0] ?? ""));
-        root._finalize(req);
     }
 
     // Parses queued lines for at most 8 ms, then yields to the event loop.

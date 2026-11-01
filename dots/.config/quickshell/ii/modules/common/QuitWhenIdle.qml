@@ -28,8 +28,8 @@ Scope {
         giveUpTimer.start();
     }
 
-    // The timer rather than the look's exit drives the next look, because a
-    // look that fails to start never reports an exit; it is simply tried again.
+    // The timer rather than the look's exit drives the next look, so a look
+    // that can't start is simply tried again.
     Timer {
         id: lookTimer
         interval: 250

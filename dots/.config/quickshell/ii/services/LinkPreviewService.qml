@@ -200,11 +200,7 @@ Singleton {
         Process {
             id: procItem
             property var targetUrls: []
-            property bool didStart: false
             property bool completed: false
-            onStarted: didStart = true
-            // Failed starts close no output stream and emit no exit signal.
-            onRunningChanged: if (!running && !didStart) Qt.callLater(procItem.complete)
             stdout: StdioCollector {
                 id: collector
                 onStreamFinished: procItem.complete()
@@ -256,11 +252,7 @@ Singleton {
             id: streamProcItem
             property string targetUrl: ""
             property var cb: null
-            property bool didStart: false
             property bool completed: false
-            onStarted: didStart = true
-            // Failed starts close no output stream and emit no exit signal.
-            onRunningChanged: if (!running && !didStart) Qt.callLater(streamProcItem.complete)
             stdout: StdioCollector {
                 id: streamCollector
                 onStreamFinished: streamProcItem.complete()

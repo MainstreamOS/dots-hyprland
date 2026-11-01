@@ -253,20 +253,7 @@ ApplicationWindow {
 
     Process {
         id: writeProc
-        // Quickshell emits no exited signal at all when a command cannot be
-        // started, only runningChanged, so hanging the rest of the chain on
-        // onExited alone left Start Install silently dead forever. Both the
-        // failure to start and a non-zero exit are handled here.
-        property bool sawExit: false
-        onRunningChanged: {
-            if (running) {
-                sawExit = false;
-            } else if (!sawExit) {
-                root.applyFailed(Translation.tr("Could not save the display settings."));
-            }
-        }
         onExited: (exitCode) => {
-            sawExit = true;
             if (exitCode === 0) {
                 reloadProc.running = true;
             } else {
