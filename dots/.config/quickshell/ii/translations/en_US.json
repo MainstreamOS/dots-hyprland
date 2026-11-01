@@ -3334,5 +3334,10 @@
   "Reinstall": "Reinstall",
   "Install": "Install",
   "File missing": "File missing",
-  "The AppImage and its launcher entry will be deleted.": "The AppImage and its launcher entry will be deleted."
+  "The AppImage and its launcher entry will be deleted.": "The AppImage and its launcher entry will be deleted.",
+  "Outgoing": "Outgoing",
+  "Answered": "Answered",
+  "Missed": "Missed",
+  "No calls yet": "No calls yet",
+  "Calls your phone gets while it is connected show up here.": "Calls your phone gets while it is connected show up here.",
 }

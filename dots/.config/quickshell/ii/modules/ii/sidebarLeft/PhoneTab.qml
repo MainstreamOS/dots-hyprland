@@ -303,6 +303,41 @@ Item {
                             Layout.preferredWidth: 1
                             implicitHeight: 26
                             buttonRadius: Appearance.rounding.verysmall
+                            colBackground: tabBar.currentIndex === 3 ? Appearance.colors.colPrimaryContainer : "transparent"
+                            colBackgroundHover: tabBar.currentIndex === 3
+                                ? Appearance.colors.colPrimaryContainerHover
+                                : ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colLayer0, 0.5)
+                            onClicked: tabBar.currentIndex = 3
+
+                            contentItem: Item {
+                                RowLayout {
+                                    id: callsTabRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        text: "call"
+                                        iconSize: 13
+                                        color: tabBar.currentIndex === 3
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        text: Translation.tr("Calls")
+                                        font.pixelSize: 11
+                                        font.weight: tabBar.currentIndex === 3 ? Font.DemiBold : Font.Medium
+                                        color: tabBar.currentIndex === 3
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
+                                }
+                            }
+                        }
+
+                        RippleButton {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            implicitHeight: 26
+                            buttonRadius: Appearance.rounding.verysmall
                             colBackground: tabBar.currentIndex === 1 ? Appearance.colors.colPrimaryContainer : "transparent"
                             colBackgroundHover: tabBar.currentIndex === 1
                                 ? Appearance.colors.colPrimaryContainerHover
@@ -383,6 +418,7 @@ Item {
             Layout.fillHeight: true
             currentIndex: {
                 if (tabBar.currentIndex === 1) return 2;
+                if (tabBar.currentIndex === 3) return 5;
                 if (tabBar.currentIndex === 2 && Phone.canBrowse && Phone.reachable) return 3;
                 if (Phone.device === null && Phone.conversations.length === 0) return 0;
                 if (tabBar.currentIndex === 0 && (Phone.canMessage || Phone.conversations.length > 0)) return 1;
@@ -461,6 +497,13 @@ Item {
                         ? Translation.tr("This phone does not offer message history or remote file browsing. Use the send-file button to share files when supported.")
                         : Translation.tr("Keep your phone and this computer on the same Wi-Fi network, then open KDE Connect on your phone. Bluetooth pairing alone does not connect messages or files.")
                 }
+            }
+
+            PhoneCallsView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                onStartCall: number => root.dialNumber(number)
+                onStartMessage: (number, name) => root.composeTo(number, name)
             }
         }
 
