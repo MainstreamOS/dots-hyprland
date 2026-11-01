@@ -18,8 +18,6 @@ Item {
     required property var screen
     property real uiScale: 1
     required property var workspaceLayout
-    property Item dockBackdropSource: null
-    property rect dockBackdropRect: Qt.rect(0, 0, 1, 1)
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     readonly property var toplevels: ToplevelManager.toplevels
     // Clamp to avoid lock-screen temp workspace (2147483647 - N) leaking into UI
@@ -210,8 +208,6 @@ Item {
         implicitHeight: workspaceColumnLayout.implicitHeight + padding * 2
         radius: root.largeWorkspaceRadius
         uiScale: root.uiScale
-        backdropSource: root.dockBackdropSource
-        backdropRect: root.dockBackdropRect
 
         Column { // Workspaces
             id: workspaceColumnLayout

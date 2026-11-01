@@ -180,8 +180,6 @@ Item {
         width: root.cardWidth; height: root.cardHeight
         radius: root.cardRadius
         uiScale: root.uiScale
-        backdropSource: root.controller.dockBackdropSource
-        backdropRect: root.controller.dockBackdropRect
         Rectangle {
             anchors.fill: parent
             radius: parent.radius

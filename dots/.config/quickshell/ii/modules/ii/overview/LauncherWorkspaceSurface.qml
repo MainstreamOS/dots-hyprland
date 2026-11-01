@@ -9,8 +9,6 @@ import qs.modules.common
 Rectangle {
     id: root
     property real uiScale: 1
-    property Item backdropSource: null
-    property rect backdropRect: Qt.rect(0, 0, 1, 1)
     radius: RoundedCorners.on ? Appearance.rounding.dockBody * uiScale : 0
     color: "transparent"
 
@@ -24,14 +22,6 @@ Rectangle {
                 height: root.height
                 radius: root.radius
             }
-        }
-        ShaderEffectSource {
-            anchors.fill: parent
-            opacity: 0.5
-            sourceItem: parent.visible ? root.backdropSource : null
-            sourceRect: root.backdropRect
-            textureSize: Qt.size(Math.max(1, Math.ceil(sourceRect.width * Screen.devicePixelRatio)),
-                Math.max(1, Math.ceil(sourceRect.height * Screen.devicePixelRatio)))
         }
         Rectangle {
             anchors.fill: parent

@@ -80,13 +80,6 @@ Scope { // Scope
             readonly property bool showPinButton: Config.options.dock.showPinButton
             readonly property bool showOverviewButton: Config.options.dock.showOverviewButton
             readonly property bool showBackground: Appearance.sizes.dockShowBackground
-            readonly property rect backdropGeometry: {
-                const x = dockMouseArea.x + dockHoverRegion.x + dockBackground.x
-                    + dockSurface.x + dockVisualBackground.x;
-                const y = dockMouseArea.y + dockHoverRegion.y + dockBackground.y
-                    + dockSurface.y + dockVisualBackground.y;
-                return Qt.rect(x, y, dockVisualBackground.width, dockVisualBackground.height);
-            }
             readonly property real bodyPadding: 5
             readonly property real rowSpacing: 3
             readonly property real listSpacing: 2

@@ -19,8 +19,6 @@ Item {
     id: root
     required property var screen
     required property string layout
-    property Item dockBackdropSource: null
-    property rect dockBackdropRect: Qt.rect(0, 0, 1, 1)
     property real screenCenterX: width / 2
     property real screenCenterY: height / 2
     required property real screenScale

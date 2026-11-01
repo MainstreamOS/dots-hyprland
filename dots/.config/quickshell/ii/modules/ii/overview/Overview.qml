@@ -486,8 +486,6 @@ Scope {
                 screenCenterY: panelWindow.height / 2 - scrollingLauncher.y
                 screenScale: panelWindow.launcherUiScale
                 workspaceLayout: panelWindow.workspaceLayout
-                dockBackdropSource: launcherBackdrop.blurSource
-                dockBackdropRect: launcherBackdrop.dockBackdropRect
                 rendering: opened || contentFade.opacity > 0
                 onAppDropped: (app, workspace) => panelWindow.launchAppOnWorkspace(app, workspace)
             }
@@ -614,8 +612,6 @@ Scope {
                         screen: panelWindow.screen
                         uiScale: panelWindow.launcherUiScale
                         workspaceLayout: panelWindow.workspaceLayout
-                        dockBackdropSource: launcherBackdrop.blurSource
-                        dockBackdropRect: launcherBackdrop.dockBackdropRect
                         visible: (panelWindow.searchingText == "")
                         onFocusSearchRequested: searchWidget.focusSearchInput()
                     }
