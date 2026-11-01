@@ -158,93 +158,114 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 50
+            implicitHeight: headerColumn.implicitHeight + 16
             radius: 14
             color: Appearance.surfaces.raised
             // Cached contacts alone only head the Contacts page; they are not a phone.
             visible: (Phone.device !== null || (ContactService.records.length > 0 && tabBar.currentIndex === 1)) && (tabBar.currentIndex === 1 || tabBar.currentIndex === 2 || root.view === "list")
 
-            RowLayout {
-                anchors.fill: parent
+            ColumnLayout {
+                id: headerColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 anchors.leftMargin: 10
                 anchors.rightMargin: 8
-                spacing: 8
+                spacing: 6
 
-                Rectangle {
-                    Layout.preferredWidth: 30
-                    Layout.preferredHeight: 30
-                    radius: 9
-                    color: ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.55)
-
-                    MaterialSymbol {
-                        anchors.centerIn: parent
-                        text: Phone.reachable ? "smartphone" : "phonelink_off"
-                        iconSize: 17
-                        color: Phone.reachable ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
-                    }
-                }
-
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
-                    spacing: 1
+                    spacing: 8
 
-                    StyledText {
-                        Layout.fillWidth: true
-                        text: Phone.device?.name ?? (ContactService.records.length > 0 ? Translation.tr("Contacts") : "")
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
-                        elide: Text.ElideRight
+
+                    Rectangle {
+                        Layout.preferredWidth: 30
+                        Layout.preferredHeight: 30
+                        radius: 9
+                        color: ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.55)
+
+                        MaterialSymbol {
+                            anchors.centerIn: parent
+                            text: Phone.reachable ? "smartphone" : "phonelink_off"
+                            iconSize: 17
+                            color: Phone.reachable ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                        }
                     }
 
-                    RowLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 5
-
-                        Rectangle {
-                            Layout.preferredWidth: 6
-                            Layout.preferredHeight: 6
-                            radius: 3
-                            color: Phone.reachable ? Appearance.m3colors.m3success : Appearance.colors.colSubtext
-                        }
+                        spacing: 1
 
                         StyledText {
                             Layout.fillWidth: true
-                            text: {
-                                if (Phone.device !== null) {
-                                    if (!Phone.reachable) return Translation.tr("Not reachable");
-                                    const charge = Phone.device?.charge ?? -1;
-                                    if (charge >= 0) {
-                                        return Phone.device.charging
-                                            ? Translation.tr("%1% · Charging").arg(charge)
-                                            : Translation.tr("%1% · Connected").arg(charge);
-                                    }
-                                    return Translation.tr("Connected");
-                                }
-                                return Translation.tr("Ready");
-                            }
-                            font.pixelSize: 11
-                            font.weight: Font.Medium
-                            color: Appearance.colors.colSubtext
+                            text: Phone.device?.name ?? (ContactService.records.length > 0 ? Translation.tr("Contacts") : "")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.weight: Font.DemiBold
+                            color: Appearance.colors.colOnLayer1
                             elide: Text.ElideRight
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 5
+
+                            Rectangle {
+                                Layout.preferredWidth: 6
+                                Layout.preferredHeight: 6
+                                radius: 3
+                                color: Phone.reachable ? Appearance.m3colors.m3success : Appearance.colors.colSubtext
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: {
+                                    if (Phone.device !== null) {
+                                        if (!Phone.reachable) return Translation.tr("Not reachable");
+                                        const charge = Phone.device?.charge ?? -1;
+                                        if (charge >= 0) {
+                                            return Phone.device.charging
+                                                ? Translation.tr("%1% · Charging").arg(charge)
+                                                : Translation.tr("%1% · Connected").arg(charge);
+                                        }
+                                        return Translation.tr("Connected");
+                                    }
+                                    return Translation.tr("Ready");
+                                }
+                                font.pixelSize: 11
+                                font.weight: Font.Medium
+                                color: Appearance.colors.colSubtext
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    IslandButton {
+                        contentColors: Appearance.colors
+                        enabled: Phone.reachable && Phone.canShare
+                        symbol: "upload_file"
+                        onClicked: root.openFileSheet(false)
+                        StyledToolTip {
+                            text: Translation.tr("Send files to your phone\nOr drop them on this tab outside a conversation")
                         }
                     }
                 }
 
                 Rectangle {
+                    Layout.fillWidth: true
                     Layout.preferredHeight: 32
-                    implicitWidth: switcherRow.implicitWidth + 6
                     radius: 10
                     color: Appearance.surfaces.row
 
                     RowLayout {
                         id: switcherRow
-                        anchors.centerIn: parent
+                        anchors.fill: parent
+                        anchors.margins: 3
                         spacing: 2
 
                         RippleButton {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             implicitHeight: 26
-                            implicitWidth: msgTabRow.implicitWidth + 14
                             buttonRadius: Appearance.rounding.verysmall
                             colBackground: tabBar.currentIndex === 0 ? Appearance.colors.colPrimaryContainer : "transparent"
                             colBackgroundHover: tabBar.currentIndex === 0
@@ -253,31 +274,34 @@ Item {
                             visible: Phone.canMessage || Phone.conversations.length > 0
                             onClicked: tabBar.currentIndex = 0
 
-                            contentItem: RowLayout {
-                                id: msgTabRow
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "chat_bubble"
-                                    iconSize: 13
-                                    color: tabBar.currentIndex === 0
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Messages")
-                                    font.pixelSize: 11
-                                    font.weight: tabBar.currentIndex === 0 ? Font.DemiBold : Font.Medium
-                                    color: tabBar.currentIndex === 0
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
+                            contentItem: Item {
+                                RowLayout {
+                                    id: msgTabRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        text: "chat_bubble"
+                                        iconSize: 13
+                                        color: tabBar.currentIndex === 0
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        text: Translation.tr("Messages")
+                                        font.pixelSize: 11
+                                        font.weight: tabBar.currentIndex === 0 ? Font.DemiBold : Font.Medium
+                                        color: tabBar.currentIndex === 0
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
                                 }
                             }
                         }
 
                         RippleButton {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             implicitHeight: 26
-                            implicitWidth: contactsTabRow.implicitWidth + 14
                             buttonRadius: Appearance.rounding.verysmall
                             colBackground: tabBar.currentIndex === 1 ? Appearance.colors.colPrimaryContainer : "transparent"
                             colBackgroundHover: tabBar.currentIndex === 1
@@ -285,31 +309,34 @@ Item {
                                 : ColorUtils.mix(Appearance.colors.colLayer2, Appearance.colors.colLayer0, 0.5)
                             onClicked: tabBar.currentIndex = 1
 
-                            contentItem: RowLayout {
-                                id: contactsTabRow
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "contacts"
-                                    iconSize: 13
-                                    color: tabBar.currentIndex === 1
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Contacts")
-                                    font.pixelSize: 11
-                                    font.weight: tabBar.currentIndex === 1 ? Font.DemiBold : Font.Medium
-                                    color: tabBar.currentIndex === 1
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
+                            contentItem: Item {
+                                RowLayout {
+                                    id: contactsTabRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        text: "contacts"
+                                        iconSize: 13
+                                        color: tabBar.currentIndex === 1
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        text: Translation.tr("Contacts")
+                                        font.pixelSize: 11
+                                        font.weight: tabBar.currentIndex === 1 ? Font.DemiBold : Font.Medium
+                                        color: tabBar.currentIndex === 1
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
                                 }
                             }
                         }
 
                         RippleButton {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
                             implicitHeight: 26
-                            implicitWidth: filesTabRow.implicitWidth + 14
                             buttonRadius: Appearance.rounding.verysmall
                             colBackground: tabBar.currentIndex === 2 ? Appearance.colors.colPrimaryContainer : "transparent"
                             colBackgroundHover: tabBar.currentIndex === 2
@@ -323,37 +350,29 @@ Item {
                                 }
                             }
 
-                            contentItem: RowLayout {
-                                id: filesTabRow
-                                anchors.centerIn: parent
-                                spacing: 4
-                                MaterialSymbol {
-                                    text: "folder"
-                                    iconSize: 13
-                                    color: tabBar.currentIndex === 2
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
-                                }
-                                StyledText {
-                                    text: Translation.tr("Files")
-                                    font.pixelSize: 11
-                                    font.weight: tabBar.currentIndex === 2 ? Font.DemiBold : Font.Medium
-                                    color: tabBar.currentIndex === 2
-                                        ? Appearance.colors.colOnPrimaryContainer
-                                        : Appearance.colors.colSubtext
+                            contentItem: Item {
+                                RowLayout {
+                                    id: filesTabRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol {
+                                        text: "folder"
+                                        iconSize: 13
+                                        color: tabBar.currentIndex === 2
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
+                                    StyledText {
+                                        text: Translation.tr("Files")
+                                        font.pixelSize: 11
+                                        font.weight: tabBar.currentIndex === 2 ? Font.DemiBold : Font.Medium
+                                        color: tabBar.currentIndex === 2
+                                            ? Appearance.colors.colOnPrimaryContainer
+                                            : Appearance.colors.colSubtext
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-
-                IslandButton {
-                    contentColors: Appearance.colors
-                    enabled: Phone.reachable && Phone.canShare
-                    symbol: "upload_file"
-                    onClicked: root.openFileSheet(false)
-                    StyledToolTip {
-                        text: Translation.tr("Send files to your phone\nOr drop them on this tab outside a conversation")
                     }
                 }
             }
