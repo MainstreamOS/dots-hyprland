@@ -1640,19 +1640,14 @@ Singleton {
         // meaning on every screen.
         property real dockIconSize: (Config.options?.dock.iconSize ?? -1) >= 0
             ? Config.options.dock.iconSize : root.sizes.dockIconDefault
-        // Keep the three controls independent. The icon itself clamps its gap
-        // to its rendered size; the settings range and stock marks stay fixed.
-        readonly property real dockLauncherIconMin: 8
-        readonly property real dockLauncherIconMax: 64
-        readonly property real dockLauncherIconStock: dockSpans ? Math.round(dockIconDefault * 0.6)
-            : Math.round(dockLauncherIconMin + (dockLauncherIconMax - dockLauncherIconMin) * 0.25)
-        readonly property real dockLauncherIconSize: (Config.options?.dock.launcherIconSize ?? -1) >= 0
-            ? Math.max(dockLauncherIconMin, Math.min(dockLauncherIconMax, Config.options.dock.launcherIconSize)) : dockLauncherIconStock
-        readonly property real dockLauncherDotSpacingMax: 30
-        readonly property real dockLauncherDotSpacingStock: Math.round(dockLauncherDotSpacingMax * 0.27)
-        readonly property real dockLauncherDotSpacing: Math.min(dockLauncherDotSpacingMax,
-            Math.max(0, Config.options.dock.launcherDotSpacing >= 0
-                ? Config.options.dock.launcherDotSpacing : dockLauncherDotSpacingStock))
+        // A third of the button, which is the icon plus 15, with gaps an eighth of the grid.
+        readonly property real dockLauncherScale: (Config.options?.dock.launcherScale ?? -1) >= 0
+            ? Config.options.dock.launcherScale : 1
+        readonly property real dockLauncherIconSize: (dockIconSize + 15) / 3 * dockLauncherScale
+        readonly property real dockLauncherDotGapStock: 0.125
+        readonly property real dockLauncherDotGap: (Config.options?.dock.launcherDotGap ?? -1) >= 0
+            ? Config.options.dock.launcherDotGap : dockLauncherDotGapStock
+        readonly property real dockLauncherDotSpacing: dockLauncherIconSize * dockLauncherDotGap
         // The bottom of the settings track. A screen too short even for this
         // has nothing left to give up, so it truncates rather than drawing
         // icons no slider could have asked for.

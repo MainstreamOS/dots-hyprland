@@ -328,14 +328,14 @@ ContentPage {
             visible: Config.options.dock.showOverviewButton
             text: Translation.tr("Launcher icon size")
             buttonIcon: "apps"
-            from: Appearance.sizes.dockLauncherIconMin
-            to: Appearance.sizes.dockLauncherIconMax
-            stopIndicatorValues: [Appearance.sizes.dockLauncherIconStock]
-            value: Appearance.sizes.dockLauncherIconSize
+            from: 0.4
+            to: 3
+            stopIndicatorValues: [1]
+            value: Appearance.sizes.dockLauncherScale
             onMoved: {
-                const stepped = Math.round(value);
-                const wanted = stepped === Appearance.sizes.dockLauncherIconStock ? -1 : stepped;
-                if (wanted !== Config.options.dock.launcherIconSize) Config.options.dock.launcherIconSize = wanted;
+                const stepped = Math.round(value * 20) / 20;
+                const wanted = stepped === 1 ? -1 : stepped;
+                if (wanted !== Config.options.dock.launcherScale) Config.options.dock.launcherScale = wanted;
             }
         }
 
@@ -344,13 +344,13 @@ ContentPage {
             text: Translation.tr("Launcher dot spacing")
             buttonIcon: "space_bar"
             from: 0
-            to: Appearance.sizes.dockLauncherDotSpacingMax
-            stopIndicatorValues: [Math.min(to, Appearance.sizes.dockLauncherDotSpacingStock)]
-            value: Appearance.sizes.dockLauncherDotSpacing
+            to: 0.4
+            stopIndicatorValues: [Appearance.sizes.dockLauncherDotGapStock]
+            value: Appearance.sizes.dockLauncherDotGap
             onMoved: {
-                const stepped = Math.round(value);
-                const wanted = stepped === Appearance.sizes.dockLauncherDotSpacingStock ? -1 : stepped;
-                if (wanted !== Config.options.dock.launcherDotSpacing) Config.options.dock.launcherDotSpacing = wanted;
+                const stepped = Math.round(value * 200) / 200;
+                const wanted = stepped === Appearance.sizes.dockLauncherDotGapStock ? -1 : stepped;
+                if (wanted !== Config.options.dock.launcherDotGap) Config.options.dock.launcherDotGap = wanted;
             }
         }
 

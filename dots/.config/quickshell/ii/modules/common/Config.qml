@@ -33,28 +33,26 @@ Singleton {
     })
     readonly property var defaultIslandPanels: ["system", "media", "notifications", "weather", "timers", "calendar", "call", "text", "resources", "localsend"]
 
-    // A stored file without these controls predates the launcher sliders and keeps
-    // its old size; first run and Reset to defaults use the new stock sizes.
+    // The launcher sliders once held pixels, which stopped matching as soon as the icons
+    // changed size. A size someone set becomes the same look in shares; the sizes before
+    // those sliders are what stock is now, so a file that never set one has nothing to do.
     function migrateDockLauncher() {
         let stored;
         try { stored = JSON.parse(configFileView.text()); } catch (e) { return false; }
-        if (!stored || typeof stored !== "object" || Array.isArray(stored)) return false;
-        const saved = stored.dock;
-        if (saved !== undefined && (!saved || typeof saved !== "object" || Array.isArray(saved))) return false;
-        let changed = false;
-        // The old glyph drew its grid at a third of the button, the icon plus 15,
-        // with gaps an eighth of the grid. Stock icons were 40, and 27 on Hug.
-        const icon = saved?.iconSize >= 0 ? saved.iconSize : (saved?.cornerStyle === "span" ? 27 : 40);
-        const size = Math.round((icon + 15) / 3);
-        if (saved?.launcherIconSize === undefined) {
-            root.options.dock.launcherIconSize = size;
-            changed = true;
+        const saved = stored?.dock;
+        if (!saved || typeof saved !== "object" || Array.isArray(saved) || saved.launcherScale !== undefined) return false;
+        const oldSize = saved.launcherIconSize;
+        const oldGap = saved.launcherDotSpacing;
+        if (!(oldSize >= 0) && !(oldGap >= 0)) return false;
+        const hug = saved.cornerStyle === "span";
+        const stock = ((saved.iconSize >= 0 ? saved.iconSize : (hug ? 27 : 40)) + 15) / 3;
+        const size = oldSize >= 0 ? oldSize : (hug ? 16 : 22);
+        const gap = oldGap >= 0 ? oldGap : 8;
+        if (size !== Math.round(stock) || gap !== size / 8) {
+            root.options.dock.launcherScale = size / stock;
+            root.options.dock.launcherDotGap = gap / size;
         }
-        if (saved?.launcherDotSpacing === undefined) {
-            root.options.dock.launcherDotSpacing = size / 8;
-            changed = true;
-        }
-        return changed;
+        return true;
     }
 
     function pickBarMode(mode) {
@@ -934,8 +932,10 @@ Singleton {
                 property real topRadiusNotch: -2
                 // A hidden end button takes its neighboring separator with it.
                 property real edgePadding: -1
-                property real launcherIconSize: -1
-                property real launcherDotSpacing: -1
+                // The launcher grid against its stock size, and its gaps as a share of the grid,
+                // so both follow the icons. Below zero they stay stock.
+                property real launcherScale: -1
+                property real launcherDotGap: -1
                 property bool showOverviewButton: true
                 property bool showPinButton: true
                 property bool showIconSeparators: true

@@ -166,9 +166,10 @@ _cfgmig_window_rounding() {
 #
 # DeepSeek: the stock custom model now ships with its own icon. extraModels is
 # a stored list, so the old entry keeps the spark until it is changed here.
-# A file without the launcher size and dot-spacing keys predates them: keep what
-# the old glyph drew, a grid a third of the button (the icon plus 15, stock 40 or
-# 27 on Hug) with gaps an eighth of the grid. Explicit values, including -1, stay.
+# The launcher sliders once held pixels. A size someone set becomes the same look
+# in shares of the stock grid, so it follows the icons from then on. Stock is what
+# the old glyph drew: a third of the button (the icon plus 15, stock 40 or 27 on
+# Hug) with gaps an eighth of the grid. A file that never set a size has nothing to do.
 _CFGMIG_JQ='
 def dated: (.appearance | type) == "object" and (.appearance | has("roundCornersRestore"));
 def magnify_stock: (.dock == null or (.dock | type) == "object")
@@ -180,13 +181,8 @@ def corners_left: $rounding == 0
   and ((.appearance.fakeScreenRounding // 2) | type == "number" and . != 0);
 def deepseek: type == "object" and .name == "Custom: DS R1 Dstl. LLaMA 70B"
   and .model == "deepseek/deepseek-r1-distill-llama-70b:free" and .icon == "spark-symbolic";
-def old_launcher: ((has("dock") | not) or (.dock | type) == "object")
-  and (((.dock // {}) | has("launcherIconSize") | not)
-    or ((.dock // {}) | has("launcherDotSpacing") | not));
-def old_launcher_size: (.dock // {}) as $d
-  | (if ($d.iconSize | type) == "number" and $d.iconSize >= 0 then $d.iconSize
-     elif $d.cornerStyle == "span" then 27 else 40 end)
-  | ((. + 15) / 3 | round);
+def old_launcher: (.dock | type) == "object" and (.dock | has("launcherScale") | not)
+  and ((.dock.launcherIconSize // -1) >= 0 or (.dock.launcherDotSpacing // -1) >= 0);
 # Anything but an object is not a file the shell wrote, and is left as it is.
 if type != "object" then {m: [], d: .} else
 (if dated then [] else
@@ -205,9 +201,15 @@ if type != "object" then {m: [], d: .} else
         | .appearance.fakeScreenRounding = 0
       else . end
     | if has_step("dock-launcher") then
-        old_launcher_size as $size
-        | if ((.dock // {}) | has("launcherIconSize")) then . else .dock.launcherIconSize = $size end
-        | if (.dock | has("launcherDotSpacing")) then . else .dock.launcherDotSpacing = $size / 8 end
+        (.dock.cornerStyle == "span") as $hug
+        | (((if (.dock.iconSize | type) == "number" and .dock.iconSize >= 0 then .dock.iconSize
+            elif $hug then 27 else 40 end) + 15) / 3) as $stock
+        | (if (.dock.launcherIconSize // -1) >= 0 then .dock.launcherIconSize
+           elif $hug then 16 else 22 end) as $size
+        | (if (.dock.launcherDotSpacing // -1) >= 0 then .dock.launcherDotSpacing else 8 end) as $gap
+        | if $size == ($stock | round) and $gap == $size / 8 then .
+          else .dock.launcherScale = $size / $stock | .dock.launcherDotGap = $gap / $size end
+        | del(.dock.launcherIconSize, .dock.launcherDotSpacing)
       else . end
     | if has_step("deepseek") then
         .ai.extraModels |= map(if deepseek then .icon = "deepseek-symbolic" else . end)
@@ -271,7 +273,7 @@ _cfgmig_config_json() {
     case "$s" in
       magnify) _cfgmig_note "Kept your Dock's Magnify strength" ;;
       corners) _cfgmig_note "Squared the screen corners, since Rounded Corners is off" ;;
-      dock-launcher) _cfgmig_note "Kept your Dock launcher size and dot spacing" ;;
+      dock-launcher) _cfgmig_note "Kept your Dock launcher look, which now follows the icon size" ;;
     esac
   done
   return 0
