@@ -155,6 +155,12 @@ ApplicationWindow {
         },
         {
             group: 4,
+            name: Translation.tr("Storage"),
+            icon: "hard_drive",
+            component: "modules/settings/StorageConfig.qml"
+        },
+        {
+            group: 4,
             name: Translation.tr("Update"),
             icon: "system_update_alt",
             component: "modules/settings/UpdateConfig.qml"
