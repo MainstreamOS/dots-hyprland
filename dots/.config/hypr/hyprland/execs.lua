@@ -63,8 +63,8 @@ hl.on("hyprland.start", function ()
     -- GTK/Qt interface fonts follow the shell's font choice (config.json).
     hl.exec_cmd("$HOME/.config/quickshell/ii/scripts/themes/apply-gtk-font.sh")
 
-    -- Gaming Mode: strip any autologin User= from /etc/sddm.conf so normal
-    -- boots/logouts reach the SDDM password greeter (no-op on a fresh desktop).
+    -- Gaming Mode: put /etc/sddm.conf back to the autologin the person chose, or
+    -- none, so normal boots never re-enter gaming (no-op on a fresh desktop).
     -- Redundant with the sddm.service ExecStartPre (gaming-mode-arm-check), the
     -- authoritative boot-time reset; this just closes the gap if the user logs
     -- straight out of a gaming-exit session without an intervening reboot.

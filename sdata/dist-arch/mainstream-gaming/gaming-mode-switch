@@ -24,7 +24,9 @@
 #              on the first sddm start of a cold boot when boot-target=gaming.
 #   get/set  - read/write the small Gaming Mode preference store (return-target,
 #              boot-target, open-setup, autologin-user) at /etc/mainstream-gaming/prefs.conf. `get` is read-only and
-#              unprivileged; `set` is reached via the scoped sudoers rule from the menu.
+#              unprivileged; `set` is reached via the scoped sudoers rule from the menu,
+#              and autologin-user only as root, from the Accounts page's user-manager.
+#              `get boot-account` names who a cold boot enters Gaming Mode as, if anyone.
 #
 # One-shot autologin: SDDM autologins whenever the merged [Autologin] has a non-empty
 # User= AND daemonApp->first is true (true in EVERY freshly-spawned sddm process, so
@@ -104,6 +106,8 @@ write_autologin() {  # $1=user (may be empty)  $2=session basename
         in_a {
             if ($0 ~ /^[[:space:]]*User[[:space:]]*=/)    next
             if ($0 ~ /^[[:space:]]*Session[[:space:]]*=/) next
+            # Would log straight back in on every logout, so no one could reach the greeter.
+            if ($0 ~ /^[[:space:]]*Relogin[[:space:]]*=/) next
             saved[ns++] = $0
             next
         }
@@ -166,9 +170,23 @@ restart_dm() { systemctl --no-block restart sddm; }
 mask_sleep()   { systemctl mask   --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true; }
 unmask_sleep() { systemctl unmask --runtime $SLEEP_TARGETS >/dev/null 2>&1 || true; }
 
+# Who a cold boot autologins into Gaming Mode as, if anyone. Steam's Exit to Desktop
+# goes through the wheel-only sudoers rule, so a standard account would never get out.
+boot_account() {
+    [[ "$(read_pref boot-target)" == "gaming" ]] || return 0
+    local u; u="$(read_pref boot-user)"
+    [[ -z "$u" ]] && u="$(default_human_user)"
+    valid_login_user "$u" && [[ " $(id -nG "$u" 2>/dev/null) " == *" wheel "* ]] && printf '%s' "$u"
+    return 0
+}
+
 # Read-only preference query: no lock, no privilege, runs as the calling user.
 if [[ "${1:-}" == "get" ]]; then
-    read_pref "${2:-}"
+    if [[ "${2:-}" == "boot-account" ]]; then
+        boot_account
+    else
+        read_pref "${2:-}"
+    fi
     exit 0
 fi
 
@@ -207,10 +225,9 @@ case "${1:-}" in
     boot-gaming)
         # First sddm start of a cold boot with boot-target=gaming. Write the gamescope
         # autologin for this one start only -- no restart (sddm is starting now), no
-        # marker. An invalid/missing boot user falls back to the greeter, never a loop.
-        u="$(read_pref boot-user)"
-        [[ -z "$u" ]] && u="$(default_human_user)"
-        if ! valid_login_user "$u"; then
+        # marker. No usable boot account falls back to the reset the arm-check runs next.
+        u="$(boot_account)"
+        if [[ -z "$u" ]]; then
             write_autologin "" "$DESKTOP_SESSION"
             exit 1
         fi

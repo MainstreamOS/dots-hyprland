@@ -21,6 +21,6 @@ post_upgrade() {
 }
 
 pre_remove() {
-    # Leave /etc/sddm.conf at the no-User base so removal can't strand an autologin.
+    /usr/bin/gaming-mode-switch set autologin-user "" >/dev/null 2>&1 || true
     /usr/bin/gaming-mode-switch reset >/dev/null 2>&1 || true
 }

@@ -10,7 +10,12 @@
 #       name, shell, home and whether they are an administrator. Read-only,
 #       runs UNPRIVILEGED.
 #
-#   create <user> [full name]
+#   autologin-status
+#       Emit JSON saying whether automatic login can be set on this machine, the
+#       account that has it, and the account a cold boot enters Gaming Mode as.
+#       Read-only, runs UNPRIVILEGED.
+#
+#   create <user> [full name] [admin] [autologin]
 #       Create the account and provision its home to the same standard the
 #       installer applies to the first user. Reads the password from stdin,
 #       and sets it LAST so the login screen cannot admit the account before
@@ -26,11 +31,12 @@
 #       Reads the current password first, on its own line, and changes
 #       nothing unless it matches.
 #   set-admin <user> yes|no   add to or remove from wheel
+#   set-autologin <user> on|off  only one account can have it, so on moves it here
 #   rename <user> <new name>  change the full name (GECOS), not the login
 #   delete <user> keep-home|remove-home
 #   set-avatar <user> <path>  install a face icon for the login screen
 #
-# Every subcommand except list is invoked via pkexec and matches the polkit
+# Every subcommand except list and autologin-status is invoked via pkexec and matches the polkit
 # action org.mainstreamos.user-manager. change-own-password also runs
 # set-password <user> verify, under its own action and with no administrator.
 
@@ -39,8 +45,8 @@ set -euo pipefail
 umask 022
 
 PROVISION_LIB=/usr/local/lib/mainstream-provision-user.sh
-# list runs unprivileged every time the page refreshes and needs none of it.
-if [[ "${1:-}" != list && -r "$PROVISION_LIB" ]]; then
+# These run unprivileged every time the page refreshes and need none of it.
+if [[ "${1:-}" != list && "${1:-}" != autologin-status && -r "$PROVISION_LIB" ]]; then
     # shellcheck source=/dev/null
     source "$PROVISION_LIB"
 fi
@@ -127,11 +133,116 @@ cmd_list() {
     printf '%s\n' "${rows[@]}" | jq -cs . || die "could not build the account list"
 }
 
-cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wheel
-    local u="${1:-}" full="${2:-}" admin="${3:-}" pw base fresh=fresh
+# Gaming Mode rewrites /etc/sddm.conf's [Autologin] block before every login
+# screen and puts back only its autologin-user preference, so that preference is
+# the setting. Without that script, or under another display manager, nothing
+# here would hold.
+GAMING_SWITCH=/usr/bin/gaming-mode-switch
+SDDM_DROPINS=/etc/sddm.conf.d
+
+_autologin_available() {
+    [[ -x "$GAMING_SWITCH" ]] \
+        && [[ "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" == */sddm.service ]]
+}
+
+# A User= in a drop-in logs someone in whenever the preference is empty, which
+# the switches would otherwise show as off.
+_dropin_autologin_user() {
+    local files=("$SDDM_DROPINS"/*.conf)
+    [[ -e "${files[0]}" ]] || return 0
+    awk 'FNR == 1 { s = 0 }
+         /^[[:space:]]*\[/ { h = $0; sub(/#.*$/, "", h); gsub(/[[:space:]]/, "", h); s = (h == "[Autologin]") }
+         s && /^[[:space:]]*User[[:space:]]*=/ { u = $0; sub(/^[^=]*=[[:space:]]*/, "", u); sub(/[[:space:]]*$/, "", u) }
+         END { print u }' "${files[@]}"
+}
+
+_strip_dropin_autologin() {
+    local f tmp
+    for f in "$SDDM_DROPINS"/*.conf; do
+        [[ -f "$f" ]] || continue
+        tmp="$(mktemp "$f.XXXXXX")"
+        awk '/^[[:space:]]*\[/ { h = $0; sub(/#.*$/, "", h); gsub(/[[:space:]]/, "", h); s = (h == "[Autologin]") }
+             s && /^[[:space:]]*(User|Relogin)[[:space:]]*=/ { next }
+             { print }' "$f" > "$tmp"
+        if cmp -s "$f" "$tmp"; then
+            rm -f -- "$tmp"
+        else
+            chmod 644 "$tmp"
+            mv -f -- "$tmp" "$f"
+            log "removed an autologin from $f"
+        fi
+    done
+}
+
+_autologin_user() {
+    local u
+    u="$("$GAMING_SWITCH" get autologin-user 2>/dev/null || true)"
+    [[ -n "$u" ]] || u="$(_dropin_autologin_user)"
+    printf '%s' "$u"
+}
+
+cmd_autologin_status() {
+    local available=false user="" boot=""
+    if _autologin_available; then
+        available=true
+        user="$(_autologin_user)"
+        boot="$("$GAMING_SWITCH" get boot-account 2>/dev/null || true)"
+    fi
+    jq -nc --argjson available "$available" --arg user "$user" --arg bootUser "$boot" \
+        '{available:$available, user:$user, bootUser:$bootUser}'
+}
+
+_autologin_on() {  # $1 = user
+    "$GAMING_SWITCH" set autologin-user "$1" || return 1
+    _strip_dropin_autologin
+    "$GAMING_SWITCH" reset
+}
+
+cmd_set_autologin() {  # $1 = user  $2 = on|off
+    local u="${1:-}" want="${2:-}" shell
+    require_human_user "$u"
+    _autologin_available || die "automatic login needs the login screen and Gaming Mode packages"
+    case "$want" in
+        on)
+            shell="$(getent passwd "$u" | cut -d: -f7)"
+            _no_login_shell "$shell" && die "$u cannot log in"
+            _autologin_on "$u" || die "could not turn on automatic login for $u; update this computer and try again"
+            log "$u now logs in automatically" ;;
+        off)
+            if [[ "$("$GAMING_SWITCH" get autologin-user)" == "$u" ]]; then
+                "$GAMING_SWITCH" set autologin-user "" || die "could not turn off automatic login for $u"
+            fi
+            [[ "$(_dropin_autologin_user)" == "$u" ]] && _strip_dropin_autologin
+            "$GAMING_SWITCH" reset || die "could not turn off automatic login for $u"
+            log "$u no longer logs in automatically" ;;
+        *) die "expected on or off, got: $want" ;;
+    esac
+}
+
+# A later account given this name must not inherit a passwordless login, and a
+# machine that booted into Gaming Mode as this account must not pass that to
+# whichever account has the lowest uid now, so it goes back to booting the desktop.
+_forget_autologin() {  # $1 = user  $2 = the account a cold boot entered Gaming Mode as
+    [[ -x "$GAMING_SWITCH" ]] || return 0
+    if [[ "$("$GAMING_SWITCH" get autologin-user)" == "$1" ]]; then
+        "$GAMING_SWITCH" set autologin-user "" || log "WARN: could not clear automatic login for $1"
+    fi
+    [[ "$(_dropin_autologin_user)" == "$1" ]] && _strip_dropin_autologin
+    if [[ "$2" == "$1" ]]; then
+        "$GAMING_SWITCH" set boot-target desktop || log "WARN: could not clear the Gaming Mode boot for $1"
+        log "this computer no longer boots into Gaming Mode as $1"
+    fi
+    "$GAMING_SWITCH" reset || log "WARN: could not update the login screen after removing $1"
+}
+
+cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wheel  $4 = "autologin"
+    local u="${1:-}" full="${2:-}" admin="${3:-}" autologin="${4:-}" pw base fresh=fresh
     valid_name "$u" || die "not a valid user name: $u"
     id "$u" >/dev/null 2>&1 && die "user already exists: $u"
     [[ -r "$PROVISION_LIB" ]] || die "provisioning library missing at $PROVISION_LIB"
+    if [[ "$autologin" == autologin ]] && ! _autologin_available; then
+        die "automatic login needs the login screen and Gaming Mode packages"
+    fi
 
     pw="$(cat)"
     [[ -n "$pw" ]] || die "no password supplied on stdin"
@@ -182,6 +293,16 @@ cmd_create() {  # $1 = user  $2 = full name (optional)  $3 = "admin" to grant wh
     # its home is finished.
     printf '%s:%s\n' "$u" "$pw" | chpasswd || die "could not set the password for $u"
     log "$u created and provisioned"
+
+    # The account is finished by now, so a failure here leaves it usable with
+    # the switch showing off rather than undoing it.
+    if [[ "$autologin" == autologin ]]; then
+        if _autologin_on "$u"; then
+            log "$u now logs in automatically"
+        else
+            log "WARN: could not turn on automatic login for $u"
+        fi
+    fi
 }
 
 cmd_provision() {  # $1 = user
@@ -327,12 +448,14 @@ _sharing_cleanup() {  # $1 = user  $2 = the uid it had
 }
 
 cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
-    local u="${1:-}" mode="${2:-keep-home}" uid home
+    local u="${1:-}" mode="${2:-keep-home}" uid home boot=""
     require_human_user "$u"
     [[ "$u" == "$(id -un "${PKEXEC_UID:-0}" 2>/dev/null)" ]] && die "refusing to delete the account asking"
     last_admin "$u" && die "$u is the only administrator who can sign in; promote someone else first"
     uid="$(id -u "$u")"
     home="$(getent passwd "$u" | cut -d: -f6)"
+    # Asked first: the answer depends on the account still existing.
+    [[ -x "$GAMING_SWITCH" ]] && boot="$("$GAMING_SWITCH" get boot-account 2>/dev/null || true)"
     case "$mode" in
         remove-home) userdel -r "$u" || die "could not delete $u" ;;
         keep-home)
@@ -351,6 +474,7 @@ cmd_delete() {  # $1 = user  $2 = keep-home|remove-home
     # account of this name would otherwise show this person's.
     rm -f -- "/var/lib/AccountsService/users/$u" "/var/lib/AccountsService/icons/$u"
     log "$u deleted ($mode)"
+    _forget_autologin "$u" "$boot"
     _sharing_cleanup "$u" "$uid"
 }
 
@@ -423,16 +547,18 @@ cmd_set_avatar() {  # $1 = user  $2 = source image
 INVOKED="invoked: $* (by uid ${PKEXEC_UID:-$EUID})"
 if [[ "${1:-}" == set-password && "${3:-}" == verify ]]; then
     UNPROVEN=1
-elif [[ "${1:-}" != list ]]; then
+elif [[ "${1:-}" != list && "${1:-}" != autologin-status ]]; then
     log "$INVOKED"
 fi
 
 case "${1:-}" in
     list)          cmd_list ;;
+    autologin-status) cmd_autologin_status ;;
     create)        shift; cmd_create "$@" ;;
     provision)     shift; cmd_provision "$@" ;;
     set-password)  shift; cmd_set_password "$@" ;;
     set-admin)     shift; cmd_set_admin "$@" ;;
+    set-autologin) shift; cmd_set_autologin "$@" ;;
     rename)        shift; cmd_rename "$@" ;;
     delete)        shift; cmd_delete "$@" ;;
     set-avatar)    shift; cmd_set_avatar "$@" ;;

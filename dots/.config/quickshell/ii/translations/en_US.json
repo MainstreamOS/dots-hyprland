@@ -3362,5 +3362,11 @@
   "Frost and Glass show a blurred copy of the wallpaper behind this surface, like the desktop widgets.": "Frost and Glass show a blurred copy of the wallpaper behind this surface, like the desktop widgets.",
   "Preset name": "Preset name",
   "Save preset": "Save preset",
-  "Delete preset": "Delete preset"
+  "Delete preset": "Delete preset",
+  "When this computer starts, it opens this account without asking for a password.": "When this computer starts, it opens this account without asking for a password.",
+  "Only one account can do this, so this turns it off for %1.": "Only one account can do this, so this turns it off for %1.",
+  "This computer starts in Gaming Mode as %1 without a password, whichever account is set here. Gaming Mode Setup changes that.": "This computer starts in Gaming Mode as %1 without a password, whichever account is set here. Gaming Mode Setup changes that.",
+  "Could not change automatic login.": "Could not change automatic login.",
+  "Log in automatically": "Log in automatically",
+  "Apps that keep saved passwords may ask for this account's password after it starts.": "Apps that keep saved passwords may ask for this account's password after it starts."
 }

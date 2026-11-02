@@ -31,6 +31,10 @@ ContentPage {
     // change-own-password arrives the same way. Until it has, your own
     // password goes through user-manager, behind an administrator.
     property bool ownPasswordHelper: false
+    // Off with an older user-manager, which has no autologin-status to answer.
+    property bool autologinAvailable: false
+    property string autologinUser: ""
+    property string gamingBootUser: ""
 
     Component.onCompleted: {
         currentUserProc.running = true
@@ -53,7 +57,34 @@ ContentPage {
                 return
             }
             accountListProc.running = true
+            autologinStatusProc.running = true
         }
+    }
+
+    Process {
+        id: autologinStatusProc
+        command: ["/usr/local/bin/user-manager", "autologin-status"]
+        stdout: StdioCollector { id: autologinStatusOut }
+        onExited: (code) => {
+            let status = { available: false, user: "", bootUser: "" }
+            if (code === 0) {
+                try { status = JSON.parse(autologinStatusOut.text) } catch (e) {}
+            }
+            root.autologinAvailable = status.available
+            root.autologinUser = status.user
+            root.gamingBootUser = status.bootUser
+        }
+    }
+
+    // What a switch for this account does, said beside it because the choice
+    // gives up the password at startup and can take the setting from someone else.
+    function autologinNote(name) {
+        const notes = [Translation.tr("When this computer starts, it opens this account without asking for a password.")]
+        if (root.autologinUser.length > 0 && root.autologinUser !== name)
+            notes.push(Translation.tr("Only one account can do this, so this turns it off for %1.").arg(root.autologinUser))
+        if (root.gamingBootUser.length > 0)
+            notes.push(Translation.tr("This computer starts in Gaming Mode as %1 without a password, whichever account is set here. Gaming Mode Setup changes that.").arg(root.gamingBootUser))
+        return notes.join(" ")
     }
 
     // The helper writes "ERROR: <reason>" to stderr before it exits, and that
@@ -210,6 +241,22 @@ ContentPage {
             }
         }
 
+
+        Process {
+            id: autologinProc
+            stderr: StdioCollector { id: autologinErr }
+            onExited: (code) => {
+                const refusal = HelperUtils.pkexecRefusal(code)
+                if (code === 0)
+                    root.showStatus(Translation.tr("Done! Changes have been saved."), false)
+                else
+                    root.showStatus(refusal || root.helperReason(autologinErr.text,
+                        Translation.tr("Could not change automatic login.")), true)
+                // The click moved the switch, so it goes back to saying what the machine does.
+                autologinSwitch.checked = Qt.binding(() => root.autologinUser === account.name)
+                root.refresh()
+            }
+        }
 
         Process {
             id: imagePickerProc
@@ -565,6 +612,30 @@ ContentPage {
                     }
                 }
 
+                ConfigSwitch {
+                    id: autologinSwitch
+                    visible: root.autologinAvailable
+                    enabled: !item.working && !autologinProc.running
+                    buttonIcon: "login"
+                    text: Translation.tr("Log in automatically")
+                    tooltipText: Translation.tr("Apps that keep saved passwords may ask for this account's password after it starts.")
+                    checked: root.autologinUser === account.name
+                    onClicked: {
+                        autologinProc.command = ["pkexec", "/usr/local/bin/user-manager",
+                            "set-autologin", account.name, root.autologinUser === account.name ? "off" : "on"]
+                        autologinProc.running = true
+                    }
+                }
+
+                StyledText {
+                    visible: root.autologinAvailable
+                    text: root.autologinNote(account.name)
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+
                 // Can't remove yourself note
                 StyledText {
                     visible: account.isCurrent
@@ -914,6 +985,25 @@ ContentPage {
             checked: false
         }
 
+        ConfigSwitch {
+            id: newAutologinSwitch
+            visible: root.autologinAvailable
+            enabled: !createAccountProc.running
+            buttonIcon: "login"
+            text: Translation.tr("Log in automatically")
+            tooltipText: Translation.tr("Apps that keep saved passwords may ask for this account's password after it starts.")
+            checked: false
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            visible: newAutologinSwitch.visible && newAutologinSwitch.checked
+            text: root.autologinNote("")
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
+        }
+
         // Says what is still missing instead of leaving the button dead and
         // silent, which reads as the page being broken.
         StyledText {
@@ -949,8 +1039,9 @@ ContentPage {
                     // authentication to dismiss and no window in which the
                     // account is usable but not an administrator.
                     createAccountProc.command = ["pkexec", "/usr/local/bin/user-manager",
-                        "create", username, fullNameField.text.trim()]
-                        .concat(makeAdminSwitch.checked ? ["admin"] : [])
+                        "create", username, fullNameField.text.trim(),
+                        makeAdminSwitch.checked ? "admin" : "",
+                        newAutologinSwitch.visible && newAutologinSwitch.checked ? "autologin" : ""]
                     createAccountProc.stdinEnabled = true
                     createAccountProc.running = true
                     root.showStatus(Translation.tr("Creating %1 and setting up their desktop…").arg(username), false)
@@ -1030,6 +1121,7 @@ ContentPage {
                 newUserPassField.text = ""
                 fullNameField.text = ""
                 makeAdminSwitch.checked = false
+                newAutologinSwitch.checked = false
                 postCreateRefreshTimer.start()
             } else if (refusal) {
                 root.showStatus(refusal, true)
