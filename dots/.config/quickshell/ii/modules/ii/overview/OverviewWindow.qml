@@ -31,12 +31,14 @@ Item { // Window
         const monitorHeight = monitorData.transform & 1 ? monitorData.width : monitorData.height;
         return (widgetHeight * monitorData.scale) / (monitorHeight * widgetMonitor.scale);
     }
+    // Where the window really is, even past the screen's edge as a scrolled column is,
+    // so neighbors never stack on top of it; the workspace's edge cuts it there.
     property real initX: {
-        return Math.max((windowData?.at[0] - (monitorData?.x ?? 0) - workspaceReserved[0]) * widthRatio * root.scale, 0) + xOffset;
+        return (windowData?.at[0] - (monitorData?.x ?? 0) - workspaceReserved[0]) * widthRatio * root.scale + xOffset;
     }
 
     property real initY: {
-        return Math.max((windowData?.at[1] - (monitorData?.y ?? 0) - workspaceReserved[1]) * heightRatio * root.scale, 0) + yOffset;
+        return (windowData?.at[1] - (monitorData?.y ?? 0) - workspaceReserved[1]) * heightRatio * root.scale + yOffset;
     }
     property real xOffset: 0
     property real yOffset: 0

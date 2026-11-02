@@ -341,8 +341,8 @@ Item {
                     xOffset: (root.workspaceImplicitWidth + workspaceSpacing) * workspaceColIndex
                     yOffset: (root.workspaceImplicitHeight + workspaceSpacing) * workspaceRowIndex
                     workspaceReserved: monitorId === root.monitor?.id ? root.previewReserved : (monitorData?.reserved ?? [0, 0, 0, 0])
-                    property real xWithinWorkspaceWidget: Math.max((windowData?.at[0] - (monitor?.x ?? 0) - workspaceReserved[0]) * root.scale, 0)
-                    property real yWithinWorkspaceWidget: Math.max((windowData?.at[1] - (monitor?.y ?? 0) - workspaceReserved[1]) * root.scale, 0)
+                    property real xWithinWorkspaceWidget: (windowData?.at[0] - (monitor?.x ?? 0) - workspaceReserved[0]) * root.scale
+                    property real yWithinWorkspaceWidget: (windowData?.at[1] - (monitor?.y ?? 0) - workspaceReserved[1]) * root.scale
 
                     // Radius
                     property real minRadius: Math.min(Appearance.rounding.small * root.uiScale, root.largeWorkspaceRadius)
