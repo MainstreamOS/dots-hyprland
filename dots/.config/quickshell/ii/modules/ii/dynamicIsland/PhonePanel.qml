@@ -336,11 +336,7 @@ ColumnLayout {
                     quickReplyInput.focus = false;
                     Phone.wanted = true;
                     SidebarLeftTabs.showTab("phone");
-                    Phone.openTargetConversation({
-                        thread: root.entry?.thread,
-                        number: root.entry?.number || root.entry?.address || "",
-                        name: root.entry?.name || ""
-                    });
+                    Phone.openEntryConversation(root.entry);
                 }
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
