@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import qs.modules.common
 
@@ -66,14 +67,32 @@ Item {
     // slides the wallpaper while the widget holds still, so watching the widget
     // alone would leave the backdrop showing a stale slice of picture.
     function refresh() {
+        // A blur has no edges to show a skipped frame by, so anything moving the
+        // picture under it, like a workspace pan, re-blurs at thirty frames a second.
+        const now = Date.now();
+        if (now - lastSample < 33) {
+            if (!sampleLater.running) sampleLater.start();
+            return;
+        }
+        lastSample = now;
         if (!blurSource) return;
         const shown = Qt.size(blur.width / magnification, blur.height / magnification);
         const center = root.mapToItem(blurSource, root.width / 2, root.height / 2);
         // Kept on the picture, since past its edge there is only emptiness to sample.
         const x = center.x - shown.width / 2 + offsetX;
         const y = center.y - shown.height / 2 + offsetY;
-        shaderSource.sourceRect = Qt.rect(Math.max(0, Math.min(x, blurSource.width - shown.width)),
+        const rect = Qt.rect(Math.max(0, Math.min(x, blurSource.width - shown.width)),
             Math.max(0, Math.min(y, blurSource.height - shown.height)), shown.width, shown.height);
+        // The same picture needs no new blur, however the card around it moved.
+        const was = shaderSource.sourceRect;
+        const same = Math.abs(was.x - rect.x) < 0.05 && Math.abs(was.y - rect.y) < 0.05
+            && Math.abs(was.width - rect.width) < 0.05 && Math.abs(was.height - rect.height) < 0.05;
+        if (same && !pictureChanged) return;
+        pictureChanged = false;
+        shaderSource.sourceRect = rect;
+        // The more it is blurred, the fewer of the picture's pixels make a difference.
+        const dpr = (root.Window.window?.devicePixelRatio ?? 1) * (blurRadius >= 32 ? 0.25 : blurRadius >= 12 ? 0.5 : 1);
+        shaderSource.textureSize = Qt.size(Math.ceil(rect.width * dpr), Math.ceil(rect.height * dpr));
         shaderSource.scheduleUpdate();
     }
 
@@ -81,12 +100,20 @@ Item {
     onTrackYChanged: refresh()
     onWidthChanged: refresh()
     onHeightChanged: refresh()
-    onBlurRadiusChanged: refresh()
+    onBlurRadiusChanged: { pictureChanged = true; refresh(); }
     onMagnificationChanged: refresh()
     onOffsetXChanged: refresh()
     onOffsetYChanged: refresh()
-    onBlurSourceChanged: refresh()
+    onBlurSourceChanged: { pictureChanged = true; refresh(); }
     Component.onCompleted: refresh()
+
+    property double lastSample: 0
+    property bool pictureChanged: true
+    Timer {
+        id: sampleLater
+        interval: 33
+        onTriggered: root.refresh()
+    }
 
     Connections {
         target: root.blurSource
@@ -95,11 +122,11 @@ Item {
         function onYChanged() { root.refresh(); }
         function onWidthChanged() { root.refresh(); }
         function onHeightChanged() { root.refresh(); }
-        function onSourceChanged() { root.refresh(); }
-        function onStatusChanged() { root.refresh(); }
+        function onSourceChanged() { root.pictureChanged = true; root.refresh(); }
+        function onStatusChanged() { root.pictureChanged = true; root.refresh(); }
         // Carries the crossfade, so this is what keeps the backdrop in step
         // while one wallpaper transitions to the next.
-        function onOpacityChanged() { root.refresh(); }
+        function onOpacityChanged() { root.pictureChanged = true; root.refresh(); }
         function onBackdropMoved() { root.refresh(); }
     }
 

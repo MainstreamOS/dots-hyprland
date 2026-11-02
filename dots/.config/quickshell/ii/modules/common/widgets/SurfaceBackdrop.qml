@@ -53,21 +53,41 @@ Loader {
     readonly property real reachRight: Math.max(0, ...curves.map(c => c.x + c.size - width))
     readonly property real reachBottom: Math.max(0, ...curves.map(c => c.y + c.size - height))
 
+    // The blur covers the largest size the surface has needed, or this much from
+    // the start, so a surface animating inside it only reshapes the cut. Re-blurring
+    // for every frame of a resize is what would cost a low end card the most.
+    property real regionWidth: 0
+    property real regionHeight: 0
+    // Which edge the surface grows away from, when it doesn't grow evenly around its middle.
+    property string growsFrom: ""
+    readonly property real wantedWidth: root.width + root.reachLeft + root.reachRight
+    readonly property real wantedHeight: root.height + root.reachTop + root.reachBottom
+    property real largestWidth: 0
+    property real largestHeight: 0
+    onWantedWidthChanged: largestWidth = Math.max(largestWidth, wantedWidth)
+    onWantedHeightChanged: largestHeight = Math.max(largestHeight, wantedHeight)
+    readonly property real blurWidth: Math.max(root.regionWidth, root.largestWidth, root.wantedWidth)
+    readonly property real blurHeight: Math.max(root.regionHeight, root.largestHeight, root.wantedHeight)
+    readonly property real blurX: (root.width + root.reachRight - root.reachLeft - root.blurWidth) / 2
+    readonly property real blurY: root.growsFrom === "top" ? -root.reachTop
+        : root.growsFrom === "bottom" ? root.height + root.reachBottom - root.blurHeight
+        : (root.height + root.reachBottom - root.reachTop - root.blurHeight) / 2
+
     active: root.source?.available ?? false
     sourceComponent: Item {
         FastBlurred {
-            x: -root.reachLeft
-            y: -root.reachTop
-            width: root.width + root.reachLeft + root.reachRight
-            height: root.height + root.reachTop + root.reachBottom
+            x: root.blurX
+            y: root.blurY
+            width: root.blurWidth
+            height: root.blurHeight
             blurSource: root.source.picture
             tintOpacity: root.settings.haze
             blurRadius: root.settings.blur
             magnification: root.settings.magnification
             offsetX: root.settings.offsetX
             offsetY: root.settings.offsetY
-            cardRect: Qt.rect(root.reachLeft, root.reachTop, root.width, root.height)
-            cardCurves: root.curves.map(c => Object.assign({}, c, { "x": c.x + root.reachLeft, "y": c.y + root.reachTop }))
+            cardRect: Qt.rect(-root.blurX, -root.blurY, root.width, root.height)
+            cardCurves: root.curves.map(c => Object.assign({}, c, { "x": c.x - root.blurX, "y": c.y - root.blurY }))
             topLeftRadius: root.topLeftRadius
             topRightRadius: root.topRightRadius
             bottomLeftRadius: root.bottomLeftRadius

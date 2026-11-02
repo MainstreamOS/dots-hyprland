@@ -168,9 +168,11 @@ Scope { // Scope
             // The dock is raised above the launcher's dim while the launcher
             // is open, and there it takes the colors that read over the dim.
             // Only on the screen the dim is shown on: a dock on another screen
-            // keeps its own.
+            // keeps its own. A Frost or Glass dock looks the same over the dim as
+            // anywhere else, so it keeps its own too.
             readonly property DockContent content: DockContent {
                 dimmed: GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "")
+                    && !(backdropSource.item?.available ?? false)
             }
             // The content colors as this dock draws them. A button's fill
             // already eases to a new color on the curve the dim fades on, so
@@ -557,11 +559,9 @@ Scope { // Scope
                             active: Config.options.dock.backdrop.enable && dockRoot.showBackground
                             sourceComponent: ScreenWallpaperSource {}
                         }
-                        // Over the launcher's dim, the dock goes back to its plain
-                        // see-through surface, which the dim's own colors are worked out for.
                         SurfaceBackdrop {
                             settings: Config.options.dock.backdrop
-                            source: dockRoot.overLauncher || dockRoot.overWindowOverview ? null : backdropSource.item
+                            source: backdropSource.item
                             x: dockSurface.x + dockVisualBackground.x
                             y: dockSurface.y + dockVisualBackground.y
                             width: dockVisualBackground.width
