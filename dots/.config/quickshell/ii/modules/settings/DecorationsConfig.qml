@@ -207,19 +207,7 @@ ContentPage {
         { displayName: Translation.tr("Haze"), value: 10 },
     ].filter(style => root.supportedBlurVariants.includes(style.value))
 
-    // Each preset fills in the settings below, which stay free to change. The
-    // opacity comes with it, since blur only shows through a see-through window.
-    readonly property var shippedBlurPresets: [
-        { displayName: Translation.tr("Solid"), blur: root.decoDefaults.blur ?? true, blurVariant: root.decoDefaults.blurVariant ?? 0,
-            blurSize: root.decoDefaults.blurSize ?? 10, blurPasses: root.decoDefaults.blurPasses ?? 3, blurNoise: root.decoDefaults.blurNoise ?? 0,
-            blurVibrancy: root.decoDefaults.blurVibrancy ?? 0.5, blurLensStrength: root.decoDefaults.blurLensStrength ?? 24,
-            blurLensWidth: root.decoDefaults.blurLensWidth ?? 48, blurClarity: root.decoDefaults.blurClarity ?? 0.82,
-            activeOpacity: root.decoDefaults.activeOpacity ?? 1, inactiveOpacity: root.decoDefaults.inactiveOpacity ?? 1 },
-        { displayName: Translation.tr("Frost"), blur: true, blurVariant: 1, blurSize: 12, blurPasses: 3, blurNoise: 0.03,
-            blurVibrancy: 0.5, activeOpacity: 1, inactiveOpacity: 0.89 },
-        { displayName: Translation.tr("Glass"), blur: true, blurVariant: 8, blurSize: 4, blurPasses: 2, blurNoise: 0,
-            blurVibrancy: 0.8, blurLensStrength: 32, blurLensWidth: 96, blurClarity: 0.6, activeOpacity: 1, inactiveOpacity: 0.93 },
-    ]
+    readonly property var shippedBlurPresets: BackdropPresets.windowShipped
     readonly property var blurPresets: root.shippedBlurPresets.concat(Array.from(Config.options.appearance.windowBlurPresets))
     function decorationValue(key) {
         return {

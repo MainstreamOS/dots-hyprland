@@ -2229,6 +2229,19 @@ ApplicationWindow {
             barShape: demo.barShape
             dockShape: demo.dockShape
         }
+        // The left sidebar sliding in, for the corner set to open it.
+        Rectangle {
+            visible: demo.trigger === "sidebar" && demo.openT > 0
+            y: 4
+            x: 4 - (width + 4) * (1 - demo.openT)
+            width: demo.width * 0.3
+            height: demo.height - 8
+            radius: 6
+            color: Appearance.colors.colLayer1
+            border.width: 1
+            border.color: Appearance.colors.colOutlineVariant
+        }
+
         FastBlur {
             anchors.fill: parent
             visible: (demo.trigger === "default" || demo.trigger === "scrolloverview") && demo.openT > 0
@@ -4141,6 +4154,26 @@ ApplicationWindow {
         property int borderSizeValue: 4
         property real activeOpacityValue: 1.0
         property real inactiveOpacityValue: 1.0
+        // What the blur presets set, for telling which one is on.
+        property var blurValues: ({})
+        readonly property int blurPresetIndex: BackdropPresets.windowShipped.findIndex(preset => Object.keys(preset)
+            .filter(key => key !== "displayName")
+            .every(key => typeof preset[key] === "boolean" ? preset[key] === cardWindows.blurValues[key]
+                : Math.abs(preset[key] - cardWindows.blurValues[key]) < 0.01))
+        function applyBlurPreset(preset) {
+            const pairs = [];
+            const values = Object.assign({}, cardWindows.blurValues);
+            for (const key of Object.keys(preset)) {
+                if (key === "displayName") continue;
+                values[key] = preset[key];
+                pairs.push(`${key}=${preset[key]}`);
+            }
+            cardWindows.blurValues = values;
+            cardWindows.blurEnabled = preset.blur;
+            cardWindows.activeOpacityValue = preset.activeOpacity;
+            cardWindows.inactiveOpacityValue = preset.inactiveOpacity;
+            cardWindows.setDecoration(pairs);
+        }
         property bool dimInactiveEnabled: true
         property real dimStrengthValue: 0.05
         property int gapsInValue: 4
@@ -4186,6 +4219,7 @@ ApplicationWindow {
         }
 
         function applyDecoValues(values) {
+            cardWindows.blurValues = values
             if (values.animations !== undefined) cardWindows.animationsEnabled = values.animations
             if (values.blur !== undefined) cardWindows.blurEnabled = values.blur
             if (values.shadow !== undefined) cardWindows.shadowsEnabled = values.shadow
@@ -4473,23 +4507,17 @@ ApplicationWindow {
                 Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
 
                 StyleSection {
-                    title: Translation.tr("Window transparency")
-                    symbol: "opacity"
+                    title: Translation.tr("Window blur")
+                    symbol: "blur_on"
                     Layout.fillHeight: false
 
-                    ConfigSlider {
+                    ConfigSelectionArray {
+                        id: windowPresetRow
                         Layout.fillWidth: true
-                        text: Translation.tr("Unfocused windows")
-                        stopIndicatorValues: cardWindows.defaultMark("inactiveOpacity")
-                        buttonIcon: "filter_none"
-                        from: 0.7
-                        to: 1.0
-                        value: cardWindows.inactiveOpacityValue
-                        onMoved: {
-                            if (Math.abs(value - cardWindows.inactiveOpacityValue) < 0.005) return;
-                            cardWindows.inactiveOpacityValue = value;
-                            cardWindows.queueDecoration("inactiveOpacity", value.toFixed(2));
-                        }
+                        buttonWidth: (width - spacing * 2) / 3 - 0.1
+                        currentValue: cardWindows.blurPresetIndex
+                        onSelected: newValue => cardWindows.applyBlurPreset(BackdropPresets.windowShipped[newValue])
+                        options: BackdropPresets.windowShipped.map((preset, index) => ({ displayName: preset.displayName, icon: ["rectangle", "ac_unit", "window"][index], value: index }))
                     }
                 }
 
@@ -9435,7 +9463,8 @@ readonly property var drawerApps: root.drawerApps
                             model: [
                                 { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
                                 { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
-                                { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" }
+                                { displayName: Translation.tr("Scrolling Overview"), icon: "view_day",  value: "scrolloverview" },
+                                { displayName: Translation.tr("Left sidebar"),       icon: "left_panel_open", value: "sidebar" }
                             ]
                             currentIndex: {
                                 const idx = model.findIndex(item => item.value === Config.options.bar.hotCorners.trigger)
