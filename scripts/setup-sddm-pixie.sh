@@ -34,7 +34,8 @@ trap report_error ERR
 # (see sdata/sddm/10-wayland.conf).
 info "Installing SDDM..."
 pacman -S --needed --noconfirm sddm layer-shell-qt
-systemctl enable sddm
+# --force takes over from another login manager instead of failing.
+systemctl enable --force sddm
 info "SDDM installed and enabled"
 
 # --- Step 2: Install pixie-sddm theme ---

@@ -225,6 +225,8 @@ install-local-pkgbuild() {
   # For all other packages optdepends are intentionally skipped.
   local failed_deps=()
   for dep in "${depends[@]}"; do
+    # Already provided, perhaps by another package: leave that provider in place.
+    pacman -T "$dep" >/dev/null 2>&1 && continue
     # Block anything on the KDE/Plasma blocklist
     if _is_kde_blocked "$dep"; then
       printf "${STY_YELLOW}[$0]: Skipping blocked KDE/Plasma dep '%s'${STY_RST}\n" "$dep"
@@ -356,7 +358,17 @@ install-local-pkgbuild() {
   # In https://github.com/end-4/dots-hyprland/issues/823#issuecomment-3394774645 it's suggested
   # to use `sudo pacman -U --noconfirm *.pkg.tar.zst` instead of `makepkg -i`, however it's
   # possible that multiple *.pkg.tar.zst exist, which makes this command not reliable.
-  x makepkg -Afsi --noconfirm
+  if [[ "$pkgname" == mainstream-quickshell-git ]]; then
+    # Installed apart from the build so --ask 4 can remove another Quickshell package
+    # in the same transaction; makepkg -i would refuse the conflict under --noconfirm.
+    x makepkg -Afs --noconfirm
+    local built_packages=()
+    mapfile -t built_packages < <(makepkg --packagelist)
+    (( ${#built_packages[@]} > 0 )) || return 1
+    x sudo pacman -U --noconfirm --ask 4 "${built_packages[@]}"
+  else
+    x makepkg -Afsi --noconfirm
+  fi
 
   # Restore pacman.conf to its pre-call state
   _pacman_conf_restore_kde "$_orig_ignorepkg"
@@ -375,7 +387,8 @@ install-quickshell() {
   remove-previous-package-name "$location"
 
   if pacman -Si "$pkg" >/dev/null 2>&1; then
-    if retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" "$pkg"; then
+    # --ask 4 removes another Quickshell package, which --noconfirm would otherwise refuse.
+    if retry sudo pacman -S $installflags --ask 4 --ignore "$KDE_IGNORE_ARG" "$pkg"; then
       local bin
       bin=$(command -v quickshell 2>/dev/null)
       if [[ -n "$bin" ]] && ! ldd "$bin" 2>&1 | grep -q "not found"; then

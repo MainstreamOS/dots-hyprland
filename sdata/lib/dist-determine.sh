@@ -85,10 +85,10 @@ export OS_DISTRO_ID_LIKE=$(awk -F'=' '/^ID_LIKE=/ { gsub(/["\x27]/,"",$2); print
 ####################
 # Determine distro ID
 
-if [[ "$OS_DISTRO_ID" =~ ^(arch|endeavouros|cachyos)$ ]]; then
+if [[ "$OS_DISTRO_ID" =~ ^(arch|mainstream|mainstreamos|omarchy|endeavouros|cachyos)$ ]]; then
   OS_GROUP_ID="arch"
   print_os_group_id_functions=(print_os_group_id)
-elif [[ "$OS_DISTRO_ID_LIKE" == "arch" ]]; then
+elif [[ " $OS_DISTRO_ID_LIKE " == *" arch "* ]]; then
   OS_GROUP_ID="arch"
   print_os_group_id_functions=(print_os_group_id{,_alike})
 elif [[ "$OS_DISTRO_ID" == "gentoo" ]]; then
