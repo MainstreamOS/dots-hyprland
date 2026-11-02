@@ -29,7 +29,7 @@ Item {
             lineWidth: Appearance.rounding.unsharpen
             value: percentage
             implicitSize: 20
-            colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnSecondaryContainer
+            colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnLayer1
             colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
             accountForLightBleeding: !root.warning
             enableAnimation: false

@@ -18,7 +18,7 @@ Item {
         anchors.centerIn: parent
         value: percentage
         enableAnimation: false
-        colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnSecondaryContainer
+        colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnLayer1
         colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
         accountForLightBleeding: !root.warning
 

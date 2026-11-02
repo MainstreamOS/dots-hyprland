@@ -25,7 +25,7 @@ MouseArea {
         valueBarHeight: 36
         value: percentage
         // value: 1
-        highlightColor: (isLow && !isCharging) ? Appearance.barContent.m3error : Appearance.barContent.colOnSecondaryContainer
+        highlightColor: (isLow && !isCharging) ? Appearance.barContent.m3error : Appearance.barContent.colOnLayer1
         trackColor: Appearance.barContent.faded(highlightColor, 0.5)
 
         font {

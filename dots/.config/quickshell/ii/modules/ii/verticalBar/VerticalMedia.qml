@@ -59,7 +59,7 @@ MouseArea {
 
         lineWidth: Appearance.rounding.unsharpen
         value: activePlayer?.position / activePlayer?.length
-        colPrimary: Appearance.barContent.colOnSecondaryContainer
+        colPrimary: Appearance.barContent.colOnLayer1
         colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
         enableAnimation: false
 

@@ -70,7 +70,7 @@ Item {
                 : activePlayer?.position / activePlayer?.length
             implicitSize: 20
             colPrimary: LocalSend.receiveActive ? Appearance.barContent.colPrimary
-                : Appearance.barContent.colOnSecondaryContainer
+                : Appearance.barContent.colOnLayer1
             colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
             enableAnimation: false
 
