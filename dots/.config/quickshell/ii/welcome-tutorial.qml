@@ -757,6 +757,8 @@ ApplicationWindow {
     // from, the same as the settings sections.
     readonly property bool styleIsCustom: Config.options.bar.backgroundOpacity >= 0
         || Config.options.dock.backgroundOpacity >= 0
+        || Config.options.bar.backdrop.enable
+        || Config.options.dock.backdrop.enable
         || Config.options.bar.backgroundColorDark !== ""
         || Config.options.bar.backgroundColorLight !== ""
         || Config.options.dock.backgroundColorDark !== ""
@@ -766,8 +768,7 @@ ApplicationWindow {
     // a color chosen here, and leaving it filled would hand the custom look
     // straight back the first time the mode flips.
     function resetStyleAppearance() {
-        Config.options.bar.backgroundOpacity = -1;
-        Config.options.dock.backgroundOpacity = -1;
+        BackdropPresets.apply(BackdropPresets.shipped[0]);
         Config.options.bar.backgroundColorDark = "";
         Config.options.bar.backgroundColorLight = "";
         Config.options.dock.backgroundColorDark = "";
@@ -4780,21 +4781,30 @@ ApplicationWindow {
                         }
                     ]
 
-                    ConfigSlider {
+                    // Laid out as the color field below is, so the buttons span
+                    // from where its swatch starts to where its Pick button ends.
+                    RowLayout {
                         Layout.fillWidth: true
-                        textWidth: 124
-                        text: Translation.tr("Transparency")
-                        buttonIcon: "opacity"
-                        stopIndicatorValues: [Appearance.colors.layer0StockAlpha]
-                        // The track stops where the surfaces stop being frosted
-                        // rather than at nothing, the same as the settings page.
-                        from: Appearance.colors.surfaceOpacityFloor
-                        to: 1
-                        value: root.styleOpacity
-                        onMoved: {
-                            if (Math.abs(value - root.styleOpacity) < 0.005)
-                                return;
-                            root.applyStyleOpacity(value);
+                        Layout.leftMargin: 8
+                        Layout.rightMargin: 8
+                        spacing: 10
+                        OptionalMaterialSymbol {
+                            icon: "auto_awesome"
+                            iconSize: Appearance.font.pixelSize.larger
+                        }
+                        StyledText {
+                            Layout.preferredWidth: 124
+                            text: Translation.tr("Blur preset")
+                            elide: Text.ElideRight
+                            color: Appearance.colors.colOnSecondaryContainer
+                        }
+                        ConfigSelectionArray {
+                            id: stylePresetRow
+                            Layout.fillWidth: true
+                            buttonWidth: (width - spacing * 2) / 3 - 0.1
+                            currentValue: BackdropPresets.indexFor(Config.options.dock)
+                            onSelected: newValue => BackdropPresets.apply(BackdropPresets.shipped[newValue])
+                            options: BackdropPresets.shipped.map((preset, index) => ({ displayName: preset.displayName, icon: ["rectangle", "ac_unit", "window"][index], value: index }))
                         }
                     }
 
@@ -4807,6 +4817,10 @@ ApplicationWindow {
                         value: root.styleColor
                         fallback: String(Appearance.colors.colLayer0)
                         onEdited: newValue => root.applyStyleColor(newValue)
+                        showsOpacity: true
+                        opacityValue: root.styleOpacity
+                        opacityFrom: Appearance.colors.surfaceOpacityFloor
+                        onOpacityEdited: newValue => root.applyStyleOpacity(newValue)
                     }
                 }
 
