@@ -17,6 +17,7 @@
   ["session", "simpleMenu"],
   ["bar", "weather"],
   ["bar", "seededWidgets"],
+  ["dock", "moveToWorkspaceShows"],
   ["sidebar", "pinnedOnStartup"],
   ["appearance", "backdropPresets"],
   ["appearance", "windowBlurPresets"]

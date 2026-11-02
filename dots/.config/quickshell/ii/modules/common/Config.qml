@@ -947,6 +947,8 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: true
+                // What the app menu's Move to workspace offers: "numbers", "named" or "both".
+                property string moveToWorkspaceShows: "both"
                 // The bar's rules: below zero the interface decides, an empty color leaves it
                 // to the palette, and colors are kept per mode.
                 property bool showBackground: true

@@ -163,6 +163,34 @@ ContentPage {
             }
         }
 
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "move_item"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Move to workspace shows")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 220
+                model: [
+                    { displayName: Translation.tr("Workspace numbers"), icon: "tag", value: "numbers" },
+                    { displayName: Translation.tr("Named workspaces"), icon: "label", value: "named" },
+                    { displayName: Translation.tr("Both"), icon: "stacks", value: "both" }
+                ]
+                currentIndex: Math.max(0, model.findIndex(item => item.value === Config.options.dock.moveToWorkspaceShows))
+                onActivated: index => Config.options.dock.moveToWorkspaceShows = model[index].value
+            }
+        }
+
         // The glow's strength is what that effect is chosen for, so it leads.
         ConfigSlider {
             visible: Appearance.sizes.dockHoverEffect === "glow"

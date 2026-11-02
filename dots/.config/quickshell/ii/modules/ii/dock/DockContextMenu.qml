@@ -289,9 +289,20 @@ Item {
                             // while the app is already all there.
                             readonly property var namedEntries: WorkspaceNames.entries.filter(entry =>
                                 entry.id !== moveToWorkspaceBlock.activeWorkspaceId || moveToWorkspaceBlock.appElsewhere)
+                            readonly property string shows: Config.options.dock.moveToWorkspaceShows
+                            readonly property bool showNumbers: shows !== "named"
+                            // The list of names, led by the workspace on screen as "Current" when it has
+                            // no name of its own to go by.
+                            readonly property var listEntries: {
+                                if (shows === "numbers") return [];
+                                const id = activeWorkspaceId;
+                                const unnamed = appElsewhere && WorkspaceNames.canName(id) && WorkspaceNames.nameFor(id).length === 0;
+                                return (unnamed ? [{ id: id, name: Translation.tr("Current") }] : []).concat(namedEntries);
+                            }
 
                             ContextMenuItem {
                                 Layout.fillWidth: true
+                                visible: moveToWorkspaceBlock.showNumbers || moveToWorkspaceBlock.listEntries.length > 0
                                 iconName: "move_item"
                                 label: Translation.tr("Move to workspace")
                                 enabled: false
@@ -299,6 +310,7 @@ Item {
                             }
 
                             RowLayout {
+                                visible: moveToWorkspaceBlock.showNumbers
                                 Layout.leftMargin: 8
                                 Layout.rightMargin: 8
                                 Layout.bottomMargin: 4
@@ -345,11 +357,11 @@ Item {
                             // they fall in the numbering, set apart from the row
                             // above so they read as the user's own.
                             ContextMenuSeparator {
-                                visible: moveToWorkspaceBlock.namedEntries.length > 0
+                                visible: moveToWorkspaceBlock.showNumbers && moveToWorkspaceBlock.listEntries.length > 0
                             }
 
                             StyledText {
-                                visible: moveToWorkspaceBlock.namedEntries.length > 0
+                                visible: moveToWorkspaceBlock.shows === "both" && moveToWorkspaceBlock.namedEntries.length > 0
                                 Layout.leftMargin: 10
                                 Layout.bottomMargin: 2
                                 text: Translation.tr("Named workspaces")
@@ -378,7 +390,7 @@ Item {
                                 ScrollBar.vertical: StyledScrollBar {
                                     policy: namedList.count > namedList.maxVisible ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
                                 }
-                                model: ScriptModel { values: moveToWorkspaceBlock.namedEntries }
+                                model: ScriptModel { values: moveToWorkspaceBlock.listEntries }
                                 // The number drawn as that workspace's button in the
                                 // row above, the one on screen filled as it is there,
                                 // with the name beside it.

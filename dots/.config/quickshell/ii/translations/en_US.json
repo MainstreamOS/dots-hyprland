@@ -3368,5 +3368,9 @@
   "This computer starts in Gaming Mode as %1 without a password, whichever account is set here. Gaming Mode Setup changes that.": "This computer starts in Gaming Mode as %1 without a password, whichever account is set here. Gaming Mode Setup changes that.",
   "Could not change automatic login.": "Could not change automatic login.",
   "Log in automatically": "Log in automatically",
-  "Apps that keep saved passwords may ask for this account's password after it starts.": "Apps that keep saved passwords may ask for this account's password after it starts."
+  "Apps that keep saved passwords may ask for this account's password after it starts.": "Apps that keep saved passwords may ask for this account's password after it starts.",
+  "Current": "Current",
+  "Move to workspace shows": "Move to workspace shows",
+  "Workspace numbers": "Workspace numbers",
+  "Both": "Both"
 }
