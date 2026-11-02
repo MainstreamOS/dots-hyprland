@@ -7,7 +7,6 @@ import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Effects
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Wayland
@@ -19,13 +18,21 @@ Item {
     required property int workspaceId
     property real cardWidth: width * 0.78
     property real cardHeight: cardWidth * controller.screen.height / Math.max(1, controller.screen.width)
+    property bool firstRow: false
+    property bool lastRow: false
     readonly property real cardRadius: controller.workspaceRadius(cardWidth, cardHeight)
-    readonly property real cardX: (width - cardWidth) / 2
-    readonly property real innerFadeInset: GlobalStates.overviewWorkspacesOnly ? 0 : root.cardX
-    readonly property real fadeLeft: 0
-    readonly property real fadeRight: width
+    // The card is the whole miniature screen, placed so the part the bar and the
+    // dock reserve falls outside this row, which shows only the windows' area.
+    readonly property var reserved: controller.workspaceLayout.reserved
+    readonly property real cardX: (width - (controller.screen.width - reserved[0] - reserved[2]) * viewportScale) / 2
+        - reserved[0] * viewportScale
+    readonly property real largeRadius: RoundedCorners.on ? Appearance.rounding.dockBody * uiScale : 0
+    readonly property real smallRadius: RoundedCorners.on ? Math.min(Appearance.rounding.verysmall * uiScale, largeRadius) : 0
+    // Top-left, top-right, bottom-left, bottom-right; the panel's outer corners are large.
+    readonly property vector4d radii: Qt.vector4d(firstRow ? largeRadius : smallRadius, firstRow ? largeRadius : smallRadius,
+        lastRow ? largeRadius : smallRadius, lastRow ? largeRadius : smallRadius)
     readonly property real uiScale: controller.uiScale
-    readonly property real cardY: 0
+    readonly property real cardY: -reserved[1] * viewportScale
     readonly property bool selected: controller.selectedWorkspace === workspaceId
     readonly property bool dropHovered: controller.dropWorkspace === workspaceId
     readonly property bool hovered: workspaceHover.hovered && !controller.dragAddress
@@ -64,11 +71,11 @@ Item {
             const rect = positions[group[0]];
             return rect && rect.x + rect.width > viewportRight + viewportScale;
         }))
-    implicitHeight: cardY + cardHeight
+    clip: true
 
     function containsScenePoint(sceneX, sceneY) {
         const point = root.mapFromItem(null, sceneX, sceneY);
-        return point.x >= fadeLeft && point.x <= fadeRight && point.y >= cardY && point.y <= cardY + cardHeight;
+        return point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height;
     }
 
     function placementAt(sceneX, sceneY) {
@@ -160,36 +167,32 @@ Item {
     }
 
     LauncherTitlePill {
-        x: root.cardX + 6 * root.uiScale
-        y: root.cardY + 6 * root.uiScale
-        width: Math.max(0, Math.min(root.cardWidth - 12 * root.uiScale, implicitWidth))
-        height: Math.max(0, Math.min(26 * root.uiScale, root.cardHeight - 12 * root.uiScale))
+        x: 6 * root.uiScale
+        y: 6 * root.uiScale
+        width: Math.max(0, Math.min(root.width - 12 * root.uiScale, implicitWidth))
+        height: Math.max(0, Math.min(26 * root.uiScale, root.height - 12 * root.uiScale))
         z: 10
         uiScale: root.uiScale
-        visible: !root.empty || WorkspaceNames.nameFor(root.workspaceId).length > 0
-        text: WorkspaceNames.nameFor(root.workspaceId) || Translation.tr("Workspace %1").arg(root.workspaceId)
+        visible: text.length > 0
+        text: WorkspaceNames.nameFor(root.workspaceId)
     }
     HoverHandler { id: workspaceHover; blocking: false }
-    StyledRectangularShadow {
-        target: backdrop
-        color: Appearance.sizes.dockShowBackground ? Appearance.dockStockShadow : "transparent"
-    }
-    LauncherWorkspaceSurface {
+    Rectangle {
         id: backdrop
-        x: root.cardX; y: root.cardY
-        width: root.cardWidth; height: root.cardHeight
-        radius: root.cardRadius
-        uiScale: root.uiScale
-        Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            color: ColorUtils.applyAlpha(Appearance.launcherContent.colOnLayer0, 0.035)
-        }
+        anchors.fill: parent
+        color: root.dropHovered ? ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherContent.colLayer1Hover, 0.1)
+            : ColorUtils.applyAlpha(Appearance.launcherContent.colOnLayer0, 0.035)
+        topLeftRadius: root.radii.x
+        topRightRadius: root.radii.y
+        bottomLeftRadius: root.radii.z
+        bottomRightRadius: root.radii.w
+        border.width: (root.dropHovered ? 2 : 1) * root.uiScale
+        border.color: root.dropHovered ? Appearance.launcherContent.colLayer2Hover
+            : ColorUtils.applyAlpha(Appearance.launcherContent.colOutlineVariant, 0.2)
         StyledText {
             anchors.centerIn: parent
-            visible: root.empty
             text: root.workspaceId
-            font.pixelSize: root.cardHeight * 0.3
+            font.pixelSize: 250 * (5 / 3) * root.uiScale * root.viewportScale
             font.weight: Font.DemiBold
             font.family: Appearance.font.family.expressive
             color: Appearance.launcherContent.colTileNumber
@@ -200,42 +203,13 @@ Item {
         }
     }
 
-    // One alpha ramp per row fades the overhang without drawing over the
-    // neighboring column. Mask input too, so invisible windows cannot be hit.
     Item {
         id: windows
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: parent.height
+        anchors.fill: parent
         // Keep the last rendered windows through the closing fade. Captures
         // detach at close, which would otherwise reveal their fallback icons.
         layer.enabled: root.controller.rendering
         layer.live: root.controller.opened
-        layer.effect: OpacityMask { maskSource: edgeMask }
-        Rectangle {
-            id: edgeMask
-            anchors.fill: parent
-            visible: false
-            layer.enabled: root.controller.rendering
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop {
-                    position: 0.0
-                    color: GlobalStates.overviewWorkspacesOnly ? "white" : "transparent"
-                }
-                GradientStop {
-                    position: root.cardX / Math.max(1, root.width)
-                    color: "white"
-                }
-                GradientStop {
-                    position: (root.cardX + root.cardWidth) / Math.max(1, root.width)
-                    color: "white"
-                }
-                GradientStop {
-                    position: 1.0
-                    color: GlobalStates.overviewWorkspacesOnly ? "white" : "transparent"
-                }
-            }
-        }
         Repeater {
             // Only this workspace's windows; ScriptModel keeps their identity across
             // geometry refreshes, so previews survive updates.
@@ -293,18 +267,10 @@ Item {
                     layer.effect: MultiEffect { maskEnabled: true; maskSource: tileMask }
                     WorkspacePreviewMask {
                         id: tileMask
-                        // A window running past the card's side carries on into the fade
-                        // there, so on that side only the card's top and bottom cut it.
-                        readonly property bool pastLeft: tile.x < root.cardX - 0.5
-                        readonly property bool pastRight: tile.x + tile.width > root.cardX + root.cardWidth + 0.5
-                        readonly property real cardLeft: pastLeft ? -1 : root.cardX - tile.x
-                        readonly property real cardRight: pastRight ? tile.width + 1 : root.cardX + root.cardWidth - tile.x
-                        readonly property real leftRadius: pastLeft ? 0 : root.cardRadius
-                        readonly property real rightRadius: pastRight ? 0 : root.cardRadius
                         anchors.fill: parent
                         windowRadii: Qt.vector4d(body.radius, body.radius, body.radius, body.radius)
-                        workspaceRect: Qt.vector4d(cardLeft, root.cardY - tile.y, cardRight - cardLeft, root.cardHeight)
-                        workspaceRadii: Qt.vector4d(leftRadius, rightRadius, leftRadius, rightRadius)
+                        workspaceRect: Qt.vector4d(-tile.x, -tile.y, root.width, root.height)
+                        workspaceRadii: root.radii
                         workspaceClipped: root.controller.dragItem === tile ? 0 : 1
                         layer.enabled: tile.visible && root.controller.opened
                         visible: false
@@ -328,9 +294,9 @@ Item {
                 Item {
                     // Only the visible part of an overhanging window receives
                     // presses. Drag coordinates stay in the scene as it lifts.
-                    x: root.controller.dragItem === tile ? 0 : Math.max(0, root.fadeLeft - tile.x) + 2 * root.uiScale
+                    x: root.controller.dragItem === tile ? 0 : Math.max(0, -tile.x) + 2 * root.uiScale
                     width: root.controller.dragItem === tile ? tile.width
-                        : Math.max(0, Math.min(tile.width, root.fadeRight - tile.x) - x - 2 * root.uiScale)
+                        : Math.max(0, Math.min(tile.width, root.width - tile.x) - x - 2 * root.uiScale)
                     height: tile.height
                     HoverHandler { id: windowHover; blocking: false }
                     TapHandler {
@@ -377,15 +343,16 @@ Item {
         onActivated: root.controller.activateWorkspace(root.workspaceId)
     }
     Rectangle {
-        x: root.cardX - 2 * root.uiScale; y: root.cardY - 2 * root.uiScale
-        width: root.cardWidth + 4 * root.uiScale; height: root.cardHeight + 4 * root.uiScale
-        radius: RoundedCorners.on ? root.cardRadius + 2 * root.uiScale : 0
+        anchors.fill: parent
+        visible: root.selected
+        z: 4
         color: "transparent"
-        border.width: (root.dropHovered || root.selected ? 2 : 1) * root.uiScale
-        border.color: root.dropHovered ? root.controller.contentColors.colLayer2Hover
-            : root.selected ? root.controller.contentColors.colSecondaryOnTile
-            : ColorUtils.applyAlpha(root.controller.contentColors.colOutlineVariant, 0.2)
-        Behavior on border.color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
+        topLeftRadius: root.radii.x
+        topRightRadius: root.radii.y
+        bottomLeftRadius: root.radii.z
+        bottomRightRadius: root.radii.w
+        border.width: 2 * root.uiScale
+        border.color: root.controller.contentColors.colSecondaryOnTile
     }
     Rectangle {
         objectName: "windowDropIndicator"

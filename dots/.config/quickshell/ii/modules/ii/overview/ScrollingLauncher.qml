@@ -108,13 +108,9 @@ Item {
         return RoundedCorners.on ? Math.min(width / 2, height / 2, Appearance.rounding.dockBody * uiScale) : 0;
     }
     readonly property var geometry: LauncherLayout.scrolling({
-        unit: screenScale, width, height, aspect: screen.width / Math.max(1, screen.height),
+        unit: screenScale, width, height, screenWidth: screen.width, screenHeight: screen.height, reserved: workspaceLayout.reserved,
         centerX: screenCenterX, centerY: screenCenterY,
         searchHeight: search.visible ? search.collapsedHeight + (20 + Appearance.sizes.elevationMargin) * screenScale : 0,
-        bodyHeight: workspaceLayout.bodyHeight,
-        dockSize: Config.options.dock.enable
-            ? Appearance.sizes.dockHeightFor(Appearance.sizes.dockIconSize) + Appearance.sizes.dockEdgeGap : 0,
-        horizontalDock: Appearance.sizes.dockEdge === "top" || Appearance.sizes.dockEdge === "bottom",
         workspacesOnly: GlobalStates.overviewWorkspacesOnly, count: visibleCount, shown: shownCount,
         swapped, recentApps: showRecentApps
     })
@@ -124,8 +120,6 @@ Item {
     readonly property real slotHeight: geometry.slotHeight
     readonly property real previewWidth: geometry.previewWidth
     readonly property real newWorkspaceHeight: geometry.plusHeight
-    readonly property real appColumnInset: geometry.inset
-    readonly property real overhang: geometry.overhang
     readonly property bool swapped: Config.options.overview.scrollingSwapSides
     signal appDropped(var app, int workspace)
 
@@ -440,6 +434,7 @@ Item {
     SearchWidget {
         id: search
         quietStyle: true
+        panelWidth: root.geometry.totalWidth
         uiScale: root.screenScale
         visible: !GlobalStates.overviewWorkspacesOnly
         z: 10
@@ -455,12 +450,21 @@ Item {
         // Keep capture contexts and masks allocated while search covers them.
         opacity: root.searching ? 0 : 1
         enabled: !root.searching && !root.activationPending
+        StyledRectangularShadow {
+            target: workspacePanel
+            color: Appearance.sizes.dockShowBackground ? Appearance.dockStockShadow : "transparent"
+        }
+        LauncherWorkspaceSurface {
+            id: workspacePanel
+            x: -root.geometry.padding; y: -root.geometry.padding
+            width: parent.width + root.geometry.padding * 2
+            height: root.geometry.panelHeight
+            uiScale: root.uiScale
+        }
         Item {
             id: workspaceViewport
-            readonly property real padding: Appearance.sizes.elevationMargin * root.uiScale
-            y: -padding
             width: parent.width
-            height: Math.max(0, root.shownCount * (root.slotHeight + root.gap) - root.gap) + padding * 2
+            height: Math.max(0, root.shownCount * (root.slotHeight + root.gap) - root.gap)
             clip: true
             Repeater {
                 id: cards
@@ -473,9 +477,11 @@ Item {
                     property real enterOffset: 0
                     controller: root
                     workspaceId: modelData
-                    y: index * (root.slotHeight + root.gap) + workspaceViewport.padding
+                    y: index * (root.slotHeight + root.gap)
                     width: parent.width; height: root.slotHeight
                     cardWidth: root.previewWidth
+                    firstRow: index === 0
+                    lastRow: index === root.shownCount - 1
                     transform: Translate { y: workspaceCard.enterOffset }
                     Behavior on y {
                         enabled: root.opened && root.workspaceTransitionDirection !== 0 && !root.dragAddress
@@ -543,7 +549,7 @@ Item {
                 required property int modelData
                 objectName: modelData < 0 ? "previousWorkspaces" : "nextWorkspaces"
                 x: (parent.width - width) / 2
-                y: modelData < 0 ? -height - root.gap
+                y: modelData < 0 ? -height - root.geometry.panelGap
                     : parent.height - (root.newWorkspaceHeight + height) / 2
                 visible: modelData < 0 ? root.moreWorkspacesAbove : root.moreWorkspacesBelow
                 width: 40 * root.uiScale
@@ -576,6 +582,26 @@ Item {
         visible: !GlobalStates.overviewWorkspacesOnly
         opacity: root.searching ? 0 : 1
         enabled: !root.searching && !root.activationPending
+        StyledRectangularShadow {
+            target: appPanel
+            color: Appearance.sizes.dockShowBackground ? Appearance.dockStockShadow : "transparent"
+        }
+        Rectangle {
+            id: appPanel
+            anchors.fill: parent
+            radius: root.workspaceRadius(width, height)
+            color: Appearance.launcherPanelBackground
+            border.width: Appearance.sizes.dockShowBackground ? 1.5 * root.uiScale : 0
+            border.color: Appearance.colors.colDockBackgroundBorder
+        }
+        Rectangle {
+            visible: root.showRecentApps
+            x: 24 * root.uiScale
+            y: root.geometry.drawerOffset - 6 * root.uiScale
+            width: parent.width - x * 2
+            height: 1.5 * root.uiScale
+            color: Appearance.colors.colDockBackgroundBorder
+        }
         ScrollingLauncherApps {
             launcher: root
             id: recentApps
@@ -593,7 +619,7 @@ Item {
             y: root.geometry.drawerOffset
             width: parent.width
             collapsedHeight: root.geometry.drawerHeight
-            visibleRows: root.showRecentApps ? 4 : 8
+            visibleRows: root.showRecentApps ? 5 : 7
         }
     }
     Item {

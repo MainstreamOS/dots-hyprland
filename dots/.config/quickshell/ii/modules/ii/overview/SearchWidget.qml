@@ -24,6 +24,8 @@ Item { // Wrapper
     property alias appResults: appResults
     property real maximumResultsHeight: 600
     property bool quietStyle: false
+    // How wide a quiet search bar runs, to span the panels under it.
+    property real panelWidth: 0
     property real uiScale: 1
     property var contentColors: Appearance.launcherPanelContent
     readonly property real collapsedHeight: searchBar.height + searchBar.verticalPadding * 4 + Appearance.sizes.elevationMargin * root.uiScale * 2
@@ -124,7 +126,7 @@ Item { // Wrapper
             topMargin: Appearance.sizes.elevationMargin * root.uiScale
         }
         clip: true
-        implicitWidth: root.quietStyle ? searchBar.preferredWidth + 14 * root.uiScale : columnLayout.implicitWidth
+        implicitWidth: root.quietStyle ? (root.panelWidth > 0 ? root.panelWidth : searchBar.preferredWidth + 14 * root.uiScale) : columnLayout.implicitWidth
         implicitHeight: columnLayout.implicitHeight
         Behavior on implicitHeight {
             id: searchHeightBehavior

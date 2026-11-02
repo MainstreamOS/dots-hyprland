@@ -12,11 +12,12 @@ ApplicationDrawer {
     wheelScrolling: true
     workspaceStyle: true
     uiScale: launcher.uiScale
-    colBackground: Appearance.launcherPanelBackground
+    bare: true
+    colBackground: "transparent"
     surfaceRadius: launcher.workspaceRadius(width, height)
     contentColors: Appearance.launcherPanelContent
     compactCells: rowHeight < 110 * uiScale
-    columns: 6
+    columns: 5
     spacing: 10 * uiScale
     iconSize: Math.max(12 * uiScale, Math.min((expanded ? 96 : 75) * uiScale,
         rowHeight - (compactCells ? 28 : 48) * uiScale))

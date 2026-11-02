@@ -54,6 +54,8 @@ Item {
     property bool headerInteractive: false
     property bool wheelScrolling: false
     property bool workspaceStyle: false
+    // Sits on a panel its parent draws, so it brings no outline or shadow of its own.
+    property bool bare: false
     property real uiScale: 1
     property string wallpaper: ""
     property real surfaceRadius: Appearance.rounding.dockBody
@@ -278,7 +280,7 @@ Item {
         blur: Appearance.sizes.elevationMargin * root.uiScale * (root.workspaceStyle ? 1.4 + root.hoverElevation * 0.4 : 0.9)
         offset: Qt.vector2d(0, (root.workspaceStyle ? 4 + root.hoverElevation * 2 : 1) * root.uiScale)
         // Nothing to cast a shadow once the surface is gone.
-        visible: root.workspaceStyle || Appearance.sizes.dockShowBackground
+        visible: !root.bare && (root.workspaceStyle || Appearance.sizes.dockShowBackground)
         // Scaled by the surface's own alpha, so a see-through list is not sat
         // on a shadow as heavy as a solid one's.
         color: root.workspaceStyle ? Appearance.colors.colShadow : Appearance.dockStockShadow
@@ -322,7 +324,7 @@ Item {
             anchors.fill: parent
             radius: drawerBackground.radius
             color: "transparent"
-            border.width: Appearance.sizes.dockShowBackground ? 1.5 * root.uiScale : 0
+            border.width: Appearance.sizes.dockShowBackground && !root.bare ? 1.5 * root.uiScale : 0
             border.color: Appearance.colors.colDockBackgroundBorder
         }
         ColumnLayout {
@@ -333,6 +335,7 @@ Item {
             LauncherTitlePill {
                 visible: root.panelTitle.length > 0
                 text: root.panelTitle
+                quiet: root.bare
                 uiScale: root.uiScale
                 Layout.alignment: Qt.AlignLeft
                 Layout.maximumWidth: parent.width

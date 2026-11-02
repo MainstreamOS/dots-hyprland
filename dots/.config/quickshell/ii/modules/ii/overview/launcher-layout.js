@@ -24,85 +24,47 @@ function workspaceGrid(o) {
 }
 
 function scrolling(o) {
-    // Fit workspace previews and panels to the available logical screen area.
-    // Text and controls retain their native logical sizes in the callers.
+    // A panel of workspace rows beside a panel of apps. Each row shows the
+    // desktop without the bar's and dock's space, plus half of a two-thirds
+    // window to either side, which makes it five thirds of a screen wide.
     const unit = o.unit;
-    const width = o.width / unit, height = o.height / unit;
-    const aspect = o.aspect;
-    const top = o.searchHeight / unit;
-    const availableHeight = Math.max(1 / unit, Math.min(o.bodyHeight / unit, height - top));
-    const designWidth = Math.max(1, Math.min(2512,
-        (1440 * aspect - (o.horizontalDock ? 0 : o.dockSize * 2)) * 0.89,
-        (1440 - 114 - (o.horizontalDock ? o.dockSize : 0)) * aspect));
-    const designColumn = o.workspacesOnly ? designWidth : (designWidth - 24) / 2;
-    // The body is 0.945 columns tall plus 76 units of gutters, fitted directly
-    // whatever the number of occupied workspaces.
-    const designStack = Math.min(designWidth / aspect, designColumn * 0.945 + 76);
-    const fit = Math.max(0.01 / unit, Math.min(width / 2512, availableHeight / designStack));
-    const scale = unit * fit;
-    const gap = 24 * scale, plusHeight = 56 * scale;
-    const columnWidth = Math.max(1, designColumn * scale);
-    const stackHeight = designStack * scale;
-
-    // The app launcher UI keeps a fixed geometry based on the default 3-workspace
-    // composition so changing the number of visible workspaces does not resize it.
-    const baseCount = 3;
-    let baseSlotHeight = Math.max(1, Math.min(
-        (stackHeight - plusHeight - gap * baseCount) / baseCount,
-        columnWidth * 0.8 / aspect));
-    let basePreviewWidth = Math.max(1, Math.min(columnWidth * 0.8, baseSlotHeight * aspect));
-    // Symmetrical 9-inch panel sizing:
-    // Both windows on the left and right of the workspace card overhang symmetrically,
-    // each showing ~half the window and fading out to transparent at the panel edge.
-    // Added together, the visible workspace (left overhang + card + right overhang)
-    // and the 6-column app drawer each measure exactly ~9 inches.
-    const overhang = Math.round(basePreviewWidth * 0.30);
-    let appsWidth = basePreviewWidth + 2 * overhang;
-    if (!o.workspacesOnly) {
-        const drawerEdge = w => {
-            const oh = Math.round(w * 0.30);
-            return o.centerX + gap / 2 + w + 2 * oh;
-        };
-        const limit = Math.min(o.width, 2 * o.centerX) - gap;
-        if (drawerEdge(basePreviewWidth) > limit) {
-            let lo = 1, hi = basePreviewWidth;
-            for (let i = 0; i < 24; i++) {
-                const mid = (lo + hi) / 2;
-                if (drawerEdge(mid) > limit) hi = mid; else lo = mid;
-            }
-            basePreviewWidth = lo;
-            baseSlotHeight = Math.min(baseSlotHeight, basePreviewWidth / aspect);
-            appsWidth = basePreviewWidth + 2 * Math.round(basePreviewWidth * 0.30);
-        }
-    }
-    const panelHeight = (baseCount - 1) * (baseSlotHeight + gap) + basePreviewWidth / aspect;
-    const panelTop = Math.max(top * unit, o.centerY - panelHeight / 2);
-    const visibleWidth = o.workspacesOnly ? columnWidth : appsWidth;
-    const leftWorkspaceX = o.workspacesOnly ? (o.width - columnWidth) / 2
-        : o.centerX - gap / 2 - visibleWidth;
-    const rightAppsX = o.centerX + gap / 2;
-    // Mirror each complete panel symmetrically when sides are swapped.
+    const reserved = o.reserved ?? [0, 0, 0, 0];
+    const usableWidth = Math.max(1, o.screenWidth - reserved[0] - reserved[2]);
+    const usableHeight = Math.max(1, o.screenHeight - reserved[1] - reserved[3]);
+    const padding = 10 * unit, rowGap = 5 * unit;
+    const count = Math.max(1, o.count), shown = Math.max(1, o.shown);
+    const fit = k => {
+        const inner = 964 * k - padding * 2;
+        // Three rows set the size, so fewer leave the panels as they are.
+        const previewScale = Math.min((inner - 2 * rowGap) / 3, (inner - (count - 1) * rowGap) / count) / usableHeight;
+        const rowWidth = usableWidth * previewScale * 5 / 3;
+        const panelWidth = rowWidth + padding * 2;
+        const appsWidth = 664 * k, panelGap = 24 * k;
+        return { k, previewScale, rowWidth, panelWidth, appsWidth, panelGap,
+            total: o.workspacesOnly ? panelWidth : panelWidth + panelGap + appsWidth };
+    };
+    let size = fit(o.height / 1239);
+    if (size.total > o.width - size.panelGap * 2)
+        size = fit(size.k * (o.width - size.panelGap * 2) / size.total);
+    const k = size.k;
+    const trayHeight = 964 * k;
+    const trayY = Math.max(o.searchHeight, o.searchHeight + (o.height - o.searchHeight - 90 * k - trayHeight) / 2);
+    const left = o.centerX - size.total / 2;
     const swapped = o.swapped && !o.workspacesOnly;
-    const workspaceX = swapped ? rightAppsX : leftWorkspaceX;
-    const appsX = swapped ? o.centerX - gap / 2 - appsWidth : rightAppsX;
-    const drawerOffset = o.recentApps ? 294 * scale : 0;
-
-    // Workspace preview slots scale to fit the configured visible count.
-    const maxPreviewWidth = o.workspacesOnly ? columnWidth * 0.8 : basePreviewWidth;
-    let slotHeight = Math.max(1, Math.min(
-        (stackHeight - plusHeight - gap * o.count) / o.count,
-        maxPreviewWidth / aspect));
-    let previewWidth = Math.max(1, Math.min(maxPreviewWidth, slotHeight * aspect));
-    const insetFor = count => Math.max(0, (stackHeight - count * (slotHeight + gap) - plusHeight) / 2);
-    const workspaceOffset = insetFor(o.shown) - (o.count > 1 ? insetFor(o.count) : 0);
-
+    const panelX = swapped ? left + size.total - size.panelWidth : left;
+    const appsX = swapped ? left : left + size.panelWidth + size.panelGap;
+    const rowHeight = usableHeight * size.previewScale;
+    const panelHeight = padding * 2 + shown * rowHeight + (shown - 1) * rowGap;
+    const panelY = trayY + (trayHeight - panelHeight) / 2;
+    const plusHeight = 56 * k;
+    const drawerOffset = o.recentApps ? 236 * k : 0;
     return {
-        scale, gap, plusHeight, columnWidth, slotHeight, previewWidth, inset: 0,
-        overhang,
-        workspace: { x: workspaceX, y: panelTop + workspaceOffset, width: visibleWidth,
-            height: stackHeight - insetFor(o.shown) },
-        apps: { x: appsX, y: panelTop, width: appsWidth, height: panelHeight },
-        recentHeight: 270 * scale,
-        drawerOffset, drawerHeight: Math.max(1, panelHeight - drawerOffset)
+        scale: k, gap: rowGap, padding, panelGap: size.panelGap, plusHeight,
+        totalWidth: size.total, panelHeight, previewScale: size.previewScale,
+        slotHeight: rowHeight, previewWidth: o.screenWidth * size.previewScale,
+        workspace: { x: panelX + padding, y: panelY + padding, width: size.rowWidth,
+            height: panelHeight - padding + size.panelGap + plusHeight },
+        apps: { x: appsX, y: trayY, width: size.appsWidth, height: trayHeight },
+        recentHeight: 226 * k, drawerOffset, drawerHeight: trayHeight - drawerOffset
     };
 }
