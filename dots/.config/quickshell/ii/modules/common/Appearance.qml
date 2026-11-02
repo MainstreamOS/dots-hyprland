@@ -429,17 +429,28 @@ Singleton {
         palette: root.colors
         adaptive: false
     }
-    readonly property color launcherPanelBackground: ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
+    // Under the dock's Frost preset the launcher's surfaces take a thin white layer over
+    // a lighter color, so its own blur reads as the same frosted material.
+    function frosted(color, opacity) {
+        const haze = 0.13;
+        const alpha = haze + opacity * (1 - haze);
+        const mix = channel => (haze + channel * opacity * (1 - haze)) / alpha;
+        return Qt.rgba(mix(color.r), mix(color.g), mix(color.b), alpha);
+    }
+    readonly property color launcherPanelBackground: BackdropPresets.dockIsFrost
+        ? frosted(Qt.color(m3colors.darkmode ? "black" : "white"), 0.5)
+        : ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
     // The workspace panels are nearly solid, so little of the blur behind them shows.
     // They take the wallpaper's hue instead, at their own lightness so nothing brightens,
     // unless the dock's color was picked by hand. Under the Glass preset they let half
     // of the launcher's blur through.
     readonly property color launcherWorkspaceBackground: {
-        const surface = BackdropPresets.dockIsGlass ? ColorUtils.applyAlpha(drawerSurface, 0.5) : drawerSurface
+        const surface = BackdropPresets.dockIsGlass ? ColorUtils.applyAlpha(drawerSurface, 0.5)
+            : BackdropPresets.dockIsFrost ? ColorUtils.applyAlpha(drawerSurface, 0.6) : drawerSurface
         const average = wallpaperAverage
-        if (colors.dockPick !== "" || average.hslSaturation <= 0)
-            return surface
-        return Qt.hsla(average.hslHue, Math.min(0.35, average.hslSaturation), surface.hslLightness, surface.a)
+        const tinted = colors.dockPick !== "" || average.hslSaturation <= 0 ? surface
+            : Qt.hsla(average.hslHue, Math.min(0.35, average.hslSaturation), surface.hslLightness, surface.a)
+        return BackdropPresets.dockIsFrost ? frosted(tinted, tinted.a) : tinted
     }
     readonly property LauncherSurfaceContent launcherPanelContent: LauncherSurfaceContent {
         m3: root.m3colors
@@ -903,7 +914,8 @@ Singleton {
         // so the tile is what it has to stand off.
         readonly property color colSecondaryOnTile: markOnFill(palette.colSecondary, colSurfaceContainerLow, palette.colSurfaceContainerLow)
         // Its number, a faint wash of the ink, lies on the tile as well.
-        readonly property color colTileNumber: faded(colOnLayer1, 0.2, colSurfaceContainerLow, palette.colSurfaceContainerLow)
+        readonly property color colTileNumber: BackdropPresets.dockIsFrost ? ColorUtils.applyAlpha(colOnLayer1, 0.3)
+            : faded(colOnLayer1, 0.2, colSurfaceContainerLow, palette.colSurfaceContainerLow)
         readonly property color colSurfaceContainerHigh: fill(palette.colSurfaceContainerHigh, m3onSurface, m3.m3onSurface)
         readonly property color m3onSurfaceVariant: ink(m3.m3onSurfaceVariant)
         // The palette's subtext is this very color, so the two are held as one.

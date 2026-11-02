@@ -17,6 +17,7 @@ Singleton {
         { displayName: Translation.tr("Glass"), enable: true, opacity: 0.55, blur: 4, haze: 0.076, magnification: 1.254, offsetX: 200, offsetY: 7 },
     ]
     readonly property var all: root.shipped.concat(Array.from(Config.options.appearance.backdropPresets))
+    readonly property bool dockIsFrost: root.indexFor(Config.options.dock) === 1
     readonly property bool dockIsGlass: root.indexFor(Config.options.dock) === 2
 
     // The same three for windows. The opacity comes with them, since blur only shows
