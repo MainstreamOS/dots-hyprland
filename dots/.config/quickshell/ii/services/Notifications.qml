@@ -57,6 +57,7 @@ Singleton {
         onNotificationChanged: if (notification === null && !replaced) root.discardNotification(notificationId)
         // Stable phone identity keeps history unique across backend restarts.
         property string phoneKey: notification?.hints?.["x-mainstream-notification-key"] || ""
+        property double phoneTime: Number(notification?.hints?.["x-mainstream-phone-time"] || 0)
         property string imageRole: {
             const role = notification?.hints?.["x-mainstream-image-role"] || "";
             return role === "app-icon" ? "notification-image" : role;
@@ -126,6 +127,7 @@ Singleton {
             "replyPlaceholder": notif.inlineReplyPlaceholder,
             "kdeIdentity": notif.kdeIdentity,
             "phoneKey": notif.phoneKey,
+            "phoneTime": notif.phoneTime,
             "imageRole": notif.imageRole,
             "iconHash": notif.iconHash,
             "kdeDeviceId": notif.kdeDeviceId,
@@ -295,7 +297,7 @@ Singleton {
         inlineReplySupported: true
         // KDE Connect can send the app and contact as separate header fields
         // instead of joining the sender and message into one HTML body.
-        extraHints: ["x-kde-display-appname", "x-kdeconnect-source-device", "x-kde-origin-name", "x-kde-eventId", "x-kde-appname", "desktop-entry", "x-mainstream-notification-key", "x-mainstream-image-role", "x-mainstream-icon-hash"]
+        extraHints: ["x-kde-display-appname", "x-kdeconnect-source-device", "x-kde-origin-name", "x-kde-eventId", "x-kde-appname", "desktop-entry", "x-mainstream-notification-key", "x-mainstream-phone-time", "x-mainstream-image-role", "x-mainstream-icon-hash"]
         keepOnReload: true
         persistenceSupported: true
 
@@ -694,6 +696,7 @@ Singleton {
                     "savedReplyPlaceholder": notif.replyPlaceholder || "",
                     "kdeIdentity": notif.kdeIdentity || "",
                     "phoneKey": notif.phoneKey || "",
+                    "phoneTime": notif.phoneTime || 0,
                     "imageRole": notif.imageRole || "",
                     "iconHash": notif.iconHash || "",
                     "kdeDeviceId": notif.kdeDeviceId || "",

@@ -125,11 +125,16 @@ Singleton {
                         mirrored.push(Object.assign({}, base, { body: "" }));
                     }
                 } else {
+                    const occurrences = new Map();
                     for (let i = 0; i < parts.length; i++) {
+                        const occurrence = occurrences.get(parts[i]) || 0;
+                        occurrences.set(parts[i], occurrence + 1);
                         mirrored.push(Object.assign({}, base, {
                             id: base.id + ":" + i,
                             body: parts[i],
-                            time: (base.time || 0) + i
+                            time: (base.time || 0) + i,
+                            notificationPart: occurrence,
+                            bundled: true
                         }));
                     }
                 }
@@ -137,7 +142,8 @@ Singleton {
                 mirrored.push(base);
             }
         }
-        const filteredMirrored = mirrored.filter(m => !native.some(n => History.sameText(n, m)));
+        const filteredMirrored = mirrored.filter(m => !native.some(n => History.sameText(n, m)))
+            .map(History.notificationMessage);
         return native.concat(filteredMirrored).map(contactFor).sort((a, b) => b.time - a.time);
     }
     // Only artwork the phone marks as the contact's picture; a notification's

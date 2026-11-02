@@ -14,6 +14,57 @@ function hasMedia(message) {
     return !!(message.media?.length || message.imageUids?.length || message.images?.length || message.audioClips?.length);
 }
 
+function notificationEventId(message) {
+    if (!message.mirrored || !message.notificationKey) return "";
+    return "notification:" + JSON.stringify([message.notificationKey,
+        message.bundled ? 0 : Number(message.notificationTime) || 0,
+        String(message.body || ""), message.notificationPart || 0]);
+}
+
+function notificationMessage(message) {
+    const id = notificationEventId(message);
+    return id ? Object.assign({}, message, {
+        id, sourceIds: [...new Set((message.sourceIds || [message.id]).concat([id]))],
+        time: Number(message.notificationTime) || message.time
+    }) : message;
+}
+
+function sameNotification(a, b) {
+    if (!a.mirrored || !b.mirrored || !a.notificationKey || a.notificationKey !== b.notificationKey
+        || (a.deviceId && b.deviceId && a.deviceId !== b.deviceId)
+        || String(a.body || "") !== String(b.body || "")
+        || (a.notificationPart || 0) !== (b.notificationPart || 0)) return false;
+    return a.bundled || b.bundled || !a.notificationTime || !b.notificationTime
+        || a.notificationTime === b.notificationTime;
+}
+
+// Older entries kept only the desktop ID. A surviving ID ties that saved
+// notification to its phone key; retain all source IDs when its copies merge.
+function adoptNotificationKeys(history, incoming) {
+    let records = history.slice();
+    for (const message of incoming) {
+        if (!message.mirrored || !message.notificationKey) continue;
+        const aliases = message.sourceIds || [message.id];
+        let seed = records.find(m => m.mirrored && !m.notificationKey
+            && m.sourceIds?.some(id => aliases.includes(id)));
+        if (!seed) {
+            // If every desktop ID was replaced, one canonical phone event can
+            // still identify its old notification-only copies. Multiple known
+            // events with identical text are ambiguous and stay separate.
+            const canonical = records.filter(m => m.mirrored && m.notificationKey === message.notificationKey
+                && m.body === message.body && (m.notificationPart || 0) === (message.notificationPart || 0));
+            if (canonical.length === 1) seed = canonical[0];
+        }
+        if (!seed) continue;
+        records = records.map(m => m.mirrored && !m.notificationKey && sameConversation(m, seed)
+            && m.body === seed.body ? Object.assign({}, m, {
+                notificationKey: message.notificationKey, notificationTime: message.notificationTime || 0,
+                notificationPart: message.notificationPart || 0, bundled: !!message.bundled
+            }) : m);
+    }
+    return records;
+}
+
 function sameConversation(a, b) {
     return a.deviceId === b.deviceId && contactMatches(a, b)
         && (a.thread === undefined || b.thread === undefined || a.thread === b.thread)
@@ -40,6 +91,22 @@ function coalesceMessages(messages) {
     const sources = m => m.sourceIds || [m.id];
     const native = m => sources(m).some(id => id.startsWith("kde:"));
     for (const message of messages) {
+        const copy = records.findIndex(other => sameNotification(other, message)
+            || (message.mirrored && other.mirrored && !message.notificationKey && !other.notificationKey
+                && message.time > 0 && message.time === other.time && message.body === other.body
+                && sameConversation(message, other)));
+        if (copy >= 0) {
+            const other = records[copy];
+            const media = hasMedia(other) ? other : message;
+            records[copy] = Object.assign({}, other, {
+                sourceIds: [...new Set(sources(other).concat(sources(message)))],
+                picture: other.picture || message.picture || "",
+                media: media.media || [], images: media.images || [], audioClips: media.audioClips || [],
+                imageUids: media.imageUids || [], imageSlots: media.imageSlots || [],
+                previewImage: media.previewImage || ""
+            });
+            continue;
+        }
         const index = native(message) ? records.findIndex(other => native(other)
             && captionHalves(other, message)) : -1;
         if (index < 0) {
@@ -233,14 +300,15 @@ function updateCalls(history, previous, incoming, now) {
 }
 
 function updateMessages(history, seen, incoming, clearedAt, now) {
-    const records = coalesceMessages(history);
+    const records = coalesceMessages(adoptNotificationKeys(history, incoming));
     const ids = seen.slice();
     const sanitizedIncoming = sanitizeHistoryMessages(incoming);
     for (const message of sanitizedIncoming.slice().reverse()) {
-        const time = Number(message.time) || now;
-        const key = message.id;
+        const time = Number(message.notificationTime) || Number(message.time) || now;
+        const key = notificationEventId(message) || message.id;
         if (!key || time <= clearedAt) continue;
-        let index = records.findIndex(m => m.sourceIds.includes(key));
+        let index = records.findIndex(m => m.sourceIds.includes(key) || sameNotification(m, message)
+            || (m.sourceIds.includes(message.id) && (!m.notificationKey || !message.notificationKey)));
         if (index < 0) index = records.findIndex(m => {
             if (Math.abs(m.time - time) > 30000 || !contactMatches(m, message)) return false;
             if (m.sourceIds.some(id => id.split(":")[0] === key.split(":")[0])) return false;
@@ -260,8 +328,12 @@ function updateMessages(history, seen, incoming, clearedAt, now) {
         const resolvedBody = old && hasMedia(old) && isMediaPlaceholder(message.body) ? (old.body || "")
             : hasMedia(message) && isMediaPlaceholder(old?.body) ? (message.body || "") : (message.body || old?.body || "");
         const record = {
-            id: old?.id || "message:" + key, sourceIds: (old?.sourceIds || []).concat(message.sourceIds || [key]).filter((id, i, all) => all.indexOf(id) === i),
+            id: old?.id || "message:" + key, sourceIds: (old?.sourceIds || []).concat(message.sourceIds || [message.id], [key]).filter((id, i, all) => all.indexOf(id) === i),
             time: old?.time || time, thread: message.thread ?? old?.thread, name: message.name || old?.name || "",
+            notificationKey: message.notificationKey || old?.notificationKey || "",
+            notificationTime: Number(message.notificationTime) || old?.notificationTime || 0,
+            notificationPart: message.notificationPart ?? old?.notificationPart ?? 0,
+            bundled: !!message.bundled || !!old?.bundled,
             type: message.type ?? old?.type, sub: message.sub ?? old?.sub,
             number: message.number || old?.number || "", body: resolvedBody,
             deviceId: message.deviceId || old?.deviceId || "",
@@ -281,6 +353,7 @@ function updateMessages(history, seen, incoming, clearedAt, now) {
         else records.push(record);
         if (!ids.includes(key)) ids.push(key);
     }
-    return {messages: records.filter(m => !m.mirrored || !mirrorRepresented(m, records))
+    const reconciled = coalesceMessages(adoptNotificationKeys(records, sanitizedIncoming));
+    return {messages: reconciled.filter(m => !m.mirrored || !mirrorRepresented(m, reconciled))
         .sort((a, b) => b.time - a.time).slice(0, limit), seen: ids.slice(-500)};
 }

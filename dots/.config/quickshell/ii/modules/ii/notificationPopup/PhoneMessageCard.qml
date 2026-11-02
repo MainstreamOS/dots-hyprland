@@ -20,10 +20,8 @@ Item {
     readonly property bool sending: root.sendRequest.length > 0 || root.mirroredReply >= 0
 
     readonly property string number: root.entry?.number || root.entry?.address || ""
-    readonly property int notificationId: {
-        const id = String(root.entry?.id ?? "");
-        return id.includes("notification:") ? parseInt(id.split(":")[1]) : -1;
-    }
+    // Carried beside the message's id, which is reshaped for telling replays apart.
+    readonly property int notificationId: Number.isInteger(root.entry?.notificationId) ? root.entry.notificationId : -1
     readonly property bool canMessage: !!root.number && Phone.canMessage && Phone.reachable
         && (!root.entry?.deviceId || root.entry.deviceId === Phone.deviceId)
     readonly property bool canReplyToNotification: Notifications.list.find(n => n.notificationId === root.notificationId)?.canReply ?? false

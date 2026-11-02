@@ -53,7 +53,11 @@ function messageFor(notification) {
         name = prefix?.[1] || "";
         if (prefix) body = body.slice(prefix[0].length);
     }
-    return {id: (native ? "sms-notification:" : "notification:") + notification.notificationId, name, body,
+    // notificationId stays a number of its own: the id below is reshaped once the message is split or replayed.
+    return {id: (native ? "sms-notification:" : "notification:") + notification.notificationId, notificationId: notification.notificationId, name, body,
+        notificationKey: notification.phoneKey || (notification.kdeDeviceId && notification.kdeInternalId
+            ? JSON.stringify([notification.kdeDeviceId, notification.kdeInternalId]) : ""),
+        notificationTime: Number(notification.phoneTime) || 0,
         number: /^\+?[\d ()\-.]+$/.test(name) ? name : "",
         // Only a contact image is a portrait; other notification images can be message artwork.
         picture: !notification.imageRole || notification.imageRole === "contact" ? notification.image || "" : "", time: notification.time,
