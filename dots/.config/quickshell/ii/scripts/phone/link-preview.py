@@ -23,6 +23,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 import subprocess
+import configparser
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -573,7 +574,31 @@ YTDLP_FORMAT = "best[height<=720][ext=mp4]/best[ext=mp4]/best"
 YTDLP_MERGED_FORMAT = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/" + YTDLP_FORMAT
 
 
-def get_stream_url(url):
+def browser_profile():
+    """The default Zen/Firefox profile, read only after playback is opted in."""
+    home = os.path.expanduser("~")
+    config = os.environ.get("XDG_CONFIG_HOME", os.path.join(home, ".config"))
+    for directory in (os.path.join(config, "zen"), os.path.join(home, ".zen"),
+                      os.path.join(home, ".mozilla", "firefox"),
+                      os.path.join(home, ".var/app/app.zen_browser.zen/.zen"),
+                      os.path.join(home, ".var/app/org.mozilla.firefox/.mozilla/firefox")):
+        profiles = configparser.ConfigParser(interpolation=None)
+        try:
+            profiles.read(os.path.join(directory, "profiles.ini"))
+            defaults = [profiles[s]["Default"] for s in profiles.sections()
+                        if s.startswith("Install") and profiles[s].get("Default")]
+            defaults += [profiles[s]["Path"] for s in profiles.sections()
+                         if s.startswith("Profile") and profiles[s].get("Default") == "1"]
+            for name in defaults:
+                path = os.path.join(directory, name)
+                if os.path.isfile(os.path.join(path, "cookies.sqlite")):
+                    return "firefox:" + path
+        except (OSError, configparser.Error, KeyError):
+            continue
+    return ""
+
+
+def get_stream_url(url, browser_sign_in=False):
     clean = normalize_url(url)
     url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
     clean_hash = hashlib.sha256(clean.encode()).hexdigest()[:16]
@@ -587,11 +612,12 @@ def get_stream_url(url):
     is_youtube = on_host(clean, "youtube.com", "youtu.be")
 
     target_template = os.path.join(MEDIA_DIR, f"{url_hash}.%(ext)s")
+    auth_args = []
 
     def download():
         try:
             cmd = ["yt-dlp", "-f", YTDLP_MERGED_FORMAT, "--merge-output-format", "mp4", "--no-playlist", "--no-warnings",
-                   "-o", target_template, clean]
+                   "-o", target_template, *auth_args, clean]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             cached = cached_media(url_hash) if res.returncode == 0 else None
             return {"url": url, **cached} if cached else None
@@ -601,8 +627,8 @@ def get_stream_url(url):
 
     def direct():
         try:
-            cmd = ["yt-dlp", "-g", "-f", YTDLP_FORMAT, "--no-playlist", "--no-warnings", clean]
-            if is_youtube:
+            cmd = ["yt-dlp", "-g", "-f", YTDLP_FORMAT, "--no-playlist", "--no-warnings", *auth_args, clean]
+            if is_youtube and not auth_args:
                 # YouTube's web clients no longer offer video and audio in one stream; its mobile site still does.
                 cmd[1:1] = ["--extractor-args", "youtube:player_client=mweb"]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=14)
@@ -620,6 +646,16 @@ def get_stream_url(url):
         result = attempt()
         if result:
             return result
+    # Metadata fetching never reads browser cookies. Only an explicitly enabled
+    # YouTube playback request may retry with the user's existing sign-in.
+    if is_youtube and browser_sign_in:
+        profile = browser_profile()
+        if profile:
+            auth_args = ["--cookies-from-browser", profile]
+            for attempt in (direct, download):
+                result = attempt()
+                if result:
+                    return result
     return {"url": url, "stream_url": "", "status": "error"}
 
 def main():
@@ -632,7 +668,7 @@ def main():
         if len(sys.argv) < 3:
             sys.exit(1)
         url = sys.argv[2]
-        res = get_stream_url(url)
+        res = get_stream_url(url, browser_sign_in="--browser-sign-in" in sys.argv[3:])
         print(json.dumps(res))
     elif cmd == "batch":
         urls = sys.argv[2:]

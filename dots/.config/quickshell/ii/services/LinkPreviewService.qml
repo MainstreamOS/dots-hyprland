@@ -239,7 +239,8 @@ Singleton {
         if (!url || typeof callback !== "function") return;
         const script = FileUtils.trimFileProtocol(`${Directories.scriptPath}/phone/link-preview.py`);
         const proc = streamProcComponent.createObject(root, {
-            command: ["python3", "-I", script, "stream", url],
+            command: ["python3", "-I", script, "stream", url].concat(
+                Config.options.sidebar.phone.youtubeBrowserSignIn ? ["--browser-sign-in"] : []),
             targetUrl: url,
             cb: callback
         });

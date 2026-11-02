@@ -828,6 +828,17 @@ ContentPage {
                 }
             }
 
+            ConfigSwitch {
+                visible: Config.options.sidebar.phone.linkPreviews
+                buttonIcon: "play_circle"
+                text: Translation.tr("Use browser sign-in for YouTube")
+                checked: Config.options.sidebar.phone.youtubeBrowserSignIn
+                onCheckedChanged: Config.options.sidebar.phone.youtubeBrowserSignIn = checked
+                StyledToolTip {
+                    text: Translation.tr("If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.")
+                }
+            }
+
             ContentSubsectionLabel {
                 Layout.topMargin: 10
                 text: Translation.tr("Contact privacy")

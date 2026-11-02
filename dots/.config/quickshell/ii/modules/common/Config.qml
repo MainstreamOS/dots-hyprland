@@ -1294,6 +1294,7 @@ Singleton {
                     property bool enable: true
                     // Fetches the page of each link in a message shown on screen.
                     property bool linkPreviews: true
+                    property bool youtubeBrowserSignIn: false
                     property JsonObject privacy: JsonObject {
                         property bool showContactName: true
                         property bool showPhoneNumber: true
