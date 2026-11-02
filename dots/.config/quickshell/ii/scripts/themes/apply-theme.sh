@@ -392,6 +392,16 @@ JQ_FILTER+=' | if ((try (.background.widgets.blur | objects | has("enable")) cat
 PRESERVE_WIDGETS_LOCKED=$(jq -c '.background.widgetsLocked | select(. != null)' "$SHELL_CONFIG" 2>/dev/null || true)
 if [ -n "$PRESERVE_WIDGETS_LOCKED" ]; then JQ_FILTER+=' | .background.widgetsLocked = $locked'; JQ_ARGS+=(--argjson locked "$PRESERVE_WIDGETS_LOCKED");
 else                                     JQ_FILTER+=' | del(.background.widgetsLocked)'; fi
+# Saved blur presets are part of a look, so a theme brings its own along. They join the
+# ones saved here and never replace or remove them: a name already here keeps its own.
+PRESERVE_PRESETS=$(jq -c '{backdrop: (.appearance.backdropPresets // []), window: (.appearance.windowBlurPresets // [])}' "$SHELL_CONFIG" 2>/dev/null || true)
+if [ -n "$PRESERVE_PRESETS" ]; then
+    JQ_FILTER+=' | def joined($mine; $theirs): ($mine | arrays) + [($theirs | arrays // [])[] | objects
+            | select(.displayName as $name | all($mine[]; .displayName != $name))];
+        .appearance.backdropPresets = joined($presets.backdrop; .appearance.backdropPresets)
+        | .appearance.windowBlurPresets = joined($presets.window; .appearance.windowBlurPresets)'
+    JQ_ARGS+=(--argjson presets "$PRESERVE_PRESETS")
+fi
 [ -n "$PRESERVE_THEME_SCHED" ]    && { JQ_FILTER+=' | .appearance.themeSchedule = $sched';        JQ_ARGS+=(--argjson sched "$PRESERVE_THEME_SCHED"); }
 [ -n "$PRESERVE_LIGHT_NIGHT" ]    && { JQ_FILTER+=' | .light.night = $night';                     JQ_ARGS+=(--argjson night "$PRESERVE_LIGHT_NIGHT"); }
 [ -n "$PRESERVE_CURSOR" ]         && { JQ_FILTER+=' | .cursor = $cursor';                          JQ_ARGS+=(--argjson cursor "$PRESERVE_CURSOR"); }

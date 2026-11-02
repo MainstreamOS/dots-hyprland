@@ -19,6 +19,19 @@
   ["bar", "seededWidgets"],
   ["dock", "moveToWorkspaceShows"],
   ["sidebar", "pinnedOnStartup"],
-  ["appearance", "backdropPresets"],
-  ["appearance", "windowBlurPresets"]
+  ["bar", "phoneWidgetSeeded"],
+  ["bar", "island", "showContactName"],
+  ["bar", "island", "showPhoneNumber"],
+  ["bar", "island", "showMessage"],
+  ["bar", "island", "showContactPicture"],
+  ["bar", "island", "phoneIntegration"],
+  ["bar", "island", "automaticAlerts"],
+  ["bar", "island", "desktopNotifications"],
+  ["bar", "island", "suppressWhileStreaming"],
+  ["bar", "island", "suppressForDiscord"],
+  ["bar", "island", "suppressForObs"],
+  ["bar", "island", "alertSeconds"],
+  ["sidebar", "phone", "privacy"],
+  ["sidebar", "phone", "linkPreviews"],
+  ["sidebar", "phone", "youtubeBrowserSignIn"]
 ]
