@@ -25,7 +25,7 @@ Rectangle {
         }
         Rectangle {
             anchors.fill: parent
-            color: Appearance.dockOwnShadow
+            color: BackdropPresets.dockIsGlass ? "transparent" : Appearance.dockOwnStockShadow
         }
         Rectangle {
             anchors.fill: parent

@@ -17,6 +17,19 @@ Singleton {
         { displayName: Translation.tr("Glass"), enable: true, opacity: 0.55, blur: 4, haze: 0.076, magnification: 1.254, offsetX: 200, offsetY: 7 },
     ]
     readonly property var all: root.shipped.concat(Array.from(Config.options.appearance.backdropPresets))
+    readonly property bool dockIsGlass: root.indexFor(Config.options.dock) === 2
+
+    // The same three for windows. The opacity comes with them, since blur only shows
+    // through a see-through window. The focused window stays opaque in every one,
+    // and Solid is the shipped look here too.
+    readonly property var windowShipped: [
+        { displayName: Translation.tr("Solid"), blur: true, blurVariant: 0, blurSize: 10, blurPasses: 3, blurNoise: 0, blurVibrancy: 0.5,
+            blurLensStrength: 24, blurLensWidth: 48, blurClarity: 0.82, activeOpacity: 1, inactiveOpacity: 1 },
+        { displayName: Translation.tr("Frost"), blur: true, blurVariant: 1, blurSize: 12, blurPasses: 3, blurNoise: 0.03,
+            blurVibrancy: 0.5, activeOpacity: 1, inactiveOpacity: 0.89 },
+        { displayName: Translation.tr("Glass"), blur: true, blurVariant: 8, blurSize: 4, blurPasses: 2, blurNoise: 0,
+            blurVibrancy: 0.8, blurLensStrength: 32, blurLensWidth: 96, blurClarity: 0.6, activeOpacity: 1, inactiveOpacity: 0.93 },
+    ]
 
     // Which preset a surface's settings amount to, or -1 once they match none.
     function indexFor(surface) {

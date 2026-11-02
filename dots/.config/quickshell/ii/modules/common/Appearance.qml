@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.modules.common.functions
+import qs.services
 pragma Singleton
 pragma ComponentBehavior: Bound
 
@@ -431,9 +432,10 @@ Singleton {
     readonly property color launcherPanelBackground: ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
     // The workspace panels are nearly solid, so little of the blur behind them shows.
     // They take the wallpaper's hue instead, at their own lightness so nothing brightens,
-    // unless the dock's color was picked by hand.
+    // unless the dock's color was picked by hand. Under the Glass preset they let half
+    // of the launcher's blur through.
     readonly property color launcherWorkspaceBackground: {
-        const surface = drawerSurface
+        const surface = BackdropPresets.dockIsGlass ? ColorUtils.applyAlpha(drawerSurface, 0.5) : drawerSurface
         const average = wallpaperAverage
         if (colors.dockPick !== "" || average.hslSaturation <= 0)
             return surface
