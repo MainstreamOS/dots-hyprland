@@ -3375,5 +3375,15 @@
   "Both": "Both",
   "Follow UI blur preset": "Follow UI blur preset",
   "Widgets show as Solid while a video wallpaper is set": "Widgets show as Solid while a video wallpaper is set",
-  "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid.": "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid."
+  "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid.": "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid.",
+  "Date & time": "Date & time",
+  "Set by hand": "Set by hand",
+  "Kept in sync with internet time": "Kept in sync with internet time",
+  "Waiting to sync with internet time": "Waiting to sync with internet time",
+  "Set time automatically": "Set time automatically",
+  "Time zone": "Time zone",
+  "Date (YYYY-MM-DD)": "Date (YYYY-MM-DD)",
+  "Time (HH:MM)": "Time (HH:MM)",
+  "Set": "Set",
+  "The change was not made.": "The change was not made."
 }

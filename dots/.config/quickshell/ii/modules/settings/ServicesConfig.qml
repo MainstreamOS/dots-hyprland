@@ -81,6 +81,186 @@ ContentPage {
     }
 
     ContentSection {
+        id: dateTime
+        icon: "schedule"
+        title: Translation.tr("Date & time")
+
+        property bool loaded: false
+        property string timezone: ""
+        property bool automatic: false
+        property bool canAutomatic: false
+        property bool inSync: false
+        property var zones: []
+        property string problem: ""
+        property date now: new Date()
+
+        // timedatectl asks systemd, which asks for an administrator through the
+        // polkit agent, so no helper of our own is involved.
+        function change(args) {
+            dateTime.problem = "";
+            timeChanger.command = ["timedatectl"].concat(args);
+            timeChanger.running = true;
+        }
+        function zoneLabel(zone) {
+            const parts = zone.split("/");
+            const city = parts[parts.length - 1].replace(/_/g, " ");
+            return parts.length > 1 ? `${city} (${parts.slice(0, -1).join(" / ").replace(/_/g, " ")})` : city;
+        }
+
+        Component.onCompleted: {
+            timeState.running = true;
+            zoneList.running = true;
+        }
+
+        Timer {
+            interval: 1000
+            running: dateTime.visible
+            repeat: true
+            onTriggered: dateTime.now = new Date()
+        }
+
+        Process {
+            id: timeState
+            command: ["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "CanNTP", "-p", "NTPSynchronized"]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    const values = {};
+                    for (const line of text.split("\n")) {
+                        const at = line.indexOf("=");
+                        if (at > 0) values[line.slice(0, at)] = line.slice(at + 1);
+                    }
+                    dateTime.timezone = values.Timezone ?? "";
+                    dateTime.automatic = values.NTP === "yes";
+                    dateTime.canAutomatic = values.CanNTP === "yes";
+                    dateTime.inSync = values.NTPSynchronized === "yes";
+                    dateTime.loaded = true;
+                }
+            }
+        }
+
+        Process {
+            id: zoneList
+            command: ["timedatectl", "list-timezones"]
+            stdout: StdioCollector {
+                onStreamFinished: dateTime.zones = text.split("\n").filter(zone => zone.length > 0)
+                    .map(zone => ({ displayName: dateTime.zoneLabel(zone), value: zone }))
+            }
+        }
+
+        Process {
+            id: timeChanger
+            stderr: StdioCollector { id: timeChangerErrors }
+            onExited: (code) => {
+                if (code !== 0)
+                    dateTime.problem = timeChangerErrors.text.trim() || Translation.tr("The change was not made.");
+                // A refused change leaves the switch where the click put it.
+                automaticSwitch.checked = Qt.binding(() => dateTime.automatic);
+                timeState.running = true;
+                dateTime.now = new Date();
+            }
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            text: dateTime.now.toLocaleString(Qt.locale(), Locale.LongFormat)
+            font.pixelSize: Appearance.font.pixelSize.normal
+            color: Appearance.colors.colOnSecondaryContainer
+            wrapMode: Text.Wrap
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            visible: dateTime.loaded
+            text: !dateTime.automatic ? Translation.tr("Set by hand")
+                : dateTime.inSync ? Translation.tr("Kept in sync with internet time")
+                : Translation.tr("Waiting to sync with internet time")
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+        }
+
+        ConfigSwitch {
+            id: automaticSwitch
+            buttonIcon: "sync"
+            text: Translation.tr("Set time automatically")
+            enabled: dateTime.canAutomatic && !timeChanger.running
+            checked: dateTime.automatic
+            onClicked: dateTime.change(["set-ntp", dateTime.automatic ? "false" : "true"])
+        }
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "public"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Time zone")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 300
+                enabled: !timeChanger.running && dateTime.zones.length > 0
+                model: dateTime.zones
+                currentIndex: dateTime.zones.findIndex(zone => zone.value === dateTime.timezone)
+                onActivated: index => dateTime.change(["set-timezone", dateTime.zones[index].value])
+            }
+        }
+
+        // By hand only while automatic time is off, since the next sync would undo it.
+        ConfigRow {
+            visible: dateTime.loaded && !dateTime.automatic
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "edit_calendar"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            MaterialTextField {
+                id: dateField
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("Date (YYYY-MM-DD)")
+                inputMethodHints: Qt.ImhDate
+            }
+            MaterialTextField {
+                id: timeField
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("Time (HH:MM)")
+                inputMethodHints: Qt.ImhTime
+            }
+            RippleButtonWithIcon {
+                materialIcon: "check"
+                mainText: Translation.tr("Set")
+                enabled: !timeChanger.running && /^\d{4}-\d{2}-\d{2}$/.test(dateField.text.trim())
+                    && /^\d{1,2}:\d{2}$/.test(timeField.text.trim())
+                onClicked: dateTime.change(["set-time", `${dateField.text.trim()} ${timeField.text.trim()}:00`])
+            }
+            // Starts from the time it is now, so a small correction is a small edit.
+            onVisibleChanged: if (visible) {
+                dateField.text = Qt.formatDate(new Date(), "yyyy-MM-dd");
+                timeField.text = Qt.formatTime(new Date(), "HH:mm");
+            }
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            visible: dateTime.problem.length > 0
+            text: dateTime.problem
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colError
+            wrapMode: Text.Wrap
+        }
+    }
+
+    ContentSection {
         visible: Config.options.policies.ai !== 0
         icon: "neurology"
         title: Translation.tr("AI Assistant")
