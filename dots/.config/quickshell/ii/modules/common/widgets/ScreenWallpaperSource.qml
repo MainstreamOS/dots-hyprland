@@ -10,7 +10,9 @@ Item {
     id: root
     readonly property var window: QsWindow.window
     readonly property var placement: WallpaperPlacement.screens[window?.screen?.name ?? ""] ?? null
-    readonly property bool available: !!placement && !placement.video && picture.status === Image.Ready
+    // Stays true while a later picture loads, so a swap doesn't take the blur down with it.
+    property bool loadedOnce: false
+    readonly property bool available: !!placement && !placement.video && loadedOnce
     readonly property alias picture: picture
 
     // The window's content item lasts through every hide and show, so the picture moves
@@ -30,8 +32,21 @@ Item {
         return start ? startMargin : end ? screenSize - windowSize - endMargin : (screenSize - windowSize) / 2;
     }
 
+    Connections {
+        target: WallpaperPlacement
+        function onFreeze(screenName) {
+            if (screenName === root.window?.screen?.name) picture.backdropFreeze();
+        }
+        function onRelease(screenName, fadeMs) {
+            if (screenName === root.window?.screen?.name) picture.backdropRelease(fadeMs);
+        }
+    }
+
     Image {
         id: picture
+        signal backdropFreeze()
+        signal backdropRelease(real fadeMs)
+        onStatusChanged: if (status === Image.Ready) root.loadedOnce = true
         // Measured from the window itself, whatever the surface asking is inside of.
         parent: root.host ?? root
         visible: false

@@ -176,6 +176,7 @@ Variants {
         // its place, under the old one, rather than gliding there during the effect.
         property bool placingPicture: false
         property bool holdingPlace: false
+        property bool backdropsHeld: false
         property real heldX: 0
         property real heldY: 0
 
@@ -232,6 +233,28 @@ Variants {
             outgoingRevealed = 0;
         }
 
+        function holdBackdrops() {
+            if (backdropsHeld) return;
+            backdropsHeld = true;
+            wallpaper.backdropFreeze();
+            WallpaperPlacement.freeze(screenName);
+        }
+
+        function letGoBackdrops(fadeMs) {
+            backdropStep.stop();
+            if (!backdropsHeld) return;
+            backdropsHeld = false;
+            wallpaper.backdropRelease(fadeMs);
+            WallpaperPlacement.release(screenName, fadeMs);
+        }
+
+        // What sits at the screen's edges changes partway through the effect, about
+        // when the effect gets there, and is finished changing when the effect is.
+        Timer {
+            id: backdropStep
+            onTriggered: bgRoot.letGoBackdrops(bgRoot.swapRunDuration * 0.65)
+        }
+
         function placePicture(width, height) {
             placingPicture = true;
             wallpaperWidth = width;
@@ -260,6 +283,8 @@ Variants {
                 return;
             }
             resetSwapKnobs();
+            backdropStep.stop();
+            holdBackdrops();
             pendingPicture = { "path": path, "width": width, "height": height };
             wallpaperSwapPending = true;
             if (outgoing.source != shownWallpaper) {
@@ -293,6 +318,8 @@ Variants {
             heldY = resized ? wallpaper.pannedY : wallpaper.y;
             holdingPlace = true;
             swapEffect = TransitionEffects.resolve(Config.options.background.wallpaperTransition);
+            backdropStep.interval = swapRunDuration * 0.35;
+            backdropStep.restart();
             swapAnimation.restart();
         }
 
@@ -304,6 +331,7 @@ Variants {
             outgoing.opacity = 0;
             pendingPicture = null;
             holdingPlace = false;
+            letGoBackdrops(0);
             resetSwapKnobs();
         }
 
@@ -609,6 +637,8 @@ Variants {
                 }
                 // For what samples this picture: the widgets over it move after it does.
                 signal backdropMoved()
+                signal backdropFreeze()
+                signal backdropRelease(real fadeMs)
                 sourceSize {
                     // Decode at physical pixels on HiDPI displays. The Image's
                     // width/height (logical px) and all parallax math stay

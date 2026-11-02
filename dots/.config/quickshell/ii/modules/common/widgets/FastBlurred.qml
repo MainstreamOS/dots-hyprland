@@ -66,7 +66,31 @@ Item {
     // the region has to be recomputed by hand. Both positions matter: parallax
     // slides the wallpaper while the widget holds still, so watching the widget
     // alone would leave the backdrop showing a stale slice of picture.
+    // Held on the picture it has while a new wallpaper's effect gets under way. On
+    // release the old blur is kept over the new one and fades, so it changes with the
+    // effect instead of snapping to the new picture before the effect has reached it.
+    property bool frozen: false
+    function releaseSampling(fadeMs) {
+        if (!frozen) return;
+        frozen = false;
+        pictureChanged = true;
+        if (fadeMs <= 0) {
+            lastSample = 0;
+            refresh();
+            return;
+        }
+        oldBlur.visible = true;
+        oldBlur.opacity = 1;
+        oldBlur.scheduleUpdate();
+        oldBlurFade.duration = fadeMs;
+        sampleAfterCover.start();
+    }
+
     function refresh() {
+        if (frozen) {
+            pictureChanged = true;
+            return;
+        }
         // A blur has no edges to show a skipped frame by, so anything moving the
         // picture under it, like a workspace pan, re-blurs at thirty frames a second.
         const now = Date.now();
@@ -128,6 +152,8 @@ Item {
         // while one wallpaper transitions to the next.
         function onOpacityChanged() { root.pictureChanged = true; root.refresh(); }
         function onBackdropMoved() { root.refresh(); }
+        function onBackdropFreeze() { root.frozen = true; }
+        function onBackdropRelease(fadeMs) { root.releaseSampling(fadeMs); }
     }
 
     FastBlur {
@@ -149,6 +175,36 @@ Item {
             // difference that shows on an older card.
             live: false
         }
+    }
+
+    ShaderEffectSource {
+        id: oldBlur
+        x: blur.x
+        y: blur.y
+        width: blur.width
+        height: blur.height
+        visible: false
+        sourceItem: blur
+        hideSource: false
+        live: false
+    }
+    // The old blur needs a frame to be copied before the new picture replaces it.
+    Timer {
+        id: sampleAfterCover
+        interval: 40
+        onTriggered: {
+            root.lastSample = 0;
+            root.refresh();
+            oldBlurFade.restart();
+        }
+    }
+    NumberAnimation {
+        id: oldBlurFade
+        target: oldBlur
+        property: "opacity"
+        to: 0
+        easing.type: Easing.InOutQuad
+        onFinished: oldBlur.visible = false
     }
 
     Rectangle {
