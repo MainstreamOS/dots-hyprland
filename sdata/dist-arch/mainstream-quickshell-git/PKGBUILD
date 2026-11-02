@@ -1,5 +1,5 @@
 # Maintainer: mainstreamos <https://github.com/MainstreamOS>
-_commit='87bcda2bce25dcdddb6401e981ebb98518a8efb8'
+_commit='9bbe7dd871cf0ec62a242c70a7ce32fa02cf45b1'
 # Useful links:
 # https://github.com/MainstreamOS/quickshell/commits/mainstream
 # https://aur.archlinux.org/packages/quickshell-git
@@ -10,8 +10,8 @@ replaces=('illogical-impulse-quickshell-git')
 
 _pkgname=quickshell
 pkgname="$_prefix-$_pkgname-git"
-pkgver=0.3.2.r24
-pkgrel=2
+pkgver=0.3.2.r30
+pkgrel=1
 pkgdesc="$_pkgname-git pinned commit and extra deps for $_prefix"
 arch=(x86_64 aarch64)
 url='https://github.com/MainstreamOS/quickshell'
