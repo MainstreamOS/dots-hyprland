@@ -11,6 +11,7 @@ import "PhoneReactions.js" as PhoneReactions
 import "PhoneIdentity.js" as Identity
 import "IslandPhoneHistory.js" as History
 import "PhoneConversationVisibility.js" as ConversationVisibility
+import "PhoneSetup.js" as Setup
 
 /**
  * Paired phones through KDE Connect or rust-connect, for the Phone tab, the
@@ -447,6 +448,14 @@ Singleton {
     }
 
     function selectDevice(id): void {
+        if (root.savedLocalSent._selectedDevice !== id) {
+            root.savedLocalSent = Object.assign({}, root.savedLocalSent, {_selectedDevice: id});
+            saveSentTimer.restart();
+        }
+        root.activateDevice(id);
+    }
+
+    function activateDevice(id): void {
         if (id === root.deviceId) return;
         root.cancelFilePreview();
         root.clearThumbnails();
@@ -1103,7 +1112,7 @@ Singleton {
             root.filePreviewFinished(event.request, event.path || "", "");
             break;
         case "devices": {
-            const incoming = event.devices ?? [];
+            const incoming = Setup.phones(event.devices ?? []);
             const isSame = incoming.length === root.devices.length && incoming.every((d, i) => {
                 const c = root.devices[i];
                 return c && c.id === d.id && c.name === d.name && c.reachable === d.reachable && c.charge === d.charge && c.charging === d.charging && c.type === d.type && JSON.stringify(c.plugins) === JSON.stringify(d.plugins);
@@ -1111,12 +1120,9 @@ Singleton {
             if (isSame) break;
 
             root.devices = incoming;
-            if (!root.devices.some(d => d.id === root.deviceId)) {
-                const pick = root.devices.find(d => d.reachable) ?? root.devices[0];
-                if (pick?.id !== root.deviceId) {
-                    root.selectDevice(pick?.id ?? "");
-                }
-            }
+            const selected = Setup.selectedDevice(root.devices, root.deviceId, root.savedLocalSent._selectedDevice);
+            if (selected && !root.savedLocalSent._selectedDevice) root.selectDevice(selected);
+            else root.activateDevice(selected);
             break;
         }
         case "conversations": {

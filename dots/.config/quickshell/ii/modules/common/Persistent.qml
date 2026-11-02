@@ -130,6 +130,11 @@ Singleton {
                 property list<string> manualDisconnects: []
             }
 
+            property JsonObject phone: JsonObject {
+                property bool introducedServices: false
+                property bool introducedBluetooth: false
+            }
+
             property JsonObject ai: JsonObject {
                 property string model: "local-ai-setup"
                 property real temperature: 0.5

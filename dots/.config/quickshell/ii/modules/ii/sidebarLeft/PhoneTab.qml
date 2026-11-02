@@ -6,6 +6,7 @@ import qs.modules.common.functions
 import qs.modules.ii.sidebarLeft.aiChat
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import "../../../services/PhoneContacts.js" as Contacts
@@ -18,6 +19,7 @@ Item {
     // "list", "thread" or "new"
     property string view: "list"
     property string notice: ""
+    property bool choosingPhone: false
     // The file sheet adds to the message being written rather than sending to the phone.
     property bool sheetAttaches: false
     // Files dropped on an open conversation go with its next message.
@@ -156,13 +158,52 @@ Item {
             Layout.fillWidth: true
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.choosingPhone
+            IslandButton {
+                symbol: "arrow_back"
+                onClicked: root.choosingPhone = false
+                StyledToolTip { text: Translation.tr("Back") }
+            }
+            StyledText {
+                Layout.fillWidth: true
+                text: Translation.tr("Choose a phone")
+                font.weight: Font.DemiBold
+            }
+        }
+
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.choosingPhone
+            clip: true
+            spacing: 8
+            model: Phone.devices
+            ScrollBar.vertical: StyledScrollBar {}
+            delegate: PhoneDeviceCard {
+                required property var modelData
+                width: ListView.view.width
+                device: modelData
+                selected: modelData.id === Phone.deviceId
+                onChosen: {
+                    // Save the old device's draft before changing its context.
+                    if (root.view !== "list") threadView.saveDraft();
+                    Phone.selectDevice(modelData.id);
+                    root.view = "list";
+                    tabBar.currentIndex = 0;
+                    root.choosingPhone = false;
+                }
+            }
+        }
+
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: headerColumn.implicitHeight + 16
             radius: 14
             color: Appearance.surfaces.raised
             // Cached contacts alone only head the Contacts page; they are not a phone.
-            visible: (Phone.device !== null || (ContactService.records.length > 0 && tabBar.currentIndex === 1)) && (tabBar.currentIndex === 1 || tabBar.currentIndex === 2 || root.view === "list")
+            visible: !root.choosingPhone && (Phone.device !== null || (ContactService.records.length > 0 && tabBar.currentIndex === 1)) && (tabBar.currentIndex === 1 || tabBar.currentIndex === 2 || root.view === "list")
 
             ColumnLayout {
                 id: headerColumn
@@ -173,70 +214,17 @@ Item {
                 anchors.rightMargin: 8
                 spacing: 6
 
-                RowLayout {
+                PhoneIdentityRow {
                     Layout.fillWidth: true
-                    spacing: 8
+                    device: Phone.device
+                    name: Phone.device?.name ?? (ContactService.records.length > 0 ? Translation.tr("Contacts") : "")
 
-
-                    Rectangle {
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 30
-                        radius: 9
-                        color: ColorUtils.mix(Appearance.colors.colPrimaryContainer, Appearance.colors.colLayer1, 0.55)
-
-                        MaterialSymbol {
-                            anchors.centerIn: parent
-                            text: Phone.reachable ? "smartphone" : "phonelink_off"
-                            iconSize: 17
-                            color: Phone.reachable ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 1
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: Phone.device?.name ?? (ContactService.records.length > 0 ? Translation.tr("Contacts") : "")
-                            font.pixelSize: Appearance.font.pixelSize.normal
-                            font.weight: Font.DemiBold
-                            color: Appearance.colors.colOnLayer1
-                            elide: Text.ElideRight
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 5
-
-                            Rectangle {
-                                Layout.preferredWidth: 6
-                                Layout.preferredHeight: 6
-                                radius: 3
-                                color: Phone.reachable ? Appearance.m3colors.m3success : Appearance.colors.colSubtext
-                            }
-
-                            StyledText {
-                                Layout.fillWidth: true
-                                text: {
-                                    if (Phone.device !== null) {
-                                        if (!Phone.reachable) return Translation.tr("Not reachable");
-                                        const charge = Phone.device?.charge ?? -1;
-                                        if (charge >= 0) {
-                                            return Phone.device.charging
-                                                ? Translation.tr("%1% · Charging").arg(charge)
-                                                : Translation.tr("%1% · Connected").arg(charge);
-                                        }
-                                        return Translation.tr("Connected");
-                                    }
-                                    return Translation.tr("Ready");
-                                }
-                                font.pixelSize: 11
-                                font.weight: Font.Medium
-                                color: Appearance.colors.colSubtext
-                                elide: Text.ElideRight
-                            }
-                        }
+                    IslandButton {
+                        visible: Phone.devices.length > 1
+                        contentColors: Appearance.colors
+                        symbol: "swap_horiz"
+                        onClicked: root.choosingPhone = true
+                        StyledToolTip { text: Translation.tr("Choose a phone") }
                     }
 
                     IslandButton {
@@ -414,6 +402,7 @@ Item {
         }
 
         StackLayout {
+            visible: !root.choosingPhone
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: {
@@ -552,7 +541,7 @@ Item {
         id: dropArea
         anchors.fill: parent
         z: 100
-        enabled: Phone.device !== null
+        enabled: Phone.device !== null && !root.choosingPhone
 
         function localPaths(drag): var {
             if (!drag.hasUrls) return [];
