@@ -100,6 +100,7 @@ Item {
         // Carries the crossfade, so this is what keeps the backdrop in step
         // while one wallpaper transitions to the next.
         function onOpacityChanged() { root.refresh(); }
+        function onBackdropMoved() { root.refresh(); }
     }
 
     FastBlur {
