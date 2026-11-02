@@ -99,6 +99,8 @@ Singleton {
             NotificationImageCache.store(notificationId, sourceImage, iconHash);
         }
         property string summary: notification?.summary ?? ""
+        // The text last shown, so an update that only touches its icon or hints is not shown again.
+        property string shownText: ""
         property double time
         property string urgency: notification?.urgency.toString() ?? "normal"
         property Timer timer
@@ -304,6 +306,15 @@ Singleton {
         onNotification: notification => root.receiveNotification(notification)
     }
 
+    // A notification carried through a reload comes back under a new id, since the offset
+    // is worked out again from the saved list. Its saved copy is the newest one with the
+    // same app and text that no live notification holds.
+    function savedCopyOf(notification) {
+        const app = notification.hints?.["x-kde-display-appname"] || notification.appName;
+        return root.list.filter(n => !n.notification && n.summary === notification.summary && n.body === notification.body
+            && (n.sourceApp || n.appName) === app).sort((a, b) => b.time - a.time)[0] ?? null;
+    }
+
     function receiveNotification(notification) {
         notification.tracked = true;
         if (!root.historyReady) {
@@ -318,8 +329,11 @@ Singleton {
         const notificationId = notification.id + root.idOffset;
         const phoneKey = notification.hints?.["x-mainstream-notification-key"] || "";
         const previous = root.list.find(n => n.notificationId === notificationId)
-            || (phoneKey ? root.list.find(n => n.phoneKey === phoneKey) : null);
-        const replay = !!previous && !!phoneKey && notification.hints?.["suppress-sound"] === true
+            || (phoneKey ? root.list.find(n => n.phoneKey === phoneKey) : null)
+            || (notification.lastGeneration ? root.savedCopyOf(notification) : null);
+        // A notification kept through a shell reload was shown before it: it is listed
+        // again, but never popped up or announced to the Island a second time.
+        const replay = notification.lastGeneration || !!previous && !!phoneKey && notification.hints?.["suppress-sound"] === true
             && previous.summary === notification.summary && previous.body === notification.body
             && previous.sourceApp === (notification.hints?.["x-kde-display-appname"] || notification.appName)
             && previous.iconHash === (notification.hints?.["x-mainstream-icon-hash"] || "");
@@ -337,7 +351,8 @@ Singleton {
             "cachedImage": retainedImage,
             "lastImage": retainedImage,
             "lastImageHash": retainedImage ? previous.iconHash : "",
-            "time": replay ? previous.time : Date.now(),
+            "time": replay ? (previous?.time ?? Date.now()) : Date.now(),
+            "shownText": notification.summary + "\n" + notification.body,
         });
         root.list = root.list.filter(n => n !== previous && n.notificationId !== notificationId).concat([newNotifObject]);
         if (previous) {
@@ -362,7 +377,11 @@ Singleton {
         if (!notif.notification || !root.list.includes(notif)) return;
         // Quickshell mutates a replacement in place; NotificationServer's
         // notification signal only fires when a new server ID is allocated.
-        notif.time = Date.now();
+        const text = notif.summary + "\n" + notif.body;
+        const newText = text !== notif.shownText;
+        notif.shownText = text;
+        if (newText)
+            notif.time = Date.now();
         // Image and hints change separately. Copy after both have settled so
         // new pixels cannot be saved under the previous image's content hash.
         NotificationImageCache.store(notif.notificationId, notif.sourceImage, notif.iconHash);
@@ -373,8 +392,10 @@ Singleton {
         notif.savedCanReply = notif.notification.hasInlineReply || notif.rawActions.some(a => IslandNotificationPolicy.isReplyAction(a));
         root.inspectKdeNotification(notif);
         root.triggerListChange();
-        root.showPopup(notif, false);
-        root.notify(notif);
+        if (newText) {
+            root.showPopup(notif, false);
+            root.notify(notif);
+        }
         root.saveSoon();
     }
 
