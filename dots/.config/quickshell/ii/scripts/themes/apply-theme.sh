@@ -356,24 +356,26 @@ fi
 # keep the live spot while the file lost it, so the next start would move
 # them. Write the live spot in so the screen and the file agree.
 [ -n "$PRESERVE_NOTIF_POS" ] && { JQ_FILTER+=' | if ((.notifications // {}) | has("position")) then . else .notifications.position = $notifpos end'; JQ_ARGS+=(--argjson notifpos "$PRESERVE_NOTIF_POS"); }
-# The Hug dock (span) runs the whole length of its edge, so it only sits on the
-# one facing the bar, and the shell holds it there whatever the file says. The
-# edge above may have come from the live config rather than the theme, so it is
-# brought into line here, where the file and the screen can still agree. A bar
-# key the snapshot lacks keeps its live value, since the adapter keeps a key the
-# file stops naming, so the live one is what the dock has to face. While the
-# shell has its bar put away any edge will do, as it does for the pickers, and
-# the theme's own edge stands.
-if [ "$(cat "$XDG_RUNTIME_DIR/quickshell-bar.state" 2>/dev/null)" != "hidden" ]; then
-    LIVE_BAR="${PRESERVE_LIVE_BAR:-}"
-    [ -n "$LIVE_BAR" ] || LIVE_BAR='{"bottom": false, "vertical": false}'
-    JQ_FILTER+=' | if .dock.cornerStyle == "span" then
-        ((if (.bar | has("bottom")) then .bar.bottom else $livebar.bottom end) == true) as $b
-        | ((if (.bar | has("vertical")) then .bar.vertical else $livebar.vertical end) == true) as $v
-        | .dock.position = (if $v then (if $b then "left" else "right" end) else (if $b then "top" else "bottom" end) end)
-      else . end'
-    JQ_ARGS+=(--argjson livebar "$LIVE_BAR")
-fi
+# The Hug dock (span) runs the whole length of the top or bottom edge, facing the
+# bar, and the shell holds it there whatever the file says. The edge above may
+# have come from the live config rather than the theme, so it is brought into
+# line here, where the file and the screen can still agree. A bar key the
+# snapshot lacks keeps its live value, so the live one is what the dock has to
+# face. A bar on a side moves to the top or bottom (left goes up, right goes
+# down), since the Hug dock never runs down a side. While the shell has its bar
+# put away, the theme's own top or bottom edge stands.
+LIVE_BAR="${PRESERVE_LIVE_BAR:-}"
+[ -n "$LIVE_BAR" ] || LIVE_BAR='{"bottom": false, "vertical": false}'
+BAR_HIDDEN=false
+[ "$(cat "$XDG_RUNTIME_DIR/quickshell-bar.state" 2>/dev/null)" = "hidden" ] && BAR_HIDDEN=true
+JQ_FILTER+=' | if .dock.cornerStyle == "span" then
+    ((if (.bar | has("bottom")) then .bar.bottom else $livebar.bottom end) == true) as $b
+    | ((if (.bar | has("vertical")) then .bar.vertical else $livebar.vertical end) == true) as $v
+    | (if $v then .bar.vertical = false else . end)
+    | .dock.position = (if $barhidden and (.dock.position == "top" or .dock.position == "bottom") then .dock.position
+        elif $b then "top" else "bottom" end)
+  else . end'
+JQ_ARGS+=(--argjson livebar "$LIVE_BAR" --argjson barhidden "$BAR_HIDDEN")
 # Which desktop widgets are on, and where each sits, is part of the look, and a
 # snapshot taken before a widget existed says nothing about it. Silence would
 # leave the previous theme's widget standing, since the adapter keeps a value

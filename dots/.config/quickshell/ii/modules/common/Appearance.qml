@@ -1544,17 +1544,27 @@ Singleton {
                 return root.sizes.barShown ? root.sizes.oppositeEdge(root.sizes.barEdge) : want;
             return want === root.sizes.barEdge ? root.sizes.oppositeEdge(want) : want;
         }
-        // Whether the dock may be set on an edge in the style it has now.
+        // Whether the dock may be set on an edge in the style it has now. The Hug dock
+        // never runs down a side, even with the bar away.
         function dockEdgeAllowed(edge) {
-            return !root.sizes.dockSpans || !root.sizes.barShown
-                || edge === root.sizes.oppositeEdge(root.sizes.barEdge);
+            if (!root.sizes.dockSpans)
+                return true;
+            if (edge === "left" || edge === "right")
+                return false;
+            return !root.sizes.barShown || edge === root.sizes.oppositeEdge(root.sizes.barEdge);
         }
+        // A bar on a side would carry a Hug dock onto the side facing it, and a bar
+        // already on one leaves the Hug dock no edge to take.
+        readonly property bool barSidesAllowed: !dockSpans
+        readonly property bool dockCanSpan: barEdge !== "left" && barEdge !== "right"
         // Every page that moves the bar or the dock, or changes the dock's
         // style, does it through these three, so the Hug dock is carried
         // across with the bar however the bar was moved. The saved edge is
         // kept as the one on screen, so the next style starts from it rather
         // than from wherever the dock was before it hugged.
         function placeBar(bottom, vertical) {
+            if (vertical && !root.sizes.barSidesAllowed)
+                return;
             // A Hug dock facing the bar keeps facing it even while the bar is
             // put away. Left behind, it would share the bar's new edge and be
             // sent across the screen each time the bar came and went. One set
@@ -1586,11 +1596,13 @@ Singleton {
             Config.options.dock.enable = true;
         }
         function setDockStyle(style) {
+            if (style === "span" && !root.sizes.dockCanSpan)
+                return;
             const onScreen = root.sizes.dockEdge;
             const previous = Config.options.dock.cornerStyle;
             Config.options.dock.cornerStyle = style;
             if (style === "span")
-                Config.options.dock.position = root.sizes.barShown
+                Config.options.dock.position = root.sizes.barShown || onScreen === "left" || onScreen === "right"
                     ? root.sizes.oppositeEdge(root.sizes.barEdge) : onScreen;
             else if (previous === "span")
                 Config.options.dock.position = onScreen;
@@ -1604,7 +1616,7 @@ Singleton {
         function pickDockStyle(style) {
             const dock = Config.options.dock;
             const previous = dock.cornerStyle;
-            if (previous === style)
+            if (previous === style || (style === "span" && !root.sizes.dockCanSpan))
                 return;
             if (previous === "float")
                 dock.radiusFloat = dock.radius;

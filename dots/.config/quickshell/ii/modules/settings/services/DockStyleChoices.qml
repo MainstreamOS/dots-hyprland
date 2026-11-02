@@ -12,10 +12,11 @@ ConfigSelectionArray {
     // each end, keeps the stored value "hug" so a config or a theme
     // written before the rename still selects it, and the Hug strip
     // is stored as "span".
+    // Hug is dimmed while the bar is on a side, since it only runs along the top or bottom.
     options: [
         { displayName: Translation.tr("Float"), icon: "page_header", value: "float" },
         { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "hug" },
-        { displayName: Translation.tr("Hug"), icon: "line_curve", value: "span" },
+        { displayName: Translation.tr("Hug"), icon: "line_curve", value: "span", enabled: Appearance.sizes.dockCanSpan },
         { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" }
     ]
 }

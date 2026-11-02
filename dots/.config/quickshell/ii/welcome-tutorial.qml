@@ -584,6 +584,8 @@ ApplicationWindow {
     // The Hug dock is stored as "span", since "hug" names the notch.
     function applyBarDockStyle(name) {
         if (name === "hug") {
+            // The Hug dock only runs along the top or bottom, and it faces the bar.
+            if (Config.options.bar.vertical) Appearance.sizes.placeBar(Config.options.bar.bottom, false);
             root.applyBarStyle(0);
             root.applyDockStyle("span");
         } else if (name === "notch") {
@@ -4876,11 +4878,12 @@ ApplicationWindow {
                             // Through the shared rule, which carries a Hug
                             // dock across to face the bar wherever it goes.
                             onSelected: newValue => Appearance.sizes.placeBar((newValue & 1) !== 0, (newValue & 2) !== 0)
+                            // A bar on a side would carry a Hug dock onto the other side.
                             options: [
                                 { displayName: Translation.tr("Top"),    icon: "arrow_upward",    value: 0 },
-                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2, enabled: !cardStyle.island },
+                                { displayName: Translation.tr("Left"),   icon: "arrow_back",      value: 2, enabled: !cardStyle.island && Appearance.sizes.barSidesAllowed },
                                 { displayName: Translation.tr("Bottom"), icon: "arrow_downward",  value: 1 },
-                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3, enabled: !cardStyle.island }
+                                { displayName: Translation.tr("Right"),  icon: "arrow_forward",   value: 3, enabled: !cardStyle.island && Appearance.sizes.barSidesAllowed }
                             ]
                         }
 

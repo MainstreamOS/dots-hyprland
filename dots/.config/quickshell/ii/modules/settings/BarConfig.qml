@@ -212,7 +212,8 @@ ContentPage {
                 ConfigSelectionArray {
                     currentValue: (Config.options.bar.bottom ? 1 : 0) | (Config.options.bar.vertical ? 2 : 0)
                     // Through the shared rule, which carries a Hug dock across
-                    // to face the bar wherever it goes.
+                    // to face the bar. The sides are left out while the dock is
+                    // Hug, since it only runs along the top or bottom.
                     onSelected: newValue => Appearance.sizes.placeBar((newValue & 1) !== 0, (newValue & 2) !== 0)
                     options: [
                         {
@@ -235,7 +236,7 @@ ContentPage {
                             icon: "arrow_forward",
                             value: 3 // bottom: true, vertical: true
                         }
-                    ].filter(option => !root.island || (option.value & 2) === 0)
+                    ].filter(option => (option.value & 2) === 0 || (!root.island && Appearance.sizes.barSidesAllowed))
                 }
             }
             ContentSubsection {

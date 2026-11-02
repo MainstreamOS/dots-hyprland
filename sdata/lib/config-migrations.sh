@@ -172,6 +172,8 @@ _cfgmig_window_rounding() {
 # Hug) with gaps an eighth of the grid. A file that never set a size has nothing to do.
 # The desktop widgets' Frosted switch became one Blur preset list: off is Solid, and
 # on keeps a preset an earlier build had picked, or else the plain blur it showed.
+# The Hug dock no longer runs down a side, so a bar on one with it moves to the top
+# or bottom (left goes up, right goes down) and the dock faces it there.
 _CFGMIG_JQ='
 def dated: (.appearance | type) == "object" and (.appearance | has("roundCornersRestore"));
 def magnify_stock: (.dock == null or (.dock | type) == "object")
@@ -187,6 +189,8 @@ def old_launcher: (.dock | type) == "object" and (.dock | has("launcherScale") |
   and ((.dock.launcherIconSize // -1) >= 0 or (.dock.launcherDotSpacing // -1) >= 0);
 def old_widget_blur: (.background | type) == "object" and (.background.widgets | type) == "object"
   and (.background.widgets.blur | type) == "object" and (.background.widgets.blur | has("enable"));
+def hug_on_side: (.dock | type) == "object" and .dock.cornerStyle == "span"
+  and (.bar | type) == "object" and .bar.vertical == true;
 # Anything but an object is not a file the shell wrote, and is left as it is.
 if type != "object" then {m: [], d: .} else
 (if dated then [] else
@@ -195,7 +199,8 @@ if type != "object" then {m: [], d: .} else
 | (if (.ai | type) == "object" and (.ai.extraModels | type) == "array"
       and any(.ai.extraModels[]; deepseek) then ["deepseek"] else [] end) as $icon
 | ((if old_launcher then ["dock-launcher"] else [] end)
-  + (if old_widget_blur then ["widget-blur"] else [] end)) as $desktop
+  + (if old_widget_blur then ["widget-blur"] else [] end)
+  + (if hug_on_side then ["hug-side"] else [] end)) as $desktop
 | ($old + $icon + $desktop) as $steps
 | def has_step($s): $steps | any(. == $s);
   {m: $steps, d: (.
@@ -220,6 +225,9 @@ if type != "object" then {m: [], d: .} else
         .background.widgets.blur |= (.style = (if .enable != true then "solid"
             elif ((.style // "") | IN("follow", "frost", "glass")) then .style else "blur" end)
           | del(.enable))
+      else . end
+    | if has_step("hug-side") then
+        .bar.vertical = false | .dock.position = (if .bar.bottom == true then "top" else "bottom" end)
       else . end
     | if has_step("deepseek") then
         .ai.extraModels |= map(if deepseek then .icon = "deepseek-symbolic" else . end)
@@ -284,6 +292,7 @@ _cfgmig_config_json() {
       magnify) _cfgmig_note "Kept your Dock's Magnify strength" ;;
       corners) _cfgmig_note "Squared the screen corners, since Rounded Corners is off" ;;
       dock-launcher) _cfgmig_note "Kept your Dock launcher look, which now follows the icon size" ;;
+      hug-side) _cfgmig_note "Moved the bar to the top or bottom, since the Hug Dock runs along those edges only" ;;
     esac
   done
   return 0

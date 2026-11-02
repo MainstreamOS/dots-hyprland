@@ -504,7 +504,7 @@ ContentPage {
                             icon: "arrow_forward",
                             value: 3 // bottom: true, vertical: true
                         }
-                    ].filter(option => !Appearance.sizes.barIsIsland || (option.value & 2) === 0)
+                    ].filter(option => (option.value & 2) === 0 || (!Appearance.sizes.barIsIsland && Appearance.sizes.barSidesAllowed))
                 }
             }
 
