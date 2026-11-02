@@ -184,43 +184,6 @@ ContentPage {
     }
 
     ContentSection {
-        icon: "blur_on"
-        title: Translation.tr("Widget appearance")
-
-        ConfigSwitch {
-            id: frostedSwitch
-            buttonIcon: "blur_on"
-            text: Translation.tr("Frosted widget backgrounds")
-            // A video wallpaper is drawn below the shell by another process, so
-            // a card has nothing here to sample and the frost cannot appear.
-            enabled: !Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
-            checked: Config.options.background.widgets.blur.enable
-            onCheckedChanged: {
-                Config.options.background.widgets.blur.enable = checked;
-            }
-            StyledToolTip {
-                text: frostedSwitch.enabled
-                    ? Translation.tr("Blur the wallpaper behind each widget card. Every widget that is on pays for its own, so older graphics may prefer this off.")
-                    : Translation.tr("Not available while a video wallpaper is set")
-            }
-        }
-
-        ConfigSlider {
-            visible: Config.options.background.widgets.blur.enable
-            text: Translation.tr("Blur amount")
-            value: Config.options.background.widgets.blur.radius
-            usePercentTooltip: false
-            buttonIcon: "deblur"
-            from: 4
-            to: 48
-            stopIndicatorValues: [24]
-            onMoved: {
-                Config.options.background.widgets.blur.radius = value;
-            }
-        }
-    }
-
-    ContentSection {
         id: settingsClock
         icon: "clock_loader_40"
         title: Translation.tr("Widget: Clock")
@@ -1121,6 +1084,62 @@ ContentPage {
                         Config.options.background.widgets.timers.vertical = checked;
                     }
                 }
+            }
+        }
+    }
+
+    ContentSection {
+        icon: "blur_on"
+        title: Translation.tr("Widget appearance")
+
+        ConfigRow {
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            OptionalMaterialSymbol {
+                icon: "auto_awesome"
+                Layout.alignment: Qt.AlignVCenter
+            }
+            StyledText {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                Layout.leftMargin: 6
+                text: Translation.tr("Blur preset")
+                color: Appearance.colors.colOnSecondaryContainer
+            }
+            StyledComboBox {
+                textRole: "displayName"
+                Layout.fillWidth: false
+                Layout.preferredWidth: 240
+                model: [
+                    { displayName: Translation.tr("Follow UI blur preset"), icon: "link", value: "follow" },
+                    { displayName: Translation.tr("Solid"), icon: "rectangle", value: "solid" },
+                    { displayName: Translation.tr("Frost"), icon: "ac_unit", value: "frost" },
+                    { displayName: Translation.tr("Glass"), icon: "window", value: "glass" },
+                    { displayName: Translation.tr("Blur"), icon: "blur_on", value: "blur" }
+                ]
+                currentIndex: Math.max(0, model.findIndex(item => item.value === Config.options.background.widgets.blur.style))
+                onActivated: index => Config.options.background.widgets.blur.style = model[index].value
+                // A video wallpaper is drawn below the shell by another process, so
+                // a card has nothing here to sample.
+                StyledToolTip {
+                    text: Wallpapers.isVideoFile(Config.options.background.wallpaperPath)
+                        ? Translation.tr("Widgets show as Solid while a video wallpaper is set")
+                        : Translation.tr("Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid.")
+                }
+            }
+        }
+
+        ConfigSlider {
+            visible: Config.options.background.widgets.blur.style === "blur"
+            text: Translation.tr("Blur amount")
+            value: Config.options.background.widgets.blur.radius
+            usePercentTooltip: false
+            buttonIcon: "deblur"
+            from: 4
+            to: 48
+            stopIndicatorValues: [24]
+            onMoved: {
+                Config.options.background.widgets.blur.radius = value;
             }
         }
     }

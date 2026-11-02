@@ -81,18 +81,11 @@ AbstractBackgroundWidget {
             color: Appearance.colors.colPrimaryContainer
             radius: Appearance.rounding?.verylarge ?? 30
 
-            Loader {
-                anchors.fill: parent
-                active: Config.options.background.widgets.blur.enable && root.wallpaperItem !== null
-                sourceComponent: FastBlurred {
-                    anchors.fill: parent
-                    blurSource: root.wallpaperItem
-                    cardRadius: contentRect.radius
-                    tint: Appearance.colors.colLayer1
-                    tintOpacity: 0.55
-                    trackX: root.x
-                    trackY: root.y
-                }
+            WidgetBackdrop {
+                wallpaperItem: root.wallpaperItem
+                cardRadius: contentRect.radius
+                trackX: root.x
+                trackY: root.y
             }
 
             // List

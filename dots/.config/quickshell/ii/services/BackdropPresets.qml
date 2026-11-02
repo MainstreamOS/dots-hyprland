@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import qs.modules.common
+import qs.modules.common.functions
 
 /**
  * Solid, Frost and Glass for the bar and dock, which take a preset together.
@@ -18,6 +19,31 @@ Singleton {
     ]
     readonly property var all: root.shipped.concat(Array.from(Config.options.appearance.backdropPresets))
     readonly property bool dockIsFrost: root.indexFor(Config.options.dock) === 1
+    // The preset look behind the desktop widgets: Frost, Glass, or whatever the dock has.
+    // Null for Solid and the plain blur, and for a dock on Solid, which has none to follow.
+    readonly property var widgetLook: {
+        const style = Config.options.background.widgets.blur.style;
+        if (style === "frost") return root.shipped[1];
+        if (style === "glass") return root.shipped[2];
+        return style === "follow" && Config.options.dock.backdrop.enable ? Config.options.dock.backdrop : null;
+    }
+    readonly property bool widgetBlurred: root.widgetLook !== null || Config.options.background.widgets.blur.style === "blur"
+    // One tint for every card. The plain blur keeps the card's own color. A preset's haze lifts
+    // the card toward its text, so there the theme's background firms up only as far as the text needs.
+    readonly property color widgetTint: {
+        const look = root.widgetLook;
+        if (!look) {
+            const layer = Appearance.colors.colLayer1;
+            return ColorUtils.applyAlpha(layer, layer.a * 0.55);
+        }
+        const base = Appearance.m3colors.m3background;
+        for (let opacity = 0.55; opacity < 0.85; opacity += 0.05) {
+            const tint = Appearance.hazed(base, opacity, look.haze);
+            if (ColorUtils.contrastRatio(Appearance.colors.colOnLayer1, ColorUtils.composite(tint, Appearance.wallpaperAverage)) >= 3)
+                return tint;
+        }
+        return Appearance.hazed(base, 0.85, look.haze);
+    }
     readonly property bool dockIsGlass: root.indexFor(Config.options.dock) === 2
 
     // The same three for windows. The opacity comes with them, since blur only shows

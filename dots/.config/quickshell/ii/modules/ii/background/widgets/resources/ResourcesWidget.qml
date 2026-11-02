@@ -37,18 +37,11 @@ AbstractBackgroundWidget {
         radius: Appearance.rounding?.verylarge ?? 30
         color: statCard.bgColor
 
-        Loader {
-            anchors.fill: parent
-            active: Config.options.background.widgets.blur.enable && root.wallpaperItem !== null
-            sourceComponent: FastBlurred {
-                anchors.fill: parent
-                blurSource: root.wallpaperItem
-                cardRadius: statCard.radius
-                tint: Appearance.colors.colLayer1
-                tintOpacity: 0.55
-                trackX: root.x
-                trackY: root.y
-            }
+        WidgetBackdrop {
+            wallpaperItem: root.wallpaperItem
+            cardRadius: statCard.radius
+            trackX: root.x
+            trackY: root.y
         }
 
         StyledRectangularShadow {

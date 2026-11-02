@@ -170,6 +170,8 @@ _cfgmig_window_rounding() {
 # in shares of the stock grid, so it follows the icons from then on. Stock is what
 # the old glyph drew: a third of the button (the icon plus 15, stock 40 or 27 on
 # Hug) with gaps an eighth of the grid. A file that never set a size has nothing to do.
+# The desktop widgets' Frosted switch became one Blur preset list: off is Solid, and
+# on keeps a preset an earlier build had picked, or else the plain blur it showed.
 _CFGMIG_JQ='
 def dated: (.appearance | type) == "object" and (.appearance | has("roundCornersRestore"));
 def magnify_stock: (.dock == null or (.dock | type) == "object")
@@ -183,6 +185,8 @@ def deepseek: type == "object" and .name == "Custom: DS R1 Dstl. LLaMA 70B"
   and .model == "deepseek/deepseek-r1-distill-llama-70b:free" and .icon == "spark-symbolic";
 def old_launcher: (.dock | type) == "object" and (.dock | has("launcherScale") | not)
   and ((.dock.launcherIconSize // -1) >= 0 or (.dock.launcherDotSpacing // -1) >= 0);
+def old_widget_blur: (.background | type) == "object" and (.background.widgets | type) == "object"
+  and (.background.widgets.blur | type) == "object" and (.background.widgets.blur | has("enable"));
 # Anything but an object is not a file the shell wrote, and is left as it is.
 if type != "object" then {m: [], d: .} else
 (if dated then [] else
@@ -190,7 +194,8 @@ if type != "object" then {m: [], d: .} else
     (if corners_left then "corners" else empty end)] end) as $old
 | (if (.ai | type) == "object" and (.ai.extraModels | type) == "array"
       and any(.ai.extraModels[]; deepseek) then ["deepseek"] else [] end) as $icon
-| (if old_launcher then ["dock-launcher"] else [] end) as $desktop
+| ((if old_launcher then ["dock-launcher"] else [] end)
+  + (if old_widget_blur then ["widget-blur"] else [] end)) as $desktop
 | ($old + $icon + $desktop) as $steps
 | def has_step($s): $steps | any(. == $s);
   {m: $steps, d: (.
@@ -210,6 +215,11 @@ if type != "object" then {m: [], d: .} else
         | if $size == ($stock | round) and $gap == $size / 8 then .
           else .dock.launcherScale = $size / $stock | .dock.launcherDotGap = $gap / $size end
         | del(.dock.launcherIconSize, .dock.launcherDotSpacing)
+      else . end
+    | if has_step("widget-blur") then
+        .background.widgets.blur |= (.style = (if .enable != true then "solid"
+            elif ((.style // "") | IN("follow", "frost", "glass")) then .style else "blur" end)
+          | del(.enable))
       else . end
     | if has_step("deepseek") then
         .ai.extraModels |= map(if deepseek then .icon = "deepseek-symbolic" else . end)

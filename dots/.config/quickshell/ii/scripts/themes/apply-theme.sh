@@ -381,6 +381,12 @@ fi
 # does not is switched off outright. Whether the widgets can be dragged is a
 # preference, so the live answer stays.
 [ -n "$PRESERVE_WIDGETS_KNOWN" ]  && { JQ_FILTER+=' | .background.widgets = ((($known | objects | with_entries(.value = {enable: false})) // {}) + ((.background.widgets | objects) // {}))'; JQ_ARGS+=(--argjson known "$PRESERVE_WIDGETS_KNOWN"); }
+# The widgets' Frosted switch, in a snapshot from before the Blur preset list or
+# filled in as off just above, is read the way config-migrations.sh reads it.
+JQ_FILTER+=' | if ((try (.background.widgets.blur | objects | has("enable")) catch false) // false) then
+    .background.widgets.blur |= (.style = (if .enable != true then "solid"
+        elif ((.style // "") | IN("follow", "frost", "glass")) then .style else "blur" end) | del(.enable))
+  else . end'
 PRESERVE_WIDGETS_LOCKED=$(jq -c '.background.widgetsLocked | select(. != null)' "$SHELL_CONFIG" 2>/dev/null || true)
 if [ -n "$PRESERVE_WIDGETS_LOCKED" ]; then JQ_FILTER+=' | .background.widgetsLocked = $locked'; JQ_ARGS+=(--argjson locked "$PRESERVE_WIDGETS_LOCKED");
 else                                     JQ_FILTER+=' | del(.background.widgetsLocked)'; fi

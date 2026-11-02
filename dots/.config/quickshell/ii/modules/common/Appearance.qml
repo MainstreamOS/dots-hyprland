@@ -431,14 +431,13 @@ Singleton {
     }
     // Under the dock's Frost preset the launcher's surfaces take a thin white layer over
     // a lighter color, so its own blur reads as the same frosted material.
-    function frosted(color, opacity) {
-        const haze = 0.13;
+    function hazed(color, opacity, haze) {
         const alpha = haze + opacity * (1 - haze);
         const mix = channel => (haze + channel * opacity * (1 - haze)) / alpha;
         return Qt.rgba(mix(color.r), mix(color.g), mix(color.b), alpha);
     }
     readonly property color launcherPanelBackground: BackdropPresets.dockIsFrost
-        ? frosted(Qt.color(m3colors.darkmode ? "black" : "white"), 0.5)
+        ? hazed(Qt.color(m3colors.darkmode ? "black" : "white"), 0.5, 0.13)
         : ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
     // The workspace panels are nearly solid, so little of the blur behind them shows.
     // They take the wallpaper's hue instead, at their own lightness so nothing brightens,
@@ -450,7 +449,7 @@ Singleton {
         const average = wallpaperAverage
         const tinted = colors.dockPick !== "" || average.hslSaturation <= 0 ? surface
             : Qt.hsla(average.hslHue, Math.min(0.35, average.hslSaturation), surface.hslLightness, surface.a)
-        return BackdropPresets.dockIsFrost ? frosted(tinted, tinted.a) : tinted
+        return BackdropPresets.dockIsFrost ? hazed(tinted, tinted.a, 0.13) : tinted
     }
     readonly property LauncherSurfaceContent launcherPanelContent: LauncherSurfaceContent {
         m3: root.m3colors

@@ -3372,5 +3372,8 @@
   "Current": "Current",
   "Move to workspace shows": "Move to workspace shows",
   "Workspace numbers": "Workspace numbers",
-  "Both": "Both"
+  "Both": "Both",
+  "Follow UI blur preset": "Follow UI blur preset",
+  "Widgets show as Solid while a video wallpaper is set": "Widgets show as Solid while a video wallpaper is set",
+  "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid.": "Every widget that is on blurs the wallpaper behind it on its own, so older graphics may prefer Solid."
 }

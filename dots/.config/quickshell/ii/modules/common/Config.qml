@@ -510,10 +510,12 @@ Singleton {
             property JsonObject background: JsonObject {
                 // x and y put a widget's center across the screen, 0 to 1, so a theme lays them out alike on every monitor.
                 property JsonObject widgets: JsonObject {
-                    // Frosted glass behind widget cards; loaded on demand, so off builds nothing.
+                    // What sits behind widget cards; loaded on demand, so Solid builds nothing.
                     property JsonObject blur: JsonObject {
-                        property bool enable: false
                         property real radius: 24
+                        // "follow" takes the dock's blur preset, "solid" has none, "frost" and
+                        // "glass" are fixed, and "blur" is the plain blur at radius.
+                        property string style: "follow"
                     }
                     property JsonObject clock: JsonObject {
                         property bool enable: true
