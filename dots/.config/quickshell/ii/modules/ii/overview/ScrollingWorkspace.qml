@@ -227,6 +227,16 @@ Item {
                 readonly property var position: root.positions[address]
                 readonly property bool selected: root.selected && root.controller.selectedByWorkspace[root.workspaceId] === address
                 readonly property bool intersects: x + width > 0 && x < root.width
+                // Set before a close is asked for, so no frame is requested of a window on its
+                // way out; that request is fatal to the shell's Wayland connection.
+                property bool captureSuppressed: false
+                // An app can decline to close, with a save prompt for one, and then its
+                // window is still here and gets its preview back.
+                Timer {
+                    id: captureResume
+                    interval: 1500
+                    onTriggered: tile.captureSuppressed = false
+                }
                 visible: !!position && intersects
                 x: root.cardX + (position?.x ?? 0)
                 y: root.cardY + (position?.y ?? 0)
@@ -278,7 +288,7 @@ Item {
                     HdrScreencopyView {
                         id: preview
                         anchors.fill: parent
-                        captureSource: root.controller.opened && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
+                        captureSource: !tile.captureSuppressed && root.controller.opened && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
                         live: !root.controller.searching && !root.controller.activationPending
                         constraintSize: Qt.size(Math.ceil(tile.width * root.controller.monitorData.scale),
                             Math.ceil(tile.height * root.controller.monitorData.scale))
@@ -303,7 +313,11 @@ Item {
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                         gesturePolicy: TapHandler.ReleaseWithinBounds
                         onTapped: (eventPoint, button) => {
-                            if (button === Qt.MiddleButton) root.controller.closeWindow(tile.address);
+                            if (button === Qt.MiddleButton) {
+                                tile.captureSuppressed = true;
+                                captureResume.restart();
+                                root.controller.closeWindow(tile.address);
+                            }
                             else root.controller.activateWindow(tile.address);
                         }
                     }
