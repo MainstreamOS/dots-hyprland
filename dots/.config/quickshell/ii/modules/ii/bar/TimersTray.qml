@@ -56,8 +56,7 @@ BarGroup {
             }
             StyledText {
                 text: {
-                    const t = TimerService.pomodoroSecondsLeft
-                    return Math.floor(t/60).toString().padStart(2,'0') + ":" + (t%60).toString().padStart(2,'0')
+                    return TimerService.formatCountdown(TimerService.pomodoroSecondsLeft)
                 }
                 color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
@@ -107,8 +106,7 @@ BarGroup {
             }
             StyledText {
                 text: {
-                    const t = TimerService.countdownSecondsLeft
-                    return Math.floor(t/60).toString().padStart(2,'0') + ":" + (t%60).toString().padStart(2,'0')
+                    return TimerService.formatCountdown(TimerService.countdownSecondsLeft)
                 }
                 color: Appearance.barContent.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small

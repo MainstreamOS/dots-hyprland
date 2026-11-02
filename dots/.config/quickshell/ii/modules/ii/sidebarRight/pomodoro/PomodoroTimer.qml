@@ -34,12 +34,8 @@ Item {
 
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
-                    text: {
-                        let minutes = Math.floor(TimerService.pomodoroSecondsLeft / 60).toString().padStart(2, '0');
-                        let seconds = Math.floor(TimerService.pomodoroSecondsLeft % 60).toString().padStart(2, '0');
-                        return `${minutes}:${seconds}`;
-                    }
-                    font.pixelSize: 40
+                    text: TimerService.formatCountdown(TimerService.pomodoroSecondsLeft)
+                    font.pixelSize: 32
                     color: Appearance.m3colors.m3onSurface
                 }
                 StyledText {

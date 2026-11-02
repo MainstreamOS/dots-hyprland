@@ -142,7 +142,7 @@ AbstractBackgroundWidget {
         // Pomodoro
         TimerCard {
             icon: TimerService.pomodoroBreak ? "coffee" : "visibility"
-            value: TimerService.formatSeconds(TimerService.pomodoroSecondsLeft)
+            value: TimerService.formatCountdown(TimerService.pomodoroSecondsLeft)
             label: TimerService.pomodoroBreak ? "Break" : "Focus"
             running: TimerService.pomodoroRunning
             bgColor: Appearance.colors.colTertiaryContainer
@@ -168,7 +168,7 @@ AbstractBackgroundWidget {
         // Countdown
         TimerCard {
             icon: "hourglass_top"
-            value: TimerService.formatSeconds(TimerService.countdownSecondsLeft)
+            value: TimerService.formatCountdown(TimerService.countdownSecondsLeft)
             label: "Countdown"
             running: TimerService.countdownRunning
             shape: MaterialShape.Shape.Bun

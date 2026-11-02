@@ -34,91 +34,31 @@ Item {
                     visible: timeItem.showsEndTime
                 }
 
+                DurationPicker {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: timeItem.showsLength
+                }
+
                 Item {
                     id: timeItem
-                    visible: !timeItem.showsEndTime
+                    visible: !timeItem.showsEndTime && !timeItem.showsLength
                     Layout.alignment: Qt.AlignHCenter
                     implicitWidth: 160
                     implicitHeight: 50
 
-                    property bool editMode: false
-                    readonly property bool showsEndTime: TimerService.countdownToClock && !TimerService.countdownRunning
-
-                    function startEdit() {
-                        timeField.text = `${Math.floor(TimerService.countdownDuration / 60).toString().padStart(2, '0')}:${Math.floor(TimerService.countdownDuration % 60).toString().padStart(2, '0')}`;
-                        timeItem.editMode = true;
-                        timeField.forceActiveFocus();
-                        timeField.selectAll();
-                    }
-
-                    function applyEdit() {
-                        editMode = false;
-                        let raw = timeField.text.replace(/[^0-9:]/g, "");
-                        let parts = raw.split(":");
-                        let newSeconds = 0;
-                        if (parts.length >= 2) {
-                            let mins = parseInt(parts[0]);
-                            let secs = parseInt(parts[1]);
-                            newSeconds = (isNaN(mins) ? 0 : mins) * 60 + (isNaN(secs) ? 0 : secs);
-                        } else {
-                            let s = parseInt(parts[0]);
-                            newSeconds = isNaN(s) ? 0 : s;
-                        }
-                        TimerService.setCountdownTime(newSeconds);
-                    }
+                    readonly property bool showsEndTime: TimerService.countdownPicksEndTime
+                    readonly property bool showsLength: !TimerService.countdownToClock && TimerService.countdownIdle
 
                     StyledText {
-                        visible: !timeItem.editMode
                         anchors.centerIn: parent
-                        text: {
-                            if (TimerService.countdownSecondsLeft >= 3600)
-                                return TimerService.formatSeconds(TimerService.countdownSecondsLeft);
-                            let minutes = Math.floor(TimerService.countdownSecondsLeft / 60).toString().padStart(2, '0');
-                            let seconds = Math.floor(TimerService.countdownSecondsLeft % 60).toString().padStart(2, '0');
-                            return `${minutes}:${seconds}`;
-                        }
-                        font.pixelSize: TimerService.countdownSecondsLeft >= 3600 ? 32 : 40
+                        text: TimerService.formatCountdown(TimerService.countdownSecondsLeft)
+                        font.pixelSize: 32
                         color: Appearance.m3colors.m3onSurface
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        visible: !timeItem.editMode
-                        cursorShape: Qt.IBeamCursor
-                        acceptedButtons: Qt.LeftButton
-
-                        onClicked: (mouse) => {
-                            if (mouse.button === Qt.LeftButton && !TimerService.countdownRunning)
-                                timeItem.startEdit();
-                        }
-                    }
-
-                    StyledTextInput {
-                        id: timeField
-                        visible: timeItem.editMode
-                        anchors.centerIn: parent
-                        width: parent.width
-                        horizontalAlignment: TextInput.AlignHCenter
-                        font.pixelSize: 40
-                        font.hintingPreference: Font.PreferDefaultHinting
-                        renderType: Text.NativeRendering
-                        color: Appearance.m3colors.m3onSurface
-
-                        Keys.onReturnPressed: timeItem.applyEdit()
-                        Keys.onEnterPressed: timeItem.applyEdit()
-                        Keys.onEscapePressed: timeItem.editMode = false
-
-                        onActiveFocusChanged: {
-                            if (!activeFocus && timeItem.editMode) {
-                                timeItem.applyEdit();
-                                timeItem.editMode = false;
-                            }
-                        }
                     }
                 }
 
                 StyledText {
-                    visible: !timeItem.showsEndTime
+                    visible: !timeItem.showsEndTime && !timeItem.showsLength
                     Layout.alignment: Qt.AlignHCenter
                     text: TimerService.countdownRunning
                         ? Translation.tr("Ends at %1").arg(Qt.formatTime(new Date(Date.now() + TimerService.countdownSecondsLeft * 1000), Config.options.time.format))
@@ -138,7 +78,6 @@ Item {
             ]
             currentIndex: TimerService.countdownToClock ? 1 : 0
             onActivated: index => {
-                timeItem.editMode = false;
                 TimerService.setCountdownMode(index === 1);
             }
         }

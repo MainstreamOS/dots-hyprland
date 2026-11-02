@@ -187,6 +187,13 @@ Singleton {
         onTriggered: refreshCountdown()
     }
 
+    // How a countdown reads wherever it shows.
+    function formatCountdown(totalSeconds) {
+        const s = Math.max(0, Math.ceil(totalSeconds));
+        const pad = value => String(value).padStart(2, "0");
+        return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+    }
+
     function formatSeconds(totalSeconds) {
         const s = Math.max(0, Math.round(totalSeconds));
         const sec = (s % 60).toString().padStart(2, "0");
@@ -225,9 +232,8 @@ Singleton {
         return { hour: at.getHours(), minute: at.getMinutes() };
     }
 
+    // Switching tabs only changes which picker shows next, so a timer already going keeps going.
     function setCountdownMode(clock) {
-        if (root.countdownRunning)
-            root.resetCountdown();
         Persistent.states.timer.countdown.mode = clock ? "clock" : "length";
     }
 
@@ -245,8 +251,18 @@ Singleton {
         }
     }
 
+    // Nothing under way, so the tabs' pickers set what the next run does.
+    readonly property bool countdownIdle: !root.countdownRunning && root.countdownSecondsLeft >= root.countdownDuration
+    // Whether the run under way was aimed at a time of day. A paused one takes its
+    // time back up from the clock, and a run of set length keeps what it has left.
+    property bool countdownAimedAtClock: false
+    readonly property bool countdownPicksEndTime: root.countdownToClock && !root.countdownRunning
+        && (root.countdownIdle || root.countdownAimedAtClock)
+
     function toggleCountdown() {
-        if (!root.countdownRunning && root.countdownToClock) {
+        if (root.countdownIdle)
+            root.countdownAimedAtClock = root.countdownToClock;
+        if (!root.countdownRunning && root.countdownToClock && root.countdownAimedAtClock) {
             root.setCountdownEndTime(root.countdownEndParts.hour, root.countdownEndParts.minute);
             // Worked out at each start, so a pause doesn't move the time it goes off.
             root.setCountdownTime(root.secondsUntilClockTime(Persistent.states.timer.countdown.endTime));

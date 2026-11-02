@@ -22,47 +22,10 @@ ColumnLayout {
     readonly property var modeKeys: ["timer", "stopwatch", "focus"]
     readonly property int currentMode: Math.max(0, root.modeKeys.indexOf(Persistent.states.timer.tab))
 
-    property bool isEditingCountdown: false
-    readonly property bool needsKeyboardFocus: isEditingCountdown
+    readonly property bool needsKeyboardFocus: false
 
-    readonly property bool showsEndTime: root.currentMode === 0 && TimerService.countdownToClock && !TimerService.countdownRunning
-
-    function startCountdownEdit() {
-        timeField.text = root.formatTime(TimerService.countdownDuration);
-        root.isEditingCountdown = true;
-        timeField.forceActiveFocus();
-        timeField.selectAll();
-    }
-
-    function applyCountdownEdit() {
-        if (!isEditingCountdown) return;
-        isEditingCountdown = false;
-        let raw = timeField.text.replace(/[^0-9:]/g, "");
-        let parts = raw.split(":");
-        let newSeconds = 0;
-        if (parts.length >= 2) {
-            let mins = parseInt(parts[0]);
-            let secs = parseInt(parts[1]);
-            newSeconds = (isNaN(mins) ? 0 : mins) * 60 + (isNaN(secs) ? 0 : secs);
-        } else {
-            let s = parseInt(parts[0]);
-            newSeconds = isNaN(s) ? 0 : s;
-        }
-        if (newSeconds > 0) {
-            TimerService.setCountdownTime(newSeconds);
-        }
-    }
-
-    function formatTime(seconds) {
-        const s = Math.max(0, Math.floor(seconds));
-        const m = Math.floor(s / 60).toString().padStart(2, '0');
-        const sec = (s % 60).toString().padStart(2, '0');
-        return `${m}:${sec}`;
-    }
-
-    function formatCountdown(seconds) {
-        return seconds >= 3600 ? TimerService.formatSeconds(seconds) : root.formatTime(seconds);
-    }
+    readonly property bool showsEndTime: root.currentMode === 0 && TimerService.countdownPicksEndTime
+    readonly property bool showsLength: root.currentMode === 0 && !TimerService.countdownToClock && TimerService.countdownIdle
 
     function format10ms(time10ms) {
         const totalSeconds = Math.floor(time10ms / 100);
@@ -211,26 +174,33 @@ ColumnLayout {
                     cornerRadius: 6
                 }
 
+                DurationPicker {
+                    Layout.alignment: Qt.AlignVCenter
+                    visible: root.showsLength
+                    contentColors: Appearance.islandContent
+                    rowHeight: 24
+                    cornerRadius: 6
+                }
+
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     spacing: 2
 
                     Item {
-                        visible: !root.showsEndTime
-                        implicitWidth: Math.max(digitsRow.implicitWidth, timeField.implicitWidth)
-                        implicitHeight: Math.max(digitsRow.implicitHeight, timeField.implicitHeight)
+                        visible: !root.showsEndTime && !root.showsLength
+                        implicitWidth: digitsRow.implicitWidth
+                        implicitHeight: digitsRow.implicitHeight
 
                         RowLayout {
                             id: digitsRow
-                            visible: !(root.currentMode === 0 && root.isEditingCountdown)
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
 
                             StyledText {
                                 text: {
                                     if (root.currentMode === 0) {
-                                        return root.formatCountdown(TimerService.countdownSecondsLeft);
+                                        return TimerService.formatCountdown(TimerService.countdownSecondsLeft);
                                     }
                                     if (root.currentMode === 1) {
                                         const totalSeconds = Math.floor(TimerService.stopwatchTime / 100);
@@ -238,7 +208,7 @@ ColumnLayout {
                                         const s = (totalSeconds % 60).toString().padStart(2, '0');
                                         return `${m}:${s}`;
                                     }
-                                    return root.formatTime(TimerService.pomodoroSecondsLeft);
+                                    return TimerService.formatCountdown(TimerService.pomodoroSecondsLeft);
                                 }
                                 font.pixelSize: 34
                                 font.weight: Font.DemiBold
@@ -259,44 +229,17 @@ ColumnLayout {
                                 Layout.alignment: Qt.AlignBaseline
                             }
                         }
-
-                        MouseArea {
-                            anchors.fill: digitsRow
-                            visible: root.currentMode === 0 && !root.isEditingCountdown && !TimerService.countdownRunning
-                            cursorShape: Qt.IBeamCursor
-                            onClicked: root.startCountdownEdit()
-                        }
-
-                        StyledTextInput {
-                            id: timeField
-                            visible: root.currentMode === 0 && root.isEditingCountdown
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 130
-                            font.pixelSize: 34
-                            font.weight: Font.DemiBold
-                            font.features: ({ "tnum": 1 })
-                            color: Appearance.islandContent.colPrimary
-                            Keys.onReturnPressed: root.applyCountdownEdit()
-                            Keys.onEnterPressed: root.applyCountdownEdit()
-                            Keys.onEscapePressed: root.isEditingCountdown = false
-                            onActiveFocusChanged: {
-                                if (!activeFocus && root.isEditingCountdown) {
-                                    root.applyCountdownEdit();
-                                    root.isEditingCountdown = false;
-                                }
-                            }
-                        }
                     }
 
                     StyledText {
-                        visible: !root.showsEndTime
+                        visible: !root.showsEndTime && !root.showsLength
                         text: {
                             if (root.currentMode === 0) {
                                 if (TimerService.countdownRunning) {
                                     const endsAt = Qt.formatTime(new Date(Date.now() + TimerService.countdownSecondsLeft * 1000), "h:mm AP");
-                                    return Translation.tr("Target: %1 · Ends at %2").arg(root.formatCountdown(TimerService.countdownDuration)).arg(endsAt);
+                                    return Translation.tr("Target: %1 · Ends at %2").arg(TimerService.formatCountdown(TimerService.countdownDuration)).arg(endsAt);
                                 }
-                                return Translation.tr("Target duration: %1 (click digits to edit)").arg(root.formatCountdown(TimerService.countdownDuration));
+                                return "";
                             }
                             if (root.currentMode === 1) {
                                 const laps = TimerService.stopwatchLaps ?? [];
@@ -452,7 +395,6 @@ ColumnLayout {
                 ]
                 currentIndex: TimerService.countdownToClock ? 1 : 0
                 onActivated: index => {
-                    root.isEditingCountdown = false;
                     TimerService.setCountdownMode(index === 1);
                 }
             }
