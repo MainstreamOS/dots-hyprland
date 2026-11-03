@@ -149,6 +149,8 @@ term_background:        191A1F
 term_foreground:        C9CCD4
 term_background_bright: 2A2B32
 term_foreground_bright: ECE9E3
+term_margin:            0
+term_margin_gradient:   0
 interface_branding:            Mainstream OS
 interface_branding_colour:     18A0BE
 interface_help_colour:         9397A0
@@ -183,9 +185,15 @@ ensure_limine_header() {
     awk '
         BEGIN { in_header = 1 }
         in_header && /^[[:space:]]*$/ { next }
-        in_header && /^#/ { next }
-        in_header && /^(timeout:|remember_last_entry:|default_entry:|hash_mismatch_panic:|term_background:|term_foreground:|term_background_bright:|term_foreground_bright:|interface_branding:|interface_branding_colou?r:|interface_help_colou?r:|interface_help_colou?r_bright:|term_palette:|term_palette_bright:|backdrop:)/ { next }
-        { in_header = 0; print }
+        in_header && /^[[:space:]]*#/ { next }
+        in_header && /^[[:space:]]*\// { in_header = 0 }
+        in_header {
+            key = tolower($0)
+            sub(/^[[:space:]]*/, "", key)
+            sub(/[[:space:]]*:.*/, "", key)
+            if (key ~ /^(timeout|remember_last_entry|default_entry|hash_mismatch_panic|wallpaper|wallpaper_style|term_background|term_foreground|term_background_bright|term_foreground_bright|term_margin|term_margin_gradient|interface_branding|interface_branding_colou?r|interface_help_colou?r|interface_help_colou?r_bright|term_palette|term_palette_bright|backdrop)$/) next
+        }
+        { print }
     ' "$limine_conf" >> "$tmpfile"
     install -m 644 "$tmpfile" "$limine_conf"
     rm -f "$tmpfile"
