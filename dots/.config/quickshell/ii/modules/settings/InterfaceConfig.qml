@@ -283,6 +283,51 @@ ContentPage {
         ])
     }
 
+    ContentSection {
+        icon: "lock_clock"
+        title: Translation.tr("Login screen")
+
+        ConfigRow {
+            ConfigSpinBox {
+                id: loginClockSize
+                icon: "resize"
+                text: Translation.tr("Clock size (%)")
+                enabled: GreeterAppearance.available
+                value: GreeterAppearance.clockSize
+                from: 50
+                to: 200
+                stepSize: 5
+                onValueChanged: {
+                    if (value !== GreeterAppearance.clockSize) GreeterAppearance.setClockSize(value);
+                }
+            }
+            Item { Layout.fillWidth: true }
+            RippleButtonWithIcon {
+                materialIcon: "restart_alt"
+                mainText: Translation.tr("Reset")
+                enabled: GreeterAppearance.available && GreeterAppearance.clockSize !== 100
+                onClicked: GreeterAppearance.setClockSize(100)
+            }
+        }
+        Connections {
+            target: GreeterAppearance
+            function onClockSizeChanged() { loginClockSize.value = GreeterAppearance.clockSize; }
+        }
+        StyledText {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("Changes the login clock for all users. Takes effect the next time the login screen opens.")
+        }
+        StyledText {
+            Layout.fillWidth: true
+            visible: !GreeterAppearance.available || GreeterAppearance.error.length > 0
+            wrapMode: Text.WordWrap
+            color: GreeterAppearance.error.length ? Appearance.m3colors.m3error : Appearance.colors.colSubtext
+            text: GreeterAppearance.error || Translation.tr("Update Mainstream to enable this setting.")
+        }
+    }
+
     // ── Left Hot Corner ──────────────────────────────────────────────────────
     ContentSection {
         icon: "ads_click"

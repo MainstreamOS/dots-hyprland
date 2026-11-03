@@ -47,10 +47,16 @@ trap cleanup EXIT
 
 if git clone https://github.com/MainstreamOS/pixie-sddm.git "$PIXIE_TMPDIR" 2>/dev/null; then
     PIXIE_THEME_DIR="/usr/share/sddm/themes/pixie"
+    if [[ -f "$PIXIE_THEME_DIR/theme.conf.user" && ! -L "$PIXIE_THEME_DIR/theme.conf.user" ]]; then
+        cp "$PIXIE_THEME_DIR/theme.conf.user" "$PIXIE_TMPDIR/.theme.conf.user.saved"
+    fi
     rm -rf "$PIXIE_THEME_DIR" 2>/dev/null || true
     mkdir -p "$PIXIE_THEME_DIR"
-    cp -r "$PIXIE_TMPDIR"/{assets,components,Main.qml,metadata.desktop,theme.conf,LICENSE} "$PIXIE_THEME_DIR/"
+    cp -r "$PIXIE_TMPDIR"/{assets,components,Main.qml,VideoBackground.qml,metadata.desktop,theme.conf,LICENSE} "$PIXIE_THEME_DIR/"
     chmod -R 755 "$PIXIE_THEME_DIR"
+    if [[ -f "$PIXIE_TMPDIR/.theme.conf.user.saved" ]]; then
+        install -m644 "$PIXIE_TMPDIR/.theme.conf.user.saved" "$PIXIE_THEME_DIR/theme.conf.user"
+    fi
 
     info "Pixie SDDM theme installed"
 else

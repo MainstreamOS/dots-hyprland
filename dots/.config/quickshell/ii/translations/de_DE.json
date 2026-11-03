@@ -3412,5 +3412,9 @@
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Wenn YouTube die Wiedergabe blockiert, verwende deine Anmeldung in Zen oder Firefox. Browser-Cookies werden nur beim Abspielen eines YouTube-Videos gelesen.",
   "Refresh phone connection": "Telefonverbindung aktualisieren",
   "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Erlaube KDE Connect unter Android den Zugriff auf Kontakte und aktiviere die Kontaktsynchronisierung, damit hier Kontaktnamen und Fotos erscheinen. Wenn du das erst nach dem Koppeln erlaubst, klicke neben dem Telefonnamen auf Telefonverbindung aktualisieren.",
-  "George Larson — Phone integration": "George Larson — Telefonintegration"
+  "George Larson — Phone integration": "George Larson — Telefonintegration",
+  "Clock size (%)": "Uhrgröße (%)",
+  "Changes the login clock for all users. Takes effect the next time the login screen opens.": "Ändert die Uhr auf dem Anmeldebildschirm für alle Benutzer. Wird beim nächsten Öffnen des Anmeldebildschirms wirksam.",
+  "Could not update the login clock size.": "Die Größe der Uhr auf dem Anmeldebildschirm konnte nicht aktualisiert werden.",
+  "Update Mainstream to enable this setting.": "Aktualisiere Mainstream, um diese Einstellung zu aktivieren."
 }

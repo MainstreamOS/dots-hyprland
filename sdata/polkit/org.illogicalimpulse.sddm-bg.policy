@@ -4,8 +4,8 @@
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
   <action id="org.illogicalimpulse.sddm-bg">
-    <description>Copy wallpaper to SDDM theme backgrounds</description>
-    <message>Authentication is required to update the SDDM login background</message>
+    <description>Update the SDDM login screen appearance</description>
+    <message>Authentication is required to update the SDDM login screen appearance</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>

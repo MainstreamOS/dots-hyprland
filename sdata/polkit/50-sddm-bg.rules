@@ -1,4 +1,4 @@
-// Allow active local users to update SDDM background without a password
+// Allow active local users to update SDDM appearance without a password
 polkit.addRule(function(action, subject) {
     if (action.id == "org.illogicalimpulse.sddm-bg" &&
         subject.isInGroup("users") && subject.active) {

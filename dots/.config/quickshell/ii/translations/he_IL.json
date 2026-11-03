@@ -3412,5 +3412,9 @@
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "אם YouTube חוסם את הניגון, יש להשתמש בחיבור שלך ב־Zen או ב־Firefox. קובצי העוגיות של הדפדפן נקראים רק בעת ניגון סרטון YouTube.",
   "Refresh phone connection": "רענון חיבור הטלפון",
   "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "ב־Android יש לאפשר ל־KDE Connect גישה לאנשי הקשר ולהפעיל סנכרון אנשי קשר כדי להציג כאן שמות ותמונות. אם ההרשאה ניתנת לאחר הצימוד, יש ללחוץ על רענון חיבור הטלפון לצד שם הטלפון.",
-  "George Larson — Phone integration": "George Larson — שילוב הטלפון"
+  "George Larson — Phone integration": "George Larson — שילוב הטלפון",
+  "Clock size (%)": "גודל השעון (%)",
+  "Changes the login clock for all users. Takes effect the next time the login screen opens.": "משנה את השעון במסך הכניסה לכל המשתמשים. השינוי יחול בפעם הבאה שמסך הכניסה ייפתח.",
+  "Could not update the login clock size.": "לא ניתן לעדכן את גודל השעון במסך הכניסה.",
+  "Update Mainstream to enable this setting.": "יש לעדכן את Mainstream כדי להפעיל הגדרה זו."
 }
