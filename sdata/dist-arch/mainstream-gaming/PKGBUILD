@@ -1,7 +1,7 @@
 groups=(mainstream)
 pkgname=mainstream-gaming
 pkgver=1.0
-pkgrel=16
+pkgrel=17
 pkgdesc='Mainstream OS Gaming Mode (gamescope Steam Big Picture session switch)'
 arch=(any)
 license=(MIT)
@@ -89,10 +89,10 @@ package() {
                  "$pkgdir/usr/lib/systemd/user/gamescope-session-plus@steam.service.d/10-mainstream-steam-bluetooth.conf"
 
   install -Dm644 "$srcdir/ntsync.conf" \
-                 "$pkgdir/usr/lib/modules-load.d/ntsync.conf"
+                 "$pkgdir/usr/lib/modules-load.d/mainstream-ntsync.conf"
 
   install -Dm644 "$srcdir/61-ioschedulers.rules" \
-                 "$pkgdir/usr/lib/udev/rules.d/61-ioschedulers.rules"
+                 "$pkgdir/usr/lib/udev/rules.d/61-mainstream-ioschedulers.rules"
 
   install -Dm644 "$srcdir/mainstream-scx-lavd.service" \
                  "$pkgdir/usr/lib/systemd/system/mainstream-scx-lavd.service"

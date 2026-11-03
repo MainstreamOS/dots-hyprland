@@ -171,6 +171,8 @@ replace-mainstream-system-packages() {
   for pair in \
     kdeconnect:rust-connect \
     gtk4:gtk4-live-css \
+    firefox-mpris-hyprland:mpris-hyprland \
+    ttf-material-symbols-variable:ttf-material-symbols-variable-git \
     adw-gtk-theme:adw-gtk-theme-git \
     adw-gtk3:adw-gtk-theme-git; do
     old=${pair%%:*}
@@ -213,8 +215,8 @@ v implicitize_old_dependencies
 # the previous illogical-impulse-* name keeps owning its files and the install
 # dies on a file conflict. Declaring conflicts[] is not a way out: that prompt
 # defaults to no, which --noconfirm then answers.
-# replaces[] is read in a subshell because install-local-pkgbuild sources every
-# PKGBUILD into one shell and three of them declare none to overwrite a stale value.
+# Read replaces[] in a fresh scope so recipes without it cannot inherit another
+# recipe's previous name.
 remove-previous-package-name() {
   local location=$1
   local previous
@@ -225,12 +227,16 @@ remove-previous-package-name() {
     if ! sudo pacman --noconfirm -Rdd "$previous"; then
       printf "${STY_YELLOW}[$0]: WARNING: could not remove '%s', the install may fail on file conflicts.${STY_RST}\n" "$previous"
     fi
-  done < <(source "$location/PKGBUILD"; printf '%s\n' "${replaces[@]:-}")
+  done < <(unset replaces; source "$location/PKGBUILD"; printf '%s\n' "${replaces[@]:-}")
 }
 
 install-local-pkgbuild() {
   local location=$1
   local installflags=$2
+  # Each recipe owns its metadata; absent arrays must not inherit the previous
+  # recipe's dependencies or conflicts when this function is called again.
+  local pkgname
+  local depends=() optdepends=() conflicts=() replaces=()
 
   x pushd $location
 
@@ -374,9 +380,10 @@ install-local-pkgbuild() {
   # In https://github.com/end-4/dots-hyprland/issues/823#issuecomment-3394774645 it's suggested
   # to use `sudo pacman -U --noconfirm *.pkg.tar.zst` instead of `makepkg -i`, however it's
   # possible that multiple *.pkg.tar.zst exist, which makes this command not reliable.
-  if [[ "$pkgname" == mainstream-quickshell-git ]]; then
-    # Installed apart from the build so --ask 4 can remove another Quickshell package
-    # in the same transaction; makepkg -i would refuse the conflict under --noconfirm.
+  if (( ${#conflicts[@]} > 0 )); then
+    # Install recipes with declared replacements separately so pacman can remove
+    # the conflicting package atomically. makepkg -i refuses that prompt under
+    # --noconfirm, including existing Quickshell and Bibata cursor packages.
     x makepkg -Afs --noconfirm
     local built_packages=()
     mapfile -t built_packages < <(makepkg --packagelist)
