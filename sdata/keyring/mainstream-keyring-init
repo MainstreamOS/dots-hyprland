@@ -142,7 +142,9 @@ rebuild_keyring() {
     if [[ -d "$GNUPG_DIR" ]]; then
         mv "$GNUPG_DIR" "$keep" || { warn "could not set the old keyring aside."; return 1; }
     fi
-    if pacman-key --init && pacman-key --populate archlinux; then
+    # Installed keyring packages describe every configured distribution's trust.
+    # Rebuilding only the Arch keys can invalidate other signed repositories.
+    if pacman-key --init && pacman-key --populate; then
         pacman-key --updatedb || warn "pacman-key --updatedb reported a failure."
         rm -rf "$keep"
         return 0
@@ -163,6 +165,9 @@ trust_key() {
 
     if ! arch_keyring_populated; then
         rebuild_keyring || return 1
+    elif ! pacman-key --populate; then
+        warn "could not restore the installed repository keyrings."
+        return 1
     fi
 
     import_and_sign

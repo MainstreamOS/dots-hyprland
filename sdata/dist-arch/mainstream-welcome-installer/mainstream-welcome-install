@@ -45,6 +45,8 @@ log() { printf '%s :: %s\n' "$(date '+%F %T')" "$*"; }
 
 as_user() {  # command...
   runuser -u "$RUSER" -- env \
+    -u XDG_CACHE_HOME -u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_STATE_HOME \
+    HOME="$RHOME" USER="$RUSER" LOGNAME="$RUSER" \
     XDG_RUNTIME_DIR="/run/user/$RUID" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$RUID/bus" \
     "$@"
@@ -96,6 +98,7 @@ wait_for_repo() {
     waited=$((waited + 3))
     if (( waited % 30 == 0 )); then
       log "still waiting for [mainstream] after ${waited}s; refreshing databases"
+      wait_for_pacman_lock || return 1
       pacman -Sy --noconfirm >/dev/null 2>&1 || true
     fi
   done
@@ -315,13 +318,16 @@ install_resolve() {  # "" | --studio   [install|update]
     log "install-davinci-resolve NOT FOUND (checked PATH and $RHOME/.local/bin)"
     notify "$name unavailable" "install-davinci-resolve not found." critical; return
   fi
+  wait_for_pacman_lock || { log "could not get the pacman lock"; return 1; }
   log "installer: $bin   args: ${flag:-<none>} -y --anon   (running as $RUSER, mode=$mode)"
   notify "$ing $name…" "Large download — it keeps running in the background."
   printf '%s ALL=(root) NOPASSWD: ALL\n' "$RUSER" > "$SUDOERS_TMP"
   chmod 0440 "$SUDOERS_TMP"
   log "granted temporary NOPASSWD sudo to $RUSER for the build"
   local rc=0
-  runuser -l "$RUSER" -- "$bin" $flag -y --anon || rc=$?
+  local flags=()
+  [[ -n $flag ]] && flags+=("$flag")
+  as_user /usr/bin/bash "$bin" "${flags[@]}" -y --anon || rc=$?
   rm -f "$SUDOERS_TMP"
   log "$name installer exited: $rc"
   if (( rc == 0 )); then notify "$name $done_" "Launch it from your apps."
@@ -339,7 +345,7 @@ update_resolve() {
     notify "DaVinci Resolve unavailable" "install-davinci-resolve not found." critical; return
   fi
   local out pkg=""
-  out=$(runuser -l "$RUSER" -- "$bin" --check --json 2>/dev/null) || true
+  out=$(as_user /usr/bin/bash "$bin" --check --json 2>/dev/null) || true
   [[ -n $out ]] && pkg=$(jq -r '.package // empty' <<<"$out" 2>/dev/null) || pkg=""
   log "resolve-update: --check reports package='${pkg:-<none>}'"
   case $pkg in

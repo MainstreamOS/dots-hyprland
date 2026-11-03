@@ -268,6 +268,30 @@ SUDO_KEEPALIVE=$!
 
 NOCONFIRM=(); (( ASSUME_YES )) && NOCONFIRM=(--noconfirm)
 
+wait_for_package_manager() {
+  local waited=0
+  while [[ -e /var/lib/pacman/db.lck ]]; do
+    (( waited == 0 )) && info "Waiting for the package manager to finish…"
+    (( waited < 600 )) || die "the package database is still locked; finish the other package operation and retry."
+    sleep 3
+    waited=$((waited + 3))
+  done
+}
+
+repair_runtime_directories() {
+  local owner d
+  owner=$(id -un)
+  info "Setting runtime directory ownership…"
+  for d in configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT Immersive Extras "Apple Immersive"; do
+    if [[ ! -d "/opt/resolve/$d" ]]; then
+      sudo install -d -m 0755 -o "$owner" -g root "/opt/resolve/$d" \
+        || die "could not create runtime directory /opt/resolve/$d."
+    fi
+    sudo chown -R "$owner":root "/opt/resolve/$d" \
+      || die "could not set runtime directory ownership for /opt/resolve/$d."
+  done
+}
+
 FINISHED=0
 cleanup() {
   [[ -n ${SUDO_KEEPALIVE:-} ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null
@@ -319,8 +343,9 @@ rocm_pin() {
     files+=("$dir/$name")
   done
   info "Installing the downgraded stack in one transaction…"
+  wait_for_package_manager
   sudo pacman -U "${NOCONFIRM[@]}" "${files[@]}" \
-    || { rm -rf "$dir"; die "pacman -U failed — a dependent ROCm package may need pinning too."; }
+    || { rm -rf "$dir"; die "pacman -U failed; review the package-manager errors above."; }
   rocm_ignore_add
   rm -rf "$dir"
   info "${c_g}${c_b}ROCm pinned to ${ver} and held from upgrades.${c_0}"
@@ -397,6 +422,7 @@ else
     step "already installed"
   else
     step "installing $OPENCL_PKG"
+    wait_for_package_manager
     sudo pacman -S --needed "${NOCONFIRM[@]}" "$OPENCL_PKG"
   fi
   if [[ $GPU == amd && -z $OPENCL_OVERRIDE ]]; then
@@ -475,6 +501,7 @@ if pacman -Qi "$PKGNAME" >/dev/null 2>&1; then
   # failed install. >= rather than == so a pulled release (installed newer than
   # the API's latest) does not rebuild either.
   if (( _cmp >= 0 )) && ! (( FORCE )); then
+    repair_runtime_directories
     info "${c_g}${c_b}${PRODUCT} ${CURRENT} is already installed and current.${c_0}"
     step "Nothing to do. Rebuild anyway with: ${c_b}${PROG} --force${c_0}"
     exit 0
@@ -635,7 +662,7 @@ package() {
   cp -rf squashfs-root/* "\${pkgdir}/opt/\${_pkgname}"
   # Runtime dirs Resolve writes into (chowned to the user after install).
   local _d
-  for _d in configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT "Apple Immersive/Calibration"; do
+  for _d in configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT Immersive Extras "Apple Immersive/Calibration"; do
     install -d -m 0755 "\${pkgdir}/opt/\${_pkgname}/\$_d"
   done
   install -Dm644 squashfs-root/share/default-config.dat "\${pkgdir}/opt/\${_pkgname}/configs/config.dat"
@@ -698,6 +725,7 @@ WRAPPER
 }
 PKGBUILD
 
+wait_for_package_manager
 ( cd "$BUILD_DIR" && makepkg -si "${NOCONFIRM[@]}" ) || die "makepkg failed."
 FINISHED=1
 
@@ -759,12 +787,7 @@ fi
 
 # Resolve writes runtime state into /opt/resolve; hand those dirs to the user
 # so it doesn't fail with "Failed to create application support directories".
-info "Setting runtime directory ownership…"
-_owner=$(id -un)
-_rt=(configs DolbyVision easyDCP Fairlight GPUCache logs Media "Resolve Disk Database" .crashreport .license .LUT "Apple Immersive")
-for _d in "${_rt[@]}"; do
-  [[ -d "/opt/resolve/$_d" ]] && sudo chown -R "$_owner":root "/opt/resolve/$_d"
-done
+repair_runtime_directories
 
 # Studio only: install the community VAAPI encoder IOPlugin (nowrep/dvcp-vaapi) on
 # every GPU, regardless of the current card, so it is already in place if the user
