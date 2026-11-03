@@ -1,22 +1,31 @@
-name: Feature request
-description: Suggest an idea for this project
+name: Suggest an improvement
+description: Something that would make Mainstream work better for you.
 labels: ["FEATURE"]
 body:
   - type: markdown
     attributes:
-      value: "NOTE:\n- Please search in [existing issues](https://github.com/end-4/dots-hyprland/issues?q=is%3Aissue) before continue.\n- Please write in **English**."
+      value: |
+        Have an idea for Mainstream? We'd like to hear it. A small change that makes an everyday task easier counts.
 
+        Check [existing suggestions](https://github.com/MainstreamOS/dots-hyprland/issues?q=is%3Aissue) first. If you'd rather talk an idea through, you're welcome in [Discussions](https://github.com/MainstreamOS/dots-hyprland/discussions) or the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd).
   - type: textarea
+    id: need
     attributes:
       label: "What would you like to be added?"
-      description: "Can be a suggestion for an existing feature. You can suggest a widget, minor user interaction changes.. whatever."
-
+      description: Tell us what you're trying to do and where the current experience gets in the way.
+    validations:
+      required: true
   - type: textarea
+    id: idea
     attributes:
-      label: "How will it help?"
-      description: "It's helpful to include examples (like in your use case)."
-
+      label: What do you have in mind?
+      description: Describe how you'd like it to work. It's fine if you know the problem but haven't settled on a solution.
+    validations:
+      required: false
   - type: textarea
+    id: examples
     attributes:
-      label: "Extra info"
-      description: "If you want a new widget, a pic of the inspiration (if available) would be awesome."
+      label: Examples or alternatives
+      description: Screenshots, sketches, a workaround you use, or another app that handles this well can help explain the idea.
+    validations:
+      required: false

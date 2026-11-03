@@ -125,14 +125,14 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 
 - [Discord](https://discord.gg/WJ3AUK5Aqd) — live help and community
 - [Documentation](https://mainstreamos.org) — install guides, every settings page, creative setup, and the security model
-- [Issues](https://github.com/MainstreamOS/dots-hyprland/issues) for bugs, [Discussions](https://github.com/MainstreamOS/dots-hyprland/discussions) for questions and ideas
+- [Issues](https://github.com/MainstreamOS/dots-hyprland/issues) for bugs, [Discussions](https://github.com/MainstreamOS/dots-hyprland/discussions) or the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd) for questions and ideas
 
 ## Contributing
 
 Contributions are welcome — code, docs, bug reports, or ideas. Two are especially wanted:
 
 - **Translations.** Mainstream should feel native well beyond English. If you speak another language, help is genuinely appreciated: [open an issue](https://github.com/MainstreamOS/dots-hyprland/issues) saying which language you can help with, no git required.
-- **Honest feedback.** Nobody working on Mainstream is above reproach — if a decision looks off or something needs addressing, open an issue or a discussion. Questions and criticism are how it gets better.
+- **Honest feedback.** Nobody working on Mainstream is above reproach — if a decision looks off or something needs addressing, open an issue, start a discussion, or bring it to the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd). Questions and criticism are how it gets better.
 
 Fixes to the upstream shell go back to [illogical-impulse](https://github.com/end-4/dots-hyprland) as pull requests.
 

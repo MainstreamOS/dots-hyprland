@@ -1,64 +1,29 @@
-# Contributing
+# Contributing to Mainstream
 
-- Please, please, please, make multiple PRs if you have many features/fixes, and don't shove your personal changes along with the PR, including changed defaults
-- We can accept features that we do not personally want, but in that case we will ask you to make it configurable/optionally loaded.
-- If you want to start working on something _big_ to contribute, it might be a good idea to ask first to not waste your effort (but if you've already done it for yourself, it doesn't hurt to submit).
+Mainstream should be comfortable on someone's first Linux computer and useful to the people who know exactly how they want theirs to work. Fixes, ideas, translations and honest feedback all help get it there. A one-line fix is welcome.
 
-# Translations
+If something is broken, [report it](https://github.com/MainstreamOS/dots-hyprland/issues). If you'd like help, want to talk through an idea, or would like to build something together, start a [discussion](https://github.com/MainstreamOS/dots-hyprland/discussions) or join the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd). You don't need a finished solution to join in.
 
-See `dots/.config/quickshell/ii/translations/tools`
+## Sending a change
 
-# Code
+Keep each pull request focused on one problem or feature. Leave unrelated local preferences and cleanup for another PR so the change is easy to understand and test. If a default needs to change, explain why and what that means for people already using it.
 
-## Dynamic loading
+Describe what changes for the person using Mainstream and how you checked it. Screenshots help with visible changes. Say what you couldn't test, and use a draft PR if you'd like feedback while you're still working.
 
-- If something's not always necessary, especially when guarded by a config option to enable/disable, put it in a `Loader`
-  - Note that you will need to declare positioning properties (like `anchors`) in the `Loader`, not the `sourceComponent`
-  - When something that's to be dynamically loaded doesn't affect its parent layout, you can have a fading animation by using FadeLoader and set the `shown` prop instead of `active` and `visible`
+For a larger feature, discussing the approach first can save work. Features that suit a particular workflow can often be offered as an option without making everyone use them.
 
-## Practical concerns
+## Keeping the desktop practical
 
-- Make sure what you add does not require significant resources for a minor purpose or harm usability just for the sake of looking nice. The dotfiles must remain practical for daily driving.
-- If there is something really fancy and impractical anyway, add a config option for it and make sure it's disabled by default (example: constantly rotating background clock)
+Make everyday use clear and predictable. Check that a change still works with keyboard navigation, smaller displays and different scaling where relevant. Keep text readable across light and dark colors and translucent surfaces.
 
-## Style
+Optional effects and features should only load when needed. Use a `Loader` for an optional component, with its layout and anchors on the loader. `FadeLoader` can animate visibility when the component doesn't need to change its parent's layout.
 
-- Spaces
-  - Space properties and children data into meaningful groups. (but of course, don't use 2+ blanks in a row)
-  - Put spaces between text and operators: `if (condition) { ... } else { ... }` instead of `if(condition){ ... }else{ ... }`
-- As you can see, it's pretty easy to use lots of nesting. There's no hard limit, end-4 himself nests a lot too, but avoid/mitigate that:
-  - Prefer early return: Use something like `if (!condition) return; doStuff();` instead of `if (condition) { doStuff() }`
-  - If you feel it's a bother to refractor something into a new file, remember there's `component` to declare reusable components in the same file.
+Consider the cost on older graphics cards and laptops. An effect should earn the resources it uses. Keep expensive extras optional, and avoid adding work to every frame when the underlying content hasn't changed.
 
-# Setting up
+Match the surrounding QML style: spaces around operators, properties grouped by purpose, and early returns where they make the code easier to follow. Split reusable pieces into a component or file when that makes the behavior clearer.
 
-The following instruction assumes that you have an Arch(-based) Linux system.
+## Translations
 
-## Complete
+The current [translation guidance](../dots/.config/quickshell/ii/translations/TERMINOLOGY.md) explains Mainstream's terminology and locale decisions. The [maintenance tools](../dots/.config/quickshell/ii/translations/tools/README.md) check coverage and formatting. Preserve existing translations and exact placeholders, commands and paths.
 
-_Might not be necessary depending on what you change, but this is recommended._
-
-- [Install](https://ii.clsty.link/en/ii-qs/01setup/) the dotfiles (if you don't wanna replace your stuff completely, do it on a new user).
-- Make changes, copy changes to a fork, create PR.
-
-## Partially working shell
-
-_Most stuff in the shell will work but not everything._
-
-- Install Hyprland and the development version of Quickshell (`yay -S hyprland quickshell-git`).
-- Copy `dots/.config/quickshell` folder to your home directory.
-
-## Extra setup for Quickshell
-- Quickshell-specific LSP setup: Run `touch ~/.config/quickshell/ii/.qmlls.ini` for proper LSP support.
-- Hint for VSCode: Get the official "Qt Qml" extension, go to its settings and change custom exe path to `/usr/bin/qmlls6`.
-
-## Python
-If your changes involves using python package or script, please use the virtual environment created by uv as described in `sdata/uv/README.md`.
-
-# Running
-
-- Launch Hyprland (not the "uwsm-managed" one)
-- For the shell:
-  - Open `~/.config/quickshell/ii` in your code editor.
-  - In a terminal run `pkill qs; qs -c ii` to start the shell in the terminal (for logs).
-  - Make edits in the opened folder. Changes are reloaded live.
+If you'd like to help with a language but don't use Git, [open an issue](https://github.com/MainstreamOS/dots-hyprland/issues), start a [discussion](https://github.com/MainstreamOS/dots-hyprland/discussions), or join the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd) and tell us which language you'd like to work on. Familiar wording and small corrections matter as much as a full translation pass.

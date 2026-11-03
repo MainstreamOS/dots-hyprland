@@ -1,1 +1,11 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Help and questions
+    url: https://github.com/MainstreamOS/dots-hyprland/discussions
+    about: Ask about using Mainstream, talk through an idea, or share what you've made. You can also join the Mainstream Discord.
+  - name: Mainstream Discord
+    url: https://discord.gg/WJ3AUK5Aqd
+    about: Get help, talk through ideas, and share your desktop with the Mainstream community.
+  - name: Mainstream guide
+    url: https://mainstreamos.org/
+    about: Installation, the desktop, settings, updates and recovery in one place.
