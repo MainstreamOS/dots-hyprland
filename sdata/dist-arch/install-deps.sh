@@ -168,7 +168,11 @@ replace-mainstream-system-packages() {
   local pending=() targets=()
   # Queries can resolve provides[]: gtk4 also finds an installed gtk4-live-css.
   # Only the exact stock package name needs replacement.
-  for pair in kdeconnect:rust-connect gtk4:gtk4-live-css; do
+  for pair in \
+    kdeconnect:rust-connect \
+    gtk4:gtk4-live-css \
+    adw-gtk-theme:adw-gtk-theme-git \
+    adw-gtk3:adw-gtk-theme-git; do
     old=${pair%%:*}
     [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] && pending+=("$pair")
   done
