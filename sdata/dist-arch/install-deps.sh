@@ -165,9 +165,11 @@ v setup-mainstream-repo
 replace-mainstream-system-packages() {
   local old replacement pair
   local pending=()
+  # Queries can resolve provides[]: gtk4 also finds an installed gtk4-live-css.
+  # Only the exact stock package name needs replacement.
   for pair in kdeconnect:rust-connect gtk4:gtk4-live-css; do
     old=${pair%%:*}
-    pacman -Qq "$old" &>/dev/null && pending+=("$pair")
+    [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] && pending+=("$pair")
   done
   [ "${#pending[@]}" -gt 0 ] || return 0
   if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
@@ -177,7 +179,7 @@ replace-mainstream-system-packages() {
   retry x sudo pacman -Syu --noconfirm || return 1
   for pair in "${pending[@]}"; do
     old=${pair%%:*}; replacement=${pair#*:}
-    if pacman -Qq "$old" &>/dev/null || ! pacman -Qq "$replacement" &>/dev/null; then
+    if [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] || ! pacman -Qq "$replacement" &>/dev/null; then
       printf 'The Mainstream repository has not provided %s to replace %s yet. Keep the existing package installed and retry after the replacement is published.\n' "$replacement" "$old" >&2
       return 1
     fi
