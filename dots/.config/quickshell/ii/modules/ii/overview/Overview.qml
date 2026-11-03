@@ -566,7 +566,7 @@ Scope {
 
                 SearchWidget {
                     id: searchWidget
-                    quietStyle: true
+                    quietStyle: false
                     uiScale: panelWindow.launcherUiScale
                     maximumResultsHeight: 600 * uiScale
                     Layout.alignment: Qt.AlignHCenter
@@ -614,20 +614,20 @@ Scope {
                 ApplicationDrawer {
                     id: appDrawer
                     ownSearchField: panelWindow.drawerOwnsSearch
-                    collapsible: false
-                    workspaceStyle: true
+                    collapsible: !panelWindow.drawerStartsExpanded
+                    workspaceStyle: false
                     uiScale: panelWindow.launcherUiScale
                     collapsedHeight: 400 * uiScale
                     wallpaper: ""
-                    colBackground: Appearance.launcherPanelBackground
-                    contentColors: Appearance.launcherPanelContent
-                    surfaceRadius: Appearance.rounding.small * uiScale
+                    colBackground: Appearance.sizes.dockShowBackground ? Appearance.launcherDrawerBackground : "transparent"
+                    contentColors: Appearance.drawerContent
+                    surfaceRadius: Appearance.rounding.dockBody * uiScale
                     // The app-only view uses naturally sized rows instead of
                     // spreading three rows over the full expanded panel.
-                    visibleRows: expanded ? 0 : 3
+                    visibleRows: 0
                     columns: expanded ? Math.max(6, Math.floor((availableWidth - 60 * uiScale) / (135 * uiScale))) : 14
                     iconSize: (expanded ? 75 : 50) * uiScale
-                    spacing: 10 * uiScale
+                    spacing: (expanded ? 45 : 30) * uiScale
                     Layout.alignment: Qt.AlignHCenter
                     Layout.fillWidth: false
                     Layout.preferredWidth: availableWidth

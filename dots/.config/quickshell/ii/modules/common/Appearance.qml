@@ -339,7 +339,8 @@ Singleton {
     // under all of it, not only around it, so a see-through surface shows it
     // too.
     function laidOverDim(surface, shadow, shown, picture) {
-        const under = picture ?? wallpaperAverage
+        const pictureColor = picture ?? wallpaperAverage
+        const under = ColorUtils.composite(ColorUtils.applyAlpha(launcherDimColor, launcherDimOpacity), pictureColor)
         return shown ? ColorUtils.composite(surface, ColorUtils.composite(shadow, under)) : under
     }
     // The dock's surface and shadow as they come, for the places the dock's
@@ -370,12 +371,12 @@ Singleton {
         adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         flipped: root.contentFlipped(backdrops, backdrops)
     }
-    readonly property color launcherBackdrop: laidOverDim(colors.colLauncherPanel, colors.colLauncherShadow,
+    readonly property color launcherBackdrop: laidOverDim(launcherSearchBackground, colors.colLauncherShadow,
         true)
     // The app list is part of the launcher, so it takes the dock's color but not
     // the see-through a dock preset or slider sets.
     readonly property color drawerSurface: ColorUtils.applyAlpha(colors.colDockBackground, colors.dockStockAlpha)
-    readonly property color drawerBackdrop: laidOverDim(drawerSurface, dockStockShadow,
+    readonly property color drawerBackdrop: laidOverDim(launcherDrawerBackground, dockStockShadow,
         root.sizes.dockShowBackground)
     readonly property color launcherStockBackdrop: laidOverDim(ColorUtils.applyAlpha(m3colors.m3surfaceContainer, colors.layer0StockAlpha),
         colors.colShadow, true)
@@ -447,20 +448,29 @@ Singleton {
         const mix = channel => (haze + channel * opacity * (1 - haze)) / alpha;
         return Qt.rgba(mix(color.r), mix(color.g), mix(color.b), alpha);
     }
+    // Frost keeps the dock's tint and milky haze on all launcher surfaces.
+    readonly property color launcherSearchBackground: BackdropPresets.dockIsFrost
+        ? launcherDrawerBackground : colors.colLauncherPanel
+    readonly property color launcherDrawerBackground: BackdropPresets.dockIsFrost
+        ? hazed(colors.colDockBackground, colors.dockStockAlpha * 0.6, Config.options.dock.backdrop.haze) : drawerSurface
+    readonly property color launcherTileBackground: BackdropPresets.dockIsFrost
+        ? ColorUtils.applyAlpha(launcherWorkspaceContent.colSurfaceContainerLow, 0.28) : launcherWorkspaceContent.colSurfaceContainerLow
+    readonly property real launcherDimOpacity: m3colors.darkmode ? 0.90 : 0.85
+    readonly property color launcherDimColor: colors.launcherPick !== ""
+        ? ColorUtils.mix(colors.launcherPick, colors.colLayer0Base, 0.2) : colors.colLayer0Base
     readonly property color launcherPanelBackground: BackdropPresets.dockIsFrost
         ? hazed(Qt.color(m3colors.darkmode ? "black" : "white"), 0.5, 0.13)
         : ColorUtils.applyAlpha(m3colors.darkmode ? "black" : "white", 0.65)
-    // The workspace panels are nearly solid, so little of the blur behind them shows.
-    // They take the wallpaper's hue instead, at their own lightness so nothing brightens,
-    // unless the dock's color was picked by hand. Under the Glass preset they let half
-    // of the launcher's blur through.
-    readonly property color launcherWorkspaceBackground: {
-        const surface = BackdropPresets.dockIsGlass ? ColorUtils.applyAlpha(drawerSurface, 0.5)
-            : BackdropPresets.dockIsFrost ? ColorUtils.applyAlpha(drawerSurface, 0.6) : drawerSurface
-        const average = wallpaperAverage
-        const tinted = colors.dockPick !== "" || average.hslSaturation <= 0 ? surface
-            : Qt.hsla(average.hslHue, Math.min(0.35, average.hslSaturation), surface.hslLightness, surface.a)
-        return BackdropPresets.dockIsFrost ? hazed(tinted, tinted.a, 0.13) : tinted
+    readonly property color launcherWorkspaceBackground: BackdropPresets.dockIsFrost
+        ? launcherDrawerBackground : colors.colLauncherPanel
+    readonly property LauncherSurfaceContent launcherWorkspaceContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.laidOverDim(root.launcherWorkspaceBackground, root.colors.colLauncherShadow, true)]
+        stockBackdrops: [root.launcherStockBackdrop]
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
+        holdsFills: true
+        flipped: root.contentFlipped(backdrops, backdrops)
     }
     readonly property LauncherSurfaceContent launcherPanelContent: LauncherSurfaceContent {
         m3: root.m3colors
@@ -1110,7 +1120,8 @@ Singleton {
         // palette's tones, which were chosen for the palette's own surface,
         // and a pick made for the dock can bury them where names are read.
         readonly property string launcherPick: root.autoIconContrast ? dockPick : ""
-        readonly property real launcherOpacity: root.autoIconContrast ? (Config.options?.dock.backgroundOpacity ?? -1) : -1
+        readonly property real launcherOpacity: root.autoIconContrast && !BackdropPresets.dockIsGlass
+            ? (Config.options?.dock.backgroundOpacity ?? -1) : -1
         property color colLauncherPanel: surfaceColor(launcherPick, m3colors.m3surfaceContainer, launcherOpacity, layer0StockAlpha)
         // Drawn under the whole panel, so a see-through one shows it as a
         // gray slab. It keeps its full strength under the stock panel and
@@ -1538,11 +1549,10 @@ Singleton {
         readonly property string dockHoverEffect: Config.options?.dock.hoverEffect ?? ""
         readonly property bool dockShowBackground: Config.options?.dock.showBackground ?? true
         readonly property real dockEdgePaddingMax: root.overviewDock.edgeGap
-        readonly property real dockEdgePaddingStock: Math.min(dockEdgePaddingMax,
-            Config.options.dock.cornerStyle === "float" ? hyprlandGapsOut : 0)
+        readonly property real dockEdgePaddingStock: Config.options.dock.cornerStyle === "float" ? dockEdgePaddingMax : 0
         readonly property real dockEdgeGap: Config.options?.dock.cornerStyle !== "float" ? 0
             : (Config.options?.dock.edgePadding ?? -1) >= 0
-            ? Math.min(dockEdgePaddingMax, Config.options.dock.edgePadding) : hyprlandGapsOut
+            ? Math.min(dockEdgePaddingMax, Config.options.dock.edgePadding) : dockEdgePaddingStock
         readonly property real dockDeskInset: elevationMargin
         property bool barShown: root.barShownOnFile
         property string dockEdge: {

@@ -22,7 +22,7 @@ Item {
         Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis,
         Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch])
     signal dismissed()
-    implicitHeight: searchBar.implicitHeight + 8 + Math.min(208, Math.max(40, results.contentHeight + 8))
+    implicitHeight: searchSurface.implicitHeight + 8 + Math.min(208, Math.max(40, results.contentHeight + 8))
 
     function updateQuery(): void {
         if (active) LauncherSearch.query = searchInput.text || Config.options.search.prefix.app;
@@ -59,38 +59,46 @@ Item {
         anchors.fill: parent
         spacing: 8
 
-        SearchBar {
-            id: searchBar
-            quietStyle: true
-            contentColors: Appearance.islandLauncherContent
+        LauncherSearchSurface {
+            id: searchSurface
             Layout.fillWidth: true
             Layout.fillHeight: false
-            Layout.preferredHeight: 48
-            Layout.leftMargin: 10
-            Layout.rightMargin: 4
-            searchingText: root.searchInput.text
-            inputFocused: root.searchRequested
-            fillSearchWidth: true
-            synchronizeQuery: false
-            completeFirstResult: false
-            dismiss: () => root.dismissed()
-            onAccepted: {
-                const item = results.itemAtIndex(results.currentIndex);
-                if (item) item.clicked();
-            }
-            onKeyPressed: event => {
-                if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-                    root.selectResult(event.key === Qt.Key_Down ? 1 : -1);
-                    event.accepted = true;
-                } else if (event.key === Qt.Key_Tab && results.currentIndex >= 0) {
-                    root.searchInput.text = root.entries[results.currentIndex].name;
-                    root.searchInput.cursorPosition = root.searchInput.text.length;
-                    event.accepted = true;
+            searchHeight: searchBar.implicitHeight
+            Layout.preferredHeight: implicitHeight
+
+            SearchBar {
+                id: searchBar
+                quietStyle: false
+                contentColors: Appearance.launcherContent
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 4
+                anchors.topMargin: 4
+                anchors.bottomMargin: 4
+                searchingText: root.searchInput.text
+                inputFocused: root.searchRequested
+                fillSearchWidth: true
+                synchronizeQuery: false
+                completeFirstResult: false
+                dismiss: () => root.dismissed()
+                onAccepted: {
+                    const item = results.itemAtIndex(results.currentIndex);
+                    if (item) item.clicked();
                 }
-            }
-            Connections {
-                target: root.searchInput
-                function onTextChanged() { root.updateQuery(); }
+                onKeyPressed: event => {
+                    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+                        root.selectResult(event.key === Qt.Key_Down ? 1 : -1);
+                        event.accepted = true;
+                    } else if (event.key === Qt.Key_Tab && results.currentIndex >= 0) {
+                        root.searchInput.text = root.entries[results.currentIndex].name;
+                        root.searchInput.cursorPosition = root.searchInput.text.length;
+                        event.accepted = true;
+                    }
+                }
+                Connections {
+                    target: root.searchInput
+                    function onTextChanged() { root.updateQuery(); }
+                }
             }
         }
 

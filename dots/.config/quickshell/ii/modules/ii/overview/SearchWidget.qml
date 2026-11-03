@@ -27,7 +27,7 @@ Item { // Wrapper
     // How wide a quiet search bar runs, to span the panels under it.
     property real panelWidth: 0
     property real uiScale: 1
-    property var contentColors: Appearance.launcherPanelContent
+    property var contentColors: Appearance.launcherContent
     readonly property real collapsedHeight: searchBar.height + searchBar.verticalPadding * 4 + Appearance.sizes.elevationMargin * root.uiScale * 2
     signal navigationKeyPressed(var event)
 

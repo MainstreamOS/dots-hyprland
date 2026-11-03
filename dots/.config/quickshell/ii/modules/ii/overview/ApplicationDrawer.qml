@@ -347,23 +347,17 @@ Item {
                 Layout.fillWidth: true
                 spacing: 8 * root.uiScale
 
-                MaterialSymbol {
-                    text: "apps"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: root.contentColors.colOnLayer0
-                }
-
-                StyledText {
+                LauncherTitlePill {
                     text: root.expanded ? Translation.tr("All Applications") : Translation.tr("Applications")
-                    font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
-                    font.weight: Font.Medium
-                    color: root.contentColors.colOnLayer0
+                    quiet: true
+                    uiScale: root.uiScale
                 }
 
                 Item { Layout.fillWidth: true }
 
                 MaterialSymbol {
                     text: root.expanded ? "expand_less" : "expand_more"
+                    opacity: 0.5
                     iconSize: Appearance.font.pixelSize.larger
                     color: root.contentColors.colSubtext
 

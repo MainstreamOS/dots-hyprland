@@ -45,14 +45,13 @@ Scope {
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         exclusionMode: ExclusionMode.Ignore
-        // The compositor's blur is all this surface shows, and it skips fully clear
-        // pixels, so this is the least alpha there is: at most one level of 255. Parked
-        // at a pixel while closed it stays clear, or that pixel shows the wallpaper.
-        color: dimWindow.surfaceShown ? Qt.rgba(0, 0, 0, 1 / 255) : "transparent"
+        // Keep a faint base for compositor blur, including the original
+        // black underlay. A closed one-pixel surface stays fully clear.
+        color: dimWindow.surfaceShown ? Qt.rgba(0, 0, 0, 0.01) : "transparent"
         // The layer is click-through by design (empty mask). The size alone turns
         // the blur on and off: closed it is kept to one pixel, and only the screen
-        // that shows it spans.
-        readonly property bool spanning: GlobalStates.overviewOpen && dimWindow.monitorIsFocused
+        // that shows it spans, including the dim's closing fade.
+        readonly property bool spanning: (GlobalStates.overviewOpen && dimWindow.monitorIsFocused) || dimTint.opacity > 0
         visible: (Config.options.overview.keepSurfaceAlive ?? true)
             || spanning
 
@@ -64,6 +63,16 @@ Scope {
         }
         implicitWidth: 1
         implicitHeight: 1
+
+        Rectangle {
+            id: dimTint
+            anchors.fill: parent
+            color: Appearance.launcherDimColor
+            opacity: dimWindow.dimShown ? Appearance.launcherDimOpacity : 0
+            Behavior on opacity {
+                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
+            }
+        }
 
         // Purely visual — all input passes through
         mask: Region {}

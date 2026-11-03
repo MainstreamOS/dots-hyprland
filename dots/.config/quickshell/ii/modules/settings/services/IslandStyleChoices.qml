@@ -8,8 +8,8 @@ ConfigSelectionArray {
     currentValue: Appearance.sizes.islandShape
     onSelected: newValue => Config.options.bar.island.shape = newValue
     options: [
-        { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "notch" },
         { displayName: Translation.tr("Float"), icon: "page_header", value: "float" },
+        { displayName: Translation.tr("Notch"), icon: "call_to_action", value: "notch" },
         { displayName: Translation.tr("Rect"), icon: "toolbar", value: "rect" }
     ]
 }

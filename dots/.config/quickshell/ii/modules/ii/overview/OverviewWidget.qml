@@ -29,7 +29,7 @@ Item {
     property var monitorData: HyprlandData.monitors.find(m => m.id === root.monitor?.id)
     readonly property var previewReserved: workspaceLayout.reserved
     readonly property real scale: workspaceLayout.previewScale
-    property color activeBorderColor: Appearance.launcherContent.colSecondaryOnTile
+    property color activeBorderColor: Appearance.launcherWorkspaceContent.colSecondaryOnTile
     readonly property real workspaceImplicitWidth: workspaceLayout.cellWidth
     readonly property real workspaceImplicitHeight: workspaceLayout.cellHeight
     // Use the dock's radius at the reference size, scaling it along with the
@@ -230,15 +230,15 @@ Item {
                             required property int index
                             property int colIndex: index
                             property int workspaceValue: root.workspaceGroup * root.workspacesShown + getWsInCell(row.index, colIndex)
-                            property color hoveredWorkspaceColor: ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherContent.colLayer1Hover, 0.1)
-                            property color hoveredBorderColor: Appearance.launcherContent.colLayer2Hover
+                            property color hoveredWorkspaceColor: ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherWorkspaceContent.colLayer1Hover, 0.1)
+                            property color hoveredBorderColor: Appearance.launcherWorkspaceContent.colLayer2Hover
                             property bool hoveredWhileDragging: false
                             property bool appDragHovered: root.appDragHoverWorkspace === workspaceValue
 
                             implicitWidth: root.workspaceImplicitWidth
                             implicitHeight: root.workspaceImplicitHeight
                             color: (hoveredWhileDragging || appDragHovered) ? hoveredWorkspaceColor
-                                : ColorUtils.applyAlpha(Appearance.launcherContent.colOnLayer0, 0.035)
+                                : Appearance.launcherTileBackground
                             readonly property vector4d radii: root.workspaceRadii(colIndex, row.index)
                             topLeftRadius: radii.x
                             topRightRadius: radii.y
@@ -246,7 +246,7 @@ Item {
                             bottomRightRadius: radii.w
                             border.width: ((hoveredWhileDragging || appDragHovered) ? 2 : 1) * root.uiScale
                             border.color: (hoveredWhileDragging || appDragHovered) ? hoveredBorderColor
-                                : ColorUtils.applyAlpha(Appearance.launcherContent.colOutlineVariant, 0.2)
+                                : "transparent"
 
                             StyledText {
                                 anchors.centerIn: parent
@@ -256,7 +256,7 @@ Item {
                                     weight: Font.DemiBold
                                     family: Appearance.font.family.expressive
                                 }
-                                color: Appearance.launcherContent.colTileNumber
+                                color: Appearance.launcherWorkspaceContent.colTileNumber
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -473,7 +473,7 @@ Item {
                 width: indicator?.width ?? 0
                 height: indicator?.height ?? 0
                 radius: RoundedCorners.on ? Math.min(Appearance.rounding.small, width / 2, height / 2) : 0
-                color: ColorUtils.applyAlpha(Appearance.launcherContent.colPrimary, 0.3)
+                color: ColorUtils.applyAlpha(Appearance.launcherWorkspaceContent.colPrimary, 0.3)
                 z: root.windowDraggingZ - 1
             }
 
