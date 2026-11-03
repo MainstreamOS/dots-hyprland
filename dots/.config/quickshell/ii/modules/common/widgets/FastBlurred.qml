@@ -29,6 +29,10 @@ Item {
     property real magnification: 1
     property real offsetX: 0
     property real offsetY: 0
+    // A part of the picture to show in place of the one behind this item, such as
+    // the part another surface shows. The part this one samples is read back below.
+    property rect sampleRect: Qt.rect(0, 0, 0, 0)
+    readonly property alias sampledRect: shaderSource.sourceRect
 
     // The blur reaches past the card on every side so its edge pixels have real
     // picture to average instead of smearing the border inward.
@@ -105,8 +109,9 @@ Item {
         // Kept on the picture, since past its edge there is only emptiness to sample.
         const x = center.x - shown.width / 2 + offsetX;
         const y = center.y - shown.height / 2 + offsetY;
-        const rect = Qt.rect(Math.max(0, Math.min(x, blurSource.width - shown.width)),
-            Math.max(0, Math.min(y, blurSource.height - shown.height)), shown.width, shown.height);
+        const rect = sampleRect.width > 0 ? sampleRect
+            : Qt.rect(Math.max(0, Math.min(x, blurSource.width - shown.width)),
+                Math.max(0, Math.min(y, blurSource.height - shown.height)), shown.width, shown.height);
         // The same picture needs no new blur, however the card around it moved.
         const was = shaderSource.sourceRect;
         const same = Math.abs(was.x - rect.x) < 0.05 && Math.abs(was.y - rect.y) < 0.05
@@ -128,6 +133,7 @@ Item {
     onMagnificationChanged: refresh()
     onOffsetXChanged: refresh()
     onOffsetYChanged: refresh()
+    onSampleRectChanged: refresh()
     onBlurSourceChanged: { pictureChanged = true; refresh(); }
     Component.onCompleted: refresh()
 

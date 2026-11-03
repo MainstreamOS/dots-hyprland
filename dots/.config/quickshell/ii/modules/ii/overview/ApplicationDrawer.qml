@@ -60,6 +60,8 @@ Item {
     property string wallpaper: ""
     property real surfaceRadius: Appearance.rounding.dockBody
     property var contentColors: Appearance.drawerContent
+    // Under Frost, show the wallpaper behind the list the way the dock does.
+    property alias samplesWallpaper: wallpaperBackdrop.wanted
     property color colBackground: workspaceStyle ? Appearance.m3colors.m3background
         : Appearance.sizes.dockShowBackground ? Appearance.drawerSurface : "transparent"
     property real hoverElevation: workspaceStyle && drawerHover.hovered && !_isDraggingApp && !folderPopupVisible ? 1 : 0
@@ -292,7 +294,12 @@ Item {
         // Each launcher supplies its material; the standalone list follows
         // the dock unless its caller chooses another surface.
         radius: root.surfaceRadius
-        color: root.colBackground
+        color: wallpaperBackdrop.shown ? Appearance.colors.colDockBackground : root.colBackground
+        LauncherWallpaperBackdrop {
+            id: wallpaperBackdrop
+            wanted: false
+            radius: drawerBackground.radius
+        }
 
         Item {
             anchors.fill: parent
@@ -347,23 +354,17 @@ Item {
                 Layout.fillWidth: true
                 spacing: 8 * root.uiScale
 
-                MaterialSymbol {
-                    text: "apps"
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: root.contentColors.colOnLayer0
-                }
-
-                StyledText {
+                LauncherTitlePill {
                     text: root.expanded ? Translation.tr("All Applications") : Translation.tr("Applications")
-                    font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
-                    font.weight: Font.Medium
-                    color: root.contentColors.colOnLayer0
+                    quiet: true
+                    uiScale: root.uiScale
                 }
 
                 Item { Layout.fillWidth: true }
 
                 MaterialSymbol {
                     text: root.expanded ? "expand_less" : "expand_more"
+                    opacity: 0.5
                     iconSize: Appearance.font.pixelSize.larger
                     color: root.contentColors.colSubtext
 

@@ -103,7 +103,7 @@ Item {
     property bool placementPending: false
     property int placementAttempts: 0
     readonly property var dragClient: clients.find(w => w.address === dragAddress) ?? null
-    readonly property var contentColors: Appearance.launcherContent
+    readonly property var contentColors: Appearance.launcherWorkspaceContent
     function workspaceRadius(width, height) {
         return RoundedCorners.on ? Math.min(width / 2, height / 2, Appearance.rounding.dockBody * uiScale) : 0;
     }
@@ -433,7 +433,7 @@ Item {
 
     SearchWidget {
         id: search
-        quietStyle: true
+        quietStyle: false
         panelWidth: root.geometry.totalWidth
         uiScale: root.screenScale
         visible: !GlobalStates.overviewWorkspacesOnly
@@ -590,9 +590,15 @@ Item {
             id: appPanel
             anchors.fill: parent
             radius: root.workspaceRadius(width, height)
-            color: Appearance.launcherPanelBackground
+            color: !Appearance.sizes.dockShowBackground ? "transparent"
+                : appBackdrop.shown ? Appearance.colors.colDockBackground : Appearance.launcherDrawerBackground
             border.width: Appearance.sizes.dockShowBackground ? 1.5 * root.uiScale : 0
             border.color: Appearance.colors.colDockBackgroundBorder
+            LauncherWallpaperBackdrop {
+                id: appBackdrop
+                wanted: Appearance.sizes.dockShowBackground
+                radius: parent.radius
+            }
         }
         Rectangle {
             visible: root.showRecentApps

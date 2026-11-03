@@ -180,22 +180,22 @@ Item {
     Rectangle {
         id: backdrop
         anchors.fill: parent
-        color: root.dropHovered ? ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherContent.colLayer1Hover, 0.1)
-            : ColorUtils.applyAlpha(Appearance.launcherContent.colOnLayer0, 0.035)
+        color: root.dropHovered ? ColorUtils.mix(Appearance.colors.colDockBackground, Appearance.launcherWorkspaceContent.colLayer1Hover, 0.1)
+            : Appearance.launcherTileBackground
         topLeftRadius: root.radii.x
         topRightRadius: root.radii.y
         bottomLeftRadius: root.radii.z
         bottomRightRadius: root.radii.w
         border.width: (root.dropHovered ? 2 : 1) * root.uiScale
-        border.color: root.dropHovered ? Appearance.launcherContent.colLayer2Hover
-            : ColorUtils.applyAlpha(Appearance.launcherContent.colOutlineVariant, 0.2)
+        border.color: root.dropHovered ? Appearance.launcherWorkspaceContent.colLayer2Hover
+            : "transparent"
         StyledText {
             anchors.centerIn: parent
             text: root.workspaceId
             font.pixelSize: 250 * (5 / 3) * root.uiScale * root.viewportScale
             font.weight: Font.DemiBold
             font.family: Appearance.font.family.expressive
-            color: Appearance.launcherContent.colTileNumber
+            color: Appearance.launcherWorkspaceContent.colTileNumber
         }
         MouseArea {
             anchors.fill: parent
@@ -297,6 +297,7 @@ Item {
                 LauncherWindowBadge {
                     id: badge
                     objectName: "windowBadge"
+                    centerIcon: Config.options.overview.centerIcons
                     uiScale: root.uiScale
                     source: Quickshell.iconPath(tile.icon, "application-x-executable")
                     visible: root.controller.dragItem !== tile
@@ -393,6 +394,7 @@ Item {
             height: width
             uiScale: root.uiScale
             pressedAtRest: false
+            prominent: true
             iconName: modelData < 0 ? "chevron_left" : "chevron_right"
             Accessible.name: modelData < 0 ? Translation.tr("Back") : Translation.tr("Next")
             onClicked: root.step(modelData)

@@ -171,6 +171,7 @@ Item { // Window
     LauncherWindowBadge {
         id: windowIcon
         objectName: "windowBadge"
+        centerIcon: Config.options.overview.centerIcons
         uiScale: root.uiScale
         boundsItem: visibleArea
         source: root.iconPath

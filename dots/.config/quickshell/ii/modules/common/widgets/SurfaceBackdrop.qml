@@ -22,6 +22,9 @@ Loader {
     property real bottomRightRadius: 0
     property real trackX: 0
     property real trackY: 0
+    // The part of the wallpaper to show instead of the one behind, and the part shown.
+    property rect sampleRect: Qt.rect(0, 0, 0, 0)
+    readonly property rect sampledRect: root.item?.sampled ?? Qt.rect(0, 0, 0, 0)
     // The screen edge a notch's curves stand on, beside its two ends, and how far they lap it.
     property string notchEdge: ""
     property int notchSize: 0
@@ -79,7 +82,9 @@ Loader {
 
     active: root.source?.available ?? false
     sourceComponent: Item {
+        readonly property rect sampled: blurred.sampledRect
         FastBlurred {
+            id: blurred
             x: root.blurX
             y: root.blurY
             width: root.blurWidth
@@ -98,6 +103,7 @@ Loader {
             bottomRightRadius: root.bottomRightRadius
             trackX: root.trackX
             trackY: root.trackY
+            sampleRect: root.sampleRect
         }
     }
 }

@@ -298,25 +298,29 @@ Scope {
                 y: 18 + root.dockInset("top")
                 width: Math.min(collapsedWidth, panel.width * 0.8)
                 uiScale: root.uiScale
-                MaterialSymbol {
-                    x: 14 * root.uiScale
+                MaterialShapeWrappedMaterialSymbol {
+                    id: searchIcon
+                    x: 10 * root.uiScale
                     anchors.verticalCenter: parent.verticalCenter
                     text: "search"
-                    iconSize: 22 * root.uiScale
-                    color: Appearance.launcherPanelContent.colOnLayer0
+                    iconSize: Appearance.font.pixelSize.huge * root.uiScale
+                    padding: 6 * root.uiScale
+                    shape: MaterialShape.Shape.Cookie7Sided
+                    color: Appearance.launcherContent.colSecondaryContainer
+                    colSymbol: Appearance.launcherContent.colOnSecondaryContainer
                 }
                 ToolbarTextField {
                     id: search
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
-                        leftMargin: 50 * root.uiScale; rightMargin: 14 * root.uiScale }
+                        leftMargin: searchIcon.x + searchIcon.width + 6 * root.uiScale; rightMargin: 10 * root.uiScale }
                     height: 40 * root.uiScale
                     padding: 10 * root.uiScale
                     font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
-                    colBackground: "transparent"
-                    color: Appearance.launcherPanelContent.colOnLayer0
-                    placeholderTextColor: Appearance.launcherPanelContent.colSubtext
-                    selectedTextColor: Appearance.launcherPanelContent.colOnSecondaryContainer
-                    selectionColor: Appearance.launcherPanelContent.colSecondaryContainer
+                    colBackground: Appearance.launcherContent.colLayer1
+                    color: Appearance.launcherContent.colOnLayer1Field
+                    placeholderTextColor: Appearance.launcherContent.colSubtextField
+                    selectedTextColor: Appearance.launcherContent.colOnSecondaryContainer
+                    selectionColor: Appearance.launcherContent.colSecondaryContainer
                     placeholderText: Translation.tr("Type to search windows")
                     selectByMouse: true
                     text: root.query

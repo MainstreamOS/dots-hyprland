@@ -307,6 +307,8 @@ Scope { // Scope
                 GlobalStates.dockWindows = Object.assign({}, GlobalStates.dockWindows, {[registeredScreen]: dockRoot});
             }
             property string registeredScreen: ""
+            // The part of the wallpaper behind the dock, which the launcher shows under Frost too.
+            readonly property rect backdropSample: dockBackdrop.sampledRect
             Component.onDestruction: {
                 GlobalFocusGrab.removePersistent(dockRoot);
                 if (GlobalStates.dockWindows[registeredScreen] === dockRoot) {
@@ -563,6 +565,7 @@ Scope { // Scope
                         // surface, which the dim's own colors are worked out for. The backdrop stays
                         // loaded, since a new one shows a frame of unplaced wallpaper before its sample.
                         SurfaceBackdrop {
+                            id: dockBackdrop
                             settings: Config.options.dock.backdrop
                             source: backdropSource.item
                             opacity: (!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)

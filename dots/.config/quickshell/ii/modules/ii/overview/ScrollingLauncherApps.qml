@@ -15,7 +15,7 @@ ApplicationDrawer {
     bare: true
     colBackground: "transparent"
     surfaceRadius: launcher.workspaceRadius(width, height)
-    contentColors: Appearance.launcherPanelContent
+    contentColors: Appearance.drawerContent
     compactCells: rowHeight < 110 * uiScale
     columns: 5
     spacing: 10 * uiScale

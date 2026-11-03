@@ -1,38 +1,13 @@
-pragma ComponentBehavior: Bound
-
 import QtQuick
-import Qt5Compat.GraphicalEffects
-import Quickshell
 import qs.services
 import qs.modules.common
 
 Rectangle {
-    id: root
     property real uiScale: 1
     radius: RoundedCorners.on ? Appearance.rounding.dockBody * uiScale : 0
-    color: "transparent"
-
-    Item {
-        anchors.fill: parent
-        visible: Appearance.sizes.dockShowBackground
-        layer.enabled: visible
-        layer.effect: OpacityMask {
-            maskSource: Rectangle {
-                width: root.width
-                height: root.height
-                radius: root.radius
-            }
-        }
-        Rectangle {
-            anchors.fill: parent
-            color: BackdropPresets.dockIsGlass || BackdropPresets.dockIsFrost ? "transparent" : Appearance.dockOwnStockShadow
-        }
-        Rectangle {
-            anchors.fill: parent
-            radius: root.radius
-            color: Appearance.launcherWorkspaceBackground
-            border.width: 1.5 * root.uiScale
-            border.color: Appearance.colors.colDockBackgroundBorder
-        }
+    color: wallpaperBackdrop.shown ? Appearance.colors.colDockBackground : Appearance.launcherWorkspaceBackground
+    LauncherWallpaperBackdrop {
+        id: wallpaperBackdrop
+        radius: parent.radius
     }
 }
