@@ -50,7 +50,15 @@ commit range behind it:
   commitsTotal the real commit count, present only when the cap truncated the
                list, so a shortened list can't read as the whole story
 
-These three are for the technical track on the website, which is off by
+  otherCommits the same, for commits from other Mainstream repos that the
+               release ships alongside, named by sha in release-notes.json:
+
+                   {"4.0.0": {"otherCommits": {"MainstreamOS/packages": ["9c492d6"]}}}
+
+               Each repo is read from a clone beside this one, named after it,
+               so only the sha is written down and the rest comes from git.
+
+These are for the technical track on the website, which is off by
 default and opt-in per reader. The desktop never reads them; it builds its
 notification from summary and changes alone. Like kind, they are deliberately
 not overridable from release-notes.json — their whole value is that anyone can
@@ -90,8 +98,8 @@ SECURITY_PREFIX = re.compile(r"^security(\([^)]*\))?\s*:", re.IGNORECASE)
 RELEASE_KIND = re.compile(r"^Release-Kind:\s*(\w+)\s*$", re.IGNORECASE | re.MULTILINE)
 KINDS = ("security", "feature", "patch")
 # Every installed desktop fetches this manifest on a timer, so the technical
-# track is bounded. Neither cap has ever been reached: the largest release so
-# far is six commits, three of which carry a body.
+# track is bounded. A release past TECH_CAP says how many it left out, and the
+# compare link on the page reaches the rest.
 TECH_CAP = 40
 BODY_CAP = 1000
 
@@ -156,6 +164,25 @@ def commits_between(repo, previous, tag):
         sha, subject, body = (record.split("\x1f") + ["", ""])[:3]
         commits.append((sha.strip(), subject.strip(), body.strip()))
     return commits
+
+
+def other_commits(repo, named):
+    """Commits from other Mainstream repos, as [{"repo", "commit", "note"}].
+
+    Read from a clone of each repo beside this one, so the subject and body
+    come from git just like the release's own range.
+    """
+    found = []
+    for name, shas in named.items():
+        clone = pathlib.Path(repo).resolve().parent / name.split("/")[-1]
+        for sha in shas:
+            out = git(str(clone), "log", "-1", "--format=%h%x1f%s%x1f%b", sha)
+            short, subject, body = (out.split("\x1f") + ["", ""])[:3]
+            entry = {"repo": name, "commit": f"{short.strip()} {subject.strip()}"}
+            if body.strip():
+                entry["note"] = body.strip()[:BODY_CAP]
+            found.append(entry)
+    return found
 
 
 def merges_between(repo, previous, tag):
@@ -295,6 +322,9 @@ def build(repo, limit, notes):
         bodies = {sha: body[:BODY_CAP] for sha, _, body in commits[:TECH_CAP] if body}
         if bodies:
             entry["commitNotes"] = bodies
+        others = other_commits(repo, note.get("otherCommits", {}))
+        if others:
+            entry["otherCommits"] = others
         skipped = merges_between(repo, previous_tag, tag)
         if skipped:
             entry["merges"] = skipped
