@@ -690,7 +690,7 @@ WEB_TYPES=(
     x-scheme-handler/http x-scheme-handler/https
     text/html application/xhtml+xml
 )
-su -s /bin/bash "$u" -c "xdg-settings set default-web-browser chromium.desktop" || true
+su -s /bin/bash "$u" -c "env -u BROWSER xdg-settings set default-web-browser chromium.desktop" || true
 su -s /bin/bash "$u" -c "xdg-mime default chromium.desktop ${WEB_TYPES[*]}" || true
 _pu_log "Chromium set as default browser."
 

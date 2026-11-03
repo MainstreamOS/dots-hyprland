@@ -19,7 +19,10 @@ _rsync_to_listfile(){
   x mkdir -p "$dst"
   local dest; dest=$(realpath -se "$dst")
   x mkdir -p "$(dirname "$INSTALLED_LISTFILE")"
-  rsync -a "$@" --out-format='%i %n' "$src"/ "$dst"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "$INSTALLED_LISTFILE"
+  (
+    set -o pipefail
+    rsync -a "$@" --out-format='%i %n' "$src"/ "$dst"/ | awk -v d="$dest" '$1 ~ /^>/{ sub(/^[^ ]+ /,""); printf d "/" $0 "\n" }' >> "$INSTALLED_LISTFILE"
+  )
 }
 function auto_backup_configs(){
   local backup=false
@@ -44,19 +47,19 @@ function auto_backup_configs(){
       ;;
   esac
   if $backup;then
-    backup_clashing_targets dots/.config $XDG_CONFIG_HOME "${BACKUP_DIR}/.config"
-    backup_clashing_targets dots/.local/share $XDG_DATA_HOME "${BACKUP_DIR}/.local/share"
+    backup_clashing_targets dots/.config "$XDG_CONFIG_HOME" "${BACKUP_DIR}/.config"
+    backup_clashing_targets dots/.local/share "$XDG_DATA_HOME" "${BACKUP_DIR}/.local/share"
     printf "${STY_BLUE}Backup into \"${BACKUP_DIR}\" finished.${STY_RST}\n"
   fi
 }
 function gen_firstrun(){
-  x mkdir -p "$(dirname ${FIRSTRUN_FILE})"
+  x mkdir -p "$(dirname "$FIRSTRUN_FILE")"
   x touch "${FIRSTRUN_FILE}"
   record_installed "${FIRSTRUN_FILE}"
 }
 cp_file(){
   # NOTE: This function is only for using in other functions
-  x mkdir -p "$(dirname $2)"
+  x mkdir -p "$(dirname "$2")"
   x cp -f "$1" "$2"
   record_installed "$2"
 }
@@ -92,69 +95,66 @@ function install_file(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -f $t ];then
+  if [ -f "$t" ];then
     warning_overwrite
   fi
-  v cp_file $s $t
+  v cp_file "$s" "$t"
 }
 function install_file__auto_backup(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -f $t ];then
+  if [ -f "$t" ];then
     echo -e "${STY_YELLOW}[$0]: \"$t\" already exists.${STY_RST}"
     if ${INSTALL_FIRSTRUN};then
       echo -e "${STY_BLUE}[$0]: It seems to be the firstrun.${STY_RST}"
-      v mv $t $t.old
-      v cp_file $s $t
+      v mv "$t" "$t.old"
+      v cp_file "$s" "$t"
     else
       echo -e "${STY_BLUE}[$0]: It seems not a firstrun.${STY_RST}"
-      v cp_file $s $t.new
+      v cp_file "$s" "$t.new"
     fi
   else
     echo -e "${STY_GREEN}[$0]: \"$t\" does not exist yet.${STY_RST}"
-    v cp_file $s $t
+    v cp_file "$s" "$t"
   fi
 }
 function install_dir(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -d $t ];then
+  if [ -d "$t" ];then
     warning_overwrite
   fi
-  v rsync_dir $s $t
+  v rsync_dir "$s" "$t"
 }
 function install_dir__sync(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -d $t ];then
+  if [ -d "$t" ];then
     warning_overwrite
   fi
-  v rsync_dir__sync $s $t
+  v rsync_dir__sync "$s" "$t"
 }
 function install_dir__skip_ifexist(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -d $t ];then
+  if [ -d "$t" ];then
     echo -e "${STY_BLUE}[$0]: \"$t\" already exists, will not do anything.${STY_RST}"
   else
     echo -e "${STY_YELLOW}[$0]: \"$t\" does not exist yet.${STY_RST}"
-    v rsync_dir $s $t
+    v rsync_dir "$s" "$t"
   fi
 }
 function install_dir__ignore_existing(){
   # NOTE: Do not add prefix `v` or `x` when using this function
   local s=$1
   local t=$2
-  if [ -d $t ];then
-    echo -e "${STY_BLUE}[$0]: \"$t\" already exists, will not do anything.${STY_RST}"
-  else
-    echo -e "${STY_YELLOW}[$0]: \"$t\" does not exist yet.${STY_RST}"
-    v rsync_dir__ignore_existing $s $t
-  fi
+  # Existing directories can be incomplete; add missing defaults while leaving
+  # every file the user already has unchanged.
+  v rsync_dir__ignore_existing "$s" "$t"
 }
 function install_dir__sync_exclude(){
   # NOTE: Do not add prefix `v` or `x` when using this function
@@ -163,10 +163,10 @@ function install_dir__sync_exclude(){
   local s=$1
   local t=$2
   shift 2
-  if [ -d $t ];then
+  if [ -d "$t" ];then
     warning_overwrite
   fi
-  v rsync_dir__sync_exclude $s $t "$@"
+  v rsync_dir__sync_exclude "$s" "$t" "$@"
 }
 # The version both halves of the ABI guard are stamped with. pacman first
 # because it reports pkgrel and pkg-config does not; a pkgrel-only rebuild
@@ -582,16 +582,16 @@ function install_google_sans_flex(){
   local src_dir="$REPO_ROOT/cache/$src_name"
   local target_dir="${XDG_DATA_HOME}/fonts/illogical-impulse-$src_name"
   if fc-list | grep -qi "$font_name"; then return; fi
-  x mkdir -p $src_dir
-  x cd $src_dir
+  x mkdir -p "$src_dir"
+  x cd "$src_dir"
   try git init -b main
-  try git remote add origin $src_url
+  try git remote add origin "$src_url"
   x git pull origin main 
   x git submodule update --init --recursive
   warning_overwrite
   rsync_dir "$src_dir" "$target_dir" 
   x fc-cache -fv
-  x cd $REPO_ROOT
+  x cd "$REPO_ROOT"
   record_installed "$target_dir"
 }
 

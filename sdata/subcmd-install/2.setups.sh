@@ -704,7 +704,11 @@ function setup_default_browser(){
     echo -e "${STY_YELLOW}[$0]: $desktop not found; skipping browser default.${STY_RST}"
     return 0
   fi
-  command -v xdg-settings >/dev/null 2>&1 && v xdg-settings set default-web-browser "$desktop"
+  if command -v xdg-settings >/dev/null 2>&1; then
+    # xdg-settings refuses browser changes when an inherited BROWSER is set.
+    # Clear it only for this command while writing the desktop's saved default.
+    v env -u BROWSER xdg-settings set default-web-browser "$desktop"
+  fi
   local web_types=(
     x-scheme-handler/http x-scheme-handler/https
     text/html application/xhtml+xml
@@ -880,7 +884,8 @@ function setup_limine_snapper(){
   if $ask; then
     read -rp "Set up limine + snapper? [y/N] " p
   else
-    p=y
+    # Installing the desktop does not opt into replacing the existing bootloader.
+    p=n
   fi
   if [[ "$p" =~ ^[Yy]$ ]]; then
     x sudo bash "${REPO_ROOT}/scripts/limine-snapper/setup-limine-snapper.sh" --yes
