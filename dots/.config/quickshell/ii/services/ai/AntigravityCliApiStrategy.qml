@@ -7,7 +7,7 @@ ApiStrategy {
     isCliStrategy: true
     supportsAttachments: true
 
-    readonly property var writeTools: ["replace_file_content", "write_to_file", "multi_replace_file_content", "sed_file"]
+    readonly property var writeTools: ["replace_file_content", "write_to_file", "multi_replace_file_content", "sed_file", "write_file", "edit_file"]
     // A denied action names its permission category, not the tool that asked.
     readonly property var editActions: ["write_file"]
     property var _requestInfo: ({})
@@ -109,7 +109,7 @@ ApiStrategy {
     }
 
     function filePathOf(params: var): string {
-        return Helpers.cleanPath(params.TargetFile || params.targetFile || params.AbsolutePath || params.absolutePath || params.path || params.file || "");
+        return Helpers.cleanPath(params.TargetFile || params.targetFile || params.AbsolutePath || params.absolutePath || params.Path || params.path || params.file || "");
     }
 
     function rememberStep(state: var, step: var, toolName: string, params: var, path: string): void {

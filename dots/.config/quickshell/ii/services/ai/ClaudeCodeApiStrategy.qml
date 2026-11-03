@@ -51,7 +51,7 @@ ApiStrategy {
         const granted = mode === "auto" || (mode === "ask" && Boolean(ctx.grant));
         // Claude asks before each step that needs approval and waits for the answer.
         const bridged = mode === "ask" && !granted && Boolean(Ai.cliPlanState["claude-code"]?.features?.includes("permission-bridge"));
-        root._requestInfo = { mode: mode, modelName: model.name ?? "", bridged: bridged, resumed: sessionId.length > 0 };
+        root._requestInfo = { mode: mode, modelName: model.name ?? "", bridged: bridged, resumed: sessionId.length > 0, cwd: ctx.dirs.claude };
         // The file may be outside the working directory, which would raise an
         // approval for every attachment. Variadic, so another flag follows.
         if (attachment.length > 0 && !granted) {
@@ -82,12 +82,58 @@ ApiStrategy {
 
     // Called after buildRequest, so the mode belongs to this request.
     function newState(): var {
-        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "", bridged: root._requestInfo.bridged === true, resumed: root._requestInfo.resumed === true };
+        return { input: -1, gotResult: false, mode: root._requestInfo.mode ?? "ask", modelName: root._requestInfo.modelName ?? "", bridged: root._requestInfo.bridged === true, resumed: root._requestInfo.resumed === true,
+            cwd: root._requestInfo.cwd ?? "", tools: ({}), completedTools: ({}) };
     }
 
     function inputTokens(usage: var): int {
         if (usage?.input_tokens === undefined) return -1;
         return usage.input_tokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    }
+
+    function activityPath(path: var, state: var): string {
+        if (typeof path !== "string" || !path.length || path.includes("\0") || path.endsWith("…[truncated]")) return "";
+        if (path.startsWith("/")) return path;
+        return state.cwd.startsWith("/") ? `${state.cwd}/${path}` : "";
+    }
+
+    function rememberTools(json: var, sink: var): void {
+        const blocks = json.message?.content;
+        for (const block of Array.isArray(blocks) ? blocks : []) {
+            if (!block || !["tool_use", "server_tool_use"].includes(block.type) || typeof block.id !== "string") continue;
+            const key = `tool:${block.id}`;
+            if (!sink.state.completedTools[key]) sink.state.tools[key] = { name: block.name, input: block.input ?? {} };
+        }
+    }
+
+    function completedTools(json: var, sink: var): void {
+        const metadata = json.mainstream_tool_result ?? {};
+        const blocks = json.message?.content;
+        for (const result of Array.isArray(blocks) ? blocks : []) {
+            if (!result || result.type !== "tool_result" || typeof result.tool_use_id !== "string") continue;
+            const key = `tool:${result.tool_use_id}`;
+            const tool = sink.state.tools[key];
+            if (!tool || sink.state.completedTools[key]) continue;
+            delete sink.state.tools[key];
+            sink.state.completedTools[key] = true;
+            // The input is a proposal. Only a successful matching result is activity.
+            if (result.is_error || metadata.interrupted) continue;
+            const input = tool.input;
+            const path = root.activityPath(input.file_path ?? input.notebook_path ?? input.path, sink.state);
+            if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(tool.name)) {
+                if (!path.length) continue;
+                const matched = root.activityPath(metadata.path, sink.state) === path;
+                const empty = metadata.added === 0 && metadata.removed === 0;
+                sink.activity({ kind: "edit", verb: matched && metadata.created ? "Added" : "Edited", target: Helpers.basename(path), path: path,
+                    added: matched && !empty ? (metadata.added ?? -1) : -1, removed: matched && !empty ? (metadata.removed ?? -1) : -1 });
+            } else if (tool.name === "Bash" && input.command) {
+                sink.activity({ kind: "command", verb: "Ran", target: input.command, copyText: input.command });
+            } else if (tool.name === "Read" && path.length) {
+                sink.activity({ kind: "read", verb: "Analyzed", target: Helpers.basename(path), path: path });
+            } else if (["Grep", "Glob", "WebSearch"].includes(tool.name)) {
+                sink.activity({ kind: "search", verb: "Ran", target: input.pattern || input.query || tool.name, path: path });
+            }
+        }
     }
 
     // What the approval card shows for one tool call.
@@ -239,6 +285,10 @@ ApiStrategy {
                 root.handleControl(json, sink);
             } else if (json.type === "stream_event") {
                 if (json.event?.type) root.handleStreamEvent(json.event, sink);
+            } else if (json.type === "assistant") {
+                root.rememberTools(json, sink);
+            } else if (json.type === "user") {
+                root.completedTools(json, sink);
             } else if (json.type === "error") {
                 const detail = typeof json.error === "string" ? json.error
                     : json.error?.message ?? json.message ?? JSON.stringify(json);

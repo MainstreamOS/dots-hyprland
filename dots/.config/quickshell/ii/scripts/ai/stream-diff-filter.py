@@ -16,8 +16,8 @@ FIELD_CAP = 2000
 TRUNCATED = "…[truncated]"
 DIFF_LINE_LIMIT = 20000
 LIST_CAP = 50
-WRITE_TOOLS = ("write_to_file", "replace_file_content", "multi_replace_file_content", "sed_file")
-BODY_KEYS = ("CodeContent", "codeContent", "ReplacementContent", "replacementContent",
+WRITE_TOOLS = ("write_to_file", "replace_file_content", "multi_replace_file_content", "sed_file", "write_file", "edit_file")
+BODY_KEYS = ("Content", "CodeContent", "codeContent", "ReplacementContent", "replacementContent",
              "TargetContent", "targetContent")
 CHUNK_KEYS = ("ReplacementChunks", "replacementChunks")
 
@@ -165,7 +165,7 @@ def process_agy(data, with_diff):
     if not isinstance(params, dict):
         params = {}
     fp = clean_path(params.get("TargetFile") or params.get("targetFile") or params.get("AbsolutePath")
-                    or params.get("absolutePath") or params.get("path") or params.get("file") or "")
+                    or params.get("absolutePath") or params.get("Path") or params.get("path") or params.get("file") or "")
     strip_bodies(params)
 
     if with_diff and tool_name in WRITE_TOOLS and fp:
@@ -185,10 +185,51 @@ def process_agy(data, with_diff):
 
 def process_claude(data):
     kind = data.get("type")
-    # Snapshots of whole messages and tool results (file bodies, command
-    # output) that the chat never reads.
+    event = data.get("event")
+    if kind == "stream_event" and isinstance(event, dict):
+        delta = event.get("delta")
+        if isinstance(delta, dict) and delta.get("type") == "input_json_delta":
+            return None, False
+    # Keep tool identity and confirmed results, without forwarding file bodies,
+    # command output or repeated assistant text to the GUI thread.
     if kind in ("assistant", "user"):
-        return None, False
+        message = data.get("message")
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if not isinstance(content, list):
+            return None, False
+        blocks = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if kind == "assistant" and block.get("type") in ("tool_use", "server_tool_use"):
+                original = block.get("input")
+                original = original if isinstance(original, dict) else {}
+                keys = ("file_path", "notebook_path", "path", "url", "command", "pattern", "query")
+                params = {key: original[key] for key in keys if isinstance(original.get(key), str)}
+                blocks.append({"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": params})
+            elif kind == "user" and block.get("type") == "tool_result":
+                blocks.append({"type": "tool_result", "tool_use_id": block.get("tool_use_id"), "is_error": bool(block.get("is_error"))})
+        if not blocks:
+            return None, False
+        compact = {"type": kind, "message": {"content": blocks}}
+        result = data.get("tool_use_result", data.get("toolUseResult"))
+        if kind == "user" and len(blocks) == 1 and isinstance(result, dict):
+            metadata = {"path": result.get("filePath", ""), "created": result.get("type") == "create",
+                        "interrupted": result.get("interrupted") is True, "added": -1, "removed": -1}
+            patches = result.get("structuredPatch")
+            if isinstance(patches, list) and patches:
+                for hunk in patches:
+                    lines = hunk.get("lines") if isinstance(hunk, dict) else None
+                    if not isinstance(lines, list):
+                        continue
+                    if metadata["added"] < 0:
+                        metadata["added"] = metadata["removed"] = 0
+                    metadata["added"] += sum(isinstance(line, str) and line.startswith("+") for line in lines)
+                    metadata["removed"] += sum(isinstance(line, str) and line.startswith("-") for line in lines)
+            elif metadata["created"] and isinstance(result.get("content"), str):
+                metadata["added"], metadata["removed"] = len(result["content"].splitlines()), 0
+            compact["mainstream_tool_result"] = metadata
+        return truncate_strings(compact), True
     if kind == "result":
         return truncate_strings(data), True
     return data, False
@@ -199,6 +240,38 @@ def process_claude(data):
 CODEX_NOISE = ("mcpServer/startupStatus/updated", "account/rateLimits/updated", "account/updated",
                "thread/status/changed", "remoteControl/status/changed", "serverRequest/resolved")
 CODEX_STREAMED = ("item/agentMessage/delta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded")
+
+
+def annotate_codex_item(item):
+    if item.get("type") not in ("fileChange", "file_change"):
+        return item
+    changes = item.get("changes")
+    for change in changes if isinstance(changes, list) else []:
+        if not isinstance(change, dict):
+            continue
+        patch = change.get("diff")
+        if not isinstance(patch, str):
+            continue
+        kind = change.get("kind")
+        kind = kind.get("type") if isinstance(kind, dict) else kind
+        if kind in ("add", "delete"):
+            count = len(patch.splitlines())
+            added, removed = (count, 0) if kind == "add" else (0, count)
+        else:
+            added = removed = 0
+            in_hunk = False
+            for line in patch.splitlines():
+                if line.startswith("@@ "):
+                    in_hunk = True
+                elif in_hunk:
+                    added += line.startswith("+")
+                    removed += line.startswith("-")
+            if not in_hunk:
+                added = removed = -1
+        # Count before truncation; the sidebar reads patches from Git on demand.
+        change["mainstream_diff"] = {"added": added, "removed": removed}
+        change.pop("diff", None)
+    return item
 
 
 def process_codex(data):
@@ -216,12 +289,12 @@ def process_codex(data):
             return data, True
         item = params.get("item")
         if isinstance(item, dict) and item.get("type") not in ("agentMessage", "reasoning"):
-            params["item"] = truncate_strings(item)
+            params["item"] = truncate_strings(annotate_codex_item(item))
             return data, True
         return data, False
     item = data.get("item")
     if isinstance(item, dict) and item.get("type") not in ("agent_message", "reasoning"):
-        data["item"] = truncate_strings(item)
+        data["item"] = truncate_strings(annotate_codex_item(item))
         return data, True
     return data, False
 

@@ -29,7 +29,7 @@ ApiStrategy {
         const attachedLine = (attachment.length > 0 && !image) ? Translation.tr("Attached file: %1").arg(attachment) : "";
         const prompt = Helpers.cliPrompt(ctx, m => Ai.historyText(m), Translation.tr("Earlier conversation:"), attachedLine, sessionId);
         const options = ["--workdir", ctx.dirs.codex, "--stdin", "--filter", "codex", "--report-exit"];
-        root._requestInfo = { mode: mode, modelName: model.name ?? "", granted: granted, bridged: bridged };
+        root._requestInfo = { mode: mode, modelName: model.name ?? "", granted: granted, bridged: bridged, cwd: ctx.dirs.codex };
 
         // The app server talks JSON-RPC on stdin: initialize, open the thread,
         // start the turn, each sent when the one before is answered.
@@ -96,9 +96,11 @@ ApiStrategy {
             modelName: root._requestInfo.modelName ?? "",
             granted: root._requestInfo.granted === true,
             bridged: root._requestInfo.bridged === true,
+            cwd: root._requestInfo.cwd ?? "",
             turn: root._requestInfo.turn ?? null,
             // File paths of each file change item, by item id
             files: ({}),
+            activityItems: ({}),
             // Ids of the items whose text arrived in pieces
             streamed: ({}),
             usage: null
@@ -116,6 +118,47 @@ ApiStrategy {
         if (item.status !== "failed" || item.exit_code === 0) return false;
         const output = String(item.aggregated_output ?? "").toLowerCase();
         return root.sandboxDenialWords.some(word => output.includes(word));
+    }
+
+    function activityPath(path: var, state: var): string {
+        if (typeof path !== "string" || !path.length || path.includes("\0") || path.endsWith("…[truncated]")) return "";
+        if (path.startsWith("/")) return path;
+        return state.cwd.startsWith("/") ? `${state.cwd}/${path}` : "";
+    }
+
+    function completedActivity(item: var, sink: var): void {
+        // Proposed, failed and declined edits must never become changed files.
+        if (item.status !== "completed") return;
+        const type = item.type;
+        if (!["commandExecution", "command_execution", "fileChange", "file_change"].includes(type)) return;
+        const key = `${type}:${item.id ?? ""}`;
+        if (item.id) {
+            if (sink.state.activityItems[key]) return;
+            sink.state.activityItems[key] = true;
+        }
+        let emitted = false;
+        if (type === "commandExecution" || type === "command_execution") {
+            if (typeof item.command !== "string" || !item.command.length) return;
+            sink.activity({ kind: "command", verb: "Ran", target: item.command, copyText: item.command });
+            emitted = true;
+        } else if (type === "fileChange" || type === "file_change") {
+            for (const change of Array.isArray(item.changes) ? item.changes : []) {
+                const path = root.activityPath(change?.path, sink.state);
+                if (!path.length) continue;
+                const kind = typeof change.kind === "string" ? change.kind : change.kind?.type;
+                const moved = root.activityPath(change.kind?.move_path ?? change.kind?.movePath, sink.state);
+                const counts = change.mainstream_diff ?? {};
+                // Zero-line new files still need Review, without an invented count.
+                const empty = counts.added === 0 && counts.removed === 0;
+                sink.activity({ kind: "edit", verb: kind === "add" ? "Added" : kind === "delete" ? "Removed" : "Edited",
+                    target: Helpers.basename(path), path: path,
+                    added: empty ? -1 : (counts.added ?? -1), removed: empty ? -1 : (counts.removed ?? -1) });
+                emitted = true;
+                if (moved.length && moved !== path)
+                    sink.activity({ kind: "edit", verb: "Edited", target: Helpers.basename(moved), path: moved });
+            }
+        }
+        if (emitted) sink.state.textOpen = false;
     }
 
     function raiseRefusals(sink: var): void {
@@ -160,6 +203,7 @@ ApiStrategy {
             // and the reasoning summary each arrive once, completed.
             case "item.completed": {
                 const item = json.item ?? {};
+                root.completedActivity(item, sink);
                 if (item.type === "agent_message" && item.text) {
                     root.emitBlock(sink, item.text);
                 } else if (item.type === "reasoning" && item.text) {
@@ -241,6 +285,7 @@ ApiStrategy {
             break;
         case "item/completed": {
             const item = params.item ?? {};
+            root.completedActivity(item, sink);
             const streamed = state.streamed[String(item.id ?? "")] === true;
             if (item.type === "agentMessage" && item.text && !streamed) {
                 root.emitBlock(sink, item.text);
