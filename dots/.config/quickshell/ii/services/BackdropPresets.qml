@@ -13,7 +13,7 @@ Singleton {
     id: root
 
     readonly property var shipped: [
-        { displayName: Translation.tr("Solid"), enable: false, opacity: 1, blur: 24, haze: 0, magnification: 1, offsetX: 0, offsetY: 0 },
+        { displayName: Translation.tr("Solid"), enable: false, opacity: -1, blur: 24, haze: 0, magnification: 1, offsetX: 0, offsetY: 0 },
         { displayName: Translation.tr("Frost"), enable: true, opacity: 0.4, blur: 56, haze: 0.16, magnification: 1, offsetX: 0, offsetY: 0 },
         { displayName: Translation.tr("Glass"), enable: true, opacity: 0.55, blur: 4, haze: 0.076, magnification: 1.254, offsetX: 200, offsetY: 7 },
     ]

@@ -285,7 +285,7 @@ Scope {
                     bottomRightRadius: bottomLeftRadius
                     Loader {
                         id: backdropSource
-                        active: Config.options.bar.backdrop.enable
+                        active: Config.options.bar.backdrop.enable || Appearance.colors.colBarBackground.a < 1
                         sourceComponent: ScreenWallpaperSource {}
                     }
                     SurfaceBackdrop {

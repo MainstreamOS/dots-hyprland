@@ -4849,6 +4849,7 @@ ApplicationWindow {
                         onEdited: newValue => root.applyStyleColor(newValue)
                         showsOpacity: true
                         opacityValue: root.styleOpacity
+                        defaultOpacity: BackdropPresets.shipped[0].opacity
                         opacityFrom: Appearance.colors.surfaceOpacityFloor
                         onOpacityEdited: newValue => root.applyStyleOpacity(newValue)
                     }

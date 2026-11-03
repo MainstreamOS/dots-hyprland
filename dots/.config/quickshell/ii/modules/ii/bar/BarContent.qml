@@ -883,7 +883,7 @@ Item { // Bar content region
     // colors, so the lap between body and curve is blended once, not twice.
     Loader {
         id: backdropSource
-        active: Config.options.bar.backdrop.enable && Config.options.bar.showBackground
+        active: Config.options.bar.showBackground && (Config.options.bar.backdrop.enable || Appearance.colors.colBarBackground.a < 1)
         sourceComponent: ScreenWallpaperSource {}
     }
     SurfaceBackdrop {

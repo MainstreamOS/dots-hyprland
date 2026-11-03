@@ -172,7 +172,7 @@ Scope { // Scope
             // else, so it keeps its own too.
             readonly property DockContent content: DockContent {
                 dimmed: GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "")
-                    && (BackdropPresets.dockIsGlass || !(backdropSource.item?.available ?? false))
+                    && (!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass || !(backdropSource.item?.available ?? false))
             }
             // The content colors as this dock draws them. A button's fill
             // already eases to a new color on the curve the dim fades on, so
@@ -556,16 +556,17 @@ Scope { // Scope
                         // where it always did.
                         Loader {
                             id: backdropSource
-                            active: Config.options.dock.backdrop.enable && dockRoot.showBackground
+                            active: dockRoot.showBackground && (Config.options.dock.backdrop.enable || Appearance.colors.colDockBackground.a < 1)
                             sourceComponent: ScreenWallpaperSource {}
                         }
-                        // Over the launcher's dim, a Glass dock fades to its plain see-through
+                        // Over the launcher's dim, Solid and Glass fade to their plain see-through
                         // surface, which the dim's own colors are worked out for. The backdrop stays
                         // loaded, since a new one shows a frame of unplaced wallpaper before its sample.
                         SurfaceBackdrop {
                             settings: Config.options.dock.backdrop
                             source: backdropSource.item
-                            opacity: BackdropPresets.dockIsGlass && (dockRoot.overLauncher || dockRoot.overWindowOverview) ? 0 : 1
+                            opacity: (!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)
+                                && (dockRoot.overLauncher || dockRoot.overWindowOverview) ? 0 : 1
                             Behavior on opacity {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                             }

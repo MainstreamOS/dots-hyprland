@@ -1,9 +1,10 @@
 import QtQuick
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.services
 
 /**
- * A surface's Frost and Glass backdrop, cut to the surface it sits behind and
+ * A surface's wallpaper blur, cut to the surface it sits behind and
  * the curves it grows. The surface's own color goes on top of it, so that color
  * is the tint.
  */
@@ -12,6 +13,9 @@ Loader {
     property var source: null
     // Whichever surface's config holds these values.
     property var settings: Config.options.bar.backdrop
+    // Solid has plain blur when its color is see-through. Keep it neutral
+    // even if a previously selected Glass preset left lens settings behind.
+    readonly property var look: root.settings.enable ? root.settings : BackdropPresets.shipped[0]
     property real topLeftRadius: 0
     property real topRightRadius: 0
     property real bottomLeftRadius: 0
@@ -81,11 +85,11 @@ Loader {
             width: root.blurWidth
             height: root.blurHeight
             blurSource: root.source.picture
-            tintOpacity: root.settings.haze
-            blurRadius: root.settings.blur
-            magnification: root.settings.magnification
-            offsetX: root.settings.offsetX
-            offsetY: root.settings.offsetY
+            tintOpacity: root.look.haze
+            blurRadius: root.look.blur
+            magnification: root.look.magnification
+            offsetX: root.look.offsetX
+            offsetY: root.look.offsetY
             cardRect: Qt.rect(-root.blurX, -root.blurY, root.width, root.height)
             cardCurves: root.curves.map(c => Object.assign({}, c, { "x": c.x - root.blurX, "y": c.y - root.blurY }))
             topLeftRadius: root.topLeftRadius

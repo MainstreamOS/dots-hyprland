@@ -594,7 +594,7 @@ Item { // Bar content region
     // curve is blended once instead of twice.
     Loader {
         id: backdropSource
-        active: Config.options.bar.backdrop.enable && Config.options.bar.showBackground
+        active: Config.options.bar.showBackground && (Config.options.bar.backdrop.enable || Appearance.colors.colBarBackground.a < 1)
         sourceComponent: ScreenWallpaperSource {}
     }
     SurfaceBackdrop {
