@@ -408,7 +408,7 @@ function install_cmds(){
           *) pkgs+=($cmd) ;;
         esac
       done
-      v sudo pacman -Syu
+      v sudo env MAINSTREAM_UPDATE_PACMAN=1 pacman -Syu
       v sudo pacman -S --noconfirm --needed "${pkgs[@]}"
       ;;
     "debian")

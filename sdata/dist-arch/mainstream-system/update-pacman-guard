@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Pacman's pre-transaction reminder for a complete desktop update.
+set -euo pipefail
+
+[[ ${MAINSTREAM_UPDATE_PACMAN:-0} == 1 ]] && exit 0
+[[ -r /proc/$PPID/cmdline ]] || exit 0
+mapfile -d '' -t args < "/proc/$PPID/cmdline"
+sync=0
+upgrade=0
+skip=0
+for arg in "${args[@]:1}"; do
+    if (( skip )); then skip=0; continue; fi
+    case "$arg" in
+        --) break ;;
+        --syn*) sync=1 ;;
+        --sysu*) upgrade=1 ;;
+        --root|--dbpath|--config|--cachedir|--hookdir|--logfile|--gpgdir|--arch|--color|--ask|--overwrite|--ignore|--ignoregroup|--assume-installed|--print-format|--sysroot)
+            skip=1 ;;
+        --*) ;;
+        -*)
+            flags=${arg:1}
+            for ((i=0; i<${#flags}; i++)); do
+                case ${flags:i:1} in
+                    S) sync=1 ;;
+                    u) upgrade=1 ;;
+                    r|b|C)
+                        (( i + 1 < ${#flags} )) || skip=1
+                        break ;;
+                esac
+            done ;;
+    esac
+done
+(( sync && upgrade )) || exit 0
+cat >&2 <<'MESSAGE'
+
+Update Mainstream from Settings > Update.
+
+The Update page updates your system packages, apps and desktop together,
+keeps Mainstream's configuration in sync, and checks whether a restart is needed.
+
+This direct system upgrade was stopped before any packages were changed.
+If you need to use pacman directly for this update, run:
+
+  sudo mainstream-update-direct
+
+MESSAGE
+exit 1

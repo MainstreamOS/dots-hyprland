@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = *
+
+[Action]
+Description = Checking the Mainstream update entry point...
+When = PreTransaction
+Exec = /usr/lib/mainstream/update-pacman-guard
+AbortOnFail

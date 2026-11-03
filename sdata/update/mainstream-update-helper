@@ -216,7 +216,7 @@ PACMAN_INHIBIT=()
 if command -v systemd-inhibit >/dev/null 2>&1 && systemd-inhibit --list >/dev/null 2>&1; then
     PACMAN_INHIBIT=(systemd-inhibit --what=shutdown:sleep --mode=block --who="Mainstream OS" --why="Installing updates")
 fi
-pacman_tx() { "${PACMAN_INHIBIT[@]}" pacman "$@"; }
+pacman_tx() { env MAINSTREAM_UPDATE_PACMAN=1 "${PACMAN_INHIBIT[@]}" pacman "$@"; }
 
 # A release can add one of these dependencies after an older install selected
 # the stock package. Explicit targets work even when [mainstream] follows the
@@ -549,7 +549,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                 echo ""
                 echo "   $(t "Look at what is there before deciding. If it is empty, or you do not need it, let the package take it over:")"
                 echo ""
-                printf "     sudo pacman -Syu"
+                printf "     sudo mainstream-update-direct"
                 for _line in "${_conflicts[@]}"; do
                     _path="${_line#*: }"
                     printf " --overwrite '%s'" "${_path% exists in filesystem}"

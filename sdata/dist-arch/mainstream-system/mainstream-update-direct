@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Explicit package-only update for terminal maintenance.
+set -euo pipefail
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+    printf '%s\n' 'Usage: sudo mainstream-update-direct [pacman options or package names]' '' \
+        'Run a full pacman system upgrade without the Settings update flow.' \
+        'For a complete Mainstream update, use Settings > Update.'
+    exit 0
+fi
+if (( EUID != 0 )); then
+    printf '%s\n' 'Run this command with sudo: sudo mainstream-update-direct' >&2
+    exit 1
+fi
+export MAINSTREAM_UPDATE_PACMAN=1
+exec /usr/bin/pacman -Syu "$@"

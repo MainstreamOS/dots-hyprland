@@ -42,6 +42,9 @@ set -u
 # writing into it, so the helper running this keeps reading the copy it
 # started with.
 ROOT_FILES=(
+    "0755|sdata/dist-arch/mainstream-system/mainstream-update-direct|/usr/bin/mainstream-update-direct"
+    "0755|sdata/dist-arch/mainstream-system/update-pacman-guard|/usr/lib/mainstream/update-pacman-guard"
+    "0644|sdata/dist-arch/mainstream-system/00-mainstream-update-guard.hook|/usr/share/libalpm/hooks/00-mainstream-update-guard.hook"
     "0755|sdata/update/mainstream-update-helper|/usr/local/bin/mainstream-update-helper"
     "0755|sdata/update/updatems|/usr/local/bin/updatems"
     "0755|sdata/update/updatems-system|/usr/local/bin/updatems-system"

@@ -154,7 +154,7 @@ v remove_deprecated_dependencies
 # Issue #363
 case $SKIP_SYSUPDATE in
   true) true;;
-  *) v sudo pacman -Syu --noconfirm;;
+  *) v sudo env MAINSTREAM_UPDATE_PACMAN=1 pacman -Syu --noconfirm;;
 esac
 
 # Set up the [mainstream] signed pacman repo (replaces the AUR helper) so the
@@ -205,7 +205,7 @@ replace-mainstream-system-packages() {
     fi
   done
   # --ask 4 permits the conflicting stock package to leave in this transaction.
-  retry x sudo pacman "${transaction[@]}" --needed --noconfirm --ask 4 "${targets[@]}" || return 1
+  retry x sudo env MAINSTREAM_UPDATE_PACMAN=1 pacman "${transaction[@]}" --needed --noconfirm --ask 4 "${targets[@]}" || return 1
   for replacement in "${!selected[@]}"; do
     if [[ "$(pacman -Qq "$replacement" 2>/dev/null)" != "$replacement" ]]; then
       printf 'Could not install %s. Review the pacman output above before retrying setup.\n' "$replacement" >&2

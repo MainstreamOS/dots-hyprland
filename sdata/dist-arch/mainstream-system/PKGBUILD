@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=18
+pkgrel=19
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -22,6 +22,9 @@ depends=(
 options=(!debug)
 install=mainstream-system.install
 source=(
+  update-pacman-guard
+  mainstream-update-direct
+  00-mainstream-update-guard.hook
   hyprbars-rebuild.sh
   hyprbars-status-notify.sh
   hyprbars-rebuild.service
@@ -74,6 +77,7 @@ source=(
   paccache-uninstalled.conf
 )
 sha256sums=(
+  SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
@@ -86,6 +90,9 @@ build() {
 }
 
 package() {
+  install -Dm755 "$srcdir/mainstream-update-direct" "$pkgdir/usr/bin/mainstream-update-direct"
+  install -Dm755 "$srcdir/update-pacman-guard" "$pkgdir/usr/lib/mainstream/update-pacman-guard"
+  install -Dm644 "$srcdir/00-mainstream-update-guard.hook" "$pkgdir/usr/share/libalpm/hooks/00-mainstream-update-guard.hook"
   install -Dm755 "$srcdir/hyprbars-rebuild.sh"            "$pkgdir/usr/lib/mainstream/hyprbars/rebuild.sh"
   install -Dm755 "$srcdir/scrolloverview-rebuild.sh"      "$pkgdir/usr/lib/mainstream/scrolloverview/rebuild.sh"
   install -Dm755 "$srcdir/hyprbars-status-notify.sh"      "$pkgdir/usr/bin/hyprbars-status-notify"
