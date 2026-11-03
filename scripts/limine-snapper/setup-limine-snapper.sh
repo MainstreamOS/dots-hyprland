@@ -378,7 +378,13 @@ with_boot_lock ensure_limine_header
 # post-install sets it, so on those machines the entry is identified by the UKI
 # it points at instead and no machine-id ever appears in the file.
 _lm_machine_id="$(tr -d '\n' < /etc/machine-id)"
-_lm_uki_name="$(. /etc/default/limine 2>/dev/null; printf '%s' "${CUSTOM_UKI_NAME:-}")"
+# Read the same layered settings as the generator. Kernel-specific cmdline
+# entries are configuration data, not shell array assignments to execute here.
+_lm_uki_name="$(
+    source /usr/lib/limine/limine-common-functions || exit 1
+    load_config || exit 1
+    printf '%s' "${CUSTOM_UKI_NAME:-}"
+)" || error "Could not read the Limine generator configuration."
 _lm_found=0
 grep -q "machine-id=${_lm_machine_id}" "$ESP/limine.conf" && _lm_found=1
 if [[ $_lm_found -eq 0 && -n "$_lm_uki_name" ]] \
@@ -462,20 +468,28 @@ with_boot_lock prune_and_enroll
 info "Installing snapper..."
 pacman -S --needed --noconfirm snapper snap-pac
 
-# If /.snapshots is already a subvolume mounted, unmount and remove for snapper to manage
-if findmnt /.snapshots &>/dev/null; then
-    umount /.snapshots 2>/dev/null || true
-fi
-
-if btrfs subvolume show /.snapshots &>/dev/null 2>&1; then
-    btrfs subvolume delete /.snapshots 2>/dev/null || true
-fi
-rmdir /.snapshots 2>/dev/null || true
-
-# Create snapper config for root
-if snapper -c root list &>/dev/null 2>&1; then
-    warn "Snapper config 'root' already exists, reconfiguring..."
+# Keep an existing snapshot layout mounted and intact when resuming setup.
+if [[ -f /etc/snapper/configs/root ]]; then
+    snapper -c root list >/dev/null || error "The existing root snapshot configuration could not be read."
+    info "Using the existing root snapshot configuration."
 else
+    # Only prepare an empty snapshot location when creating a new config.
+    # Check before unmounting: an unmounted directory can hide saved snapshots.
+    if [[ -d /.snapshots ]]; then
+        _snapshot_contents=$(find /.snapshots -mindepth 1 -maxdepth 1 -print -quit) \
+            || error "Could not check the existing snapshot directory."
+        [[ -z "$_snapshot_contents" ]] \
+            || error "The snapshot directory is not empty but has no root configuration; restore its Snapper configuration before rerunning setup."
+    fi
+    if findmnt /.snapshots &>/dev/null; then
+        umount /.snapshots
+    fi
+    if btrfs subvolume show /.snapshots &>/dev/null 2>&1; then
+        btrfs subvolume delete /.snapshots
+    fi
+    if [[ -d /.snapshots ]]; then
+        rmdir /.snapshots
+    fi
     snapper -c root create-config /
 fi
 
