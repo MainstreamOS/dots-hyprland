@@ -36,6 +36,11 @@ Scope {
             id: sessionRoot
             visible: sessionLoader.active
             property string subtitle
+            readonly property real menuScale: Math.max(0.5, Math.min(2, Config.options.session.menuSize / 100))
+            readonly property real menuWidthLimit: Math.max(1, width - 64)
+            readonly property real menuHeightLimit: Math.max(1, height - menuHeader.implicitHeight
+                - menuDescription.implicitHeight - contentColumn.spacing * 2
+                - Math.max(64, warningsColumn.implicitHeight * 2 + 40))
 
             function hide() {
                 GlobalStates.sessionOpen = false;
@@ -76,6 +81,7 @@ Scope {
                 }
 
                 ColumnLayout {
+                    id: menuHeader
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 0
                     StyledText {
@@ -109,12 +115,14 @@ Scope {
                 }
 
                 DescriptionLabel {
+                    id: menuDescription
                     Layout.alignment: Qt.AlignHCenter
                     text: sessionRoot.subtitle
                 }
             }
 
             ColumnLayout {
+                id: warningsColumn
                 anchors {
                     top: contentColumn.bottom
                     topMargin: 10
@@ -148,11 +156,16 @@ Scope {
             Component {
                 id: fullMenuComponent
                 GridLayout {
+                    id: fullGrid
                     columns: 4
                     columnSpacing: 15
                     rowSpacing: 15
+                    readonly property real buttonSize: Math.max(1, Math.floor(Math.min(120 * sessionRoot.menuScale,
+                        (sessionRoot.menuWidthLimit - columnSpacing * 3) / 4,
+                        (sessionRoot.menuHeightLimit - rowSpacing) / 2)))
 
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionLock
                         focus: sessionRoot.visible
                         buttonIcon: "lock"
@@ -169,6 +182,7 @@ Scope {
                         KeyNavigation.down: sessionHibernate
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionSleep
                         buttonIcon: "dark_mode"
                         buttonText: Translation.tr("Sleep")
@@ -185,6 +199,7 @@ Scope {
                         KeyNavigation.down: sessionShutdown
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionLogout
                         buttonIcon: "logout"
                         buttonText: Translation.tr("Logout")
@@ -201,6 +216,7 @@ Scope {
                         KeyNavigation.down: sessionReboot
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionTaskManager
                         buttonIcon: "browse_activity"
                         buttonText: Translation.tr("Task Manager")
@@ -217,6 +233,7 @@ Scope {
                     }
 
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionHibernate
                         buttonIcon: "downloading"
                         buttonText: Translation.tr("Hibernate")
@@ -232,6 +249,7 @@ Scope {
                         KeyNavigation.right: sessionShutdown
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionShutdown
                         buttonIcon: "power_settings_new"
                         buttonText: Translation.tr("Shutdown")
@@ -248,6 +266,7 @@ Scope {
                         KeyNavigation.up: sessionSleep
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionReboot
                         buttonIcon: "restart_alt"
                         buttonText: Translation.tr("Reboot")
@@ -264,6 +283,7 @@ Scope {
                         KeyNavigation.up: sessionLogout
                     }
                     SessionActionButton {
+                        size: fullGrid.buttonSize
                         id: sessionFirmwareReboot
                         buttonIcon: "settings_applications"
                         buttonText: Translation.tr("Reboot to firmware settings")
@@ -286,9 +306,9 @@ Scope {
                 RowLayout {
                     id: simpleRow
                     spacing: 15
-                    // Twice the full menu's buttons, or as large as four still fit
-                    // on a narrow screen.
-                    readonly property real buttonSize: Math.max(120, Math.min(240, Math.floor((sessionMouseArea.width - 2 * 32 - 3 * spacing) / 4)))
+                    readonly property real buttonSize: Math.max(1, Math.floor(Math.min(240 * sessionRoot.menuScale,
+                        (sessionRoot.menuWidthLimit - spacing * 3) / 4,
+                        sessionRoot.menuHeightLimit)))
 
                     SessionActionButton {
                         id: simpleLock

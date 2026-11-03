@@ -902,6 +902,7 @@ Singleton {
                 property bool restoreEnabled: true
                 // One row of Lock, Logout, Reboot and Shutdown; off shows the full grid.
                 property bool simpleMenu: true
+                property int menuSize: 100
             }
 
             property JsonObject brightness: JsonObject {

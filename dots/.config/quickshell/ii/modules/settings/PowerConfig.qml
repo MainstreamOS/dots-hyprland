@@ -232,6 +232,15 @@ ContentPage {
                 }
             }
         }
+        ConfigSpinBox {
+            icon: "resize"
+            text: Translation.tr("Size (%)")
+            value: Config.options.session.menuSize
+            from: 50
+            to: 200
+            stepSize: 5
+            onValueChanged: Config.options.session.menuSize = value
+        }
     }
 
     // ── Power Saving ──────────────────────────────────────────────────────────
