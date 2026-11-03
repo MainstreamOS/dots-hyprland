@@ -313,6 +313,17 @@ Singleton {
         adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         flipped: root.contentFlipped(backdrops, backdrops) || root.extremeFlipped(backdrops)
     }
+    // System buttons need visible fills and readable ink over Glass: fills are judged against
+    // the Island, and text against the fill drawn, hover and press included.
+    readonly property LauncherSurfaceContent islandSystemContent: LauncherSurfaceContent {
+        m3: root.m3colors
+        palette: root.colors
+        backdrops: [root.barBackdrop]
+        stockBackdrops: [root.barStockBackdrop]
+        adaptive: root.autoIconContrast && root._judgeLauncherEnabled
+        holdsFills: true
+        flipped: root.contentFlipped(backdrops, backdrops) || root.extremeFlipped(backdrops)
+    }
     readonly property SurfaceContent dockContent: SurfaceContent {
         m3: root.m3colors
         palette: root.colors

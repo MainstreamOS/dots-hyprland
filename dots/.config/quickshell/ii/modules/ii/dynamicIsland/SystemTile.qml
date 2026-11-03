@@ -13,8 +13,20 @@ RippleButton {
     property bool expanded: false
     property var iconAction: null
 
-    readonly property color colText: Appearance.islandContent.colOnLayer1
-    readonly property color colIcon: highlighted ? Appearance.colors.colOnPrimary : Appearance.islandContent.m3onSurface
+    readonly property var contentColors: Appearance.islandSystemContent
+    readonly property color colText: contentColors.onFill(Appearance.colors.colOnLayer1,
+        root.buttonColor, Appearance.surfaces.raised)
+    readonly property color colSubtext: contentColors.onFill(Appearance.colors.colSubtext,
+        root.buttonColor, Appearance.surfaces.raised)
+    readonly property color iconBackground: highlighted
+        ? contentColors.markOnFill(Appearance.colors.colPrimary, root.buttonColor, Appearance.surfaces.raised)
+        : contentColors.standOff(Appearance.surfaces.row, contentColors.tone(Appearance.surfaces.row),
+            contentColors.m3onSurface, contentColors.laid(root.buttonColor, Appearance.barBackdrop),
+            contentColors.laid(contentColors.onStock(Appearance.surfaces.raised), Appearance.barStockBackdrop))
+    readonly property color colIcon: contentColors.onFill(
+        highlighted ? Appearance.colors.colOnPrimary : Appearance.m3colors.m3onSurface,
+        [root.buttonColor, root.iconBackground],
+        [Appearance.surfaces.raised, highlighted ? Appearance.colors.colPrimary : Appearance.surfaces.row])
 
     Layout.preferredWidth: 1
     Layout.minimumWidth: 0
@@ -23,9 +35,11 @@ RippleButton {
     leftPadding: 6
     rightPadding: 8
 
-    colBackground: Appearance.surfaces.raised
-    colBackgroundHover: Appearance.surfaces.raisedHover
-    colRipple: Appearance.colors.colLayer2Active
+    colBackground: contentColors.fill(Appearance.surfaces.raised, contentColors.m3onSurface, Appearance.m3colors.m3onSurface)
+    colBackgroundHover: contentColors.apartFrom(
+        contentColors.fill(Appearance.surfaces.raisedHover, contentColors.m3onSurface, Appearance.m3colors.m3onSurface),
+        colBackground, Appearance.colors.colOnLayer1, Appearance.surfaces.raisedHover, Appearance.surfaces.raised)
+    colRipple: contentColors.flash(Appearance.colors.colLayer2Active, contentColors.m3onSurface, Appearance.m3colors.m3onSurface)
     buttonRadius: highlighted ? (Appearance?.rounding?.normal ?? 17) : height / 2
     buttonRadiusPressed: Appearance?.rounding?.small ?? 12
     Accessible.name: text + ": " + subtitle
@@ -52,9 +66,7 @@ RippleButton {
                 id: iconBg
                 anchors.fill: parent
                 radius: Math.max(4, root.buttonEffectiveRadius - root.padding)
-                color: root.highlighted
-                    ? Appearance.colors.colPrimary
-                    : Appearance.surfaces.row
+                color: root.iconBackground
 
                 Behavior on radius {
                     animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
@@ -102,7 +114,7 @@ RippleButton {
                 text: root.subtitle
                 font.pixelSize: 10
                 font.weight: Font.Normal
-                color: Appearance.islandContent.colSubtext
+                color: root.colSubtext
                 elide: Text.ElideRight
             }
         }
@@ -113,7 +125,7 @@ RippleButton {
             Layout.preferredHeight: 14
             text: "chevron_right"
             iconSize: 14
-            color: Appearance.islandContent.colSubtext
+            color: root.colSubtext
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             rotation: root.expanded ? 90 : 0
