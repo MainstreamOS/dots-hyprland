@@ -4482,6 +4482,23 @@ ApplicationWindow {
                 spacing: 0
 
                 StyleSection {
+                    title: Translation.tr("Window blur")
+                    symbol: "blur_on"
+                    Layout.fillHeight: false
+
+                    ConfigSelectionArray {
+                        id: windowPresetRow
+                        Layout.fillWidth: true
+                        buttonWidth: (width - spacing * 2) / 3 - 0.1
+                        currentValue: cardWindows.blurPresetIndex
+                        onSelected: newValue => cardWindows.applyBlurPreset(BackdropPresets.windowShipped[newValue])
+                        options: BackdropPresets.windowShipped.map((preset, index) => ({ displayName: preset.displayName, icon: ["rectangle", "ac_unit", "window"][index], value: index }))
+                    }
+                }
+
+                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
+
+                StyleSection {
                     title: Translation.tr("Window shape")
                     symbol: "rounded_corner"
                     Layout.fillHeight: false
@@ -4503,23 +4520,6 @@ ApplicationWindow {
                             cardWindows.roundingValue = stepped;
                             cardWindows.queueDecoration("rounding", stepped);
                         }
-                    }
-                }
-
-                Item { Layout.fillHeight: true; Layout.minimumHeight: 6 }
-
-                StyleSection {
-                    title: Translation.tr("Window blur")
-                    symbol: "blur_on"
-                    Layout.fillHeight: false
-
-                    ConfigSelectionArray {
-                        id: windowPresetRow
-                        Layout.fillWidth: true
-                        buttonWidth: (width - spacing * 2) / 3 - 0.1
-                        currentValue: cardWindows.blurPresetIndex
-                        onSelected: newValue => cardWindows.applyBlurPreset(BackdropPresets.windowShipped[newValue])
-                        options: BackdropPresets.windowShipped.map((preset, index) => ({ displayName: preset.displayName, icon: ["rectangle", "ac_unit", "window"][index], value: index }))
                     }
                 }
 
