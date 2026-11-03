@@ -218,6 +218,38 @@ if command -v systemd-inhibit >/dev/null 2>&1 && systemd-inhibit --list >/dev/nu
 fi
 pacman_tx() { "${PACMAN_INHIBIT[@]}" pacman "$@"; }
 
+# A release can add one of these dependencies after an older install selected
+# the stock package. Explicit targets work even when [mainstream] follows the
+# repository that contains that stock name.
+mainstream_replacement_targets() {
+    local pair old replacement
+    local -A selected=()
+    for pair in \
+        kdeconnect:rust-connect \
+        gtk4:gtk4-live-css \
+        firefox-mpris-hyprland:mpris-hyprland \
+        ttf-material-symbols-variable:ttf-material-symbols-variable-git \
+        adw-gtk-theme:adw-gtk-theme-git \
+        adw-gtk3:adw-gtk-theme-git; do
+        old=${pair%%:*}; replacement=${pair#*:}
+        [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] || continue
+        [[ -z "${selected[$replacement]:-}" ]] || continue
+        pacman -Si "mainstream/$replacement" >/dev/null 2>&1 || continue
+        selected[$replacement]=1
+        printf 'mainstream/%s\n' "$replacement"
+    done
+    return 0
+}
+
+pacman_system_upgrade() {
+    local targets=() replacements=()
+    mapfile -t targets < <(mainstream_replacement_targets)
+    if (( ${#targets[@]} )); then
+        replacements=(--ask 4 "${targets[@]}")
+    fi
+    pacman_tx -Syu --noconfirm "${replacements[@]}" "$@"
+}
+
 # A read-only root fails every step below in its own words, so say why once:
 # a snapshot booted from the boot menu, or the kernel remounted it after an error.
 root_mount="$(findmnt -no OPTIONS,SOURCE / 2>/dev/null || true)"
@@ -406,6 +438,12 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
     # --noconfirm: stdin is /dev/null, so a provider prompt would read EOF and empty
     # the plan. The repeated database refresh is deliberate.
     PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm </dev/null 2>/dev/null | reboot_check plan)"
+    # The first preview refreshed the databases. Re-plan with any explicit
+    # migrations so reboot detection sees the transaction we will actually run.
+    mapfile -t _replacement_targets < <(mainstream_replacement_targets)
+    if (( ${#_replacement_targets[@]} )); then
+        PLAN_OUT="$(pacman -Syu --print --print-format '%n' --noconfirm --ask 4 "${_replacement_targets[@]}" </dev/null 2>/dev/null | reboot_check plan)"
+    fi
     reboot_marker PLAN "$PLAN_OUT"
     if [[ "${PLAN_OUT%%$'\n'*}" == 1 ]]; then
         echo ">>> $(t "This update replaces parts of the running desktop. A reboot will be needed when it finishes.")"
@@ -417,7 +455,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
         exit 107
     fi
     BOOT_TOUCHED=1
-    pacman_tx -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
+    pacman_system_upgrade 2>&1 | tee "$PACMAN_LOG"
     PACMAN_RC=${PIPESTATUS[0]}
     if [[ "$PACMAN_RC" -ne 0 ]]; then
         # An untrusted [mainstream] key aborts the whole transaction, core and extra
@@ -436,7 +474,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                     && pacman-key --updatedb
                 rm -f /var/lib/pacman/sync/mainstream.db*
             fi
-            pacman_tx -Syu --noconfirm 2>&1 | tee "$PACMAN_LOG"
+            pacman_system_upgrade 2>&1 | tee "$PACMAN_LOG"
             PACMAN_RC=${PIPESTATUS[0]}
             if [[ "$PACMAN_RC" -ne 0 ]] \
                && grep -qE 'key "[^"]*" is unknown|missing required signature|invalid or corrupted database \(PGP signature\)' "$PACMAN_LOG"; then
@@ -457,7 +495,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                     rm -f /etc/pacman.conf.mskey-tmp
                 fi
                 MAINSTREAM_REPO_OFFLINE=1
-                pacman_tx -Syu --noconfirm
+                pacman_system_upgrade
                 PACMAN_RC=$?
             fi
         fi
@@ -493,7 +531,7 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
             if [[ "$_adoptable" -eq 1 ]]; then
                 echo ""
                 echo "── $(t "A mainstream package now owns files an older install placed directly on disk. Adopting them and retrying...")"
-                pacman_tx -Syu --noconfirm "${_ow_args[@]}"
+                pacman_system_upgrade "${_ow_args[@]}"
                 PACMAN_RC=$?
             else
                 # Someone else's package wants an unowned path, often left by a vendor
@@ -519,11 +557,14 @@ if [[ "$SKIP_SYSTEM" -eq 0 && "$BOOT_HELD" -eq 0 ]]; then
                 echo ""
             fi
         fi
-        if [[ "$PACMAN_RC" -ne 0 ]]; then
+        # Repeating a rejected dependency plan cannot resolve its conflicts.
+        # Keep pacman's explanation visible instead of calling it a cache error.
+        if [[ "$PACMAN_RC" -ne 0 ]] \
+           && ! grep -qE 'unresolvable package conflicts|failed to prepare transaction \((conflicting dependencies|could not satisfy dependencies)\)' "$PACMAN_LOG"; then
             echo ""
             echo "── $(t "pacman failed (corrupted cache or busy database are the usual transient causes) — retrying once...")"
             sleep 5
-            pacman_tx -Syu --noconfirm
+            pacman_system_upgrade
             PACMAN_RC=$?
         fi
     fi

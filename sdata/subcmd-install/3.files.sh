@@ -736,21 +736,20 @@ function setup_proton_ge(){
   if [[ -d "$install_dir" ]]; then
     echo -e "${STY_BLUE}[$0]: $tag already installed — skipping download.${STY_RST}"
   else
-    # GE-Proton now ships an -aarch64 tarball alongside the x86_64 build, so a
-    # broad endswith(".tar.gz") match returns TWO urls and corrupts the curl
-    # argument with an embedded newline. Match the exact x86_64 asset name.
+    # Prefer the explicit x86_64 archive, retaining the older unsuffixed name.
+    # ARM archives and checksum files must never match this selection.
     local tarball_url
     if command -v jq &>/dev/null; then
       tarball_url=$(echo "$release_json" | \
-        jq -r --arg tag "$tag" '.assets[] | select(.name == ($tag + ".tar.gz")) | .browser_download_url')
+        jq -r --arg tag "$tag" '.assets | map({key: .name, value: .browser_download_url}) | from_entries
+          | .[$tag + "-x86_64.tar.gz"] // .[$tag + ".tar.gz"] // empty')
     else
-      tarball_url=$(echo "$release_json" | python3 -c "
+      tarball_url=$(echo "$release_json" | python3 -c '
 import sys, json
-tag = '$tag'
-for a in json.load(sys.stdin)['assets']:
-    if a['name'] == tag + '.tar.gz':
-        print(a['browser_download_url']); break
-")
+tag = sys.argv[1]
+assets = {a["name"]: a["browser_download_url"] for a in json.load(sys.stdin)["assets"]}
+print(assets.get(tag + "-x86_64.tar.gz") or assets.get(tag + ".tar.gz") or "")
+' "$tag")
     fi
 
     if [[ -z "$tarball_url" ]]; then
