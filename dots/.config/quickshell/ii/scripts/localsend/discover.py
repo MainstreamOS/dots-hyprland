@@ -20,7 +20,7 @@ import threading
 from http.server import ThreadingHTTPServer
 
 from common import (FINGERPRINT, PORT, LocalSendHandler, device_info,
-                    join_multicast_socket, start_announcer)
+                    join_multicast_socket, lan_addresses, start_announcer)
 
 ANNOUNCE_INTERVAL = 2.0
 
@@ -53,7 +53,7 @@ def emit_device(info, address):
 
 
 def local_ips():
-    ips = {"127.0.0.1"}
+    ips = {"127.0.0.1", *lan_addresses()}
     try:
         hostname = socket.gethostname()
         _, _, addrs = socket.gethostbyname_ex(hostname)

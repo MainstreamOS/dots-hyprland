@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -7,8 +8,20 @@ import qs.modules.common.functions
 import qs.modules.ii.mediaControls
 
 ColumnLayout {
+    id: root
     readonly property bool busy: playerSelector.popup.visible
     spacing: 8
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: {
+            if (!IslandPanels.enabled("localsend")) return;
+            GlobalStates.mediaTransferActive = false;
+            GlobalStates.mediaReceiveActive = true;
+            IslandState.beginTransfer();
+            GlobalStates.mediaControlsOpen = true;
+            if (!LocalSend.receiveActive) LocalSend.startReceive();
+        }
+    }
     Loader {
         Layout.fillWidth: true
         Layout.preferredHeight: active ? Appearance.sizes.mediaControlsHeight : 0

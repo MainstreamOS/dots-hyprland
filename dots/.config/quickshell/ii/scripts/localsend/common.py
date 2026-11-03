@@ -10,6 +10,7 @@ import hashlib
 import json
 import socket
 import struct
+import subprocess
 import threading
 import urllib.parse
 import uuid
@@ -55,6 +56,24 @@ def emit(line):
     print(line, flush=True)
 
 
+def lan_addresses():
+    """Choose local multicast interfaces even when a VPN owns the default route."""
+    try:
+        result = subprocess.run(["ip", "-j", "-4", "address", "show", "up"],
+                                capture_output=True, text=True, timeout=2, check=True)
+        addresses = []
+        for interface in json.loads(result.stdout):
+            flags = interface.get("flags", [])
+            if "MULTICAST" not in flags or "POINTOPOINT" in flags or "LOOPBACK" in flags:
+                continue
+            for address in interface.get("addr_info", []):
+                if address.get("family") == "inet" and address.get("scope") == "global":
+                    addresses.append(address["local"])
+        return list(dict.fromkeys(addresses))
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+        return []
+
+
 def join_multicast_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -63,18 +82,30 @@ def join_multicast_socket():
     except (AttributeError, OSError):
         pass
     sock.bind(("", PORT))
-    mreq = struct.pack("4sl", socket.inet_aton(MULTICAST_ADDR), socket.INADDR_ANY)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    joined = False
+    last_error = None
+    for address in lan_addresses() or ["0.0.0.0"]:
+        membership = struct.pack("=4s4s", socket.inet_aton(MULTICAST_ADDR), socket.inet_aton(address))
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            joined = True
+        except OSError as error:
+            last_error = error
+    if not joined:
+        sock.close()
+        raise last_error
     return sock
 
 
 def announce_loop(sock, payload, stop_event, interval):
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
     while not stop_event.is_set():
-        try:
-            sock.sendto(payload, (MULTICAST_ADDR, PORT))
-        except OSError:
-            pass
+        for address in lan_addresses() or ["0.0.0.0"]:
+            try:
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(address))
+                sock.sendto(payload, (MULTICAST_ADDR, PORT))
+            except OSError:
+                pass
         stop_event.wait(interval)
 
 

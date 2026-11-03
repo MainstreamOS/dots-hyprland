@@ -38,12 +38,17 @@ Singleton {
     signal failed(string message)
     signal receiveCompleted(int fileCount)
 
-    // Discovery is driven by the binding on discoverProc.running below — it
-    // runs continuously while the file-transfer picker is visible. This
-    // function just clears the cached device list so the UI shows a fresh
-    // sweep; the running discoverProc immediately re-populates it.
+    property bool discoveryRestarting: false
+    // Restart the worker too: it remembers peers already emitted this sweep.
     function refreshDevices() {
         root.devices = [];
+        root.discoveryRestarting = true;
+        discoveryRestart.restart();
+    }
+    Timer {
+        id: discoveryRestart
+        interval: 150
+        onTriggered: root.discoveryRestarting = false
     }
 
     function send(device, files) {
@@ -168,7 +173,7 @@ Singleton {
         id: discoverProc
         command: ["python3",
             FileUtils.trimFileProtocol(`${Directories.scriptPath}/localsend/discover.py`)]
-        running: GlobalStates.mediaTransferActive && root.state === root.stateIdle
+        running: GlobalStates.mediaTransferActive && root.state === root.stateIdle && !root.discoveryRestarting
         onRunningChanged: {
             root.discovering = running;
             if (running) {
