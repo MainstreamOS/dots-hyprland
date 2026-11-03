@@ -411,6 +411,9 @@ hl.layer_rule({ match = { namespace = "osk[0-9]*" }, ignore_alpha = 0.6})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur_popups = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
+-- Window blur presets must not reach the bar or dock. Solid draws its color
+-- and transparency alone; Frost and Glass draw their own wallpaper backdrop.
+hl.layer_rule({ name = "mainstream-panel-blur", match = { namespace = "quickshell:(bar|verticalBar|dynamicIsland|dock|dockTop|dockLeft|dockRight)" }, blur = false})
 -- The catch-all above also blurs surfaces nothing is ever seen through: the
 -- wallpaper layer itself, the corner masks and the hot-corner ripple. The
 -- wallpaper covers the whole screen, and the blur pass runs over its full
@@ -419,27 +422,11 @@ hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
 -- dock and sidebars a fraction of it. The overview's dim stays blurred: what
 -- it frosts behind the overview is very much seen.
 hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotCornerRipple)" }, blur = false})
--- Blur stops at a fixed alpha, so with the shared 0.79 the bar loses its blur
--- between two neighboring steps of its own transparency slider, and where that
--- lands moves with the interface's transparency setting — around 7% of the
--- slider on a wallpaper the automatic setting reads as fairly vibrant. Held low
--- enough that the slider is smooth through the range anyone uses, and above the
--- shadow these surfaces cast. Their layer is larger than the shape drawn on it:
--- the rest is the room the shadow falls in, and a floor under the shadow's own
--- alpha sends the blur through that too, ringing every surface in a frosted
--- halo. The dock and sidebars ride the same floor, because the shared threshold
--- above sits inside the reach of their stock alpha — the automatic transparency
--- can land them a hair under it on a dark wallpaper, and a surface should not
--- lose its blur to settings nobody touched.
+-- Sidebars keep blur below their stock alpha but above their shadows, so the room around
+-- them never turns into a frosted halo. Panels a custom rule blurs share this floor.
 hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
--- The dock and the app list sit above the overview's dim while the overview is
--- open, so they are the blurred surfaces here whose blur edge is ever seen
--- against anything but the wallpaper. Blurring the wallpaper alone punches a
--- bright, stepped outline through the dim, because that edge is decided per
--- pixel with nothing in between. Reading what is actually behind them puts the
--- dim on both sides of the line, and the line has nothing left to show. The
--- app list wears the dock's surface besides, so the two have to frost the same
--- way or they stop reading as one material.
+-- The app list sits above the overview's dim. Read what is actually behind it
+-- so its blur edge blends with the dim instead of revealing a wallpaper outline.
 hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overview[A-Za-z]*)" }, xray = false})
 -- The dim is what the launcher stands on, and it shows the wallpaper past the
 -- windows. Its blur is computed once and reused until the wallpaper changes.
