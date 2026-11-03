@@ -3409,5 +3409,7 @@
   "Set": "Задать",
   "The change was not made.": "Изменение не применено.",
   "Use browser sign-in for YouTube": "Использовать вход через браузер для YouTube",
-  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Если YouTube блокирует воспроизведение, используется ваш вход в Zen или Firefox. Файлы cookie браузера считываются только при воспроизведении видео с YouTube."
+  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Если YouTube блокирует воспроизведение, используется ваш вход в Zen или Firefox. Файлы cookie браузера считываются только при воспроизведении видео с YouTube.",
+  "Refresh phone connection": "Обновить подключение телефона",
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "На Android разрешите доступ к контактам и включите синхронизацию контактов в KDE Connect, чтобы здесь отображались имена и фотографии. Если вы сделаете это после сопряжения, нажмите «Обновить подключение телефона» рядом с названием телефона."
 }

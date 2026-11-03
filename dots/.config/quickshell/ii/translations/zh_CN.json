@@ -3409,5 +3409,7 @@
   "Set": "设置",
   "The change was not made.": "未应用更改。",
   "Use browser sign-in for YouTube": "为 YouTube 使用浏览器登录状态",
-  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "如果 YouTube 阻止播放，则使用您在 Zen 或 Firefox 中的登录状态。仅在播放 YouTube 视频时读取浏览器 Cookie。"
+  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "如果 YouTube 阻止播放，则使用您在 Zen 或 Firefox 中的登录状态。仅在播放 YouTube 视频时读取浏览器 Cookie。",
+  "Refresh phone connection": "刷新手机连接",
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "在 Android 上，允许 KDE Connect 访问联系人并启用联系人同步，即可在这里显示联系人姓名和照片。如果在配对后才授予权限，请点击手机名称旁的“刷新手机连接”。"
 }

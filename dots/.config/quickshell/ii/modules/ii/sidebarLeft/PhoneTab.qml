@@ -229,6 +229,14 @@ Item {
 
                     IslandButton {
                         contentColors: Appearance.colors
+                        enabled: Phone.connected
+                        symbol: "refresh"
+                        onClicked: Phone.refreshConnection()
+                        StyledToolTip { text: Translation.tr("Refresh phone connection") }
+                    }
+
+                    IslandButton {
+                        contentColors: Appearance.colors
                         enabled: Phone.reachable && Phone.canShare
                         symbol: "upload_file"
                         onClicked: root.openFileSheet(false)
@@ -418,26 +426,7 @@ Item {
                 PagePlaceholder {
                     icon: "smartphone"
                     title: Phone.connected ? Translation.tr("Connect your phone") : Translation.tr("Looking for your phone")
-                    description: Translation.tr("1. Install the free KDE Connect app on your phone. On Android, get it from the Google Play Store or F-Droid. On iPhone, get it from the App Store.\n2. Connect the phone to the same Wi-Fi network as this computer.\n3. Open KDE Connect on the phone, tap this computer in its list, then tap the button to pair with it. Pairing connects the two over Wi-Fi. It does not use Bluetooth or a cable.\n4. A request then appears at the top of this tab. Check that its code matches the one on your phone, then click Accept.")
-                }
-                // The compatibility command opens Rust Connect's local web UI;
-                // with the original backend it opens KDE Connect's desktop app.
-                Process {
-                    id: pairingApp
-                    property bool found: false
-                    running: true
-                    command: ["sh", "-c", "command -v kdeconnect-app"]
-                    onExited: exitCode => pairingApp.found = exitCode === 0
-                }
-                RippleButtonWithIcon {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 40
-                    visible: Phone.connected && pairingApp.found
-                    materialIcon: "devices"
-                    mainText: Phone.backendName === "rust-connect"
-                        ? Translation.tr("Open Rust Connect") : Translation.tr("Open KDE Connect")
-                    onClicked: Quickshell.execDetached(["kdeconnect-app"])
+                    description: Translation.tr("1. Install the free KDE Connect app on your phone. On Android, get it from the Google Play Store or F-Droid. On iPhone, get it from the App Store.\n2. Connect the phone to the same Wi-Fi network as this computer.\n3. Open KDE Connect on the phone, tap this computer in its list, then tap the button to pair with it. Pairing connects the two over Wi-Fi. It does not use Bluetooth or a cable.\n4. A request then appears at the top of this tab. Check that its code matches the one on your phone, then click Accept.") + "\n5. " + Translation.tr("On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.")
                 }
             }
 

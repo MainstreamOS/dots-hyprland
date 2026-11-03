@@ -3409,5 +3409,7 @@
   "Set": "تنظیم",
   "The change was not made.": "تغییر اعمال نشد.",
   "Use browser sign-in for YouTube": "استفاده از ورود مرورگر برای YouTube",
-  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "اگر YouTube پخش را مسدود کرد، از حساب واردشده در Zen یا Firefox استفاده شود. کوکی‌های مرورگر فقط هنگام پخش ویدیوی YouTube خوانده می‌شوند."
+  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "اگر YouTube پخش را مسدود کرد، از حساب واردشده در Zen یا Firefox استفاده شود. کوکی‌های مرورگر فقط هنگام پخش ویدیوی YouTube خوانده می‌شوند.",
+  "Refresh phone connection": "تازه‌سازی اتصال تلفن",
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "در Android، دسترسی به مخاطبین را مجاز کنید و همگام‌سازی مخاطبین را در KDE Connect فعال کنید تا نام و عکس مخاطبین اینجا نمایش داده شود. اگر پس از جفت‌سازی این اجازه را می‌دهید، روی تازه‌سازی اتصال تلفن در کنار نام تلفن کلیک کنید."
 }

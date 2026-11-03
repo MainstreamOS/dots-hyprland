@@ -59,6 +59,15 @@ Singleton {
         root.command({cmd: "conversations", device: root.deviceId});
         if (root.openThread >= 0) root.command({cmd: "thread", device: root.deviceId, thread: root.openThread, count: 100});
     }
+    function refreshConnection(): void {
+        root.command({cmd: "devices"});
+        if (!root.connected || !root.reachable) return;
+        if (root.device?.plugins?.includes("kdeconnect_contacts")) {
+            root.command({cmd: "contacts", device: root.deviceId});
+        }
+        root.syncDevice();
+    }
+
     function disconnectState(): void {
         root.cancelFilePreview();
         root.clearThumbnails();

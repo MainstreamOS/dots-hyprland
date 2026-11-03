@@ -3409,5 +3409,7 @@
   "Set": "Imposta",
   "The change was not made.": "La modifica non è stata applicata.",
   "Use browser sign-in for YouTube": "Usa l’accesso del browser per YouTube",
-  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Se YouTube blocca la riproduzione, usa il tuo accesso in Zen o Firefox. I cookie del browser vengono letti solo quando riproduci un video di YouTube."
+  "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Se YouTube blocca la riproduzione, usa il tuo accesso in Zen o Firefox. I cookie del browser vengono letti solo quando riproduci un video di YouTube.",
+  "Refresh phone connection": "Aggiorna connessione del telefono",
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Su Android, consenti l’accesso ai contatti e attiva la sincronizzazione dei contatti in KDE Connect per vederne qui nomi e foto. Se lo fai dopo l’associazione, fai clic su Aggiorna connessione del telefono accanto al nome del telefono."
 }
