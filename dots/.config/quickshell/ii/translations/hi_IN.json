@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "YouTube के लिए ब्राउज़र में किए गए साइन इन का उपयोग करें",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "अगर YouTube वीडियो चलाने से रोकता है, तो Zen या Firefox में किए गए साइन इन का उपयोग करें। ब्राउज़र कुकीज़ केवल YouTube वीडियो चलाते समय पढ़ी जाती हैं।",
   "Refresh phone connection": "फ़ोन कनेक्शन रीफ़्रेश करें",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android पर KDE Connect को संपर्कों का ऐक्सेस दें और संपर्क सिंक चालू करें, ताकि यहाँ संपर्कों के नाम और तस्वीरें दिखें। अगर आप पेयर करने के बाद यह अनुमति देते हैं, तो फ़ोन के नाम के पास फ़ोन कनेक्शन रीफ़्रेश करें पर क्लिक करें।"
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android पर KDE Connect को संपर्कों का ऐक्सेस दें और संपर्क सिंक चालू करें, ताकि यहाँ संपर्कों के नाम और तस्वीरें दिखें। अगर आप पेयर करने के बाद यह अनुमति देते हैं, तो फ़ोन के नाम के पास फ़ोन कनेक्शन रीफ़्रेश करें पर क्लिक करें।",
+  "George Larson — Phone integration": "George Larson — फ़ोन एकीकरण"
 }

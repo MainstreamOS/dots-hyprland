@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "為 YouTube 使用瀏覽器登入狀態",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "如果 YouTube 封鎖播放，則使用您在 Zen 或 Firefox 中的登入狀態。僅在播放 YouTube 影片時讀取瀏覽器 Cookie。",
   "Refresh phone connection": "重新整理手機連線",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "在 Android 上，允許 KDE Connect 存取聯絡人並啟用聯絡人同步，即可在這裡顯示聯絡人姓名和照片。若在配對後才授予權限，請點選手機名稱旁的「重新整理手機連線」。"
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "在 Android 上，允許 KDE Connect 存取聯絡人並啟用聯絡人同步，即可在這裡顯示聯絡人姓名和照片。若在配對後才授予權限，請點選手機名稱旁的「重新整理手機連線」。",
+  "George Larson — Phone integration": "George Larson — 手機整合"
 }

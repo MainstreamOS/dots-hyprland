@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "Dùng phiên đăng nhập trình duyệt cho YouTube",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Nếu YouTube chặn phát video, hãy dùng phiên đăng nhập Zen hoặc Firefox của bạn. Cookie trình duyệt chỉ được đọc khi bạn phát video YouTube.",
   "Refresh phone connection": "Làm mới kết nối điện thoại",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Trên Android, cho phép KDE Connect truy cập danh bạ và bật đồng bộ danh bạ để hiển thị tên và ảnh liên hệ ở đây. Nếu cấp quyền sau khi ghép đôi, hãy nhấp vào Làm mới kết nối điện thoại bên cạnh tên điện thoại."
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Trên Android, cho phép KDE Connect truy cập danh bạ và bật đồng bộ danh bạ để hiển thị tên và ảnh liên hệ ở đây. Nếu cấp quyền sau khi ghép đôi, hãy nhấp vào Làm mới kết nối điện thoại bên cạnh tên điện thoại.",
+  "George Larson — Phone integration": "George Larson — Tích hợp điện thoại"
 }

@@ -9,6 +9,7 @@ import qs.modules.common.widgets
 
 ContentPage {
     forceWidth: true
+    baseWidth: Math.max(0, Math.min(600, width - 40))
 
     // Avatar cropped to a circle at a fixed size so every card in the
     // credits grid renders uniformly regardless of source image shape.
@@ -39,35 +40,54 @@ ContentPage {
         property string link
         property string donateLink: ""
         Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        Layout.preferredWidth: 1
+        Layout.alignment: Qt.AlignTop
         Layout.preferredHeight: forkCardColumn.implicitHeight
         ColumnLayout {
             id: forkCardColumn
+            width: forkCard.width
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 8
             CircleAvatar {
                 source: forkCard.image
             }
             StyledText {
-                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
                 text: forkCard.name
                 font.pixelSize: Appearance.font.pixelSize.title
             }
             StyledText {
-                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
                 text: forkCard.subtitle
                 font.pixelSize: Appearance.font.pixelSize.normal
             }
-            RowLayout {
+            GridLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 8
+                Layout.maximumWidth: forkCard.width
+                columns: donateButton.visible && projectButton.implicitWidth + donateButton.implicitWidth + columnSpacing > forkCard.width ? 1 : 2
+                columnSpacing: 8
+                rowSpacing: 8
                 RippleButtonWithIcon {
+                    id: projectButton
+                    Layout.maximumWidth: forkCard.width
+                    Layout.alignment: Qt.AlignHCenter
                     materialIcon: "code"
                     mainText: Translation.tr("Original Project")
                     onClicked: Qt.openUrlExternally(forkCard.link)
                 }
                 RippleButtonWithIcon {
+                    id: donateButton
+                    Layout.maximumWidth: forkCard.width
+                    Layout.alignment: Qt.AlignHCenter
                     visible: forkCard.donateLink !== ""
                     materialIcon: "favorite"
                     mainText: Translation.tr("Donate")
@@ -196,7 +216,7 @@ ContentPage {
 
         GridLayout {
             Layout.fillWidth: true
-            columns: 3
+            columns: Math.max(1, Math.min(3, Math.floor((width + columnSpacing) / (180 + columnSpacing))))
             columnSpacing: 30
             rowSpacing: 30
             Layout.topMargin: 10
@@ -214,6 +234,12 @@ ContentPage {
                 name: "end4-pC"
                 subtitle: Translation.tr("pctrade · Widgets, Media tab")
                 link: "https://github.com/pctrade/end4-pC"
+            }
+            ForkCard {
+                image: `${Directories.home}/.local/share/icons/about-georgeglarson.jpg`
+                name: "Rust Connect"
+                subtitle: Translation.tr("George Larson — Phone integration")
+                link: "https://github.com/georgeglarson/rust-connect"
             }
             ForkCard {
                 image: `${Directories.home}/.local/share/icons/about-yayuuu.png`

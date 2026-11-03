@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "YouTube にブラウザーのログイン情報を使用",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "YouTube で再生がブロックされた場合、Zen または Firefox のログイン情報を使用します。ブラウザーの Cookie は YouTube 動画を再生するときだけ読み取られます。",
   "Refresh phone connection": "スマートフォンの接続を更新",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android で KDE Connect に連絡先へのアクセスを許可し、連絡先の同期を有効にすると、ここに連絡先の名前と写真が表示されます。ペアリング後に許可した場合は、スマートフォン名の横にある「スマートフォンの接続を更新」をクリックしてください。"
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android で KDE Connect に連絡先へのアクセスを許可し、連絡先の同期を有効にすると、ここに連絡先の名前と写真が表示されます。ペアリング後に許可した場合は、スマートフォン名の横にある「スマートフォンの接続を更新」をクリックしてください。",
+  "George Larson — Phone integration": "George Larson — スマートフォン連携"
 }

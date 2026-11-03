@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "Usar a sessão do navegador para o YouTube",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "Se o YouTube bloquear a reprodução, use sua sessão do Zen ou Firefox. Os cookies do navegador são lidos apenas quando você reproduz um vídeo do YouTube.",
   "Refresh phone connection": "Atualizar conexão do celular",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "No Android, permita o acesso aos contatos e ative a sincronização de contatos no KDE Connect para ver os nomes e as fotos aqui. Se fizer isso após o pareamento, clique em Atualizar conexão do celular ao lado do nome do celular."
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "No Android, permita o acesso aos contatos e ative a sincronização de contatos no KDE Connect para ver os nomes e as fotos aqui. Se fizer isso após o pareamento, clique em Atualizar conexão do celular ao lado do nome do celular.",
+  "George Larson — Phone integration": "George Larson — Integração com o celular"
 }

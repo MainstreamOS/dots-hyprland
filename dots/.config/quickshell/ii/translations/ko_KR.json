@@ -3411,5 +3411,6 @@
   "Use browser sign-in for YouTube": "YouTube에 브라우저 로그인 사용",
   "If YouTube blocks playback, use your Zen or Firefox sign-in. Browser cookies are read only when you play a YouTube video.": "YouTube에서 재생을 차단하면 Zen 또는 Firefox의 로그인 정보를 사용합니다. 브라우저 쿠키는 YouTube 동영상을 재생할 때만 읽습니다.",
   "Refresh phone connection": "휴대폰 연결 새로고침",
-  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android에서 KDE Connect의 연락처 접근을 허용하고 연락처 동기화를 켜면 여기에 연락처 이름과 사진이 표시됩니다. 페어링 후에 허용했다면 휴대폰 이름 옆의 휴대폰 연결 새로고침을 클릭하세요."
+  "On Android, allow contact access and enable contact sync in KDE Connect to see contact names and photos here. If you do this after pairing, click Refresh phone connection beside the phone name.": "Android에서 KDE Connect의 연락처 접근을 허용하고 연락처 동기화를 켜면 여기에 연락처 이름과 사진이 표시됩니다. 페어링 후에 허용했다면 휴대폰 이름 옆의 휴대폰 연결 새로고침을 클릭하세요.",
+  "George Larson — Phone integration": "George Larson — 휴대폰 연동"
 }
