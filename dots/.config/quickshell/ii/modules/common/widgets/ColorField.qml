@@ -47,6 +47,7 @@ RowLayout {
     property bool showsOpacity: false
     property real opacityValue: 1
     property real opacityFrom: 0
+    property real defaultOpacity: 1
     signal edited(string newValue)
     signal opacityEdited(real newValue)
 
@@ -351,6 +352,8 @@ RowLayout {
                                 picker.emitted[""] = true
                                 if (root.value !== "")
                                     root.edited("")
+                                if (root.showsOpacity && root.opacityValue !== root.defaultOpacity)
+                                    root.opacityEdited(root.defaultOpacity)
                                 picker.close()
                             }
                             StyledToolTip { text: Translation.tr("Hand this color back to the palette") }
