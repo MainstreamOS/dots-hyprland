@@ -159,12 +159,13 @@ showfun setup-mainstream-repo
 v setup-mainstream-repo
 
 # A -S dependency install does not process replaces[], and its conflict prompt
-# defaults to no under --noconfirm. Replace stock packages in one normal system
-# upgrade once our repo is available, before entering those installs. Never
-# remove GTK separately: installed apps must keep a working toolkit throughout.
+# defaults to no under --noconfirm. Request our replacements explicitly: a
+# higher-priority repo containing the stock name prevents -Syu from discovering
+# replaces[] in a later repo. Keep the replacements and full upgrade in one
+# transaction so installed apps always have a working toolkit.
 replace-mainstream-system-packages() {
   local old replacement pair
-  local pending=()
+  local pending=() targets=()
   # Queries can resolve provides[]: gtk4 also finds an installed gtk4-live-css.
   # Only the exact stock package name needs replacement.
   for pair in kdeconnect:rust-connect gtk4:gtk4-live-css; do
@@ -173,14 +174,23 @@ replace-mainstream-system-packages() {
   done
   [ "${#pending[@]}" -gt 0 ] || return 0
   if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
-    printf '%s\n' 'Stock packages need Mainstream replacements. Run sudo pacman -Syu after enabling the Mainstream repo, then retry without skipping the system update.' >&2
+    printf '%s\n' 'Stock packages need Mainstream replacements. Retry setup without skipping the system update so they can be replaced in one transaction.' >&2
     return 1
   fi
-  retry x sudo pacman -Syu --noconfirm || return 1
+  for pair in "${pending[@]}"; do
+    replacement=${pair#*:}
+    if ! pacman -Si "mainstream/$replacement" >/dev/null 2>&1; then
+      printf 'Cannot find %s in the Mainstream repository. Check the repository refresh output above, then retry setup.\n' "$replacement" >&2
+      return 1
+    fi
+    targets+=("mainstream/$replacement")
+  done
+  # --ask 4 permits the conflicting stock package to leave in this transaction.
+  retry x sudo pacman -Syu --needed --noconfirm --ask 4 "${targets[@]}" || return 1
   for pair in "${pending[@]}"; do
     old=${pair%%:*}; replacement=${pair#*:}
-    if [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] || ! pacman -Qq "$replacement" &>/dev/null; then
-      printf 'The Mainstream repository has not provided %s to replace %s yet. Keep the existing package installed and retry after the replacement is published.\n' "$replacement" "$old" >&2
+    if [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" || "$(pacman -Qq "$replacement" 2>/dev/null)" != "$replacement" ]]; then
+      printf 'Could not replace %s with %s. Review the pacman output above before retrying setup.\n' "$old" "$replacement" >&2
       return 1
     fi
   done
