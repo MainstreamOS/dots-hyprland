@@ -17,6 +17,7 @@ Options for install:
       --ignore-outdate      Ignore outdate checking for community supported \"dist-*\".
   -s, --skip-sysupdate      Skip system package upgrade e.g. \"sudo pacman -Syu\"
       --skip-gpudrivers     Skip automatic GPU driver detection and installation
+      --skip-limine         Keep the current bootloader instead of setting up Limine and Snapper
       --skip-backup         Skip backup conflicting files
       --skip-quickshell     Skip installing the config for Quickshell
       --skip-hyprland       Skip installing the config for Hyprland
@@ -56,7 +57,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-limine,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -89,6 +90,7 @@ while true ; do
     -s|--skip-sysupdate) SKIP_SYSUPDATE=true;shift;;
     --ignore-outdate) IGNORE_OUTDATE_CHECK=true;shift;;
     --skip-gpudrivers) SKIP_GPUDRIVERS=true;shift;;
+    --skip-limine) SKIP_LIMINE=true;shift;;
     --skip-backup) SKIP_BACKUP=true;shift;;
     --skip-hyprland) SKIP_HYPRLAND=true;shift;;
     --skip-hyprland-entry) SKIP_HYPRLAND_ENTRY=true;shift;;

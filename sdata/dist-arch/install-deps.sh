@@ -10,6 +10,7 @@
 MAINSTREAM_KEY_FPR=D644BEB9C1B7668E3A6C16DA8D567345B265848E
 MAINSTREAM_REPO_URL=https://github.com/MainstreamOS/packages/releases/download/mainstream-repo
 MAINSTREAM_MIRROR_URL=https://downloads.sourceforge.net/project/mainstreamos/mainstream-repo
+MS_INSTALL_MISSING_PACKAGES=()
 
 # Retry a command with increasing backoff. The [mainstream] repo is a single
 # GitHub-hosted server (no mirrors), so a transient network blip pulling its db
@@ -50,7 +51,10 @@ remove_deprecated_dependencies(){
   list+=(hyprland-qtutils)
   list+=({quickshell,hyprutils,hyprpicker,hyprlang,hypridle,hyprland-qt-support,hyprland-qtutils,hyprlock,xdg-desktop-portal-hyprland,hyprcursor,hyprwayland-scanner,hyprland}-git)
   list+=(matugen-bin)
-  for i in ${list[@]};do try sudo pacman --noconfirm -Rdd $i;done
+  for i in "${list[@]}"; do
+    [[ "$(pacman -Qq "$i" 2>/dev/null)" == "$i" ]] || continue
+    try sudo pacman --noconfirm -Rdd "$i"
+  done
 }
 # NOTE: `implicitize_old_dependencies()` was for the old days when we just switch from dependencies.conf to local PKGBUILDs.
 # However, let's just keep it as references for other distros writing their `sdata/dist-<OS_GROUP_ID>/install-deps.sh`, if they need it.
@@ -237,7 +241,7 @@ remove-previous-package-name() {
   local previous
   while read -r previous; do
     [ -n "$previous" ] || continue
-    pacman -Qq "$previous" &>/dev/null || continue
+    [[ "$(pacman -Qq "$previous" 2>/dev/null)" == "$previous" ]] || continue
     printf "${STY_CYAN}[$0]: Removing previous package name '%s'${STY_RST}\n" "$previous"
     if ! sudo pacman --noconfirm -Rdd "$previous"; then
       printf "${STY_YELLOW}[$0]: WARNING: could not remove '%s', the install may fail on file conflicts.${STY_RST}\n" "$previous"
@@ -370,11 +374,13 @@ install-local-pkgbuild() {
       if ! sudo flatpak install --system --noninteractive --assumeyes \
               flathub "$dep"; then
         printf "${STY_RED}[$0]: ERROR: Failed to install Flatpak '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
+        MS_INSTALL_MISSING_PACKAGES+=("$dep")
       fi
       continue
     fi
     if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
       printf "${STY_RED}[$0]: ERROR: Failed to install dependency '%s'. You may need to install it manually.${STY_RST}\n" "$dep"
+      MS_INSTALL_MISSING_PACKAGES+=("$dep")
     fi
   done
 

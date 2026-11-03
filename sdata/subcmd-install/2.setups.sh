@@ -268,6 +268,19 @@ function detect_gpu_vendors(){
   echo "${vendors[*]}"
 }
 
+function install_optional_gpu_packages(){
+  local pkg
+  if ! sudo pacman -S --needed --noconfirm "$@"; then
+    for pkg in "$@"; do
+      if ! pacman -T "$pkg" >/dev/null 2>&1; then
+        MS_INSTALL_MISSING_PACKAGES+=("$pkg")
+        note_failure "GPU package $pkg could not be installed; check repository versions and retry setup."
+      fi
+    done
+  fi
+  return 0
+}
+
 function setup_gpu_drivers(){
   local vendors
   x sudo install -Dm644 "${REPO_ROOT}/sdata/lib/gpu-config.sh" /usr/local/lib/gpu-config.sh
@@ -312,7 +325,7 @@ function setup_gpu_drivers(){
               [[ "$NVIDIA_DRIVER_FAMILY" != nouveau ]] && _repo+=(egl-wayland)
               x sudo pacman -S --needed --noconfirm "${_repo[@]}"
               # 32-bit GL needs the multilib repo; best-effort so a non-multilib host doesn't abort the install.
-              [[ ${#_lib32[@]} -gt 0 ]] && try sudo pacman -S --needed --noconfirm "${_lib32[@]}"
+              [[ ${#_lib32[@]} -gt 0 ]] && install_optional_gpu_packages "${_lib32[@]}"
             else
               # Frozen legacy branch (nvidia-580xx/470xx/390xx) — only present if [mainstream] prebuilt it.
               # The *-dkms packages build against the kernel, so linux-headers + dkms must be present first.
@@ -376,12 +389,12 @@ function setup_gpu_drivers(){
             # devices. VA-API/VDPAU are part of mesa itself now.
             if [[ "${IS_OLD_AMD:-false}" == true ]]; then
               x sudo pacman -S --needed --noconfirm mesa libva-utils
-              try sudo pacman -S --needed --noconfirm lib32-mesa
+              install_optional_gpu_packages lib32-mesa
             else
               x sudo pacman -S --needed --noconfirm mesa vulkan-radeon libva-utils
               # 32-bit Vulkan so Steam/multilib apps don't pull lib32-nvidia-utils
               # as the provider on AMD (best-effort: needs multilib, which Steam needs too).
-              try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-radeon
+              install_optional_gpu_packages lib32-mesa lib32-vulkan-radeon
             fi
             ;;
           fedora)
@@ -413,7 +426,7 @@ function setup_gpu_drivers(){
                 x sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
                 ;;
             esac
-            try sudo pacman -S --needed --noconfirm lib32-mesa lib32-vulkan-intel
+            install_optional_gpu_packages lib32-mesa lib32-vulkan-intel
             ;;
           fedora)
             x sudo dnf install -y mesa-dri-drivers mesa-vulkan-drivers intel-media-driver
@@ -453,10 +466,10 @@ function setup_gpu_drivers(){
   # on AMD/Intel/VM systems. Mirrors archiso install-gpu-drivers.
   if [[ "$OS_GROUP_ID" == "arch" ]]; then
     if ! pacman -T vulkan-driver >/dev/null 2>&1; then
-      try sudo pacman -S --needed --noconfirm vulkan-swrast
+      install_optional_gpu_packages vulkan-swrast
     fi
     if ! pacman -T lib32-vulkan-driver >/dev/null 2>&1; then
-      try sudo pacman -S --needed --noconfirm lib32-vulkan-swrast
+      install_optional_gpu_packages lib32-vulkan-swrast
     fi
   fi
 }
@@ -860,6 +873,7 @@ v setup_default_pdf_viewer
 
 # Optional: Limine + Snapper automatic backup setup (Arch, btrfs, UEFI only)
 function setup_limine_snapper(){
+  [[ "${SKIP_LIMINE:-false}" == true ]] && return 0
   local ROOT_FSTYPE
   ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || echo "")
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
@@ -884,8 +898,7 @@ function setup_limine_snapper(){
   if $ask; then
     read -rp "Set up limine + snapper? [y/N] " p
   else
-    # Installing the desktop does not opt into replacing the existing bootloader.
-    p=n
+    p=y
   fi
   if [[ "$p" =~ ^[Yy]$ ]]; then
     x sudo bash "${REPO_ROOT}/scripts/limine-snapper/setup-limine-snapper.sh" --yes
@@ -1114,6 +1127,30 @@ function _initramfs_rebuild(){
   fi
 }
 
+function _mkinitcpio_clear_stock_splash(){
+  # A UKI's static bitmap appears before Plymouth, independently of its theme.
+  # Keep custom bitmap options and every other preset setting unchanged.
+  sudo python3 - "${MKINITCPIO_PRESET_DIR:-/etc/mkinitcpio.d}" <<'PY'
+from pathlib import Path
+import re
+import stat
+import sys
+
+for preset in Path(sys.argv[1]).glob('*.preset'):
+    if preset.is_symlink() or not stat.S_ISREG(preset.stat().st_mode):
+        continue
+    original = preset.read_text()
+    lines = []
+    for line in original.splitlines(keepends=True):
+        if re.match(r'^\s*\w+_options\s*=', line):
+            line = re.sub(r'''--splash(?:=|\s+)/usr/share/systemd/bootctl/splash-arch\.bmp(?=[\s"']|$)''', '', line)
+        lines.append(line)
+    updated = ''.join(lines)
+    if updated != original:
+        preset.write_text(updated)
+PY
+}
+
 function setup_plymouth(){
   if [[ "$OS_GROUP_ID" != "arch" ]]; then
     echo -e "${STY_YELLOW}[$0]: Plymouth setup is only supported on Arch Linux. Skipping.${STY_RST}"
@@ -1142,10 +1179,11 @@ function setup_plymouth(){
   fi
   # Non-interactive — writes to /etc/plymouth/plymouthd.conf
   if [[ -d "$theme_dst" ]]; then
-    sudo plymouth-set-default-theme mainstream
+    sudo plymouth-set-default-theme mainstream || return 1
   else
-    sudo plymouth-set-default-theme bgrt
+    sudo plymouth-set-default-theme bgrt || return 1
   fi
+  _mkinitcpio_clear_stock_splash || return 1
   # Persist the desired boot flags in /etc/kernel/cmdline so future
   # limine-mkinitcpio regenerations keep the splash/silencing settings.
   echo -e "${STY_CYAN}[$0]: Ensuring the plymouth splash flags are in the managed kernel cmdline...${STY_RST}"
@@ -1159,8 +1197,8 @@ function setup_plymouth(){
 # boot entries from /etc/kernel/cmdline, keeping everything in sync. When
 # setup_gpu_autoconfig also runs, it rebuilds again after adding MODULES —
 # that's a small cost for keeping plymouth working standalone.
-  _initramfs_rebuild
-  echo -e "${STY_GREEN}[$0]: Plymouth BGRT theme configured.${STY_RST}"
+  _initramfs_rebuild || return 1
+  echo -e "${STY_GREEN}[$0]: Plymouth boot splash configured.${STY_RST}"
 }
 
 function setup_gpu_autoconfig(){

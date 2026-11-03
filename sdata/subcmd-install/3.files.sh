@@ -1096,7 +1096,15 @@ try hyprctl reload
 printf "\n"
 ms_step_raw "finalizing install..."
 printf "\n"
-ms_ready "reboot to enter Mainstream."
+if (( ${#MS_INSTALL_MISSING_PACKAGES[@]} > 0 )); then
+  ms_ready "desktop installed; some packages could not be installed."
+  while IFS= read -r missing; do
+    ms_step_raw "not installed: $missing"
+  done < <(printf '%s\n' "${MS_INSTALL_MISSING_PACKAGES[@]}" | sort -u)
+  ms_hint "check the install log, resolve the package errors, then rerun ./setup install."
+else
+  ms_ready "reboot to enter Mainstream."
+fi
 printf "\n"
 ms_hint "in Hyprland: Super+W = wallpaper · Super+Tab = keybinds"
 printf "\n"
