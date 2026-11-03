@@ -413,6 +413,7 @@ hl.layer_rule({ match = { namespace = "quickshell:.*" }, blur = true})
 hl.layer_rule({ match = { namespace = "quickshell:.*" }, ignore_alpha = 0.79})
 -- Window blur presets must not reach the bar or dock. They draw their own
 -- wallpaper blur, plain for a see-through Solid and styled for Frost or Glass.
+-- WallpaperPlacement disables this override when video needs compositor blur.
 hl.layer_rule({ name = "mainstream-panel-blur", match = { namespace = "quickshell:(bar|verticalBar|dynamicIsland|dock|dockTop|dockLeft|dockRight)" }, blur = false})
 -- The catch-all above also blurs surfaces nothing is ever seen through: the
 -- wallpaper layer itself, the corner masks and the hot-corner ripple. The

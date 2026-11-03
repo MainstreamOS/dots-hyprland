@@ -83,6 +83,7 @@ ShellRoot {
         GlobalStates._publishBarOpen = true
         // Only the shell draws the launcher, see _judgeLauncherEnabled.
         Appearance._judgeLauncherEnabled = true
+        WallpaperPlacement._panelBlurEnabled = true
     }
 
 
