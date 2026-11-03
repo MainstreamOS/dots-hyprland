@@ -162,10 +162,13 @@ v setup-mainstream-repo
 # defaults to no under --noconfirm. Request our replacements explicitly: a
 # higher-priority repo containing the stock name prevents -Syu from discovering
 # replaces[] in a later repo. Keep the replacements and full upgrade in one
-# transaction so installed apps always have a working toolkit.
+# transaction so installed apps always have a working toolkit. Seed missing
+# Mainstream packages on fresh installs too, before an earlier meta-package's
+# dependencies can pull in the stock implementation.
 replace-mainstream-system-packages() {
   local old replacement pair
-  local pending=() targets=()
+  local pending=() targets=() transaction=(-Syu)
+  local -A selected=()
   # Queries can resolve provides[]: gtk4 also finds an installed gtk4-live-css.
   # Only the exact stock package name needs replacement.
   for pair in \
@@ -176,23 +179,35 @@ replace-mainstream-system-packages() {
     adw-gtk-theme:adw-gtk-theme-git \
     adw-gtk3:adw-gtk-theme-git; do
     old=${pair%%:*}
-    [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] && pending+=("$pair")
-  done
-  [ "${#pending[@]}" -gt 0 ] || return 0
-  if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
-    printf '%s\n' 'Stock packages need Mainstream replacements. Retry setup without skipping the system update so they can be replaced in one transaction.' >&2
-    return 1
-  fi
-  for pair in "${pending[@]}"; do
     replacement=${pair#*:}
+    [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" ]] && pending+=("$pair")
+    if [[ "$(pacman -Qq "$replacement" 2>/dev/null)" != "$replacement" && -z "${selected[$replacement]:-}" ]]; then
+      targets+=("mainstream/$replacement")
+      selected[$replacement]=1
+    fi
+  done
+  [ "${#targets[@]}" -gt 0 ] || return 0
+  if [[ "${SKIP_SYSUPDATE:-false}" == true ]]; then
+    if (( ${#pending[@]} > 0 )); then
+      printf '%s\n' 'Stock packages need Mainstream replacements. Retry setup without skipping the system update so they can be replaced in one transaction.' >&2
+      return 1
+    fi
+    transaction=(-S)
+  fi
+  for replacement in "${!selected[@]}"; do
     if ! pacman -Si "mainstream/$replacement" >/dev/null 2>&1; then
       printf 'Cannot find %s in the Mainstream repository. Check the repository refresh output above, then retry setup.\n' "$replacement" >&2
       return 1
     fi
-    targets+=("mainstream/$replacement")
   done
   # --ask 4 permits the conflicting stock package to leave in this transaction.
-  retry x sudo pacman -Syu --needed --noconfirm --ask 4 "${targets[@]}" || return 1
+  retry x sudo pacman "${transaction[@]}" --needed --noconfirm --ask 4 "${targets[@]}" || return 1
+  for replacement in "${!selected[@]}"; do
+    if [[ "$(pacman -Qq "$replacement" 2>/dev/null)" != "$replacement" ]]; then
+      printf 'Could not install %s. Review the pacman output above before retrying setup.\n' "$replacement" >&2
+      return 1
+    fi
+  done
   for pair in "${pending[@]}"; do
     old=${pair%%:*}; replacement=${pair#*:}
     if [[ "$(pacman -Qq "$old" 2>/dev/null)" == "$old" || "$(pacman -Qq "$replacement" 2>/dev/null)" != "$replacement" ]]; then
