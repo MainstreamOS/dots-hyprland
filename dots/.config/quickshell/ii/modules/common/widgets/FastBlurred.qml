@@ -168,7 +168,10 @@ Item {
 
         ShaderEffectSource {
             id: shaderSource
-            sourceItem: root.blurSource
+            // A source assigned before the sampler has a window can keep Qt
+            // referencing its old native window after a hide. Connect only
+            // while both items belong to the same window, and release on detach.
+            sourceItem: shaderSource.Window.window && shaderSource.Window.window === root.blurSource?.Window.window ? root.blurSource : null
             hideSource: false
             // A wallpaper is a still picture between transitions. Grabbing it on
             // demand keeps a dozen of these off the per-frame path, which is the
@@ -184,7 +187,7 @@ Item {
         width: blur.width
         height: blur.height
         visible: false
-        sourceItem: blur
+        sourceItem: oldBlur.Window.window && oldBlur.Window.window === blur.Window.window ? blur : null
         hideSource: false
         live: false
     }
