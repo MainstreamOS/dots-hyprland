@@ -179,8 +179,7 @@ def cut_out(wall, key, result_path):
         grid = np.asarray(mask.resize((GRID_COLUMNS, GRID_ROWS), Image.BOX), dtype=np.float32) / 255
         layers.append({"path": str(out), "cover": [round(float(v), 3) for v in grid.flat]})
 
-    result = json.dumps({"width": image.width, "height": image.height, "columns": GRID_COLUMNS, "rows": GRID_ROWS,
-                         "layers": layers})
+    result = json.dumps({"columns": GRID_COLUMNS, "rows": GRID_ROWS, "layers": layers})
     tmp = result_path.with_suffix(".tmp")
     tmp.write_text(result)
     tmp.replace(result_path)

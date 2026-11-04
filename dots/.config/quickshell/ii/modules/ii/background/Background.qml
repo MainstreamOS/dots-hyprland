@@ -431,13 +431,17 @@ Variants {
             }
             // With no path yet, magick would wait on input that never comes.
             if (bgRoot.wallpaperPath.length === 0) {
+                getWallpaperSizeProc.path = "";
                 getWallpaperSizeProc.running = false;
                 bgRoot.pictureMeasured(bgRoot.fallbackWallpaper, bgRoot.modelData.width, bgRoot.modelData.height);
                 return;
             }
             // Ending a run measures again from its exit, so the newest path is the one sized.
             if (getWallpaperSizeProc.running) {
-                getWallpaperSizeProc.running = false;
+                if (getWallpaperSizeProc.path !== bgRoot.wallpaperPath) {
+                    getWallpaperSizeProc.path = "";
+                    getWallpaperSizeProc.running = false;
+                }
                 return;
             }
             getWallpaperSizeProc.path = bgRoot.wallpaperPath;
@@ -907,10 +911,8 @@ Variants {
                     y: wallpaper.y - widgetCanvas.y
                     width: wallpaper.width
                     height: wallpaper.height
-                    drift: wallpaper.width > 0 && wallpaper.height > 0
-                        ? Math.abs(widgetCanvas.parallaxFactor - 1) / 2
-                            * Math.max(bgRoot.parallaxTotalPixelsX / wallpaper.width, bgRoot.parallaxTotalPixelsY / wallpaper.height)
-                        : 0
+                    sourceSize.width: wallpaper.sourceSize.width
+                    sourceSize.height: wallpaper.sourceSize.height
                     picture: CF.FileUtils.trimFileProtocol(wallpaper.source.toString())
                     allowed: !bgRoot.wallpaperSwapPending && !swapAnimation.running && !GlobalStates.screenLocked
                     wanted: Config.options.background.widgets.clock.depthEffect

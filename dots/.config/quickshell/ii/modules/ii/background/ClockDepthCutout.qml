@@ -6,8 +6,8 @@ import qs.modules.common
 import qs.modules.common.functions
 
 // The parts of the wallpaper in front of the clock, stacked above it so the clock sits
-// behind them. Fills the wallpaper the owner places it over, and draws only around the clock.
-Item {
+// behind them. Lines up with the wallpaper the owner places it over.
+Image {
     id: root
 
     required property string picture
@@ -15,8 +15,6 @@ Item {
     required property rect region
     property bool wanted: false
     property bool allowed: true
-    // How far the clock can slide against the picture with parallax, in shares of it.
-    property real drift: 0
 
     // A smaller share of the clock covered isn't an effect, and a larger one hides the time.
     readonly property real minCover: 0.01
@@ -67,63 +65,17 @@ Item {
         return "";
     }
 
-    // The part of the picture to load, moved only once the clock leaves it, so a drag
-    // reloads now and then instead of every step.
-    readonly property real cropSlack: 0.05
-    property rect crop: Qt.rect(0, 0, 0, 0)
-    readonly property real cropMargin: root.drift + root.cropSlack
-    function updateCrop() {
-        const r = root.region;
-        const inside = r.x >= root.crop.x && r.y >= root.crop.y
-            && r.x + r.width <= root.crop.x + root.crop.width && r.y + r.height <= root.crop.y + root.crop.height
-            && root.crop.width > 0;
-        if (inside || r.width <= 0)
-            return;
-        const m = root.cropMargin + root.cropSlack;
-        const x = Math.max(0, r.x - m);
-        const y = Math.max(0, r.y - m);
-        root.crop = Qt.rect(x, y, Math.min(1, r.x + r.width + m) - x, Math.min(1, r.y + r.height + m) - y);
-    }
-    onRegionChanged: root.updateCrop()
-    onCropMarginChanged: {
-        root.crop = Qt.rect(0, 0, 0, 0);
-        root.updateCrop();
-    }
-    // In the cutout's own pixels, which also keeps it lined up with the wallpaper.
-    readonly property int pictureWidth: root.result?.width ?? 0
-    readonly property int pictureHeight: root.result?.height ?? 0
-    readonly property rect cropPixels: {
-        const left = Math.floor(root.crop.x * root.pictureWidth);
-        const top = Math.floor(root.crop.y * root.pictureHeight);
-        return Qt.rect(left, top, Math.ceil((root.crop.x + root.crop.width) * root.pictureWidth) - left,
-            Math.ceil((root.crop.y + root.crop.height) * root.pictureHeight) - top);
-    }
+    source: root.layerPath.length > 0 ? `file://${root.layerPath}` : ""
+    opacity: root.allowed && status === Image.Ready ? 1 : 0
+    visible: opacity > 0
+    fillMode: Image.PreserveAspectCrop
+    asynchronous: true
+    cache: false
+    smooth: true
+    mipmap: true
 
-    property string loadedLayer: ""
-    visible: image.opacity > 0
-
-    Image {
-        id: image
-        readonly property bool hasCrop: root.cropPixels.width > 0 && root.cropPixels.height > 0
-        x: root.pictureWidth > 0 ? root.cropPixels.x / root.pictureWidth * root.width : 0
-        y: root.pictureHeight > 0 ? root.cropPixels.y / root.pictureHeight * root.height : 0
-        width: root.pictureWidth > 0 ? root.cropPixels.width / root.pictureWidth * root.width : 0
-        height: root.pictureHeight > 0 ? root.cropPixels.height / root.pictureHeight * root.height : 0
-        source: root.layerPath.length > 0 && hasCrop ? `file://${root.layerPath}` : ""
-        sourceClipRect: root.cropPixels
-        opacity: root.allowed && root.layerPath.length > 0 && root.loadedLayer === root.layerPath ? 1 : 0
-        asynchronous: true
-        cache: false
-        retainWhileLoading: true
-        smooth: true
-        onStatusChanged: {
-            if (status === Image.Ready)
-                root.loadedLayer = root.layerPath;
-        }
-
-        Behavior on opacity {
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-        }
+    Behavior on opacity {
+        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }
 
     onJobChanged: root.run()
