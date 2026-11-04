@@ -50,4 +50,20 @@ if [ -n "$MAIN" ]; then
         fi
     done
 fi
+
+# Hyprtoolkit (hyprland-share-picker) — keep UI fonts in sync with shell fonts
+HTCFG="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hyprtoolkit.conf"
+if [ -f "$HTCFG" ]; then
+    [ -n "$MAIN" ] && sed -i "s|^font_family =.*|font_family = $MAIN|" "$HTCFG"
+    [ -n "$MONO" ] && sed -i "s|^font_family_monospace =.*|font_family_monospace = $MONO|" "$HTCFG"
+fi
+
+# Keep the matugen template in sync so wallpaper/color switches preserve the font
+for tmpl in "${XDG_CONFIG_HOME:-$HOME/.config}/matugen/templates/hyprland/hyprtoolkit.conf"; do
+    if [ -f "$tmpl" ]; then
+        [ -n "$MAIN" ] && sed -i "s|^font_family =.*|font_family = $MAIN|" "$tmpl"
+        [ -n "$MONO" ] && sed -i "s|^font_family_monospace =.*|font_family_monospace = $MONO|" "$tmpl"
+    fi
+done
+
 exit 0
