@@ -121,11 +121,24 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 | [Limine](https://github.com/limine-bootloader/limine) + [Snapper](https://github.com/openSUSE/snapper) | Boot menu with snapshot rollbacks |
 | [Mainstream Repo](https://github.com/MainstreamOS/packages) | Signed repo of prebuilt packages — no AUR builds on your machine |
 
+## Releases and versioning
+
+Mainstream separates **rolling system packages**, **numbered desktop releases**, and **installation media**:
+
+- **System packages (rolling)** — Arch Linux (`core`, `extra`, `multilib`) and the signed [`[mainstream]`](https://github.com/MainstreamOS/packages) repository update continuously. You never need to reinstall when a new release comes out.
+- **Mainstream desktop & tooling (`MAJOR.MINOR.PATCH`)** — The shell, Settings app, and system helpers ship as numbered releases through **Settings → Update** (and the [Changelog](https://mainstreamos.org/#changelog)):
+  - **`MAJOR` (`4.0.0`)** — Major shell redesigns, architectural milestones, or config migrations (applied automatically during update).
+  - **`MINOR` (`4.1.0`)** — New features, settings pages, or visual modes that stay compatible with your existing setup.
+  - **`PATCH` (`4.0.1`)** — Bug fixes, security fixes, and polish.
+- **Install images (ISOs)** — Live ISOs built from [`MainstreamOS/archiso`](https://github.com/MainstreamOS/archiso) are point-in-time snapshots carrying the current kernel, hardware drivers, graphical installer, and newest numbered release so fresh installs work out of the box.
+- **Edge channel (`--edge`)** — An optional switch in **Settings → Update** (or `install.sh --edge`) that tracks the `mainstream` development branch ahead of numbered releases, protected by the same pre-update Btrfs snapshots.
+
 ## Support
 
 - [Discord](https://discord.gg/WJ3AUK5Aqd) — live help and community
 - [Documentation](https://mainstreamos.org) — install guides, every settings page, creative setup, and the security model
 - [Issues](https://github.com/MainstreamOS/dots-hyprland/issues) for bugs, [Discussions](https://github.com/MainstreamOS/dots-hyprland/discussions) or the [Mainstream Discord](https://discord.gg/WJ3AUK5Aqd) for questions and ideas
+- [Security policy](SECURITY.md) — supported versions and how to report a security vulnerability privately
 
 ## Contributing
 
