@@ -121,6 +121,21 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 | [Limine](https://github.com/limine-bootloader/limine) + [Snapper](https://github.com/openSUSE/snapper) | Boot menu with snapshot rollbacks |
 | [Mainstream Repo](https://github.com/MainstreamOS/packages) | Signed repo of prebuilt packages — no AUR builds on your machine |
 
+## System requirements
+
+| Component | Minimum | Recommended |
+| :--- | :--- | :--- |
+| **Processor (CPU)** | 64-bit x86-64 dual-core (Intel Core 2 Duo / Core i3+, AMD Athlon 64 X2 / Ryzen 3+) | 64-bit quad-core or faster (Intel 8th Gen Core i5+, AMD Ryzen 5+) |
+| **Memory (RAM)** | **4 GB RAM** (live installer & baseline desktop) | **8 GB RAM** (smooth multi-tab browsing & multitasking) |
+| **Storage** | **25 GB** available space (SSD or HDD) | **64 GB+** NVMe or SATA SSD |
+| **Graphics (GPU)** | Wayland and OpenGL 3.3 / GLES 3.0 capable:<br>• **Intel**: HD Graphics 4000 or newer (2012+)<br>• **AMD**: Radeon HD 7000 / RX series (GCN 1.0+ with `amdgpu`)<br>• **NVIDIA**: GeForce GTX 900+ (Maxwell) with 535+ driver or modern open kernel modules | • **AMD / Intel**: Radeon RX 500+ / RX 5000+ or Intel Iris Xe / Arc<br>• **NVIDIA**: GeForce GTX 1660 / RTX 2060 or newer |
+| **Display** | 1280×720 (720p) minimum | 1920×1080 (1080p) or higher (scaling supported) |
+| **Boot & Firmware** | UEFI (64-bit) or Legacy BIOS (Secure Boot disabled) | UEFI (64-bit) |
+| **Network** | Internet connection required for package downloads & mirrors | Broadband internet connection |
+
+> [!TIP]
+> On laptops with integrated graphics or older hardware meeting the minimum spec, selecting the **Solid** look in Welcome or Settings turns off live wallpaper blur sampling, keeping animations smooth and power draw low.
+
 ## Releases and versioning
 
 Mainstream separates **rolling system packages**, **numbered desktop releases**, and **installation media**:
