@@ -81,6 +81,12 @@ hl.bind("ALT + XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SOURCE@ 
 hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SOURCE@ toggle"), {locked = true} )
 hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_SOURCE@ toggle"), {locked = true, description = "Toggle mic"} )
 
+--##! Laptop Switches & Clamshell
+hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd(hyprScripts .. "/clamshell.sh close"), {locked = true})
+hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd(hyprScripts .. "/clamshell.sh open"), {locked = true})
+hl.bind("switch:on:Apple SMC power/lid events", hl.dsp.exec_cmd(hyprScripts .. "/clamshell.sh close"), {locked = true})
+hl.bind("switch:off:Apple SMC power/lid events", hl.dsp.exec_cmd(hyprScripts .. "/clamshell.sh open"), {locked = true})
+
 -- Fork overhaul: wallpaper selector moved from Ctrl+Super+T → Super+W
 hl.bind("SUPER + W", hl.dsp.global("quickshell:wallpaperSelectorToggle"), {description = "Toggle wallpaper selector"} )
 hl.bind("SUPER + ALT + W", hl.dsp.global("quickshell:wallpaperSelectorRandom"), {description = "Select random wallpaper"} )

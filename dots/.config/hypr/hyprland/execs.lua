@@ -38,6 +38,8 @@ hl.on("hyprland.start", function ()
     -- Bar, wallpaper
     hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
     hl.exec_cmd("$HOME/.config/hypr/custom/scripts/__restore_video_wallpaper.sh")
+    -- Clamshell check on boot (in case laptop was booted docked with lid closed)
+    hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/clamshell.sh check")
     -- The layout picked on the login screen leads this session's list, kept
     -- in Settings' own list and handed to localed, so the desktop types in
     -- what the password was typed in.
