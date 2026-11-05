@@ -222,6 +222,8 @@ rm -rf "$WTMP"
 # ── NVIDIA env / services / early-KMS / hypridle / breadcrumb ────────────────
 NTMP="$(mktemp -d)"; export MKINITCPIO_CONF="$NTMP/mkinitcpio.conf"
 NVHOME="$NTMP/home"; mkdir -p "$NVHOME/.config/hypr/custom"
+# A desktop, where NVIDIA drives the display, until a test below mocks a hybrid; never the machine running this.
+export GPU_PCI_DEVICES_PATH="$NTMP/no-pci-devices"
 
 NVIDIA_GEN=turing; : > "$NVHOME/.config/hypr/custom/env.lua"; : > "$NVHOME/.config/hypr/custom/general.lua"; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
@@ -248,6 +250,41 @@ NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 1))
 EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
 chk_str retire-glx "$( [[ "$EL" == *'__GLX_VENDOR_LIBRARY_NAME'* ]] && echo present || echo absent )" "absent"
 chk_str retire-wlr "$( [[ "$EL" == *'WLR_NO_HARDWARE_CURSORS'* ]] && echo present || echo absent )" "absent"
+
+# Hybrid laptop tests: gate VA-API and GBM behind boot_vga check
+MOCK_PCI="$NTMP/pci_devices"; mkdir -p "$MOCK_PCI"
+export GPU_PCI_DEVICES_PATH="$MOCK_PCI"
+
+# Test 1: Desktop with NVIDIA boot_vga=1
+mkdir -p "$MOCK_PCI/0000:01:00.0"
+echo "0x030000" > "$MOCK_PCI/0000:01:00.0/class"
+echo "0x10de" > "$MOCK_PCI/0000:01:00.0/vendor"
+echo "1" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+chk_str dgpu-is-display "$(nvidia_is_display_gpu && echo yes || echo no)" "yes"
+: > "$NVHOME/.config/hypr/custom/env.lua"
+NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 2))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str dgpu-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "nvidia")'* ]] && echo present || echo absent )" "present"
+chk_str dgpu-gbm "$( [[ "$EL" == *'hl.env("GBM_BACKEND", "nvidia-drm")'* ]] && echo present || echo absent )" "present"
+
+# Test 2: Hybrid laptop with Intel boot_vga=1 and NVIDIA offload boot_vga=0
+mkdir -p "$MOCK_PCI/0000:00:02.0"
+echo "0x030000" > "$MOCK_PCI/0000:00:02.0/class"
+echo "0x8086" > "$MOCK_PCI/0000:00:02.0/vendor"
+echo "1" > "$MOCK_PCI/0000:00:02.0/boot_vga"
+echo "0" > "$MOCK_PCI/0000:01:00.0/boot_vga"
+chk_str hybrid-not-display "$(nvidia_is_display_gpu && echo yes || echo no)" "no"
+printf 'hl.env("LIBVA_DRIVER_NAME", "nvidia")\nhl.env("GBM_BACKEND", "nvidia-drm")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+NVIDIA_GEN=turing; nvidia_write_env "$NVHOME"; CASES=$((CASES + 2))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str hybrid-retire-libva "$( [[ "$EL" == *'LIBVA_DRIVER_NAME'* ]] && echo present || echo absent )" "absent"
+chk_str hybrid-retire-gbm "$( [[ "$EL" == *'GBM_BACKEND'* ]] && echo present || echo absent )" "absent"
+printf 'hl.env("LIBVA_DRIVER_NAME", "iHD")\nhl.env("NVD_BACKEND", "direct")\n' > "$NVHOME/.config/hypr/custom/env.lua"
+nvidia_retire_offload_env "$NVHOME"; CASES=$((CASES + 2))
+EL="$(cat "$NVHOME/.config/hypr/custom/env.lua")"
+chk_str hybrid-keeps-user-libva "$( [[ "$EL" == *'hl.env("LIBVA_DRIVER_NAME", "iHD")'* ]] && echo present || echo absent )" "present"
+chk_str hybrid-retire-nvd "$( [[ "$EL" == *'NVD_BACKEND'* ]] && echo present || echo absent )" "absent"
+export GPU_PCI_DEVICES_PATH="$NTMP/no-pci-devices"; rm -rf "$MOCK_PCI"
 
 # AQ_DRM_DEVICES is no longer written: pinning Aquamarine to one card
 # black-screened a hybrid laptop, and autodetect is what makes the outputs on
@@ -286,7 +323,7 @@ flush_failures "$NTMP/breadcrumb"; CASES=$((CASES + 1))
 BC="$(cat "$NTMP/breadcrumb")"
 chk_str breadcrumb-x "$( [[ "$BC" == *"- driver X failed"* ]] && echo yes || echo no )" "yes"
 chk_str breadcrumb-y "$( [[ "$BC" == *"- driver Y failed"* ]] && echo yes || echo no )" "yes"
-rm -rf "$NTMP"
+unset GPU_PCI_DEVICES_PATH; rm -rf "$NTMP"
 
 # ── _gpu_nvidia_has_driver: any-of, not all-of ──────────────────────────────
 # Drives every NVIDIA branch in both orchestrators, so an all-of query silently

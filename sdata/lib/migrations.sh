@@ -71,6 +71,27 @@ migrate_rust_connect_session_target() {
 }
 migrate_rust_connect_session_target "${REPO_ROOT:-}"
 
+# Earlier releases set NVIDIA's video decoding and buffer backends on hybrid laptops too, where
+# another GPU drives the display and they black out browser video. Installs are fixed by setup,
+# and this reaches the machines that update instead.
+migrate_hybrid_nvidia_env() {
+    local repo_root="${1:-}" env_lua="$HOME/.config/hypr/custom/env.lua"
+    [[ -f "$env_lua" && -r "$repo_root/sdata/lib/gpu-config.sh" ]] || return 0
+    grep -qE '^[[:space:]]*hl\.env\("(LIBVA_DRIVER_NAME|GBM_BACKEND|NVD_BACKEND)"' "$env_lua" || return 0
+    (
+        # shellcheck source=/dev/null
+        source "$repo_root/sdata/lib/gpu-config.sh" || exit 0
+        nvidia_is_display_gpu && exit 0
+        if [[ "${DRY_RUN:-false}" == true ]]; then
+            echo "[DRY-RUN] Would take NVIDIA's video settings out of custom/env.lua, since another GPU drives the display"
+            exit 0
+        fi
+        nvidia_retire_offload_env "$HOME"
+    )
+    return 0
+}
+migrate_hybrid_nvidia_env "${REPO_ROOT:-}"
+
 # The update that brings the Decorations carry in is run by the exp-update from
 # before it, which read its own script before the pull. That runner sources
 # this file after the pull and before it copies anything, which makes this the
