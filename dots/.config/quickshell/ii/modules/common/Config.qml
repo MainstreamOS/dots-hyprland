@@ -905,6 +905,13 @@ Singleton {
                 property int menuSize: 75
             }
 
+            property JsonObject display: JsonObject {
+                // Clamshell mode on laptops: keep external displays on and disable internal screen when closed
+                property bool clamshellMode: true
+                // Suspend laptop when lid is closed without external displays
+                property bool sleepOnLidClose: true
+            }
+
             property JsonObject brightness: JsonObject {
                 // brightnessctl device, e.g. "intel_backlight"; empty lets it choose. Set it
                 // when a hybrid laptop exposes a dead second backlight brightnessctl may pick.

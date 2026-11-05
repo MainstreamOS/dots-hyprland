@@ -19,6 +19,9 @@ ContentPage {
     // scale change. Wayland's QScreen change signals aren't reliable here.
     signal scaleApplied()
 
+    // Laptops have an internal display panel (eDP/LVDS/DSI) or battery present
+    readonly property bool isLaptop: (displayConfigPage.monitors && displayConfigPage.monitors.some(m => /^(eDP|LVDS|DSI)/.test(m.name))) || (Battery.available && !Battery.testMode)
+
     property var monitors: []
     property var pendingChanges: ({})
     // True for the duration of a canvas drag (see the arrangement-canvas
@@ -3710,6 +3713,44 @@ except Exception:
             }
 
             onClicked: displayConfigPage.applyAllChanges()
+        }
+    }
+
+    // ── Laptop Clamshell & Lid Behavior ─────────────────────────────────────
+    ContentSection {
+        objectName: "lidBehaviorSection"
+        visible: displayConfigPage.isLaptop
+        icon: "laptop"
+        title: Translation.tr("Lid Behavior")
+
+        StyledText {
+            Layout.fillWidth: true
+            text: Translation.tr("Configure display and power actions when closing your laptop lid.")
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
+        }
+
+        ConfigSwitch {
+            buttonIcon: "dock"
+            text: Translation.tr("Clamshell mode")
+            tooltipText: Translation.tr("Keep external displays active and disable the built-in screen when the laptop lid is closed.")
+            checked: Config.options.display.clamshellMode
+            onCheckedChanged: {
+                if (checked === Config.options.display.clamshellMode) return;
+                Config.options.display.clamshellMode = checked;
+            }
+        }
+
+        ConfigSwitch {
+            buttonIcon: "bedtime"
+            text: Translation.tr("Sleep on lid close")
+            tooltipText: Translation.tr("Suspend the laptop when the lid is closed without an external display connected.")
+            checked: Config.options.display.sleepOnLidClose
+            onCheckedChanged: {
+                if (checked === Config.options.display.sleepOnLidClose) return;
+                Config.options.display.sleepOnLidClose = checked;
+            }
         }
     }
 

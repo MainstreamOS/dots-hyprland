@@ -80,6 +80,38 @@ is_lid_closed() {
   return 1
 }
 
+# Reads clamshell setting from config.json ("clamshell" | "suspend" | "ignore" or boolean)
+get_clamshell_setting() {
+  local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
+  if [ -r "$cfg" ] && command -v jq >/dev/null 2>&1; then
+    local val
+    val=$(jq -r '.display.clamshellMode // true' "$cfg" 2>/dev/null || echo "true")
+    if [ "$val" = "true" ] || [ "$val" = "clamshell" ]; then
+      printf '%s\n' "clamshell"
+      return 0
+    elif [ "$val" = "suspend" ]; then
+      printf '%s\n' "suspend"
+      return 0
+    else
+      printf '%s\n' "ignore"
+      return 0
+    fi
+  fi
+  printf '%s\n' "clamshell"
+}
+
+get_sleep_on_lid_close() {
+  local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
+  if [ -r "$cfg" ] && command -v jq >/dev/null 2>&1; then
+    local val
+    val=$(jq -r '.display.sleepOnLidClose // true' "$cfg" 2>/dev/null || echo "true")
+    if [ "$val" = "false" ]; then
+      return 1
+    fi
+  fi
+  return 0
+}
+
 save_internal_state() {
   local internal="$1"
   mkdir -p "$STATE_DIR"
@@ -98,9 +130,26 @@ handle_close() {
   internal=$(get_internal_monitor)
   [ -n "$internal" ] || exit 0
 
+  local mode
+  mode=$(get_clamshell_setting)
+
   if has_external_monitor "$internal"; then
-    save_internal_state "$internal"
-    hyprctl keyword monitor "$internal, disable" >/dev/null 2>&1 || true
+    case "$mode" in
+      clamshell)
+        save_internal_state "$internal"
+        hyprctl keyword monitor "$internal, disable" >/dev/null 2>&1 || true
+        ;;
+      suspend)
+        systemctl suspend >/dev/null 2>&1 || true
+        ;;
+      ignore)
+        # Keep internal screen and session active without disabling output
+        ;;
+    esac
+  else
+    if get_sleep_on_lid_close; then
+      systemctl suspend >/dev/null 2>&1 || true
+    fi
   fi
 }
 
@@ -127,7 +176,10 @@ handle_check() {
   internal=$(get_internal_monitor)
   [ -n "$internal" ] || exit 0
 
-  if is_lid_closed && has_external_monitor "$internal"; then
+  local mode
+  mode=$(get_clamshell_setting)
+
+  if [ "$mode" = "clamshell" ] && is_lid_closed && has_external_monitor "$internal"; then
     handle_close
   elif ! is_lid_closed && [ -f "$STATE_FILE" ]; then
     handle_open
