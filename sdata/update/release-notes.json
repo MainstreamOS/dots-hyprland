@@ -437,5 +437,13 @@
         "9c492d694b06"
       ]
     }
+  },
+  "4.0.1": {
+    "date": "2026-11-04",
+    "kind": "patch",
+    "summary": "Fix Hyprland plugin rebuilds for hyprbars and scrolloverview getting skipped after quarantine",
+    "changes": [
+      "Plugin rebuilds for hyprbars and scrolloverview now reliably reinstall when recovering from a quarantined build after a Hyprland upgrade"
+    ]
   }
 }

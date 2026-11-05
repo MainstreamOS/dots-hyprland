@@ -374,7 +374,8 @@ for target in "${TARGETS[@]}"; do
     user_home="${target%/.local/share/hyprland/plugins/hyprbars.so}"
     # Everything below runs as root inside folders the user owns, so a link
     # anywhere under the home would aim these writes at a file of its choosing.
-    if [[ "$(realpath -e -- "$target" 2>/dev/null)" != "$(realpath -e -- "$user_home" 2>/dev/null)/.local/share/hyprland/plugins/hyprbars.so" ]]; then
+    plugin_dir="$(realpath -e -- "$user_home" 2>/dev/null)/.local/share/hyprland/plugins"
+    if [[ "$(realpath -e -- "$(dirname -- "$target")" 2>/dev/null)" != "$plugin_dir" || -L "$target" ]]; then
         log "Skipped $target: its path goes through a link"
         continue
     fi
