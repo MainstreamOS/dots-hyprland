@@ -3443,5 +3443,6 @@
   "Boot files and Limine UKI hashes are verified on the new partition before switching /etc/fstab, keeping your existing boot partition intact until cutover.": "Boot files and Limine UKI hashes are verified on the new partition before switching /etc/fstab, keeping your existing boot partition intact until cutover.",
   "Expanding EFI partition...": "Expanding EFI partition...",
   "Expand to %1 GB": "Expand to %1 GB",
-  "Unavailable": "Unavailable"
+  "Unavailable": "Unavailable",
+  "AppImages": "AppImages"
 }

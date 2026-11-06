@@ -37,6 +37,7 @@ ContentPage {
     readonly property var usageParts: [
         { key: "apps", ids: ["apps"], icon: "apps", name: Translation.tr("Apps") },
         { key: "flatpak", ids: ["flatpak", "flatpakSystem"], icon: "package_2", name: Translation.tr("Flatpak apps") },
+        { key: "appimages", ids: ["appimages"], icon: "install_desktop", name: Translation.tr("AppImages") },
         { key: "games", ids: ["games"], icon: "sports_esports", name: Translation.tr("Games") },
         { key: "documents", ids: ["documents"], icon: "description", name: Translation.tr("Documents") },
         { key: "downloads", ids: ["downloads"], icon: "download", name: Translation.tr("Downloads") },

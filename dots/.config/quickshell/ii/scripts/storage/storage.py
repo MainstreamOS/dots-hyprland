@@ -11,9 +11,11 @@ trash PATH       Moves something inside Home to the Trash.
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 HOME = Path.home()
@@ -25,6 +27,19 @@ COREDUMPS = Path("/var/lib/systemd/coredump")
 KEPT_JOURNAL = 200 * 1024 * 1024
 THUMBNAILS = [CACHE / "thumbnails"]
 TOOL_CACHES = [CACHE / name for name in ("yay", "paru", "uv", "pip", "pnpm", "go-build")] + [HOME / ".npm/_cacache"]
+APPLICATIONS = DATA / "applications"
+# Where AppImages are kept by default. Mainstream OS places them in ~/AppImages by default.
+APPIMAGE_DIRS = [
+    HOME / "AppImages",
+    HOME / "Applications",
+    HOME / "Downloads",
+    HOME / "Desktop",
+    HOME / ".local/bin",
+    HOME / "bin",
+    HOME / ".local/share/AppImages",
+    HOME / ".local/share/appimagekit",
+    HOME / ".local/share/gearlever",
+]
 LARGEST_FILES = 15
 LARGEST_FILE_MIN = 100 * 1024 * 1024
 ENV = {**os.environ, "LC_ALL": "C"}
@@ -49,11 +64,21 @@ def du(*paths, depth=None, every_file=False):
     found = [str(path) for path in paths if os.path.lexists(path)]
     if not found:
         return {}
+    # A single du invocation remembers inodes across operands. NUL delimiters also
+    # let a file name contain whitespace without changing the accounting.
+    try:
+        output = subprocess.run(
+            [*command, "--null", "--files0-from=-"],
+            input=b"".join(os.fsencode(path) + b"\0" for path in found),
+            capture_output=True, env=ENV,
+        ).stdout
+    except OSError:
+        return {}
     result = {}
-    for line in run(*command, "--", *found).splitlines():
-        size, _, path = line.partition("\t")
+    for line in output.split(b"\0"):
+        size, _, path = line.partition(b"\t")
         if size.isdigit():
-            result[path] = int(size)
+            result[os.fsdecode(path)] = int(size)
     return result
 
 
@@ -78,6 +103,16 @@ def mounts():
         if fstype not in PSEUDO and device.startswith("/dev/") and not device.startswith("/dev/loop"):
             found.append((mount, device, fstype))
     return sorted(found, key=lambda entry: len(entry[0]), reverse=True)
+
+
+def mounts_in(folder):
+    """Every mount point inside a folder, network ones included, read without touching any of them."""
+    found = set()
+    for line in Path("/proc/self/mountinfo").read_text().splitlines():
+        point = Path(line.split()[4].replace("\\040", " "))
+        if point != folder and point.is_relative_to(folder):
+            found.add(point)
+    return found
 
 
 def device_of(path):
@@ -118,7 +153,6 @@ def efi_info():
         return None
 
 
-
 def user_folders():
     names = {"documents": ("DOCUMENTS", "Documents"), "downloads": ("DOWNLOAD", "Downloads"),
              "pictures": ("PICTURES", "Pictures"), "videos": ("VIDEOS", "Videos"), "music": ("MUSIC", "Music")}
@@ -133,9 +167,124 @@ def user_folders():
     return {key: Path(configured.get(xdg, HOME / folder)) for key, (xdg, folder) in names.items()}
 
 
+def appimage_type(path):
+    """1 or 2 for an AppImage (ELF magic \x7fELF + AI + Type 1/2), else 0."""
+    try:
+        with open(path, "rb") as file:
+            head = file.read(11)
+        if len(head) == 11 and head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10] in (1, 2):
+            return head[10]
+    except OSError:
+        pass
+    return 0
+
+
+def is_appimage(path):
+    """Whether a path is an AppImage file, checking extension or binary header."""
+    try:
+        if not path.is_file() or path.is_symlink():
+            return False
+        if path.name.lower().endswith(".appimage"):
+            return True
+        return appimage_type(path) != 0
+    except OSError:
+        return False
+
+
+def appimages():
+    """The AppImage files in Home: those the launcher starts, standard folders (~/AppImages, ~/Applications, etc.), and any in Home."""
+    found = set()
+    # du -x leaves drives mounted inside Home out of its sizes, so their AppImages stay out too,
+    # and a network mount that stopped answering is never walked.
+    elsewhere = mounts_in(HOME)
+
+    def on_home_drive(path):
+        return not any(path.is_relative_to(point) for point in elsewhere)
+
+    # 1. Launcher desktop entries across user, system, and flatpak locations
+    desktop_dirs = [
+        APPLICATIONS,
+        Path("/usr/share/applications"),
+        Path("/usr/local/share/applications"),
+    ]
+    try:
+        desktop_dirs.extend(HOME.glob(".var/app/*/data/applications"))
+    except OSError:
+        pass
+
+    for folder in desktop_dirs:
+        if not folder.exists():
+            continue
+        try:
+            entries = folder.glob("*.desktop")
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                lines = entry.read_text(errors="ignore").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                line = line.strip()
+                for prefix in ("X-Mainstream-AppImage=", "X-Gearlever-Location=", "X-AppImage-Old-Exec=", "Exec=", "TryExec="):
+                    if line.startswith(prefix):
+                        val = line[len(prefix):].strip()
+                        try:
+                            words = shlex.split(val)
+                        except ValueError:
+                            words = val.split()
+                        for word in words:
+                            word = word.strip("\"'")
+                            if word.startswith("/") or word.startswith("~"):
+                                candidate = Path(os.path.expanduser(word))
+                                if candidate.is_relative_to(HOME) and on_home_drive(candidate) and is_appimage(candidate):
+                                    found.add(candidate)
+
+    # 2. Designated and common AppImage folders (including ~/AppImages)
+    for folder in APPIMAGE_DIRS:
+        if not on_home_drive(folder) or not folder.exists():
+            continue
+        for where, dirs, names in os.walk(folder):
+            try:
+                rel = Path(where).relative_to(folder)
+                if len(rel.parts) > 3:
+                    dirs.clear()
+                    continue
+            except ValueError:
+                pass
+            dirs[:] = [name for name in dirs if on_home_drive(Path(where, name))]
+            for name in names:
+                candidate = Path(where, name)
+                if is_appimage(candidate):
+                    found.add(candidate)
+
+    # 3. Fast depth-limited search across Home for any *.appimage outside cache/trash/git
+    try:
+        home_str = str(HOME)
+        output = run("find", home_str, "-xdev", "-maxdepth", "4",
+                     "(", "-path", f"{home_str}/.cache", "-o",
+                          "-path", f"{home_str}/.local/share/Trash", "-o",
+                          "-path", f"{home_str}/.git", ")", "-prune",
+                     "-o", "-type", "f", "-iname", "*.appimage", "-print")
+        for line in output.splitlines():
+            line = line.strip()
+            if line:
+                candidate = Path(line)
+                if candidate.is_relative_to(HOME) and is_appimage(candidate):
+                    found.add(candidate)
+    except Exception:
+        pass
+
+    return sorted(path for path in found
+                  if path.is_relative_to(HOME) and on_home_drive(path) and path.is_file() and not path.is_symlink())
+
+
 def usage():
     """What fills the disk. Home is measured once, a few levels deep, and read from for its parts."""
-    home = du(HOME, depth=3)
+    # Attribute AppImage inodes before walking Home so du also excludes any hard links
+    # to them from the directory totals, regardless of which folder is visited first.
+    images = appimages()
+    home = du(*images, HOME, depth=3)
     folders = user_folders()
     parts = {key: [path] for key, path in folders.items()}
     parts["games"] = [DATA / "Steam", HOME / ".steam/steam", HOME / "Games"]
@@ -156,7 +305,17 @@ def usage():
         inside = [other for other, _ in counted if other != path and other.is_relative_to(path)]
         nearest = [other for other in inside if not any(other != mid and other.is_relative_to(mid) for mid in inside)]
         sizes[key] += max(0, home[str(path)] - sum(home[str(other)] for other in nearest))
-    sizes["otherHome"] = max(0, home.get(str(HOME), 0) - sum(sizes.values()))
+    other_home = max(0, home.get(str(HOME), 0) - sum(sizes.values()))
+    kept = [image for image in images if str(image) in home]
+    sizes["appimages"] = sum(home[str(image)] for image in kept)
+    folder = Counter(image.parent for image in kept).most_common(1)
+    appimage_home_dir = HOME / "AppImages"
+    if any(image.is_relative_to(appimage_home_dir) for image in kept):
+        parts["appimages"] = [appimage_home_dir]
+    else:
+        default_dir = appimage_home_dir if appimage_home_dir.exists() else (HOME / "Applications" if (HOME / "Applications").exists() else HOME)
+        parts["appimages"] = [folder[0][0]] if folder else [default_dir]
+    sizes["otherHome"] = other_home
     home_device = device_of(HOME)
     for key, size in sizes.items():
         paths = parts.get(key, [HOME])
