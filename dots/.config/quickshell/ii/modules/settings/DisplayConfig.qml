@@ -3716,6 +3716,18 @@ except Exception:
         }
     }
 
+    // ── Section divider ─────────────────────────────────────────────────────
+    // Clear separation between staged monitor geometry canvas above and instant
+    // laptop lid / power settings below.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.topMargin: 8
+        Layout.bottomMargin: 8
+        implicitHeight: 1
+        visible: displayConfigPage.isLaptop
+        color: Appearance.colors.colOutlineVariant
+    }
+
     // ── Laptop Clamshell & Lid Behavior ─────────────────────────────────────
     ContentSection {
         objectName: "lidBehaviorSection"
@@ -3739,6 +3751,7 @@ except Exception:
             onCheckedChanged: {
                 if (checked === Config.options.display.clamshellMode) return;
                 Config.options.display.clamshellMode = checked;
+                Quickshell.execDetached(["bash", "-c", `"${Directories.home}/.config/hypr/hyprland/scripts/clamshell.sh" reconcile`]);
             }
         }
 
@@ -3750,6 +3763,7 @@ except Exception:
             onCheckedChanged: {
                 if (checked === Config.options.display.sleepOnLidClose) return;
                 Config.options.display.sleepOnLidClose = checked;
+                Quickshell.execDetached(["bash", "-c", `"${Directories.home}/.config/hypr/hyprland/scripts/clamshell.sh" reconcile`]);
             }
         }
     }

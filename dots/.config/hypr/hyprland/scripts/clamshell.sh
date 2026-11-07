@@ -6,6 +6,27 @@ set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mainstream"
 STATE_FILE="$STATE_DIR/clamshell-internal-monitor"
+UNIT="mainstream-lid-inhibit.service"
+
+is_inhibited() {
+  systemctl --user is-active --quiet "$UNIT" 2>/dev/null
+}
+
+inhibit_lid() {
+  if ! is_inhibited; then
+    systemd-run --user --quiet --collect --unit="$UNIT" \
+      --description="Mainstream Clamshell Lid Switch Inhibitor" \
+      --property=PartOf=graphical-session.target \
+      systemd-inhibit --what=handle-lid-switch --mode=block \
+      --who="Mainstream OS" --why="Laptop docked or sleep on lid close disabled" sleep infinity &
+  fi
+}
+
+uninhibit_lid() {
+  if is_inhibited; then
+    systemctl --user stop "$UNIT" 2>/dev/null || true
+  fi
+}
 
 # Find internal panel connector name (eDP-*, LVDS-*, DSI-*)
 get_internal_monitor() {
@@ -30,18 +51,19 @@ get_internal_monitor() {
 
 # Returns 0 if an external monitor is connected
 has_external_monitor() {
-  local internal="$1"
+  local internal="${1:-}"
+  [ -n "$internal" ] || internal=$(get_internal_monitor)
 
   # 1. Check Hyprland active monitors
   if command -v hyprctl >/dev/null 2>&1; then
     local ext_hypr
-    ext_hypr=$(hyprctl monitors -j 2>/dev/null | jq -r --arg int "$internal" '[.[] | select(.name != $int and .name != "HEADLESS-1")] | length' 2>/dev/null || echo "0")
+    ext_hypr=$(hyprctl monitors -j 2>/dev/null | jq -r --arg int "$internal" '[.[] | select(.name != $int and .name != "HEADLESS-1" and .disabled != true)] | length' 2>/dev/null || echo "0")
     if [ "$ext_hypr" -gt 0 ]; then
       return 0
     fi
   fi
 
-  # 2. Check sysfs DRM connection status
+  # 2. Check sysfs DRM connection status (including USB-C and Unknown dock connectors)
   for status in /sys/class/drm/card*-*/status; do
     [ -f "$status" ] || continue
     local connector
@@ -112,6 +134,16 @@ get_sleep_on_lid_close() {
   return 0
 }
 
+reconcile_inhibitor() {
+  local internal
+  internal=$(get_internal_monitor)
+  if has_external_monitor "$internal" || ! get_sleep_on_lid_close; then
+    inhibit_lid
+  else
+    uninhibit_lid
+  fi
+}
+
 save_internal_state() {
   local internal="$1"
   mkdir -p "$STATE_DIR"
@@ -136,19 +168,27 @@ handle_close() {
   if has_external_monitor "$internal"; then
     case "$mode" in
       clamshell)
+        inhibit_lid
         save_internal_state "$internal"
         hyprctl keyword monitor "$internal, disable" >/dev/null 2>&1 || true
         ;;
       suspend)
+        uninhibit_lid
+        loginctl lock-session >/dev/null 2>&1 || true
         systemctl suspend >/dev/null 2>&1 || true
         ;;
       ignore)
-        # Keep internal screen and session active without disabling output
+        inhibit_lid
         ;;
     esac
   else
     if get_sleep_on_lid_close; then
+      uninhibit_lid
+      # Lock session immediately so display is protected prior to suspend
+      loginctl lock-session >/dev/null 2>&1 || true
       systemctl suspend >/dev/null 2>&1 || true
+    else
+      inhibit_lid
     fi
   fi
 }
@@ -157,6 +197,8 @@ handle_open() {
   local internal
   internal=$(get_internal_monitor)
   [ -n "$internal" ] || exit 0
+
+  reconcile_inhibitor
 
   if [ -s "$STATE_FILE" ]; then
     read -r mode pos scale < "$STATE_FILE" || true
@@ -175,6 +217,8 @@ handle_check() {
   local internal
   internal=$(get_internal_monitor)
   [ -n "$internal" ] || exit 0
+
+  reconcile_inhibitor
 
   local mode
   mode=$(get_clamshell_setting)
@@ -196,8 +240,11 @@ case "${1:-check}" in
   check)
     handle_check
     ;;
+  reconcile)
+    reconcile_inhibitor
+    ;;
   *)
-    echo "Usage: $0 {close|open|check}" >&2
+    echo "Usage: $0 {close|open|check|reconcile}" >&2
     exit 1
     ;;
 esac

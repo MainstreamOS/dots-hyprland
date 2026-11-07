@@ -211,6 +211,19 @@ ContentPage {
 
             Item { Layout.fillWidth: true }
         }
+
+        ConfigSwitch {
+            visible: Battery.available && !Battery.testMode
+            buttonIcon: "bedtime"
+            text: Translation.tr("Sleep on lid close")
+            tooltipText: Translation.tr("Suspend the laptop when the lid is closed without an external display connected.")
+            checked: Config.options.display.sleepOnLidClose
+            onCheckedChanged: {
+                if (checked === Config.options.display.sleepOnLidClose) return;
+                Config.options.display.sleepOnLidClose = checked;
+                Quickshell.execDetached(["bash", "-c", `"${Directories.home}/.config/hypr/hyprland/scripts/clamshell.sh" reconcile`]);
+            }
+        }
     }
 
     // ── Session Menu ──────────────────────────────────────────────────────────
