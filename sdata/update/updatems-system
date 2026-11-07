@@ -76,6 +76,9 @@ ROOT_FILES=(
     "0644|sdata/polkit/org.mainstreamos.ollama-setup.policy|/usr/share/polkit-1/actions/org.mainstreamos.ollama-setup.policy"
     "0755|sdata/polkit/ai-cli-install|/usr/local/bin/ai-cli-install"
     "0644|sdata/polkit/org.mainstreamos.ai-cli-install.policy|/usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy"
+    "0755|sdata/polkit/mainstream-efi-resize|/usr/local/bin/mainstream-efi-resize"
+    "0644|sdata/polkit/mainstream-efi-resize-recover.service|/usr/lib/systemd/system/mainstream-efi-resize-recover.service"
+    "0644|sdata/polkit/org.mainstreamos.efi-resize.policy|/usr/share/polkit-1/actions/org.mainstreamos.efi-resize.policy"
     "0755|dots/.config/quickshell/ii/scripts/colors/sddm-bg-helper.sh|/usr/local/bin/sddm-bg-helper"
     "0644|sdata/polkit/org.illogicalimpulse.sddm-bg.policy|/usr/share/polkit-1/actions/org.illogicalimpulse.sddm-bg.policy"
     "0644|sdata/polkit/50-sddm-bg.rules|/usr/share/polkit-1/rules.d/50-sddm-bg.rules"
@@ -97,6 +100,18 @@ if [[ "${1:-}" == --list-root-files ]]; then
 fi
 
 [[ $EUID -eq 0 ]] || { echo "updatems-system: must run as root" >&2; exit 1; }
+# Keep the resize out for this update, including boot writes outside pacman.
+mkdir -p /run/lock
+if ! { exec 8>>/run/lock/mainstream-efi-resize.lock; } || ! flock -s -n 8; then
+    echo "Wait for the EFI resize to finish before updating." >&2
+    exit 1
+fi
+{ enable -f /usr/lib/bash/fdflags fdflags && fdflags -s +cloexec 8; } 2>/dev/null || true
+if [[ -e /var/lib/mainstream/efi-resize.pending ]]; then
+    echo "Complete EFI resize recovery before updating: sudo mainstream-efi-resize recover" >&2
+    echo "If recovery keeps failing, go back to the original EFI partition: sudo mainstream-efi-resize cancel" >&2
+    exit 1
+fi
 
 # Resolve REPO_DIR. Argument > $SUDO_USER's clone > $HOME's clone.
 if [[ -n "${1:-}" ]]; then

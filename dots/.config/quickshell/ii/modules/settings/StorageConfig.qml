@@ -8,6 +8,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
+import qs.modules.settings.storage
 
 ContentPage {
     id: root
@@ -21,6 +22,7 @@ ContentPage {
     readonly property int shownEntries: 40
 
     property var disks: []
+    property var efi: null
     property var usage: ({})
     property var cleanups: ({})
     property bool rescanWanted: false
@@ -194,6 +196,8 @@ ContentPage {
                 if (entry.kind === "disk") {
                     scanner.freshDisks = scanner.freshDisks.concat([entry]);
                     root.disks = scanner.freshDisks;
+                } else if (entry.kind === "efi") {
+                    root.efi = entry;
                 } else if (entry.kind === "usage") {
                     root.usage = Object.assign({}, root.usage, { [entry.id]: entry });
                 } else if (entry.kind === "clean") {
@@ -823,5 +827,103 @@ ContentPage {
                 largest: root.largeFiles[0]?.size ?? 1
             }
         }
+    }
+
+    // ── EFI Boot Partition ──────────────────────────────────────────────────
+    ContentSection {
+        id: efiSection
+        objectName: "efiBootSection"
+        visible: root.efi !== null
+        icon: "developer_board"
+        title: Translation.tr("EFI Boot Partition")
+
+        StyledText {
+            Layout.fillWidth: true
+            text: Translation.tr("Holds bootloader binaries, Unified Kernel Images (UKIs), and system recovery files.")
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.WordWrap
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.bottomMargin: 8
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                StyledText {
+                    text: Translation.tr("%1 free").arg(root.formatSize(root.efi ? root.efi.free : 0))
+                    font.pixelSize: Appearance.font.pixelSize.title
+                    color: Appearance.colors.colOnLayer1
+                }
+                Item { Layout.fillWidth: true }
+                StyledText {
+                    Layout.alignment: Qt.AlignBottom
+                    text: Translation.tr("%1 of %2 used on %3").arg(root.formatSize(root.efi ? root.efi.used : 0))
+                        .arg(root.formatSize(root.efi ? (root.efi.part_bytes ?? root.efi.total) : 0)).arg(root.efi ? root.efi.mount : "/boot/efi")
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                }
+            }
+
+            // Storage bar
+            Item {
+                id: efiBar
+                Layout.fillWidth: true
+                implicitHeight: 22
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 8
+                    color: Appearance.surfaces.row
+                }
+
+                Rectangle {
+                    readonly property real usedRatio: root.efi && root.efi.total > 0 ? (root.efi.used / root.efi.total) : 0
+                    width: Math.max(14, efiBar.width * usedRatio)
+                    height: parent.height
+                    radius: 8
+                    color: (root.efi && root.efi.free < 150 * 1024 * 1024) ? Appearance.colors.colWarning : Appearance.colors.colPrimary
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                StyledText {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: `${root.efi ? root.efi.device : ""} • FAT32 (ESP)`
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                }
+
+                Item { Layout.fillWidth: true }
+
+                RippleButtonWithIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    materialIcon: "aspect_ratio"
+                    mainText: Translation.tr("Expand size...")
+                    onClicked: efiResizeDialog.open()
+                }
+            }
+
+            // Low space warning if free space < 150 MB
+            NoticeBox {
+                Layout.fillWidth: true
+                visible: root.efi && (root.efi.free < 150 * 1024 * 1024)
+                materialIcon: "warning"
+                text: Translation.tr("Low space on EFI partition. Kernel updates and Unified Kernel Images (UKIs) may fail if this runs out.")
+            }
+        }
+    }
+
+    EfiResizeDialog {
+        id: efiResizeDialog
+        targetArea: root
+        efiData: root.efi
+        onResizeCompleted: root.rescan()
     }
 }

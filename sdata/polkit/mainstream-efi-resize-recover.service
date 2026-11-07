@@ -1,0 +1,12 @@
+[Unit]
+Description=Complete an interrupted Mainstream EFI resize
+After=local-fs.target
+Before=multi-user.target graphical.target
+ConditionPathExists=/var/lib/mainstream/efi-resize.pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mainstream-efi-resize recover
+
+[Install]
+WantedBy=multi-user.target

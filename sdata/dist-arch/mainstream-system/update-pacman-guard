@@ -2,6 +2,15 @@
 # Pacman's pre-transaction reminder for a complete desktop update.
 set -euo pipefail
 
+if [[ -e /var/lib/mainstream/efi-resize.pending ]]; then
+    echo "Complete EFI resize recovery before changing system packages: sudo mainstream-efi-resize recover" >&2
+    echo "If recovery keeps failing, go back to the original EFI partition: sudo mainstream-efi-resize cancel" >&2
+    exit 1
+fi
+if [[ -e /run/lock/mainstream-efi-resize.lock ]] && ! (flock -s -n 8) 8</run/lock/mainstream-efi-resize.lock; then
+    echo "Wait for the EFI resize to finish before changing system packages." >&2
+    exit 1
+fi
 [[ ${MAINSTREAM_UPDATE_PACMAN:-0} == 1 ]] && exit 0
 [[ -r /proc/$PPID/cmdline ]] || exit 0
 mapfile -d '' -t args < "/proc/$PPID/cmdline"

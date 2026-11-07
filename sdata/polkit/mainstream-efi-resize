@@ -1,0 +1,1112 @@
+#!/usr/bin/env bash
+# mainstream-efi-resize: grows the EFI system partition for Settings > Storage, run through pkexec.
+# Grows it in place when free space follows it; otherwise builds a new one in free space, or in
+# space taken from the end of a single-device Btrfs, and moves the mount over once it checks out.
+#
+# Usage: mainstream-efi-resize probe [target_mb] | plan | resize <target_mb> | recover | cancel,
+# printing JSON progress lines.
+
+set -euo pipefail
+export LC_ALL=C
+# Settings may close mid-run and take the progress pipe with it; the resize still has to finish.
+trap '' PIPE HUP
+
+MIN_TARGET_MB=1024
+MAX_TARGET_MB=16384
+BTRFS_SAFETY_MARGIN_BYTES=$((4 * 1024 * 1024 * 1024)) # Keep >= 4 GiB free on root Btrfs
+SHRINK_CUSHION_BYTES=$((128 * 1024 * 1024))          # 128 MiB temporary cushion during GPT shrink
+ESP_GPT_TYPE="C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+
+FSTAB_PATH="${EFI_RESIZE_FSTAB:-/etc/fstab}"
+BOOT_LOCK="${EFI_RESIZE_LOCK:-/run/lock/boot-partition.lock}"
+BACKUP_BASE="${EFI_RESIZE_BACKUP_BASE:-/var/cache/mainstream}"
+CUTOVER_STATE="${EFI_RESIZE_STATE:-/var/lib/mainstream/efi-resize.pending}"
+RESIZE_LOCK=/run/lock/mainstream-efi-resize.lock
+MOUNT_OVERRIDE="${EFI_RESIZE_MOUNT:-}"
+SKIP_NVRAM="${EFI_RESIZE_SKIP_NVRAM:-0}"
+FORCE_UEFI="${EFI_RESIZE_FORCE_UEFI:-0}"
+MIN_FREE_OVERRIDE="${EFI_RESIZE_BTRFS_MARGIN_BYTES:-}"
+if [[ -n "$MIN_FREE_OVERRIDE" && "$MIN_FREE_OVERRIDE" =~ ^[0-9]+$ ]]; then
+    BTRFS_SAFETY_MARGIN_BYTES="$MIN_FREE_OVERRIDE"
+fi
+
+emit_progress() {
+    local step="$1" pct="$2" msg="$3"
+    jq -nc --arg step "$step" --argjson pct "$pct" --arg msg "$msg" \
+        '{step: $step, percent: $pct, message: $msg}' 2>/dev/null || true
+}
+
+die_json() {
+    local msg="$1"
+    jq -nc --arg msg "$msg" '{step: "error", percent: 0, error: true, message: $msg}' 2>/dev/null || true
+    exit 1
+}
+
+# Only a partition typed as the EFI System Partition, wherever it is mounted: a FAT data partition
+# at /efi or /boot/efi would otherwise be the one grown and formatted.
+is_esp_partition() {
+    local ptype
+    ptype="$(lsblk -dno PARTTYPE "$1" 2>/dev/null || true)"
+    # A minimal recovery environment may have no udev partition properties yet.
+    [[ -n "$ptype" ]] || ptype="$(blkid -p -s PART_ENTRY_TYPE -o value "$1" 2>/dev/null || true)"
+    [[ "${ptype,,}" == "${ESP_GPT_TYPE,,}" ]]
+}
+
+find_esp_mount() {
+    if [[ -n "$MOUNT_OVERRIDE" ]]; then
+        if mountpoint -q "$MOUNT_OVERRIDE" 2>/dev/null; then
+            local fstype src
+            fstype="$(findmnt -n -o FSTYPE -M "$MOUNT_OVERRIDE" 2>/dev/null || true)"
+            src="$(findmnt -nv -o SOURCE -M "$MOUNT_OVERRIDE" 2>/dev/null || true)"
+            if [[ "$fstype" == "vfat" && -b "$src" ]] && is_esp_partition "$src"; then
+                printf '%s\n' "$MOUNT_OVERRIDE"
+                return 0
+            fi
+        fi
+        return 1
+    fi
+
+    local mp fstype src
+    for mp in /boot/efi /efi /boot; do
+        mountpoint -q "$mp" 2>/dev/null || continue
+        fstype="$(findmnt -n -o FSTYPE -M "$mp" 2>/dev/null || true)"
+        [[ "$fstype" == "vfat" ]] || continue
+        src="$(findmnt -nv -o SOURCE -M "$mp" 2>/dev/null || true)"
+        [[ -n "$src" && -b "$src" ]] || continue
+        is_esp_partition "$src" || continue
+        printf '%s\n' "$mp"
+        return 0
+    done
+    return 1
+}
+
+resolve_parent_disk() {
+    local part_dev="$1" pk
+    pk="$(lsblk -dno PKNAME "$part_dev" 2>/dev/null | head -n1 || true)"
+    if [[ -n "$pk" ]]; then
+        printf '/dev/%s\n' "$pk"
+        return 0
+    fi
+    return 1
+}
+
+resolve_part_num() {
+    local part_dev="$1" base
+    base="$(basename "$part_dev")"
+    if [[ -r "/sys/class/block/$base/partition" ]]; then
+        cat "/sys/class/block/$base/partition"
+        return 0
+    fi
+    lsblk -dno PARTN "$part_dev" 2>/dev/null | tr -d ' '
+}
+
+part_path_for_num() {
+    local disk="$1" num="$2"
+    if [[ "$disk" =~ [0-9]$ ]]; then
+        printf '%sp%s\n' "$disk" "$num"
+    else
+        printf '%s%s\n' "$disk" "$num"
+    fi
+}
+
+# Resolves the live mountpoint for a block device (handling Btrfs [/subvol] sources)
+find_mount_for_dev() {
+    local target_dev="$1"
+    findmnt -rn -o SOURCE,TARGET 2>/dev/null | awk -v dev="$target_dev" '
+        {
+            src = $1
+            sub(/\[.*\]$/, "", src)
+            if (src == dev) {
+                if ($2 == "/") { root_hit = 1 }
+                else if (!first_hit) { first_hit = $2 }
+            }
+        }
+        END {
+            if (root_hit) print "/"
+            else if (first_hit) print first_hit
+        }
+    '
+}
+
+# Sets the ESP_*, DISK_LABEL, SECTOR_SIZE, *_LBA, STRATEGY, CAN_RESIZE, REASON, MAX_TARGET_BYTES, GAP_* and
+# TAIL_* globals: the ESP and how it can grow to $1 MB (default 2048).
+analyze_layout() {
+    local req_mb="$1"
+    local req_bytes
+
+    ESP_MNT=""
+    ESP_DEV=""
+    ESP_UUID=""
+    ESP_DISK=""
+    ESP_PARTN=0
+    ESP_TOTAL_BYTES=0
+    ESP_USED_BYTES=0
+    ESP_FREE_BYTES=0
+    STRATEGY="unsupported"
+    CAN_RESIZE="false"
+    REASON=""
+    MAX_TARGET_BYTES=0
+    GAP_START_SEC=0
+    GAP_SIZE_SEC=0
+    TAIL_DEV=""
+    TAIL_PARTN=0
+    TAIL_START_SEC=0
+    TAIL_SIZE_SEC=0
+    TAIL_FSTYPE=""
+    TAIL_MNT=""
+    TAIL_FREE_BYTES=0
+
+    if [[ "$FORCE_UEFI" != "1" && ! -d /sys/firmware/efi ]]; then
+        REASON="System booted in legacy BIOS mode rather than UEFI."
+        return 1
+    fi
+
+    ESP_MNT="$(find_esp_mount || true)"
+    if [[ -z "$ESP_MNT" ]]; then
+        REASON="No mounted FAT32 EFI System Partition found at /boot/efi, /efi, or /boot."
+        return 1
+    fi
+
+    ESP_DEV="$(findmnt -nv -o SOURCE -M "$ESP_MNT" 2>/dev/null || true)"
+    if [[ -z "$ESP_DEV" || ! -b "$ESP_DEV" ]]; then
+        REASON="Could not resolve backing block device for $ESP_MNT."
+        return 1
+    fi
+    if [[ "$ESP_DEV" == /dev/mapper/* || "$ESP_DEV" == /dev/dm-* || "$ESP_DEV" == /dev/md* ]]; then
+        REASON="EFI partition ($ESP_DEV) is on a mapped or RAID device."
+        return 1
+    fi
+
+    ESP_UUID="$(findmnt -n -o UUID -M "$ESP_MNT" 2>/dev/null || true)"
+    [[ -n "$ESP_UUID" ]] || ESP_UUID="$(blkid -s UUID -o value "$ESP_DEV" 2>/dev/null || true)"
+    ESP_DISK="$(resolve_parent_disk "$ESP_DEV" || true)"
+    ESP_PARTN="$(resolve_part_num "$ESP_DEV" || true)"
+    if [[ -z "$ESP_DISK" || ! -b "$ESP_DISK" || -z "$ESP_PARTN" ]]; then
+        REASON="Could not resolve parent disk or partition number for $ESP_DEV."
+        return 1
+    fi
+
+    ESP_TOTAL_BYTES="$(lsblk -bdno SIZE "$ESP_DEV" 2>/dev/null | tr -d ' ' || echo 0)"
+    if ! read -r ESP_USED_BYTES ESP_FREE_BYTES < <(df -B1 --output=used,avail "$ESP_MNT" 2>/dev/null | tail -n1) \
+        || [[ ! "$ESP_USED_BYTES" =~ ^[0-9]+$ || ! "$ESP_FREE_BYTES" =~ ^[0-9]+$ || ! "$ESP_TOTAL_BYTES" =~ ^[0-9]+$ ]]; then
+        ESP_TOTAL_BYTES=0 ESP_USED_BYTES=0 ESP_FREE_BYTES=0
+        REASON="Could not measure the EFI partition."
+        return 1
+    fi
+
+    if ! [[ "$req_mb" =~ ^[1-9][0-9]{3,4}$ ]] || (( req_mb < MIN_TARGET_MB || req_mb > MAX_TARGET_MB )); then
+        REASON="Target size must be between ${MIN_TARGET_MB} MB and ${MAX_TARGET_MB} MB."
+        return 1
+    fi
+    if (( req_mb <= ESP_TOTAL_BYTES / 1048576 + 32 )); then
+        REASON="Choose a target more than 32 MiB larger than the current EFI partition."
+        return 1
+    fi
+    if (( req_mb < ESP_USED_BYTES / 1048576 + 128 )); then
+        REASON="The target is too small for the current boot files."
+        return 1
+    fi
+
+    req_bytes=$(( req_mb * 1024 * 1024 ))
+    local sfdisk_json=""
+    sfdisk_json="$(sfdisk -J "$ESP_DISK" 2>/dev/null || true)"
+    local disk_base
+    disk_base="$(basename "$ESP_DISK")"
+
+    if [[ -n "$sfdisk_json" ]]; then
+        DISK_LABEL="$(jq -r '.partitiontable.label // ""' <<<"$sfdisk_json")"
+        SECTOR_SIZE="$(jq -r '.partitiontable.sectorsize // 512' <<<"$sfdisk_json")"
+        FIRST_LBA="$(jq -r '.partitiontable.firstlba // 2048' <<<"$sfdisk_json")"
+        LAST_LBA="$(jq -r '.partitiontable.lastlba // 0' <<<"$sfdisk_json")"
+        parts_tsv="$(jq -r '.partitiontable.partitions // [] | sort_by(.start) | .[] | "\(.start)\t\(.size)\t\(.node)"' <<<"$sfdisk_json")"
+    else
+        # Unprivileged probe fallback: read partition boundaries directly from world-readable sysfs
+        DISK_LABEL="$(lsblk -dno PTTYPE "$ESP_DISK" 2>/dev/null || true)"
+        if [[ "${2:-}" == resize ]]; then
+            REASON="The on-disk GPT could not be read."
+            return 1
+        fi
+        local logical_sector disk_sectors
+        logical_sector="$(cat "/sys/class/block/$disk_base/queue/logical_block_size" 2>/dev/null || echo 512)"
+        disk_sectors="$(cat "/sys/class/block/$disk_base/size" 2>/dev/null || echo 0)"
+        # sysfs units are always 512 bytes. Reserve the backup GPT header and entry array.
+        SECTOR_SIZE=512
+        FIRST_LBA=2048
+        LAST_LBA=$(( disk_sectors - 1 - (logical_sector + 16384) / 512 ))
+
+        local sys_parts=()
+        for p_dir in "/sys/class/block/$disk_base/"*; do
+            [[ -f "$p_dir/start" && -f "$p_dir/size" ]] || continue
+            local st sz p_name
+            st="$(< "$p_dir/start")"
+            sz="$(< "$p_dir/size")"
+            p_name="/dev/$(basename "$p_dir")"
+            sys_parts+=("$st	$sz	$p_name")
+        done
+        if (( ${#sys_parts[@]} > 0 )); then
+            parts_tsv="$(printf '%s\n' "${sys_parts[@]}" | sort -n -k1,1)"
+        else
+            parts_tsv=""
+        fi
+    fi
+
+    if [[ "${DISK_LABEL,,}" != "gpt" ]]; then
+        REASON="Disk $ESP_DISK uses ${DISK_LABEL:-unknown} partitioning; GPT is required."
+        return 1
+    fi
+    if [[ -z "$parts_tsv" ]]; then
+        REASON="Could not read partition table or partitions from $ESP_DISK."
+        return 1
+    fi
+
+    local align_sec=$(( 1048576 / SECTOR_SIZE ))
+    (( align_sec < 1 )) && align_sec=1
+
+    # Check partition count limit (GPT standard table has 128 slots)
+    local part_count
+    part_count="$(wc -l <<<"$parts_tsv" | tr -d ' ')"
+
+    # 1. Check contiguous free space immediately after ESP (inplace_grow)
+    local esp_start=0 esp_size=0 next_after_esp=$(( LAST_LBA + 1 ))
+    local prev_Was_esp=0 p_start p_size p_node
+    local best_gap_start=0 best_gap_sec=0 cursor="$FIRST_LBA"
+
+    while IFS=$'\t' read -r p_start p_size p_node; do
+        [[ -n "$p_start" ]] || continue
+        local aligned_cursor=$(( ((cursor + align_sec - 1) / align_sec) * align_sec ))
+        if (( p_start > aligned_cursor )); then
+            local gap_s=$(( p_start - aligned_cursor ))
+            if (( gap_s > best_gap_sec )); then
+                best_gap_sec="$gap_s"
+                best_gap_start="$aligned_cursor"
+            fi
+        fi
+        if (( prev_Was_esp == 1 )); then
+            next_after_esp="$p_start"
+            prev_Was_esp=0
+        fi
+        if [[ "$p_node" == "$ESP_DEV" ]]; then
+            esp_start="$p_start"
+            esp_size="$p_size"
+            prev_Was_esp=1
+        fi
+        cursor=$(( p_start + p_size ))
+        TAIL_START_SEC="$p_start"
+        TAIL_SIZE_SEC="$p_size"
+        TAIL_DEV="$p_node"
+    done <<<"$parts_tsv"
+
+    # Check trailing unallocated gap after the last partition
+    local aligned_tail_cursor=$(( ((cursor + align_sec - 1) / align_sec) * align_sec ))
+    if (( LAST_LBA + 1 > aligned_tail_cursor )); then
+        local tail_gap_s=$(( LAST_LBA + 1 - aligned_tail_cursor ))
+        if (( tail_gap_s > best_gap_sec )); then
+            best_gap_sec="$tail_gap_s"
+            best_gap_start="$aligned_tail_cursor"
+        fi
+    fi
+
+    if (( esp_start > 0 )); then
+        local max_inplace_sec=$(( next_after_esp - esp_start ))
+        local max_inplace_bytes=$(( max_inplace_sec * SECTOR_SIZE ))
+        if (( max_inplace_bytes >= req_bytes && max_inplace_bytes > ESP_TOTAL_BYTES + 32 * 1024 * 1024 )); then
+            STRATEGY="inplace_grow"
+            CAN_RESIZE="true"
+            MAX_TARGET_BYTES="$max_inplace_bytes"
+            GAP_START_SEC="$esp_start"
+            GAP_SIZE_SEC="$max_inplace_sec"
+            REASON="Contiguous unallocated space follows $ESP_DEV; partition can expand directly in place."
+            return 0
+        fi
+        if (( max_inplace_bytes > MAX_TARGET_BYTES )); then
+            MAX_TARGET_BYTES="$max_inplace_bytes"
+        fi
+    fi
+
+    # 2. Check unallocated GPT gap anywhere on disk for a new dedicated ESP
+    local best_gap_bytes=$(( best_gap_sec * SECTOR_SIZE ))
+    if (( part_count < 128 && best_gap_bytes >= req_bytes )); then
+        STRATEGY="new_esp_unallocated"
+        CAN_RESIZE="true"
+        MAX_TARGET_BYTES="$best_gap_bytes"
+        GAP_START_SEC="$best_gap_start"
+        GAP_SIZE_SEC="$best_gap_sec"
+        REASON="Unallocated space on $ESP_DISK can host a new dedicated EFI System Partition with zero filesystem shrinking."
+        return 0
+    fi
+    if (( best_gap_bytes > MAX_TARGET_BYTES )); then
+        MAX_TARGET_BYTES="$best_gap_bytes"
+    fi
+
+    # 3. Check tail partition for online Btrfs shrink + tail ESP creation
+    if [[ -n "$TAIL_DEV" && -b "$TAIL_DEV" && "$TAIL_DEV" != "$ESP_DEV" ]] && (( part_count < 128 )); then
+        TAIL_PARTN="$(resolve_part_num "$TAIL_DEV" || echo 0)"
+        TAIL_FSTYPE="$(lsblk -dno FSTYPE "$TAIL_DEV" 2>/dev/null | tr -d ' ' || true)"
+        TAIL_MNT="$(find_mount_for_dev "$TAIL_DEV" || true)"
+
+        if [[ "$TAIL_FSTYPE" == "crypto_LUKS" ]]; then
+            REASON="Partition $TAIL_DEV is LUKS-encrypted and no unallocated space exists on $ESP_DISK. Shrink the encrypted partition from a live USB to free disk space first."
+            return 1
+        fi
+
+        if [[ "$TAIL_FSTYPE" != "btrfs" ]]; then
+            REASON="Last partition $TAIL_DEV uses ${TAIL_FSTYPE:-unknown} (online shrink requires mounted Btrfs or unallocated disk space)."
+            return 1
+        fi
+
+        if [[ -z "$TAIL_MNT" ]]; then
+            REASON="Btrfs partition $TAIL_DEV is not currently mounted."
+            return 1
+        fi
+
+        # Refuse multi-device Btrfs pools
+        local btrfs_devs
+        btrfs_devs="$(btrfs filesystem show "$TAIL_MNT" 2>/dev/null | awk '/Total devices/ {print $3; exit}' || echo 0)"
+        if [[ "$btrfs_devs" != "1" && "${2:-}" != resize ]]; then
+            # The read-only preview can use sysfs when btrfs-progs needs administrator access.
+            local fs_uuid
+            fs_uuid="$(lsblk -dno UUID "$TAIL_DEV" 2>/dev/null || true)"
+            if [[ "$fs_uuid" =~ ^[[:xdigit:]-]+$ && -d "/sys/fs/btrfs/$fs_uuid/devices" ]]; then
+                local devices=("/sys/fs/btrfs/$fs_uuid/devices/"*)
+                if [[ -e "${devices[0]}" ]]; then btrfs_devs="${#devices[@]}"; fi
+            fi
+        fi
+        if [[ "$btrfs_devs" != "1" ]]; then
+            REASON="Btrfs volume at $TAIL_MNT spans multiple devices ($btrfs_devs); automatic single-disk shrink is disabled."
+            return 1
+        fi
+
+        TAIL_FREE_BYTES="$(df -B1 --output=avail "$TAIL_MNT" 2>/dev/null | tail -n1 | tr -d ' ' || echo 0)"
+        # Account for any trailing unallocated sectors already after TAIL_DEV
+        local trailing_unalloc_bytes=$(( (LAST_LBA - (TAIL_START_SEC + TAIL_SIZE_SEC) + 1) * SECTOR_SIZE ))
+        (( trailing_unalloc_bytes < 0 )) && trailing_unalloc_bytes=0
+
+        local shrinkable_bytes=$(( TAIL_FREE_BYTES + trailing_unalloc_bytes - BTRFS_SAFETY_MARGIN_BYTES - SHRINK_CUSHION_BYTES ))
+        if (( shrinkable_bytes > MAX_TARGET_BYTES )); then
+            MAX_TARGET_BYTES="$shrinkable_bytes"
+        fi
+
+        if (( shrinkable_bytes >= req_bytes )); then
+            STRATEGY="tail_btrfs_relocate"
+            CAN_RESIZE="true"
+            REASON="Will safely shrink Btrfs volume ($TAIL_MNT) at the end of $ESP_DISK and transition to a dedicated EFI System Partition."
+            return 0
+        else
+            local need_gb=$(( (req_bytes + BTRFS_SAFETY_MARGIN_BYTES + SHRINK_CUSHION_BYTES) / (1024 * 1024 * 1024) + 1 ))
+            REASON="Insufficient free space on $TAIL_MNT ($(( TAIL_FREE_BYTES / (1024 * 1024 * 1024) )) GiB available; at least ${need_gb} GiB free required)."
+            return 1
+        fi
+    fi
+
+    REASON="No supported online expansion path found on $ESP_DISK."
+    return 1
+}
+
+cmd_probe() {
+    local req_mb="${1:-2048}"
+    if [[ ! "$req_mb" =~ ^[0-9]+$ ]]; then
+        req_mb=2048
+    fi
+    analyze_layout "$req_mb" || true
+
+    jq -nc \
+        --arg mount "${ESP_MNT:-}" \
+        --arg device "${ESP_DEV:-}" \
+        --arg uuid "${ESP_UUID:-}" \
+        --arg disk "${ESP_DISK:-}" \
+        --argjson part_num "${ESP_PARTN:-0}" \
+        --argjson total_bytes "${ESP_TOTAL_BYTES:-0}" \
+        --argjson used_bytes "${ESP_USED_BYTES:-0}" \
+        --argjson free_bytes "${ESP_FREE_BYTES:-0}" \
+        --arg strategy "${STRATEGY:-unsupported}" \
+        --argjson can_resize "${CAN_RESIZE:-false}" \
+        --arg reason "${REASON:-}" \
+        --argjson max_target_bytes "${MAX_TARGET_BYTES:-0}" \
+        --arg tail_device "${TAIL_DEV:-}" \
+        --arg tail_fstype "${TAIL_FSTYPE:-}" \
+        --arg tail_mount "${TAIL_MNT:-}" \
+        --argjson tail_free_bytes "${TAIL_FREE_BYTES:-0}" \
+        '{
+            mount: $mount,
+            device: $device,
+            uuid: $uuid,
+            disk: $disk,
+            part_num: $part_num,
+            total_bytes: $total_bytes,
+            used_bytes: $used_bytes,
+            free_bytes: $free_bytes,
+            strategy: $strategy,
+            can_resize: $can_resize,
+            reason: $reason,
+            max_target_bytes: $max_target_bytes,
+            tail_device: $tail_device,
+            tail_fstype: $tail_fstype,
+            tail_mount: $tail_mount,
+            tail_free_bytes: $tail_free_bytes
+        }'
+}
+
+# Settings asks for the same plan the writer uses, once per offered size.
+cmd_plan() {
+    local target plans='[]' why="" first=""
+    for target in 1024 2048 4096 8192; do
+        if analyze_layout "$target"; then
+            plans="$(jq -c --argjson size "$target" --arg strategy "$STRATEGY" --arg reason "$REASON" \
+                '. + [{target_mb:$size,strategy:$strategy,reason:$reason}]' <<<"$plans")"
+        else
+            [[ -n "$first" ]] || first="$REASON"
+            # A size the partition already has says nothing about why it cannot grow.
+            if [[ -z "$why" ]] && (( target > ESP_TOTAL_BYTES / 1048576 + 32 )); then
+                why="$REASON"
+            fi
+        fi
+    done
+    [[ -n "$ESP_MNT" && "$ESP_TOTAL_BYTES" -gt 0 ]] || return 0
+    jq -nc --arg mount "$ESP_MNT" --arg device "$ESP_DEV" --arg uuid "$ESP_UUID" \
+        --argjson used "$ESP_USED_BYTES" --argjson free "$ESP_FREE_BYTES" --argjson part "$ESP_TOTAL_BYTES" \
+        --argjson plans "$plans" --arg reason "${why:-$first}" \
+        '{kind:"efi",fstype:"vfat",mount:$mount,device:$device,uuid:$uuid,used:$used,free:$free,
+          total:($used+$free),part_bytes:$part,resize_plans:$plans,reason:(if $plans == [] then $reason else "" end)}'
+}
+
+refresh_kernel_parttable() {
+    local disk="$1"
+    if command -v partprobe >/dev/null 2>&1; then
+        partprobe "$disk" 2>/dev/null || true
+    fi
+    if command -v partx >/dev/null 2>&1; then
+        partx -u "$disk" 2>/dev/null || true
+    fi
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm settle --timeout=10 2>/dev/null || true
+    fi
+}
+
+# Whether the kernel holds a partition at the start and size just written, in SECTOR_SIZE sectors.
+# A refresh can report success and still leave the old geometry in place.
+kernel_part_is() {
+    local dev="$1" want_start="$2" want_size="$3" name
+    [[ -b "$dev" ]] || return 1
+    name="$(basename "$(readlink -f "$dev")")"
+    [[ -r "/sys/class/block/$name/start" && -r "/sys/class/block/$name/size" ]] || return 1
+    # sysfs counts 512-byte sectors, whatever the disk's own sector size.
+    (( $(< "/sys/class/block/$name/start") * 512 == want_start * SECTOR_SIZE
+        && $(< "/sys/class/block/$name/size") * 512 == want_size * SECTOR_SIZE ))
+}
+
+# The same geometry in the partition table on the disk itself.
+disk_part_is() {
+    local dev="$1" want_start="$2" want_size="$3" line
+    line="$(sfdisk -d "$ESP_DISK" 2>/dev/null | awk -v d="$dev" '$1 == d && $2 == ":"')"
+    [[ "$line" =~ start=\ *([0-9]+) ]] && (( BASH_REMATCH[1] == want_start )) || return 1
+    [[ "$line" =~ size=\ *([0-9]+) ]] && (( BASH_REMATCH[1] == want_size ))
+}
+
+# A rollback that could not finish says so, in place of the error that started it.
+rollback_incomplete() {
+    jq -nc --arg msg "$1" '{step: "error", percent: 0, error: true, message: $msg}' 2>/dev/null || true
+}
+
+# Refreshes for up to five seconds until the kernel holds that geometry.
+await_kernel_part() {
+    local tries
+    for (( tries = 0; tries < 25; tries++ )); do
+        kernel_part_is "$@" && return 0
+        sleep 0.2
+        refresh_kernel_parttable "$ESP_DISK"
+    done
+    return 1
+}
+
+copy_esp_tree() {
+    local src_dir="$1" dst_dir="$2"
+    rsync -rltD --no-perms --no-owner --no-group --modify-window=2 "$src_dir/" "$dst_dir/"
+    sync
+}
+
+verify_esp_contents() {
+    local src_dir="$1" dst_dir="$2"
+    diff -rq "$src_dir" "$dst_dir" >/dev/null 2>&1 || return 1
+    if [[ -f "$dst_dir/limine.conf" ]] && command -v mainstream-boot-verify >/dev/null 2>&1; then
+        local rc=0
+        # Quick: a rebuild would wait on the boot lock held here, and would write the live partition, not this copy.
+        MAINSTREAM_ESP="$dst_dir" MAINSTREAM_BOOT_LOCK="/run/lock/efi-resize-inner.lock" \
+            mainstream-boot-verify --repair --quick >/dev/null 2>&1 || rc=$?
+        # Exit codes 0 (valid) and 3 (repaired from backup) mean bootable
+        if (( rc != 0 && rc != 3 )); then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Atomically point the configured mount at the replacement FAT volume.
+update_fstab_esp_uuid() {
+    local mp="$1" new_uuid="$2" tmp
+    [[ -f "$FSTAB_PATH" ]] || return 1
+    tmp="$(mktemp "${FSTAB_PATH}.efi-resize.XXXXXX")" || return 1
+    if awk -v mp="$mp" -v uuid="$new_uuid" '
+        /^[[:space:]]*#/ || NF < 3 { print; next }
+        $2 == mp { $1 = "UUID=" uuid; updated = 1 }
+        { print }
+        END {
+            if (!updated) printf "UUID=%s\t%s\tvfat\tumask=0077\t0 2\n", uuid, mp
+        }
+    ' "$FSTAB_PATH" > "$tmp" && chmod --reference="$FSTAB_PATH" "$tmp" \
+        && mv -f -- "$tmp" "$FSTAB_PATH" && sync -f -- "$(dirname -- "$FSTAB_PATH")"; then
+        return 0
+    fi
+    rm -f -- "$tmp"
+    return 1
+}
+
+loader_on_esp() {
+    local dir="$1"
+    if [[ -f "$dir/EFI/limine/BOOTX64.EFI" ]]; then
+        printf '%s' '\EFI\limine\BOOTX64.EFI'
+    elif [[ -f "$dir/EFI/systemd/systemd-bootx64.efi" ]]; then
+        printf '%s' '\EFI\systemd\systemd-bootx64.efi'
+    elif [[ -f "$dir/EFI/BOOT/BOOTX64.EFI" ]]; then
+        printf '%s' '\EFI\BOOT\BOOTX64.EFI'
+    else
+        return 1
+    fi
+}
+
+# A retry reuses any entry already created for this partition and loader.
+boot_entry_for() {
+    local entries="$1" guid="$2" loader="$3"
+    grep -iF "GPT,$guid," <<<"$entries" | grep -iF "$loader" \
+        | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*.*/\1/p' | head -n 1
+}
+
+nvram_skipped() {
+    [[ "$SKIP_NVRAM" == "1" ]] || [[ ! -d /sys/firmware/efi/efivars && "$FORCE_UEFI" == "1" ]]
+}
+
+# Sets BOOT_ENTRY to the firmware entry for this partition and loader, creating it when missing.
+# The new entry stays out of the boot order until promote_boot_entry.
+ensure_boot_entry() {
+    local dev="$1" guid="$2" loader="$3" entries disk partn
+    BOOT_ENTRY=""
+    entries="$(efibootmgr -v)" || return 1
+    BOOT_ENTRY="$(boot_entry_for "$entries" "$guid" "$loader" || true)"
+    [[ -z "$BOOT_ENTRY" ]] || return 0
+    disk="$(resolve_parent_disk "$dev")" && partn="$(resolve_part_num "$dev")" || return 1
+    # A firmware write can succeed even if the command exits with an error. Read back the result.
+    efibootmgr --create-only --disk "$disk" --part "$partn" --label "Mainstream" --loader "$loader" --unicode >/dev/null || true
+    entries="$(efibootmgr -v)" || return 1
+    BOOT_ENTRY="$(boot_entry_for "$entries" "$guid" "$loader" || true)"
+    [[ -n "$BOOT_ENTRY" ]]
+}
+
+promote_boot_entry() {
+    local num="$1" order first
+    order="$(efibootmgr | sed -n 's/^BootOrder: //p')" || return 1
+    first="${order%%,*}"
+    [[ "${first^^}" != "${num^^}" ]] || return 0
+    order="$(awk -F, -v num="$num" '{
+        printf "%s", num
+        for (i=1;i<=NF;i++) if ($i != "" && toupper($i) != toupper(num)) printf ",%s", $i
+    }' <<<"$order")"
+    efibootmgr -o "$order" >/dev/null || return 1
+    first="$(efibootmgr | sed -n 's/^BootOrder: //p' | cut -d, -f1)" || return 1
+    [[ "${first^^}" == "${num^^}" ]]
+}
+
+activate_esp() {
+    nvram_skipped && return 0
+    ensure_boot_entry "$@" && promote_boot_entry "$BOOT_ENTRY"
+}
+
+write_cutover_state() {
+    local mp="$1" old="$2" new="$3" uuid="$4" loader="$5" dir tmp
+    dir="$(dirname -- "$CUTOVER_STATE")"
+    mkdir -p "$dir"
+    tmp="$(mktemp "$dir/efi-resize.XXXXXX")"
+    jq -nc --arg mount "$mp" --arg old "$old" --arg new "$new" --arg uuid "$uuid" --arg loader "$loader" \
+        '{mount:$mount, old:$old, new:$new, uuid:$uuid, loader:$loader}' > "$tmp"
+    # Flushed before it takes its name, so a power cut never leaves an empty record behind.
+    sync -- "$tmp"
+    mv -f -- "$tmp" "$CUTOVER_STATE"
+    # Nothing can delete the verified replacement once the record might be durable.
+    ROLLBACK_DISK=""
+    ROLLBACK_BTRFS_MNT=""
+    ROLLBACK_BOOT_ENTRY=""
+    sync -f -- "$dir"
+}
+
+# Fills the caller's mp, old, guid, uuid and loader from the record.
+read_cutover_state() {
+    mp="$(jq -er '.mount' "$CUTOVER_STATE" 2>/dev/null)" && old="$(jq -er '.old' "$CUTOVER_STATE")" \
+        && guid="$(jq -er '.new' "$CUTOVER_STATE")" && uuid="$(jq -er '.uuid' "$CUTOVER_STATE")" \
+        && loader="$(jq -er '.loader' "$CUTOVER_STATE")" \
+        || die_json "The EFI resize record cannot be read. Boot updates are paused."
+    [[ "$mp" == /boot || "$mp" == /boot/efi || "$mp" == /efi || ( -n "$MOUNT_OVERRIDE" && "$mp" == "$MOUNT_OVERRIDE" ) ]] \
+        || die_json "The EFI resize record has an invalid mount path."
+    [[ "$guid" =~ ^[[:xdigit:]-]+$ && "$old" =~ ^[[:xdigit:]-]+$ && "$uuid" =~ ^[[:xdigit:]-]+$ ]] \
+        || die_json "The EFI resize record has an invalid partition identifier."
+}
+
+# The device mounted at $1, once any pending automount has fired.
+esp_mount_source() {
+    local src
+    stat -- "$1/." >/dev/null 2>&1 || true
+    src="$(findmnt -nv -o SOURCE -M "$1" 2>/dev/null | tail -n 1 || true)"
+    [[ -z "$src" ]] || readlink -f -- "$src"
+}
+
+# Moves the mount at $1 from $3 (empty when nothing is mounted) to $2. A device that will not
+# mount gives the mount back to the one it came from. Returns 2 when the mount is busy.
+switch_esp_mount() {
+    local mp="$1" dev="$2" current="$3" unit
+    if [[ -n "$current" ]]; then
+        unit="$(systemd-escape -p --suffix=automount "$mp" 2>/dev/null || true)"
+        if [[ -n "$unit" ]] && systemctl is-active --quiet "$unit" 2>/dev/null; then
+            AUTOMOUNT_UNIT="$unit"
+            systemctl stop "$unit" || return 2
+        fi
+        umount "$mp" || return 2
+    fi
+    mount -t vfat -o umask=0077 "$dev" "$mp" && return 0
+    [[ -z "$current" ]] || mount -t vfat -o umask=0077 "$current" "$mp" 2>/dev/null || true
+    return 1
+}
+
+finish_cutover() {
+    local mp old guid uuid loader dev current rc
+    read_cutover_state
+    dev="$(blkid -t "PARTUUID=$guid" -o device || true)"
+    [[ -b "$dev" && "$(blkid -s UUID -o value "$dev")" == "$uuid" ]] && is_esp_partition "$dev" \
+        || die_json "The replacement EFI partition could not be verified. Boot updates are paused."
+
+    current="$(esp_mount_source "$mp")"
+    if [[ "$current" != "$dev" ]]; then
+        [[ -z "$current" || "$(blkid -s PARTUUID -o value "$current")" == "$old" ]] \
+            || die_json "Another device is mounted at $mp. Boot updates are paused."
+        rc=0
+        switch_esp_mount "$mp" "$dev" "$current" || rc=$?
+        (( rc != 2 )) || die_json "The old EFI partition is still busy. Close files on it and retry EFI recovery."
+        (( rc == 0 )) || die_json "The replacement EFI partition could not be mounted. Boot updates are paused."
+    fi
+    local loader_path
+    loader_path="${loader//\\//}"
+    [[ -f "$mp/$loader_path" ]] || die_json "The replacement EFI loader is missing. Boot updates are paused."
+    activate_esp "$dev" "$guid" "$loader" || die_json "The new firmware boot entry could not be activated. Boot updates are paused."
+    update_fstab_esp_uuid "$mp" "$uuid" || die_json "Could not save the replacement EFI mount in fstab. Boot updates are paused."
+    if [[ "$(findmnt -en -o MAJ:MIN -M "$mp")" != "$(lsblk -dno MAJ:MIN "$dev")" ]]; then
+        die_json "The mounted EFI partition does not match the replacement. Boot updates are paused."
+    fi
+    if [[ -d /run/systemd/system ]]; then
+        systemctl daemon-reload
+    fi
+    rm -f -- "$CUTOVER_STATE"
+    sync -f -- "$(dirname -- "$CUTOVER_STATE")"
+    ESP_MNT="$mp"
+    ESP_DEV="$dev"
+}
+
+# Backs out of a prepared switch that cannot finish. The original partition takes the mount, fstab
+# and firmware order back, and the replacement is left in place, emptied so nothing boots from it.
+cancel_cutover() {
+    local mp old guid uuid loader old_dev old_uuid new_dev current rc entries num
+    read_cutover_state
+    old_dev="$(blkid -t "PARTUUID=$old" -o device || true)"
+    old_uuid=""
+    [[ ! -b "$old_dev" ]] || old_uuid="$(blkid -s UUID -o value "$old_dev" || true)"
+    [[ -n "$old_uuid" ]] && is_esp_partition "$old_dev" \
+        || die_json "The original EFI partition could not be verified, so the resize cannot be canceled."
+    new_dev="$(blkid -t "PARTUUID=$guid" -o device || true)"
+
+    current="$(esp_mount_source "$mp")"
+    if [[ "$current" != "$old_dev" ]]; then
+        [[ -z "$current" || "$current" == "$new_dev" ]] \
+            || die_json "Another device is mounted at $mp. Boot updates are paused."
+        rc=0
+        switch_esp_mount "$mp" "$old_dev" "$current" || rc=$?
+        (( rc != 2 )) || die_json "The EFI partition is busy. Close files on it and retry."
+        (( rc == 0 )) || die_json "The original EFI partition could not be mounted, so the resize was not canceled."
+    fi
+    if [[ ! -f "$mp/${loader//\\//}" ]]; then
+        [[ -z "$current" || "$current" == "$old_dev" ]] || switch_esp_mount "$mp" "$current" "$old_dev" || true
+        die_json "The original EFI loader is missing, so the resize was not canceled."
+    fi
+    if awk -v mp="$mp" -v src="UUID=$uuid" '!/^[[:space:]]*#/ && $2 == mp && $1 == src { found = 1 } END { exit !found }' "$FSTAB_PATH"; then
+        update_fstab_esp_uuid "$mp" "$old_uuid" \
+            || die_json "Could not put the original EFI mount back in fstab. Boot updates are paused."
+    fi
+    if ! nvram_skipped; then
+        entries="$(efibootmgr -v)" || die_json "The firmware boot entries could not be read. Boot updates are paused."
+        num="$(boot_entry_for "$entries" "$guid" "$loader" || true)"
+        if [[ -n "$num" ]]; then
+            efibootmgr -q -b "$num" -B >/dev/null 2>&1 || true
+            entries="$(efibootmgr -v)" || die_json "The firmware boot entries could not be read. Boot updates are paused."
+            num="$(boot_entry_for "$entries" "$guid" "$loader" || true)"
+            [[ -z "$num" ]] || die_json "The firmware entry for the replacement EFI partition could not be removed. Boot updates are paused."
+        fi
+    fi
+    if [[ -d /run/systemd/system ]]; then
+        systemctl daemon-reload
+    fi
+    # Its loader copy would still be found by firmware that scans every EFI partition.
+    local cleared=0
+    if [[ -b "$new_dev" && "$(blkid -s UUID -o value "$new_dev" 2>/dev/null || true)" == "$uuid" ]] \
+        && ! findmnt -n -S "$new_dev" >/dev/null 2>&1; then
+        wipefs -a "$new_dev" >/dev/null 2>&1 && cleared=1
+    fi
+    rm -f -- "$CUTOVER_STATE"
+    sync -f -- "$(dirname -- "$CUTOVER_STATE")"
+    if (( cleared )); then
+        emit_progress "done" 100 "The EFI resize was canceled. ${new_dev} was emptied and left in place."
+    else
+        emit_progress "done" 100 "The EFI resize was canceled. The unused replacement partition was left in place."
+    fi
+}
+
+find_next_free_partn() {
+    local disk="$1" sfdisk_json used_nums n
+    sfdisk_json="$(sfdisk -J "$disk")"
+    used_nums="$(jq -r '.partitiontable.partitions // [] | .[].node' <<<"$sfdisk_json" | while read -r nd; do
+        resolve_part_num "$nd" || true
+    done)"
+    for (( n = 1; n <= 128; n++ )); do
+        if ! grep -qx "$n" <<<"$used_nums"; then
+            printf '%s\n' "$n"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Variables tracked for emergency rollback
+BACKUP_DIR=""
+TMP_ESP_MNT=""
+SFDISK_BACKUP=""
+ROLLBACK_DISK=""
+ROLLBACK_BTRFS_MNT=""
+ROLLBACK_BOOT_ENTRY=""
+ROLLBACK_REMOUNT_DEV=""
+ROLLBACK_REMOUNT_TARGET=""
+AUTOMOUNT_UNIT=""
+ESP_FORMAT_STARTED=0
+ESP_VOL_ID=""
+
+# Once the old partition is reformatted only the backup holds its files, so they go back
+# onto it, formatting it again first if the failed format left nothing mountable.
+restore_esp_backup() {
+    [[ -n "$BACKUP_DIR" && -d "$BACKUP_DIR" ]] || return 0
+    emit_progress "restore" 0 "Putting the boot files back on ${ESP_DEV}..."
+    if ! mountpoint -q "$ESP_MNT" 2>/dev/null && ! mount "$ESP_DEV" "$ESP_MNT" 2>/dev/null; then
+        mkfs.vfat -F 32 -n "EFI" ${ESP_VOL_ID:+-i "$ESP_VOL_ID"} "$ESP_DEV" >/dev/null 2>&1 || return 1
+        mount "$ESP_DEV" "$ESP_MNT" || return 1
+    fi
+    copy_esp_tree "$BACKUP_DIR" "$ESP_MNT"
+}
+
+cleanup_and_rollback() {
+    local exit_code=$?
+    if [[ -n "$TMP_ESP_MNT" ]]; then
+        umount "$TMP_ESP_MNT" 2>/dev/null || true
+        rmdir "$TMP_ESP_MNT" 2>/dev/null || true
+    fi
+    # After the cutover is prepared, keep both ESPs and retry instead of undoing part of the switch.
+    if (( exit_code != 0 )) && [[ ! -e "$CUTOVER_STATE" ]]; then
+        if [[ -n "$ROLLBACK_BOOT_ENTRY" ]]; then
+            efibootmgr -q -b "$ROLLBACK_BOOT_ENTRY" -B >/dev/null 2>&1 || true
+        fi
+        if [[ -n "$ROLLBACK_DISK" && -n "$SFDISK_BACKUP" && -f "$SFDISK_BACKUP" ]]; then
+            if ! sfdisk --force --no-reread "$ROLLBACK_DISK" < "$SFDISK_BACKUP" >/dev/null 2>&1; then
+                rollback_incomplete "The partition table could not be put back; its backup is ${SFDISK_BACKUP}."
+            fi
+            refresh_kernel_parttable "$ROLLBACK_DISK"
+        fi
+        if [[ -n "$ROLLBACK_BTRFS_MNT" ]]; then
+            # Grown back only once both the table on disk and the kernel hold the partition at its old
+            # size again. Left smaller is safe; grown past the partition is not.
+            if disk_part_is "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC" \
+                && await_kernel_part "$TAIL_DEV" "$TAIL_START_SEC" "$TAIL_SIZE_SEC"; then
+                btrfs filesystem resize max "$ROLLBACK_BTRFS_MNT" >/dev/null 2>&1 || true
+            else
+                rollback_incomplete "Btrfs on ${TAIL_DEV} was left smaller, since its partition could not be confirmed back at its old size. The backups are in ${BACKUP_BASE}."
+            fi
+        fi
+        if (( ESP_FORMAT_STARTED )); then
+            restore_esp_backup || true
+        elif [[ -n "$ROLLBACK_REMOUNT_DEV" && -n "$ROLLBACK_REMOUNT_TARGET" ]]; then
+            if ! mountpoint -q "$ROLLBACK_REMOUNT_TARGET" 2>/dev/null; then
+                mount "$ROLLBACK_REMOUNT_DEV" "$ROLLBACK_REMOUNT_TARGET" 2>/dev/null || true
+            fi
+        fi
+    fi
+    if [[ -n "$AUTOMOUNT_UNIT" ]]; then
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl start "$AUTOMOUNT_UNIT" 2>/dev/null || true
+    fi
+    # Both backups stay after a failure, for recovery by hand.
+    if (( exit_code == 0 )); then
+        [[ -n "$BACKUP_DIR" && -d "$BACKUP_DIR" ]] && rm -rf "$BACKUP_DIR"
+        [[ -n "$SFDISK_BACKUP" && -f "$SFDISK_BACKUP" ]] && rm -f "$SFDISK_BACKUP"
+    fi
+    return 0
+}
+
+lock_resize() {
+    mkdir -p "$(dirname "$BOOT_LOCK")" "$(dirname "$RESIZE_LOCK")"
+    exec 8>"$RESIZE_LOCK" 9>"$BOOT_LOCK"
+    flock -w 30 8 && flock -w 30 9 \
+        || die_json "Boot partition is currently locked by another system update or snapshot task."
+    # Pacman holds its database lock from before the pre-transaction guard until after all boot hooks.
+    [[ ! -e /var/lib/pacman/db.lck ]] || die_json "Wait for the package transaction to finish before resizing EFI."
+}
+
+cmd_resize() {
+    local target_mb="${1:-}"
+    lock_resize
+
+    if [[ -e "$CUTOVER_STATE" ]]; then
+        trap cleanup_and_rollback EXIT
+        finish_cutover
+        emit_progress "done" 100 "The interrupted EFI resize was completed."
+        return 0
+    fi
+
+    emit_progress "preflight" 5 "Inspecting GPT layout and free space..."
+    if ! analyze_layout "$target_mb" resize; then
+        die_json "${REASON:-Unsupported partition layout.}"
+    fi
+    is_esp_partition "$ESP_DEV" || die_json "${ESP_DEV} is not an EFI System Partition; nothing was changed."
+
+    trap cleanup_and_rollback EXIT
+
+    mkdir -p -m 0700 "$BACKUP_BASE"
+    SFDISK_BACKUP="$(mktemp "$BACKUP_BASE/sfdisk-backup.XXXXXX")"
+    sfdisk -d "$ESP_DISK" > "$SFDISK_BACKUP"
+
+    local align_sec=$(( 1048576 / SECTOR_SIZE ))
+    (( align_sec < 1 )) && align_sec=1
+    local target_sec=$(( (target_mb * 1048576) / SECTOR_SIZE ))
+    target_sec=$(( (target_sec / align_sec) * align_sec ))
+
+    if [[ "$STRATEGY" == "inplace_grow" ]]; then
+        # ── Strategy 1: Grow existing ESP in place ──────────────────────────
+        if (( target_sec > GAP_SIZE_SEC )); then
+            target_sec="$GAP_SIZE_SEC"
+        fi
+
+        emit_progress "backup" 18 "Backing up EFI boot files from ${ESP_MNT}..."
+        BACKUP_DIR="$(mktemp -d "$BACKUP_BASE/efi-backup.XXXXXX")"
+        chmod 0700 "$BACKUP_DIR"
+        cp -a "$ESP_MNT/." "$BACKUP_DIR/"
+        sync
+
+        # Stop systemd automount unit if active so it doesn't remount during mkfs
+        local unit_escaped
+        unit_escaped="$(systemd-escape -p --suffix=automount "$ESP_MNT" 2>/dev/null || true)"
+        if [[ -n "$unit_escaped" ]] && systemctl is-active --quiet "$unit_escaped" 2>/dev/null; then
+            AUTOMOUNT_UNIT="$unit_escaped"
+            systemctl stop "$AUTOMOUNT_UNIT" 2>/dev/null || true
+        fi
+
+        emit_progress "partition" 40 "Unmounting ${ESP_MNT} and extending GPT partition ${ESP_DEV}..."
+        ROLLBACK_DISK="$ESP_DISK"
+        ROLLBACK_REMOUNT_DEV="$ESP_DEV"
+        ROLLBACK_REMOUNT_TARGET="$ESP_MNT"
+
+        umount "$ESP_MNT" || die_json "Could not unmount ${ESP_MNT}; close any open files on the boot partition."
+
+        # Extend partition end boundary via sfdisk
+        printf ',%s\n' "$target_sec" | sfdisk --force --no-reread -N "$ESP_PARTN" "$ESP_DISK" >/dev/null
+        refresh_kernel_parttable "$ESP_DISK"
+        await_kernel_part "$ESP_DEV" "$GAP_START_SEC" "$target_sec" \
+            || die_json "The kernel did not take the larger ${ESP_DEV}; nothing was formatted."
+
+        emit_progress "format" 60 "Formatting expanded FAT32 EFI System Partition..."
+        # In-place growth must keep the existing FAT volume ID.
+        ESP_VOL_ID="${ESP_UUID//-/}"
+        ESP_VOL_ID="${ESP_VOL_ID^^}"
+        [[ "$ESP_VOL_ID" =~ ^[0-9A-F]{8}$ ]] || die_json "The original EFI volume ID could not be read; nothing was formatted."
+        # From here the partition table stays grown, and a failure restores the files instead.
+        ROLLBACK_DISK=""
+        ESP_FORMAT_STARTED=1
+        mkfs.vfat -F 32 -n "EFI" -i "$ESP_VOL_ID" "$ESP_DEV" >/dev/null
+        refresh_kernel_parttable "$ESP_DISK"
+
+        emit_progress "restore" 78 "Mounting ${ESP_MNT} and restoring boot files..."
+        mount "$ESP_DEV" "$ESP_MNT"
+        copy_esp_tree "$BACKUP_DIR" "$ESP_MNT"
+
+        emit_progress "verify" 92 "Verifying bootloader integrity and UKI hashes..."
+        verify_esp_contents "$BACKUP_DIR" "$ESP_MNT" || die_json "Bootloader verification failed after restore (backup preserved at $BACKUP_DIR)."
+
+        local final_bytes
+        final_bytes="$(lsblk -bdno SIZE "$ESP_DEV" 2>/dev/null | tr -d ' ' || echo 0)"
+        if (( final_bytes < target_mb * 1024 * 1024 * 90 / 100 )); then
+            die_json "Kernel reported unchanged partition size (${final_bytes} bytes) on ${ESP_DEV}."
+        fi
+
+        if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
+
+        emit_progress "done" 100 "EFI boot partition expanded in place to $(( final_bytes / (1024 * 1024) )) MB."
+        return 0
+    fi
+
+    # ── Strategy 2 & 3: Build & verify new GPT ESP before atomic cutover ────
+    local new_esp_start=0 new_esp_sec="$target_sec"
+    local new_partn
+    new_partn="$(find_next_free_partn "$ESP_DISK")" || die_json "No free GPT partition number available on $ESP_DISK."
+    local new_esp_dev
+    new_esp_dev="$(part_path_for_num "$ESP_DISK" "$new_partn")"
+
+    if [[ "$STRATEGY" == "new_esp_unallocated" ]]; then
+        new_esp_start="$GAP_START_SEC"
+        if (( new_esp_sec > GAP_SIZE_SEC )); then
+            new_esp_sec="$GAP_SIZE_SEC"
+        fi
+        ROLLBACK_DISK="$ESP_DISK"
+        emit_progress "partition" 25 "Creating new ${target_mb} MB EFI System Partition (${new_esp_dev})..."
+        local updated_dump
+        updated_dump="$(cat "$SFDISK_BACKUP")"$'\n'"${new_esp_dev} : start= ${new_esp_start}, size= ${new_esp_sec}, type=${ESP_GPT_TYPE}, name=\"Mainstream EFI\""
+        sfdisk --force --no-reread "$ESP_DISK" <<<"$updated_dump" >/dev/null
+        refresh_kernel_parttable "$ESP_DISK"
+        await_kernel_part "$new_esp_dev" "$new_esp_start" "$new_esp_sec" \
+            || die_json "The kernel did not take the new partition ${new_esp_dev}; nothing was formatted."
+
+    elif [[ "$STRATEGY" == "tail_btrfs_relocate" ]]; then
+        new_esp_start=$(( ((LAST_LBA - new_esp_sec + 1) / align_sec) * align_sec ))
+        new_esp_sec=$(( ((LAST_LBA - new_esp_start + 1) / align_sec) * align_sec ))
+        local new_tail_end=$(( new_esp_start - 1 ))
+        local new_tail_size=$(( new_tail_end - TAIL_START_SEC + 1 ))
+        if (( new_tail_size <= align_sec )); then
+            die_json "Calculated shrunk partition size for ${TAIL_DEV} is invalid."
+        fi
+
+        local old_tail_bytes=$(( TAIL_SIZE_SEC * SECTOR_SIZE ))
+        local new_tail_bytes=$(( new_tail_size * SECTOR_SIZE ))
+        local shrink_bytes=$(( old_tail_bytes - new_tail_bytes + SHRINK_CUSHION_BYTES ))
+
+        emit_progress "shrink" 20 "Shrinking Btrfs filesystem (${TAIL_MNT}) to free ${target_mb} MB at end of disk..."
+        ROLLBACK_BTRFS_MNT="$TAIL_MNT"
+        btrfs filesystem resize "-${shrink_bytes}" "$TAIL_MNT" >/dev/null
+        btrfs filesystem sync "$TAIL_MNT" >/dev/null 2>&1 || sync
+
+        # Verify Btrfs logical device size is strictly <= new_tail_bytes before touching GPT!
+        local btrfs_cur_bytes
+        btrfs_cur_bytes="$(btrfs filesystem usage -b "$TAIL_MNT" 2>/dev/null | awk '/Device size:/ {print $3; exit}' || echo 0)"
+        if (( btrfs_cur_bytes == 0 || btrfs_cur_bytes > new_tail_bytes )); then
+            die_json "Btrfs volume size (${btrfs_cur_bytes}) did not shrink below target boundary (${new_tail_bytes}); aborting safely before partition edit."
+        fi
+
+        emit_progress "partition" 42 "Updating GPT boundaries and creating ${new_esp_dev}..."
+        ROLLBACK_DISK="$ESP_DISK"
+        local rewritten_dump
+        rewritten_dump="$(awk -v tdev="$TAIL_DEV" -v nsize="$new_tail_size" '
+            $1 == tdev && $2 == ":" {
+                sub(/size=[[:space:]]*[0-9]+/, "size= " nsize)
+            }
+            { print }
+        ' "$SFDISK_BACKUP")"$'\n'"${new_esp_dev} : start= ${new_esp_start}, size= ${new_esp_sec}, type=${ESP_GPT_TYPE}, name=\"Mainstream EFI\""
+
+        sfdisk --force --no-reread "$ESP_DISK" <<<"$rewritten_dump" >/dev/null
+        refresh_kernel_parttable "$ESP_DISK"
+        # Growing Btrfs to a partition the kernel still holds at its old size would run it into the new one.
+        await_kernel_part "$TAIL_DEV" "$TAIL_START_SEC" "$new_tail_size" \
+            && await_kernel_part "$new_esp_dev" "$new_esp_start" "$new_esp_sec" \
+            || die_json "The kernel did not take the new partition sizes; Btrfs was not grown and nothing was formatted."
+
+        emit_progress "reexpand" 55 "Snapping Btrfs filesystem to updated partition boundary..."
+        btrfs filesystem resize max "$TAIL_MNT" >/dev/null
+        btrfs filesystem sync "$TAIL_MNT" >/dev/null 2>&1 || sync
+    else
+        die_json "Unhandled resize strategy '${STRATEGY}'."
+    fi
+
+    kernel_part_is "$new_esp_dev" "$new_esp_start" "$new_esp_sec" \
+        || die_json "The kernel no longer holds ${new_esp_dev} where it was written; nothing was formatted."
+
+    emit_progress "format" 68 "Formatting new EFI System Partition (${new_esp_dev}) as FAT32..."
+    mkfs.vfat -F 32 -n "MSEFI" "$new_esp_dev" >/dev/null
+    refresh_kernel_parttable "$ESP_DISK"
+    local new_uuid=""
+    tries=0
+    while [[ -z "$new_uuid" ]] && (( tries < 15 )); do
+        new_uuid="$(blkid -s UUID -o value "$new_esp_dev" 2>/dev/null || lsblk -dno UUID "$new_esp_dev" 2>/dev/null | tr -d ' ' || true)"
+        [[ -n "$new_uuid" ]] && break
+        sleep 0.2
+        tries=$(( tries + 1 ))
+    done
+    [[ -n "$new_uuid" ]] || die_json "Could not read FAT32 UUID from ${new_esp_dev}."
+
+    emit_progress "copy" 80 "Copying bootloader and UKI images to ${new_esp_dev}..."
+    mkdir -p /run/mainstream
+    TMP_ESP_MNT="$(mktemp -d /run/mainstream/new-esp.XXXXXX)"
+    mount "$new_esp_dev" "$TMP_ESP_MNT"
+    copy_esp_tree "$ESP_MNT" "$TMP_ESP_MNT"
+
+    emit_progress "verify" 90 "Verifying UKIs and Limine pins on the new partition..."
+    verify_esp_contents "$ESP_MNT" "$TMP_ESP_MNT" || die_json "Verification of new EFI partition failed; rolling back cleanly."
+
+    local old_guid new_guid loader
+    [[ -f "$FSTAB_PATH" ]] || die_json "The EFI mount requires an fstab to relocate it."
+    loader="$(loader_on_esp "$TMP_ESP_MNT")" || die_json "No supported EFI loader was found."
+    old_guid="$(blkid -s PARTUUID -o value "$ESP_DEV")"
+    new_guid="$(blkid -s PARTUUID -o value "$new_esp_dev")"
+    # Firmware that will not keep the entry is found out while the resize can still be undone.
+    if ! nvram_skipped; then
+        ensure_boot_entry "$new_esp_dev" "$new_guid" "$loader" \
+            || die_json "The firmware did not keep a boot entry for the new EFI partition; rolling back cleanly."
+        ROLLBACK_BOOT_ENTRY="$BOOT_ENTRY"
+    fi
+    if [[ -d /run/systemd/system ]]; then
+        systemctl enable mainstream-efi-resize-recover.service >/dev/null 2>&1 \
+            || die_json "The EFI recovery service could not be enabled; rolling back cleanly."
+    fi
+    cp -a -- "$FSTAB_PATH" "${FSTAB_PATH}.bak-efi-resize"
+    sync -f -- "$(dirname -- "$FSTAB_PATH")"
+    umount "$TMP_ESP_MNT"
+    rmdir "$TMP_ESP_MNT"
+    TMP_ESP_MNT=""
+
+    emit_progress "cutover" 93 "Recording the EFI switch so it can finish after a restart..."
+    write_cutover_state "$ESP_MNT" "$old_guid" "$new_guid" "$new_uuid" "$loader"
+    finish_cutover
+
+    if command -v mainstream-limine-windows >/dev/null 2>&1 && [[ -f "$ESP_MNT/limine.conf" ]]; then
+        mainstream-limine-windows >/dev/null 2>&1 || true
+    fi
+
+    local final_bytes
+    final_bytes="$(lsblk -bdno SIZE "$new_esp_dev" 2>/dev/null | tr -d ' ' || echo 0)"
+    emit_progress "done" 100 "EFI boot partition expanded to $(( final_bytes / (1024 * 1024) )) MB on ${new_esp_dev}."
+}
+
+case "${1:-}" in
+    probe)
+        cmd_probe "${2:-2048}"
+        ;;
+    plan)
+        cmd_plan
+        ;;
+    resize)
+        cmd_resize "${2:-}"
+        ;;
+    recover)
+        [[ $EUID == 0 ]] || exit 1
+        [[ -e "$CUTOVER_STATE" ]] || exit 0
+        lock_resize
+        trap cleanup_and_rollback EXIT
+        if [[ -e "$CUTOVER_STATE" ]]; then finish_cutover; fi
+        ;;
+    cancel)
+        [[ $EUID == 0 ]] || exit 1
+        [[ -e "$CUTOVER_STATE" ]] || exit 0
+        lock_resize
+        trap cleanup_and_rollback EXIT
+        if [[ -e "$CUTOVER_STATE" ]]; then cancel_cutover; fi
+        ;;
+    *)
+        echo "Usage: $0 {probe [target_mb]|plan|resize <target_mb>|recover|cancel}" >&2
+        exit 1
+        ;;
+esac

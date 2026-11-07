@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+    <vendor>Mainstream OS</vendor>
+    <vendor_url>https://mainstreamos.org</vendor_url>
+    <icon_name>drive-harddisk</icon_name>
+
+    <action id="org.mainstreamos.efi-resize">
+        <description>Change EFI Boot Partition Size</description>
+        <description xml:lang="en_US">Change EFI Boot Partition Size</description>
+        <message>Authentication is required to resize the EFI boot partition</message>
+        <message xml:lang="en_US">Authentication is required to resize the EFI boot partition</message>
+        <defaults>
+            <allow_any>auth_admin</allow_any>
+            <allow_inactive>auth_admin</allow_inactive>
+            <allow_active>auth_admin_keep</allow_active>
+        </defaults>
+        <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/mainstream-efi-resize</annotate>
+        <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+    </action>
+</policyconfig>

@@ -1,0 +1,2 @@
+module qs.modules.settings.storage
+EfiResizeDialog 1.0 EfiResizeDialog.qml

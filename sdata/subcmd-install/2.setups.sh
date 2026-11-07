@@ -189,6 +189,17 @@ function setup_ollama_setup(){
       /usr/share/polkit-1/actions/org.mainstreamos.ai-cli-install.policy
 }
 
+function setup_efi_resize(){
+  # Install the privileged helper + polkit policy used by Settings -> Storage
+  # to safely resize the EFI system partition.
+  x sudo install -Dm755 "${REPO_ROOT}/sdata/polkit/mainstream-efi-resize" \
+      /usr/local/bin/mainstream-efi-resize
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/mainstream-efi-resize-recover.service" \
+      /usr/lib/systemd/system/mainstream-efi-resize-recover.service
+  x sudo install -Dm644 "${REPO_ROOT}/sdata/polkit/org.mainstreamos.efi-resize.policy" \
+      /usr/share/polkit-1/actions/org.mainstreamos.efi-resize.policy
+}
+
 function setup_kill_fprintd_service(){
   # Fix fingerprint bug when sleeping
   # Fprintd waits 30 seconds after a successful login before quitting, so sleeping during that time period may cause fprintd to break.
@@ -529,6 +540,9 @@ v setup_user_manager
 
 showfun setup_ollama_setup
 v setup_ollama_setup
+
+showfun setup_efi_resize
+v setup_efi_resize
 
 if command -v systemctl >/dev/null 2>&1; then
   # For Fedora, uinput is required for the virtual keyboard to function, and udev rules enable input group users to utilize it.

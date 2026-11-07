@@ -114,16 +114,16 @@ user_step() {
     STEP_TIMED_OUT=0
     STEP_LEAD=""
     if (( ! UNATTENDED )); then
-        runuser -u "$ORIG_USER" -- "$@" 9>&-
+        runuser -u "$ORIG_USER" -- "$@" 8>&- 9>&-
         return
     fi
     # A stop is held until both pids are known.
     trap 'stop_asked=1' INT TERM HUP
     # timeout sets no limit here; it gives the step a process group of its own.
-    runuser -u "$ORIG_USER" -- timeout 0 "$@" 9>&- &
+    runuser -u "$ORIG_USER" -- timeout 0 "$@" 8>&- 9>&- &
     STEP_PID=$!
     if (( limit > 0 )); then
-        sleep "$limit" 9>&- &
+        sleep "$limit" 8>&- 9>&- &
         STEP_TIMER=$!
     fi
     trap on_stop INT TERM HUP
@@ -263,6 +263,19 @@ if [[ ",${root_mount%% *}," == *,ro,* ]]; then
     exit 1
 fi
 
+# Keep the resize out for this update, including boot writes outside pacman.
+mkdir -p /run/lock
+if ! { exec 8>>/run/lock/mainstream-efi-resize.lock; } || ! flock -s -n 8; then
+    echo "Wait for the EFI resize to finish before updating." >&2
+    exit 1
+fi
+{ enable -f /usr/lib/bash/fdflags fdflags && fdflags -s +cloexec 8; } 2>/dev/null || true
+if [[ -e /var/lib/mainstream/efi-resize.pending ]]; then
+    echo ">>> Complete EFI resize recovery before updating: sudo mainstream-efi-resize recover"
+    echo ">>> If recovery keeps failing, go back to the original EFI partition: sudo mainstream-efi-resize cancel"
+    exit 1
+fi
+
 # Every pacman step would fail against another package manager's lock, and the
 # exit trap must never clear a lock a live process owns.
 if [[ -e /var/lib/pacman/db.lck ]] && pgrep -x pacman >/dev/null 2>&1; then
@@ -284,7 +297,7 @@ chmod 0440 "$TEMP_SUDOERS"
 HELPER_STARTED_AT="$(date '+%Y-%m-%dT%H:%M:%S%z')"
 REBOOT_CHECK="$ORIG_HOME/.config/quickshell/ii/scripts/update/reboot-check.sh"
 _reboot_check_run() {  # stdin passes through
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" "$@" 2>/dev/null 9>&-
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" bash "$REBOOT_CHECK" "$@" 2>/dev/null 8>&- 9>&-
 }
 reboot_check() {  # $1 = mode, rest = args
     [[ -r "$REBOOT_CHECK" ]] || { echo 0; return 0; }
@@ -643,7 +656,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
             rc=${PIPESTATUS[0]}
         else
             runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                flatpak update --noninteractive --user 9>&- 2>&1 | tee "$FLATPAK_LOG"
+                flatpak update --noninteractive --user 8>&- 9>&- 2>&1 | tee "$FLATPAK_LOG"
             rc=${PIPESTATUS[0]}
         fi
         if [[ "$rc" -ne 0 ]] && ! grep -qE "$FP_NO_RETRY" "$FLATPAK_LOG"; then
@@ -655,7 +668,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
                 rc=$?
             else
                 runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-                    flatpak update --noninteractive --user 9>&-
+                    flatpak update --noninteractive --user 8>&- 9>&-
                 rc=$?
             fi
         fi
@@ -677,7 +690,7 @@ if [[ "$SKIP_FLATPAK" -eq 0 ]] && command -v flatpak >/dev/null 2>&1; then
     FP_USR_RC=$?
     if [[ "$FP_USR_RC" -eq 0 ]]; then
         runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-            flatpak uninstall --unused --noninteractive --user 9>&- || true
+            flatpak uninstall --unused --noninteractive --user 8>&- 9>&- || true
     fi
     rm -f "$FLATPAK_LOG"
     if [[ "$FP_SYS_RC" -ne 0 ]]; then
@@ -740,7 +753,7 @@ elif [[ "$SKIP_DOTFILES" -eq 0 ]] && command -v updatems >/dev/null 2>&1; then
     echo "═══════════════════════════════════════════════════════════"
     _ums_args=()
     [[ "$EDGE" -eq 1 ]] && _ums_args+=(--edge)
-    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems "${_ums_args[@]}" 9>&-
+    runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" updatems "${_ums_args[@]}" 8>&- 9>&-
     DOTFILES_RC=$?
 
     # ── 5b. System-level dotfiles bits (updatems-system) ───────────────────
@@ -775,7 +788,7 @@ topgrade_session_env() {
     local uid rtd
     uid=$(id -u "$ORIG_USER" 2>/dev/null) || return 0
     rtd="/run/user/$uid"
-    runuser -u "$ORIG_USER" -- test -S "$rtd/bus" 2>/dev/null 9>&- || return 0
+    runuser -u "$ORIG_USER" -- test -S "$rtd/bus" 2>/dev/null 8>&- 9>&- || return 0
     TOPGRADE_USER_ENV+=("XDG_RUNTIME_DIR=$rtd" "DBUS_SESSION_BUS_ADDRESS=unix:path=$rtd/bus")
 }
 
@@ -911,7 +924,7 @@ fi
 # needs a rebuild against the new Qt.
 if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/quickshell ]]; then
     if ! runuser -u "$ORIG_USER" -- env HOME="$ORIG_HOME" \
-            /usr/bin/quickshell --private-check-compat >/dev/null 2>&1 9>&-; then
+            /usr/bin/quickshell --private-check-compat >/dev/null 2>&1 8>&- 9>&-; then
         QS_PKG=$(pacman -Qoq /usr/bin/quickshell 2>/dev/null | head -1)
         QS_PKGBUILD_DIR="$ORIG_HOME/.cache/dots-hyprland/sdata/dist-arch/mainstream-quickshell-git"
         # Building a recipe older than the installed package would downgrade it,
@@ -919,7 +932,7 @@ if [[ "$AUTO_REBUILD_QS" -eq 1 && "$PKG_STEP_FAILED" -eq 0 ]] && [[ -x /usr/bin/
         if [[ "$QS_PKG" == "${QS_PKGBUILD_DIR##*/}" && -f "$QS_PKGBUILD_DIR/PKGBUILD" ]]; then
             QS_RECIPE_VER=$(runuser -u "$ORIG_USER" -- bash -c \
                 'cd "$1" && source ./PKGBUILD >/dev/null 2>&1 && echo "${epoch:+$epoch:}$pkgver-$pkgrel"' \
-                _ "$QS_PKGBUILD_DIR" 2>/dev/null 9>&-)
+                _ "$QS_PKGBUILD_DIR" 2>/dev/null 8>&- 9>&-)
             QS_INSTALLED_VER=$(pacman -Q "$QS_PKG" 2>/dev/null | awk '{print $2}')
             if [[ -n "$QS_RECIPE_VER" && -n "$QS_INSTALLED_VER" ]] \
                     && (( $(vercmp "$QS_RECIPE_VER" "$QS_INSTALLED_VER") < 0 )); then

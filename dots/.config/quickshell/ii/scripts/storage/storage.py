@@ -107,6 +107,18 @@ def disks():
     return sorted(result, key=lambda disk: (disk["mount"] != "/", disk["mount"]))
 
 
+def efi_info():
+    """Read the unprivileged plan from the same helper that performs the resize."""
+    try:
+        return json.loads(subprocess.check_output(
+            ["/usr/local/bin/mainstream-efi-resize", "plan"],
+            text=True, stderr=subprocess.DEVNULL, timeout=12,
+        ))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+
 def user_folders():
     names = {"documents": ("DOCUMENTS", "Documents"), "downloads": ("DOWNLOAD", "Downloads"),
              "pictures": ("PICTURES", "Pictures"), "videos": ("VIDEOS", "Videos"), "music": ("MUSIC", "Music")}
@@ -198,6 +210,9 @@ def scan():
 
     for disk in disks():
         emit(disk)
+    efi = efi_info()
+    if efi:
+        emit(efi)
     try:
         for line in LAST_SCAN.read_text().splitlines():
             print(line, flush=True)
@@ -315,6 +330,8 @@ def main():
         clean(sys.argv[2])
     elif command == "trash" and len(sys.argv) == 3:
         trash(sys.argv[2])
+    elif command == "efi":
+        print(json.dumps(efi_info()))
     else:
         sys.exit(__doc__)
 
