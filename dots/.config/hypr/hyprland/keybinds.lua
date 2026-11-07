@@ -22,24 +22,11 @@ end
 --#!
 --##! Desktop
 -- These absolutely need to be on top, or they won't work consistently
--- Tapping Super opens the launcher. A release bind already stays quiet after another
--- key or button, because Hyprland tracks those as presses, but it never tracks the
--- wheel. So the wheel cancels the tap itself, with any other modifiers held too.
-local superTapped = false
-local function superDown() superTapped = true end
-local function superWheel() superTapped = false end
-local function superUp()
- if not superTapped then return end
- hl.dispatch(hl.dsp.global("quickshell:searchToggleRelease"))
- hl.dispatch(hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel"))
-end
-hl.bind("SUPER + SUPER_L", superDown, {non_consuming = true, transparent = true} )
-hl.bind("SUPER + SUPER_R", superDown, {non_consuming = true, transparent = true} )
-hl.bind("SUPER + SUPER_L", superUp, {release = true, description = "Toggle search"} )
-hl.bind("SUPER + SUPER_R", superUp, {release = true} )
-for _, wheel in ipairs({"mouse_up", "mouse_down", "mouse_left", "mouse_right"}) do
- hl.bind(wheel, superWheel, {non_consuming = true, transparent = true, ignore_mods = true} )
-end
+-- Native release binds suppress the launcher when Super was used in another shortcut.
+hl.bind("SUPER + SUPER_L", hl.dsp.global("quickshell:searchToggleRelease"), {release = true, description = "Toggle search"} )
+hl.bind("SUPER + SUPER_R", hl.dsp.global("quickshell:searchToggleRelease"), {release = true} )
+hl.bind("SUPER + SUPER_L", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel"), {release = true} )
+hl.bind("SUPER + SUPER_R", hl.dsp.exec_cmd(qsIsAlive.." || pkill fuzzel || fuzzel"), {release = true} )
 
 hl.bind("SUPER_L", hl.dsp.global("quickshell:workspaceNumber"), {ignore_mods = true, transparent = true} )
 hl.bind("SUPER_R", hl.dsp.global("quickshell:workspaceNumber"), {ignore_mods = true, transparent = true} )
