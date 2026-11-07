@@ -103,12 +103,15 @@ Scope {
         GlobalStates.desktopMenuOpen = false;
         held = holdAlt;
         opened = true;
-        const ids = HyprlandData.workspaces.filter(w => w.monitorID === monitorId).map(w => w.id);
+        // Workspaces 1 to 10 are kept alive while empty, so only windows or being on show count.
+        const shown = new Set(HyprlandData.monitors.map(m => m.activeWorkspace?.id));
+        const inUse = HyprlandData.workspaces.filter(w => w.windows > 0 || shown.has(w.id));
+        const ids = inUse.filter(w => w.monitorID === monitorId).map(w => w.id);
         clients.forEach(w => ids.push(w.workspace.id));
         ids.push(workspaceId);
         const used = [...new Set(ids)].filter(id => id > 0 && id < 2147483600).sort((a, b) => a - b);
-        // The spare workspace must be free on every monitor, or opening it jumps there.
-        const taken = new Set(HyprlandData.workspaces.map(w => w.id));
+        // The spare workspace must not be in use or live on another monitor, or opening it jumps there.
+        const taken = new Set(HyprlandData.workspaces.filter(w => inUse.includes(w) || w.monitorID !== monitorId).map(w => w.id));
         let spare = Math.max(...used) + 1;
         while (taken.has(spare)) spare++;
         workspaceIds = used.concat([spare]);

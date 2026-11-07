@@ -22,6 +22,9 @@ dontLoadDefaultRules = false
 dontLoadDefaultColors = false
 dontLoadDefaultKeybinds = false
 
+-- Track explicit workspace persistence before any custom module can register it.
+require("hyprland.workspace-persistence")
+
 -- Variables FIRST so terminal/browser/etc. are in scope when keybinds load.
 require("hyprland.variables")
 tryRequire("custom.variables")

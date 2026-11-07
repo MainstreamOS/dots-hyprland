@@ -362,6 +362,101 @@ end
 -- ######## Workspace rules ########
 hl.workspace_rule({ workspace = "special:special", gaps_out = 30 })
 
+-- Workspaces 1 to 10 stay alive while empty, so a slide across them has a frame to start from,
+-- and a higher group of ten (11 to 20 and so on) does the same while it is in use.
+-- Only on a single screen: whenever rules change, Hyprland moves a persistent workspace with no
+-- monitor of its own onto the focused screen, which would pull windows off a second one.
+local keepAlive = false
+local dynamicDecades = {}
+
+local workspacePersistence = require("hyprland.workspace-persistence")
+
+local function setDecadePersistent(decade, persistent)
+    for i = decade * 10 + 1, decade * 10 + 10 do
+        workspacePersistence.setDefault(i, persistent)
+    end
+end
+
+local function getDecade(wsId)
+    -- The lock screen parks windows on workspaces just below the top id.
+    if not wsId or wsId <= 0 or wsId >= 2147483600 then return 0 end
+    return math.floor((wsId - 1) / 10)
+end
+
+local function ensureDecadePersistent(decade)
+    if not keepAlive or decade <= 0 or dynamicDecades[decade] then return end
+    setDecadePersistent(decade, true)
+    dynamicDecades[decade] = true
+end
+
+local function cleanupEmptyDecades(activeDecade)
+    for decade, _ in pairs(dynamicDecades) do
+        if decade ~= activeDecade then
+            local hasWindows = false
+            for i = decade * 10 + 1, decade * 10 + 10 do
+                local w = hl.get_workspace(i)
+                if w and w.windows > 0 then
+                    hasWindows = true
+                    break
+                end
+            end
+            if not hasWindows then
+                setDecadePersistent(decade, false)
+                dynamicDecades[decade] = nil
+            end
+        end
+    end
+end
+
+local function activeDecade()
+    local ws = hl.get_active_workspace()
+    if not ws or ws.special then return 0 end
+    return getDecade(ws.id)
+end
+
+local function setKeepAlive(on)
+    if keepAlive == on then return end
+    keepAlive = on
+    setDecadePersistent(0, on)
+    if on then
+        ensureDecadePersistent(activeDecade())
+    else
+        for decade, _ in pairs(dynamicDecades) do
+            setDecadePersistent(decade, false)
+        end
+        dynamicDecades = {}
+    end
+end
+
+local function refreshKeepAlive(leaving)
+    local screens = 0
+    for _, m in ipairs(hl.get_monitors() or {}) do
+        if not leaving or m.name ~= leaving.name then screens = screens + 1 end
+    end
+    setKeepAlive(screens == 1)
+end
+
+hl.on("workspace.active", function(ws)
+    if not ws or not ws.id or ws.special or ws.id <= 0 then return end
+    local decade = getDecade(ws.id)
+    ensureDecadePersistent(decade)
+    cleanupEmptyDecades(decade)
+end)
+
+local function onWindowChange()
+    cleanupEmptyDecades(activeDecade())
+end
+
+hl.on("window.destroy", onWindowChange)
+hl.on("window.close", onWindowChange)
+hl.on("window.move_to_workspace", onWindowChange)
+
+-- At startup no screen is connected yet; deciding once Hyprland is up lets each one open on a workspace of its own.
+if #(hl.get_monitors() or {}) > 0 then refreshKeepAlive() end
+hl.on("hyprland.start", function() refreshKeepAlive() end)
+hl.on("monitor.added", function() refreshKeepAlive() end)
+hl.on("monitor.removed", function(mon) refreshKeepAlive(mon) end)
+
 -- ######## Layer rules ########
 hl.layer_rule({ match = { namespace = ".*" }, xray = true})
 hl.layer_rule({ match = { namespace = "walker" }, no_anim = true})

@@ -36,25 +36,18 @@ NestableObject {
 
     // Function to update workspaceOccupied
     function updateWorkspaceOccupied() {
-        root.occupied = Array.from({
-            length: root.shownCount
-        }, (_, i) => {
-            const thisWorkspaceId = getWorkspaceId(root.group, i);
-            return Hyprland.workspaces.values.some(ws => ws.id === thisWorkspaceId);
-        });
+        const used = new Set(HyprlandData.windowList.map(win => win.workspace.id));
+        const next = Array.from({ length: root.shownCount }, (_, i) => used.has(root.getWorkspaceId(root.group, i)));
+        // The window list is replaced on nearly every Hyprland event; most leave this unchanged.
+        if (next.length !== root.occupied.length || next.some((v, i) => v !== root.occupied[i]))
+            root.occupied = next;
     }
 
     // Occupied workspace updates
     Component.onCompleted: updateWorkspaceOccupied()
     Connections {
-        target: Hyprland.workspaces
-        function onValuesChanged() {
-            root.updateWorkspaceOccupied();
-        }
-    }
-    Connections {
-        target: Hyprland
-        function onFocusedWorkspaceChanged() {
+        target: HyprlandData
+        function onWindowListChanged() {
             root.updateWorkspaceOccupied();
         }
     }
