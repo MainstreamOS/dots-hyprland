@@ -1,0 +1,440 @@
+#!/usr/bin/env bash
+# mainstream-hardware-quirks: applies the udev rules, module options and services some laptops
+# need. Runs on first boot and every update, and changes a file only when its content differs.
+#
+# Usage: mainstream-hardware-quirks [--packages]
+#   --packages  prints the packages this machine's quirks need and changes nothing, since the
+#               engine itself runs inside pacman's transaction where it cannot install any.
+
+set -euo pipefail
+
+SYS_VENDOR="$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true)"
+PRODUCT_NAME="$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
+# Lenovo keeps the model name in these two and only a machine type code in product_name.
+PRODUCT_FAMILY="$(cat /sys/class/dmi/id/product_family 2>/dev/null || true)"
+PRODUCT_VERSION="$(cat /sys/class/dmi/id/product_version 2>/dev/null || true)"
+CPU_VENDOR="$(awk '$1 == "vendor_id" {print $3; exit}' /proc/cpuinfo 2>/dev/null || true)"
+CPU_MODEL="$(awk '$1 == "model" && $2 == ":" {print $3; exit}' /proc/cpuinfo 2>/dev/null || true)"
+[[ "$CPU_MODEL" =~ ^[0-9]+$ ]] || CPU_MODEL=0
+
+log() {
+    printf 'mainstream-hardware-quirks: %s\n' "$1"
+}
+
+hw_match() {
+    grep -qiF -- "$1" <<<"$PRODUCT_NAME"$'\n'"$PRODUCT_FAMILY"$'\n'"$PRODUCT_VERSION"
+}
+
+# A real system battery, not a mouse's or a UPS's.
+battery_present() {
+    local bat
+    for bat in /sys/class/power_supply/*; do
+        [[ -r "$bat/type" && "$(< "$bat/type")" == Battery ]] || continue
+        [[ -r "$bat/present" && "$(< "$bat/present")" == 1 ]] || continue
+        [[ -r "$bat/scope" && "$(< "$bat/scope")" == Device ]] && continue
+        return 0
+    done
+    return 1
+}
+
+pci_has() {
+    local dev id
+    for dev in /sys/bus/pci/devices/*; do
+        [[ -r "$dev/vendor" && -r "$dev/device" ]] || continue
+        id="$(< "$dev/vendor"):$(< "$dev/device")"
+        id="${id//0x/}"
+        [[ " $* " == *" $id "* ]] && return 0
+    done
+    return 1
+}
+
+usb_has() {
+    local dev
+    for dev in /sys/bus/usb/devices/*; do
+        [[ -r "$dev/idVendor" && -r "$dev/idProduct" ]] || continue
+        [[ " $* " == *" $(< "$dev/idVendor"):$(< "$dev/idProduct") "* ]] && return 0
+    done
+    return 1
+}
+
+# lspci wakes a sleeping discrete GPU, so it runs at most once and only on Intel machines.
+is_intel_ptl() {
+    [[ "$CPU_VENDOR" == GenuineIntel ]] || return 1
+    if [[ -z "${INTEL_PTL:-}" ]]; then
+        INTEL_PTL=0
+        if command -v lspci >/dev/null 2>&1; then
+            grep -qiE '(vga|3d|display).*panther lake' <<<"$(lspci 2>/dev/null)" && INTEL_PTL=1
+        elif [[ "$CPU_MODEL" == 204 ]]; then
+            INTEL_PTL=1
+        fi
+    fi
+    (( INTEL_PTL ))
+}
+
+is_apple() {
+    [[ "$SYS_VENDOR" =~ ^Apple || "$PRODUCT_NAME" =~ MacBook ]]
+}
+
+is_intel_laptop() {
+    [[ "$CPU_VENDOR" == GenuineIntel ]] && battery_present
+}
+
+# Intel hybrid cores from Alder Lake on, where intel-lpmd keeps light work off the P-cores.
+is_intel_hybrid_laptop() {
+    is_intel_laptop && [[ "$CPU_MODEL" =~ ^(151|154|170|172|183|186|189|191|204)$ ]]
+}
+
+is_asus_rog() {
+    [[ "$SYS_VENDOR" == "ASUSTeK COMPUTER INC." ]] && grep -q ROG <<<"$PRODUCT_FAMILY"
+}
+
+# Macs get this driver through mac-config.sh, with its own kernel handling.
+needs_broadcom_wl() {
+    [[ ! "$SYS_VENDOR" =~ ^Apple ]] && pci_has 14e4:43a0 14e4:4331
+}
+
+is_tuxedo() {
+    grep -qi TUXEDO <<<"$SYS_VENDOR"
+}
+
+has_camlink_4k() {
+    grep -qsx "Cam Link 4K" /sys/bus/usb/devices/*/product
+}
+
+is_framework16() {
+    [[ "$SYS_VENDOR" =~ Framework ]] && hw_match "Laptop 16"
+}
+
+# A package the repositories do not carry yet is left out, so the install never fails on it.
+available() {
+    pacman -Si "$1" >/dev/null 2>&1
+}
+
+# Headers for every installed kernel, custom ones included, or the module is missing whenever
+# another one boots. A kernel whose headers no repository carries is named and left out.
+dkms_packages() {
+    local file headers=() seen=" "
+    for file in /usr/lib/modules/*/pkgbase; do
+        [[ -r "$file" ]] || continue
+        local name="$(< "$file")-headers"
+        [[ "$seen" == *" $name "* ]] && continue
+        seen+="$name "
+        if available "$name"; then
+            headers+=("$name")
+        else
+            printf 'mainstream-hardware-quirks: no %s in the repositories\n' "$name" >&2
+        fi
+    done
+    # No kernel could be read at all, so the stock one is the likeliest.
+    [[ "$seen" == " " ]] && headers=(linux-headers)
+    printf '%s\n' "$1" dkms "${headers[@]}"
+}
+
+# Returns 0 when it had to write the file.
+write_if_changed() {
+    local file="$1" content="$2"
+    [[ -f "$file" && "$(< "$file")" == "$content" ]] && return 1
+    mkdir -p "$(dirname "$file")"
+    printf '%s\n' "$content" > "$file"
+}
+
+reload_udev() {
+    command -v udevadm >/dev/null 2>&1 || return 0
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger --subsystem-match="$1" 2>/dev/null || true
+}
+
+# Switched on once; a service the user turns off afterwards stays off.
+enable_service() {
+    local stamp="/var/lib/mainstream/hardware-quirks/$1.enabled"
+    command -v systemctl >/dev/null 2>&1 || return 0
+    [[ -e "$stamp" ]] && return 0
+    systemctl list-unit-files "$1" >/dev/null 2>&1 || return 0
+    mkdir -p "${stamp%/*}" && : > "$stamp"
+    systemctl is-enabled "$1" >/dev/null 2>&1 && return 0
+    log "Enabling $1..."
+    systemctl enable "$1" 2>/dev/null || true
+    [[ -d /run/systemd/system ]] && systemctl start "$1" 2>/dev/null || true
+}
+
+print_packages() {
+    local packages=()
+    is_intel_laptop && (( ${CPU_MODEL:-0} >= 42 )) && packages+=(thermald)
+    is_intel_hybrid_laptop && packages+=(intel-lpmd)
+    is_asus_rog && packages+=(asusctl)
+    needs_broadcom_wl && mapfile -t -O "${#packages[@]}" packages < <(dkms_packages broadcom-wl-dkms)
+    is_tuxedo && available tuxedo-drivers-dkms && mapfile -t -O "${#packages[@]}" packages < <(dkms_packages tuxedo-drivers-dkms)
+    is_framework16 && available qmk-hid && packages+=(qmk-hid)
+    if has_camlink_4k && available v4l2-relayd; then
+        mapfile -t -O "${#packages[@]}" packages < <(dkms_packages v4l2loopback-dkms)
+        packages+=(v4l2loopback-utils v4l2-relayd v4l-utils)
+    fi
+    (( ${#packages[@]} )) && printf '%s\n' "${packages[@]}"
+    return 0
+}
+
+# ── ASUS ROG Flow Z13 detachable keyboard touchpad ─────────────────────────
+# It connects over USB, so libinput would treat it as external and skip disable-while-typing.
+apply_asus_z13_quirk() {
+    if [[ "$PRODUCT_NAME" =~ GZ30[12] || "$PRODUCT_NAME" =~ "ROG Flow Z13" ]] \
+        || usb_has 0b05:1a30 0b05:19b6; then
+        if write_if_changed /etc/udev/rules.d/99-mainstream-asus-z13-touchpad.rules \
+'ACTION=="add|change", KERNEL=="event*", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="1a30", ENV{ID_INPUT_TOUCHPAD}=="1", ENV{ID_INPUT_TOUCHPAD_INTEGRATION}="internal"
+ACTION=="add|change", KERNEL=="event*", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="19b6", ENV{ID_INPUT_TOUCHPAD}=="1", ENV{ID_INPUT_TOUCHPAD_INTEGRATION}="internal"'; then
+            log "Configured the ASUS ROG Flow Z13 touchpad."
+            reload_udev input
+        fi
+    fi
+}
+
+# ── ASUS Panther Lake laptops: ExpertBook B9406 and Zenbook UX5406AA ───────
+# Their panels read no EDID, so xe picks PWM backlight where they want DPCD. The B9406 panel
+# also stays frozen in Panel Replay; its touchpad quirk ships in the package, where libinput reads it.
+apply_asus_ptl_quirks() {
+    is_intel_ptl || return 0
+    local options=""
+    if hw_match B9406; then
+        options="enable_panel_replay=0 enable_dpcd_backlight=1"
+    elif hw_match UX5406AA; then
+        options="enable_dpcd_backlight=1"
+    fi
+    if [[ -n "$options" ]] && write_if_changed /etc/modprobe.d/mainstream-asus-ptl-display.conf "options xe $options"; then
+        log "Configured the ASUS Panther Lake display."
+        NEED_MKINITCPIO=1
+    fi
+}
+
+# ── Intel Panther Lake: FRED ───────────────────────────────────────────────
+# Flexible Return and Event Delivery replaces the old interrupt path and is off unless asked for.
+apply_intel_ptl_fred() {
+    is_intel_ptl || return 0
+    [[ -f /etc/default/limine || -f /etc/limine-entry-tool.conf ]] || return 0
+    if write_if_changed /etc/limine-entry-tool.d/mainstream-intel-ptl-fred.conf 'KERNEL_CMDLINE[default]+=" fred=on"'; then
+        log "Turned on FRED for Intel Panther Lake."
+        NEED_MKINITCPIO=1
+    fi
+}
+
+# ── Intel BE200 / BE211 Wi-Fi 7 ────────────────────────────────────────────
+# Temporary: iwlwifi's EHT receive path drops these cards to the lowest rate on Wi-Fi 7 access
+# points, so they stay on Wi-Fi 6 until the driver is fixed. Taken from Omarchy.
+apply_intel_wifi7_eht_quirk() {
+    pci_has 8086:e440 8086:272b || return 0
+    if write_if_changed /etc/modprobe.d/mainstream-iwlwifi-eht.conf 'options iwlwifi disable_11be=Y'; then
+        log "Kept the Intel BE200 / BE211 Wi-Fi on Wi-Fi 6."
+    fi
+}
+
+# ── Microsoft Surface keyboard and EC modules in the initramfs ─────────────
+# So the Type Cover works for the LUKS passphrase in early boot.
+apply_surface_quirk() {
+    [[ "$SYS_VENDOR" =~ "Microsoft Corporation" && "$PRODUCT_NAME" =~ Surface ]] || return 0
+    local pinctrl=""
+    command -v lsmod >/dev/null 2>&1 && pinctrl="$(lsmod | awk '/^pinctrl_/ && !found {print $1; found = 1}')"
+    local mods="surface_aggregator surface_aggregator_registry surface_aggregator_hub surface_hid_core surface_hid surface_kbd intel_lpss_pci 8250_dw"
+    [[ -n "$pinctrl" ]] && mods="$pinctrl $mods"
+    if write_if_changed /etc/mkinitcpio.conf.d/surface_device_modules.conf "MODULES+=($mods)"; then
+        log "Added the Surface keyboard modules to the initramfs."
+        NEED_MKINITCPIO=1
+    fi
+}
+
+# ── Apple MacBook, through the shared mac-config.sh ────────────────────────
+apply_apple_quirks() {
+    is_apple || return 0
+    log "Apple hardware detected. Applying the Mac configuration..."
+    local mac_lib="" path script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    for path in /usr/local/lib/mac-config.sh "$script_dir/../../lib/mac-config.sh"
+    do
+        if [[ -f "$path" ]]; then
+            mac_lib="$path"
+            break
+        fi
+    done
+    if [[ -n "$mac_lib" ]]; then
+        # shellcheck source=/dev/null
+        source "$mac_lib"
+        mac_apply_autoconfig || true
+    else
+        log "Warning: mac-config.sh library not found, skipping mac autoconfig."
+    fi
+}
+
+# ── Lenovo Yoga Pro 7 14IAH10 bass speakers ────────────────────────────────
+# Its ALC287 needs this pin quirk to drive both amplifiers; without it one speaker and the bass stay silent.
+apply_lenovo_yoga_quirk() {
+    hw_match "Yoga Pro 7 14IAH10" || return 0
+    if write_if_changed /etc/modprobe.d/mainstream-lenovo-yoga-audio.conf 'options snd-sof-intel-hda-generic hda_model=alc287-yoga9-bass-spk-pin'; then
+        log "Configured the Lenovo Yoga Pro 7 bass speakers."
+    fi
+}
+
+# ── TUXEDO keyboard backlight ──────────────────────────────────────────────
+# An old out-of-tree clevo_xsm_wmi claims the Clevo WMI interface before tuxedo-drivers can.
+apply_tuxedo_quirk() {
+    is_tuxedo || return 0
+    if write_if_changed /etc/modprobe.d/mainstream-blacklist-clevo-xsm-wmi.conf 'blacklist clevo_xsm_wmi'; then
+        log "Kept clevo_xsm_wmi from taking the TUXEDO keyboard backlight."
+    fi
+}
+
+# ── Framework Laptop 16 RGB keyboard access through qmk_hid ────────────────
+apply_framework_quirk() {
+    is_framework16 || return 0
+    if write_if_changed /etc/udev/rules.d/50-mainstream-framework16-qmk-hid.rules 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0012", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="32ac", ATTRS{idProduct}=="0014", MODE="0660", TAG+="uaccess"'; then
+        log "Configured Framework 16 keyboard lighting access."
+        reload_udev hidraw
+    fi
+}
+
+# ── Top row sends media keys ───────────────────────────────────────────────
+# ASUS laptops keep Fn-lock in the driver, which boots them on F1-F12. Media keys come first,
+# as the keycaps read, and Fn gives F1-F12. Options set by anyone else win. hid_apple is left
+# alone: its default already does this for Apple keyboards, and keyboards that only borrow
+# Apple's IDs have no Fn key it can see, so they would lose F1-F12.
+apply_toprow_mediakeys() {
+    local conf=/etc/modprobe.d/mainstream-toprow.conf others=() lines=()
+    mapfile -t others < <(grep -lsE '^[[:space:]]*options[[:space:]]+(hid_asus|asus_wmi)[[:space:]].*fnlock_default=' \
+        /etc/modprobe.d/*.conf | grep -v '/mainstream-')
+    if (( ${#others[@]} )); then
+        # Emptied rather than kept, since it would sort after theirs and override it.
+        [[ -s "$conf" ]] && : > "$conf" && log "Left the top row to ${others[*]}."
+        return 0
+    fi
+    # Only the options this kernel's drivers have, or the kernel logs the rest as unknown.
+    grep -q '^fnlock_default:' <<<"$(modinfo -p hid_asus 2>/dev/null)" && lines+=("options hid_asus fnlock_default=0")
+    grep -q '^fnlock_default:' <<<"$(modinfo -p asus_wmi 2>/dev/null)" && lines+=("options asus_wmi fnlock_default=0")
+    (( ${#lines[@]} )) || return 0
+    if write_if_changed "$conf" "$(printf '%s\n' "${lines[@]}")"; then
+        log "The top row now sends media keys first."
+        # A keyboard driver already in the boot image keeps the options it was built with.
+        [[ -d /sys/module/hid_asus ]] && NEED_MKINITCPIO=1
+    fi
+    return 0
+}
+
+# ── Elgato Cam Link 4K ─────────────────────────────────────────────────────
+# Keep the raw camera accessible until the relay can deliver a frame. The relay service owns
+# the readiness marker and restores access when it stops, including on a normal unplug.
+apply_camlink_4k_quirk() {
+    local rules=/etc/udev/rules.d/71-mainstream-camlink-4k.rules
+    has_camlink_4k || [[ -f "$rules" ]] || return 0
+    local changed=0
+    write_if_changed "$rules" "$(cat <<'RULE'
+# After 70-uaccess adds the tag and before 73-seat-late applies its ACL.
+SUBSYSTEM=="video4linux", ENV{ID_VENDOR_ID}=="0fd9", ENV{ID_MODEL}=="Cam_Link_4K", ENV{ID_V4L_CAPABILITIES}==":capture:", \
+  SYMLINK+="camlink4k", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/dev/camlink4k", ENV{SYSTEMD_WANTS}="v4l2-relayd@camlink.service"
+SUBSYSTEM=="video4linux", ENV{ID_VENDOR_ID}=="0fd9", ENV{ID_MODEL}=="Cam_Link_4K", ENV{ID_V4L_CAPABILITIES}==":capture:", \
+  TEST=="/run/mainstream-camlink/ready", TAG-="uaccess", OWNER="root", GROUP="root", MODE="0600"
+RULE
+)" && changed=1
+    rm -f /var/lib/mainstream/camlink-relay-ok
+    if ! { command -v v4l2-relayd && command -v v4l2loopback-ctl && modinfo v4l2loopback; } >/dev/null 2>&1; then
+        rm -f /run/mainstream-camlink/ready
+        [[ -d /run/systemd/system ]] && reload_udev video4linux
+        return 0
+    fi
+    write_if_changed /etc/modprobe.d/mainstream-v4l2loopback.conf 'options v4l2loopback exclusive_caps=1' && changed=1
+    write_if_changed /etc/v4l2-relayd.d/camlink.conf 'VIDEOSRC="v4l2src device=/dev/camlink4k"
+FORMAT=NV12
+WIDTH=1280
+HEIGHT=720
+FRAMERATE=30/1
+CARD_LABEL="Cam Link 4K"' && changed=1
+    write_if_changed /etc/systemd/system/mainstream-camlink-4k-loopback.service "$(cat <<'UNIT'
+[Unit]
+Description=Create the Cam Link 4K virtual camera
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/modprobe v4l2loopback
+ExecStart=/bin/sh -c 'grep -qsx "Cam Link 4K" /sys/devices/virtual/video4linux/*/name || exec v4l2loopback-ctl add -n "Cam Link 4K" -x 1'
+UNIT
+)" && changed=1
+    write_if_changed /etc/systemd/system/v4l2-relayd@camlink.service.d/mainstream-camlink.conf "$(cat <<'UNIT'
+[Unit]
+# Only the device's stop is tied in, so starting the base relay without a Cam Link leaves no job waiting.
+ConditionPathExists=/dev/camlink4k
+StopPropagatedFrom=dev-camlink4k.device
+Requires=mainstream-camlink-4k-loopback.service
+After=mainstream-camlink-4k-loopback.service
+
+[Service]
+RestartSec=2
+RuntimeDirectory=mainstream-camlink
+# A usable frame is stronger evidence than a running service or an existing loopback node.
+ExecStartPost=-+/bin/sh -c 'device=$(grep -lx "Cam Link 4K" /sys/devices/virtual/video4linux/*/name | head -n1 | cut -d/ -f6); \
+  [ -n "$${device}" ] || exit 0; \
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do \
+    if /usr/bin/timeout 1 /usr/bin/v4l2-ctl -d "/dev/$${device}" --stream-mmap --stream-count=1 --stream-to=/run/mainstream-camlink/probe && [ -s /run/mainstream-camlink/probe ]; then \
+      rm -f /run/mainstream-camlink/probe; \
+      touch /run/mainstream-camlink/ready && /usr/bin/udevadm trigger --action=change --subsystem-match=video4linux \
+        && /usr/bin/udevadm settle && setfacl -b /dev/camlink4k; \
+      echo "Cam Link relay delivered its first frame"; exit 0; \
+    fi; sleep 0.2; \
+  done; rm -f /run/mainstream-camlink/probe; echo "Cam Link relay has no frames yet; leaving the raw camera accessible"'
+ExecStopPost=-+/bin/sh -c 'rm -f /run/mainstream-camlink/ready; /usr/bin/udevadm trigger --action=change --subsystem-match=video4linux'
+# A synced sink drops every frame, since each arrives stamped with its capture time and already late.
+ExecStart=
+ExecStart=/bin/sh -c 'DEVICE=$(grep -l -m1 -E "^${CARD_LABEL}$" /sys/devices/virtual/video4linux/*/name | cut -d/ -f6); exec /usr/bin/v4l2-relayd -i "${VIDEOSRC}" $${SPLASHSRC:+-s "$${SPLASHSRC}"} -o "appsrc name=appsrc caps=video/x-raw,format=${FORMAT},width=${WIDTH},height=${HEIGHT},framerate=${FRAMERATE} ! videoconvert ! v4l2sink name=v4l2sink sync=false device=/dev/$${DEVICE}" $EXTRA_OPTS'
+UNIT
+)" && changed=1
+    [[ -d /run/systemd/system ]] || return 0
+    local action=start
+    if (( changed )); then
+        log "Configured the Cam Link relay with direct camera fallback."
+        systemctl daemon-reload 2>/dev/null || true
+        reload_udev video4linux
+        udevadm settle 2>/dev/null || true
+        action=restart
+    fi
+    if [[ -e /dev/camlink4k ]]; then
+        systemctl "$action" v4l2-relayd@camlink.service 2>/dev/null || true
+    fi
+}
+
+# ── Intel laptop power services ────────────────────────────────────────────
+# thermald from Sandy Bridge on, and intel-lpmd on hybrid cores. --packages names both.
+apply_intel_power_services() {
+    is_intel_laptop || return 0
+    (( ${CPU_MODEL:-0} >= 42 )) && enable_service thermald.service
+    is_intel_hybrid_laptop && enable_service intel_lpmd.service
+    return 0
+}
+
+main() {
+    if [[ "${1:-}" == --packages ]]; then
+        print_packages
+        return 0
+    fi
+    NEED_MKINITCPIO=0
+
+    apply_asus_z13_quirk
+    apply_asus_ptl_quirks
+    apply_intel_ptl_fred
+    apply_intel_wifi7_eht_quirk
+    apply_surface_quirk
+    apply_apple_quirks
+    apply_lenovo_yoga_quirk
+    apply_tuxedo_quirk
+    apply_framework_quirk
+    apply_toprow_mediakeys
+    apply_camlink_4k_quirk
+    apply_intel_power_services
+
+    # limine-mkinitcpio also renews the boot entries' hashes; a plain mkinitcpio -P leaves
+    # Limine refusing the rebuilt images. The update defers it to the next kernel update.
+    if (( NEED_MKINITCPIO )) && [[ ${EUID:-$(id -u)} -eq 0 && -z "${MAINSTREAM_QUIRKS_DEFER_REBUILD:-}" ]]; then
+        log "Hardware quirks changed the initramfs or kernel options. Rebuilding the boot images..."
+        if command -v limine-mkinitcpio >/dev/null 2>&1; then
+            limine-mkinitcpio || true
+        elif command -v mkinitcpio >/dev/null 2>&1; then
+            mkinitcpio -P || true
+        fi
+    fi
+}
+
+main "$@"
