@@ -15,6 +15,7 @@ import Qt5Compat.GraphicalEffects
 LazyLoader {
     id: root
 
+    readonly property real uiScale: Appearance.sizes.barPopupScale
     property Item anchorTarget
     property bool shown: false
 
@@ -22,6 +23,7 @@ LazyLoader {
 
     component: PanelWindow {
         id: popupWindow
+        property real uiScale: root.uiScale
         color: "transparent"
 
         anchors.left: !Config.options.bar.vertical || (Config.options.bar.vertical && !Config.options.bar.bottom)
@@ -87,7 +89,7 @@ LazyLoader {
 
         Rectangle {
             id: popupBackground
-            readonly property real margin: 14
+            readonly property real margin: 14 * root.uiScale
             anchors {
                 fill: parent
                 leftMargin: Appearance.sizes.elevationMargin
@@ -108,19 +110,19 @@ LazyLoader {
                     fill: parent
                     margins: popupBackground.margin
                 }
-                spacing: 10
+                spacing: 10 * root.uiScale
 
                 // Header
                 RowLayout {
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     MaterialSymbol {
                         text: "volume_up"
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
                         color: Appearance.colors.colOnLayer1
                     }
                     StyledText {
                         text: Translation.tr("Audio Output")
-                        font.pixelSize: Appearance.font.pixelSize.normal
+                        font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                         font.weight: Font.DemiBold
                         color: Appearance.colors.colOnLayer1
                     }
@@ -135,7 +137,7 @@ LazyLoader {
                         Layout.preferredWidth: pctMetrics.advanceWidth
                         horizontalAlignment: Text.AlignRight
                         text: Math.round((Audio.sink?.audio.volume ?? 0) * 100) + "%"
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                         font.family: "monospace"
                         color: Appearance.colors.colSubtext
 
@@ -149,9 +151,9 @@ LazyLoader {
 
                 // Master volume slider
                 RowLayout {
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     MouseArea {
-                        implicitWidth: 24; implicitHeight: 24
+                        implicitWidth: 24 * root.uiScale; implicitHeight: 24 * root.uiScale
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (Audio.sink) Audio.sink.audio.muted = !Audio.sink.audio.muted;
@@ -165,7 +167,7 @@ LazyLoader {
                                 if (vol < 0.5) return "volume_down";
                                 return "volume_up";
                             }
-                            iconSize: 20
+                            iconSize: 20 * root.uiScale
                             color: Audio.sink?.audio.muted ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
                         }
                     }
@@ -179,7 +181,7 @@ LazyLoader {
                 // Separator
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 1
+                    implicitHeight: 1 * root.uiScale
                     color: Appearance.colors.colOutlineVariant
                     opacity: 0.5
                 }
@@ -199,7 +201,7 @@ LazyLoader {
                     }
                     visible: count > 0
                     clip: true
-                    spacing: 4
+                    spacing: 4 * root.uiScale
                     model: ScriptModel { values: Audio.outputAppNodes }
                     delegate: Item {
                             required property var modelData
@@ -211,10 +213,10 @@ LazyLoader {
                             RowLayout {
                                 id: appRow
                                 anchors { left: parent.left; right: parent.right }
-                                spacing: 6
+                                spacing: 6 * root.uiScale
 
                                 MouseArea {
-                                    implicitWidth: 28; implicitHeight: 28
+                                    implicitWidth: 28 * root.uiScale; implicitHeight: 28 * root.uiScale
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: modelData.audio.muted = !modelData.audio.muted
 
@@ -241,17 +243,17 @@ LazyLoader {
                                         anchors.centerIn: parent
                                         visible: modelData?.audio.muted ?? false
                                         text: "volume_off"
-                                        iconSize: 18
+                                        iconSize: 18 * root.uiScale
                                         color: Appearance.colors.colOnLayer1
                                     }
                                 }
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: -4
+                                    spacing: -4 * root.uiScale
                                     StyledText {
                                         Layout.fillWidth: true
-                                        font.pixelSize: Appearance.font.pixelSize.small
+                                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                                         color: Appearance.colors.colSubtext
                                         elide: Text.ElideRight
                                         text: {

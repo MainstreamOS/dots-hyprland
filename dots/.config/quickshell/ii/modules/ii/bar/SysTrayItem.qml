@@ -11,6 +11,7 @@ import qs.modules.common.functions
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.barContent
     required property SystemTrayItem item
     property bool targetMenuOpen: false
@@ -159,8 +160,8 @@ MouseArea {
 
     hoverEnabled: true
     acceptedButtons: Qt.LeftButton | Qt.RightButton
-    implicitWidth: 20
-    implicitHeight: 20
+    implicitWidth: 20 * root.uiScale
+    implicitHeight: 20 * root.uiScale
     onPressed: (event) => {
         switch (event.button) {
         case Qt.LeftButton:
@@ -259,8 +260,8 @@ MouseArea {
     // The grab comes from Qt's pixmap store, so this draws it at once with no provider.
     Canvas {
         id: iconReader
-        width: 24
-        height: 24
+        width: 24 * root.uiScale
+        height: 24 * root.uiScale
         opacity: 0
         onPaint: {
             const shot = root.grab;

@@ -10,6 +10,7 @@ import Quickshell.Wayland
 LazyLoader {
     id: root
 
+    readonly property real uiScale: Appearance.sizes.barPopupScale
     property Item hoverTarget
     default property Item contentItem
     property real popupBackgroundMargin: 0
@@ -28,6 +29,7 @@ LazyLoader {
 
     component: PanelWindow {
         id: popupWindow
+        property real uiScale: root.uiScale
         color: "transparent"
 
         // Taking focus is what keeps the bar out of the grab: while every
@@ -109,7 +111,7 @@ LazyLoader {
 
         Rectangle {
             id: popupBackground
-            readonly property real margin: 10
+            readonly property real margin: 10 * root.uiScale
             anchors {
                 fill: parent
                 leftMargin: Appearance.sizes.elevationMargin + root.popupBackgroundMargin * (!popupWindow.anchors.left)

@@ -22,7 +22,7 @@ Item {
         Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis,
         Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch])
     signal dismissed()
-    implicitHeight: searchSurface.implicitHeight + 8 + Math.min(208, Math.max(40, results.contentHeight + 8))
+    implicitHeight: searchSurface.implicitHeight + 8 * Appearance.sizes.islandScale + Math.min(208 * Appearance.sizes.islandScale, Math.max(40 * Appearance.sizes.islandScale, results.contentHeight + 8 * Appearance.sizes.islandScale))
 
     function updateQuery(): void {
         if (active) LauncherSearch.query = searchInput.text || Config.options.search.prefix.app;
@@ -57,26 +57,28 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: 8 * Appearance.sizes.islandScale
 
         LauncherSearchSurface {
             id: searchSurface
             Layout.fillWidth: true
             Layout.fillHeight: false
             searchHeight: searchBar.implicitHeight
+            uiScale: Appearance.sizes.islandScale
             // The Island is its own surface, with no desktop behind this one.
             samplesWallpaper: false
             Layout.preferredHeight: implicitHeight
 
             SearchBar {
                 id: searchBar
+                uiScale: Appearance.sizes.islandScale
                 quietStyle: false
                 contentColors: Appearance.launcherContent
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 4
-                anchors.topMargin: 4
-                anchors.bottomMargin: 4
+                anchors.leftMargin: 10 * Appearance.sizes.islandScale
+                anchors.rightMargin: 4 * Appearance.sizes.islandScale
+                anchors.topMargin: 4 * Appearance.sizes.islandScale
+                anchors.bottomMargin: 4 * Appearance.sizes.islandScale
                 searchingText: root.searchInput.text
                 inputFocused: root.searchRequested
                 fillSearchWidth: true
@@ -109,9 +111,9 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            topMargin: 4
-            bottomMargin: 4
-            spacing: 2
+            topMargin: 4 * Appearance.sizes.islandScale
+            bottomMargin: 4 * Appearance.sizes.islandScale
+            spacing: 2 * Appearance.sizes.islandScale
             model: ScriptModel { values: root.entries }
             boundsBehavior: Flickable.StopAtBounds
             delegate: SearchItem {

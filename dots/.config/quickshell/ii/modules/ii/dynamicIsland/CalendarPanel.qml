@@ -40,56 +40,56 @@ ColumnLayout {
         NumberAnimation { target: taskRow; property: "opacity"; to: 1; duration: 140; easing.type: Easing.OutCubic }
     }
     onTasksChanged: taskIndex = Math.max(0, Math.min(taskIndex, tasks.length - 1))
-    spacing: 2
+    spacing: 2 * Appearance.sizes.islandScale
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 154
-        topLeftRadius: Appearance?.rounding?.normal ?? 17
-        topRightRadius: Appearance?.rounding?.normal ?? 17
-        bottomLeftRadius: 5
-        bottomRightRadius: 5
+        implicitHeight: 154 * Appearance.sizes.islandScale
+        topLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        topRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        bottomLeftRadius: 5 * Appearance.sizes.islandScale
+        bottomRightRadius: 5 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 8
-            anchors.topMargin: 6
-            anchors.bottomMargin: 6
-            spacing: 2
+            anchors.margins: 8 * Appearance.sizes.islandScale
+            anchors.topMargin: 6 * Appearance.sizes.islandScale
+            anchors.bottomMargin: 6 * Appearance.sizes.islandScale
+            spacing: 2 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 24
+                Layout.preferredHeight: 24 * Appearance.sizes.islandScale
                 IslandButton {
                     contentColors: root.contentColors
-                    implicitHeight: 24
-                    implicitWidth: 24
+                    implicitHeight: 24 * Appearance.sizes.islandScale
+                    implicitWidth: 24 * Appearance.sizes.islandScale
                     symbol: "chevron_left"
                     Accessible.name: Translation.tr("Previous month")
                     onClicked: root.monthOffset--
                 }
                 RippleButton {
                     Layout.fillWidth: true
-                    implicitHeight: 24
+                    implicitHeight: 24 * Appearance.sizes.islandScale
                     topPadding: 0
                     bottomPadding: 0
-                    buttonRadius: 8
+                    buttonRadius: 8 * Appearance.sizes.islandScale
                     Accessible.name: Translation.tr("Return to today")
                     onClicked: root.monthOffset = 0
                     contentItem: StyledText {
                         text: Qt.formatDate(root.month, "MMMM yyyy")
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        font.pixelSize: 13
+                        font.pixelSize: 13 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         color: root.contentColors.colOnLayer0
                     }
                 }
                 IslandButton {
                     contentColors: root.contentColors
-                    implicitHeight: 24
-                    implicitWidth: 24
+                    implicitHeight: 24 * Appearance.sizes.islandScale
+                    implicitWidth: 24 * Appearance.sizes.islandScale
                     symbol: "chevron_right"
                     Accessible.name: Translation.tr("Next month")
                     onClicked: root.monthOffset++
@@ -98,7 +98,7 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 14
+                Layout.preferredHeight: 14 * Appearance.sizes.islandScale
                 spacing: 0
                 Repeater {
                     model: CalendarLayout.weekDays
@@ -109,7 +109,7 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         color: root.contentColors.colSubtext
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * Appearance.sizes.islandScale
                     }
                 }
             }
@@ -117,19 +117,19 @@ ColumnLayout {
             GridLayout {
                 Layout.fillWidth: true
                 columns: 7
-                rowSpacing: 1
+                rowSpacing: 1 * Appearance.sizes.islandScale
                 columnSpacing: 0
                 Repeater {
                     model: root.days
                     Item {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: 16
+                        implicitHeight: 16 * Appearance.sizes.islandScale
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 17
-                            height: 17
-                            radius: 8.5
+                            width: 17 * Appearance.sizes.islandScale
+                            height: 17 * Appearance.sizes.islandScale
+                            radius: 8.5 * Appearance.sizes.islandScale
                             color: Appearance.colors.colPrimary
                             visible: parent.modelData.today === 1
                         }
@@ -138,7 +138,7 @@ ColumnLayout {
                             text: parent.modelData.day
                             opacity: parent.modelData.today === -1 ? 0.35 : 1
                             color: parent.modelData.today === 1 ? Appearance.colors.colOnPrimary : root.contentColors.colOnLayer0
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * Appearance.sizes.islandScale
                             font.weight: parent.modelData.today === 1 ? Font.DemiBold : Font.Normal
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -151,37 +151,37 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 46
-        topLeftRadius: 5
-        topRightRadius: 5
-        bottomLeftRadius: Appearance?.rounding?.normal ?? 17
-        bottomRightRadius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 46 * Appearance.sizes.islandScale
+        topLeftRadius: 5 * Appearance.sizes.islandScale
+        topRightRadius: 5 * Appearance.sizes.islandScale
+        bottomLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        bottomRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
 
         RowLayout {
             id: taskRow
             anchors.fill: parent
-            anchors.margins: 6
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 8
+            anchors.margins: 6 * Appearance.sizes.islandScale
+            anchors.leftMargin: 8 * Appearance.sizes.islandScale
+            anchors.rightMargin: 8 * Appearance.sizes.islandScale
+            spacing: 8 * Appearance.sizes.islandScale
 
             IslandButton {
                 contentColors: root.contentColors
                 symbol: "chevron_left"
-                implicitHeight: 26
-                implicitWidth: 26
+                implicitHeight: 26 * Appearance.sizes.islandScale
+                implicitWidth: 26 * Appearance.sizes.islandScale
                 enabled: root.tasks.length > 1 && !root.busy
                 Accessible.name: Translation.tr("Previous task")
                 onClicked: root.taskIndex = (root.taskIndex - 1 + root.tasks.length) % root.tasks.length
             }
 
             RippleButton {
-                implicitHeight: 26
-                implicitWidth: 26
+                implicitHeight: 26 * Appearance.sizes.islandScale
+                implicitWidth: 26 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 6
+                buttonRadius: 6 * Appearance.sizes.islandScale
                 enabled: !!root.displayedTask
                 Accessible.role: Accessible.CheckBox
                 Accessible.name: Translation.tr("Complete task")
@@ -191,9 +191,9 @@ ColumnLayout {
                 contentItem: Item {
                     Rectangle {
                         anchors.centerIn: parent
-                        width: 18
-                        height: 18
-                        radius: 5
+                        width: 18 * Appearance.sizes.islandScale
+                        height: 18 * Appearance.sizes.islandScale
+                        radius: 5 * Appearance.sizes.islandScale
                         border.width: 2
                         border.color: root.completingTask ? Appearance.colors.colPrimary : root.contentColors.colOnSurfaceVariant
                         color: root.completingTask ? Appearance.colors.colPrimary : "transparent"
@@ -201,7 +201,7 @@ ColumnLayout {
                         MaterialSymbol {
                             anchors.centerIn: parent
                             text: "check"
-                            iconSize: 14
+                            iconSize: 14 * Appearance.sizes.islandScale
                             color: Appearance.colors.colOnPrimary
                             opacity: root.checkProgress
                             scale: 0.5 + root.checkProgress * 0.5
@@ -220,14 +220,14 @@ ColumnLayout {
                 StyledText {
                     text: root.completionCaption || Translation.tr("Tasks") + (root.tasks.length ? " · " + (root.taskIndex + 1) + " / " + root.tasks.length : "")
                     color: root.contentColors.colSubtext
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * Appearance.sizes.islandScale
                 }
 
                 StyledText {
                     Layout.fillWidth: true
                     text: root.displayedTask?.content || Translation.tr("All caught up")
                     color: root.contentColors.colOnLayer0
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     wrapMode: Text.WordWrap
                     maximumLineCount: 1
                     elide: Text.ElideRight
@@ -237,8 +237,8 @@ ColumnLayout {
             IslandButton {
                 contentColors: root.contentColors
                 symbol: "chevron_right"
-                implicitHeight: 26
-                implicitWidth: 26
+                implicitHeight: 26 * Appearance.sizes.islandScale
+                implicitWidth: 26 * Appearance.sizes.islandScale
                 enabled: root.tasks.length > 1 && !root.busy
                 Accessible.name: Translation.tr("Next task")
                 onClicked: root.taskIndex = (root.taskIndex + 1) % root.tasks.length

@@ -13,11 +13,11 @@ StyledPopup {
 
     Row {
         anchors.centerIn: parent
-        spacing: 12
+        spacing: 12 * root.uiScale
 
         Column {
             anchors.top: parent.top
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             StyledPopupHeaderRow {
                 icon: "memory"
@@ -25,7 +25,7 @@ StyledPopup {
             }
 
             Column {
-                spacing: 4
+                spacing: 4 * root.uiScale
 
                 StyledPopupValueRow {
                     icon: "clock_loader_60"
@@ -52,7 +52,7 @@ StyledPopup {
         Column {
             visible: ResourceUsage.swapTotal > 0
             anchors.top: parent.top
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             StyledPopupHeaderRow {
                 icon: "swap_horiz"
@@ -60,7 +60,7 @@ StyledPopup {
             }
 
             Column {
-                spacing: 4
+                spacing: 4 * root.uiScale
 
                 StyledPopupValueRow {
                     icon: "clock_loader_60"
@@ -86,7 +86,7 @@ StyledPopup {
 
         Column {
             anchors.top: parent.top
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             StyledPopupHeaderRow {
                 icon: "planner_review"
@@ -94,7 +94,7 @@ StyledPopup {
             }
 
             Column {
-                spacing: 4
+                spacing: 4 * root.uiScale
 
                 StyledPopupValueRow {
                     icon: "bolt"
@@ -120,7 +120,7 @@ StyledPopup {
 
         ColumnLayout {
             Layout.alignment: Qt.AlignTop
-            spacing: 8
+            spacing: 8 * root.uiScale
             visible: (Config.options?.resources?.enableGpu !== false) &&
                      (Config.options?.resources?.gpu?.bar?.showIGpu !== false) &&
                      GpuUsage.iGpuAvailable &&
@@ -159,7 +159,7 @@ StyledPopup {
 
         ColumnLayout {
             Layout.alignment: Qt.AlignTop
-            spacing: 8
+            spacing: 8 * root.uiScale
             visible: (Config.options?.resources?.enableGpu !== false) &&
                      (Config.options?.resources?.gpu?.bar?.showDGpu !== false) &&
                      GpuUsage.dGpuAvailable &&

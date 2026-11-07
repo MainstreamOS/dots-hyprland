@@ -15,6 +15,7 @@ import Qt5Compat.GraphicalEffects
 
 ButtonMouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.barContent
 
     property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
@@ -28,13 +29,13 @@ ButtonMouseArea {
     property bool vertical: Config.options.bar.vertical
     property bool superPressAndHeld: false // Relevant modifications at bottom of file
 
-    property real workspaceButtonWidth: 26
-    property real activeWorkspaceMargin: 2
+    property real workspaceButtonWidth: 26 * root.uiScale
+    property real activeWorkspaceMargin: 2 * root.uiScale
     property real activeWorkspaceSize: workspaceButtonWidth - activeWorkspaceMargin * 2
     property real workspaceIconSize: workspaceButtonWidth * (Config.options.bar.workspaces.circleAppIcons ? 0.69 : 0.57)
     property real workspaceIconSizeShrinked: workspaceButtonWidth * 0.55
     property real workspaceIconOpacityShrinked: 1
-    property real workspaceIconMarginShrinked: -4
+    property real workspaceIconMarginShrinked: -4 * root.uiScale
     property int workspaceIndexInGroup: (monitor?.activeWorkspace?.id - 1) % wsModel.shownCount
     property real specialTextSize: workspaceButtonWidth * 0.5
 
@@ -95,7 +96,7 @@ ButtonMouseArea {
         anchors.bottomMargin: root.vertical ? -dragExtension : 0
         z: 10
 
-        property int dragExtension: 50    // extra px of catch area on each side
+        property real dragExtension: 50 * root.uiScale    // extra px of catch area on each side
         property real deadZone: 0.18
         property real minSpeed: 1.5       // workspaces per second just outside dead zone
         property real maxSpeed: 2.0       // workspaces per second at the edge
@@ -325,8 +326,8 @@ ButtonMouseArea {
                                 anchors {
                                     bottom: parent.bottom
                                     right: parent.right
-                                    bottomMargin: (wsApp.implicitHeight - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
-                                    rightMargin: (wsApp.implicitWidth - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    bottomMargin: (wsApp.height - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    rightMargin: (wsApp.width - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
                                 }
                                 animated: !wsApp.biggestWindow
                                 visible: false
@@ -382,8 +383,8 @@ ButtonMouseArea {
                                 anchors {
                                     bottom: parent.bottom
                                     right: parent.right
-                                    bottomMargin: (wsApp.implicitHeight - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
-                                    rightMargin: (wsApp.implicitWidth - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    bottomMargin: (wsApp.height - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
+                                    rightMargin: (wsApp.width - root.workspaceButtonWidth) / 2 + wsApp.cornerMargin
                                 }
                                 source: wsApp.mainAppIconSource
                                 implicitSize: (!root.superPressAndHeld && Config.options?.bar.workspaces.showAppIcons) ? root.workspaceIconSize : root.workspaceIconSizeShrinked
@@ -485,6 +486,8 @@ ButtonMouseArea {
         readonly property int wsId: wsModel.getWorkspaceIdAt(index)
         implicitWidth: root.vertical ? root.barThickness : root.workspaceButtonWidth
         implicitHeight: root.vertical ? root.workspaceButtonWidth : root.barThickness
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
     }
 
     component NumberWorkspaceItem: WorkspaceItem {
@@ -535,7 +538,7 @@ ButtonMouseArea {
             StyledText {
                 anchors.centerIn: parent
                 font {
-                    pixelSize: Appearance.font.pixelSize.small - ((text.length - 1) * (text !== "10") * 2)
+                    pixelSize: (Appearance.font.pixelSize.small - ((text.length - 1) * (text !== "10") * 2)) * root.uiScale
                     family: Config.options?.bar.workspaces.useNerdFont ? Appearance.font.family.iconNerd : defaultFont
                 }
                 color: wsNum.contentColor

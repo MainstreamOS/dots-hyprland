@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -10,6 +11,7 @@ import QtQuick
  */
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     // Handed the strip's tones when this sits bare on it rather than in a group.
     property Appearance.SurfaceContent tones: Appearance.barContent
 
@@ -28,7 +30,7 @@ MouseArea {
     // CustomIcon is a plain Item and carries no implicit size of its own. The
     // extra width on the right is the gutter the dot sits in — the M is solid
     // to all four corners, so a badge laid over it would be unreadable.
-    implicitWidth: icon.width + 4 + 7
+    implicitWidth: icon.width + (4 + 7) * root.uiScale
     // baseBarHeight, not barHeight: this renders without a pill, and on a
     // floating bar barHeight is taller by the gap on each side, which would
     // stretch the row and drop everything sharing it.
@@ -46,15 +48,15 @@ MouseArea {
         id: icon
         anchors {
             left: parent.left
-            leftMargin: 2
+            leftMargin: 2 * root.uiScale
             verticalCenter: parent.verticalCenter
         }
         // 238x104 in the source, kept to that ratio. Sized so the M itself
         // still lands at the same width it did alone and the stream strokes
         // account for the rest. The viewBox padding is scaled to survive this
         // size — too little and antialiasing shaves the outer stems.
-        width: 36
-        height: 16
+        width: 36 * root.uiScale
+        height: 16 * root.uiScale
         source: "mainstream-symbolic.svg"
         colorize: true
         color: root.tones.colOnLayer1
@@ -62,14 +64,14 @@ MouseArea {
         Rectangle {
             anchors {
                 left: parent.right
-                leftMargin: 1
+                leftMargin: 1 * root.uiScale
                 top: parent.top
                 // Above the mark's cap rather than level with it, so it reads
                 // as a badge on the icon instead of part of the artwork.
-                topMargin: -3
+                topMargin: -3 * root.uiScale
             }
-            implicitWidth: 6
-            implicitHeight: 6
+            implicitWidth: 6 * root.uiScale
+            implicitHeight: 6 * root.uiScale
             radius: height / 2
             color: root.dotColors[ReleaseUpdates.severity] ?? root.tones.colOnLayer1
         }

@@ -9,8 +9,9 @@ import QtQuick.Layouts
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool hovered: false
-    implicitWidth: rowLayout.implicitWidth + 4 * 2
+    implicitWidth: rowLayout.implicitWidth + 4 * 2 * root.uiScale
     implicitHeight: Appearance.sizes.baseBarHeight
 
     acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -35,14 +36,14 @@ MouseArea {
         MaterialSymbol {
             fill: 0
             text: Icons.getWeatherIcon(Weather.data.wCode) ?? "cloud"
-            iconSize: Appearance.font.pixelSize.large
+            iconSize: Appearance.font.pixelSize.large * root.uiScale
             color: Appearance.barContent.colOnLayer1
             Layout.alignment: Qt.AlignVCenter
         }
 
         StyledText {
             visible: true
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
             color: Appearance.barContent.colOnLayer1
             text: Weather.data?.temp ?? "--°"
             Layout.alignment: Qt.AlignVCenter

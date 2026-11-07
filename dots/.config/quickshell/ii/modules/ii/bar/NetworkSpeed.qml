@@ -1,3 +1,4 @@
+import Quickshell
 import qs
 import qs.modules.common
 import qs.modules.common.widgets
@@ -11,6 +12,7 @@ import QtQuick.Layouts
  */
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     implicitWidth: rowLayout.implicitWidth + rowLayout.anchors.leftMargin + rowLayout.anchors.rightMargin
     implicitHeight: Appearance.sizes.baseBarHeight
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
@@ -24,8 +26,8 @@ MouseArea {
 
         spacing: 0
         anchors.fill: parent
-        anchors.leftMargin: 4
-        anchors.rightMargin: 4
+        anchors.leftMargin: 4 * root.uiScale
+        anchors.rightMargin: 4 * root.uiScale
 
         SpeedReading {
             iconName: "arrow_downward"
@@ -33,7 +35,7 @@ MouseArea {
         }
 
         SpeedReading {
-            Layout.leftMargin: 6
+            Layout.leftMargin: 6 * root.uiScale
             iconName: "arrow_upward"
             value: NetworkUsage.formatRate(NetworkUsage.uploadRate)
         }
@@ -49,13 +51,13 @@ MouseArea {
         id: reading
         required property string iconName
         required property string value
-        spacing: 2
+        spacing: 2 * root.uiScale
 
         MaterialSymbol {
             Layout.alignment: Qt.AlignVCenter
             fill: 0
             text: reading.iconName
-            iconSize: Appearance.font.pixelSize.normal
+            iconSize: Appearance.font.pixelSize.normal * root.uiScale
             color: Appearance.barContent.colOnLayer1
         }
 
@@ -79,7 +81,7 @@ MouseArea {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                 // Tabular figures: every digit is one width, so no reading
                 // outgrows the slot measured on eights.
                 font.features: ({ "tnum": 1 })

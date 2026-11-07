@@ -7,6 +7,8 @@ Text {
     property bool animateChange: false
     property real animationDistanceX: 0
     property real animationDistanceY: 6
+    // The size its window draws at, for the bar and the Island; 1 everywhere else.
+    property real uiScale: QsWindow.window?.uiScale ?? 1
 
     // Sidebars opt into native glyphs without changing ordinary interface text.
     // Large display text still rasterizes at its final size, as before.
@@ -19,7 +21,7 @@ Text {
     font {
         hintingPreference: Font.PreferDefaultHinting
         family: defaultFont
-        pixelSize: Appearance?.font.pixelSize.small ?? 15
+        pixelSize: (Appearance?.font.pixelSize.small ?? 15) * root.uiScale
         variableAxes: shouldUseNumberFont ? ({}) : Appearance.font.variableAxes.main
     }
     color: Appearance?.m3colors.m3onBackground ?? "black"

@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import qs.modules.common
@@ -6,6 +7,7 @@ import qs.modules.common.functions
 
 RippleButton {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.islandContent
     property string symbol: ""
     property string subtitle: ""
@@ -13,13 +15,13 @@ RippleButton {
     readonly property bool iconOnly: text.length === 0 && subtitle.length === 0
     readonly property color ink: highlighted ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colOnLayer1
 
-    implicitHeight: compact ? 42 : subtitle ? 58 : 34
-    implicitWidth: iconOnly ? implicitHeight : subtitle ? 170 : Math.max(implicitHeight, (buttonContent ? buttonContent.implicitWidth : 0) + leftPadding + rightPadding)
+    implicitHeight: (compact ? 42 : subtitle ? 58 : 34) * root.uiScale
+    implicitWidth: iconOnly ? implicitHeight : subtitle ? 170 * root.uiScale : Math.max(implicitHeight, (buttonContent ? buttonContent.implicitWidth : 0) + leftPadding + rightPadding)
     topPadding: 0
     bottomPadding: 0
-    leftPadding: iconOnly ? 0 : (compact ? 10 : 12)
-    rightPadding: iconOnly ? 0 : (compact ? 10 : 12)
-    buttonRadius: subtitle ? 12 : compact ? 9 : 10
+    leftPadding: iconOnly ? 0 : (compact ? 10 : 12) * root.uiScale
+    rightPadding: iconOnly ? 0 : (compact ? 10 : 12) * root.uiScale
+    buttonRadius: (subtitle ? 12 : compact ? 9 : 10) * root.uiScale
     colBackground: highlighted ? Appearance.colors.colPrimaryContainer : Appearance.surfaces.raised
     colBackgroundHover: highlighted ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
     colRipple: highlighted ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
@@ -33,7 +35,7 @@ RippleButton {
             anchors.centerIn: parent
             visible: root.iconOnly
             text: root.symbol
-            iconSize: root.compact ? 16 : 18
+            iconSize: (root.compact ? 16 : 18) * root.uiScale
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             color: root.ink
@@ -43,13 +45,13 @@ RippleButton {
             id: buttonContent
             anchors.centerIn: parent
             visible: !root.iconOnly
-            spacing: root.compact ? 6 : 7
+            spacing: (root.compact ? 6 : 7) * root.uiScale
 
             MaterialSymbol {
                 Layout.alignment: Qt.AlignVCenter
                 visible: root.symbol.length > 0
                 text: root.symbol
-                iconSize: root.compact ? 16 : 18
+                iconSize: (root.compact ? 16 : 18) * root.uiScale
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 color: root.ink
@@ -58,7 +60,7 @@ RippleButton {
             ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
                 visible: root.text.length > 0 || root.subtitle.length > 0
-                spacing: 1
+                spacing: 1 * root.uiScale
 
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
@@ -66,7 +68,7 @@ RippleButton {
                     text: root.text
                     elide: Text.ElideRight
                     color: root.ink
-                    font.pixelSize: root.compact ? 11 : 12
+                    font.pixelSize: (root.compact ? 11 : 12) * root.uiScale
                     font.weight: Font.DemiBold
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -76,10 +78,10 @@ RippleButton {
                     text: root.subtitle
                     visible: text.length > 0
                     color: root.highlighted ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colSubtext
-                    font.pixelSize: root.compact ? 10 : 11
+                    font.pixelSize: (root.compact ? 10 : 11) * root.uiScale
                     elide: Text.ElideRight
                     verticalAlignment: Text.AlignVCenter
-                    Layout.maximumWidth: root.width - 48
+                    Layout.maximumWidth: root.width - 48 * root.uiScale
                 }
             }
         }

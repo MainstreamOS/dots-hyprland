@@ -10,7 +10,7 @@ Flickable {
     id: root
     property var contentColors: Appearance.islandContent
     property var entries: []
-    implicitHeight: 60
+    implicitHeight: 60 * Appearance.sizes.islandScale
     contentWidth: cards.width
     contentHeight: height
     flickableDirection: Flickable.HorizontalFlick
@@ -44,7 +44,7 @@ Flickable {
     Row {
         id: cards
         height: root.height
-        spacing: 2
+        spacing: 2 * Appearance.sizes.islandScale
         Repeater {
             model: root.entries
             Rectangle {
@@ -53,10 +53,10 @@ Flickable {
                 required property int index
                 width: root.entries.length === 1 ? root.width : (root.width - cards.spacing * (root.entries.length - 1)) / root.entries.length
                 height: root.height
-                topLeftRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === 0 ? (Appearance?.rounding?.normal ?? 17) : 4
-                bottomLeftRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === 0 ? (Appearance?.rounding?.normal ?? 17) : 4
-                topRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) : 4
-                bottomRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) : 4
+                topLeftRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : card.index === 0 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : 4 * Appearance.sizes.islandScale
+                bottomLeftRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : card.index === 0 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : 4 * Appearance.sizes.islandScale
+                topRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : 4 * Appearance.sizes.islandScale
+                bottomRightRadius: root.entries.length === 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : card.index === root.entries.length - 1 ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : 4 * Appearance.sizes.islandScale
                 readonly property color ink: root.contentColors.colOnLayer0
                 readonly property bool charging: modelData.state === UPowerDeviceState.Charging
                 readonly property real level: Math.max(0, Math.min(1, modelData.percentage))
@@ -67,29 +67,29 @@ Flickable {
                 Accessible.name: modelData.label + " · " + Math.round(level * 100) + "% · " + root.details(modelData)
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 9
-                    spacing: 3
+                    anchors.margins: 9 * Appearance.sizes.islandScale
+                    spacing: 3 * Appearance.sizes.islandScale
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 5
-                        MaterialSymbol { text: card.modelData.symbol; iconSize: 18; color: card.accent }
-                        StyledText { Layout.fillWidth: true; Layout.minimumWidth: 0; text: card.modelData.label; color: card.ink; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; textFormat: Text.PlainText }
-                        MaterialSymbol { visible: card.charging; text: "bolt"; iconSize: 14; color: card.accent }
-                        StyledText { text: Math.round(card.level * 100) + "%"; font.pixelSize: 13; font.weight: Font.DemiBold; color: card.accent }
+                        spacing: 5 * Appearance.sizes.islandScale
+                        MaterialSymbol { text: card.modelData.symbol; iconSize: 18 * Appearance.sizes.islandScale; color: card.accent }
+                        StyledText { Layout.fillWidth: true; Layout.minimumWidth: 0; text: card.modelData.label; color: card.ink; font.pixelSize: 12 * Appearance.sizes.islandScale; font.weight: Font.Medium; elide: Text.ElideRight; textFormat: Text.PlainText }
+                        MaterialSymbol { visible: card.charging; text: "bolt"; iconSize: 14 * Appearance.sizes.islandScale; color: card.accent }
+                        StyledText { text: Math.round(card.level * 100) + "%"; font.pixelSize: 13 * Appearance.sizes.islandScale; font.weight: Font.DemiBold; color: card.accent }
                     }
                     StyledText {
                         Layout.fillWidth: true
                         text: root.details(card.modelData)
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * Appearance.sizes.islandScale
                         color: root.contentColors.colOnSurfaceVariant
                         elide: Text.ElideRight
                     }
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 3
-                        radius: 1.5
+                        implicitHeight: 3 * Appearance.sizes.islandScale
+                        radius: 1.5 * Appearance.sizes.islandScale
                         color: Qt.rgba(card.ink.r, card.ink.g, card.ink.b, 0.12)
-                        Rectangle { height: parent.height; width: parent.width * card.level; radius: 1.5; color: card.accent }
+                        Rectangle { height: parent.height; width: parent.width * card.level; radius: 1.5 * Appearance.sizes.islandScale; color: card.accent }
                     }
                 }
             }

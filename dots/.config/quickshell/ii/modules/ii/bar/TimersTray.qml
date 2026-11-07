@@ -9,6 +9,7 @@ import QtQuick.Controls
 BarGroup {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     readonly property bool pRunning: TimerService.pomodoroRunning ?? false
     readonly property bool sRunning: TimerService.stopwatchRunning ?? false
     readonly property bool cRunning: TimerService.countdownRunning ?? false
@@ -41,16 +42,16 @@ BarGroup {
         // The grid would compress the row while the pill's width animates
         // up; pinning the minimum keeps the reveal from squashing it.
         Layout.minimumWidth: implicitWidth
-        spacing: 15
+        spacing: 15 * root.uiScale
 
         // --- POMODORO SECTION ---
         RowLayout {
             visible: (root.pRunning && root.sRunning) || (!root.sRunning && root.hasPomo)
-            spacing: 5
+            spacing: 5 * root.uiScale
 
             MaterialSymbol {
                 text: "search_activity"
-                iconSize: Appearance.font.pixelSize.large
+                iconSize: Appearance.font.pixelSize.large * root.uiScale
                 color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -59,7 +60,7 @@ BarGroup {
                     return TimerService.formatCountdown(TimerService.pomodoroSecondsLeft)
                 }
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                 // Tabular figures: every digit shares one width, so a ticking
                 // time doesn't resize the pill.
                 font.features: ({ "tnum": 1 })
@@ -70,11 +71,11 @@ BarGroup {
         // --- STOPWATCH SECTION ---
         RowLayout {
             visible: root.sRunning || (root.hasStop && !root.hasPomo && !root.hasCountdown)
-            spacing: 5
+            spacing: 5 * root.uiScale
 
             MaterialSymbol {
                 text: "timer"
-                iconSize: Appearance.font.pixelSize.large
+                iconSize: Appearance.font.pixelSize.large * root.uiScale
                 color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -87,7 +88,7 @@ BarGroup {
                     (t%100).toString().padStart(2,'0')
                 }
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                 font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -96,11 +97,11 @@ BarGroup {
         // --- COUNTDOWN SECTION ---
         RowLayout {
             visible: (root.cRunning && root.sRunning) || (!root.sRunning && root.hasCountdown)
-            spacing: 5
+            spacing: 5 * root.uiScale
 
             MaterialSymbol {
                 text: "hourglass_top"
-                iconSize: Appearance.font.pixelSize.large
+                iconSize: Appearance.font.pixelSize.large * root.uiScale
                 color: Appearance.barContent.colOnLayer1
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -109,7 +110,7 @@ BarGroup {
                     return TimerService.formatCountdown(TimerService.countdownSecondsLeft)
                 }
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                 font.features: ({ "tnum": 1 })
                 Layout.alignment: Qt.AlignVCenter
             }

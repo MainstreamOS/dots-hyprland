@@ -10,6 +10,7 @@ import Quickshell.Services.UPower
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.barContent
     property bool borderless: Config.options.bar.borderless
     implicitWidth: rowLayout.implicitWidth + rowLayout.spacing * 2
@@ -18,7 +19,7 @@ Item {
     RowLayout {
         id: rowLayout
 
-        spacing: 4
+        spacing: 4 * root.uiScale
         anchors.centerIn: parent
 
         Loader {
@@ -32,7 +33,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 1
                     text: "screenshot_region"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -49,7 +50,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 1
                     text: "videocam"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -66,7 +67,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 1
                     text: "colorize"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -83,7 +84,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 0
                     text: "keyboard"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -100,7 +101,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 0
                     text: Pipewire.defaultAudioSource?.audio?.muted ? "mic_off" : "mic"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -123,7 +124,7 @@ Item {
                     horizontalAlignment: Qt.AlignHCenter
                     fill: 0
                     text: Appearance.m3colors.darkmode ? "light_mode" : "dark_mode"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }
@@ -157,7 +158,7 @@ Item {
                         case PowerProfile.Balanced: return "airwave"
                         case PowerProfile.Performance: return "local_fire_department"
                     }
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: root.contentColors.colOnLayer2
                 }
             }

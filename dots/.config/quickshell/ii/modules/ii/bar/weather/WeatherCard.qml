@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
@@ -6,10 +7,11 @@ import qs.modules.common.widgets
 
 Rectangle {
     id: root
-    radius: Appearance.rounding.small
+    property real uiScale: QsWindow.window?.uiScale ?? 1
+    radius: Appearance.rounding.small * root.uiScale
     color: Appearance.colors.colSurfaceContainerHigh
-    implicitWidth: columnLayout.implicitWidth + 14 * 2
-    implicitHeight: columnLayout.implicitHeight + 14 * 2
+    implicitWidth: columnLayout.implicitWidth + 14 * 2 * root.uiScale
+    implicitHeight: columnLayout.implicitHeight + 14 * 2 * root.uiScale
     Layout.fillWidth: parent
 
     property alias title: title.text
@@ -19,25 +21,25 @@ Rectangle {
     ColumnLayout {
         id: columnLayout
         anchors.fill: parent
-        spacing: -10
+        spacing: -10 * root.uiScale
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             MaterialSymbol {
                 id: symbol
                 fill: 0
-                iconSize: Appearance.font.pixelSize.normal
+                iconSize: Appearance.font.pixelSize.normal * root.uiScale
                 color: Appearance.colors.colOnSurfaceVariant
             }
             StyledText {
                 id: title
-                font.pixelSize: Appearance.font.pixelSize.smaller
+                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                 color: Appearance.colors.colOnSurfaceVariant
             }
         }
         StyledText {
             id: value
             Layout.alignment: Qt.AlignHCenter
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
             color: Appearance.colors.colOnSurfaceVariant
         }
     }

@@ -45,7 +45,7 @@ StyledPopup {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 8
+        spacing: 8 * root.uiScale
 
         // Held here because the popup itself only takes the one item it
         // shows. While the field has the keyboard the bars count as part of
@@ -67,8 +67,8 @@ StyledPopup {
             id: nameField
             Layout.fillHeight: false
             Layout.fillWidth: true
-            implicitWidth: 240
-            implicitHeight: 40
+            implicitWidth: 240 * root.uiScale
+            implicitHeight: 40 * root.uiScale
             colBackground: Appearance.colors.colLayer2
             // The popup window is only as big as its card, so the stock
             // right-click menu would open clipped and out of reach.
@@ -81,16 +81,16 @@ StyledPopup {
 
         StyledText {
             Layout.fillWidth: true
-            Layout.maximumWidth: 240
+            Layout.maximumWidth: 240 * root.uiScale
             wrapMode: Text.WordWrap
             text: Translation.tr("Shown instead of window titles until you clear it")
-            font.pixelSize: Appearance.font.pixelSize.smaller
+            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
             color: Appearance.colors.colSubtext
         }
 
         RowLayout {
             Layout.alignment: Qt.AlignRight
-            spacing: 4
+            spacing: 4 * root.uiScale
 
             DialogButton {
                 buttonText: Translation.tr("Clear")

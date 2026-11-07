@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -16,6 +17,7 @@ import Quickshell.Widgets
 Slider {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property list<real> stopIndicatorValues: [1]
     property list<real> dividerValues: []
     enum Configuration {
@@ -30,26 +32,28 @@ Slider {
     property var configuration: StyledSlider.Configuration.S
 
     property bool showHandle: true
-    property real handleDefaultWidth: 3
-    property real handlePressedWidth: 1.5
+    property real handleDefaultWidth: 3 * root.uiScale
+    property real handlePressedWidth: 1.5 * root.uiScale
     property color highlightColor: Appearance.colors.colPrimary
     property color trackColor: Appearance.colors.colSecondaryContainer
     property color handleColor: Appearance.colors.colPrimary
     property color dotColor: Appearance.m3colors.m3onSecondaryContainer
     property color dotColorHighlighted: Appearance.m3colors.m3onPrimary
     property real unsharpenRadius: Appearance.rounding.unsharpen
-    property real trackWidth: configuration
-    property real trackRadius: !showHandle ? (trackWidth / 2)
-        : trackWidth >= StyledSlider.Configuration.XL ? 21
-        : trackWidth >= StyledSlider.Configuration.L ? 12
-        : trackWidth >= StyledSlider.Configuration.M ? 9
-        : trackWidth >= StyledSlider.Configuration.S ? 6
-        : trackWidth / 2
-    property real handleHeight: showHandle ? ((configuration === StyledSlider.Configuration.Wavy) ? Appearance.sizes.wavySliderHeight : Math.max(33, trackWidth + 9)) : 0
+    property real trackWidth: configuration * root.uiScale
+    // The configurations name unscaled widths, so the track is measured back at that size.
+    readonly property real baseTrackWidth: trackWidth / root.uiScale
+    property real trackRadius: (!showHandle ? (baseTrackWidth / 2)
+        : baseTrackWidth >= StyledSlider.Configuration.XL ? 21
+        : baseTrackWidth >= StyledSlider.Configuration.L ? 12
+        : baseTrackWidth >= StyledSlider.Configuration.M ? 9
+        : baseTrackWidth >= StyledSlider.Configuration.S ? 6
+        : baseTrackWidth / 2) * root.uiScale
+    property real handleHeight: showHandle ? ((configuration === StyledSlider.Configuration.Wavy) ? Appearance.sizes.wavySliderHeight : Math.max(33, baseTrackWidth + 9)) * root.uiScale : 0
     property real handleWidth: showHandle ? (root.pressed ? handlePressedWidth : handleDefaultWidth) : 0
-    property real handleMargins: showHandle ? 4 : 0
-    property real dividerMargins: 2
-    property real trackDotSize: 3
+    property real handleMargins: showHandle ? 4 * root.uiScale : 0
+    property real dividerMargins: 2 * root.uiScale
+    property real trackDotSize: 3 * root.uiScale
     property bool usePercentTooltip: true
     property string tooltipContent: usePercentTooltip ? `${Math.round(((value - from) / (to - from)) * 100)}%` : `${Math.round(value)}`
     property bool wavy: configuration === StyledSlider.Configuration.Wavy // If true, the progress bar will have a wavy fill effect

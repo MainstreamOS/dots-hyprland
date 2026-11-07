@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.functions
 import QtQuick
@@ -5,8 +6,9 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool vertical: false
-    property real padding: 5
+    property real padding: 5 * root.uiScale
     // Opt-in glow — when true the group pill picks up a primary border
     // (and a faint primary tint, so the shape stays visible even in
     // line-separated mode where the fill is otherwise transparent).
@@ -24,8 +26,8 @@ Item {
         id: background
         anchors {
             fill: parent
-            topMargin: root.vertical ? 0 : 4
-            bottomMargin: root.vertical ? 0 : 4
+            topMargin: root.vertical ? 0 : 4 * root.uiScale
+            bottomMargin: root.vertical ? 0 : 4 * root.uiScale
             leftMargin: root.vertical ? 4 : 0
             rightMargin: root.vertical ? 4 : 0
         }
@@ -33,7 +35,7 @@ Item {
         // while the icons on it switch at once passes through a moment where
         // neither reads. The drag-over glow is laid over it and eases alone.
         color: Config.options?.bar.borderless ? "transparent" : Appearance.colBarPill
-        radius: Appearance.rounding.barWidget
+        radius: Appearance.rounding.barWidget * root.uiScale
 
         Rectangle {
             anchors.fill: parent
@@ -65,7 +67,7 @@ Item {
             bottom: root.vertical ? parent.bottom : undefined
             margins: root.padding
         }
-        columnSpacing: 4
-        rowSpacing: 12
+        columnSpacing: 4 * root.uiScale
+        rowSpacing: 12 * root.uiScale
     }
 }

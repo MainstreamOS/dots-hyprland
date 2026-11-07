@@ -15,7 +15,8 @@ import Quickshell.Services.Mpris
 Item {
     id: root
 
-    property real radius: Appearance.rounding.medium
+    property real uiScale: QsWindow.window?.uiScale ?? 1
+    property real radius: Appearance.rounding.medium * root.uiScale
     property real targetWidth: 440
     property real targetHeight: 160
 
@@ -33,9 +34,9 @@ Item {
         id: actionButton
         property bool filled: false
         property string label: ""
-        implicitWidth: actionButtonText.implicitWidth + (filled ? 26 : 22)
-        implicitHeight: 28
-        buttonRadius: Appearance.rounding.small
+        implicitWidth: actionButtonText.implicitWidth + (filled ? 26 : 22) * root.uiScale
+        implicitHeight: 28 * root.uiScale
+        buttonRadius: Appearance.rounding.small * root.uiScale
         colBackground: filled ? root.blendedColors.colPrimary : Qt.rgba(0, 0, 0, 0)
         colBackgroundHover: filled ? root.blendedColors.colPrimaryHover
             : ColorUtils.transparentize(root.blendedColors.colSecondaryContainerHover, 0.5)
@@ -45,7 +46,7 @@ Item {
             id: actionButtonText
             anchors.centerIn: parent
             text: actionButton.label
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
             font.weight: actionButton.filled ? Font.DemiBold : Font.Normal
             color: actionButton.filled ? root.blendedColors.colOnPrimary : root.blendedColors.colOnLayer0
         }
@@ -82,7 +83,7 @@ Item {
     Rectangle {
         id: bg
         anchors.fill: parent
-        anchors.margins: Appearance.sizes.elevationMargin
+        anchors.margins: Appearance.sizes.elevationMargin * root.uiScale
         color: ColorUtils.applyAlpha(root.blendedColors.colLayer0, 1)
         radius: root.radius
 
@@ -121,16 +122,16 @@ Item {
         ColumnLayout {
             id: col
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 6
+            anchors.margins: 12 * root.uiScale
+            spacing: 6 * root.uiScale
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 8 * root.uiScale
 
                 MaterialSymbol {
                     text: "download"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: root.blendedColors.colOnLayer0
                 }
                 StyledText {
@@ -141,14 +142,14 @@ Item {
                             : Translation.tr("Receiving…"))
                         : Translation.tr("Receive via LocalSend")
                     elide: Text.ElideMiddle
-                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                     font.weight: Font.DemiBold
                     color: root.blendedColors.colOnLayer0
                 }
                 MaterialSymbol {
                     visible: root.uiState === "waiting"
                     text: "progress_activity"
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
                     color: root.blendedColors.colSubtext
                     NumberAnimation on rotation {
                         from: 0; to: 360
@@ -161,7 +162,7 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 1
+                Layout.preferredHeight: 1 * root.uiScale
                 color: Appearance.colors.colOutlineVariant
                 opacity: 0.4
             }
@@ -181,13 +182,13 @@ Item {
             Component {
                 id: waitingComp
                 ColumnLayout {
-                    spacing: 4
+                    spacing: 4 * root.uiScale
 
                     StyledText {
                         Layout.fillWidth: true
                         text: Translation.tr("Visible to nearby devices as \"%1\"").arg(LocalSend.receiveAlias)
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                         color: root.blendedColors.colOnLayer0
                     }
                     StyledText {
@@ -197,13 +198,13 @@ Item {
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
                         maximumLineCount: 2
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: 6 * root.uiScale
                         Item { Layout.fillWidth: true }
 
                         ActionButton {
@@ -222,14 +223,14 @@ Item {
             Component {
                 id: receivingComp
                 ColumnLayout {
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     Item { Layout.fillHeight: true }
                     StyledText {
                         Layout.fillWidth: true
                         text: LocalSend.receiveSender.length > 0
                             ? Translation.tr("Receiving from %1…").arg(LocalSend.receiveSender)
                             : Translation.tr("Receiving…")
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                         color: root.blendedColors.colSubtext
                         elide: Text.ElideRight
                     }
@@ -247,22 +248,22 @@ Item {
             Component {
                 id: doneComp
                 ColumnLayout {
-                    spacing: 4
+                    spacing: 4 * root.uiScale
 
                     Item { Layout.fillHeight: true }
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 8
+                        spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "check_circle"
-                            iconSize: Appearance.font.pixelSize.huge
+                            iconSize: Appearance.font.pixelSize.huge * root.uiScale
                             color: root.blendedColors.colPrimary
                         }
                         StyledText {
                             text: LocalSend.receiveLastCount === 1
                                 ? Translation.tr("Received 1 file")
                                 : Translation.tr("Received %1 files").arg(LocalSend.receiveLastCount)
-                            font.pixelSize: Appearance.font.pixelSize.large
+                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                         }
@@ -271,7 +272,7 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: 6 * root.uiScale
                         Item { Layout.fillWidth: true }
 
                         ActionButton {
@@ -290,19 +291,19 @@ Item {
             Component {
                 id: errorComp
                 ColumnLayout {
-                    spacing: 4
+                    spacing: 4 * root.uiScale
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "error"
-                            iconSize: Appearance.font.pixelSize.larger
+                            iconSize: Appearance.font.pixelSize.larger * root.uiScale
                             color: Appearance.colors.colError
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: Translation.tr("Receiving failed")
-                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                             elide: Text.ElideRight
@@ -314,7 +315,7 @@ Item {
                         text: LocalSend.receiveError || Translation.tr("Unknown error")
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
                     RowLayout {

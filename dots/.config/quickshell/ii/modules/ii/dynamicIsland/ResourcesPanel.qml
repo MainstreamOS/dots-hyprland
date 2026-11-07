@@ -13,7 +13,7 @@ import qs.modules.ii.bar
 ColumnLayout {
     id: root
     property var contentColors: Appearance.islandContent
-    spacing: 6
+    spacing: 6 * Appearance.sizes.islandScale
     readonly property bool showUtilButtons: Config.options.bar.utilButtons.showScreenSnip
         || Config.options.bar.utilButtons.showScreenRecord
         || Config.options.bar.utilButtons.showColorPicker
@@ -22,7 +22,7 @@ ColumnLayout {
         || Config.options.bar.utilButtons.showDarkModeToggle
         || Config.options.bar.utilButtons.showPerformanceProfileToggle
     readonly property real bottomBarHeight: showUtilButtons ? (utilButtonsContainer.implicitHeight + spacing) : 0
-    implicitHeight: Math.min(208, metrics.implicitHeight
+    implicitHeight: Math.min(208 * Appearance.sizes.islandScale, metrics.implicitHeight
         + (batteryStrip.visible ? batteryStrip.implicitHeight + spacing : 0)
         + (showUtilButtons ? bottomBarHeight : 0))
     readonly property var batteries: {
@@ -116,8 +116,8 @@ ColumnLayout {
             Rectangle {
                 id: resourceSection
                 Layout.fillWidth: true
-                implicitHeight: sectionContent.implicitHeight + 20
-                radius: Appearance?.rounding?.normal ?? 17
+                implicitHeight: sectionContent.implicitHeight + 20 * Appearance.sizes.islandScale
+                radius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
                 color: Appearance.surfaces.raised
                 Accessible.role: Accessible.Button
                 Accessible.name: Translation.tr("Task Manager")
@@ -133,12 +133,12 @@ ColumnLayout {
                 ColumnLayout {
                     id: sectionContent
                     anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 10
+                    anchors.margins: 12 * Appearance.sizes.islandScale
+                    spacing: 10 * Appearance.sizes.islandScale
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 16 * Appearance.sizes.islandScale
 
                         Repeater {
                             model: [
@@ -179,22 +179,22 @@ ColumnLayout {
                                 required property var modelData
                                 visible: colLayout.modelData.show !== false
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 1
+                                Layout.preferredWidth: 1 * Appearance.sizes.islandScale
                                 Layout.minimumWidth: 0
-                                spacing: 6
+                                spacing: 6 * Appearance.sizes.islandScale
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 5
+                                    spacing: 5 * Appearance.sizes.islandScale
                                     MaterialSymbol {
                                         text: colLayout.modelData.symbol
-                                        iconSize: 16
+                                        iconSize: 16 * Appearance.sizes.islandScale
                                         color: root.contentColors.colOnSurfaceVariant
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
                                         text: colLayout.modelData.label
-                                        font.pixelSize: 12
+                                        font.pixelSize: 12 * Appearance.sizes.islandScale
                                         font.weight: Font.DemiBold
                                         color: root.contentColors.colOnSurfaceVariant
                                         elide: Text.ElideRight
@@ -203,24 +203,24 @@ ColumnLayout {
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: 4 * Appearance.sizes.islandScale
                                     Repeater {
                                         model: colLayout.modelData.readings
                                         RowLayout {
                                             id: rowItem
                                             required property var modelData
                                             Layout.fillWidth: true
-                                            spacing: 4
+                                            spacing: 4 * Appearance.sizes.islandScale
                                             visible: rowItem.modelData.show !== false
 
                                             MaterialSymbol {
                                                 text: rowItem.modelData.icon
-                                                iconSize: 13
+                                                iconSize: 13 * Appearance.sizes.islandScale
                                                 color: root.contentColors.colOnSurfaceVariant
                                             }
                                             StyledText {
                                                 text: rowItem.modelData.label
-                                                font.pixelSize: 11
+                                                font.pixelSize: 11 * Appearance.sizes.islandScale
                                                 color: root.contentColors.colOnSurfaceVariant
                                             }
                                             Item {
@@ -228,7 +228,7 @@ ColumnLayout {
                                             }
                                             StyledText {
                                                 text: rowItem.modelData.value
-                                                font.pixelSize: 11
+                                                font.pixelSize: 11 * Appearance.sizes.islandScale
                                                 font.weight: Font.Medium
                                                 color: root.contentColors.colOnLayer0
                                                 horizontalAlignment: Text.AlignRight
@@ -243,7 +243,7 @@ ColumnLayout {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 16
+                        spacing: 16 * Appearance.sizes.islandScale
                         visible: root.showIGpu || root.showDGpu
 
                         Repeater {
@@ -275,22 +275,22 @@ ColumnLayout {
                                 required property var modelData
                                 visible: gpuColLayout.modelData.show !== false
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 1
+                                Layout.preferredWidth: 1 * Appearance.sizes.islandScale
                                 Layout.minimumWidth: 0
-                                spacing: 6
+                                spacing: 6 * Appearance.sizes.islandScale
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 5
+                                    spacing: 5 * Appearance.sizes.islandScale
                                     MaterialSymbol {
                                         text: gpuColLayout.modelData.symbol
-                                        iconSize: 16
+                                        iconSize: 16 * Appearance.sizes.islandScale
                                         color: root.contentColors.colOnSurfaceVariant
                                     }
                                     StyledText {
                                         Layout.fillWidth: true
                                         text: gpuColLayout.modelData.label
-                                        font.pixelSize: 12
+                                        font.pixelSize: 12 * Appearance.sizes.islandScale
                                         font.weight: Font.DemiBold
                                         color: root.contentColors.colOnSurfaceVariant
                                         elide: Text.ElideRight
@@ -299,24 +299,24 @@ ColumnLayout {
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 4
+                                    spacing: 4 * Appearance.sizes.islandScale
                                     Repeater {
                                         model: gpuColLayout.modelData.readings
                                         RowLayout {
                                             id: gpuRowItem
                                             required property var modelData
                                             Layout.fillWidth: true
-                                            spacing: 4
+                                            spacing: 4 * Appearance.sizes.islandScale
                                             visible: gpuRowItem.modelData.show !== false
 
                                             MaterialSymbol {
                                                 text: gpuRowItem.modelData.icon
-                                                iconSize: 13
+                                                iconSize: 13 * Appearance.sizes.islandScale
                                                 color: root.contentColors.colOnSurfaceVariant
                                             }
                                             StyledText {
                                                 text: gpuRowItem.modelData.label
-                                                font.pixelSize: 11
+                                                font.pixelSize: 11 * Appearance.sizes.islandScale
                                                 color: root.contentColors.colOnSurfaceVariant
                                             }
                                             Item {
@@ -324,7 +324,7 @@ ColumnLayout {
                                             }
                                             StyledText {
                                                 text: gpuRowItem.modelData.value
-                                                font.pixelSize: 11
+                                                font.pixelSize: 11 * Appearance.sizes.islandScale
                                                 font.weight: Font.Medium
                                                 color: root.contentColors.colOnLayer0
                                                 horizontalAlignment: Text.AlignRight
@@ -343,9 +343,9 @@ ColumnLayout {
     Rectangle {
         id: utilButtonsContainer
         Layout.alignment: Qt.AlignHCenter
-        implicitWidth: utilButtons.implicitWidth + 20
-        implicitHeight: 28
-        radius: 14
+        implicitWidth: utilButtons.implicitWidth + 20 * Appearance.sizes.islandScale
+        implicitHeight: 28 * Appearance.sizes.islandScale
+        radius: 14 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.showUtilButtons
 

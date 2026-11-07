@@ -10,7 +10,7 @@ StyledPopup {
     ColumnLayout {
         id: columnLayout
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
 
         // Header
         StyledPopupHeaderRow {

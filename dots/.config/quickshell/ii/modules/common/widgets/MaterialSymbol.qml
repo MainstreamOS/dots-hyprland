@@ -3,7 +3,7 @@ import QtQuick
 
 StyledText {
     id: root
-    property real iconSize: Appearance?.font.pixelSize.small ?? 16
+    property real iconSize: (Appearance?.font.pixelSize.small ?? 16) * uiScale
     property real fill: 0
     property real truncatedFill: fill.toFixed(1) // Reduce memory consumption spikes from constant font remapping
     property real truncatedOpsz: Math.round(iconSize / 4) * 4

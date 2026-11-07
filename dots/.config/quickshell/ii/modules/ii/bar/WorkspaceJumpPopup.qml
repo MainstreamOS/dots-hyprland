@@ -28,7 +28,7 @@ StyledPopup {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
 
         StyledPopupHeaderRow {
             icon: "workspaces"
@@ -41,29 +41,29 @@ StyledPopup {
                 id: entryButton
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.minimumWidth: 210
-                Layout.maximumWidth: 320
+                Layout.minimumWidth: 210 * root.uiScale
+                Layout.maximumWidth: 320 * root.uiScale
                 onClicked: root.go(entryButton.modelData.id)
                 mainContentComponent: Component {
                     RowLayout {
-                        spacing: 10
+                        spacing: 10 * root.uiScale
                         Rectangle {
-                            implicitWidth: Math.max(22, entryNumber.implicitWidth + 10)
-                            implicitHeight: 22
+                            implicitWidth: Math.max(22 * root.uiScale, entryNumber.implicitWidth + 10 * root.uiScale)
+                            implicitHeight: 22 * root.uiScale
                             radius: height / 2
                             color: Appearance.colors.colSecondaryContainer
                             StyledText {
                                 id: entryNumber
                                 anchors.centerIn: parent
                                 text: entryButton.modelData.id
-                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                                 color: Appearance.colors.colOnSecondaryContainer
                             }
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: entryButton.modelData.name
-                            font.pixelSize: Appearance.font.pixelSize.small
+                            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                             color: Appearance.colors.colOnSecondaryContainer
                             elide: Text.ElideRight
                         }

@@ -13,8 +13,8 @@ ColumnLayout {
     required property var entries
     signal selected(entryId: string)
     signal clearRequested()
-    implicitHeight: 204
-    spacing: 6
+    implicitHeight: 204 * Appearance.sizes.islandScale
+    spacing: 6 * Appearance.sizes.islandScale
 
 
     function contact(entry) {
@@ -39,23 +39,23 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: 8 * Appearance.sizes.islandScale
 
         StyledText {
             Layout.fillWidth: true
             text: root.calls ? Translation.tr("Recent calls") : Translation.tr("Recent messages")
-            font.pixelSize: 12
+            font.pixelSize: 12 * Appearance.sizes.islandScale
             font.weight: Font.DemiBold
             color: Appearance.islandContent.colOnSurfaceVariant
         }
 
         RippleButton {
-            implicitHeight: 28
+            implicitHeight: 28 * Appearance.sizes.islandScale
             topPadding: 0
             bottomPadding: 0
-            leftPadding: 10
-            rightPadding: 10
-            buttonRadius: 8
+            leftPadding: 10 * Appearance.sizes.islandScale
+            rightPadding: 10 * Appearance.sizes.islandScale
+            buttonRadius: 8 * Appearance.sizes.islandScale
             colBackground: Appearance.surfaces.raised
             colBackgroundHover: Appearance.colors.colLayer2Hover
             Accessible.name: root.calls ? Translation.tr("Clear call history") : Translation.tr("Clear message history")
@@ -63,11 +63,11 @@ ColumnLayout {
             onClicked: root.clearRequested()
             contentItem: RowLayout {
                 anchors.centerIn: parent
-                spacing: 4
+                spacing: 4 * Appearance.sizes.islandScale
                 MaterialSymbol {
                     Layout.alignment: Qt.AlignVCenter
                     text: "delete_sweep"
-                    iconSize: 15
+                    iconSize: 15 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -75,7 +75,7 @@ ColumnLayout {
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Clear")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.Medium
                     color: Appearance.islandContent.colOnLayer1
                     verticalAlignment: Text.AlignVCenter
@@ -87,14 +87,14 @@ ColumnLayout {
     ClippingRectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        radius: (Appearance?.rounding?.normal ?? 17) - 3
+        radius: ((Appearance?.rounding?.normal ?? 17) - 3) * Appearance.sizes.islandScale
         color: "transparent"
 
         ListView {
             id: historyList
             anchors.fill: parent
             clip: true
-            spacing: 2
+            spacing: 2 * Appearance.sizes.islandScale
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: StyledScrollBar {}
             onWidthChanged: Qt.callLater(() => historyList.forceLayout())
@@ -106,11 +106,11 @@ ColumnLayout {
             required property int index
             readonly property int totalCount: historyList.count
             width: ListView.view.width
-            height: 50
+            height: 50 * Appearance.sizes.islandScale
             clip: true
-            padding: 6
-            leftPadding: 10
-            rightPadding: 10
+            padding: 6 * Appearance.sizes.islandScale
+            leftPadding: 10 * Appearance.sizes.islandScale
+            rightPadding: 10 * Appearance.sizes.islandScale
 
             colBackground: Appearance.surfaces.raised
             colBackgroundHover: Appearance.colors.colLayer2Hover
@@ -128,12 +128,12 @@ ColumnLayout {
             }
 
             contentItem: RowLayout {
-                spacing: 10
+                spacing: 10 * Appearance.sizes.islandScale
 
                 ClippingRectangle {
-                    Layout.preferredWidth: 34
-                    Layout.preferredHeight: 34
-                    radius: 17
+                    Layout.preferredWidth: 34 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 34 * Appearance.sizes.islandScale
+                    radius: 17 * Appearance.sizes.islandScale
                     color: Appearance.surfaces.row
 
                     Image {
@@ -151,7 +151,7 @@ ColumnLayout {
                         anchors.centerIn: parent
                         visible: contactPhoto.status !== Image.Ready
                         text: "person"
-                        iconSize: 20
+                        iconSize: 20 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
@@ -159,13 +159,13 @@ ColumnLayout {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    spacing: 1
+                    spacing: 1 * Appearance.sizes.islandScale
 
                     StyledText {
                         Layout.fillWidth: true
                         text: root.contact(row.modelData)
                         textFormat: Text.PlainText
-                        font.pixelSize: 13
+                        font.pixelSize: 13 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         color: Appearance.islandContent.colOnLayer1
                         maximumLineCount: 1
@@ -180,7 +180,7 @@ ColumnLayout {
                             : row.modelData.answered ? Translation.tr("Call ended") : row.modelData.incoming ? Translation.tr("Incoming call") : Translation.tr("Call"))
                             : root.messagePreview(row.modelData)
                         textFormat: Text.PlainText
-                        font.pixelSize: 11
+                        font.pixelSize: 11 * Appearance.sizes.islandScale
                         maximumLineCount: 1
                         wrapMode: Text.NoWrap
                         color: Appearance.islandContent.colSubtext
@@ -190,7 +190,7 @@ ColumnLayout {
 
                 StyledText {
                     text: root.timestamp(row.modelData.time)
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
             }
@@ -203,7 +203,7 @@ ColumnLayout {
             text: root.calls ? Translation.tr("Recent calls will appear here.") : Translation.tr("Recent messages will appear here.")
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            font.pixelSize: 13
+            font.pixelSize: 13 * Appearance.sizes.islandScale
             color: Appearance.islandContent.colOnSurfaceVariant
         }
     }

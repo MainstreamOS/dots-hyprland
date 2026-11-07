@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.functions
 import qs.services
@@ -6,6 +7,7 @@ import QtQuick.Layouts
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     property bool alwaysShowAllResources: false
     implicitWidth: rowLayout.implicitWidth + rowLayout.anchors.leftMargin + rowLayout.anchors.rightMargin
@@ -19,8 +21,8 @@ MouseArea {
 
         spacing: 0
         anchors.fill: parent
-        anchors.leftMargin: 4
-        anchors.rightMargin: 4
+        anchors.leftMargin: 4 * root.uiScale
+        anchors.rightMargin: 4 * root.uiScale
 
         Resource {
             iconName: "memory"

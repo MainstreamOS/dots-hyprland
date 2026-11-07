@@ -1,3 +1,4 @@
+import Quickshell
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
@@ -7,6 +8,7 @@ import qs.modules.ii.bar as Bar
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool alwaysShowAllResources: false
     implicitHeight: columnLayout.implicitHeight
     implicitWidth: columnLayout.implicitWidth
@@ -16,7 +18,7 @@ MouseArea {
 
     ColumnLayout {
         id: columnLayout
-        spacing: 10
+        spacing: 10 * root.uiScale
         anchors.fill: parent
 
         Resource {

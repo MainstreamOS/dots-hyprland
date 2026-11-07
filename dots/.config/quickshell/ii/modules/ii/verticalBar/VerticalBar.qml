@@ -30,6 +30,8 @@ Scope {
             required property ShellScreen modelData
             component: PanelWindow { // Bar window
                 id: barRoot
+                // Read by the widgets inside, which are laid out at this size.
+                property real uiScale: Appearance.sizes.barScale
                 screen: barLoader.modelData
                 contentItem.visible: !GlobalStates.scrollOverviewOpen
 

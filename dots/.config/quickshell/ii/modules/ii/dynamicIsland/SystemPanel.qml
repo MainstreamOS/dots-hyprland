@@ -31,7 +31,7 @@ ColumnLayout {
     property bool audioDrawerOpen: false
     readonly property bool busy: tray.trayOverflowOpen || !!tray.activeMenu || root.audioDrawerOpen || root.wifiDrawerOpen || root.bluetoothDrawerOpen || root.nightLightDrawerOpen
     readonly property bool needsKeyboardFocus: (root.wifiDrawerOpen && (shownNetworks.held || root.wifiDrawerPasswordFocused)) ?? false
-    spacing: 6
+    spacing: 6 * Appearance.sizes.islandScale
 
     // A network asked for a password releases its prompt when the drawer closes or
     // the panel goes away, so the shared access point and network list are not held.
@@ -70,7 +70,7 @@ ColumnLayout {
     RowLayout {
         id: topRow
         Layout.fillWidth: true
-        spacing: 6
+        spacing: 6 * Appearance.sizes.islandScale
 
         SystemTile {
             id: networkTile
@@ -125,30 +125,30 @@ ColumnLayout {
     Rectangle {
         id: audioDrawer
         Layout.fillWidth: true
-        implicitHeight: 158
-        radius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 158 * Appearance.sizes.islandScale
+        radius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.audioDrawerOpen
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            anchors.topMargin: 8
-            anchors.bottomMargin: 8
-            spacing: 4
+            anchors.leftMargin: 8 * Appearance.sizes.islandScale
+            anchors.rightMargin: 8 * Appearance.sizes.islandScale
+            anchors.topMargin: 8 * Appearance.sizes.islandScale
+            anchors.bottomMargin: 8 * Appearance.sizes.islandScale
+            spacing: 4 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                Layout.leftMargin: 4
-                Layout.rightMargin: 4
-                spacing: 6
+                Layout.preferredHeight: 22 * Appearance.sizes.islandScale
+                Layout.leftMargin: 4 * Appearance.sizes.islandScale
+                Layout.rightMargin: 4 * Appearance.sizes.islandScale
+                spacing: 6 * Appearance.sizes.islandScale
 
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Audio Output")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnSurfaceVariant
                     verticalAlignment: Text.AlignVCenter
@@ -158,10 +158,10 @@ ColumnLayout {
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Volume mixer")
@@ -173,17 +173,17 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "tune"
-                        iconSize: 15
+                        iconSize: 15 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close audio output")
@@ -193,7 +193,7 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
-                        iconSize: 17
+                        iconSize: 17 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
@@ -202,14 +202,14 @@ ColumnLayout {
             ClippingRectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: (Appearance?.rounding?.normal ?? 17) - 3
+                radius: ((Appearance?.rounding?.normal ?? 17) - 3) * Appearance.sizes.islandScale
                 color: "transparent"
 
                 StyledListView {
                     id: outputListView
                     anchors.fill: parent
                     clip: true
-                    spacing: 2
+                    spacing: 2 * Appearance.sizes.islandScale
                     model: root.audioDrawerOpen ? Audio.outputDevices : null
 
                 ScrollBar.vertical: StyledScrollBar {
@@ -240,11 +240,11 @@ ColumnLayout {
 
                 delegate: ItemDelegate {
                     id: itemDelegate
-                    width: ListView.view ? ListView.view.width : (audioDrawer.width - 16)
-                    implicitHeight: 32
+                    width: ListView.view ? ListView.view.width : (audioDrawer.width - 16 * Appearance.sizes.islandScale)
+                    implicitHeight: 32 * Appearance.sizes.islandScale
                 padding: 0
-                leftPadding: 8
-                rightPadding: 8
+                leftPadding: 8 * Appearance.sizes.islandScale
+                rightPadding: 8 * Appearance.sizes.islandScale
 
                 required property var modelData
                 required property int index
@@ -282,13 +282,13 @@ ColumnLayout {
                 }
 
                 contentItem: RowLayout {
-                    spacing: 8
+                    spacing: 8 * Appearance.sizes.islandScale
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: 26
-                        Layout.preferredHeight: 26
-                        radius: itemDelegate.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) : height / 2
+                        Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                        Layout.preferredHeight: 26 * Appearance.sizes.islandScale
+                        radius: itemDelegate.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) * Appearance.sizes.islandScale : height / 2
                         color: itemDelegate.isCurrent
                             ? Appearance.colors.colPrimary
                             : Appearance.surfaces.row
@@ -306,7 +306,7 @@ ColumnLayout {
                                 if (str.includes("hdmi") || str.includes("displayport") || str.includes("monitor") || str.includes("tv")) return "tv";
                                 return "speaker";
                             }
-                            iconSize: 15
+                            iconSize: 15 * Appearance.sizes.islandScale
                             color: itemDelegate.isCurrent ? Appearance.colors.colOnPrimary : Appearance.islandContent.colOnLayer1
                         }
                     }
@@ -318,16 +318,16 @@ ColumnLayout {
                         text: Audio.friendlyDeviceName(itemDelegate.modelData)
                         elide: Text.ElideRight
                         verticalAlignment: Text.AlignVCenter
-                        font.pixelSize: 12
+                        font.pixelSize: 12 * Appearance.sizes.islandScale
                         font.weight: itemDelegate.isCurrent ? Font.DemiBold : Font.Normal
                     }
 
                     Rectangle {
                         visible: itemDelegate.isCurrent
                         Layout.alignment: Qt.AlignVCenter
-                        Layout.preferredWidth: 20
-                        Layout.preferredHeight: 20
-                        radius: 10
+                        Layout.preferredWidth: 20 * Appearance.sizes.islandScale
+                        Layout.preferredHeight: 20 * Appearance.sizes.islandScale
+                        radius: 10 * Appearance.sizes.islandScale
                         color: Appearance.colors.colPrimary
 
                         MaterialSymbol {
@@ -335,7 +335,7 @@ ColumnLayout {
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                             text: "check"
-                            iconSize: 13
+                            iconSize: 13 * Appearance.sizes.islandScale
                             color: Appearance.colors.colOnPrimary
                         }
                     }
@@ -350,7 +350,7 @@ ColumnLayout {
                 visible: !Audio.outputDevices.length
                 anchors.centerIn: parent
                 text: Translation.tr("No output devices")
-                font.pixelSize: 12
+                font.pixelSize: 12 * Appearance.sizes.islandScale
                 color: Appearance.islandContent.colSubtext
             }
         }
@@ -365,30 +365,30 @@ ColumnLayout {
     Rectangle {
         id: wifiDrawer
         Layout.fillWidth: true
-        implicitHeight: 158
-        radius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 158 * Appearance.sizes.islandScale
+        radius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.wifiDrawerOpen
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            anchors.topMargin: 8
-            anchors.bottomMargin: 8
-            spacing: 4
+            anchors.leftMargin: 8 * Appearance.sizes.islandScale
+            anchors.rightMargin: 8 * Appearance.sizes.islandScale
+            anchors.topMargin: 8 * Appearance.sizes.islandScale
+            anchors.bottomMargin: 8 * Appearance.sizes.islandScale
+            spacing: 4 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                Layout.leftMargin: 4
-                Layout.rightMargin: 4
-                spacing: 6
+                Layout.preferredHeight: 22 * Appearance.sizes.islandScale
+                Layout.leftMargin: 4 * Appearance.sizes.islandScale
+                Layout.rightMargin: 4 * Appearance.sizes.islandScale
+                spacing: 6 * Appearance.sizes.islandScale
 
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Wi-Fi Networks")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnSurfaceVariant
                     verticalAlignment: Text.AlignVCenter
@@ -398,10 +398,10 @@ ColumnLayout {
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Rescan Wi-Fi networks")
@@ -411,17 +411,17 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "refresh"
-                        iconSize: 15
+                        iconSize: 15 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Network settings")
@@ -434,17 +434,17 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "settings"
-                        iconSize: 15
+                        iconSize: 15 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close Wi-Fi networks")
@@ -454,7 +454,7 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
-                        iconSize: 17
+                        iconSize: 17 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
@@ -463,20 +463,20 @@ ColumnLayout {
             StyledIndeterminateProgressBar {
                 visible: Network.wifiScanning
                 Layout.fillWidth: true
-                Layout.preferredHeight: 2
+                Layout.preferredHeight: 2 * Appearance.sizes.islandScale
             }
 
             ClippingRectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: (Appearance?.rounding?.normal ?? 17) - 3
+                radius: ((Appearance?.rounding?.normal ?? 17) - 3) * Appearance.sizes.islandScale
                 color: "transparent"
 
                 StyledListView {
                     id: wifiListView
                     anchors.fill: parent
                     clip: true
-                    spacing: 2
+                    spacing: 2 * Appearance.sizes.islandScale
                     model: root.wifiDrawerOpen ? shownNetworks.networks : null
                     // The network asking for a password sits in the middle of the drawer, also while
                     // its prompt opens and the list around it changes.
@@ -516,13 +516,13 @@ ColumnLayout {
 
                 delegate: ItemDelegate {
                     id: wifiItem
-                    width: ListView.view ? ListView.view.width : (wifiDrawer.width - 16)
-                    implicitHeight: wifiItem.askingPassword ? (itemContentLayout.implicitHeight + topPadding + bottomPadding) : 32
+                    width: ListView.view ? ListView.view.width : (wifiDrawer.width - 16 * Appearance.sizes.islandScale)
+                    implicitHeight: wifiItem.askingPassword ? (itemContentLayout.implicitHeight + topPadding + bottomPadding) : 32 * Appearance.sizes.islandScale
                     padding: 0
-                    topPadding: wifiItem.askingPassword ? 10 : 0
-                    bottomPadding: wifiItem.askingPassword ? 10 : 0
-                    leftPadding: 8
-                    rightPadding: 8
+                    topPadding: wifiItem.askingPassword ? 10 * Appearance.sizes.islandScale : 0
+                    bottomPadding: wifiItem.askingPassword ? 10 * Appearance.sizes.islandScale : 0
+                    leftPadding: 8 * Appearance.sizes.islandScale
+                    rightPadding: 8 * Appearance.sizes.islandScale
 
                     required property WifiAccessPoint modelData
                     required property int index
@@ -569,17 +569,17 @@ ColumnLayout {
 
                     contentItem: ColumnLayout {
                         id: itemContentLayout
-                        spacing: 6
+                        spacing: 6 * Appearance.sizes.islandScale
 
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            spacing: 8 * Appearance.sizes.islandScale
 
                             Rectangle {
                                 Layout.alignment: Qt.AlignVCenter
-                                Layout.preferredWidth: 26
-                                Layout.preferredHeight: 26
-                                radius: wifiItem.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) : height / 2
+                                Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                                Layout.preferredHeight: 26 * Appearance.sizes.islandScale
+                                radius: wifiItem.isCurrent ? (Appearance?.rounding?.verysmall ?? 8) * Appearance.sizes.islandScale : height / 2
                                 color: wifiItem.isCurrent
                                     ? Appearance.colors.colPrimary
                                     : Appearance.surfaces.row
@@ -590,7 +590,7 @@ ColumnLayout {
                                     verticalAlignment: Text.AlignVCenter
                                     property int strength: wifiItem.modelData?.strength ?? 0
                                     text: strength > 80 ? "signal_wifi_4_bar" : strength > 60 ? "network_wifi_3_bar" : strength > 40 ? "network_wifi_2_bar" : strength > 20 ? "network_wifi_1_bar" : "signal_wifi_0_bar"
-                                    iconSize: 16
+                                    iconSize: 16 * Appearance.sizes.islandScale
                                     color: wifiItem.isCurrent ? Appearance.colors.colOnPrimary : Appearance.islandContent.colOnLayer1
                                 }
                             }
@@ -602,7 +602,7 @@ ColumnLayout {
                                 text: wifiItem.modelData?.ssid || Translation.tr("Hidden Network")
                                 elide: Text.ElideRight
                                 verticalAlignment: Text.AlignVCenter
-                                font.pixelSize: 12
+                                font.pixelSize: 12 * Appearance.sizes.islandScale
                                 font.weight: wifiItem.isCurrent ? Font.DemiBold : Font.Normal
                             }
 
@@ -612,7 +612,7 @@ ColumnLayout {
                                 verticalAlignment: Text.AlignVCenter
                                 visible: (wifiItem.modelData?.isSecure || false) && !wifiItem.isCurrent
                                 text: "lock"
-                                iconSize: 13
+                                iconSize: 13 * Appearance.sizes.islandScale
                                 color: Appearance.islandContent.colSubtext
                             }
 
@@ -622,16 +622,16 @@ ColumnLayout {
                                 verticalAlignment: Text.AlignVCenter
                                 visible: wifiItem.isConnecting
                                 text: "settings_ethernet"
-                                iconSize: 14
+                                iconSize: 14 * Appearance.sizes.islandScale
                                 color: Appearance.islandContent.colPrimary
                             }
 
                             Rectangle {
                                 visible: wifiItem.isCurrent
                                 Layout.alignment: Qt.AlignVCenter
-                                Layout.preferredWidth: 20
-                                Layout.preferredHeight: 20
-                                radius: 10
+                                Layout.preferredWidth: 20 * Appearance.sizes.islandScale
+                                Layout.preferredHeight: 20 * Appearance.sizes.islandScale
+                                radius: 10 * Appearance.sizes.islandScale
                                 color: Appearance.colors.colPrimary
 
                                 MaterialSymbol {
@@ -639,7 +639,7 @@ ColumnLayout {
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     text: "check"
-                                    iconSize: 13
+                                    iconSize: 13 * Appearance.sizes.islandScale
                                     color: Appearance.colors.colOnPrimary
                                 }
                             }
@@ -648,12 +648,12 @@ ColumnLayout {
                         ColumnLayout {
                             Layout.fillWidth: true
                             visible: wifiItem.askingPassword
-                            spacing: 6
+                            spacing: 6 * Appearance.sizes.islandScale
 
                             StyledText {
                                 visible: (wifiItem.modelData?.connectionError ?? "").length > 0
                                 text: wifiItem.modelData?.connectionError ?? ""
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * Appearance.sizes.islandScale
                                 color: Appearance.islandContent.colErrorMark
                                 Layout.fillWidth: true
                             }
@@ -662,10 +662,10 @@ ColumnLayout {
                                 id: pwdField
                                 Layout.fillWidth: true
                                 Layout.fillHeight: false
-                                implicitHeight: 30
-                                padding: 8
+                                implicitHeight: 30 * Appearance.sizes.islandScale
+                                padding: 8 * Appearance.sizes.islandScale
                                 colBackground: Appearance.colors.colLayer1
-                                radius: Appearance.rounding.small
+                                radius: Appearance.rounding.small * Appearance.sizes.islandScale
                                 placeholderText: Translation.tr("Password")
                                 echoMode: TextInput.Password
                                 inputMethodHints: Qt.ImhSensitiveData
@@ -685,13 +685,13 @@ ColumnLayout {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 6
+                                spacing: 6 * Appearance.sizes.islandScale
 
                                 Item { Layout.fillWidth: true }
 
                                 DialogButton {
                                     buttonText: Translation.tr("Cancel")
-                                    implicitHeight: 24
+                                    implicitHeight: 24 * Appearance.sizes.islandScale
                                     onClicked: {
                                         wifiItem.modelData.askingPassword = false;
                                         wifiItem.modelData.connectionError = "";
@@ -701,7 +701,7 @@ ColumnLayout {
 
                                 DialogButton {
                                     buttonText: Translation.tr("Connect")
-                                    implicitHeight: 24
+                                    implicitHeight: 24 * Appearance.sizes.islandScale
                                     colBackground: Appearance.colors.colPrimary
                                     colBackgroundHover: Appearance.colors.colPrimaryHover
                                     colText: Appearance.colors.colOnPrimary
@@ -725,7 +725,7 @@ ColumnLayout {
                     visible: !shownNetworks.networks.length
                     anchors.centerIn: parent
                     text: Network.wifiScanning ? Translation.tr("Scanning for networks…") : Translation.tr("No Wi-Fi networks found")
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
             }
@@ -736,7 +736,7 @@ ColumnLayout {
     RowLayout {
         id: secondRow
         Layout.fillWidth: true
-        spacing: 6
+        spacing: 6 * Appearance.sizes.islandScale
         visible: !root.wifiDrawerOpen && !root.audioDrawerOpen && !root.bluetoothDrawerOpen && !root.nightLightDrawerOpen
 
         SystemTile {
@@ -777,27 +777,27 @@ ColumnLayout {
     Rectangle {
         id: bluetoothDrawer
         Layout.fillWidth: true
-        implicitHeight: 158
-        radius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 158 * Appearance.sizes.islandScale
+        radius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.bluetoothDrawerOpen
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 8
-            spacing: 4
+            anchors.margins: 8 * Appearance.sizes.islandScale
+            spacing: 4 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                Layout.leftMargin: 4
-                Layout.rightMargin: 4
-                spacing: 6
+                Layout.preferredHeight: 22 * Appearance.sizes.islandScale
+                Layout.leftMargin: 4 * Appearance.sizes.islandScale
+                Layout.rightMargin: 4 * Appearance.sizes.islandScale
+                spacing: 6 * Appearance.sizes.islandScale
 
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Bluetooth")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnSurfaceVariant
                 }
@@ -805,10 +805,10 @@ ColumnLayout {
                 Item { Layout.fillWidth: true }
 
                 RippleButton {
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Settings")
@@ -818,16 +818,16 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "settings"
-                        iconSize: 15
+                        iconSize: 15 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
                 RippleButton {
-                    Layout.preferredWidth: 22
-                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: 22 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
                     padding: 0
-                    buttonRadius: 6
+                    buttonRadius: 6 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.surfaces.row
                     Accessible.name: Translation.tr("Close")
@@ -837,7 +837,7 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "keyboard_arrow_up"
-                        iconSize: 17
+                        iconSize: 17 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
@@ -846,14 +846,14 @@ ColumnLayout {
             ClippingRectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: (Appearance?.rounding?.normal ?? 17) - 3
+                radius: ((Appearance?.rounding?.normal ?? 17) - 3) * Appearance.sizes.islandScale
                 color: "transparent"
 
                 StyledListView {
                     id: bluetoothList
                     anchors.fill: parent
                     clip: true
-                    spacing: 2
+                    spacing: 2 * Appearance.sizes.islandScale
                     animateAppearance: false
                     model: ScriptModel {
                         values: root.bluetoothDrawerOpen ? BluetoothStatus.friendlyDeviceList : []
@@ -861,7 +861,7 @@ ColumnLayout {
                     delegate: BluetoothDeviceItem {
                         required property BluetoothDevice modelData
                         device: modelData
-                        width: Math.max(0, ListView.view.width - 8)
+                        width: Math.max(0, ListView.view.width - 8 * Appearance.sizes.islandScale)
                         compact: true
                         contentColors: Appearance.islandContent
                     }
@@ -877,7 +877,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: BluetoothStatus.friendlyDeviceList.length === 0
                     text: Translation.tr("No devices found")
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
                 StyledIndeterminateProgressBar {
@@ -893,26 +893,26 @@ ColumnLayout {
     Rectangle {
         id: nightLightDrawer
         Layout.fillWidth: true
-        implicitHeight: 158
-        radius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 158 * Appearance.sizes.islandScale
+        radius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.nightLightDrawerOpen
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 8
-            spacing: 4
+            anchors.margins: 8 * Appearance.sizes.islandScale
+            spacing: 4 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                Layout.leftMargin: 4
-                Layout.rightMargin: 4
-                spacing: 6
+                Layout.preferredHeight: 22 * Appearance.sizes.islandScale
+                Layout.leftMargin: 4 * Appearance.sizes.islandScale
+                Layout.rightMargin: 4 * Appearance.sizes.islandScale
+                spacing: 6 * Appearance.sizes.islandScale
 
                 StyledText {
                     text: Translation.tr("Night Light")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnSurfaceVariant
                 }
@@ -920,15 +920,15 @@ ColumnLayout {
                 Item { Layout.fillWidth: true }
 
                 IslandButton {
-                    implicitWidth: 22
-                    implicitHeight: 22
+                    implicitWidth: 22 * Appearance.sizes.islandScale
+                    implicitHeight: 22 * Appearance.sizes.islandScale
                     symbol: "settings"
                     Accessible.name: Translation.tr("Settings")
                     onClicked: Session.openSettings("DisplayConfig.qml", "nightLightSection")
                 }
                 IslandButton {
-                    implicitWidth: 22
-                    implicitHeight: 22
+                    implicitWidth: 22 * Appearance.sizes.islandScale
+                    implicitHeight: 22 * Appearance.sizes.islandScale
                     symbol: "keyboard_arrow_up"
                     Accessible.name: Translation.tr("Close")
                     onClicked: root.nightLightDrawerOpen = false
@@ -937,7 +937,7 @@ ColumnLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: 2 * Appearance.sizes.islandScale
 
                 Repeater {
                     model: [
@@ -949,8 +949,8 @@ ColumnLayout {
                     IslandButton {
                         required property var modelData
                         Layout.fillWidth: true
-                        Layout.preferredWidth: 1
-                        implicitHeight: 28
+                        Layout.preferredWidth: 1 * Appearance.sizes.islandScale
+                        implicitHeight: 28 * Appearance.sizes.islandScale
                         compact: true
                         text: modelData.label
                         highlighted: Config.options.light.night.mode === modelData.value
@@ -962,16 +962,16 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 visible: Config.options.light.night.mode === "manual"
-                spacing: 6
+                spacing: 6 * Appearance.sizes.islandScale
                 StyledText {
                     text: Translation.tr("Turn on") + " · " + DateTime.formatTimeOfDay(Config.options.light.night.from)
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
                 Item { Layout.fillWidth: true }
                 StyledText {
                     text: Translation.tr("Turn off") + " · " + DateTime.formatTimeOfDay(Config.options.light.night.to)
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
             }
@@ -982,22 +982,22 @@ ColumnLayout {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: 6 * Appearance.sizes.islandScale
                     MaterialSymbol {
                         text: "thermostat"
-                        iconSize: 18
+                        iconSize: 18 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                     StyledText {
                         Layout.fillWidth: true
                         text: Translation.tr("Intensity")
-                        font.pixelSize: 12
+                        font.pixelSize: 12 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         color: Appearance.islandContent.colOnLayer1
                     }
                     StyledText {
                         text: Math.round(Config.options.light.night.colorTemperature) + " K"
-                        font.pixelSize: 12
+                        font.pixelSize: 12 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colSubtext
                     }
                 }
@@ -1005,7 +1005,7 @@ ColumnLayout {
                 StyledSlider {
                     id: nightLightIntensity
                     Layout.fillWidth: true
-                    implicitHeight: 26
+                    implicitHeight: 26 * Appearance.sizes.islandScale
                     configuration: StyledSlider.Configuration.XS
                     showHandle: false
                     from: 6500
@@ -1023,16 +1023,16 @@ ColumnLayout {
 
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: 2
+        spacing: 2 * Appearance.sizes.islandScale
         visible: !root.wifiDrawerOpen && !root.audioDrawerOpen && !root.bluetoothDrawerOpen && !root.nightLightDrawerOpen
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 36
-            topLeftRadius: Appearance?.rounding?.normal ?? 17
-            topRightRadius: Appearance?.rounding?.normal ?? 17
-            bottomLeftRadius: 4
-            bottomRightRadius: 4
+            implicitHeight: 36 * Appearance.sizes.islandScale
+            topLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+            topRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+            bottomLeftRadius: 4 * Appearance.sizes.islandScale
+            bottomRightRadius: 4 * Appearance.sizes.islandScale
             color: Appearance.surfaces.raised
 
             ControlWheel {
@@ -1042,13 +1042,13 @@ ColumnLayout {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: 8 * Appearance.sizes.islandScale
+                anchors.rightMargin: 10 * Appearance.sizes.islandScale
+                spacing: 8 * Appearance.sizes.islandScale
 
                 RippleButton {
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
+                    Layout.preferredWidth: 28 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 28 * Appearance.sizes.islandScale
                     topPadding: 0
                     bottomPadding: 0
                     buttonRadius: height / 2
@@ -1060,7 +1060,7 @@ ColumnLayout {
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
                         text: Audio.sink?.audio?.muted ? "volume_off" : "volume_up"
-                        iconSize: 18
+                        iconSize: 18 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -1068,9 +1068,9 @@ ColumnLayout {
                 }
 
                 StyledText {
-                    Layout.preferredWidth: 54
+                    Layout.preferredWidth: 54 * Appearance.sizes.islandScale
                     text: Translation.tr("Volume")
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnLayer1
                     elide: Text.ElideRight
@@ -1078,7 +1078,7 @@ ColumnLayout {
 
                 StyledSlider {
                     Layout.fillWidth: true
-                    implicitHeight: 26
+                    implicitHeight: 26 * Appearance.sizes.islandScale
                     configuration: StyledSlider.Configuration.XS
                     showHandle: false
                     wheelEnabled: false
@@ -1089,10 +1089,10 @@ ColumnLayout {
                 }
 
                 StyledText {
-                    Layout.preferredWidth: 36
+                    Layout.preferredWidth: 36 * Appearance.sizes.islandScale
                     horizontalAlignment: Text.AlignRight
                     text: Math.round(Audio.value * 100) + "%"
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     font.weight: Font.Medium
                     color: Appearance.islandContent.colSubtext
                 }
@@ -1101,11 +1101,11 @@ ColumnLayout {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 36
-            topLeftRadius: 4
-            topRightRadius: 4
-            bottomLeftRadius: Appearance?.rounding?.normal ?? 17
-            bottomRightRadius: Appearance?.rounding?.normal ?? 17
+            implicitHeight: 36 * Appearance.sizes.islandScale
+            topLeftRadius: 4 * Appearance.sizes.islandScale
+            topRightRadius: 4 * Appearance.sizes.islandScale
+            bottomLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+            bottomRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
             color: Appearance.surfaces.raised
 
             ControlWheel {
@@ -1118,27 +1118,27 @@ ColumnLayout {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: 8 * Appearance.sizes.islandScale
+                anchors.rightMargin: 10 * Appearance.sizes.islandScale
+                spacing: 8 * Appearance.sizes.islandScale
 
                 Rectangle {
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
+                    Layout.preferredWidth: 28 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 28 * Appearance.sizes.islandScale
                     radius: height / 2
                     color: "transparent"
                     MaterialSymbol {
                         anchors.centerIn: parent
                         text: root.isLaptop ? "brightness_6" : "tonality"
-                        iconSize: 18
+                        iconSize: 18 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colOnLayer1
                     }
                 }
 
                 StyledText {
-                    Layout.preferredWidth: 54
+                    Layout.preferredWidth: 54 * Appearance.sizes.islandScale
                     text: root.isLaptop ? Translation.tr("Brightness") : Translation.tr("Gamma")
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnLayer1
                     elide: Text.ElideRight
@@ -1146,7 +1146,7 @@ ColumnLayout {
 
                 StyledSlider {
                     Layout.fillWidth: true
-                    implicitHeight: 26
+                    implicitHeight: 26 * Appearance.sizes.islandScale
                     configuration: StyledSlider.Configuration.XS
                     showHandle: false
                     wheelEnabled: false
@@ -1164,10 +1164,10 @@ ColumnLayout {
                 }
 
                 StyledText {
-                    Layout.preferredWidth: 36
+                    Layout.preferredWidth: 36 * Appearance.sizes.islandScale
                     horizontalAlignment: Text.AlignRight
                     text: (root.isLaptop ? Math.round((root.brightness?.brightness ?? 0) * 100) : Hyprsunset.gamma) + "%"
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     font.weight: Font.Medium
                     color: Appearance.islandContent.colSubtext
                 }
@@ -1179,8 +1179,8 @@ ColumnLayout {
         id: trayContainer
         property bool expanded: false
         Layout.alignment: Qt.AlignHCenter
-        implicitWidth: Math.min(root.width, trayRow.implicitWidth + 20)
-        implicitHeight: 28
+        implicitWidth: Math.min(root.width, trayRow.implicitWidth + 20 * Appearance.sizes.islandScale)
+        implicitHeight: 28 * Appearance.sizes.islandScale
         radius: height / 2
         color: Appearance.surfaces.raised
         visible: !root.wifiDrawerOpen && !root.audioDrawerOpen && !root.bluetoothDrawerOpen && !root.nightLightDrawerOpen
@@ -1190,8 +1190,8 @@ ColumnLayout {
         RowLayout {
             id: trayRow
             anchors.centerIn: parent
-            width: Math.max(0, Math.min(implicitWidth, parent.width - 20))
-            spacing: 4
+            width: Math.max(0, Math.min(implicitWidth, parent.width - 20 * Appearance.sizes.islandScale))
+            spacing: 4 * Appearance.sizes.islandScale
 
             Flickable {
                 Layout.fillWidth: true
@@ -1218,8 +1218,8 @@ ColumnLayout {
 
             RippleButton {
                 visible: tray.unpinnedItems.length > 0
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
+                Layout.preferredWidth: 24 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 24 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
                 buttonRadius: height / 2
@@ -1232,7 +1232,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: trayContainer.expanded ? "chevron_left" : "chevron_right"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter

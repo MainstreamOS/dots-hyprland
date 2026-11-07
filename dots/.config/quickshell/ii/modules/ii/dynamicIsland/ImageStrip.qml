@@ -19,7 +19,7 @@ Flickable {
         root.readyImageCount = count;
     }
 
-    implicitHeight: 84
+    implicitHeight: 84 * Appearance.sizes.islandScale
     implicitWidth: previews.width
     contentWidth: Math.max(width, previews.width)
     contentHeight: height
@@ -30,7 +30,7 @@ Flickable {
         id: previews
         x: Math.max(0, (root.width - previews.width) / 2)
         height: root.height
-        spacing: 8
+        spacing: 8 * Appearance.sizes.islandScale
         Repeater {
             id: imageRepeater
             model: (root.images || []).filter(source => typeof source === "string" && source.trim().length > 0)
@@ -53,10 +53,10 @@ Flickable {
                 readonly property real aspect: (img.implicitWidth > 0 && img.implicitHeight > 0)
                     ? (img.implicitWidth / img.implicitHeight) : 1.0
                 width: root.square ? root.height : (root.images.length === 1
-                    ? Math.max(56, Math.min(root.width > 0 ? root.width : 280, Math.round(root.height * aspect)))
-                    : Math.max(56, Math.min(140, Math.round(root.height * aspect))))
+                    ? Math.max(56 * Appearance.sizes.islandScale, Math.min(root.width > 0 ? root.width : 280 * Appearance.sizes.islandScale, Math.round(root.height * aspect)))
+                    : Math.max(56 * Appearance.sizes.islandScale, Math.min(140 * Appearance.sizes.islandScale, Math.round(root.height * aspect))))
                 height: root.height
-                radius: 10
+                radius: 10 * Appearance.sizes.islandScale
                 // Transparent artwork already carries its own silhouette.
                 // Keep the rounded crop for photos without painting a tile
                 // into the transparent corners of circular contact pictures.

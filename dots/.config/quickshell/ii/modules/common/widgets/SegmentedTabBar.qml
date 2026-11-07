@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import qs.modules.common
@@ -10,19 +11,20 @@ import qs.modules.common.widgets
 // which a click or a wheel step over the switch sends.
 Rectangle {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var model: []
     property var running: []
     property int currentIndex: 0
     // The ink for the surface it sits on, such as Appearance.islandContent on the Island.
     property var contentColors: Appearance.colors
     // The Island's sizes; a larger switch scales its corners with them.
-    property real iconSize: 13
-    property real labelSize: 11
+    property real iconSize: 13 * root.uiScale
+    property real labelSize: 11 * root.uiScale
     signal activated(int index)
 
     Layout.fillWidth: true
-    implicitHeight: 28
-    radius: 8
+    implicitHeight: 28 * root.uiScale
+    radius: 8 * root.uiScale
     color: Appearance.surfaces.row
 
     WheelHandler {
@@ -36,8 +38,8 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 2
-        spacing: 2
+        anchors.margins: 2 * root.uiScale
+        spacing: 2 * root.uiScale
 
         Repeater {
             model: root.model
@@ -49,7 +51,7 @@ Rectangle {
                 readonly property color ink: chosen ? Appearance.colors.colOnPrimaryContainer : root.contentColors.colSubtext
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                buttonRadius: root.radius - 2
+                buttonRadius: root.radius - 2 * root.uiScale
                 colBackground: chosen ? Appearance.colors.colPrimaryContainer : "transparent"
                 colBackgroundHover: chosen ? Appearance.colors.colPrimaryContainerHover : Appearance.colors.colLayer2Hover
                 colRipple: chosen ? Appearance.colors.colPrimaryContainerActive : Appearance.colors.colLayer2Active
@@ -57,7 +59,7 @@ Rectangle {
 
                 RowLayout {
                     anchors.centerIn: parent
-                    spacing: 4
+                    spacing: 4 * root.uiScale
                     MaterialSymbol {
                         text: segment.modelData.icon ?? ""
                         iconSize: root.iconSize
@@ -71,7 +73,7 @@ Rectangle {
                     }
                     Rectangle {
                         visible: (root.running[segment.index] ?? false) && !segment.chosen
-                        width: 5; height: 5; radius: 2.5
+                        width: 5 * root.uiScale; height: 5 * root.uiScale; radius: 2.5 * root.uiScale
                         color: root.contentColors.colPrimary
                     }
                 }

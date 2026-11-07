@@ -15,7 +15,7 @@ ColumnLayout {
     id: root
     implicitHeight: (messageBody.visible && messageBody.isAudioOnly)
         ? (detailHeaderBar.implicitHeight + (replyBar.visible ? replyBar.implicitHeight + root.spacing : 0) + (replyErrorText.visible ? replyErrorText.implicitHeight + root.spacing : 0) + messageBody.implicitHeight + root.spacing)
-        : 204
+        : 204 * Appearance.sizes.islandScale
     property bool calls: false
     property string selectedHistoryId: ""
     readonly property var entries: calls ? IslandState.recentCalls : IslandState.recentMessages
@@ -200,11 +200,11 @@ ColumnLayout {
         return root.messageLinkPreview?.thumbnail ? LinkPreviewService.stripUrls(body, 1) : body;
     }
 
-    spacing: 6
+    spacing: 6 * Appearance.sizes.islandScale
 
     PhoneHistoryList {
         Layout.fillWidth: true
-        Layout.preferredHeight: 204
+        Layout.preferredHeight: 204 * Appearance.sizes.islandScale
         visible: !root.entry
         calls: root.calls
         entries: root.entries
@@ -215,24 +215,24 @@ ColumnLayout {
     Rectangle {
         id: detailHeaderBar
         Layout.fillWidth: true
-        implicitHeight: 44
-        radius: 12
+        implicitHeight: 44 * Appearance.sizes.islandScale
+        radius: 12 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: !!root.entry
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 6
-            anchors.rightMargin: 6
-            spacing: 8
+            anchors.leftMargin: 6 * Appearance.sizes.islandScale
+            anchors.rightMargin: 6 * Appearance.sizes.islandScale
+            spacing: 8 * Appearance.sizes.islandScale
 
             RippleButton {
                 visible: !root.liveCall
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 30
+                Layout.preferredWidth: 30 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 30 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 9
+                buttonRadius: 9 * Appearance.sizes.islandScale
                 colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 Accessible.name: Translation.tr("Back to history")
@@ -240,7 +240,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "arrow_back"
-                    iconSize: 16
+                    iconSize: 16 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -249,9 +249,9 @@ ColumnLayout {
 
             ClippingRectangle {
                 visible: root.privacy.showContactPicture
-                Layout.preferredWidth: 32
-                Layout.preferredHeight: 32
-                radius: 16
+                Layout.preferredWidth: 32 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 32 * Appearance.sizes.islandScale
+                radius: 16 * Appearance.sizes.islandScale
                 color: Appearance.surfaces.row
 
                 Image {
@@ -267,18 +267,18 @@ ColumnLayout {
                     visible: !root.entry?.picture
                     text: root.calls ? "call" : "chat"
                     color: Appearance.islandContent.colOnLayer1
-                    iconSize: 18
+                    iconSize: 18 * Appearance.sizes.islandScale
                 }
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                spacing: 1
+                spacing: 1 * Appearance.sizes.islandScale
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: 6 * Appearance.sizes.islandScale
 
                     StyledText {
                         Layout.fillWidth: true
@@ -286,15 +286,15 @@ ColumnLayout {
                         text: root.privacy.showContactName && root.entry?.name && (root.entry.name !== root.entry.number || root.privacy.showPhoneNumber)
                             ? root.entry.name : root.privacy.showPhoneNumber && root.entry?.number ? root.entry.number : Translation.tr("Private contact")
                         color: Appearance.islandContent.colOnLayer0
-                        font.pixelSize: 13
+                        font.pixelSize: 13 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
                     }
 
                     Rectangle {
-                        implicitHeight: 16
-                        implicitWidth: typeLabel.implicitWidth + 8
-                        radius: 4
+                        implicitHeight: 16 * Appearance.sizes.islandScale
+                        implicitWidth: typeLabel.implicitWidth + 8 * Appearance.sizes.islandScale
+                        radius: 4 * Appearance.sizes.islandScale
                         color: Appearance.surfaces.row
 
                         StyledText {
@@ -303,7 +303,7 @@ ColumnLayout {
                             text: root.calls
                                 ? (root.liveCall ? root.callStatus : Translation.tr("Call"))
                                 : Translation.tr("Text message")
-                            font.pixelSize: 9
+                            font.pixelSize: 9 * Appearance.sizes.islandScale
                             font.weight: Font.Medium
                             color: Appearance.islandContent.colSubtext
                         }
@@ -315,17 +315,17 @@ ColumnLayout {
                     visible: root.privacy.showPhoneNumber && !!root.entry?.number
                     text: (root.entry?.number || "") + (root.entry?.time ? " · " + Qt.formatDateTime(new Date(root.entry.time), Config.options.time.format) : "")
                     color: Appearance.islandContent.colSubtext
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * Appearance.sizes.islandScale
                     elide: Text.ElideRight
                 }
             }
 
             RippleButton {
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 30
+                Layout.preferredWidth: 30 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 30 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 9
+                buttonRadius: 9 * Appearance.sizes.islandScale
                 colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 visible: !root.calls && root.canReply
@@ -341,7 +341,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "open_in_new"
-                    iconSize: 16
+                    iconSize: 16 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -354,34 +354,34 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.preferredHeight: root.composing ? 114 : 154
-        implicitHeight: root.composing ? 114 : 154
-        radius: 12
+        Layout.preferredHeight: (root.composing ? 114 : 154) * Appearance.sizes.islandScale
+        implicitHeight: (root.composing ? 114 : 154) * Appearance.sizes.islandScale
+        radius: 12 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.calls && !root.liveCall && !!root.entry
         clip: true
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 8
+            anchors.margins: 10 * Appearance.sizes.islandScale
+            spacing: 8 * Appearance.sizes.islandScale
 
             Item { Layout.fillHeight: true }
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 8
+                spacing: 8 * Appearance.sizes.islandScale
 
                 MaterialSymbol {
                     text: root.entry?.answered ? "call_received" : (root.entry?.incoming ? "call_missed" : "call_made")
-                    iconSize: 20
+                    iconSize: 20 * Appearance.sizes.islandScale
                     color: root.entry?.answered ? Appearance.islandContent.colPrimary : (root.entry?.incoming ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colSubtext)
                 }
 
                 StyledText {
                     text: root.callbackPending ? Translation.tr("Starting call…") : root.entry?.answered ? Translation.tr("Call ended")
                         : (root.entry?.incoming ? Translation.tr("Missed call") : Translation.tr("Outgoing call"))
-                    font.pixelSize: 13
+                    font.pixelSize: 13 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnLayer1
                 }
@@ -389,14 +389,14 @@ ColumnLayout {
                 StyledText {
                     visible: !!root.entry?.time
                     text: "·  " + (root.entry?.time ? Qt.formatDateTime(new Date(root.entry.time), Config.options.time.format) : "")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                 }
             }
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 10
+                spacing: 10 * Appearance.sizes.islandScale
 
                 IslandButton {
                     symbol: "call"
@@ -420,7 +420,7 @@ ColumnLayout {
                 visible: root.callbackTarget && !!PhoneCalls.dialError
                 text: PhoneCalls.dialError
                 color: Appearance.islandContent.colErrorMark
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -435,7 +435,7 @@ ColumnLayout {
         visible: root.liveCall
         text: root.callStatus
         horizontalAlignment: Text.AlignHCenter
-        font.pixelSize: 18
+        font.pixelSize: 18 * Appearance.sizes.islandScale
         color: Appearance.barStripContent.colOnLayer1
     }
 
@@ -457,7 +457,7 @@ ColumnLayout {
             ? Translation.tr("Connect your phone over Bluetooth for Accept and Decline controls.")
             : IslandState.phoneStatus)
         color: Appearance.barStripContent.colOnSurfaceVariant
-        font.pixelSize: 12
+        font.pixelSize: 12 * Appearance.sizes.islandScale
         wrapMode: Text.WordWrap
         maximumLineCount: 3
         elide: Text.ElideRight
@@ -467,17 +467,17 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.alignment: Qt.AlignHCenter
         visible: root.liveCall && !!(root.entry?.canNegative || root.entry?.canPositive)
-        spacing: 12
+        spacing: 12 * Appearance.sizes.islandScale
         Item { Layout.fillWidth: true }
         IslandButton {
-            Layout.maximumWidth: (root.width - 12) / 2
+            Layout.maximumWidth: (root.width - 12 * Appearance.sizes.islandScale) / 2
             symbol: "call_end"
             text: root.entry?.negativeLabel || Translation.tr("Decline")
             visible: root.entry?.canNegative ?? false
             onClicked: IslandState.action(root.entry.id, "negative")
         }
         IslandButton {
-            Layout.maximumWidth: (root.width - 12) / 2
+            Layout.maximumWidth: (root.width - 12 * Appearance.sizes.islandScale) / 2
             symbol: root.entry?.backend === "KDE Connect" ? "volume_off" : "call"
             text: root.entry?.positiveLabel || Translation.tr("Answer")
             highlighted: true
@@ -506,7 +506,7 @@ ColumnLayout {
         visible: root.canReply && !!IslandState.phoneError
         text: IslandState.phoneError
         color: Appearance.barStripContent.colErrorMark
-        font.pixelSize: 11
+        font.pixelSize: 11 * Appearance.sizes.islandScale
         wrapMode: Text.WordWrap
     }
 
@@ -514,8 +514,8 @@ ColumnLayout {
     Rectangle {
         id: replyBar
         Layout.fillWidth: true
-        implicitHeight: 34
-        radius: 10
+        implicitHeight: 34 * Appearance.sizes.islandScale
+        radius: 10 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.canReply
 
@@ -559,14 +559,14 @@ ColumnLayout {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 4
-            spacing: 6
+            anchors.leftMargin: 8 * Appearance.sizes.islandScale
+            anchors.rightMargin: 4 * Appearance.sizes.islandScale
+            spacing: 6 * Appearance.sizes.islandScale
 
             MaterialSymbol {
                 visible: !root.recordingVoice
                 text: "reply"
-                iconSize: 16
+                iconSize: 16 * Appearance.sizes.islandScale
                 color: Appearance.islandContent.colSubtext
             }
 
@@ -575,11 +575,11 @@ ColumnLayout {
                 visible: !root.recordingVoice
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                leftPadding: 4
-                rightPadding: 4
+                leftPadding: 4 * Appearance.sizes.islandScale
+                rightPadding: 4 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                font.pixelSize: 12
+                font.pixelSize: 12 * Appearance.sizes.islandScale
                 colBackground: "transparent"
                 placeholderText: root.calls ? Translation.tr("Message…") : Translation.tr("Reply to %1…").arg(root.privacy.showContactName ? root.entry?.name || Translation.tr("contact") : Translation.tr("contact"))
                 onAccepted: replyBar.send()
@@ -606,12 +606,12 @@ ColumnLayout {
                 visible: root.recordingVoice
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 8
+                spacing: 8 * Appearance.sizes.islandScale
 
                 Rectangle {
                     Layout.alignment: Qt.AlignVCenter
-                    implicitWidth: 8
-                    implicitHeight: 8
+                    implicitWidth: 8 * Appearance.sizes.islandScale
+                    implicitHeight: 8 * Appearance.sizes.islandScale
                     radius: Appearance.rounding.full
                     color: Appearance.islandContent.colErrorMark
                     SequentialAnimation on opacity {
@@ -626,18 +626,18 @@ ColumnLayout {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     text: Translation.tr("Recording voice note: %1:%2").arg(Math.floor(root.recordingSeconds / 60)).arg((root.recordingSeconds % 60 < 10 ? "0" : "") + (root.recordingSeconds % 60))
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colErrorMark
                     elide: Text.ElideRight
                 }
 
                 RippleButton {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 26
-                    Layout.preferredHeight: 26
+                    Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                    Layout.preferredHeight: 26 * Appearance.sizes.islandScale
                     topPadding: 0
                     bottomPadding: 0
-                    buttonRadius: 13
+                    buttonRadius: 13 * Appearance.sizes.islandScale
                     colBackground: "transparent"
                     colBackgroundHover: Appearance.colors.colLayer2Hover
                     onClicked: voiceRecordProc.cancel()
@@ -646,7 +646,7 @@ ColumnLayout {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         text: "close"
-                        iconSize: 15
+                        iconSize: 15 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colSubtext
                     }
                     StyledToolTip {
@@ -658,11 +658,11 @@ ColumnLayout {
             RippleButton {
                 id: micBtn
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 26 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 13
+                buttonRadius: 13 * Appearance.sizes.islandScale
                 colBackground: root.recordingVoice ? ColorUtils.transparentize(Appearance.colors.colError, 0.85) : "transparent"
                 colBackgroundHover: root.recordingVoice ? ColorUtils.transparentize(Appearance.colors.colError, 0.7) : Appearance.colors.colLayer2Hover
                 enabled: root.canReply && !root.pendingRequest
@@ -684,7 +684,7 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     text: root.recordingVoice ? "stop" : "mic"
-                    iconSize: 16
+                    iconSize: 16 * Appearance.sizes.islandScale
                     color: root.recordingVoice ? Appearance.islandContent.colErrorMark : (parent.enabled ? (micBtn.hovered ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext) : ColorUtils.transparentize(Appearance.islandContent.colSubtext, 0.5))
                 }
                 StyledToolTip {
@@ -699,11 +699,11 @@ ColumnLayout {
                 property real flight: 0
                 property real confirmation: 0
                 readonly property bool canSend: root.recordingVoice || quickReplyInput.text.trim().length > 0
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 26 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 13
+                buttonRadius: 13 * Appearance.sizes.islandScale
                 opacity: enabled || root.replySent ? 1 : 0.4
                 colBackground: canSend ? Appearance.colors.colPrimary : "transparent"
                 colBackgroundHover: canSend ? Appearance.colors.colPrimaryHover : Appearance.colors.colLayer2Hover
@@ -722,7 +722,7 @@ ColumnLayout {
                     MaterialSymbol {
                         anchors.centerIn: parent
                         text: "arrow_upward"
-                        iconSize: 16
+                        iconSize: 16 * Appearance.sizes.islandScale
                         color: sendBtn.canSend ? Appearance.colors.colOnPrimary
                             : root.replySent ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext
                         horizontalAlignment: Text.AlignHCenter
@@ -733,7 +733,7 @@ ColumnLayout {
                     MaterialSymbol {
                         anchors.centerIn: parent
                         text: "check"
-                        iconSize: 16
+                        iconSize: 16 * Appearance.sizes.islandScale
                         color: sendBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.islandContent.colPrimary
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter

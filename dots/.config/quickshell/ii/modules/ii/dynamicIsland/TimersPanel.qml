@@ -11,8 +11,8 @@ import qs.modules.common.functions
 
 ColumnLayout {
     id: root
-    spacing: 2
-    implicitHeight: 208
+    spacing: 2 * Appearance.sizes.islandScale
+    implicitHeight: 208 * Appearance.sizes.islandScale
     Layout.fillWidth: true
     Layout.fillHeight: true
 
@@ -37,25 +37,25 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 154
-        topLeftRadius: Appearance?.rounding?.normal ?? 17
-        topRightRadius: Appearance?.rounding?.normal ?? 17
-        bottomLeftRadius: 5
-        bottomRightRadius: 5
+        implicitHeight: 154 * Appearance.sizes.islandScale
+        topLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        topRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        bottomLeftRadius: 5 * Appearance.sizes.islandScale
+        bottomRightRadius: 5 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 8
+            anchors.margins: 10 * Appearance.sizes.islandScale
+            spacing: 8 * Appearance.sizes.islandScale
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: 6 * Appearance.sizes.islandScale
 
                 SegmentedTabBar {
                     Layout.fillWidth: false
-                    Layout.preferredWidth: 236
+                    Layout.preferredWidth: 236 * Appearance.sizes.islandScale
                     contentColors: Appearance.islandContent
                     model: [
                         {"name": Translation.tr("Timer"), "icon": "hourglass_top"},
@@ -70,18 +70,18 @@ ColumnLayout {
                 Item { Layout.fillWidth: true }
 
                 Rectangle {
-                    Layout.preferredHeight: 22
-                    implicitWidth: statusContent.implicitWidth + 14
-                    radius: 11
+                    Layout.preferredHeight: 22 * Appearance.sizes.islandScale
+                    implicitWidth: statusContent.implicitWidth + 14 * Appearance.sizes.islandScale
+                    radius: 11 * Appearance.sizes.islandScale
                     color: ColorUtils.mix(Appearance.colors.colSecondaryContainer, "transparent", 0.3)
 
                     RowLayout {
                         id: statusContent
                         anchors.centerIn: parent
-                        spacing: 5
+                        spacing: 5 * Appearance.sizes.islandScale
 
                         Rectangle {
-                            width: 6; height: 6; radius: 3
+                            width: 6 * Appearance.sizes.islandScale; height: 6 * Appearance.sizes.islandScale; radius: 3 * Appearance.sizes.islandScale
                             color: {
                                 if (root.currentMode === 0) return TimerService.countdownRunning ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext;
                                 if (root.currentMode === 1) return TimerService.stopwatchRunning ? Appearance.islandContent.colPrimary : Appearance.islandContent.colSubtext;
@@ -101,7 +101,7 @@ ColumnLayout {
                                 }
                                 return Translation.tr("Cycle %1 of %2").arg(TimerService.pomodoroCycle + 1).arg(TimerService.cyclesBeforeLongBreak);
                             }
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * Appearance.sizes.islandScale
                             font.weight: Font.DemiBold
                             color: Appearance.colors.colOnSecondaryContainer
                         }
@@ -112,12 +112,12 @@ ColumnLayout {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 14
+                spacing: 14 * Appearance.sizes.islandScale
 
                 CircularProgress {
                     Layout.alignment: Qt.AlignVCenter
-                    implicitSize: 84
-                    lineWidth: 6
+                    implicitSize: 84 * Appearance.sizes.islandScale
+                    lineWidth: 6 * Appearance.sizes.islandScale
                     enableAnimation: true
                     value: {
                         if (root.currentMode === 0) {
@@ -142,7 +142,7 @@ ColumnLayout {
                                 if (root.currentMode === 1) return "timer";
                                 return TimerService.pomodoroLongBreak ? "eco" : TimerService.pomodoroBreak ? "local_cafe" : "search_activity";
                             }
-                            iconSize: 22
+                            iconSize: 22 * Appearance.sizes.islandScale
                             color: Appearance.islandContent.colPrimary
                         }
 
@@ -159,7 +159,7 @@ ColumnLayout {
                                 }
                                 return TimerService.pomodoroLongBreak ? Translation.tr("Long") : TimerService.pomodoroBreak ? Translation.tr("Break") : Translation.tr("Focus");
                             }
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * Appearance.sizes.islandScale
                             font.weight: Font.DemiBold
                             color: Appearance.islandContent.colSubtext
                         }
@@ -170,22 +170,22 @@ ColumnLayout {
                     Layout.alignment: Qt.AlignVCenter
                     visible: root.showsEndTime
                     contentColors: Appearance.islandContent
-                    rowHeight: 24
-                    cornerRadius: 6
+                    rowHeight: 24 * Appearance.sizes.islandScale
+                    cornerRadius: 6 * Appearance.sizes.islandScale
                 }
 
                 DurationPicker {
                     Layout.alignment: Qt.AlignVCenter
                     visible: root.showsLength
                     contentColors: Appearance.islandContent
-                    rowHeight: 24
-                    cornerRadius: 6
+                    rowHeight: 24 * Appearance.sizes.islandScale
+                    cornerRadius: 6 * Appearance.sizes.islandScale
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: 2
+                    spacing: 2 * Appearance.sizes.islandScale
 
                     Item {
                         visible: !root.showsEndTime && !root.showsLength
@@ -195,7 +195,7 @@ ColumnLayout {
                         RowLayout {
                             id: digitsRow
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: 2
+                            spacing: 2 * Appearance.sizes.islandScale
 
                             StyledText {
                                 text: {
@@ -210,7 +210,7 @@ ColumnLayout {
                                     }
                                     return TimerService.formatCountdown(TimerService.pomodoroSecondsLeft);
                                 }
-                                font.pixelSize: 34
+                                font.pixelSize: 34 * Appearance.sizes.islandScale
                                 font.weight: Font.DemiBold
                                 font.features: ({ "tnum": 1 })
                                 color: Appearance.islandContent.colOnLayer0
@@ -222,7 +222,7 @@ ColumnLayout {
                                     const ms = (Math.floor(TimerService.stopwatchTime) % 100).toString().padStart(2, '0');
                                     return `.${ms}`;
                                 }
-                                font.pixelSize: 22
+                                font.pixelSize: 22 * Appearance.sizes.islandScale
                                 font.weight: Font.Medium
                                 font.features: ({ "tnum": 1 })
                                 color: Appearance.islandContent.colSubtext
@@ -255,20 +255,20 @@ ColumnLayout {
                             }
                             return Translation.tr("Next: %1 min break").arg(Math.floor(TimerService.breakTime / 60));
                         }
-                        font.pixelSize: 11
+                        font.pixelSize: 11 * Appearance.sizes.islandScale
                         color: Appearance.islandContent.colSubtext
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
 
                     RowLayout {
-                        spacing: 8
-                        Layout.topMargin: 4
+                        spacing: 8 * Appearance.sizes.islandScale
+                        Layout.topMargin: 4 * Appearance.sizes.islandScale
 
                         RippleButton {
-                            implicitHeight: 32
-                            implicitWidth: 86
-                            buttonRadius: 10
+                            implicitHeight: 32 * Appearance.sizes.islandScale
+                            implicitWidth: 86 * Appearance.sizes.islandScale
+                            buttonRadius: 10 * Appearance.sizes.islandScale
                             colBackground: {
                                 const running = (root.currentMode === 0 && TimerService.countdownRunning)
                                     || (root.currentMode === 1 && TimerService.stopwatchRunning)
@@ -296,14 +296,14 @@ ColumnLayout {
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 5
+                                spacing: 5 * Appearance.sizes.islandScale
                                 readonly property bool running: (root.currentMode === 0 && TimerService.countdownRunning)
                                     || (root.currentMode === 1 && TimerService.stopwatchRunning)
                                     || (root.currentMode === 2 && TimerService.pomodoroRunning);
 
                                 MaterialSymbol {
                                     text: parent.running ? "pause" : "play_arrow"
-                                    iconSize: 16
+                                    iconSize: 16 * Appearance.sizes.islandScale
                                     color: parent.running ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                                 }
                                 StyledText {
@@ -313,7 +313,7 @@ ColumnLayout {
                                         if (root.currentMode === 1) return TimerService.stopwatchTime === 0 ? Translation.tr("Start") : Translation.tr("Resume");
                                         return TimerService.pomodoroSecondsLeft === TimerService.pomodoroLapDuration ? Translation.tr("Start") : Translation.tr("Resume");
                                     }
-                                    font.pixelSize: 12
+                                    font.pixelSize: 12 * Appearance.sizes.islandScale
                                     font.weight: Font.DemiBold
                                     color: parent.running ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                                 }
@@ -321,9 +321,9 @@ ColumnLayout {
                         }
 
                         RippleButton {
-                            implicitHeight: 32
-                            implicitWidth: 80
-                            buttonRadius: 10
+                            implicitHeight: 32 * Appearance.sizes.islandScale
+                            implicitWidth: 80 * Appearance.sizes.islandScale
+                            buttonRadius: 10 * Appearance.sizes.islandScale
                             readonly property bool isLapMode: root.currentMode === 1 && TimerService.stopwatchRunning
                             readonly property bool canReset: {
                                 if (root.currentMode === 0) return TimerService.countdownSecondsLeft < TimerService.countdownDuration;
@@ -349,15 +349,15 @@ ColumnLayout {
 
                             RowLayout {
                                 anchors.centerIn: parent
-                                spacing: 5
+                                spacing: 5 * Appearance.sizes.islandScale
                                 MaterialSymbol {
                                     text: parent.parent.isLapMode ? "flag" : "replay"
-                                    iconSize: 15
+                                    iconSize: 15 * Appearance.sizes.islandScale
                                     color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                 }
                                 StyledText {
                                     text: parent.parent.isLapMode ? Translation.tr("Lap") : Translation.tr("Reset")
-                                    font.pixelSize: 12
+                                    font.pixelSize: 12 * Appearance.sizes.islandScale
                                     font.weight: parent.parent.isLapMode ? Font.DemiBold : Font.Medium
                                     color: parent.parent.isLapMode ? Appearance.colors.colOnPrimaryContainer : Appearance.islandContent.colOnLayer1
                                 }
@@ -371,23 +371,23 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 52
-        topLeftRadius: 5
-        topRightRadius: 5
-        bottomLeftRadius: Appearance?.rounding?.normal ?? 17
-        bottomRightRadius: Appearance?.rounding?.normal ?? 17
+        implicitHeight: 52 * Appearance.sizes.islandScale
+        topLeftRadius: 5 * Appearance.sizes.islandScale
+        topRightRadius: 5 * Appearance.sizes.islandScale
+        bottomLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
+        bottomRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
 
         RowLayout {
             visible: root.currentMode === 0
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 6
+            anchors.leftMargin: 10 * Appearance.sizes.islandScale
+            anchors.rightMargin: 10 * Appearance.sizes.islandScale
+            spacing: 6 * Appearance.sizes.islandScale
 
             SegmentedTabBar {
                 Layout.fillWidth: false
-                Layout.preferredWidth: 176
+                Layout.preferredWidth: 176 * Appearance.sizes.islandScale
                 contentColors: Appearance.islandContent
                 model: [
                     {"name": Translation.tr("Length"), "icon": "hourglass_top"},
@@ -402,7 +402,7 @@ ColumnLayout {
             StyledText {
                 visible: !TimerService.countdownToClock
                 text: Translation.tr("Add:")
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: Font.Medium
                 color: Appearance.islandContent.colSubtext
                 Layout.alignment: Qt.AlignVCenter
@@ -419,8 +419,8 @@ ColumnLayout {
                     required property var modelData
                     visible: !TimerService.countdownToClock
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    buttonRadius: 8
+                    Layout.preferredHeight: 32 * Appearance.sizes.islandScale
+                    buttonRadius: 8 * Appearance.sizes.islandScale
                     colBackground: ColorUtils.mix(Appearance.colors.colLayer1, Appearance.colors.colLayer2, 0.45)
                     colBackgroundHover: Appearance.colors.colLayer2Hover
                     colRipple: Appearance.colors.colLayer2Active
@@ -429,7 +429,7 @@ ColumnLayout {
                     StyledText {
                         anchors.centerIn: parent
                         text: modelData.label
-                        font.pixelSize: 11
+                        font.pixelSize: 11 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         color: Appearance.islandContent.colOnLayer1
                     }
@@ -440,16 +440,16 @@ ColumnLayout {
         RowLayout {
             visible: root.currentMode === 1
             anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            spacing: 8
+            anchors.leftMargin: 12 * Appearance.sizes.islandScale
+            anchors.rightMargin: 12 * Appearance.sizes.islandScale
+            spacing: 8 * Appearance.sizes.islandScale
 
             readonly property var laps: TimerService.stopwatchLaps ?? []
             readonly property bool hasLaps: laps.length > 0
 
             MaterialSymbol {
                 text: parent.hasLaps ? "history" : "info"
-                iconSize: 16
+                iconSize: 16 * Appearance.sizes.islandScale
                 color: Appearance.islandContent.colSubtext
             }
 
@@ -461,7 +461,7 @@ ColumnLayout {
                     }
                     return Translation.tr("Tap Lap while running to save splits");
                 }
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: Font.Medium
                 color: Appearance.islandContent.colOnLayer1
                 elide: Text.ElideRight
@@ -478,16 +478,16 @@ ColumnLayout {
                     }
                     return "";
                 }
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: Font.DemiBold
                 color: Appearance.islandContent.colPrimary
             }
 
             RippleButton {
                 visible: parent.hasLaps && !TimerService.stopwatchRunning
-                implicitHeight: 28
-                implicitWidth: 64
-                buttonRadius: 6
+                implicitHeight: 28 * Appearance.sizes.islandScale
+                implicitWidth: 64 * Appearance.sizes.islandScale
+                buttonRadius: 6 * Appearance.sizes.islandScale
                 colBackground: ColorUtils.mix(Appearance.colors.colLayer1, Appearance.colors.colLayer2, 0.45)
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 colRipple: Appearance.colors.colLayer2Active
@@ -496,7 +496,7 @@ ColumnLayout {
                 StyledText {
                     anchors.centerIn: parent
                     text: Translation.tr("Reset")
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * Appearance.sizes.islandScale
                     font.weight: Font.Medium
                     color: Appearance.islandContent.colOnLayer1
                 }
@@ -506,13 +506,13 @@ ColumnLayout {
         RowLayout {
             visible: root.currentMode === 2
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 6
+            anchors.leftMargin: 10 * Appearance.sizes.islandScale
+            anchors.rightMargin: 10 * Appearance.sizes.islandScale
+            spacing: 6 * Appearance.sizes.islandScale
 
             StyledText {
                 text: Translation.tr("Adjust:")
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: Font.Medium
                 color: Appearance.islandContent.colSubtext
                 Layout.alignment: Qt.AlignVCenter
@@ -528,8 +528,8 @@ ColumnLayout {
                 delegate: RippleButton {
                     required property var modelData
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    buttonRadius: 8
+                    Layout.preferredHeight: 32 * Appearance.sizes.islandScale
+                    buttonRadius: 8 * Appearance.sizes.islandScale
                     colBackground: ColorUtils.mix(Appearance.colors.colLayer1, Appearance.colors.colLayer2, 0.45)
                     colBackgroundHover: Appearance.colors.colLayer2Hover
                     colRipple: Appearance.colors.colLayer2Active
@@ -538,7 +538,7 @@ ColumnLayout {
                     StyledText {
                         anchors.centerIn: parent
                         text: modelData.label
-                        font.pixelSize: 11
+                        font.pixelSize: 11 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold
                         color: Appearance.islandContent.colOnLayer1
                     }

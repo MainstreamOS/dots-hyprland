@@ -1,6 +1,7 @@
 import qs.modules.common.widgets
 import qs.modules.common
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import qs.services
 
@@ -14,6 +15,9 @@ RowLayout {
     property string buttonIcon: ""
     property alias value: slider.value
     property alias stopIndicatorValues: slider.stopIndicatorValues
+    property alias stepSize: slider.stepSize
+    // A percent of the track's range unless a row says what its value means.
+    property alias tooltipContent: slider.tooltipContent
     property bool usePercentTooltip: true
     property real from: slider.from
     property real to: slider.to
@@ -64,6 +68,7 @@ RowLayout {
         value: root.value
         from: root.from
         to: root.to
+        snapMode: stepSize > 0 ? Slider.SnapAlways : Slider.NoSnap
         onMoved: root.moved()
         Layout.fillWidth: root.sliderWidth <= 0
         Layout.preferredWidth: root.sliderWidth > 0 ? root.sliderWidth : -1

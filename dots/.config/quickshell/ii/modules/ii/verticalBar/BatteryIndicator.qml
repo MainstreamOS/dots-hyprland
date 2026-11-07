@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -7,6 +8,7 @@ import qs.modules.ii.bar as Bar
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     readonly property var chargeState: Battery.chargeState
     readonly property bool isCharging: Battery.isCharging
@@ -29,7 +31,7 @@ MouseArea {
         trackColor: Appearance.barContent.faded(highlightColor, 0.5)
 
         font {
-            pixelSize: 13
+            pixelSize: 13 * root.uiScale
             weight: Font.DemiBold
         }
 
@@ -40,7 +42,7 @@ MouseArea {
 
             Column {
                 anchors.centerIn: parent
-                spacing: -4
+                spacing: -4 * root.uiScale
 
                 MaterialSymbol {
                     id: boltIcon
@@ -55,7 +57,7 @@ MouseArea {
                             return Icons.getBatteryIcon(Battery.percentage * 100);
                         }
                     }
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
                     animateChange: true
                 }
                 StyledText {

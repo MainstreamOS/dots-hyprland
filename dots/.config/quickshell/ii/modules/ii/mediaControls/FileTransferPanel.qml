@@ -16,8 +16,9 @@ import Quickshell.Services.Mpris
 Item {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var fileUrls: []
-    property real radius: Appearance.rounding.medium
+    property real radius: Appearance.rounding.medium * root.uiScale
     property real targetWidth: 440
     property real targetHeight: 160
 
@@ -83,7 +84,7 @@ Item {
     Rectangle {
         id: bg
         anchors.fill: parent
-        anchors.margins: Appearance.sizes.elevationMargin
+        anchors.margins: Appearance.sizes.elevationMargin * root.uiScale
         color: ColorUtils.applyAlpha(root.blendedColors.colLayer0, 1)
         radius: root.radius
 
@@ -122,16 +123,16 @@ Item {
         ColumnLayout {
             id: col
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 6
+            anchors.margins: 12 * root.uiScale
+            spacing: 6 * root.uiScale
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 8 * root.uiScale
 
                 MaterialSymbol {
                     text: "send"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: root.blendedColors.colOnLayer0
                 }
                 StyledText {
@@ -140,14 +141,14 @@ Item {
                         ? root.fileSummary
                         : Translation.tr("Send via LocalSend")
                     elide: Text.ElideMiddle
-                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                     font.weight: Font.DemiBold
                     color: root.blendedColors.colOnLayer0
                 }
                 MaterialSymbol {
                     visible: LocalSend.discovering
                     text: "progress_activity"
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
                     color: root.blendedColors.colSubtext
                     NumberAnimation on rotation {
                         from: 0; to: 360
@@ -160,7 +161,7 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 1
+                Layout.preferredHeight: 1 * root.uiScale
                 color: Appearance.colors.colOutlineVariant
                 opacity: 0.4
             }
@@ -180,7 +181,7 @@ Item {
             Component {
                 id: idleComp
                 ColumnLayout {
-                    spacing: 4
+                    spacing: 4 * root.uiScale
 
                     StyledText {
                         Layout.fillWidth: true
@@ -190,7 +191,7 @@ Item {
                         text: LocalSend.discovering
                             ? Translation.tr("Searching for devices…")
                             : Translation.tr("No devices found")
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
 
@@ -211,9 +212,9 @@ Item {
                         ColumnLayout {
                             id: deviceColumn
                             width: deviceFlickable.width
-                            spacing: 2
+                            spacing: 2 * root.uiScale
 
-                            Item { Layout.fillWidth: true; Layout.preferredHeight: 2 }
+                            Item { Layout.fillWidth: true; Layout.preferredHeight: 2 * root.uiScale }
 
                             Repeater {
                                 model: LocalSend.devices
@@ -222,8 +223,8 @@ Item {
                                     required property var modelData
                                     required property int index
                                     Layout.fillWidth: true
-                                    implicitHeight: 32
-                                    buttonRadius: Appearance.rounding.small
+                                    implicitHeight: 32 * root.uiScale
+                                    buttonRadius: Appearance.rounding.small * root.uiScale
                                     toggled: root.selectedIndex === index
                                     colBackground: Qt.rgba(0, 0, 0, 0)
                                     colBackgroundHover: ColorUtils.transparentize(root.blendedColors.colSecondaryContainerHover, 0.5)
@@ -235,9 +236,9 @@ Item {
 
                                     contentItem: RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        spacing: 8
+                                        anchors.leftMargin: 8 * root.uiScale
+                                        anchors.rightMargin: 8 * root.uiScale
+                                        spacing: 8 * root.uiScale
 
                                         MaterialSymbol {
                                             text: {
@@ -250,7 +251,7 @@ Item {
                                                 default: return "devices";
                                                 }
                                             }
-                                            iconSize: Appearance.font.pixelSize.normal
+                                            iconSize: Appearance.font.pixelSize.normal * root.uiScale
                                             color: deviceBtn.toggled
                                                 ? root.blendedColors.colOnSecondaryContainer
                                                 : root.blendedColors.colOnLayer0
@@ -259,7 +260,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: deviceBtn.modelData.alias || deviceBtn.modelData.address
                                             elide: Text.ElideRight
-                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                                             font.weight: Font.DemiBold
                                             color: deviceBtn.toggled
                                                 ? root.blendedColors.colOnSecondaryContainer
@@ -267,7 +268,7 @@ Item {
                                         }
                                         StyledText {
                                             text: deviceBtn.modelData.address
-                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                                             color: root.blendedColors.colSubtext
                                             elide: Text.ElideRight
                                         }
@@ -275,19 +276,19 @@ Item {
                                 }
                             }
 
-                            Item { Layout.fillWidth: true; Layout.preferredHeight: 2 }
+                            Item { Layout.fillWidth: true; Layout.preferredHeight: 2 * root.uiScale }
                         }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: 6 * root.uiScale
                         Item { Layout.fillWidth: true }
 
                         RippleButton {
-                            implicitWidth: cancelText.implicitWidth + 22
-                            implicitHeight: 28
-                            buttonRadius: Appearance.rounding.small
+                            implicitWidth: cancelText.implicitWidth + 22 * root.uiScale
+                            implicitHeight: 28 * root.uiScale
+                            buttonRadius: Appearance.rounding.small * root.uiScale
                             colBackground: Qt.rgba(0, 0, 0, 0)
                             colBackgroundHover: ColorUtils.transparentize(root.blendedColors.colSecondaryContainerHover, 0.5)
                             colRipple: ColorUtils.transparentize(root.blendedColors.colSecondaryContainerActive, 0.4)
@@ -296,7 +297,7 @@ Item {
                                 id: cancelText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Cancel")
-                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                                 color: root.blendedColors.colOnLayer0
                             }
                         }
@@ -305,9 +306,9 @@ Item {
                             id: sendBtn
                             enabled: root.selectedIndex >= 0
                                 && root.fileUrls.length > 0
-                            implicitWidth: sendText.implicitWidth + 26
-                            implicitHeight: 28
-                            buttonRadius: Appearance.rounding.small
+                            implicitWidth: sendText.implicitWidth + 26 * root.uiScale
+                            implicitHeight: 28 * root.uiScale
+                            buttonRadius: Appearance.rounding.small * root.uiScale
                             opacity: enabled ? 1.0 : 0.5
                             colBackground: root.blendedColors.colPrimary
                             colBackgroundHover: root.blendedColors.colPrimaryHover
@@ -322,7 +323,7 @@ Item {
                                 id: sendText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Send")
-                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                                 font.weight: Font.DemiBold
                                 color: root.blendedColors.colOnPrimary
                             }
@@ -334,7 +335,7 @@ Item {
             Component {
                 id: sendingComp
                 ColumnLayout {
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     Item { Layout.fillHeight: true }
                     StyledText {
                         Layout.fillWidth: true
@@ -345,7 +346,7 @@ Item {
                                 ? Translation.tr("Sending to %1…").arg(name)
                                 : Translation.tr("Sending…");
                         }
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                         color: root.blendedColors.colSubtext
                         elide: Text.ElideRight
                     }
@@ -365,15 +366,15 @@ Item {
                 Item {
                     RowLayout {
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "check_circle"
-                            iconSize: Appearance.font.pixelSize.huge
+                            iconSize: Appearance.font.pixelSize.huge * root.uiScale
                             color: root.blendedColors.colPrimary
                         }
                         StyledText {
                             text: Translation.tr("Sent")
-                            font.pixelSize: Appearance.font.pixelSize.large
+                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                         }
@@ -384,19 +385,19 @@ Item {
             Component {
                 id: errorComp
                 ColumnLayout {
-                    spacing: 4
+                    spacing: 4 * root.uiScale
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "error"
-                            iconSize: Appearance.font.pixelSize.larger
+                            iconSize: Appearance.font.pixelSize.larger * root.uiScale
                             color: Appearance.colors.colError
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: Translation.tr("Failed")
-                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                             elide: Text.ElideRight
@@ -408,16 +409,16 @@ Item {
                         text: LocalSend.lastError || Translation.tr("Unknown error")
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         Item { Layout.fillWidth: true }
                         RippleButton {
-                            implicitWidth: dismissText.implicitWidth + 22
-                            implicitHeight: 26
-                            buttonRadius: Appearance.rounding.small
+                            implicitWidth: dismissText.implicitWidth + 22 * root.uiScale
+                            implicitHeight: 26 * root.uiScale
+                            buttonRadius: Appearance.rounding.small * root.uiScale
                             colBackground: Qt.rgba(0, 0, 0, 0)
                             colBackgroundHover: ColorUtils.transparentize(root.blendedColors.colSecondaryContainerHover, 0.5)
                             colRipple: ColorUtils.transparentize(root.blendedColors.colSecondaryContainerActive, 0.4)
@@ -429,7 +430,7 @@ Item {
                                 id: dismissText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Dismiss")
-                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                                 color: root.blendedColors.colOnLayer0
                             }
                         }

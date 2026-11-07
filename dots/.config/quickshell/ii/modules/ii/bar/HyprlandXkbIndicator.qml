@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import qs.services
 import qs.modules.common
@@ -5,6 +6,7 @@ import qs.modules.common.widgets
 
 Loader {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool vertical: false
     property color color: Appearance.barContent.colOnSurfaceVariant
     active: HyprlandXkb.layoutCodes.length > 1

@@ -11,7 +11,7 @@ ColumnLayout {
     id: root
     readonly property bool busy: LocalSend.state === LocalSend.stateSending || LocalSend.receiveSessionActive
     readonly property bool receiving: GlobalStates.mediaReceiveActive && !GlobalStates.mediaTransferActive
-    spacing: 6
+    spacing: 6 * Appearance.sizes.islandScale
     Component.onCompleted: {
         if (!receiving) GlobalStates.mediaTransferActive = true;
         GlobalStates.mediaControlsOpen = true;
@@ -41,12 +41,12 @@ ColumnLayout {
         StyledText {
             visible: !root.receiving && !GlobalStates.mediaTransferUrls.length
             text: Translation.tr("Drop files here")
-            font.pixelSize: 12; color: Appearance.barStripContent.colOnSurfaceVariant
+            font.pixelSize: 12 * Appearance.sizes.islandScale; color: Appearance.barStripContent.colOnSurfaceVariant
         }
     }
     Loader {
         Layout.fillWidth: true
-        Layout.preferredHeight: Appearance.sizes.mediaControlsHeight
+        Layout.preferredHeight: Appearance.sizes.mediaControlsHeight * Appearance.sizes.islandScale
         sourceComponent: root.receiving ? receive : send
     }
     Component {
@@ -55,7 +55,7 @@ ColumnLayout {
             fileUrls: GlobalStates.mediaTransferUrls
             targetWidth: root.width
             targetHeight: Appearance.sizes.mediaControlsHeight
-            radius: Appearance.rounding.large
+            radius: Appearance.rounding.large * Appearance.sizes.islandScale
         }
     }
     Component {
@@ -63,7 +63,7 @@ ColumnLayout {
         ReceivePanel {
             targetWidth: root.width
             targetHeight: Appearance.sizes.mediaControlsHeight
-            radius: Appearance.rounding.large
+            radius: Appearance.rounding.large * Appearance.sizes.islandScale
         }
     }
 }

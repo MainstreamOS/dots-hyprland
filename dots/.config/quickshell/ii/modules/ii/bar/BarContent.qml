@@ -12,6 +12,7 @@ import qs.modules.common.functions
 Item { // Bar content region
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var screen: root.QsWindow.window?.screen
     property var brightnessMonitor: Brightness.getMonitorForScreen(screen)
     property real useShortenedForm: (Appearance.sizes.barHellaShortenScreenWidthThreshold >= screen?.width) ? 2 : (Appearance.sizes.barShortenScreenWidthThreshold >= screen?.width) ? 1 : 0
@@ -98,7 +99,7 @@ Item { // Bar content region
         return name === "media" || (name === "resources" && root.useShortenedForm === 2);
     }
 
-    readonly property int mediaMinimumWidth: 140
+    readonly property real mediaMinimumWidth: 140 * root.uiScale
 
     // When resources and media share a group, media takes the room resources
     // leaves rather than growing the pill, so switching resources on never
@@ -191,7 +192,7 @@ Item { // Bar content region
         Layout.topMargin: Appearance.sizes.baseBarHeight / 3
         Layout.bottomMargin: Appearance.sizes.baseBarHeight / 3
         Layout.fillHeight: true
-        implicitWidth: 1
+        implicitWidth: 1 * root.uiScale
         implicitHeight: Appearance.sizes.baseBarHeight / 3
         color: Appearance.barContent.colOutlineVariant
     }
@@ -231,7 +232,7 @@ Item { // Bar content region
         // and let the group's set width hand back whatever resources didn't use.
         Layout.preferredWidth: moduleName !== "media" ? -1
             : yieldsToGroupMate ? root.mediaMinimumWidth
-            : Math.max(root.mediaMinimumWidth, root.centerSideModuleWidth - 40)
+            : Math.max(root.mediaMinimumWidth, root.centerSideModuleWidth - 40 * root.uiScale)
         Layout.fillHeight: root.moduleFillHeight(moduleName)
         active: entryEnabled && root.moduleActive(moduleName)
         visible: active && root.moduleVisible(moduleName)
@@ -285,7 +286,7 @@ Item { // Bar content region
             id: chromelessRow
             anchors.fill: parent
             visible: pill.chromeless
-            spacing: 4
+            spacing: 4 * root.uiScale
             Repeater {
                 // Gated on chromelessness, not just hidden: an always-built
                 // model would keep a live duplicate of every widget behind
@@ -326,7 +327,7 @@ Item { // Bar content region
         Component {
             id: workspacesPill
             BarGroup {
-                padding: workspacesWidget?.widgetPadding ?? 4
+                padding: workspacesWidget?.widgetPadding ?? 4 * root.uiScale
                 glowing: workspacesWidget?.dragOver ?? false
                 Workspaces {
                     id: workspacesWidget
@@ -393,7 +394,7 @@ Item { // Bar content region
     Component {
         id: comp_clock
         MouseArea {
-            implicitWidth: clockInner.implicitWidth + 60
+            implicitWidth: clockInner.implicitWidth + 60 * root.uiScale
             implicitHeight: clockInner.implicitHeight
             acceptedButtons: Qt.LeftButton
             onPressed: GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen
@@ -448,8 +449,8 @@ Item { // Bar content region
         RippleButton { // Right sidebar button
             id: rightSidebarButton
 
-            implicitWidth: indicatorsRowLayout.implicitWidth + 10 * 2
-            implicitHeight: indicatorsRowLayout.implicitHeight + 5 * 2
+            implicitWidth: indicatorsRowLayout.implicitWidth + 10 * 2 * root.uiScale
+            implicitHeight: indicatorsRowLayout.implicitHeight + 5 * 2 * root.uiScale
 
             buttonRadius: Appearance.rounding.full
             colBackground: barRightSideMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
@@ -472,7 +473,7 @@ Item { // Bar content region
             RowLayout {
                 id: indicatorsRowLayout
                 anchors.centerIn: parent
-                property real realSpacing: 15
+                property real realSpacing: 15 * root.uiScale
                 spacing: 0
 
                 Revealer {
@@ -484,7 +485,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "volume_off"
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -497,7 +498,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "mic_off"
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -521,20 +522,20 @@ Item { // Bar content region
                 }
                 MaterialSymbol {
                     text: Network.materialSymbol
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.leftMargin: indicatorsRowLayout.realSpacing
                     visible: BluetoothStatus.available
                     text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.leftMargin: indicatorsRowLayout.realSpacing
                     text: "settings"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
             }
@@ -551,14 +552,14 @@ Item { // Bar content region
             // keep between their own icons. Giving back 10 lands the seam at
             // that same rhythm; the button overhangs the slot evenly, so the
             // hover circle and hit area stay full size.
-            implicitWidth: volumeIconButton.implicitWidth - 10
+            implicitWidth: volumeIconButton.implicitWidth - 10 * root.uiScale
             implicitHeight: volumeIconButton.implicitHeight
 
             RippleButton {
                 id: volumeIconButton
                 anchors.centerIn: parent
-                implicitWidth: 32
-                implicitHeight: 32
+                implicitWidth: 32 * root.uiScale
+                implicitHeight: 32 * root.uiScale
                 buttonRadius: Appearance.rounding.full
                 toggled: volumeBarPopup.shown
                 colBackground: barRightSideMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
@@ -578,7 +579,7 @@ Item { // Bar content region
                         if (vol < 0.5) return "volume_down";
                         return "volume_up";
                     }
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: volumeIconButton.toggled ? Appearance.barContent.m3onSecondaryContainer : Appearance.barContent.colOnLayer0
                 }
             }
@@ -653,7 +654,7 @@ Item { // Bar content region
     // end carries a curve drawn beyond it, so two facing each other need
     // room to stand apart or they meet and weld the surfaces back into one.
     readonly property real splitGap: root.isNotch
-        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
+        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2 * root.uiScale)
         : Appearance.sizes.hyprlandGapsOut
 
     readonly property real maxFloatInset: {
@@ -709,7 +710,7 @@ Item { // Bar content region
     // leaves each site only the two things that differ: where it hangs and
     // which way it turns.
     component BarFlare: RoundCorner {
-        implicitSize: Appearance.rounding.barFloat
+        implicitSize: Appearance.rounding.barFloat * root.uiScale
         color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
             : Appearance.colors.colBarBackground
         outlineWidth: Config.options.bar.showBackground ? 1 : 0
@@ -729,7 +730,7 @@ Item { // Bar content region
     component BarEndFlares: Item {
         BarFlare {
             anchors.right: parent.left
-            anchors.rightMargin: -2
+            anchors.rightMargin: -2 * root.uiScale
             anchors.top: !Config.options.bar.bottom ? parent.top : undefined
             anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
@@ -737,7 +738,7 @@ Item { // Bar content region
         }
         BarFlare {
             anchors.left: parent.right
-            anchors.leftMargin: -2
+            anchors.leftMargin: -2 * root.uiScale
             anchors.top: !Config.options.bar.bottom ? parent.top : undefined
             anchors.bottom: Config.options.bar.bottom ? parent.bottom : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomLeft
@@ -767,7 +768,7 @@ Item { // Bar content region
         anchors.bottomMargin: root.isNotch ? 0 : Appearance.sizes.hyprlandGapsOut
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
-        readonly property real radius: Appearance.rounding.barFloat
+        readonly property real radius: Appearance.rounding.barFloat * root.uiScale
         // The pair against the docked edge is squared off when the surface is
         // set down on it, and so is an end that reaches the screen's own edge.
         // The pair facing the desktop keeps its roundness either way.
@@ -792,7 +793,7 @@ Item { // Bar content region
             trackX: floatSurface.x
             trackY: root.y
             notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "bottom" : "top") : ""
-            notchSize: Appearance.rounding.barFloat
+            notchSize: Appearance.rounding.barFloat * root.uiScale
         }
         Item {
             anchors.fill: parent
@@ -899,7 +900,7 @@ Item { // Bar content region
         bottomRightRadius: barBackground.bottomRightRadius
         trackY: root.y
         notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "bottom" : "top") : ""
-        notchSize: Appearance.rounding.barFloat
+        notchSize: Appearance.rounding.barFloat * root.uiScale
         hugEdge: Config.options.bar.cornerStyle === 0 ? (Config.options.bar.bottom ? "bottom" : "top") : ""
         hugSize: Appearance.rounding.screenRounding
     }
@@ -927,7 +928,7 @@ Item { // Bar content region
             ? (root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque : Appearance.colors.colBarBackground)
             : "transparent"
         // Left for the shadow to read, the way the split surfaces leave theirs.
-        radius: root.floatStyles ? Appearance.rounding.barFloat : 0
+        radius: root.floatStyles ? Appearance.rounding.barFloat * root.uiScale : 0
         // Set down on the docked edge, the pair touching it is squared off, and
         // so are the ends when the strip is asked for the whole width and
         // reaches the screen's own corners.
@@ -975,9 +976,9 @@ Item { // Bar content region
         RowLayout {
             id: leftRow
             anchors.fill: parent
-            anchors.leftMargin: Appearance.rounding.screenRounding
-            anchors.rightMargin: Appearance.rounding.screenRounding
-            spacing: 4
+            anchors.leftMargin: Appearance.rounding.screenRounding * root.uiScale
+            anchors.rightMargin: Appearance.rounding.screenRounding * root.uiScale
+            spacing: 4 * root.uiScale
 
             Repeater {
                 model: Config.options.bar.layout.left
@@ -1016,7 +1017,7 @@ Item { // Bar content region
         Row {
             id: centerMidRow
             anchors.centerIn: parent
-            spacing: 4
+            spacing: 4 * root.uiScale
             Repeater {
                 model: root.groupsAt()
                 delegate: GroupPill {
@@ -1032,10 +1033,10 @@ Item { // Bar content region
         id: centerLeftFlank
         anchors {
             right: centerMidZone.left
-            rightMargin: root.groupsAt().length > 0 ? 6 : 3
+            rightMargin: (root.groupsAt().length > 0 ? 6 : 3) * root.uiScale
             verticalCenter: parent.verticalCenter
         }
-        spacing: 4
+        spacing: 4 * root.uiScale
         Repeater {
             model: root.groupsBefore()
             delegate: GroupPill {
@@ -1049,7 +1050,7 @@ Item { // Bar content region
     VerticalBarSeparator {
         anchors {
             right: centerMidZone.left
-            rightMargin: 2
+            rightMargin: 2 * root.uiScale
             verticalCenter: parent.verticalCenter
         }
         visible: Config.options?.bar.borderless && centerLeftFlank.width > 0 && root.groupsAt().length > 0
@@ -1059,7 +1060,7 @@ Item { // Bar content region
         id: centerRightFlank
         anchors {
             left: centerMidZone.right
-            leftMargin: root.groupsAt().length > 0 ? 6 : 3
+            leftMargin: (root.groupsAt().length > 0 ? 6 : 3) * root.uiScale
             verticalCenter: parent.verticalCenter
         }
         implicitWidth: centerRightFlankRow.implicitWidth
@@ -1069,7 +1070,7 @@ Item { // Bar content region
         Row {
             id: centerRightFlankRow
             anchors.fill: parent
-            spacing: 4
+            spacing: 4 * root.uiScale
             Repeater {
                 model: root.groupsAfter()
                 delegate: GroupPill {
@@ -1084,7 +1085,7 @@ Item { // Bar content region
     VerticalBarSeparator {
         anchors {
             left: centerMidZone.right
-            leftMargin: 2
+            leftMargin: 2 * root.uiScale
             verticalCenter: parent.verticalCenter
         }
         visible: Config.options?.bar.borderless && centerRightFlank.width > 0 && root.groupsAt().length > 0
@@ -1116,9 +1117,9 @@ Item { // Bar content region
             id: rightRow
             anchors.fill: parent
             // Split, the surface budgets the same pad at both of its ends.
-            anchors.leftMargin: root.floatSplit ? root.floatPad : 5
-            anchors.rightMargin: Appearance.rounding.screenRounding
-            spacing: 5
+            anchors.leftMargin: root.floatSplit ? root.floatPad : 5 * root.uiScale
+            anchors.rightMargin: Appearance.rounding.screenRounding * root.uiScale
+            spacing: 5 * root.uiScale
 
             Item { // Packs the pills against the screen edge (see sectionNeedsPacker)
                 Layout.fillWidth: true

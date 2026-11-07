@@ -684,8 +684,13 @@ Singleton {
                 property bool bottom: false // Instead of top
                 property string mode: "bar" // "bar" | "island"
                 property int cornerStyle: 1 // 0: Hug | 1: Float | 2: Plain rectangle | 3: Notch
+                // The traditional bar's size, as a factor of its usual size.
+                property real scale: 1.0
                 property JsonObject island: JsonObject {
                     property string shape: "notch" // "notch" | "float" | "rect"
+                    property real expandedScale: 1.0
+                    // The closed Island's size, as the traditional bar has its own.
+                    property real scale: 1.0
                     property bool appDrawer: false
                     property list<string> panelOrder: root.defaultIslandPanels
                     property list<string> disabledPanels: []

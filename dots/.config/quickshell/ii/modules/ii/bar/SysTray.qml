@@ -9,11 +9,12 @@ import qs.modules.common.widgets
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.barContent
     // Room between the icons and the pill drawn around them, the same the
     // utility buttons keep, so the two read as the same kind of thing when they
     // sit beside each other.
-    readonly property real contentPadding: 4
+    readonly property real contentPadding: 4 * root.uiScale
     implicitWidth: gridLayout.implicitWidth + root.contentPadding * 2
     implicitHeight: gridLayout.implicitHeight + root.contentPadding * 2
     property bool vertical: false
@@ -76,8 +77,8 @@ Item {
         columns: root.vertical ? 1 : -1
         anchors.fill: parent
         anchors.margins: root.contentPadding
-        rowSpacing: 8
-        columnSpacing: 15
+        rowSpacing: 8 * root.uiScale
+        columnSpacing: 15 * root.uiScale
 
         RippleButton {
             id: trayOverflowButton
@@ -100,7 +101,7 @@ Item {
 
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
-                iconSize: Appearance.font.pixelSize.larger
+                iconSize: Appearance.font.pixelSize.larger * root.uiScale
                 text: "expand_more"
                 horizontalAlignment: Text.AlignHCenter
                 color: root.trayOverflowOpen ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnLayer2
@@ -119,8 +120,8 @@ Item {
                     id: trayOverflowLayout
                     anchors.centerIn: parent
                     columns: Math.ceil(Math.sqrt(root.unpinnedItems.length))
-                    columnSpacing: 10
-                    rowSpacing: 10
+                    columnSpacing: 10 * root.uiScale
+                    rowSpacing: 10 * root.uiScale
 
                     Repeater {
                         model: root.unpinnedItems
@@ -160,7 +161,7 @@ Item {
 
         StyledText {
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-            font.pixelSize: Appearance.font.pixelSize.larger
+            font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
             color: root.contentColors.colSubtext
             text: "•"
             visible: root.showSeparator && SystemTray.items.values.length > 0

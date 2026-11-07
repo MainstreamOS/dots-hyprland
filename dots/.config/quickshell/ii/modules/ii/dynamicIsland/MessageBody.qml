@@ -20,16 +20,16 @@ Rectangle {
     readonly property bool hasImageSources: root.images && root.images.some(source => typeof source === "string" && source.trim().length > 0)
     readonly property bool hasImages: !!leftImageLoader.item?.hasImages || !!rightImageLoader.item?.hasImages
     readonly property bool isAudioOnly: root.hasAudio && (!root.text || root.text.length === 0) && !root.hasImages
-    implicitHeight: root.isAudioOnly ? 70 : 104
-    radius: 12
+    implicitHeight: (root.isAudioOnly ? 70 : 104) * Appearance.sizes.islandScale
+    radius: 12 * Appearance.sizes.islandScale
     color: Appearance.surfaces.row
     RowLayout {
         anchors.fill: parent
-        anchors.topMargin: root.isAudioOnly ? 8 : 10
-        anchors.bottomMargin: root.isAudioOnly ? 8 : 10
-        anchors.leftMargin: root.isAudioOnly ? 10 : 10
-        anchors.rightMargin: root.isAudioOnly ? 10 : 10
-        spacing: 12
+        anchors.topMargin: (root.isAudioOnly ? 8 : 10) * Appearance.sizes.islandScale
+        anchors.bottomMargin: (root.isAudioOnly ? 8 : 10) * Appearance.sizes.islandScale
+        anchors.leftMargin: 10 * Appearance.sizes.islandScale
+        anchors.rightMargin: 10 * Appearance.sizes.islandScale
+        spacing: 12 * Appearance.sizes.islandScale
         Loader {
             id: leftImageLoader
             active: root.hasImageSources && !root.imagesOnRight
@@ -37,10 +37,10 @@ Rectangle {
             Layout.fillWidth: !root.hasTextOrAudio
             Layout.fillHeight: false
             Layout.preferredWidth: root.hasTextOrAudio
-                ? (root.images.length > 1 ? Math.min(180, item?.implicitWidth ?? 84) : Math.min(84, root.height - 20))
+                ? (root.images.length > 1 ? Math.min(180 * Appearance.sizes.islandScale, item?.implicitWidth ?? 84 * Appearance.sizes.islandScale) : Math.min(84 * Appearance.sizes.islandScale, root.height - 20 * Appearance.sizes.islandScale))
                 : -1
-            Layout.maximumWidth: root.hasTextOrAudio ? 180 : -1
-            Layout.preferredHeight: Math.min(84, root.height - 20)
+            Layout.maximumWidth: root.hasTextOrAudio ? 180 * Appearance.sizes.islandScale : -1
+            Layout.preferredHeight: Math.min(84 * Appearance.sizes.islandScale, root.height - 20 * Appearance.sizes.islandScale)
             Layout.alignment: root.hasTextOrAudio ? Qt.AlignTop : Qt.AlignCenter
             sourceComponent: imageStripComponent
         }
@@ -59,7 +59,7 @@ Rectangle {
                 width: scroll.availableWidth
                 y: (!root.text && root.hasAudio && height < scroll.availableHeight)
                     ? Math.round((scroll.availableHeight - height) / 2) : 0
-                spacing: root.isAudioOnly ? 4 : 8
+                spacing: (root.isAudioOnly ? 4 : 8) * Appearance.sizes.islandScale
                 Repeater {
                     model: root.audioClips
                     MessageAudioClip {
@@ -78,7 +78,7 @@ Rectangle {
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                     lineHeight: 1.2
-                    font.pixelSize: 13
+                    font.pixelSize: 13 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer0
                     verticalAlignment: Text.AlignTop
                 }
@@ -91,10 +91,10 @@ Rectangle {
             Layout.fillWidth: !root.hasTextOrAudio
             Layout.fillHeight: false
             Layout.preferredWidth: root.hasTextOrAudio
-                ? (root.images.length > 1 ? Math.min(180, item?.implicitWidth ?? 84) : Math.min(84, root.height - 20))
+                ? (root.images.length > 1 ? Math.min(180 * Appearance.sizes.islandScale, item?.implicitWidth ?? 84 * Appearance.sizes.islandScale) : Math.min(84 * Appearance.sizes.islandScale, root.height - 20 * Appearance.sizes.islandScale))
                 : -1
-            Layout.maximumWidth: root.hasTextOrAudio ? 180 : -1
-            Layout.preferredHeight: Math.min(84, root.height - 20)
+            Layout.maximumWidth: root.hasTextOrAudio ? 180 * Appearance.sizes.islandScale : -1
+            Layout.preferredHeight: Math.min(84 * Appearance.sizes.islandScale, root.height - 20 * Appearance.sizes.islandScale)
             Layout.alignment: root.hasTextOrAudio ? Qt.AlignTop : Qt.AlignCenter
             sourceComponent: imageStripComponent
         }

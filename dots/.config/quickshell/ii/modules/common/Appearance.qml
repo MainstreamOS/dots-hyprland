@@ -1509,7 +1509,14 @@ Singleton {
     }
 
     sizes: QtObject {
-        property real baseBarHeight: 40
+        // The bar or closed Island (barScale) and the open Island (islandScale), laid out at that size rather
+        // than magnified so icons stay sharp; in tenths, so sizes land on whole pixels often enough to stay crisp.
+        readonly property real barScale: Math.round(Math.max(0.8, Math.min(1.5,
+            (barIsIsland ? Config.options?.bar.island.scale : Config.options?.bar.scale) ?? 1)) * 10) / 10
+        // The bar's popups follow the bar, and on the Island they follow the Island.
+        readonly property real barPopupScale: barIsIsland ? islandScale : barScale
+        readonly property real islandScale: Math.round(Math.max(0.8, Math.min(1.8, Config.options?.bar.island.expandedScale ?? 1)) * 10) / 10
+        property real baseBarHeight: Math.round(40 * barScale)
         // A floating strip spans the whole screen unless it is told otherwise,
         // as a percentage so one setting reads the same on every monitor
         // rather than leaving a wide screen barely trimmed and a narrow one
@@ -1770,9 +1777,9 @@ Singleton {
         }
         property real barHeight: (barIsIsland ? islandShape === "float" : Config.options.bar.cornerStyle === 1) ?
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
-        property real barCenterSideModuleWidth: Config.options?.bar.verbose ? 360 : 140
-        property real barCenterSideModuleWidthShortened: 280
-        property real barCenterSideModuleWidthHellaShortened: 190
+        property real barCenterSideModuleWidth: (Config.options?.bar.verbose ? 360 : 140) * barScale
+        property real barCenterSideModuleWidthShortened: 280 * barScale
+        property real barCenterSideModuleWidthHellaShortened: 190 * barScale
         property real barShortenScreenWidthThreshold: 1200 // Shorten if screen width is at most this value
         property real barHellaShortenScreenWidthThreshold: 1000 // Shorten even more...
         property real elevationMargin: 10
@@ -1808,7 +1815,7 @@ Singleton {
         property real searchWidth: 360
         property real sidebarWidth: 460
         property real sidebarWidthExtended: 750
-        property real baseVerticalBarWidth: 46
+        property real baseVerticalBarWidth: Math.round(46 * barScale)
         property real verticalBarWidth: Config.options.bar.cornerStyle === 1 ? 
             (baseVerticalBarWidth + root.sizes.hyprlandGapsOut * 2) : baseVerticalBarWidth
         property real wallpaperSelectorWidth: 1200

@@ -37,6 +37,81 @@ ContentPage {
                 ? Translation.tr("Hover over the clock to expand. Use the arrows beside the panel title to change panels; scrolling there switches workspaces.")
                 : Translation.tr("Choose a style, arrange your widgets, and access workspaces, media, and system controls from the bar.")
         }
+        // The bar and the closed Island each keep their own size, and the Island's panels a third.
+        ConfigSlider {
+            readonly property real saved: (root.island ? Config.options.bar.island.scale : Config.options.bar.scale) ?? 1.0
+            buttonIcon: "zoom_in"
+            text: Translation.tr("Size")
+            from: 80
+            to: 150
+            stepSize: 10
+            stopIndicatorValues: [80, 90, 100, 110, 120, 130, 140, 150]
+            tooltipContent: `${Math.round(value)}%`
+            value: Math.round(saved * 100)
+            onMoved: {
+                const stepped = Math.round(value / 10) / 10;
+                if (Math.abs(stepped - saved) < 0.001)
+                    return;
+                if (root.island)
+                    Config.options.bar.island.scale = stepped;
+                else
+                    Config.options.bar.scale = stepped;
+            }
+        }
+        StyledText {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            wrapMode: Text.WordWrap
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            text: root.island ? Translation.tr("The Island's height and clock while it is closed.")
+                : Translation.tr("The bar's height, icons and text.")
+        }
+        ConfigResetButton {
+            visible: Math.abs(((root.island ? Config.options.bar.island.scale : Config.options.bar.scale) ?? 1.0) - 1.0) > 0.01
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default")
+            onClicked: {
+                if (root.island)
+                    Config.options.bar.island.scale = 1.0;
+                else
+                    Config.options.bar.scale = 1.0;
+            }
+        }
+        ConfigSlider {
+            visible: root.island
+            buttonIcon: "open_in_full"
+            text: Translation.tr("Panel size")
+            from: 80
+            to: 180
+            stepSize: 10
+            stopIndicatorValues: [80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180]
+            tooltipContent: `${Math.round(value)}%`
+            value: Math.round((Config.options.bar.island.expandedScale ?? 1.0) * 100)
+            onMoved: {
+                const stepped = Math.round(value / 10) / 10;
+                if (Math.abs(stepped - (Config.options.bar.island.expandedScale ?? 1.0)) < 0.001)
+                    return;
+                Config.options.bar.island.expandedScale = stepped;
+            }
+        }
+        StyledText {
+            visible: root.island
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            wrapMode: Text.WordWrap
+            font.pixelSize: Appearance.font.pixelSize.small
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("How large the Island opens. The clock stays the same size.")
+        }
+        ConfigResetButton {
+            visible: root.island && Math.abs((Config.options.bar.island.expandedScale ?? 1.0) - 1.0) > 0.01
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default")
+            onClicked: Config.options.bar.island.expandedScale = 1.0
+        }
     }
     forceWidth: true
     ContentSection {

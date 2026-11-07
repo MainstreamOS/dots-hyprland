@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -11,6 +12,7 @@ import Quickshell.Hyprland
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     readonly property MprisPlayer activePlayer: MprisController.activePlayer
     readonly property string cleanedTitle: StringUtils.cleanMusicTitle(activePlayer?.trackTitle) || Translation.tr("No media")
@@ -59,16 +61,16 @@ Item {
     RowLayout { // Real content
         id: rowLayout
 
-        spacing: 4
+        spacing: 4 * root.uiScale
         anchors.fill: parent
 
         ClippedFilledCircularProgress {
             id: mediaCircProg
             Layout.alignment: Qt.AlignVCenter
-            lineWidth: Appearance.rounding.unsharpen
+            lineWidth: Appearance.rounding.unsharpen * root.uiScale
             value: LocalSend.receiveSessionActive ? LocalSend.receiveProgressFraction
                 : activePlayer?.position / activePlayer?.length
-            implicitSize: 20
+            implicitSize: 20 * root.uiScale
             colPrimary: LocalSend.receiveActive ? Appearance.barContent.colPrimary
                 : Appearance.barContent.colOnLayer1
             colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
@@ -84,7 +86,7 @@ Item {
                     fill: 1
                     text: LocalSend.receiveActive ? "download"
                         : activePlayer?.isPlaying ? "pause" : "music_note"
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
                     color: LocalSend.receiveActive ? Appearance.barContent.colPrimary
                         : Appearance.barContent.m3onSecondaryContainer
                 }

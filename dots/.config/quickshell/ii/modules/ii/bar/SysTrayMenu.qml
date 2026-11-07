@@ -10,6 +10,7 @@ import Quickshell
 
 PopupWindow {
     id: root
+    property real uiScale: Appearance.sizes.barPopupScale
     required property QsMenuHandle trayItemMenuHandle
     property string trayItemId: ""
 

@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
@@ -5,6 +6,7 @@ import QtQuick
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     required property string iconName
     required property double percentage
     property int warningThreshold: 100
@@ -26,7 +28,7 @@ Item {
             font.weight: Font.Medium
             fill: 1
             text: root.iconName
-            iconSize: 13
+            iconSize: 13 * root.uiScale
             color: Appearance.barContent.colOnSecondaryContainer
         }
     }

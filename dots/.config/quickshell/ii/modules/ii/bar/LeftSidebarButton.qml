@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import qs
 import qs.services
@@ -6,6 +7,7 @@ import qs.modules.common.widgets
 
 RippleButton {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     // Handed the strip's tones when this sits bare on it rather than in a group.
     property Appearance.SurfaceContent tones: Appearance.barContent
 
@@ -13,7 +15,7 @@ RippleButton {
 
     visible: SidebarLeftTabs.buttonShown
 
-    property real buttonPadding: 5
+    property real buttonPadding: 5 * root.uiScale
     implicitWidth: distroIcon.width + buttonPadding * 2
     implicitHeight: distroIcon.height + buttonPadding * 2
     buttonRadius: Appearance.rounding.full
@@ -54,8 +56,8 @@ RippleButton {
     CustomIcon {
         id: distroIcon
         anchors.centerIn: parent
-        width: 19.5
-        height: 19.5
+        width: 19.5 * root.uiScale
+        height: 19.5 * root.uiScale
         // The stock icon is the logo of the model picked in the AI Assistant
         // tab; with AI off the button is not shown at all. No model object yet
         // means local AI is still being looked up.
@@ -71,11 +73,11 @@ RippleButton {
             anchors {
                 bottom: parent.bottom
                 right: parent.right
-                bottomMargin: -2
-                rightMargin: -2
+                bottomMargin: -2 * root.uiScale
+                rightMargin: -2 * root.uiScale
             }
-            implicitWidth: 8
-            implicitHeight: 8
+            implicitWidth: 8 * root.uiScale
+            implicitHeight: 8 * root.uiScale
             radius: Appearance.rounding.full
             color: root.tones.colTertiary
 

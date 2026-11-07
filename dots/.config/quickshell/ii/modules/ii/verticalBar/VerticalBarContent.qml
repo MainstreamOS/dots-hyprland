@@ -13,6 +13,7 @@ import qs.modules.ii.bar as Bar
 Item { // Bar content region
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var screen: root.QsWindow.window?.screen
     property var brightnessMonitor: Brightness.getMonitorForScreen(screen)
 
@@ -32,7 +33,7 @@ Item { // Bar content region
     // the ends move together it governs both.
     // The desktop the split keeps between surfaces; see the horizontal bar.
     readonly property real splitGap: root.isNotch
-        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2)
+        ? Math.max(Appearance.sizes.hyprlandGapsOut, Appearance.rounding.barFloat * 2 * root.uiScale)
         : Appearance.sizes.hyprlandGapsOut
 
     readonly property real maxFloatInset: {
@@ -196,7 +197,7 @@ Item { // Bar content region
             id: pillGroup
             anchors.fill: parent
             vertical: true
-            padding: 8
+            padding: 8 * root.uiScale
             Repeater {
                 model: pill.gw
                 delegate: BarModule {
@@ -290,8 +291,8 @@ Item { // Bar content region
             RippleButton {
                 id: volumeIconButton
                 anchors.centerIn: parent
-                implicitWidth: 32
-                implicitHeight: 32
+                implicitWidth: 32 * root.uiScale
+                implicitHeight: 32 * root.uiScale
                 buttonRadius: Appearance.rounding.full
                 toggled: volumeBarPopup.shown
                 colBackground: barBottomSectionMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
@@ -311,7 +312,7 @@ Item { // Bar content region
                         if (vol < 0.5) return "volume_down";
                         return "volume_up";
                     }
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: volumeIconButton.toggled ? Appearance.barContent.m3onSecondaryContainer : Appearance.barContent.colOnLayer0
                 }
             }
@@ -329,8 +330,8 @@ Item { // Bar content region
             id: rightSidebarButton
             Layout.alignment: Qt.AlignHCenter
 
-            implicitHeight: indicatorsColumnLayout.implicitHeight + 4 * 2
-            implicitWidth: indicatorsColumnLayout.implicitWidth + 6 * 2
+            implicitHeight: indicatorsColumnLayout.implicitHeight + 4 * 2 * root.uiScale
+            implicitWidth: indicatorsColumnLayout.implicitWidth + 6 * 2 * root.uiScale
 
             buttonRadius: Appearance.rounding.full
             colBackground: barBottomSectionMouseArea.hovered ? Appearance.barContent.colLayer1Hover : ColorUtils.transparentize(Appearance.barContent.colLayer1Hover, 1)
@@ -353,7 +354,7 @@ Item { // Bar content region
             ColumnLayout {
                 id: indicatorsColumnLayout
                 anchors.centerIn: parent
-                property real realSpacing: 6
+                property real realSpacing: 6 * root.uiScale
                 spacing: 0
 
                 Revealer {
@@ -366,7 +367,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "volume_off"
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -380,7 +381,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "mic_off"
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -406,20 +407,20 @@ Item { // Bar content region
                 }
                 MaterialSymbol {
                     text: Network.materialSymbol
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.topMargin: indicatorsColumnLayout.realSpacing
                     visible: BluetoothStatus.available
                     text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.topMargin: indicatorsColumnLayout.realSpacing
                     text: "settings"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
             }
@@ -427,7 +428,7 @@ Item { // Bar content region
     }
 
     component BarFlare: RoundCorner {
-        implicitSize: Appearance.rounding.barFloat
+        implicitSize: Appearance.rounding.barFloat * root.uiScale
         color: root.notchSeamFix ? Appearance.colors.colBarBackgroundOpaque
             : Appearance.colors.colBarBackground
         outlineWidth: Config.options.bar.showBackground ? 1 : 0
@@ -437,7 +438,7 @@ Item { // Bar content region
     component BarEndFlares: Item {
         BarFlare { // Above the strip
             anchors.bottom: parent.top
-            anchors.bottomMargin: -2
+            anchors.bottomMargin: -2 * root.uiScale
             anchors.left: !Config.options.bar.bottom ? parent.left : undefined
             anchors.right: Config.options.bar.bottom ? parent.right : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.BottomRight
@@ -445,7 +446,7 @@ Item { // Bar content region
         }
         BarFlare { // Below it
             anchors.top: parent.bottom
-            anchors.topMargin: -2
+            anchors.topMargin: -2 * root.uiScale
             anchors.left: !Config.options.bar.bottom ? parent.left : undefined
             anchors.right: Config.options.bar.bottom ? parent.right : undefined
             corner: Config.options.bar.bottom ? RoundCorner.CornerEnum.TopRight
@@ -474,7 +475,7 @@ Item { // Bar content region
         anchors.rightMargin: root.floatingInset
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
-        readonly property real radius: Appearance.rounding.barFloat
+        readonly property real radius: Appearance.rounding.barFloat * root.uiScale
         // The pair against the docked edge is squared off when the surface is
         // set down on it. The pair facing the desktop keeps its roundness,
         // except at an end carried out to the screen's own corner.
@@ -497,7 +498,7 @@ Item { // Bar content region
             trackX: root.x
             trackY: floatSurface.y
             notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "right" : "left") : ""
-            notchSize: Appearance.rounding.barFloat
+            notchSize: Appearance.rounding.barFloat * root.uiScale
         }
         Item {
             anchors.fill: parent
@@ -610,7 +611,7 @@ Item { // Bar content region
         bottomRightRadius: barBackground.bottomRightRadius
         trackX: root.x
         notchEdge: root.notchFlares ? (Config.options.bar.bottom ? "right" : "left") : ""
-        notchSize: Appearance.rounding.barFloat
+        notchSize: Appearance.rounding.barFloat * root.uiScale
         hugEdge: Config.options.bar.cornerStyle === 0 ? (Config.options.bar.bottom ? "right" : "left") : ""
         hugSize: Appearance.rounding.screenRounding
     }
@@ -638,7 +639,7 @@ Item { // Bar content region
             : Appearance.colors.colBarBackground
         // Left for the shadow to read: it takes the roundness of the corners
         // that show, or it would keep a shape the surface no longer has.
-        radius: root.floatStyles ? Appearance.rounding.barFloat : 0
+        radius: root.floatStyles ? Appearance.rounding.barFloat * root.uiScale : 0
         // Set down on the docked edge, the pair touching it is squared off. The
         // pair facing the desktop sits at the strip's ends, so it is squared
         // too once the strip runs the whole height and those ends land on the
@@ -664,7 +665,7 @@ Item { // Bar content region
     Column { // Middle section (layout.center)
         id: middleSection
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
         Repeater {
             model: Config.options.bar.layout.center
             delegate: GroupPill {
@@ -711,7 +712,7 @@ Item { // Bar content region
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             Repeater {
                 model: Config.options.bar.layout.left
@@ -760,7 +761,7 @@ Item { // Bar content region
                 leftMargin: root.floatingInset
                 rightMargin: root.floatingInset
             }
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             Repeater {
                 model: Config.options.bar.layout.right

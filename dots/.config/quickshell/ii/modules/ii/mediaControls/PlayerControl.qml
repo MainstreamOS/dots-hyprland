@@ -15,6 +15,7 @@ import Quickshell.Services.Mpris
 
 Item { // Player instance
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     required property MprisPlayer player
     property var artUrl: player?.trackArtUrl
     property string artDownloadLocation: Directories.coverArt
@@ -74,8 +75,8 @@ Item { // Player instance
     property string displayedArtFilePath: root.artUrl && !root.artReloading ? Qt.resolvedUrl(artFilePath) : ""
 
     component TrackChangeButton: RippleButton {
-        implicitWidth: 24
-        implicitHeight: 24
+        implicitWidth: 24 * root.uiScale
+        implicitHeight: 24 * root.uiScale
 
         property var iconName
         colBackground: ColorUtils.transparentize(blendedColors.colSecondaryContainer, 1)
@@ -83,7 +84,7 @@ Item { // Player instance
         colRipple: blendedColors.colSecondaryContainerActive
 
         contentItem: MaterialSymbol {
-            iconSize: Appearance.font.pixelSize.huge
+            iconSize: Appearance.font.pixelSize.huge * root.uiScale
             fill: 1
             horizontalAlignment: Text.AlignHCenter
             color: blendedColors.colOnSecondaryContainer
@@ -158,7 +159,7 @@ Item { // Player instance
     Rectangle { // Background
         id: background
         anchors.fill: parent
-        anchors.margins: Appearance.sizes.elevationMargin
+        anchors.margins: Appearance.sizes.elevationMargin * root.uiScale
         color: ColorUtils.applyAlpha(blendedColors.colLayer0, 1)
         radius: root.radius
 
@@ -208,21 +209,21 @@ Item { // Player instance
             id: playPauseButton
             anchors.right: parent.right
             anchors.top: background.top
-            anchors.topMargin: 16
-            anchors.rightMargin: 16
-            property real size: 44
+            anchors.topMargin: 16 * root.uiScale
+            anchors.rightMargin: 16 * root.uiScale
+            property real size: 44 * root.uiScale
 
             implicitWidth: size
             implicitHeight: size
             downAction: () => root.player.togglePlaying();
 
-            buttonRadius: root.player?.isPlaying ? Appearance?.rounding.small : size / 2
+            buttonRadius: root.player?.isPlaying ? Appearance?.rounding.small * root.uiScale : size / 2
             colBackground: root.player?.isPlaying ? blendedColors.colPrimary : blendedColors.colSecondaryContainer
             colBackgroundHover: root.player?.isPlaying ? blendedColors.colPrimaryHover : blendedColors.colSecondaryContainerHover
             colRipple: root.player?.isPlaying ? blendedColors.colPrimaryActive : blendedColors.colSecondaryContainerActive
 
             contentItem: MaterialSymbol {
-                iconSize: Appearance.font.pixelSize.huge
+                iconSize: Appearance.font.pixelSize.huge * root.uiScale
                 fill: 1
                 horizontalAlignment: Text.AlignHCenter
                 color: root.player?.isPlaying ? blendedColors.colOnPrimary : blendedColors.colOnSecondaryContainer
@@ -236,14 +237,14 @@ Item { // Player instance
 
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 13
-            spacing: 15
+            anchors.margins: 13 * root.uiScale
+            spacing: 15 * root.uiScale
 
             Rectangle { // Art background
                 id: artBackground
                 Layout.fillHeight: true
                 implicitWidth: height
-                radius: Appearance.rounding.verysmall
+                radius: Appearance.rounding.verysmall * root.uiScale
                 color: ColorUtils.transparentize(blendedColors.colLayer1, 0.5)
 
                 layer.enabled: true
@@ -283,7 +284,7 @@ Item { // Player instance
 
             ColumnLayout { // Info & controls
                 Layout.fillHeight: true
-                spacing: 2
+                spacing: 2 * root.uiScale
 
                 Item {// Marquee Container
                     id: titleContainer
@@ -291,7 +292,7 @@ Item { // Player instance
                     Layout.preferredHeight: trackTitleMain.implicitHeight
 
                     // Dynamic margin to prevent overlap with the floating play/pause button
-                    Layout.rightMargin: playPauseButton.width + 16 + 3
+                    Layout.rightMargin: playPauseButton.width + (16 + 3) * root.uiScale
                     clip: true
 
                     property bool runMarquee: trackTitleMain.implicitWidth > width + 2
@@ -299,7 +300,7 @@ Item { // Player instance
 
                     Row {
                         id: movingRow
-                        spacing: 40
+                        spacing: 40 * root.uiScale
                         x: 0
 
                         SequentialAnimation {
@@ -329,7 +330,7 @@ Item { // Player instance
                         }
                         StyledText { // Main Text
                             id: trackTitleMain
-                            font.pixelSize: Appearance.font.pixelSize.large
+                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
                             color: blendedColors.colOnLayer0
                             elide: Text.ElideNone
                             animateChange: true
@@ -357,9 +358,9 @@ Item { // Player instance
                 StyledText {
                     id: trackArtist
                     Layout.fillWidth: true
-                    Layout.rightMargin: playPauseButton.width + 16 + 3
+                    Layout.rightMargin: playPauseButton.width + (16 + 3) * root.uiScale
                     clip: true
-                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                     color: blendedColors.colSubtext
                     elide: Text.ElideRight
                     text: root.player?.trackArtist
@@ -371,14 +372,14 @@ Item { // Player instance
                 Item { Layout.fillHeight: true }
                 Item {
                     Layout.fillWidth: true
-                    implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight + 4
+                    implicitHeight: trackTime.implicitHeight + sliderRow.implicitHeight + 4 * root.uiScale
 
                     StyledText {
                         id: trackTime
                         anchors.bottom: sliderRow.top
-                        anchors.bottomMargin: 4
+                        anchors.bottomMargin: 4 * root.uiScale
                         anchors.left: parent.left
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                         font.features: { "tnum": 1 }
                         color: blendedColors.colSubtext
                         elide: Text.ElideRight
@@ -392,13 +393,13 @@ Item { // Player instance
 
                         anchors.left: trackTime.right
                         anchors.right: sliderRow.right
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 4
+                        anchors.leftMargin: 10 * root.uiScale
+                        anchors.rightMargin: 4 * root.uiScale
 
                         visible: Capabilities.volume(root.player)
 
                         MaterialSymbol {
-                            iconSize: Appearance.font.pixelSize.normal
+                            iconSize: Appearance.font.pixelSize.normal * root.uiScale
                             color: blendedColors.colSubtext
                             text: {
                                 const vol = root.player?.volume ?? 1.0
@@ -409,8 +410,8 @@ Item { // Player instance
                         }
 
                         StyledSlider {
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: Appearance.sizes.wavySliderHeight
+                            Layout.preferredWidth: 120 * root.uiScale
+                            Layout.preferredHeight: Appearance.sizes.wavySliderHeight * root.uiScale
                             configuration: StyledSlider.Configuration.Wavy
                             animateWave: false
                             highlightColor: blendedColors.colPrimary
@@ -431,16 +432,16 @@ Item { // Player instance
                             left: parent.left
                             right: parent.right
                         }
-                        anchors.bottomMargin: -8
+                        anchors.bottomMargin: -8 * root.uiScale
                         TrackChangeButton {
                             iconName: "skip_previous"
-                            Layout.leftMargin: -4
+                            Layout.leftMargin: -4 * root.uiScale
                             downAction: () => root.player?.previous()
                         }
                         Item {
                             id: progressBarContainer
                             Layout.fillWidth: true
-                            implicitHeight: Appearance.sizes.wavySliderHeight
+                            implicitHeight: Appearance.sizes.wavySliderHeight * root.uiScale
 
                             Loader {
                                 id: sliderLoader

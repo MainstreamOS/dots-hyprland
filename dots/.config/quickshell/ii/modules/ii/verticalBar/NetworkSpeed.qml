@@ -1,3 +1,4 @@
+import Quickshell
 import qs
 import qs.modules.common
 import qs.modules.common.widgets
@@ -8,6 +9,7 @@ import qs.modules.ii.bar as Bar
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     implicitHeight: columnLayout.implicitHeight
     implicitWidth: columnLayout.implicitWidth
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
@@ -18,7 +20,7 @@ MouseArea {
 
     ColumnLayout {
         id: columnLayout
-        spacing: 6
+        spacing: 6 * root.uiScale
         anchors.fill: parent
 
         SpeedReading {
@@ -48,14 +50,14 @@ MouseArea {
             Layout.alignment: Qt.AlignHCenter
             fill: 0
             text: reading.iconName
-            iconSize: Appearance.font.pixelSize.normal
+            iconSize: Appearance.font.pixelSize.normal * root.uiScale
             color: Appearance.barContent.colOnLayer1
         }
 
         StyledText {
             Layout.alignment: Qt.AlignHCenter
             color: Appearance.barContent.colOnLayer1
-            font.pixelSize: Appearance.font.pixelSize.smallest
+            font.pixelSize: Appearance.font.pixelSize.smallest * root.uiScale
             font.features: ({ "tnum": 1 })
             text: reading.value
         }

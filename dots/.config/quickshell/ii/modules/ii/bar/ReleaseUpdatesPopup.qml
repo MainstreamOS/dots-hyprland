@@ -20,7 +20,7 @@ StyledPopup {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
 
         StyledPopupHeaderRow {
             icon: "campaign"
@@ -29,7 +29,7 @@ StyledPopup {
 
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 210
+            Layout.minimumWidth: 210 * root.uiScale
             materialIcon: "system_update_alt"
             mainText: Translation.tr("Open updates")
             onClicked: {
@@ -39,7 +39,7 @@ StyledPopup {
         }
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 210
+            Layout.minimumWidth: 210 * root.uiScale
             materialIcon: "history"
             mainText: Translation.tr("What's new")
             onClicked: {
@@ -49,7 +49,7 @@ StyledPopup {
         }
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 210
+            Layout.minimumWidth: 210 * root.uiScale
             materialIcon: "refresh"
             mainText: Translation.tr("Check now")
             enabled: !ReleaseUpdates.checking
@@ -76,7 +76,7 @@ StyledPopup {
             RippleButtonWithIcon {
                 required property var modelData
                 Layout.fillWidth: true
-                Layout.minimumWidth: 210
+                Layout.minimumWidth: 210 * root.uiScale
                 materialIcon: modelData.icon
                 mainText: modelData.label
                 colBackground: ReleaseUpdates.notifyMode === modelData.mode

@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
@@ -9,11 +10,12 @@ import QtQuick
 RippleButton {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property string buttonText
-    padding: 14
-    implicitHeight: 36
+    padding: 14 * root.uiScale
+    implicitHeight: 36 * root.uiScale
     implicitWidth: buttonTextWidget.implicitWidth + padding * 2
-    buttonRadius: Appearance?.rounding.full ?? 9999
+    buttonRadius: (Appearance?.rounding.full ?? 9999) * root.uiScale
 
     property color colEnabled: Appearance?.colors.colPrimary ?? "#65558F"
     property color colDisabled: Appearance?.m3colors.m3outline ?? "#8D8C96"
@@ -29,7 +31,7 @@ RippleButton {
         anchors.rightMargin: root.padding
         text: buttonText
         horizontalAlignment: Text.AlignHCenter
-        font.pixelSize: Appearance?.font.pixelSize.small ?? 12
+        font.pixelSize: (Appearance?.font.pixelSize.small ?? 12) * root.uiScale
         color: root.enabled ? root.colEnabled : root.colDisabled
 
         Behavior on color {

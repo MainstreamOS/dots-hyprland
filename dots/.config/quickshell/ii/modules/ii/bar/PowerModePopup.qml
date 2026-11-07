@@ -22,7 +22,7 @@ StyledPopup {
 
     ColumnLayout {
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
 
         StyledPopupHeaderRow {
             icon: "bolt"
@@ -31,7 +31,7 @@ StyledPopup {
 
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 180
+            Layout.minimumWidth: 180 * root.uiScale
             visible: PowerProfiles.hasPerformanceProfile
             materialIcon: "local_fire_department"
             mainText: Translation.tr("Performance")
@@ -42,7 +42,7 @@ StyledPopup {
         }
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 180
+            Layout.minimumWidth: 180 * root.uiScale
             materialIcon: "airwave"
             mainText: Translation.tr("Balanced")
             colBackground: PowerProfiles.profile === PowerProfile.Balanced
@@ -52,7 +52,7 @@ StyledPopup {
         }
         RippleButtonWithIcon {
             Layout.fillWidth: true
-            Layout.minimumWidth: 180
+            Layout.minimumWidth: 180 * root.uiScale
             materialIcon: "energy_savings_leaf"
             mainText: Translation.tr("Power Saver")
             colBackground: PowerProfiles.profile === PowerProfile.PowerSaver

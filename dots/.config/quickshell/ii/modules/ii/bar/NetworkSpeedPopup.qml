@@ -28,7 +28,7 @@ StyledPopup {
     ColumnLayout {
         id: columnLayout
         anchors.centerIn: parent
-        spacing: 4
+        spacing: 4 * root.uiScale
 
         // An interface coming or going can move the traffic to another link
         // while the card is up.

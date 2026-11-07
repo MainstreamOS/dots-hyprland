@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -12,6 +13,7 @@ import qs.modules.ii.bar as Bar
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     readonly property MprisPlayer activePlayer: MprisController.activePlayer
     readonly property string cleanedTitle: StringUtils.cleanMusicTitle(activePlayer?.trackTitle) || Translation.tr("No media")
@@ -55,9 +57,9 @@ MouseArea {
     ClippedFilledCircularProgress {
         id: mediaCircProg
         anchors.centerIn: parent
-        implicitSize: 20
+        implicitSize: 20 * root.uiScale
 
-        lineWidth: Appearance.rounding.unsharpen
+        lineWidth: Appearance.rounding.unsharpen * root.uiScale
         value: activePlayer?.position / activePlayer?.length
         colPrimary: Appearance.barContent.colOnLayer1
         colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
@@ -72,7 +74,7 @@ MouseArea {
                 anchors.centerIn: parent
                 fill: 1
                 text: activePlayer?.isPlaying ? "pause" : "music_note"
-                iconSize: Appearance.font.pixelSize.normal
+                iconSize: Appearance.font.pixelSize.normal * root.uiScale
                 color: Appearance.barContent.m3onSecondaryContainer
             }
         }
@@ -84,7 +86,7 @@ MouseArea {
 
         Column {
             anchors.centerIn: parent
-            spacing: 4
+            spacing: 4 * root.uiScale
 
             Bar.StyledPopupHeaderRow {
                 icon: "music_note"

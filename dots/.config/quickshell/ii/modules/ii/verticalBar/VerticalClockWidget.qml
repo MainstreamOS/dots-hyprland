@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -7,6 +8,7 @@ import qs.modules.ii.bar as Bar
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     implicitHeight: column.implicitHeight
     implicitWidth: Appearance.sizes.verticalBarWidth
@@ -21,7 +23,7 @@ Item {
 
         Column {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: -4
+            spacing: -4 * root.uiScale
 
             Repeater {
                 model: root.dateTimeString.split(/[: ]/)
@@ -42,7 +44,7 @@ Item {
         }
         StyledText {
             anchors.horizontalCenter: parent.horizontalCenter
-            font.pixelSize: Appearance.font.pixelSize.smallest
+            font.pixelSize: Appearance.font.pixelSize.smallest * root.uiScale
             color: Appearance.barContent.colOnLayer1
             text: DateTime.shortDate
         }

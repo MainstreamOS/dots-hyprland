@@ -28,19 +28,19 @@ RippleButton {
         [root.buttonColor, root.iconBackground],
         [Appearance.surfaces.raised, highlighted ? Appearance.colors.colPrimary : Appearance.surfaces.row])
 
-    Layout.preferredWidth: 1
+    Layout.preferredWidth: 1 * Appearance.sizes.islandScale
     Layout.minimumWidth: 0
-    implicitHeight: 44
-    padding: 5
-    leftPadding: 6
-    rightPadding: 8
+    implicitHeight: 44 * Appearance.sizes.islandScale
+    padding: 5 * Appearance.sizes.islandScale
+    leftPadding: 6 * Appearance.sizes.islandScale
+    rightPadding: 8 * Appearance.sizes.islandScale
 
     colBackground: contentColors.fill(Appearance.surfaces.raised, contentColors.m3onSurface, Appearance.m3colors.m3onSurface)
     colBackgroundHover: contentColors.apartFrom(
         contentColors.fill(Appearance.surfaces.raisedHover, contentColors.m3onSurface, Appearance.m3colors.m3onSurface),
         colBackground, Appearance.colors.colOnLayer1, Appearance.surfaces.raisedHover, Appearance.surfaces.raised)
     colRipple: contentColors.flash(Appearance.colors.colLayer2Active, contentColors.m3onSurface, Appearance.m3colors.m3onSurface)
-    buttonRadius: highlighted ? (Appearance?.rounding?.normal ?? 17) : height / 2
+    buttonRadius: highlighted ? (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale : height / 2
     buttonRadiusPressed: Appearance?.rounding?.small ?? 12
     Accessible.name: text + ": " + subtitle
 
@@ -49,12 +49,12 @@ RippleButton {
     }
 
     contentItem: RowLayout {
-        spacing: 6
+        spacing: 6 * Appearance.sizes.islandScale
 
         MouseArea {
             id: iconArea
-            Layout.preferredWidth: 32
-            Layout.preferredHeight: 32
+            Layout.preferredWidth: 32 * Appearance.sizes.islandScale
+            Layout.preferredHeight: 32 * Appearance.sizes.islandScale
             cursorShape: Qt.PointingHandCursor
             hoverEnabled: true
             acceptedButtons: root.iconAction ? Qt.LeftButton : Qt.NoButton
@@ -65,7 +65,7 @@ RippleButton {
             Rectangle {
                 id: iconBg
                 anchors.fill: parent
-                radius: Math.max(4, root.buttonEffectiveRadius - root.padding)
+                radius: Math.max(4 * Appearance.sizes.islandScale, root.buttonEffectiveRadius - root.padding)
                 color: root.iconBackground
 
                 Behavior on radius {
@@ -80,7 +80,7 @@ RippleButton {
                     anchors.centerIn: parent
                     fill: root.highlighted ? 1 : 0
                     text: root.symbol
-                    iconSize: 18
+                    iconSize: 18 * Appearance.sizes.islandScale
                     color: root.colIcon
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -103,7 +103,7 @@ RippleButton {
             StyledText {
                 Layout.fillWidth: true
                 text: root.text
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: 600
                 color: root.colText
                 elide: Text.ElideRight
@@ -112,7 +112,7 @@ RippleButton {
             StyledText {
                 Layout.fillWidth: true
                 text: root.subtitle
-                font.pixelSize: 10
+                font.pixelSize: 10 * Appearance.sizes.islandScale
                 font.weight: Font.Normal
                 color: root.colSubtext
                 elide: Text.ElideRight
@@ -121,10 +121,10 @@ RippleButton {
 
         MaterialSymbol {
             visible: root.opensPanel
-            Layout.preferredWidth: 14
-            Layout.preferredHeight: 14
+            Layout.preferredWidth: 14 * Appearance.sizes.islandScale
+            Layout.preferredHeight: 14 * Appearance.sizes.islandScale
             text: "chevron_right"
-            iconSize: 14
+            iconSize: 14 * Appearance.sizes.islandScale
             color: root.colSubtext
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Shapes
 import qs.modules.common
@@ -8,8 +9,9 @@ import qs.modules.common
 Item {
     id: root
 
-    property int implicitSize: 30
-    property int lineWidth: 2
+    property real uiScale: QsWindow.window?.uiScale ?? 1
+    property real implicitSize: 30 * root.uiScale
+    property real lineWidth: 2 * root.uiScale
     property real value: 0
     property color colPrimary: Appearance.m3colors.m3onSecondaryContainer
     property color colSecondary: Appearance.colors.colSecondaryContainer
@@ -43,7 +45,7 @@ Item {
         anchors.fill: parent
         
         sourceComponent: Rectangle {
-            radius: 9999
+            radius: 9999 * root.uiScale
             color: root.colSecondary
         }
     }

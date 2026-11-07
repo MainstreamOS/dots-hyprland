@@ -14,23 +14,23 @@ StyledPopup {
         anchors.centerIn: parent
         implicitWidth: Math.max(header.implicitWidth, gridLayout.implicitWidth)
         implicitHeight: gridLayout.implicitHeight
-        spacing: 5
+        spacing: 5 * root.uiScale
 
         // Header
         ColumnLayout {
             id: header
             Layout.alignment: Qt.AlignHCenter
-            spacing: 2
+            spacing: 2 * root.uiScale
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 6
+                spacing: 6 * root.uiScale
 
                 MaterialSymbol {
                     fill: 0
                     font.weight: Font.Medium
                     text: "location_on"
-                    iconSize: Appearance.font.pixelSize.large
+                    iconSize: Appearance.font.pixelSize.large * root.uiScale
                     color: Appearance.colors.colOnSurfaceVariant
                 }
 
@@ -38,14 +38,14 @@ StyledPopup {
                     text: Weather.data.city
                     font {
                         weight: Font.Medium
-                        pixelSize: Appearance.font.pixelSize.normal
+                        pixelSize: Appearance.font.pixelSize.normal * root.uiScale
                     }
                     color: Appearance.colors.colOnSurfaceVariant
                 }
             }
             StyledText {
                 id: temp
-                font.pixelSize: Appearance.font.pixelSize.smaller
+                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
                 color: Appearance.colors.colOnSurfaceVariant
                 text: Weather.data.temp + " • " + Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike)
             }
@@ -55,8 +55,8 @@ StyledPopup {
         GridLayout {
             id: gridLayout
             columns: 2
-            rowSpacing: 5
-            columnSpacing: 5
+            rowSpacing: 5 * root.uiScale
+            columnSpacing: 5 * root.uiScale
             uniformCellWidths: true
 
             WeatherCard {
@@ -107,7 +107,7 @@ StyledPopup {
             text: Translation.tr("Last refresh: %1").arg(Weather.data.lastRefresh)
             font {
                 weight: Font.Medium
-                pixelSize: Appearance.font.pixelSize.smaller
+                pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
             }
             color: Appearance.colors.colOnSurfaceVariant
         }

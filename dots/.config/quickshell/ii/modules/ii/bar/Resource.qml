@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import QtQuick
@@ -5,6 +6,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     required property string iconName
     required property double percentage
     property int warningThreshold: 100
@@ -17,7 +19,7 @@ Item {
 
     RowLayout {
         id: resourceRowLayout
-        spacing: 2
+        spacing: 2 * root.uiScale
         x: shown ? 0 : -resourceRowLayout.width
         anchors {
             verticalCenter: parent.verticalCenter
@@ -26,9 +28,9 @@ Item {
         ClippedFilledCircularProgress {
             id: resourceCircProg
             Layout.alignment: Qt.AlignVCenter
-            lineWidth: Appearance.rounding.unsharpen
+            lineWidth: Appearance.rounding.unsharpen * root.uiScale
             value: percentage
-            implicitSize: 20
+            implicitSize: 20 * root.uiScale
             colPrimary: root.warning ? Appearance.barContent.colError : Appearance.barContent.colOnLayer1
             colSecondary: Appearance.barContent.faded(colPrimary, 0.5)
             accountForLightBleeding: !root.warning
@@ -44,7 +46,7 @@ Item {
                     font.weight: Font.DemiBold
                     fill: 1
                     text: iconName
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
                     color: Appearance.barContent.m3onSecondaryContainer
                 }
             }
@@ -58,14 +60,14 @@ Item {
             TextMetrics {
                 id: fullPercentageTextMetrics
                 text: "100"
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
             }
 
             StyledText {
                 id: percentageText
                 anchors.centerIn: parent
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                 text: `${Math.round(percentage * 100).toString()}`
             }
         }

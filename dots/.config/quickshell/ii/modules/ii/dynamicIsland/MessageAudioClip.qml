@@ -45,15 +45,15 @@ ColumnLayout {
         }
     }
 
-    spacing: 3
+    spacing: 3 * Appearance.sizes.islandScale
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: 5
+        spacing: 5 * Appearance.sizes.islandScale
 
         MaterialSymbol {
             text: (root.current && IslandMessageAudio.error) ? "error" : "mic"
-            iconSize: 14
+            iconSize: 14 * Appearance.sizes.islandScale
             color: (root.current && IslandMessageAudio.error) ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colOnSurfaceVariant
         }
 
@@ -62,7 +62,7 @@ ColumnLayout {
             text: (root.current && IslandMessageAudio.error)
                 ? IslandMessageAudio.error
                 : (root.loading ? Translation.tr("Loading audio clip…") : Translation.tr("Audio clip"))
-            font.pixelSize: 11
+            font.pixelSize: 11 * Appearance.sizes.islandScale
             font.weight: Font.Medium
             elide: Text.ElideRight
             color: (root.current && IslandMessageAudio.error) ? Appearance.islandContent.colErrorMark : Appearance.islandContent.colOnSurfaceVariant
@@ -77,7 +77,7 @@ ColumnLayout {
                 const dur = Phone.durationFor(root.attachment);
                 return dur > 0 ? StringUtils.friendlyTimeForSeconds(dur / 1000) : "";
             }
-            font.pixelSize: 10
+            font.pixelSize: 10 * Appearance.sizes.islandScale
             font.features: {"tnum": 1}
             color: Appearance.islandContent.colOnSurfaceVariant
         }
@@ -85,11 +85,11 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: 8 * Appearance.sizes.islandScale
 
         RippleButton {
-            implicitWidth: 32
-            implicitHeight: 32
+            implicitWidth: 32 * Appearance.sizes.islandScale
+            implicitHeight: 32 * Appearance.sizes.islandScale
             topPadding: 0
             bottomPadding: 0
             buttonRadius: Appearance.rounding.full
@@ -103,7 +103,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: !root.loading
                     text: root.playing ? "pause" : "play_arrow"
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: Appearance.font.pixelSize.larger * Appearance.sizes.islandScale
                     fill: 1
                     color: root.contentColor
                     horizontalAlignment: Text.AlignHCenter
@@ -112,7 +112,7 @@ ColumnLayout {
                 MaterialLoadingIndicator {
                     anchors.centerIn: parent
                     visible: root.loading
-                    implicitSize: 22
+                    implicitSize: 22 * Appearance.sizes.islandScale
                     loading: visible
                 }
             }
@@ -123,7 +123,7 @@ ColumnLayout {
 
         StyledSlider {
             Layout.fillWidth: true
-            Layout.preferredHeight: 22
+            Layout.preferredHeight: 22 * Appearance.sizes.islandScale
             configuration: StyledSlider.Configuration.Wavy
             animateWave: root.playing
             enabled: root.current && root.duration > 0
@@ -135,8 +135,8 @@ ColumnLayout {
 
         RippleButton {
             id: downloadBtn
-            implicitWidth: 28
-            implicitHeight: 28
+            implicitWidth: 28 * Appearance.sizes.islandScale
+            implicitHeight: 28 * Appearance.sizes.islandScale
             buttonRadius: Appearance.rounding.full
             colBackground: ColorUtils.transparentize(root.contentColor, 0.9)
             colBackgroundHover: ColorUtils.transparentize(root.contentColor, 0.8)
@@ -155,13 +155,13 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: !root.saveBusy
                     text: root.saveResult === "done" ? "check" : root.saveResult === "failed" ? "error" : "download"
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.pixelSize.normal * Appearance.sizes.islandScale
                     color: root.saveResult === "failed" ? Appearance.islandContent.colErrorMark : root.contentColor
                 }
                 MaterialLoadingIndicator {
                     anchors.centerIn: parent
                     visible: root.saveBusy
-                    implicitSize: 20
+                    implicitSize: 20 * Appearance.sizes.islandScale
                     loading: visible
                 }
             }

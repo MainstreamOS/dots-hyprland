@@ -11,6 +11,7 @@ import Quickshell.Widgets
 // Separators never reach this row: the menu draws the app's separators itself.
 ContextMenuItem {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     required property QsMenuEntry menuEntry
     property bool forceIconColumn: false
     property bool forceSpecialInteractionColumn: false
@@ -44,13 +45,13 @@ ContextMenuItem {
     Component {
         id: leadingColumns
         RowLayout {
-            spacing: 8
+            spacing: 8 * root.uiScale
 
             // Interaction: checkbox or radio button
             Item {
                 visible: root.showSpecialInteractionColumn
-                implicitWidth: 20
-                implicitHeight: 20
+                implicitWidth: 20 * root.uiScale
+                implicitHeight: 20 * root.uiScale
 
                 Loader {
                     anchors.fill: parent
@@ -69,7 +70,7 @@ ContextMenuItem {
 
                     sourceComponent: MaterialSymbol {
                         text: root.menuEntry.checkState === Qt.PartiallyChecked ? "check_indeterminate_small" : "check"
-                        iconSize: 20
+                        iconSize: 20 * root.uiScale
                     }
                 }
             }
@@ -77,15 +78,15 @@ ContextMenuItem {
             // Button icon
             Item {
                 visible: root.showIconColumn
-                implicitWidth: 20
-                implicitHeight: 20
+                implicitWidth: 20 * root.uiScale
+                implicitHeight: 20 * root.uiScale
 
                 Loader {
                     anchors.centerIn: parent
                     active: root.menuEntry.icon.length > 0
                     sourceComponent: IconImage {
                         source: root.menuEntry.icon
-                        implicitSize: 20
+                        implicitSize: 20 * root.uiScale
                         mipmap: true
                     }
                 }
@@ -97,7 +98,7 @@ ContextMenuItem {
         id: submenuChevron
         MaterialSymbol {
             text: "chevron_right"
-            iconSize: Appearance.font.pixelSize.normal
+            iconSize: Appearance.font.pixelSize.normal * root.uiScale
             color: Appearance.m3colors.m3onSurface
         }
     }

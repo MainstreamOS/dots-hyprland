@@ -9,6 +9,7 @@ import Quickshell.Hyprland
 
 Item {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     // Handed the strip's tones when this sits bare on it rather than in a group.
     property Appearance.SurfaceContent tones: Appearance.barContent
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
@@ -59,13 +60,13 @@ Item {
     // and the utility buttons keep, so the three read as the same kind of
     // thing. Zero when there is no pill: against the bare strip the title
     // keeps the exact footprint it has always had.
-    readonly property real contentPadding: pilled ? 4 : 0
+    readonly property real contentPadding: pilled ? 4 * root.uiScale : 0
 
     // The width the title keeps whatever it says, matching the clock so the two
     // read as the same kind of thing. The lines inside elide into it: they can
     // only do that once something has settled how wide the widget is, and
     // asking for the text's own width answers "as wide as the title is long".
-    readonly property real titleWidth: 270
+    readonly property real titleWidth: 270 * root.uiScale
 
     // Held rather than fitted. Sizing to the title makes the widget as wide as
     // whatever happens to be focused, so the bar rearranged itself around a
@@ -82,11 +83,11 @@ Item {
         anchors.right: parent.right
         anchors.leftMargin: root.contentPadding
         anchors.rightMargin: root.contentPadding
-        spacing: -4
+        spacing: -4 * root.uiScale
 
         StyledText {
             Layout.fillWidth: true
-            font.pixelSize: Appearance.font.pixelSize.smaller
+            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
             color: root.tones.colSubtext
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? Translation.tr("Workspace %1").arg(root.shownWorkspaceId) :
@@ -98,7 +99,7 @@ Item {
 
         StyledText {
             Layout.fillWidth: true
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
             color: root.tones.colOnLayer0
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? root.workspaceName :

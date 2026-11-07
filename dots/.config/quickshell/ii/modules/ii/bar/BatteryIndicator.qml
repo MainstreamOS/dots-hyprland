@@ -1,3 +1,4 @@
+import Quickshell
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
@@ -6,6 +7,7 @@ import QtQuick.Layouts
 
 MouseArea {
     id: root
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property bool borderless: Config.options.bar.borderless
     readonly property var chargeState: Battery.chargeState
     readonly property bool isCharging: Battery.isCharging
@@ -49,11 +51,11 @@ MouseArea {
                 MaterialSymbol {
                     id: boltIcon
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: -2
-                    Layout.rightMargin: -2
+                    Layout.leftMargin: -2 * root.uiScale
+                    Layout.rightMargin: -2 * root.uiScale
                     fill: 1
                     text: "bolt"
-                    iconSize: Appearance.font.pixelSize.smaller
+                    iconSize: Appearance.font.pixelSize.smaller * root.uiScale
                     visible: isCharging && percentage < 1 // TODO: animation
                 }
                 StyledText {

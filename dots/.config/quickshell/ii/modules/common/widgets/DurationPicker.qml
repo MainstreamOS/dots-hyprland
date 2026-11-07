@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import qs.services
@@ -8,12 +9,13 @@ import qs.modules.common.widgets
 RowLayout {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.colors
-    property real rowHeight: 26
-    property real digitSize: 20
+    property real rowHeight: 26 * root.uiScale
+    property real digitSize: 20 * root.uiScale
     // Matches the chosen tab of the timer tabs above it.
-    property real cornerRadius: 8
-    spacing: 2
+    property real cornerRadius: 8 * root.uiScale
+    spacing: 2 * root.uiScale
 
     readonly property int hours: Math.floor(TimerService.countdownDuration / 3600)
     readonly property int minutes: Math.floor(TimerService.countdownDuration / 60) % 60

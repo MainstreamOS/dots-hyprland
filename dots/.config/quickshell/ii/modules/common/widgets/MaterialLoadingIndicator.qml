@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+import Quickshell
 import QtQuick
 import qs.modules.common
 import qs.modules.common.functions
@@ -7,13 +8,14 @@ import qs.modules.common.widgets
 Rectangle {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property color colBg: Appearance.colors.colPrimaryContainer
     property color colShape: Appearance.colors.colOnPrimaryContainer
     property bool loading: true
     property double pullProgress: 0
 
     // Size, color
-    property double implicitSize: 48
+    property double implicitSize: 48 * root.uiScale
     implicitWidth: implicitSize
     implicitHeight: implicitSize
     radius: Math.min(width, height) / 2

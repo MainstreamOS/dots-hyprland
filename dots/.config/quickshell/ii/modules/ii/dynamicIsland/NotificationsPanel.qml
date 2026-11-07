@@ -11,8 +11,8 @@ import qs.modules.common.widgets
 
 ColumnLayout {
     id: root
-    implicitHeight: 204
-    spacing: 6
+    implicitHeight: 204 * Appearance.sizes.islandScale
+    spacing: 6 * Appearance.sizes.islandScale
     property int currentIndex: 0
     readonly property var entries: IslandState.notifications
     readonly property string newestId: entries[0]?.id ?? ""
@@ -57,27 +57,27 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 44
-        radius: 12
+        implicitHeight: 44 * Appearance.sizes.islandScale
+        radius: 12 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 6
-            spacing: 10
+            anchors.leftMargin: 8 * Appearance.sizes.islandScale
+            anchors.rightMargin: 6 * Appearance.sizes.islandScale
+            spacing: 10 * Appearance.sizes.islandScale
 
             ClippingRectangle {
                 visible: !root.privateContact && (!root.entry?.phoneOrigin || Config.options.bar.island.showContactPicture)
-                Layout.preferredWidth: 32
-                Layout.preferredHeight: 32
-                radius: 10
+                Layout.preferredWidth: 32 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 32 * Appearance.sizes.islandScale
+                radius: 10 * Appearance.sizes.islandScale
                 color: Appearance.colors.colSecondaryContainer
 
                 IconImage {
                     id: iconDisplay
                     anchors.fill: parent
-                    anchors.margins: root.isVectorIcon ? 3 : 0
+                    anchors.margins: (root.isVectorIcon ? 3 : 0) * Appearance.sizes.islandScale
                     visible: !!source.toString() && status !== Image.Error
                     source: root.resolvedIcon
                     backer.sourceSize: Qt.size(Math.ceil(width * Screen.devicePixelRatio), Math.ceil(height * Screen.devicePixelRatio))
@@ -89,19 +89,19 @@ ColumnLayout {
                     visible: !iconDisplay.visible || iconDisplay.status === Image.Error
                     text: "notifications"
                     color: Appearance.colors.colOnSecondaryContainer
-                    iconSize: 18
+                    iconSize: 18 * Appearance.sizes.islandScale
                 }
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                spacing: 1
+                spacing: 1 * Appearance.sizes.islandScale
 
                 StyledText {
                     Layout.fillWidth: true
                     text: root.entry?.sourceApp || Translation.tr("Notifications")
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colSubtext
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
@@ -110,7 +110,7 @@ ColumnLayout {
                 StyledText {
                     Layout.fillWidth: true
                     text: !root.entry ? Translation.tr("You're all caught up") : root.privateContact ? Translation.tr("Private notification") : root.entry.summary
-                    font.pixelSize: 13
+                    font.pixelSize: 13 * Appearance.sizes.islandScale
                     font.weight: Font.DemiBold
                     color: Appearance.islandContent.colOnLayer0
                     elide: Text.ElideRight
@@ -120,11 +120,11 @@ ColumnLayout {
 
             RippleButton {
                 visible: !!root.entry
-                Layout.preferredWidth: 30
-                Layout.preferredHeight: 30
+                Layout.preferredWidth: 30 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 30 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 9
+                buttonRadius: 9 * Appearance.sizes.islandScale
                 colBackground: Appearance.surfaces.row
                 colBackgroundHover: Appearance.colors.colLayer2Hover
                 Accessible.name: Translation.tr("Dismiss notification")
@@ -132,7 +132,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "close"
-                    iconSize: 16
+                    iconSize: 16 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -191,7 +191,7 @@ ColumnLayout {
         visible: !!root.liveNotif?.actionError
         text: root.liveNotif?.actionError || ""
         color: Appearance.barStripContent.colErrorMark
-        font.pixelSize: 11
+        font.pixelSize: 11 * Appearance.sizes.islandScale
         wrapMode: Text.WordWrap
     }
 
@@ -227,21 +227,21 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         visible: !root.replying
-        spacing: 6
+        spacing: 6 * Appearance.sizes.islandScale
 
         IslandButton { symbol: "chevron_left"; enabled: root.currentIndex > 0; onClicked: { root.cancelReply(); root.currentIndex--; } }
 
         Rectangle {
-            implicitHeight: 24
-            implicitWidth: countText.implicitWidth + 12
-            radius: 6
+            implicitHeight: 24 * Appearance.sizes.islandScale
+            implicitWidth: countText.implicitWidth + 12 * Appearance.sizes.islandScale
+            radius: 6 * Appearance.sizes.islandScale
             color: Appearance.surfaces.row
 
             StyledText {
                 id: countText
                 anchors.centerIn: parent
                 text: root.entries.length ? (root.currentIndex + 1) + " / " + root.entries.length : "0"
-                font.pixelSize: 11
+                font.pixelSize: 11 * Appearance.sizes.islandScale
                 font.weight: Font.Medium
                 color: Appearance.islandContent.colOnLayer1
             }
@@ -250,7 +250,7 @@ ColumnLayout {
         IslandButton { symbol: "chevron_right"; enabled: root.currentIndex + 1 < root.entries.length; onClicked: { root.cancelReply(); root.currentIndex++; } }
         Item { Layout.fillWidth: true }
         RowLayout {
-            spacing: 6
+            spacing: 6 * Appearance.sizes.islandScale
             Repeater {
                 model: (root.entry?.actions ?? []).filter(a => a && (a.text || a.identifier))
                 delegate: IslandButton {
@@ -285,8 +285,8 @@ ColumnLayout {
 
     Rectangle {
         Layout.fillWidth: true
-        implicitHeight: 34
-        radius: 10
+        implicitHeight: 34 * Appearance.sizes.islandScale
+        radius: 10 * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
         visible: root.replying
 
@@ -296,16 +296,16 @@ ColumnLayout {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 6
-            anchors.rightMargin: 4
-            spacing: 6
+            anchors.leftMargin: 6 * Appearance.sizes.islandScale
+            anchors.rightMargin: 4 * Appearance.sizes.islandScale
+            spacing: 6 * Appearance.sizes.islandScale
 
             RippleButton {
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 26 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 8
+                buttonRadius: 8 * Appearance.sizes.islandScale
                 colBackground: "transparent"
                 colBackgroundHover: Appearance.surfaces.row
                 Accessible.name: Translation.tr("Cancel reply")
@@ -313,7 +313,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "close"
-                    iconSize: 15
+                    iconSize: 15 * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -324,11 +324,11 @@ ColumnLayout {
                 id: replyInput
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                leftPadding: 4
-                rightPadding: 4
+                leftPadding: 4 * Appearance.sizes.islandScale
+                rightPadding: 4 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                font.pixelSize: 12
+                font.pixelSize: 12 * Appearance.sizes.islandScale
                 colBackground: "transparent"
                 placeholderText: root.entryReplyPlaceholder || Translation.tr("Reply…")
                 onAccepted: root.submitReply()
@@ -338,11 +338,11 @@ ColumnLayout {
             RippleButton {
                 id: sendNotifBtn
                 readonly property bool canSend: replyInput.text.trim().length > 0
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: 26 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 26 * Appearance.sizes.islandScale
                 topPadding: 0
                 bottomPadding: 0
-                buttonRadius: 13
+                buttonRadius: 13 * Appearance.sizes.islandScale
                 colBackground: canSend ? Appearance.colors.colPrimary : "transparent"
                 colBackgroundHover: canSend ? Appearance.colors.colPrimaryHover : Appearance.colors.colLayer2Hover
                 enabled: canSend && !root.liveNotif?.actionPending
@@ -351,7 +351,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "arrow_upward"
-                    iconSize: 16
+                    iconSize: 16 * Appearance.sizes.islandScale
                     color: sendNotifBtn.canSend ? Appearance.colors.colOnPrimary : Appearance.islandContent.colSubtext
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter

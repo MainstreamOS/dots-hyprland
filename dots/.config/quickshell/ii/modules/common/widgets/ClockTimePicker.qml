@@ -1,3 +1,4 @@
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 import qs.services
@@ -8,12 +9,13 @@ import qs.modules.common.widgets
 RowLayout {
     id: root
 
+    property real uiScale: QsWindow.window?.uiScale ?? 1
     property var contentColors: Appearance.colors
-    property real rowHeight: 26
-    property real digitSize: 20
+    property real rowHeight: 26 * root.uiScale
+    property real digitSize: 20 * root.uiScale
     // Matches the chosen tab of the timer tabs above it.
-    property real cornerRadius: 8
-    spacing: 2
+    property real cornerRadius: 8 * root.uiScale
+    spacing: 2 * root.uiScale
 
     readonly property bool twelveHour: /ap/i.test(Config.options.time.format)
     readonly property int hour: TimerService.countdownEndParts.hour
@@ -53,8 +55,8 @@ RowLayout {
 
     ColumnLayout {
         visible: root.twelveHour
-        Layout.leftMargin: 4
-        spacing: 2
+        Layout.leftMargin: 4 * root.uiScale
+        spacing: 2 * root.uiScale
 
         Repeater {
             model: [
@@ -77,7 +79,7 @@ RowLayout {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
                     text: periodButton.modelData.label
-                    font.pixelSize: Appearance.font.pixelSize.small
+                    font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
                     font.weight: Font.DemiBold
                     color: periodButton.chosen ? root.contentColors.colOnPrimary : root.contentColors.colOnLayer1
                 }
