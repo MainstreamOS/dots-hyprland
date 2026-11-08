@@ -107,15 +107,16 @@ get_clamshell_setting() {
   local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
   if [ -r "$cfg" ] && command -v jq >/dev/null 2>&1; then
     local val
-    val=$(jq -r '.display.clamshellMode // true' "$cfg" 2>/dev/null || echo "true")
+    # jq's // would replace a false too, so only a missing value takes the default.
+    val=$(jq -r '.display.clamshellMode | if . == null then true else . end' "$cfg" 2>/dev/null || echo "true")
     if [ "$val" = "true" ] || [ "$val" = "clamshell" ]; then
       printf '%s\n' "clamshell"
       return 0
-    elif [ "$val" = "suspend" ]; then
-      printf '%s\n' "suspend"
+    elif [ "$val" = "ignore" ]; then
+      printf '%s\n' "ignore"
       return 0
     else
-      printf '%s\n' "ignore"
+      printf '%s\n' "suspend"
       return 0
     fi
   fi
@@ -126,7 +127,7 @@ get_sleep_on_lid_close() {
   local cfg="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
   if [ -r "$cfg" ] && command -v jq >/dev/null 2>&1; then
     local val
-    val=$(jq -r '.display.sleepOnLidClose // true' "$cfg" 2>/dev/null || echo "true")
+    val=$(jq -r '.display.sleepOnLidClose | if . == null then true else . end' "$cfg" 2>/dev/null || echo "true")
     if [ "$val" = "false" ]; then
       return 1
     fi
@@ -137,11 +138,23 @@ get_sleep_on_lid_close() {
 reconcile_inhibitor() {
   local internal
   internal=$(get_internal_monitor)
-  if has_external_monitor "$internal" || ! get_sleep_on_lid_close; then
+  # Without a built-in panel there is no lid to hold.
+  if [ -z "$internal" ]; then
+    uninhibit_lid
+  elif has_external_monitor "$internal" || ! get_sleep_on_lid_close; then
     inhibit_lid
   else
     uninhibit_lid
   fi
+}
+
+# Hyprland's Lua config has no `hyprctl keyword`, so monitors change through hl.monitor.
+set_monitor() {
+  hyprctl eval "hl.monitor({ $1 })" >/dev/null 2>&1 || true
+}
+
+is_monitor_enabled() {
+  hyprctl monitors -j 2>/dev/null | jq -e --arg name "$1" 'any(.[]; .name == $name)' >/dev/null 2>&1
 }
 
 save_internal_state() {
@@ -149,12 +162,19 @@ save_internal_state() {
   mkdir -p "$STATE_DIR"
   if command -v hyprctl >/dev/null 2>&1; then
     local info
-    info=$(hyprctl monitors all -j 2>/dev/null | jq -r --arg int "$internal" '.[] | select(.name == $int) | "\(.width)x\(.height)@\(.refreshRate | floor) \(.x)x\(.y) \(.scale)"' 2>/dev/null || true)
+    info=$(hyprctl monitors -j 2>/dev/null | jq -r --arg int "$internal" '.[] | select(.name == $int) | "\(.width)x\(.height)@\(.refreshRate) \(.x)x\(.y) \(.scale) \(.transform)"' 2>/dev/null || true)
     if [ -n "$info" ] && [ "$info" != "null" ]; then
       printf '%s\n' "$info" > "$STATE_FILE"
       return 0
     fi
   fi
+}
+
+# logind may already be suspending for the same lid close, and this can resume after waking,
+# so it only sleeps while the lid is still shut.
+sleep_now() {
+  loginctl lock-session >/dev/null 2>&1 || true
+  is_lid_closed && systemctl suspend >/dev/null 2>&1 || true
 }
 
 handle_close() {
@@ -169,13 +189,15 @@ handle_close() {
     case "$mode" in
       clamshell)
         inhibit_lid
-        save_internal_state "$internal"
-        hyprctl keyword monitor "$internal, disable" >/dev/null 2>&1 || true
+        # Saved only while the panel is on, so a second close cannot overwrite it.
+        if is_monitor_enabled "$internal"; then
+          save_internal_state "$internal"
+          set_monitor "output = \"$internal\", disabled = true"
+        fi
         ;;
       suspend)
         uninhibit_lid
-        loginctl lock-session >/dev/null 2>&1 || true
-        systemctl suspend >/dev/null 2>&1 || true
+        sleep_now
         ;;
       ignore)
         inhibit_lid
@@ -184,9 +206,7 @@ handle_close() {
   else
     if get_sleep_on_lid_close; then
       uninhibit_lid
-      # Lock session immediately so display is protected prior to suspend
-      loginctl lock-session >/dev/null 2>&1 || true
-      systemctl suspend >/dev/null 2>&1 || true
+      sleep_now
     else
       inhibit_lid
     fi
@@ -201,15 +221,16 @@ handle_open() {
   reconcile_inhibitor
 
   if [ -s "$STATE_FILE" ]; then
-    read -r mode pos scale < "$STATE_FILE" || true
+    read -r mode pos scale transform < "$STATE_FILE" || true
     if [ -n "$mode" ] && [ -n "$pos" ] && [ -n "$scale" ]; then
-      hyprctl keyword monitor "$internal, $mode, $pos, $scale" >/dev/null 2>&1 || true
+      # A rotated panel, as some small laptops have, comes back the right way up.
+      set_monitor "output = \"$internal\", mode = \"$mode\", position = \"$pos\", scale = \"$scale\", transform = ${transform:-0}"
     else
-      hyprctl keyword monitor "$internal, preferred, auto, auto" >/dev/null 2>&1 || true
+      set_monitor "output = \"$internal\", mode = \"preferred\", position = \"auto\", scale = \"auto\""
     fi
     rm -f "$STATE_FILE"
-  else
-    hyprctl keyword monitor "$internal, preferred, auto, auto" >/dev/null 2>&1 || true
+  elif ! is_monitor_enabled "$internal"; then
+    set_monitor "output = \"$internal\", mode = \"preferred\", position = \"auto\", scale = \"auto\""
   fi
 }
 
@@ -230,6 +251,22 @@ handle_check() {
   fi
 }
 
+# A monitor came or went, which has no lid event. Undocked with the lid shut, this is a lid close.
+handle_monitors_changed() {
+  local internal
+  internal=$(get_internal_monitor)
+  [ -n "$internal" ] || exit 0
+
+  reconcile_inhibitor
+  if is_lid_closed; then
+    if has_external_monitor "$internal"; then
+      [ "$(get_clamshell_setting)" = "clamshell" ] && handle_close
+    else
+      handle_close
+    fi
+  fi
+}
+
 case "${1:-check}" in
   close)
     handle_close
@@ -243,8 +280,11 @@ case "${1:-check}" in
   reconcile)
     reconcile_inhibitor
     ;;
+  monitors)
+    handle_monitors_changed
+    ;;
   *)
-    echo "Usage: $0 {close|open|check|reconcile}" >&2
+    echo "Usage: $0 {close|open|check|reconcile|monitors}" >&2
     exit 1
     ;;
 esac

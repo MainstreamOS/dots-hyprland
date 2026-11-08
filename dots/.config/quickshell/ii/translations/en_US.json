@@ -3416,5 +3416,11 @@
   "Clock size (%)": "Clock size (%)",
   "Changes the login clock for all users. Takes effect the next time the login screen opens.": "Changes the login clock for all users. Takes effect the next time the login screen opens.",
   "Could not update the login clock size.": "Could not update the login clock size.",
-  "Update Mainstream to enable this setting.": "Update Mainstream to enable this setting."
+  "Update Mainstream to enable this setting.": "Update Mainstream to enable this setting.",
+  "Lid Behavior": "Lid Behavior",
+  "Configure display and power actions when closing your laptop lid.": "Configure display and power actions when closing your laptop lid.",
+  "Clamshell mode": "Clamshell mode",
+  "With an external display connected, closing the lid turns the built-in screen off. Turned off, the laptop sleeps instead.": "With an external display connected, closing the lid turns the built-in screen off. Turned off, the laptop sleeps instead.",
+  "Sleep on lid close": "Sleep on lid close",
+  "Suspend the laptop when the lid is closed without an external display connected.": "Suspend the laptop when the lid is closed without an external display connected."
 }

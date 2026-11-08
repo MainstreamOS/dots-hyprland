@@ -78,6 +78,13 @@ hl.on("hyprland.start", function ()
     hl.exec_cmd("/usr/bin/gaming-mode --tips")
 end)
 
+-- Docking or undocking with the lid shut has no lid event, so the lid script looks again.
+for _, event in ipairs({"monitor.added", "monitor.removed"}) do
+    hl.on(event, function()
+        hl.exec_cmd("$HOME/.config/hypr/hyprland/scripts/clamshell.sh monitors")
+    end)
+end
+
 hl.on("hyprland.shutdown", function()
     hl.exec_cmd("systemctl --user stop hyprland-session.target")
 end)

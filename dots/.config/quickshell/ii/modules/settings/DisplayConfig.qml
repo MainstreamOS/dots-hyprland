@@ -3746,7 +3746,7 @@ except Exception:
         ConfigSwitch {
             buttonIcon: "dock"
             text: Translation.tr("Clamshell mode")
-            tooltipText: Translation.tr("Keep external displays active and disable the built-in screen when the laptop lid is closed.")
+            tooltipText: Translation.tr("With an external display connected, closing the lid turns the built-in screen off. Turned off, the laptop sleeps instead.")
             checked: Config.options.display.clamshellMode
             onCheckedChanged: {
                 if (checked === Config.options.display.clamshellMode) return;
