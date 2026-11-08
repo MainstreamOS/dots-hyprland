@@ -1528,13 +1528,13 @@ function setup_mpris_hyprland(){
     echo -e "${STY_YELLOW}[$0]: mpris-hyprland setup is currently Arch-only. Skipping.${STY_RST}"
     return 0
   fi
-  # On Mainstream OS ISO installs it's already provided prebuilt by the
-  # [mainstream] repo — nothing to do. Only build it for standalone installs
-  # that don't have it yet. The setup script makepkg's the PKGBUILD, which
-  # pulls its own build deps (rust/cargo/zip/git) via makepkg -s, so no
-  # toolchain needs to be pre-present.
   if pacman -Qq mpris-hyprland &>/dev/null; then
     echo -e "${STY_GREEN}[$0]: mpris-hyprland already installed — skipping.${STY_RST}"
+    return 0
+  fi
+  # The [mainstream] prebuilt, as the ISO installs it; the source build below needs the Rust toolchain.
+  if pacman -Si mpris-hyprland &>/dev/null && sudo pacman -S --needed --noconfirm mpris-hyprland; then
+    echo -e "${STY_GREEN}[$0]: Installed prebuilt mpris-hyprland from [mainstream].${STY_RST}"
     return 0
   fi
   x bash "${REPO_ROOT}/scripts/setup-mpris-hyprland.sh" \

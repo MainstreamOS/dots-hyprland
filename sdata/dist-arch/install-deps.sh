@@ -249,6 +249,22 @@ remove-previous-package-name() {
   done < <(unset replaces; source "$location/PKGBUILD"; printf '%s\n' "${replaces[@]:-}")
 }
 
+# One pacman run for a whole group, so a package in it can provide for the rest and the hooks run
+# once. If that run fails, each is tried alone, and what still fails goes to the caller's failed_deps.
+install-group() {
+  local installflags=$1; shift
+  (( $# > 0 )) || return 0
+  sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$@" && return 0
+  printf "${STY_YELLOW}[$0]: Installing these packages one at a time instead.${STY_RST}\n"
+  local dep
+  for dep in "$@"; do
+    if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
+      printf "${STY_YELLOW}[$0]: WARNING: Failed to install dependency '%s', will retry after others.${STY_RST}\n" "$dep"
+      failed_deps+=("$dep")
+    fi
+  done
+}
+
 install-local-pkgbuild() {
   local location=$1
   local installflags=$2
@@ -261,24 +277,20 @@ install-local-pkgbuild() {
 
   source ./PKGBUILD
 
-  # Install depends[] one-by-one so a single failure doesn't block the rest.
   # optdepends[] is only installed for mainstream-extras (default apps).
   # For all other packages optdepends are intentionally skipped.
-  local failed_deps=()
-  for dep in "${depends[@]}"; do
-    # Already provided, perhaps by another package: leave that provider in place.
-    pacman -T "$dep" >/dev/null 2>&1 && continue
+  local failed_deps=() wanted=() missing=()
+  # pacman -T prints only what nothing installed provides yet, so a provider already in place stays.
+  (( ${#depends[@]} > 0 )) && mapfile -t missing < <(pacman -T "${depends[@]}" 2>/dev/null)
+  for dep in "${missing[@]}"; do
     # Block anything on the KDE/Plasma blocklist
     if _is_kde_blocked "$dep"; then
       printf "${STY_YELLOW}[$0]: Skipping blocked KDE/Plasma dep '%s'${STY_RST}\n" "$dep"
       continue
     fi
-
-    if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$dep"; then
-      printf "${STY_YELLOW}[$0]: WARNING: Failed to install dependency '%s', will retry after others.${STY_RST}\n" "$dep"
-      failed_deps+=("$dep")
-    fi
+    wanted+=("$dep")
   done
+  install-group "$installflags" "${wanted[@]}"
 
   # For mainstream-extras specifically, also install its optdepends —
   # these are the default apps (calculator, office, media player, etc.) that
@@ -324,6 +336,12 @@ install-local-pkgbuild() {
     else
       printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     fi
+    local natives=()
+    for dep in "${optdepends[@]}"; do
+      local pkg="${dep%%:*}"
+      [[ "$pkg" == *.* ]] || _is_kde_blocked "$pkg" || natives+=("$pkg")
+    done
+    install-group "$installflags" "${natives[@]}"
     for dep in "${optdepends[@]}"; do
       local pkg="${dep%%:*}"
       if _is_kde_blocked "$pkg"; then
@@ -349,12 +367,6 @@ install-local-pkgbuild() {
           printf "${STY_YELLOW}[$0]: WARNING: Failed to install Flatpak '%s', will retry after others.${STY_RST}\n" "$pkg"
           failed_deps+=("$pkg")
         fi
-        continue
-      fi
-      # Native Arch / AUR path.
-      if ! retry sudo pacman -S $installflags --ignore "$KDE_IGNORE_ARG" --asdeps "$pkg"; then
-        printf "${STY_YELLOW}[$0]: WARNING: Failed to install extras dep '%s', will retry after others.${STY_RST}\n" "$pkg"
-        failed_deps+=("$pkg")
       fi
     done
   fi
@@ -420,22 +432,21 @@ install-local-pkgbuild() {
   x popd
 }
 
-# quickshell is the only heavy compile in the dotfiles. Prefer the signed
-# [mainstream] prebuilt and fall back to a source build only when it is missing
-# or its linkage is broken (e.g. an Arch soname bump the prebuilt predates).
-install-quickshell() {
+# Quickshell and MicroTeX are the only compiles here: install the signed [mainstream] prebuilts as the
+# ISO does, building from source only when one is missing or broken (e.g. by an Arch soname bump).
+install-prebuilt() {
   local location=$1
   local installflags=$2
-  local pkg=mainstream-quickshell-git
+  local bin=$3
+  local pkg
+  pkg=$(basename "$location")
 
   remove-previous-package-name "$location"
 
   if pacman -Si "$pkg" >/dev/null 2>&1; then
-    # --ask 4 removes another Quickshell package, which --noconfirm would otherwise refuse.
+    # --ask 4 removes a conflicting package such as another Quickshell, which --noconfirm refuses.
     if retry sudo pacman -S $installflags --ask 4 --ignore "$KDE_IGNORE_ARG" "$pkg"; then
-      local bin
-      bin=$(command -v quickshell 2>/dev/null)
-      if [[ -n "$bin" ]] && ! ldd "$bin" 2>&1 | grep -q "not found"; then
+      if [[ -x "$bin" ]] && ! ldd "$bin" 2>&1 | grep -q "not found"; then
         printf "${STY_CYAN}[$0]: Installed prebuilt $pkg from [mainstream].${STY_RST}\n"
         return 0
       fi
@@ -464,12 +475,16 @@ metapkgs+=(./sdata/dist-arch/mainstream-welcome-installer)
 for i in "${metapkgs[@]}"; do
   metainstallflags="--needed"
   installfn=install-local-pkgbuild
-  [[ "$(basename "$i")" == mainstream-quickshell-git ]] && installfn=install-quickshell
+  prebuiltbin=
+  case "$(basename "$i")" in
+    mainstream-quickshell-git) installfn=install-prebuilt; prebuiltbin=/usr/bin/quickshell ;;
+    mainstream-microtex-git) installfn=install-prebuilt; prebuiltbin=/opt/MicroTeX/LaTeX ;;
+  esac
   $ask && showfun "$installfn" || metainstallflags="$metainstallflags --noconfirm"
   if declare -F ms_step >/dev/null 2>&1; then
     ms_step installing "$(basename "$i")"
   fi
-  v "$installfn" "$i" "$metainstallflags"
+  v "$installfn" "$i" "$metainstallflags" "$prebuiltbin"
 done
 
 ## plasma-browser-integration is intentionally not installed.
