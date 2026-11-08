@@ -5,6 +5,16 @@
 const limit = 30;
 const mediaPlaceholders = new Set(["image", "photo", "gif", "video", "audio", "audio clip", "voice message", "media", "attachment"]);
 
+// Equal times keep one fixed order. The engine's sort is not stable, so records
+// reshuffled on every pass would compare as changed and be saved again, endlessly.
+function tieBreak(a, b) {
+    const x = String(a.id ?? JSON.stringify(a)), y = String(b.id ?? JSON.stringify(b));
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+function newestFirst(a, b) {
+    return b.time - a.time || tieBreak(a, b);
+}
+
 function isMediaPlaceholder(body) {
     return mediaPlaceholders.has(String(body || "").trim().toLowerCase());
 }
@@ -134,7 +144,7 @@ function groupMessages(messages, extractUrls) {
     const native = m => !m.mirrored && m.deviceId && m.thread !== undefined
         && sources(m).some(id => id.startsWith("kde:"));
     const uid = m => Number(sources(m).find(id => id.startsWith("kde:"))?.split(":").pop()) || 0;
-    const ordered = messages.slice().sort((a, b) => a.time - b.time || uid(a) - uid(b));
+    const ordered = messages.slice().sort((a, b) => a.time - b.time || uid(a) - uid(b) || tieBreak(a, b));
     const grouped = new Map();
     const captions = new Set();
     for (let i = 0; i < ordered.length; i++) {
@@ -167,7 +177,7 @@ function groupMessages(messages, extractUrls) {
         captions.add(caption.id);
     }
     return ordered.filter(message => !captions.has(message.id))
-        .map(message => grouped.get(message.id) || message).sort((a, b) => b.time - a.time);
+        .map(message => grouped.get(message.id) || message).sort(newestFirst);
 }
 
 // Older history kept a thumbnail alongside the fetched file. Resolve only
@@ -228,7 +238,7 @@ function updateContactPhotos(known, entries, now) {
         if (index >= 0) result[index] = contact;
         else result.push(contact);
     }
-    return result.sort((a, b) => b.time - a.time).slice(0, 100);
+    return result.sort(newestFirst).slice(0, 100);
 }
 
 function mirrorRepresented(message, records) {
@@ -241,7 +251,7 @@ function mirrorRepresented(message, records) {
         && other.time > 0 && contactMatches(other, message)
         && (other.thread === undefined || message.thread === undefined || other.thread === message.thread)
         && other.sourceIds.some(id => id.startsWith("kde:")))
-        .sort((a, b) => a.time - b.time);
+        .sort((a, b) => a.time - b.time || tieBreak(a, b));
     const latestSynced = synced.filter(other => other.time <= message.time).pop();
     // Some phones post the notification before dating the SMS: only the first
     // following SMS within ten minutes, with identical text, represents it.
@@ -296,7 +306,7 @@ function updateCalls(history, previous, incoming, now) {
     for (const record of records) {
         if (!record.endedAt && !used.includes(record.id)) record.endedAt = now;
     }
-    return {calls: records.sort((a, b) => b.time - a.time).slice(0, limit), active: active};
+    return {calls: records.sort(newestFirst).slice(0, limit), active: active};
 }
 
 function updateMessages(history, seen, incoming, clearedAt, now) {
@@ -355,5 +365,5 @@ function updateMessages(history, seen, incoming, clearedAt, now) {
     }
     const reconciled = coalesceMessages(adoptNotificationKeys(records, sanitizedIncoming));
     return {messages: reconciled.filter(m => !m.mirrored || !mirrorRepresented(m, reconciled))
-        .sort((a, b) => b.time - a.time).slice(0, limit), seen: ids.slice(-500)};
+        .sort(newestFirst).slice(0, limit), seen: ids.slice(-500)};
 }
