@@ -876,7 +876,7 @@ ContentSection {
                         color: Appearance.colors.colOnSecondaryContainer
                     }
                     StyledComboBox {
-                        Layout.preferredWidth: 240
+                        Layout.preferredWidth: 240 * Appearance.font.textGrowth
                         textRole: "displayName"
                         model: root.idleInhibitOptions
                         currentIndex: Math.max(0, root.idleInhibitOptions.findIndex(o => o.value === root.dIdleInhibit))

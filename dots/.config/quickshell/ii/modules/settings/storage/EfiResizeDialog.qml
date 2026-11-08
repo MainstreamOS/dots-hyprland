@@ -79,7 +79,8 @@ Popup {
     dim: true
     closePolicy: isResizing ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
     padding: 24
-    implicitWidth: 500
+    // Built around its text, so it gets room as the text grows, as the Settings window does.
+    implicitWidth: Math.round(500 * Appearance.font.roomGrowth)
 
     x: parent ? Math.round((parent.width - width) / 2) : 0
     y: parent ? Math.round((parent.height - height) / 2) : 0
@@ -212,14 +213,15 @@ Popup {
                     Layout.fillWidth: true
                     spacing: 8
 
+                    // Wraps rather than pushing the usage past the box when the text is large.
                     StyledText {
+                        Layout.fillWidth: true
                         text: root.efiData ? `${root.efiData.device} on ${root.efiData.mount}` : "/boot/efi"
                         font.pixelSize: Appearance.font.pixelSize.normal
                         font.weight: Font.Medium
                         color: Appearance.colors.colOnLayer2
+                        wrapMode: Text.Wrap
                     }
-
-                    Item { Layout.fillWidth: true }
 
                     StyledText {
                         text: Translation.tr("%1 of %2 used")

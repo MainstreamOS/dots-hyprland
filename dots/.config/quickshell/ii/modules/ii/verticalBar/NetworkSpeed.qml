@@ -50,14 +50,14 @@ MouseArea {
             Layout.alignment: Qt.AlignHCenter
             fill: 0
             text: reading.iconName
-            iconSize: Appearance.font.pixelSize.normal * root.uiScale
+            iconSize: Appearance.font.basePixelSize.normal * root.uiScale
             color: Appearance.barContent.colOnLayer1
         }
 
         StyledText {
             Layout.alignment: Qt.AlignHCenter
             color: Appearance.barContent.colOnLayer1
-            font.pixelSize: Appearance.font.pixelSize.smallest * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.smallest * root.uiScale
             font.features: ({ "tnum": 1 })
             text: reading.value
         }

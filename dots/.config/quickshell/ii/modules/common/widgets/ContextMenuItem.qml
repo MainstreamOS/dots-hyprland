@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import QtQuick.Layouts
 import qs.services
 import qs.modules.common
@@ -10,6 +11,7 @@ import qs.modules.common
 // the way every button does.
 RippleButton {
     id: root
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
 
     // Empty leaves the icon out, and the label starts at the row's inset.
     property string iconName: ""
@@ -44,7 +46,7 @@ RippleButton {
         MaterialSymbol {
             visible: root.iconName !== ""
             text: root.iconName
-            iconSize: Appearance.font.pixelSize.normal
+            iconSize: root.fontSizes.normal
             color: Appearance.m3colors.m3onSurface
             rotation: root.iconRotation
             Layout.alignment: Qt.AlignVCenter
@@ -54,7 +56,7 @@ RippleButton {
             Layout.fillWidth: true
             text: root.label
             horizontalAlignment: Text.AlignLeft
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: root.fontSizes.small
             color: Appearance.m3colors.m3onSurface
             elide: Text.ElideRight
         }

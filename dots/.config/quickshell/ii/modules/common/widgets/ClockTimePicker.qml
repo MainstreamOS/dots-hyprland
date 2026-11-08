@@ -10,6 +10,7 @@ RowLayout {
     id: root
 
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property var contentColors: Appearance.colors
     property real rowHeight: 26 * root.uiScale
     property real digitSize: 20 * root.uiScale
@@ -69,6 +70,8 @@ RowLayout {
                 readonly property bool chosen: root.afternoon === modelData.afternoon
                 implicitWidth: root.digitSize * 2
                 implicitHeight: root.rowHeight
+                topPadding: 0
+                bottomPadding: 0
                 buttonRadius: root.cornerRadius
                 colBackground: chosen ? root.contentColors.colPrimary : "transparent"
                 colBackgroundHover: chosen ? root.contentColors.colPrimaryHover : root.contentColors.colLayer1Hover
@@ -79,7 +82,7 @@ RowLayout {
                     anchors.centerIn: parent
                     horizontalAlignment: Text.AlignHCenter
                     text: periodButton.modelData.label
-                    font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                    font.pixelSize: root.fontSizes.small * root.uiScale
                     font.weight: Font.DemiBold
                     color: periodButton.chosen ? root.contentColors.colOnPrimary : root.contentColors.colOnLayer1
                 }

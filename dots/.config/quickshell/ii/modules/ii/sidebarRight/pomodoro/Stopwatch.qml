@@ -52,7 +52,7 @@ Item {
             spacing: 0
             StyledText {
                 // Layout.preferredWidth: elapsedIndicator.width * 0.6 // Prevent shakiness
-                font.pixelSize: 40
+                font.pixelSize: Appearance.font.scaled(40)
                 color: Appearance.m3colors.m3onSurface
                 text: {
                     let totalSeconds = Math.floor(TimerService.stopwatchTime) / 100
@@ -63,7 +63,7 @@ Item {
             }
             StyledText {
                 Layout.fillWidth: true
-                font.pixelSize: 40
+                font.pixelSize: Appearance.font.scaled(40)
                 color: Appearance.colors.colSubtext
                 text: {
                     return `:<sub>${(Math.floor(TimerService.stopwatchTime) % 100).toString().padStart(2, '0')}</sub>`
@@ -180,9 +180,9 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 32
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 8)
                 buttonRadius: 10
-                implicitWidth: 90
+                implicitWidth: Math.max(90, contentItem.implicitWidth + 24)
                 font.pixelSize: Appearance.font.pixelSize.larger
 
                 onClicked: {

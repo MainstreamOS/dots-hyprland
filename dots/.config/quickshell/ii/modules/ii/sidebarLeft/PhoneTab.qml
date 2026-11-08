@@ -284,7 +284,7 @@ Item {
                                     }
                                     StyledText {
                                         text: Translation.tr("Messages")
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         font.weight: tabBar.currentIndex === 0 ? Font.DemiBold : Font.Medium
                                         color: tabBar.currentIndex === 0
                                             ? Appearance.colors.colOnPrimaryContainer
@@ -319,7 +319,7 @@ Item {
                                     }
                                     StyledText {
                                         text: Translation.tr("Calls")
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         font.weight: tabBar.currentIndex === 3 ? Font.DemiBold : Font.Medium
                                         color: tabBar.currentIndex === 3
                                             ? Appearance.colors.colOnPrimaryContainer
@@ -354,7 +354,7 @@ Item {
                                     }
                                     StyledText {
                                         text: Translation.tr("Contacts")
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         font.weight: tabBar.currentIndex === 1 ? Font.DemiBold : Font.Medium
                                         color: tabBar.currentIndex === 1
                                             ? Appearance.colors.colOnPrimaryContainer
@@ -395,7 +395,7 @@ Item {
                                     }
                                     StyledText {
                                         text: Translation.tr("Files")
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         font.weight: tabBar.currentIndex === 2 ? Font.DemiBold : Font.Medium
                                         color: tabBar.currentIndex === 2
                                             ? Appearance.colors.colOnPrimaryContainer

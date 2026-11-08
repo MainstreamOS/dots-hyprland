@@ -400,14 +400,12 @@ Scope {
                         }
                         // Stays until the release is installed. Hovering opens the Island, which says what it is.
                         // Raised to the time's cap height, like the bar icon's badge, so it never reads as the date's separator.
-                        Rectangle {
-                            visible: ReleaseUpdates.updateAvailable && ReleaseUpdates.wantTray
+                        UpdateDot {
+                            visible: ReleaseUpdates.showIndicator
                             anchors.verticalCenter: parent.verticalCenter
-                            anchors.verticalCenterOffset: -Appearance.font.pixelSize.large * 0.35 * Appearance.sizes.barScale
-                            width: 6 * Appearance.sizes.barScale
-                            height: width
-                            radius: width / 2
-                            color: ReleaseUpdates.dotColor(Appearance.barStripContent)
+                            anchors.verticalCenterOffset: -Appearance.font.basePixelSize.large * 0.35 * Appearance.sizes.barScale
+                            size: 6 * Appearance.sizes.barScale
+                            tones: Appearance.barStripContent
                         }
                     }
                     Item {

@@ -319,7 +319,13 @@ Singleton {
 
     // A window running as its own process waits for this before it quits, or
     // the change that started the countdown below would never reach the file.
-    readonly property bool writePending: fileWriteTimer.running
+    readonly property bool writePending: fileWriteTimer.running || root._applyAppFontsAfterSave
+
+    property bool _applyAppFontsAfterSave: false
+    function queueAppFontApply() {
+        root._applyAppFontsAfterSave = true;
+        fileWriteTimer.restart();
+    }
 
     Timer {
         id: fileWriteTimer
@@ -334,6 +340,7 @@ Singleton {
             }
             if (root._writeStale) {
                 root._writeStale = false
+                root._applyAppFontsAfterSave = false
                 return
             }
             configFileView.writeAdapter()
@@ -355,6 +362,13 @@ Singleton {
             if (root._reloading) return
             fileWriteTimer.restart()
         }
+        onSaved: {
+            if (root._applyAppFontsAfterSave && !fileWriteTimer.running) {
+                root._applyAppFontsAfterSave = false;
+                Quickshell.execDetached([Quickshell.shellPath("scripts/themes/apply-gtk-font.sh")]);
+            }
+        }
+        onSaveFailed: root._applyAppFontsAfterSave = false
         onLoaded: {
             root.ready = true
             // Memory matches disk again, so later writes are not stale.
@@ -441,6 +455,10 @@ Singleton {
                     property int fakeScreenRounding: -1
                     property int windowRounding: -1
                 }
+                // Font size in apps, apart from the display scale. See scripts/themes/apply-gtk-font.sh.
+                property real appFontScale: 1.0
+                // The shell's own text; the bar and Island follow their own Size instead.
+                property real uiTextScale: 1.0
                 property JsonObject fonts: JsonObject {
                     property string main: "Google Sans Flex"
                     property string numbers: "Google Sans Flex"

@@ -123,7 +123,7 @@ Item {
                     text: root.filteredContacts.length === 1
                         ? Translation.tr("1 contact")
                         : Translation.tr("%1 contacts").arg(root.filteredContacts.length)
-                    font.pixelSize: 11
+                    font.pixelSize: Appearance.font.scaled(11)
                     font.weight: Font.Medium
                     color: Appearance.colors.colSubtext
                 }
@@ -154,7 +154,7 @@ Item {
                     Layout.fillWidth: true
                     text: Translation.tr("Dial %1").arg(root.dialNumber)
                     textFormat: Text.PlainText
-                    font.pixelSize: 13
+                    font.pixelSize: Appearance.font.pixelSize.smallie
                     font.weight: Font.DemiBold
                     color: Appearance.colors.colOnLayer1
                     elide: Text.ElideRight
@@ -234,7 +234,7 @@ Item {
                                 anchors.centerIn: parent
                                 visible: !avatarImg.visible
                                 text: Config.options.sidebar.phone.privacy.showContactName && row.modelData.named ? Contacts.initials(row.modelData.name) : "#"
-                                font.pixelSize: 13
+                                font.pixelSize: Appearance.font.pixelSize.smallie
                                 font.weight: Font.DemiBold
                                 color: Appearance.colors.colOnPrimaryContainer
                             }
@@ -263,7 +263,7 @@ Item {
                                         Layout.fillWidth: true
                                         text: Phone.privateContactName(row.modelData.named ? row.modelData.name : "", row.primaryNumber)
                                         textFormat: Text.PlainText
-                                        font.pixelSize: 13
+                                        font.pixelSize: Appearance.font.pixelSize.smallie
                                         font.weight: Font.DemiBold
                                         color: Appearance.colors.colOnLayer1
                                         elide: Text.ElideRight
@@ -281,7 +281,7 @@ Item {
                                         text: Config.options.sidebar.phone.privacy.showPhoneNumber
                                             ? (row.primaryNumber || Translation.tr("No number listed"))
                                             : Translation.tr("Number hidden")
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         color: Appearance.colors.colSubtext
                                         elide: Text.ElideRight
                                     }
@@ -299,7 +299,7 @@ Item {
                                             id: multiBadgeLabel
                                             anchors.centerIn: parent
                                             text: Translation.tr("+%1 more").arg(row.secondaryCount)
-                                            font.pixelSize: 9
+                                            font.pixelSize: Appearance.font.scaled(9)
                                             font.weight: Font.Medium
                                             color: row.isExpanded
                                                 ? Appearance.colors.colOnPrimaryContainer
@@ -353,7 +353,7 @@ Item {
                                         Layout.fillWidth: true
                                         text: secondaryRow.modelData
                                         textFormat: Text.PlainText
-                                        font.pixelSize: 11
+                                        font.pixelSize: Appearance.font.scaled(11)
                                         color: Appearance.colors.colOnLayer1
                                         elide: Text.ElideRight
                                     }
@@ -400,7 +400,7 @@ Item {
                 text: root.searchQuery.length > 0
                     ? Translation.tr("No contacts matching \"%1\"").arg(root.searchQuery)
                     : Translation.tr("No contacts available")
-                font.pixelSize: 13
+                font.pixelSize: Appearance.font.pixelSize.smallie
                 font.weight: Font.DemiBold
                 color: Appearance.colors.colOnLayer1
             }
@@ -413,7 +413,7 @@ Item {
                 text: root.searchQuery.length > 0
                     ? Translation.tr("Check the spelling or try searching by phone number.")
                     : Translation.tr("Contacts synced from your paired phone will appear here.")
-                font.pixelSize: 11
+                font.pixelSize: Appearance.font.scaled(11)
                 color: Appearance.colors.colSubtext
             }
 

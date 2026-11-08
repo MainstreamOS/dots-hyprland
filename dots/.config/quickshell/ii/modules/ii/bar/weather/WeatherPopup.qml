@@ -30,7 +30,7 @@ StyledPopup {
                     fill: 0
                     font.weight: Font.Medium
                     text: "location_on"
-                    iconSize: Appearance.font.pixelSize.large * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.large * root.uiScale
                     color: Appearance.colors.colOnSurfaceVariant
                 }
 
@@ -38,14 +38,14 @@ StyledPopup {
                     text: Weather.data.city
                     font {
                         weight: Font.Medium
-                        pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                        pixelSize: Appearance.font.basePixelSize.normal * root.uiScale
                     }
                     color: Appearance.colors.colOnSurfaceVariant
                 }
             }
             StyledText {
                 id: temp
-                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                font.pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
                 color: Appearance.colors.colOnSurfaceVariant
                 text: Weather.data.temp + " • " + Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike)
             }
@@ -107,7 +107,7 @@ StyledPopup {
             text: Translation.tr("Last refresh: %1").arg(Weather.data.lastRefresh)
             font {
                 weight: Font.Medium
-                pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
             }
             color: Appearance.colors.colOnSurfaceVariant
         }

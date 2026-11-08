@@ -21,7 +21,7 @@ Item {
         spacing: 4 * root.uiScale
 
         StyledText {
-            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.large * root.uiScale
             font.features: { "tnum": 1 }
             color: root.contentColor
             text: DateTime.time
@@ -29,14 +29,14 @@ Item {
 
         StyledText {
             visible: root.showDate
-            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
             color: root.contentColor
             text: "•"
         }
 
         StyledText {
             visible: root.showDate
-            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
             color: root.contentColor
             text: DateTime.longDate
         }

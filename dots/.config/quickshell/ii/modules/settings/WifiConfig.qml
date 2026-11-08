@@ -425,6 +425,7 @@ Item {
                 }
                 StyledText {
                     Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
                     Layout.alignment: Qt.AlignVCenter
                     Layout.leftMargin: 6
                     text: Translation.tr("Country")
@@ -434,7 +435,7 @@ Item {
                     id: countryCombo
                     textRole: "displayName"
                     Layout.fillWidth: false
-                    Layout.preferredWidth: 220
+                    Layout.preferredWidth: 220 * Appearance.font.textGrowth
                     enabled: root.countryCanChange
                     model: root.countryModel
                     currentIndex: root.countryIndex

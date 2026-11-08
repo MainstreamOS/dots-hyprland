@@ -56,14 +56,14 @@ StyledPopup {
                                 id: entryNumber
                                 anchors.centerIn: parent
                                 text: entryButton.modelData.id
-                                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                                font.pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
                                 color: Appearance.colors.colOnSecondaryContainer
                             }
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: entryButton.modelData.name
-                            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                            font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
                             color: Appearance.colors.colOnSecondaryContainer
                             elide: Text.ElideRight
                         }

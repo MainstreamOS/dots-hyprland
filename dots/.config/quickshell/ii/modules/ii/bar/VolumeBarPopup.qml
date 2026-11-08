@@ -117,12 +117,12 @@ LazyLoader {
                     spacing: 8 * root.uiScale
                     MaterialSymbol {
                         text: "volume_up"
-                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                        iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                         color: Appearance.colors.colOnLayer1
                     }
                     StyledText {
                         text: Translation.tr("Audio Output")
-                        font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                        font.pixelSize: Appearance.font.basePixelSize.normal * root.uiScale
                         font.weight: Font.DemiBold
                         color: Appearance.colors.colOnLayer1
                     }
@@ -137,7 +137,7 @@ LazyLoader {
                         Layout.preferredWidth: pctMetrics.advanceWidth
                         horizontalAlignment: Text.AlignRight
                         text: Math.round((Audio.sink?.audio.volume ?? 0) * 100) + "%"
-                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                        font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
                         font.family: "monospace"
                         color: Appearance.colors.colSubtext
 
@@ -253,7 +253,7 @@ LazyLoader {
                                     spacing: -4 * root.uiScale
                                     StyledText {
                                         Layout.fillWidth: true
-                                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                                        font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
                                         color: Appearance.colors.colSubtext
                                         elide: Text.ElideRight
                                         text: {

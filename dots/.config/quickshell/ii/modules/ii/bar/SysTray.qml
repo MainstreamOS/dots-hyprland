@@ -101,7 +101,7 @@ Item {
 
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
-                iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                 text: "expand_more"
                 horizontalAlignment: Text.AlignHCenter
                 color: root.trayOverflowOpen ? root.contentColors.colOnSecondaryContainer : root.contentColors.colOnLayer2
@@ -161,7 +161,7 @@ Item {
 
         StyledText {
             Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-            font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.larger * root.uiScale
             color: root.contentColors.colSubtext
             text: "•"
             visible: root.showSeparator && SystemTray.items.values.length > 0

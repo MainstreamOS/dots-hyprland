@@ -86,7 +86,7 @@ Item {
                     fill: 1
                     text: LocalSend.receiveActive ? "download"
                         : activePlayer?.isPlaying ? "pause" : "music_note"
-                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.normal * root.uiScale
                     color: LocalSend.receiveActive ? Appearance.barContent.colPrimary
                         : Appearance.barContent.m3onSecondaryContainer
                 }

@@ -38,7 +38,7 @@ MouseArea {
                 id: icon
                 anchors.centerIn: parent
                 text: !Phone.reachable ? "phonelink_off" : "smartphone"
-                iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                 color: Appearance.barContent.colOnLayer1
             }
             Rectangle {
@@ -58,7 +58,7 @@ MouseArea {
             Layout.alignment: Qt.AlignCenter
             visible: Phone.reachable && text.length > 0
             text: root.chargeText
-            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
             color: Appearance.barContent.colOnLayer1
         }
     }

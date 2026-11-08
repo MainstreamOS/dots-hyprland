@@ -19,8 +19,9 @@ RippleButton {
 
     Layout.fillWidth: false
     Layout.fillHeight: false
-    implicitWidth: 38;
-    implicitHeight: 38;
+    // Grows with the number in it, and so gives the month heading above the room it needs.
+    implicitWidth: Appearance.font.scaled(38)
+    implicitHeight: implicitWidth
 
     toggled: (isToday == 1)
     // Round, as the Dynamic Island marks today.

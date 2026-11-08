@@ -170,7 +170,7 @@ MouseArea { // Notification group area
         clip: true
         implicitHeight: root.expanded ? 
             row.implicitHeight + padding * 2 :
-            Math.min(80, row.implicitHeight + padding * 2)
+            Math.min(Appearance.font.scaled(80), row.implicitHeight + padding * 2)
 
         Behavior on implicitHeight {
             id: implicitHeightAnim

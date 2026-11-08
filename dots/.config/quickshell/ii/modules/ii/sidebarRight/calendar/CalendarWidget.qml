@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Layouts
 
 Item {
+    id: root
     // Layout.topMargin: 10
     anchors.topMargin: 10
     property int monthShift: 0
@@ -56,10 +57,15 @@ Item {
         // Calendar header
         RowLayout {
             Layout.fillWidth: true
+            // No wider than the panel holding the calendar.
+            Layout.maximumWidth: root.parent?.width ?? Number.POSITIVE_INFINITY
             spacing: 5
             IslandButton {
                 contentColors: Appearance.colors
                 implicitWidth: monthLabel.implicitWidth + 10 * 2
+                // When the row meets the panel's edge, a long month name is what gives.
+                Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
                 Behavior on implicitWidth {
                     SmoothedAnimation {
                         velocity: Appearance.animation.elementMove.velocity
@@ -71,6 +77,7 @@ Item {
                 }
                 contentItem: StyledText {
                     id: monthLabel
+                    elide: Text.ElideRight
                     text: `${monthShift != 0 ? "• " : ""}${viewingDate.toLocaleDateString(Qt.locale(), "MMMM yyyy")}`
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter

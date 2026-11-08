@@ -84,7 +84,7 @@ StyledPopup {
             Layout.maximumWidth: 240 * root.uiScale
             wrapMode: Text.WordWrap
             text: Translation.tr("Shown instead of window titles until you clear it")
-            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
             color: Appearance.colors.colSubtext
         }
 

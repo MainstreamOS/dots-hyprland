@@ -23,7 +23,7 @@ RowLayout {
     property real to: slider.to
     // Wide enough for the longest honest label a page carries — "Gap between
     // windows" is not sayable in fewer words — so no row ends in an ellipsis.
-    property real textWidth: 160
+    property real textWidth: 160 * Appearance.font.textGrowth
     // The track fills whatever is left over unless a width is asked for. A row
     // whose label needs the room is better served by a shorter track than by a
     // label written over it.
@@ -40,6 +40,7 @@ RowLayout {
     // track still follows the bound value either way, so a setting changed
     // elsewhere moves the handle without being written back.
     signal moved()
+    readonly property alias pressed: slider.pressed
 
     RowLayout {
         id: row

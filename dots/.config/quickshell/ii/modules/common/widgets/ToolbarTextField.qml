@@ -9,6 +9,7 @@ TextField {
     id: filterField
 
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property alias colBackground: background.color
     property alias radius: background.radius
 
@@ -20,7 +21,7 @@ TextField {
     color: Appearance.colors.colOnLayer1
     font {
         family: Appearance.font.family.main
-        pixelSize: Appearance.font.pixelSize.small * filterField.uiScale
+        pixelSize: filterField.fontSizes.small * filterField.uiScale
         hintingPreference: Font.PreferFullHinting
         variableAxes: Appearance.font.variableAxes.main
     }

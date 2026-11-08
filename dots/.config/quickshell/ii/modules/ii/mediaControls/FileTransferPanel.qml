@@ -17,6 +17,7 @@ Item {
     id: root
 
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property var fileUrls: []
     property real radius: Appearance.rounding.medium * root.uiScale
     property real targetWidth: 440
@@ -132,7 +133,7 @@ Item {
 
                 MaterialSymbol {
                     text: "send"
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: root.fontSizes.larger * root.uiScale
                     color: root.blendedColors.colOnLayer0
                 }
                 StyledText {
@@ -141,14 +142,14 @@ Item {
                         ? root.fileSummary
                         : Translation.tr("Send via LocalSend")
                     elide: Text.ElideMiddle
-                    font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                    font.pixelSize: root.fontSizes.normal * root.uiScale
                     font.weight: Font.DemiBold
                     color: root.blendedColors.colOnLayer0
                 }
                 MaterialSymbol {
                     visible: LocalSend.discovering
                     text: "progress_activity"
-                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                    iconSize: root.fontSizes.normal * root.uiScale
                     color: root.blendedColors.colSubtext
                     NumberAnimation on rotation {
                         from: 0; to: 360
@@ -191,7 +192,7 @@ Item {
                         text: LocalSend.discovering
                             ? Translation.tr("Searching for devices…")
                             : Translation.tr("No devices found")
-                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                        font.pixelSize: root.fontSizes.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
 
@@ -251,7 +252,7 @@ Item {
                                                 default: return "devices";
                                                 }
                                             }
-                                            iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                                            iconSize: root.fontSizes.normal * root.uiScale
                                             color: deviceBtn.toggled
                                                 ? root.blendedColors.colOnSecondaryContainer
                                                 : root.blendedColors.colOnLayer0
@@ -260,7 +261,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: deviceBtn.modelData.alias || deviceBtn.modelData.address
                                             elide: Text.ElideRight
-                                            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                                            font.pixelSize: root.fontSizes.small * root.uiScale
                                             font.weight: Font.DemiBold
                                             color: deviceBtn.toggled
                                                 ? root.blendedColors.colOnSecondaryContainer
@@ -268,7 +269,7 @@ Item {
                                         }
                                         StyledText {
                                             text: deviceBtn.modelData.address
-                                            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                                            font.pixelSize: root.fontSizes.smaller * root.uiScale
                                             color: root.blendedColors.colSubtext
                                             elide: Text.ElideRight
                                         }
@@ -297,7 +298,7 @@ Item {
                                 id: cancelText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Cancel")
-                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                                font.pixelSize: root.fontSizes.small * root.uiScale
                                 color: root.blendedColors.colOnLayer0
                             }
                         }
@@ -323,7 +324,7 @@ Item {
                                 id: sendText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Send")
-                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                                font.pixelSize: root.fontSizes.small * root.uiScale
                                 font.weight: Font.DemiBold
                                 color: root.blendedColors.colOnPrimary
                             }
@@ -346,7 +347,7 @@ Item {
                                 ? Translation.tr("Sending to %1…").arg(name)
                                 : Translation.tr("Sending…");
                         }
-                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                        font.pixelSize: root.fontSizes.small * root.uiScale
                         color: root.blendedColors.colSubtext
                         elide: Text.ElideRight
                     }
@@ -369,12 +370,12 @@ Item {
                         spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "check_circle"
-                            iconSize: Appearance.font.pixelSize.huge * root.uiScale
+                            iconSize: root.fontSizes.huge * root.uiScale
                             color: root.blendedColors.colPrimary
                         }
                         StyledText {
                             text: Translation.tr("Sent")
-                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
+                            font.pixelSize: root.fontSizes.large * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                         }
@@ -391,13 +392,13 @@ Item {
                         spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "error"
-                            iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                            iconSize: root.fontSizes.larger * root.uiScale
                             color: Appearance.colors.colError
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: Translation.tr("Failed")
-                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                            font.pixelSize: root.fontSizes.normal * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                             elide: Text.ElideRight
@@ -409,7 +410,7 @@ Item {
                         text: LocalSend.lastError || Translation.tr("Unknown error")
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                        font.pixelSize: root.fontSizes.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
                     RowLayout {
@@ -430,7 +431,7 @@ Item {
                                 id: dismissText
                                 anchors.centerIn: parent
                                 text: Translation.tr("Dismiss")
-                                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                                font.pixelSize: root.fontSizes.small * root.uiScale
                                 color: root.blendedColors.colOnLayer0
                             }
                         }

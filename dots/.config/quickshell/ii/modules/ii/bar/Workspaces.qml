@@ -538,7 +538,7 @@ ButtonMouseArea {
             StyledText {
                 anchors.centerIn: parent
                 font {
-                    pixelSize: (Appearance.font.pixelSize.small - ((text.length - 1) * (text !== "10") * 2)) * root.uiScale
+                    pixelSize: (Appearance.font.basePixelSize.small - ((text.length - 1) * (text !== "10") * 2)) * root.uiScale
                     family: Config.options?.bar.workspaces.useNerdFont ? Appearance.font.family.iconNerd : defaultFont
                 }
                 color: wsNum.contentColor

@@ -61,7 +61,7 @@ RowLayout {
             StyledText {
                 Layout.fillWidth: true
                 text: root.status
-                font.pixelSize: 11
+                font.pixelSize: Appearance.font.scaled(11)
                 font.weight: Font.Medium
                 color: Appearance.colors.colSubtext
                 elide: Text.ElideRight

@@ -312,7 +312,7 @@ Item { // Bar content region
                         if (vol < 0.5) return "volume_down";
                         return "volume_up";
                     }
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                     color: volumeIconButton.toggled ? Appearance.barContent.m3onSecondaryContainer : Appearance.barContent.colOnLayer0
                 }
             }
@@ -367,7 +367,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "volume_off"
-                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                        iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -381,7 +381,7 @@ Item { // Bar content region
                     }
                     MaterialSymbol {
                         text: "mic_off"
-                        iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                        iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                         color: rightSidebarButton.colText
                     }
                 }
@@ -407,20 +407,20 @@ Item { // Bar content region
                 }
                 MaterialSymbol {
                     text: Network.materialSymbol
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.topMargin: indicatorsColumnLayout.realSpacing
                     visible: BluetoothStatus.available
                     text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
                 MaterialSymbol {
                     Layout.topMargin: indicatorsColumnLayout.realSpacing
                     text: "settings"
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.larger * root.uiScale
                     color: rightSidebarButton.colText
                 }
             }

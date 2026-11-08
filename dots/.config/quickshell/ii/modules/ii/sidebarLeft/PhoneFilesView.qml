@@ -630,7 +630,7 @@ Item {
                             StyledText {
                                 Layout.fillWidth: true
                                 text: tile.modelData.sub
-                                font.pixelSize: 10
+                                font.pixelSize: Appearance.font.pixelSize.smallest
                                 color: tile.isActive
                                     ? ColorUtils.mix(Appearance.colors.colOnPrimaryContainer, Appearance.colors.colPrimaryContainer, 0.25)
                                     : Appearance.colors.colSubtext
@@ -694,7 +694,7 @@ Item {
 
                 StyledText {
                     text: Translation.tr("%1 items").arg(folderModel.count)
-                    font.pixelSize: 11
+                    font.pixelSize: Appearance.font.scaled(11)
                     color: Appearance.colors.colSubtext
                 }
 
@@ -763,7 +763,7 @@ Item {
                                         if (root.sortFieldKey === "type") return Translation.tr("Type");
                                         return Translation.tr("Name");
                                     }
-                                    font.pixelSize: 10
+                                    font.pixelSize: Appearance.font.pixelSize.smallest
                                     font.weight: Font.Medium
                                     color: root.sortMenuOpen ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colPrimary
                                 }
@@ -807,7 +807,7 @@ Item {
                                 }
                                 StyledText {
                                     text: root.selectionMode ? Translation.tr("Done") : Translation.tr("Select")
-                                    font.pixelSize: 10
+                                    font.pixelSize: Appearance.font.pixelSize.smallest
                                     font.weight: root.selectionMode ? Font.DemiBold : Font.Normal
                                     color: root.selectionMode ? Appearance.colors.colOnPrimary : Appearance.colors.colSubtext
                                 }
@@ -938,7 +938,7 @@ Item {
                         id: matchCountText
                         anchors.centerIn: parent
                         text: Translation.tr("%1 matches").arg(folderModel.count)
-                        font.pixelSize: 10
+                        font.pixelSize: Appearance.font.pixelSize.smallest
                         color: Appearance.colors.colSubtext
                     }
                 }
@@ -980,7 +980,7 @@ Item {
 
                     StyledText {
                         text: Translation.tr("Sort by:")
-                        font.pixelSize: 10
+                        font.pixelSize: Appearance.font.pixelSize.smallest
                         font.weight: Font.DemiBold
                         color: Appearance.colors.colSubtext
                         Layout.leftMargin: 2
@@ -1006,7 +1006,7 @@ Item {
                             }
                             StyledText {
                                 text: root.sortReversed ? Translation.tr("Descending") : Translation.tr("Ascending")
-                                font.pixelSize: 9
+                                font.pixelSize: Appearance.font.scaled(9)
                                 color: Appearance.colors.colOnLayer1
                             }
                         }
@@ -1041,7 +1041,7 @@ Item {
                             contentItem: StyledText {
                                 anchors.centerIn: parent
                                 text: modelData.label
-                                font.pixelSize: 10
+                                font.pixelSize: Appearance.font.pixelSize.smallest
                                 font.weight: root.sortFieldKey === modelData.key ? Font.DemiBold : Font.Normal
                                 color: root.sortFieldKey === modelData.key
                                     ? Appearance.colors.colOnPrimaryContainer
@@ -1224,7 +1224,7 @@ Item {
                         StyledText {
                             visible: !entry.fileIsDir
                             text: isOpening ? Translation.tr("Opening…") : root.sizeText(Number(entry.fileSize))
-                            font.pixelSize: 11
+                            font.pixelSize: Appearance.font.scaled(11)
                             color: isOpening ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
                         }
 
@@ -1394,7 +1394,7 @@ Item {
                                     horizontalAlignment: Text.AlignHCenter
                                     text: gridEntry.fileName
                                     elide: Text.ElideMiddle
-                                    font.pixelSize: 10
+                                    font.pixelSize: Appearance.font.pixelSize.smallest
                                     color: Appearance.colors.colOnLayer1
                                 }
                             }
@@ -1421,7 +1421,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: gridEntry.fileName
                                             elide: Text.ElideMiddle
-                                            font.pixelSize: 11
+                                            font.pixelSize: Appearance.font.scaled(11)
                                             font.weight: gridEntry.fileIsDir ? Font.DemiBold : Font.Normal
                                             color: Appearance.colors.colOnLayer1
                                         }
@@ -1430,7 +1430,7 @@ Item {
                                             text: gridEntry.fileIsDir
                                                 ? Translation.tr("Folder")
                                                 : (gridEntry.isOpening ? Translation.tr("Opening…") : root.sizeText(Number(gridEntry.fileSize)))
-                                            font.pixelSize: 10
+                                            font.pixelSize: Appearance.font.pixelSize.smallest
                                             color: gridEntry.isOpening ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
                                         }
                                     }
@@ -1517,14 +1517,14 @@ Item {
                         text: root.selectedCount === 1
                             ? Translation.tr("1 file selected")
                             : Translation.tr("%1 files selected").arg(root.selectedCount)
-                        font.pixelSize: 12
+                        font.pixelSize: Appearance.font.pixelSize.smaller
                         font.weight: Font.DemiBold
                         color: Appearance.colors.colOnLayer1
                     }
 
                     StyledText {
                         text: Translation.tr("%1 total").arg(root.sizeText(root.selectedTotalBytes))
-                        font.pixelSize: 10
+                        font.pixelSize: Appearance.font.pixelSize.smallest
                         color: Appearance.colors.colSubtext
                     }
                 }
@@ -1554,7 +1554,7 @@ Item {
                             text: root.pendingSelectedSaves > 0
                                 ? Translation.tr("Saving (%1)").arg(root.pendingSelectedSaves)
                                 : Translation.tr("Download (%1)").arg(root.selectedFilePaths.length)
-                            font.pixelSize: 11
+                            font.pixelSize: Appearance.font.scaled(11)
                             font.weight: Font.DemiBold
                             color: root.selectedCount > 0 ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
                         }

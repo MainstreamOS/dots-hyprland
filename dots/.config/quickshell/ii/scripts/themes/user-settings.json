@@ -33,5 +33,7 @@
   ["bar", "island", "alertSeconds"],
   ["sidebar", "phone", "privacy"],
   ["sidebar", "phone", "linkPreviews"],
-  ["sidebar", "phone", "youtubeBrowserSignIn"]
+  ["sidebar", "phone", "youtubeBrowserSignIn"],
+  ["appearance", "appFontScale"],
+  ["appearance", "uiTextScale"]
 ]

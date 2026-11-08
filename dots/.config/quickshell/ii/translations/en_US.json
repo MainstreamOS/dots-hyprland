@@ -3450,5 +3450,11 @@
   "Support Mainstream": "Support Mainstream",
   "Clear all notifications": "Clear all notifications",
   "The Island while it's closed": "The Island while it's closed",
-  "The Island while it's open": "The Island while it's open"
+  "The Island while it's open": "The Island while it's open",
+  "Text size": "Text size",
+  "Text in apps, without changing the display scale. GTK and Qt apps and Firefox follow it; Electron apps keep their own zoom.": "Text in apps, without changing the display scale. GTK and Qt apps and Firefox follow it; Electron apps keep their own zoom.",
+  "Reset to default text size": "Reset to default text size",
+  "App font size": "App font size",
+  "UI text size": "UI text size",
+  "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.": "Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size."
 }

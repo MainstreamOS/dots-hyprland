@@ -38,6 +38,7 @@ RippleButton {
         StyledText {
             id: labelWidget
             Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             text: root.text
             font.pixelSize: root.font.pixelSize
             color: Appearance.colors.colOnSecondaryContainer

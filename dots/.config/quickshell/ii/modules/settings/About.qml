@@ -9,7 +9,7 @@ import qs.modules.common.widgets
 
 ContentPage {
     forceWidth: true
-    baseWidth: Math.max(0, Math.min(600, width - 40))
+    baseWidth: Math.max(0, Math.min(600 * Appearance.font.roomGrowth, width - 40))
 
     // Avatar cropped to a circle at a fixed size so every card in the
     // credits grid renders uniformly regardless of source image shape.

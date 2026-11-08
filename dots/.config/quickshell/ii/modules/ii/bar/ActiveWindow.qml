@@ -87,7 +87,7 @@ Item {
 
         StyledText {
             Layout.fillWidth: true
-            font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.smaller * root.uiScale
             color: root.tones.colSubtext
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? Translation.tr("Workspace %1").arg(root.shownWorkspaceId) :
@@ -99,7 +99,7 @@ Item {
 
         StyledText {
             Layout.fillWidth: true
-            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
             color: root.tones.colOnLayer0
             elide: Text.ElideRight
             text: root.workspaceName.length > 0 ? root.workspaceName :

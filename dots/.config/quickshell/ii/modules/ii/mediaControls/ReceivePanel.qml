@@ -16,6 +16,7 @@ Item {
     id: root
 
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property real radius: Appearance.rounding.medium * root.uiScale
     property real targetWidth: 440
     property real targetHeight: 160
@@ -46,7 +47,7 @@ Item {
             id: actionButtonText
             anchors.centerIn: parent
             text: actionButton.label
-            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+            font.pixelSize: root.fontSizes.small * root.uiScale
             font.weight: actionButton.filled ? Font.DemiBold : Font.Normal
             color: actionButton.filled ? root.blendedColors.colOnPrimary : root.blendedColors.colOnLayer0
         }
@@ -131,7 +132,7 @@ Item {
 
                 MaterialSymbol {
                     text: "download"
-                    iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                    iconSize: root.fontSizes.larger * root.uiScale
                     color: root.blendedColors.colOnLayer0
                 }
                 StyledText {
@@ -142,14 +143,14 @@ Item {
                             : Translation.tr("Receiving…"))
                         : Translation.tr("Receive via LocalSend")
                     elide: Text.ElideMiddle
-                    font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                    font.pixelSize: root.fontSizes.normal * root.uiScale
                     font.weight: Font.DemiBold
                     color: root.blendedColors.colOnLayer0
                 }
                 MaterialSymbol {
                     visible: root.uiState === "waiting"
                     text: "progress_activity"
-                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                    iconSize: root.fontSizes.normal * root.uiScale
                     color: root.blendedColors.colSubtext
                     NumberAnimation on rotation {
                         from: 0; to: 360
@@ -188,7 +189,7 @@ Item {
                         Layout.fillWidth: true
                         text: Translation.tr("Visible to nearby devices as \"%1\"").arg(LocalSend.receiveAlias)
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                        font.pixelSize: root.fontSizes.small * root.uiScale
                         color: root.blendedColors.colOnLayer0
                     }
                     StyledText {
@@ -198,7 +199,7 @@ Item {
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
                         maximumLineCount: 2
-                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                        font.pixelSize: root.fontSizes.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
 
@@ -230,7 +231,7 @@ Item {
                         text: LocalSend.receiveSender.length > 0
                             ? Translation.tr("Receiving from %1…").arg(LocalSend.receiveSender)
                             : Translation.tr("Receiving…")
-                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                        font.pixelSize: root.fontSizes.small * root.uiScale
                         color: root.blendedColors.colSubtext
                         elide: Text.ElideRight
                     }
@@ -256,14 +257,14 @@ Item {
                         spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "check_circle"
-                            iconSize: Appearance.font.pixelSize.huge * root.uiScale
+                            iconSize: root.fontSizes.huge * root.uiScale
                             color: root.blendedColors.colPrimary
                         }
                         StyledText {
                             text: LocalSend.receiveLastCount === 1
                                 ? Translation.tr("Received 1 file")
                                 : Translation.tr("Received %1 files").arg(LocalSend.receiveLastCount)
-                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
+                            font.pixelSize: root.fontSizes.large * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                         }
@@ -297,13 +298,13 @@ Item {
                         spacing: 8 * root.uiScale
                         MaterialSymbol {
                             text: "error"
-                            iconSize: Appearance.font.pixelSize.larger * root.uiScale
+                            iconSize: root.fontSizes.larger * root.uiScale
                             color: Appearance.colors.colError
                         }
                         StyledText {
                             Layout.fillWidth: true
                             text: Translation.tr("Receiving failed")
-                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                            font.pixelSize: root.fontSizes.normal * root.uiScale
                             font.weight: Font.DemiBold
                             color: root.blendedColors.colOnLayer0
                             elide: Text.ElideRight
@@ -315,7 +316,7 @@ Item {
                         text: LocalSend.receiveError || Translation.tr("Unknown error")
                         wrapMode: Text.Wrap
                         elide: Text.ElideRight
-                        font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                        font.pixelSize: root.fontSizes.smaller * root.uiScale
                         color: root.blendedColors.colSubtext
                     }
                     RowLayout {

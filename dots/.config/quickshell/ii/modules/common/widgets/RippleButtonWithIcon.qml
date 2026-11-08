@@ -1,10 +1,12 @@
 import QtQuick
+import Quickshell
 import QtQuick.Layouts
 import qs.modules.common
 import qs.modules.common.widgets
 
 RippleButton {
     id: buttonWithIconRoot
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property string nerdIcon
     property string materialIcon
     property bool materialIconFill: true
@@ -17,7 +19,7 @@ RippleButton {
         StyledText {
             visible: text !== ""
             text: buttonWithIconRoot.mainText
-            font.pixelSize: Appearance.font.pixelSize.small
+            font.pixelSize: buttonWithIconRoot.fontSizes.small
             color: Appearance.colors.colOnSecondaryContainer
             elide: Text.ElideRight
         }
@@ -62,7 +64,7 @@ RippleButton {
                     active: !nerdIcon
                     sourceComponent: MaterialSymbol {
                         text: buttonWithIconRoot.materialIcon
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: buttonWithIconRoot.fontSizes.larger
                         color: Appearance.colors.colOnSecondaryContainer
                         fill: buttonWithIconRoot.materialIconFill ? 1 : 0
                     }
@@ -73,7 +75,7 @@ RippleButton {
                     active: nerdIcon
                     sourceComponent: StyledText {
                         text: buttonWithIconRoot.nerdIcon
-                        font.pixelSize: Appearance.font.pixelSize.larger
+                        font.pixelSize: buttonWithIconRoot.fontSizes.larger
                         font.family: Appearance.font.family.iconNerd
                         color: Appearance.colors.colOnSecondaryContainer
                     }

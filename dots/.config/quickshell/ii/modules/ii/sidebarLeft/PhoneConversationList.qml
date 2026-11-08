@@ -345,7 +345,7 @@ Item {
                             }
                             StyledText {
                                 text: root.when(row.modelData.date)
-                                font.pixelSize: 11
+                                font.pixelSize: Appearance.font.scaled(11)
                                 font.weight: Font.Medium
                                 color: Appearance.colors.colSubtext
                             }

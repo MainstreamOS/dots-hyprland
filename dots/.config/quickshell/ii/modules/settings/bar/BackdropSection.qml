@@ -24,6 +24,7 @@ ContentSection {
         }
         StyledText {
             Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             Layout.alignment: Qt.AlignVCenter
             Layout.leftMargin: 6
             text: Translation.tr("Blur preset")
@@ -32,7 +33,7 @@ ContentSection {
         StyledComboBox {
             textRole: "displayName"
             Layout.fillWidth: false
-            Layout.preferredWidth: 220
+            Layout.preferredWidth: 220 * Appearance.font.textGrowth
             model: root.backdropPresetIndex >= 0 ? BackdropPresets.all
                 : BackdropPresets.all.concat([{ displayName: Translation.tr("Custom") }])
             currentIndex: root.backdropPresetIndex >= 0 ? root.backdropPresetIndex : BackdropPresets.all.length

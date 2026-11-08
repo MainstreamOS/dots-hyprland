@@ -14,7 +14,8 @@ Rectangle {
     // A card on the Dynamic Island's raised surface, as its panels' cards are.
     color: Appearance.surfaces.raised
     clip: true
-    implicitHeight: collapsed ? collapsedBottomWidgetGroupRow.implicitHeight : 350
+    // The calendar's days grow with the text, so the panel that holds them does too.
+    implicitHeight: collapsed ? collapsedBottomWidgetGroupRow.implicitHeight : Appearance.font.scaled(350)
     property int selectedTab: Persistent.states.sidebar.bottomGroup.tab
     property int previousIndex: -1
     property bool collapsed: Persistent.states.sidebar.bottomGroup.collapsed

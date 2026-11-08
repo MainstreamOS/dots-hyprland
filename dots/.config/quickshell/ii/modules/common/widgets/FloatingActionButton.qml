@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import QtQuick.Layouts
 import qs.modules.common
 import qs.modules.common.widgets
@@ -56,7 +57,7 @@ RippleButton {
                     }
                     text: root.buttonText
                     color: Appearance.colors.colOnPrimaryContainer
-                    font.pixelSize: 14
+                    font.pixelSize: 14 * Appearance.font.textScaleFor(QsWindow.window)
                     font.weight: 450
                 }
             }

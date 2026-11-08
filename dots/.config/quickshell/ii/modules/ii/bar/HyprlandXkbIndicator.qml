@@ -28,7 +28,7 @@ Loader {
             anchors.centerIn: parent
             horizontalAlignment: Text.AlignHCenter
             text: abbreviateLayoutCode(HyprlandXkb.currentLayoutCode)
-            font.pixelSize: text.includes("\n") ? Appearance.font.pixelSize.smallie : Appearance.font.pixelSize.small
+            font.pixelSize: (text.includes("\n") ? Appearance.font.basePixelSize.smallie : Appearance.font.basePixelSize.small) * root.uiScale
             color: root.color
             animateChange: true
         }

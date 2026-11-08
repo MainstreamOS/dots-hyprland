@@ -442,6 +442,7 @@ ContentPage {
         ConfigRow {
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 text: Translation.tr("Shake to Locate")
                 font.pixelSize: Appearance.font.pixelSize.normal
                 color: Appearance.colors.colOnLayer1
@@ -449,7 +450,7 @@ ContentPage {
             StyledComboBox {
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 220
+                Layout.preferredWidth: 220 * Appearance.font.textGrowth
                 model: [
                     { displayName: Translation.tr("Disabled"),       value: "off" },
                     { displayName: Translation.tr("Magnifier Zoom"),  value: "zoom" },
@@ -680,6 +681,7 @@ ContentPage {
             visible: root.forceTouchpadSettingsVisible || root.touchpadDeviceName !== ""
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 text: Translation.tr("Touchpad")
                 font.pixelSize: Appearance.font.pixelSize.normal
                 color: Appearance.colors.colOnLayer1
@@ -687,7 +689,7 @@ ContentPage {
             StyledComboBox {
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 220
+                Layout.preferredWidth: 220 * Appearance.font.textGrowth
                 model: [
                     { displayName: Translation.tr("Enabled"),  value: true },
                     { displayName: Translation.tr("Disabled"), value: false },
@@ -909,13 +911,14 @@ ContentPage {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     Layout.leftMargin: 6
+                    wrapMode: Text.WordWrap
                     text: gestureRow.label
                     color: Appearance.colors.colOnSecondaryContainer
                 }
                 StyledComboBox {
                     textRole: "displayName"
                     Layout.fillWidth: false
-                    Layout.preferredWidth: 220
+                    Layout.preferredWidth: 220 * Appearance.font.textGrowth
                     model: gestureRow.options
                     enabled: !Config.themeApplyInProgress
                     currentIndex: {

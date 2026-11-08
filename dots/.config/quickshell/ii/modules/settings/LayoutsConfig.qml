@@ -397,6 +397,8 @@ ContentPage {
                     id: dwindleCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    // Lined up at the top, as a caption a line longer would otherwise shift the other card.
+                    Layout.alignment: Qt.AlignTop
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: dwindleCol.implicitHeight
                     onClicked: root.applyLayout("dwindle")
@@ -409,7 +411,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             color: dwindleCard.sel ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
                             border.width: dwindleCard.sel ? 2 : 1
@@ -473,6 +475,7 @@ ContentPage {
                     id: masterCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    Layout.alignment: Qt.AlignTop
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: masterCol.implicitHeight
                     onClicked: root.applyLayout("master")
@@ -485,7 +488,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             color: masterCard.sel ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
                             border.width: masterCard.sel ? 2 : 1
@@ -544,6 +547,7 @@ ContentPage {
                     id: scrollingCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    Layout.alignment: Qt.AlignTop
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: scrollingCol.implicitHeight
                     onClicked: root.applyLayout("scrolling")
@@ -556,7 +560,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             clip: true
                             color: scrollingCard.sel ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
@@ -619,6 +623,7 @@ ContentPage {
                     id: monocleCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    Layout.alignment: Qt.AlignTop
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: monocleCol.implicitHeight
                     onClicked: root.applyLayout("monocle")
@@ -631,7 +636,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             color: monocleCard.sel ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
                             border.width: monocleCard.sel ? 2 : 1
@@ -700,6 +705,7 @@ ContentPage {
                         }
                         StyledText {
                             Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                             Layout.alignment: Qt.AlignVCenter
                             Layout.leftMargin: 6
                             text: Translation.tr("Window width")
@@ -708,7 +714,7 @@ ContentPage {
                         StyledComboBox {
                             textRole: "displayName"
                             Layout.fillWidth: false
-                            Layout.preferredWidth: 220
+                            Layout.preferredWidth: 220 * Appearance.font.textGrowth
                             model: [
                                 { displayName: Translation.tr("Halves (default)"), value: 2 },
                                 { displayName: Translation.tr("Two-thirds"), value: 1.5 },
@@ -746,6 +752,7 @@ ContentPage {
                     id: floatCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    Layout.alignment: Qt.AlignTop
                     cursorShape: Qt.PointingHandCursor
                     implicitHeight: floatCol.implicitHeight
                     onClicked: root.applyLayout("float")
@@ -758,7 +765,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             color: floatCard.sel ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
                             border.width: floatCard.sel ? 2 : 1
@@ -823,6 +830,7 @@ ContentPage {
                     id: titleBarCard
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
+                    Layout.alignment: Qt.AlignTop
                     implicitHeight: titleBarCol.implicitHeight
 
                     ColumnLayout {
@@ -832,7 +840,7 @@ ContentPage {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            implicitHeight: 130
+                            implicitHeight: 130 * Appearance.font.roomGrowth
                             radius: Appearance.rounding.normal
                             color: TitleBars.enabled ? Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g, Appearance.colors.colPrimary.b, 0.1) : Appearance.colors.colLayer2
                             border.width: TitleBars.enabled ? 2 : 1
@@ -1048,12 +1056,12 @@ ContentPage {
                                     // Workspace number badge (top-right corner)
                                     Rectangle {
                                         anchors { right: parent.right; top: parent.top; margins: 2 }
-                                        width: 13; height: 13; radius: 7
+                                        width: Appearance.font.scaled(13); height: width; radius: width / 2
                                         color: perWsCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colLayer1
                                         border.width: 1; border.color: perWsCard.sel ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
                                         StyledText {
                                             anchors.centerIn: parent
-                                            text: String(mw.wsNum); font.pixelSize: 7
+                                            text: String(mw.wsNum); font.pixelSize: Appearance.font.scaled(7)
                                             color: perWsCard.sel ? Appearance.colors.colOnPrimary : Appearance.colors.colSubtext
                                         }
                                     }
@@ -1199,6 +1207,7 @@ ContentPage {
                                 font.pixelSize: Appearance.font.pixelSize.small
                                 color: Appearance.colors.colSubtext
                                 Layout.fillWidth: true
+                                elide: Text.ElideRight
                             }
 
                             // True radio pills — exactly one active per workspace row

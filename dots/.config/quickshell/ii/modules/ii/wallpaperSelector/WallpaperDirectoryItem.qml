@@ -114,7 +114,7 @@ MouseArea {
                     sourceComponent: Text {
                         text: "▶"
                         color: "#ffffff"
-                        font.pixelSize: 28
+                        font.pixelSize: Appearance.font.scaled(28)
                         style: Text.Raised
                         styleColor: "#000000"
                         opacity: 0.7

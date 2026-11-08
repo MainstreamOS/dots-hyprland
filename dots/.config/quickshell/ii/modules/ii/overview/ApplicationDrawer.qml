@@ -57,6 +57,7 @@ Item {
     // Sits on a panel its parent draws, so it brings no outline or shadow of its own.
     property bool bare: false
     property real uiScale: 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property string wallpaper: ""
     property real surfaceRadius: Appearance.rounding.dockBody
     property var contentColors: Appearance.drawerContent
@@ -69,7 +70,7 @@ Item {
     property real wheelVelocity: 0
     property double lastWheelTime: 0
     property bool compactCells: false
-    property real appLabelSize: Appearance.font.pixelSize.smaller * uiScale
+    property real appLabelSize: fontSizes.smaller * uiScale
     readonly property real rowHeight: appGrid.cellHeight
 
     // Drag-to-workspace signals — Overview.qml listens to these.
@@ -516,7 +517,7 @@ Item {
                         anchors.centerIn: parent
                         visible: appGrid.count === 0 && (root.searchText.length > 0 || root.appSource !== null)
                         text: root.emptyText
-                        font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                        font.pixelSize: root.fontSizes.normal * root.uiScale
                         color: root.contentColors.colSubtextRead
                     }
 

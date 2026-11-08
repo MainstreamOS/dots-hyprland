@@ -336,7 +336,7 @@ ClippingRectangle {
                     id: durText
                     anchors.centerIn: parent
                     text: StringUtils.friendlyTimeForSeconds(root.preview?.duration ?? 0)
-                    font.pixelSize: 9
+                    font.pixelSize: Appearance.font.scaled(9)
                     font.weight: Font.DemiBold
                     font.features: { "tnum": 1 }
                     color: "white"

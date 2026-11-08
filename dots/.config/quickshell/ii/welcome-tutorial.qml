@@ -4840,7 +4840,7 @@ ApplicationWindow {
 
                     ColorField {
                         Layout.fillWidth: true
-                        textWidth: 124
+                        textWidth: 124 * Appearance.font.textGrowth
                         text: Translation.tr("Color")
                         buttonIcon: "wallpaper"
                         allowEmpty: true

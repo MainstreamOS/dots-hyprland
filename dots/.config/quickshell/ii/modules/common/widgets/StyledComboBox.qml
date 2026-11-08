@@ -23,7 +23,8 @@ ComboBox {
     property color colBackgroundHover: Appearance.colors.colSecondaryContainerHover
     property color colBackgroundActive: Appearance.colors.colSecondaryContainerActive
 
-    implicitHeight: 40
+    // Grows by the same factor as the widths drop-downs are given, so their shape holds at any text size.
+    implicitHeight: Math.round(40 * root.fontSizes.small / Appearance.font.basePixelSize.small)
     readonly property real contentInset: 16
     leftPadding: 0
     rightPadding: indicator.width + root.contentInset

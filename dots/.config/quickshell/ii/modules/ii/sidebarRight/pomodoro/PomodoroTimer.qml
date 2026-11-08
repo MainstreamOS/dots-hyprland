@@ -35,7 +35,7 @@ Item {
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
                     text: TimerService.formatCountdown(TimerService.pomodoroSecondsLeft)
-                    font.pixelSize: 32
+                    font.pixelSize: Appearance.font.scaled(32)
                     color: Appearance.m3colors.m3onSurface
                 }
                 StyledText {
@@ -78,9 +78,9 @@ Item {
                     text: TimerService.pomodoroRunning ? Translation.tr("Pause") : (TimerService.pomodoroSecondsLeft === TimerService.pomodoroLapDuration) ? Translation.tr("Start") : Translation.tr("Resume")
                     color: TimerService.pomodoroRunning ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                 }
-                implicitHeight: 32
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 8)
                 buttonRadius: 10
-                implicitWidth: 90
+                implicitWidth: Math.max(90, contentItem.implicitWidth + 24)
                 font.pixelSize: Appearance.font.pixelSize.larger
                 onClicked: TimerService.togglePomodoro()
                 colBackground: TimerService.pomodoroRunning ? Appearance.colors.colSecondaryContainer : Appearance.colors.colPrimary
@@ -88,9 +88,9 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 32
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 8)
                 buttonRadius: 10
-                implicitWidth: 90
+                implicitWidth: Math.max(90, contentItem.implicitWidth + 24)
 
                 onClicked: TimerService.resetPomodoro()
                 enabled: (TimerService.pomodoroSecondsLeft < TimerService.pomodoroLapDuration) || TimerService.pomodoroCycle > 0 || TimerService.pomodoroBreak

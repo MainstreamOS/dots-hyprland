@@ -15,6 +15,7 @@ RippleButton {
     id: root
     property var contentColors: Appearance.launcherContent
     property real uiScale: 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property LauncherSearchResult entry
     property string query
     property bool isSeparator: entry?.isSeparator ?? false
@@ -225,7 +226,7 @@ RippleButton {
             id: bigTextComponent
             StyledText {
                 text: root.bigText
-                font.pixelSize: Appearance.font.pixelSize.larger * root.uiScale
+                font.pixelSize: root.fontSizes.larger * root.uiScale
                 color: root.colForeground
             }
         }
@@ -237,7 +238,7 @@ RippleButton {
             Layout.alignment: Qt.AlignVCenter
             spacing: 0
             StyledText {
-                font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                font.pixelSize: root.fontSizes.smaller * root.uiScale
                 color: root.selected ? root.colOnFill
                     : root.down ? root.contentColors.colSubtextOnRipple
                     : root.keyboardDown ? root.contentColors.colSubtextPressed : root.contentColors.colSubtextRead
@@ -257,7 +258,7 @@ RippleButton {
                             id: activeText
                             anchors.centerIn: parent
                             text: "check"
-                            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+                            font.pixelSize: root.fontSizes.normal * root.uiScale
                             color: root.colOnCheck
                         }
                     }
@@ -274,7 +275,7 @@ RippleButton {
                     Layout.fillWidth: true
                     id: nameText
                     textFormat: Text.StyledText // RichText also works, but StyledText ensures elide work
-                    font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                    font.pixelSize: root.fontSizes.small * root.uiScale
                     font.family: Appearance.font.family[root.fontType]
                     color: root.colForeground
                     horizontalAlignment: Text.AlignLeft
@@ -298,7 +299,7 @@ RippleButton {
             Layout.fillWidth: false
             visible: root.selected
             id: clickAction
-            font.pixelSize: Appearance.font.pixelSize.normal * root.uiScale
+            font.pixelSize: root.fontSizes.normal * root.uiScale
             color: root.colOnFill
             horizontalAlignment: Text.AlignRight
             text: root.itemClickActionName
@@ -330,7 +331,7 @@ RippleButton {
                             active: actionButton.iconType === LauncherSearchResult.IconType.Material || actionButton.iconName === ""
                             sourceComponent: MaterialSymbol {
                                 text: actionButton.iconName || "video_settings"
-                                font.pixelSize: Appearance.font.pixelSize.hugeass * root.uiScale
+                                font.pixelSize: root.fontSizes.hugeass * root.uiScale
                                 color: actionButton.down ? root.contentColors.colOnActionActive :
                                     (actionButton.hovered ? root.contentColors.colOnActionHover : root.colForeground)
                             }

@@ -36,14 +36,14 @@ MouseArea {
         MaterialSymbol {
             fill: 0
             text: Icons.getWeatherIcon(Weather.data.wCode) ?? "cloud"
-            iconSize: Appearance.font.pixelSize.large * root.uiScale
+            iconSize: Appearance.font.basePixelSize.large * root.uiScale
             color: Appearance.barContent.colOnLayer1
             Layout.alignment: Qt.AlignVCenter
         }
 
         StyledText {
             visible: true
-            font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
             color: Appearance.barContent.colOnLayer1
             text: Weather.data?.temp ?? "--°"
             Layout.alignment: Qt.AlignVCenter

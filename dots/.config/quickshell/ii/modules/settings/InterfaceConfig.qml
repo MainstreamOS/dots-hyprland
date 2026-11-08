@@ -374,6 +374,7 @@ ContentPage {
             }
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6   // match ConfigSwitch's contentItem RowLayout spacing (10) minus ConfigRow's default (4)
                 text: Translation.tr("Action")
@@ -383,7 +384,7 @@ ContentPage {
                 id: hotCornerTriggerCombo
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 220
+                Layout.preferredWidth: 220 * Appearance.font.textGrowth
                 model: [
                     { displayName: Translation.tr("Off"),                icon: "block",     value: "off" },
                     { displayName: Translation.tr("Default Overview"),   icon: "grid_view", value: "default" },
@@ -1126,6 +1127,7 @@ ContentPage {
                 font.pixelSize: Appearance.font.pixelSize.normal
                 color: lockEnabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
             StyledComboBox {
                 enabled: lockEnabled
@@ -1235,6 +1237,7 @@ ContentPage {
             }
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6
                 text: Translation.tr("Position")
@@ -1243,7 +1246,7 @@ ContentPage {
             StyledComboBox {
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 220
+                Layout.preferredWidth: 220 * Appearance.font.textGrowth
                 model: notificationsSection.positions
                 currentIndex: Math.max(0, model.findIndex(p => p.value === Appearance.sizes.notificationPosition))
                 onActivated: index => {

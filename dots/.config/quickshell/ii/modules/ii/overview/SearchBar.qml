@@ -13,6 +13,7 @@ RowLayout {
     property var contentColors: Appearance.launcherContent
     property bool quietStyle: false
     property real uiScale: 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     spacing: 6 * root.uiScale
     readonly property real actionSize: 40 * uiScale
     readonly property real searchIconSize: 22 * uiScale
@@ -50,7 +51,7 @@ RowLayout {
         id: searchIcon
         visible: !root.quietStyle
         Layout.alignment: Qt.AlignVCenter
-        iconSize: Appearance.font.pixelSize.huge * root.uiScale
+        iconSize: root.fontSizes.huge * root.uiScale
         padding: 6 * root.uiScale
         color: root.contentColors.colSecondaryContainer
         colSymbol: root.contentColors.colOnSecondaryContainer
@@ -96,7 +97,7 @@ RowLayout {
         Layout.minimumWidth: root.fillSearchWidth ? 0 : -1
         implicitHeight: 40 * root.uiScale
         focus: root.inputFocused
-        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+        font.pixelSize: root.fontSizes.small * root.uiScale
         padding: 10 * root.uiScale
         colBackground: root.quietStyle ? "transparent" : root.contentColors.colLayer1
         radius: RoundedCorners.on ? Appearance.rounding.full * root.uiScale : 0

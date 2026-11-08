@@ -16,6 +16,7 @@ import Quickshell.Services.Mpris
 Item { // Player instance
     id: root
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     required property MprisPlayer player
     property var artUrl: player?.trackArtUrl
     property string artDownloadLocation: Directories.coverArt
@@ -84,7 +85,7 @@ Item { // Player instance
         colRipple: blendedColors.colSecondaryContainerActive
 
         contentItem: MaterialSymbol {
-            iconSize: Appearance.font.pixelSize.huge * root.uiScale
+            iconSize: root.fontSizes.huge * root.uiScale
             fill: 1
             horizontalAlignment: Text.AlignHCenter
             color: blendedColors.colOnSecondaryContainer
@@ -223,7 +224,7 @@ Item { // Player instance
             colRipple: root.player?.isPlaying ? blendedColors.colPrimaryActive : blendedColors.colSecondaryContainerActive
 
             contentItem: MaterialSymbol {
-                iconSize: Appearance.font.pixelSize.huge * root.uiScale
+                iconSize: root.fontSizes.huge * root.uiScale
                 fill: 1
                 horizontalAlignment: Text.AlignHCenter
                 color: root.player?.isPlaying ? blendedColors.colOnPrimary : blendedColors.colOnSecondaryContainer
@@ -330,7 +331,7 @@ Item { // Player instance
                         }
                         StyledText { // Main Text
                             id: trackTitleMain
-                            font.pixelSize: Appearance.font.pixelSize.large * root.uiScale
+                            font.pixelSize: root.fontSizes.large * root.uiScale
                             color: blendedColors.colOnLayer0
                             elide: Text.ElideNone
                             animateChange: true
@@ -360,7 +361,7 @@ Item { // Player instance
                     Layout.fillWidth: true
                     Layout.rightMargin: playPauseButton.width + (16 + 3) * root.uiScale
                     clip: true
-                    font.pixelSize: Appearance.font.pixelSize.smaller * root.uiScale
+                    font.pixelSize: root.fontSizes.smaller * root.uiScale
                     color: blendedColors.colSubtext
                     elide: Text.ElideRight
                     text: root.player?.trackArtist
@@ -379,7 +380,7 @@ Item { // Player instance
                         anchors.bottom: sliderRow.top
                         anchors.bottomMargin: 4 * root.uiScale
                         anchors.left: parent.left
-                        font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                        font.pixelSize: root.fontSizes.small * root.uiScale
                         font.features: { "tnum": 1 }
                         color: blendedColors.colSubtext
                         elide: Text.ElideRight
@@ -399,7 +400,7 @@ Item { // Player instance
                         visible: Capabilities.volume(root.player)
 
                         MaterialSymbol {
-                            iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                            iconSize: root.fontSizes.normal * root.uiScale
                             color: blendedColors.colSubtext
                             text: {
                                 const vol = root.player?.volume ?? 1.0

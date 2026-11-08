@@ -332,7 +332,7 @@ ContentPage {
                         anchors.centerIn: parent
                         visible: faceImage.status !== Image.Ready
                         text: (account.name.charAt(0) ?? "?").toUpperCase()
-                        font.pixelSize: 16
+                        font.pixelSize: Appearance.font.pixelSize.normal
                         font.weight: Font.Medium
                         color: account.isCurrent ? Appearance.colors.colOnPrimary : Appearance.colors.colOnLayer2
                     }
@@ -367,7 +367,7 @@ ContentPage {
                                 id: youLabel
                                 anchors.centerIn: parent
                                 text: Translation.tr("You")
-                                font.pixelSize: 10
+                                font.pixelSize: Appearance.font.pixelSize.smallest
                                 font.weight: Font.Medium
                                 color: Appearance.colors.colOnPrimary
                             }

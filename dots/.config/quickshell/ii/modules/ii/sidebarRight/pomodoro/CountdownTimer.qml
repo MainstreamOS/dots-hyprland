@@ -52,7 +52,7 @@ Item {
                     StyledText {
                         anchors.centerIn: parent
                         text: TimerService.formatCountdown(TimerService.countdownSecondsLeft)
-                        font.pixelSize: 32
+                        font.pixelSize: Appearance.font.scaled(32)
                         color: Appearance.m3colors.m3onSurface
                     }
                 }
@@ -93,9 +93,9 @@ Item {
                     text: TimerService.countdownRunning ? Translation.tr("Pause") : (TimerService.countdownSecondsLeft === TimerService.countdownDuration) ? Translation.tr("Start") : Translation.tr("Resume")
                     color: TimerService.countdownRunning ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnPrimary
                 }
-                implicitHeight: 32
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 8)
                 buttonRadius: 10
-                implicitWidth: 90
+                implicitWidth: Math.max(90, contentItem.implicitWidth + 24)
                 font.pixelSize: Appearance.font.pixelSize.larger
                 onClicked: TimerService.toggleCountdown()
                 colBackground: TimerService.countdownRunning ? Appearance.colors.colSecondaryContainer : Appearance.colors.colPrimary
@@ -103,9 +103,9 @@ Item {
             }
 
             RippleButton {
-                implicitHeight: 32
+                implicitHeight: Math.max(32, contentItem.implicitHeight + 8)
                 buttonRadius: 10
-                implicitWidth: 90
+                implicitWidth: Math.max(90, contentItem.implicitWidth + 24)
 
                 onClicked: TimerService.resetCountdown()
                 enabled: TimerService.countdownSecondsLeft < TimerService.countdownDuration

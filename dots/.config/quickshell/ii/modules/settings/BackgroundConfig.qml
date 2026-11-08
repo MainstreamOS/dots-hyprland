@@ -1101,6 +1101,7 @@ ContentPage {
             }
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6
                 text: Translation.tr("Blur preset")
@@ -1109,7 +1110,7 @@ ContentPage {
             StyledComboBox {
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 240
+                Layout.preferredWidth: 240 * Appearance.font.textGrowth
                 model: [
                     { displayName: Translation.tr("Follow UI blur preset"), icon: "link", value: "follow" },
                     { displayName: Translation.tr("Solid"), icon: "rectangle", value: "solid" },

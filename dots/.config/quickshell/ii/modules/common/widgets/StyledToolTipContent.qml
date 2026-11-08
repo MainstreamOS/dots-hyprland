@@ -1,11 +1,13 @@
 import qs.modules.common
 import qs.modules.common.widgets
 import QtQuick
+import Quickshell
 import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
     id: root
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     required property string text
     property bool shown: false
     property real horizontalPadding: 10
@@ -47,7 +49,7 @@ Item {
             anchors.centerIn: parent
             width: root.maximumTextWidth > 0 ? Math.min(implicitWidth, root.maximumTextWidth) : implicitWidth
             text: root.text
-            font.pixelSize: Appearance?.font.pixelSize.smaller ?? 14
+            font.pixelSize: root.fontSizes?.smaller ?? 14
             font.hintingPreference: Font.PreferNoHinting // Prevent shaky text
             color: Appearance?.colors.colOnTooltip ?? "#FFFFFF"
             wrapMode: Text.Wrap

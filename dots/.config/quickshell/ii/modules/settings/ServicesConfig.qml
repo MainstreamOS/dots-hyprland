@@ -198,6 +198,7 @@ ContentPage {
             }
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6
                 text: Translation.tr("Time zone")
@@ -206,7 +207,7 @@ ContentPage {
             StyledComboBox {
                 textRole: "displayName"
                 Layout.fillWidth: false
-                Layout.preferredWidth: 300
+                Layout.preferredWidth: 300 * Appearance.font.textGrowth
                 enabled: !timeChanger.running && dateTime.zones.length > 0
                 model: dateTime.zones
                 currentIndex: dateTime.zones.findIndex(zone => zone.value === dateTime.timezone)

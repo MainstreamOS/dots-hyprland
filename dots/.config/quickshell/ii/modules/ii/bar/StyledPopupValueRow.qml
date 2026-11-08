@@ -15,7 +15,7 @@ RowLayout {
     MaterialSymbol {
         text: root.icon
         color: Appearance.colors.colOnSurfaceVariant
-        iconSize: Appearance.font.pixelSize.large * root.uiScale
+        iconSize: Appearance.font.basePixelSize.large * root.uiScale
     }
     StyledText {
         text: root.label

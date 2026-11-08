@@ -57,7 +57,7 @@ MouseArea {
                             return Icons.getBatteryIcon(Battery.percentage * 100);
                         }
                     }
-                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.normal * root.uiScale
                     animateChange: true
                 }
                 StyledText {

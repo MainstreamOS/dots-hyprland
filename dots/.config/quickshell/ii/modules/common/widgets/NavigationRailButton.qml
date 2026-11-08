@@ -2,6 +2,7 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
 import QtQuick
+import Quickshell
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -142,7 +143,7 @@ TabButton {
                 }
             }
             text: buttonText
-            font.pixelSize: 14
+            font.pixelSize: 14 * Appearance.font.textScaleFor(QsWindow.window)
             color: Appearance.colors.colOnLayer1
         }
     }

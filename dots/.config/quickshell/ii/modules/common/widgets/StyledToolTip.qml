@@ -19,7 +19,8 @@ ToolTip {
     font {
         family: Appearance.font.family.main
         variableAxes: Appearance.font.variableAxes.main
-        pixelSize: Appearance?.font.pixelSize.smaller ?? 14
+        // The content reads the sizes for the window it opens in, as the bar's and dock's keep their own.
+        pixelSize: contentItem.fontSizes?.smaller ?? 14
         hintingPreference: Font.PreferNoHinting // Prevent shaky text
     }
 

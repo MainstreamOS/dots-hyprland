@@ -46,7 +46,7 @@ Item {
                     font.weight: Font.DemiBold
                     fill: 1
                     text: iconName
-                    iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.normal * root.uiScale
                     color: Appearance.barContent.m3onSecondaryContainer
                 }
             }
@@ -60,14 +60,14 @@ Item {
             TextMetrics {
                 id: fullPercentageTextMetrics
                 text: "100"
-                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
             }
 
             StyledText {
                 id: percentageText
                 anchors.centerIn: parent
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
                 text: `${Math.round(percentage * 100).toString()}`
             }
         }

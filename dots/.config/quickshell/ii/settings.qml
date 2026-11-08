@@ -362,6 +362,7 @@ ApplicationWindow {
         target: Config
         function onReadyChanged() {
             root.signalRestarted();
+            root.takeWindowGrowth();
         }
     }
 
@@ -549,6 +550,7 @@ ApplicationWindow {
         MaterialThemeLoader.reapplyTheme()
         ThemeLibrary.load()
         Config.readWriteDelay = 0 // Settings app always only sets one var at a time so delay isn't needed
+        root.takeWindowGrowth()
         recenterTimer.restart()
         // Files opens the Sharing page naming the folder that should be
         // shared once sharing is set up.
@@ -621,12 +623,20 @@ ApplicationWindow {
         }
     }
 
-    minimumWidth: 750
-    minimumHeight: 500
+    // The window, side menu and page column grow with UI text size, as far as their labels need.
+    // The window takes its size once, when the settings are read: following the slider resized it
+    // at every step, which flickered and left the desktop showing past it as it shrank.
+    property real windowGrowth: 1
+    function takeWindowGrowth() {
+        if (Config.ready)
+            root.windowGrowth = Appearance.font.roomGrowth;
+    }
+    minimumWidth: Math.round(750 * root.windowGrowth)
+    minimumHeight: Math.round(500 * root.windowGrowth)
     // A restart opens the new window at the old one's size.
     readonly property var startSize: (Quickshell.env("QS_SETTINGS_SIZE") || "").split("x").map(Number)
-    width: root.startSize[0] >= root.minimumWidth ? root.startSize[0] : 1100
-    height: root.startSize[1] >= root.minimumHeight ? root.startSize[1] : 750
+    width: root.startSize[0] >= root.minimumWidth ? root.startSize[0] : Math.round(1100 * root.windowGrowth)
+    height: root.startSize[1] >= root.minimumHeight ? root.startSize[1] : Math.round(750 * root.windowGrowth)
     color: Appearance.m3colors.m3background
 
     ColumnLayout {
@@ -734,7 +744,8 @@ ApplicationWindow {
                 id: navRailWrapper
                 Layout.fillHeight: true
                 Layout.margins: 5
-                implicitWidth: 150
+                // Wide enough for the longest page name, which a translation or larger text can stretch.
+                implicitWidth: Math.max(150 * Appearance.font.roomGrowth, navRail.implicitWidth)
                 Flickable {
                     id: navRailFlickable
                     anchors.fill: parent
@@ -918,7 +929,7 @@ ApplicationWindow {
         property real buttonIconRotation: 0
         property string buttonText
 
-        readonly property real baseSize: 56
+        readonly property real baseSize: 56 * Appearance.font.roomGrowth
         readonly property real visualWidth: baseSize + 20 + navBtnText.implicitWidth
 
         Layout.fillWidth: true
@@ -953,14 +964,14 @@ ApplicationWindow {
             Item {
                 id: navBtnIconArea
                 implicitWidth: navBtn.baseSize
-                implicitHeight: 32
+                implicitHeight: 32 * Appearance.font.roomGrowth
                 anchors {
                     left: parent.left
                     verticalCenter: parent.verticalCenter
                 }
                 MaterialSymbol {
                     anchors.centerIn: parent
-                    iconSize: 24
+                    iconSize: 24 * Appearance.font.roomGrowth
                     fill: navBtn.toggled ? 1 : 0
                     font.weight: (navBtn.toggled || navBtn.hovered) ? Font.DemiBold : Font.Normal
                     text: navBtn.buttonIcon
@@ -980,7 +991,7 @@ ApplicationWindow {
                     verticalCenter: navBtnIconArea.verticalCenter
                 }
                 text: navBtn.buttonText
-                font.pixelSize: 14
+                font.pixelSize: Appearance.font.scaled(14)
                 color: Appearance.colors.colOnLayer1
             }
         }

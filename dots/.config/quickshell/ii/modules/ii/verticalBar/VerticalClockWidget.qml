@@ -32,10 +32,10 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     font.pixelSize: {
                         if (modelData.match(/am|pm/i))
-                            return Appearance.font.pixelSize.smaller;
+                            return Appearance.font.basePixelSize.smaller;
                         else
                             // Smaller "am"/"pm" text
-                            return Appearance.font.pixelSize.large;
+                            return Appearance.font.basePixelSize.large;
                     }
                     color: Appearance.barContent.colOnLayer1
                     text: modelData.padStart(2, "0")
@@ -44,7 +44,7 @@ Item {
         }
         StyledText {
             anchors.horizontalCenter: parent.horizontalCenter
-            font.pixelSize: Appearance.font.pixelSize.smallest * root.uiScale
+            font.pixelSize: Appearance.font.basePixelSize.smallest * root.uiScale
             color: Appearance.barContent.colOnLayer1
             text: DateTime.shortDate
         }

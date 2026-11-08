@@ -1232,7 +1232,7 @@ ColumnLayout {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: trayContainer.expanded ? "chevron_left" : "chevron_right"
-                    iconSize: Appearance.font.pixelSize.larger * Appearance.sizes.islandScale
+                    iconSize: Appearance.font.basePixelSize.larger * Appearance.sizes.islandScale
                     color: Appearance.islandContent.colOnLayer1
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter

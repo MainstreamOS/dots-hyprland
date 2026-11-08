@@ -55,7 +55,7 @@ MouseArea {
                     Layout.rightMargin: -2 * root.uiScale
                     fill: 1
                     text: "bolt"
-                    iconSize: Appearance.font.pixelSize.smaller * root.uiScale
+                    iconSize: Appearance.font.basePixelSize.smaller * root.uiScale
                     visible: isCharging && percentage < 1 // TODO: animation
                 }
                 StyledText {

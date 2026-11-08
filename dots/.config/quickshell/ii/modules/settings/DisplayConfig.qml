@@ -1534,7 +1534,7 @@ except Exception:
                                 id: disabledLabel
                                 anchors.centerIn: parent
                                 text: Translation.tr("OFF")
-                                font.pixelSize: 9
+                                font.pixelSize: Appearance.font.scaled(9)
                                 color: Appearance.m3colors.m3onError
                             }
                         }
@@ -3698,13 +3698,14 @@ except Exception:
 
         RippleButton {
             implicitHeight: 36
-            implicitWidth: 160
+            implicitWidth: Math.max(160, applyLabel.implicitWidth + 32)
             buttonRadius: Appearance.rounding.full
             colBackground: Appearance.colors.colPrimary
             colBackgroundHover: Qt.lighter(Appearance.colors.colPrimary, 1.1)
             colRipple: Qt.lighter(Appearance.colors.colPrimary, 1.2)
 
             contentItem: StyledText {
+                id: applyLabel
                 anchors.centerIn: parent
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Appearance.font.pixelSize.normal
@@ -3726,6 +3727,71 @@ except Exception:
         implicitHeight: 1
         visible: displayConfigPage.isLaptop
         color: Appearance.colors.colOutlineVariant
+    }
+
+    // ── Text size ───────────────────────────────────────────────────────────
+    // Apart from the display scale: none of it changes how much fits on screen.
+    ContentSection {
+        icon: "format_size"
+        title: Translation.tr("Text size")
+
+        ConfigSlider {
+            buttonIcon: "format_size"
+            text: Translation.tr("UI text size")
+            from: 80
+            to: 130
+            stepSize: 10
+            stopIndicatorValues: [100]
+            tooltipContent: `${Math.round(value)}%`
+            value: Math.round((Config.options.appearance.uiTextScale ?? 1) * 100)
+            // A drag applies once the handle is let go: this row grows with the text, so a live
+            // change would slide the track under the pointer and set off another, back and forth.
+            onMoved: if (!pressed) apply()
+            onPressedChanged: if (!pressed) apply()
+            function apply() {
+                const stepped = Math.round(value / 10) / 10;
+                if (Math.abs(stepped - (Config.options.appearance.uiTextScale ?? 1)) < 0.001)
+                    return;
+                Config.options.appearance.uiTextScale = stepped;
+            }
+            StyledToolTip {
+                text: Translation.tr("Text in the desktop's sidebars, menus, notifications and Settings. The bar and Island follow their own Size.")
+            }
+        }
+        ConfigSlider {
+            buttonIcon: "font_download"
+            text: Translation.tr("App font size")
+            from: 80
+            to: 200
+            stepSize: 10
+            stopIndicatorValues: [100]
+            tooltipContent: `${Math.round(value)}%`
+            value: Math.round((Config.options.appearance.appFontScale ?? 1) * 100)
+            onMoved: {
+                const stepped = Math.round(value / 10) / 10;
+                if (Math.abs(stepped - (Config.options.appearance.appFontScale ?? 1)) < 0.001)
+                    return;
+                Config.options.appearance.appFontScale = stepped;
+                Config.queueAppFontApply();
+            }
+            StyledToolTip {
+                text: Translation.tr("Text in apps, without changing the display scale. GTK and Qt apps and Firefox follow it; Electron apps keep their own zoom.")
+            }
+        }
+        ConfigResetButton {
+            visible: Math.abs((Config.options.appearance.uiTextScale ?? 1) - 1) > 0.01
+                || Math.abs((Config.options.appearance.appFontScale ?? 1) - 1) > 0.01
+            Layout.leftMargin: 8
+            Layout.topMargin: 2
+            buttonText: Translation.tr("Reset to default text size")
+            onClicked: {
+                Config.options.appearance.uiTextScale = 1;
+                if (Math.abs((Config.options.appearance.appFontScale ?? 1) - 1) > 0.01) {
+                    Config.options.appearance.appFontScale = 1;
+                    Config.queueAppFontApply();
+                }
+            }
+        }
     }
 
     // ── Laptop Clamshell & Lid Behavior ─────────────────────────────────────
@@ -3822,13 +3888,14 @@ except Exception:
             }
             StyledText {
                 Layout.fillWidth: true
+                wrapMode: Text.WordWrap
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: 6
                 text: Translation.tr("Schedule night light")
                 color: Appearance.colors.colOnSecondaryContainer
             }
             StyledComboBox {
-                Layout.preferredWidth: 180
+                Layout.preferredWidth: 180 * Appearance.font.textGrowth
                 Layout.fillWidth: false
                 model: [
                     Translation.tr("Disabled"),

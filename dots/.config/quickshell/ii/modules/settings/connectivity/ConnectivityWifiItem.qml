@@ -211,7 +211,7 @@ Rectangle {
                             }
                             StyledText {
                                 text: root.securityType
-                                font.pixelSize: 11
+                                font.pixelSize: Appearance.font.scaled(11)
                                 font.weight: Font.Medium
                                 color: root.isActive ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer2
                             }
@@ -246,7 +246,7 @@ Rectangle {
                             }
                             StyledText {
                                 text: Translation.tr("Open")
-                                font.pixelSize: 11
+                                font.pixelSize: Appearance.font.scaled(11)
                                 font.weight: Font.Medium
                                 color: Appearance.colors.colTertiary
                             }
@@ -272,7 +272,7 @@ Rectangle {
                             id: freqText
                             anchors.centerIn: freqBadge
                             text: root.frequencyBand
-                            font.pixelSize: 11
+                            font.pixelSize: Appearance.font.scaled(11)
                             color: root.isActive ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
                         }
                     }

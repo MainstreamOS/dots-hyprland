@@ -13,7 +13,7 @@ RippleButton {
     onClicked: root.chosen(modelData.emoji)
     contentItem: StyledText {
         text: root.modelData.emoji
-        font.pixelSize: 24
+        font.pixelSize: Appearance.font.scaled(24)
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

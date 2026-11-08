@@ -740,7 +740,7 @@ ContentPage {
                         visible: !shareRow.missing
                         textRole: "displayName"
                         Layout.fillWidth: false
-                        Layout.preferredWidth: 220
+                        Layout.preferredWidth: 220 * Appearance.font.textGrowth
                         enabled: !FileSharing.busy
                         model: [
                             { displayName: Translation.tr("View only"), icon: "visibility", value: "view" },

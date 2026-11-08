@@ -18,7 +18,7 @@ ContentPage {
     // wider eight left when Auto picks Neutral, and the choices on the right
     // sit against the right edge, so every row ends on the same line. A
     // narrower window shrinks it rather than cutting it off.
-    baseWidth: Math.max(600, Math.min(page.width - 40, 695))
+    baseWidth: Math.max(600 * Appearance.font.roomGrowth, Math.min(page.width - 40, 695 * Appearance.font.roomGrowth))
     // Everything here fits the window at its usual size, so the longer pages'
     // extra room at the bottom would only let it scroll into empty space.
     bottomContentPadding: 20

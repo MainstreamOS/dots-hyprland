@@ -11,6 +11,7 @@ RippleButton {
     id: root
 
     property real uiScale: QsWindow.window?.uiScale ?? 1
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     property string buttonText
     padding: 14 * root.uiScale
     implicitHeight: 36 * root.uiScale
@@ -31,7 +32,7 @@ RippleButton {
         anchors.rightMargin: root.padding
         text: buttonText
         horizontalAlignment: Text.AlignHCenter
-        font.pixelSize: (Appearance?.font.pixelSize.small ?? 12) * root.uiScale
+        font.pixelSize: (root.fontSizes?.small ?? 12) * root.uiScale
         color: root.enabled ? root.colEnabled : root.colDisabled
 
         Behavior on color {

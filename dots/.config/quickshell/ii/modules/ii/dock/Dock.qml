@@ -32,6 +32,8 @@ Scope { // Scope
             // over a launcher. Moving the reservation between layers makes
             // pinned sidebars get arranged before it and grow behind the UI.
             PanelWindow {
+                // The dock keeps its own size, apart from UI text size (Appearance.font.sizesFor).
+                property real uiScale: 1
                 screen: perScreen.modelData
                 visible: root.pinned && !GlobalStates.screenLocked
                 color: "transparent"
@@ -65,6 +67,7 @@ Scope { // Scope
                     Qt.callLater(() => { if (dockWindowLoader) dockWindowLoader.active = true; });
                 }
                 sourceComponent: PanelWindow {
+                    property real uiScale: 1
                     id: dockRoot
                     // Window
                     screen: perScreen.modelData
@@ -887,7 +890,7 @@ Scope { // Scope
                                         // size it is given is a font cache key of
                                         // its own, so a fraction here mints a face
                                         // the rounding was meant to prevent.
-                                        iconSize: Math.round(Appearance.font.pixelSize.larger
+                                        iconSize: Math.round(Appearance.font.basePixelSize.larger
                                             * dockRoot.fittedIconSize / Appearance.sizes.dockIconStock)
                                         color: root.pinned ? dockRoot.content.m3onPrimary : dockRoot.content.colOnLayer0
                                     }

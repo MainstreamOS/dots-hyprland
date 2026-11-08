@@ -707,7 +707,7 @@ ContentPage {
 
                         RippleButton {
                             implicitWidth: Math.max(72, actionLabel.implicitWidth + 24)
-                            implicitHeight: 32
+                            implicitHeight: Math.max(32, actionLabel.implicitHeight + 12)
                             buttonRadius: Appearance.rounding.full
                             enabled: root.cleaningId.length === 0 && !cleanRow.confirming
                             colBackground: Appearance.colors.colSecondaryContainer

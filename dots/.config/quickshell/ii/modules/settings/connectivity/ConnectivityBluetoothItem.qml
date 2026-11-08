@@ -127,7 +127,7 @@ Rectangle {
                             }
                             StyledText {
                                 text: root.isConnected ? Translation.tr("Connected") : Translation.tr("Paired")
-                                font.pixelSize: 10
+                                font.pixelSize: Appearance.font.pixelSize.smallest
                                 font.weight: Font.Medium
                                 color: root.isConnected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
                             }
@@ -149,7 +149,7 @@ Rectangle {
                         
                         StyledText {
                             text: `${Math.round(root.batteryLevel * 100)}%`
-                            font.pixelSize: 10
+                            font.pixelSize: Appearance.font.pixelSize.smallest
                             color: root.isConnected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
                         }
                     }

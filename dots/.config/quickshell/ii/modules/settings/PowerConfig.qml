@@ -286,6 +286,7 @@ ContentPage {
                         font.pixelSize: Appearance.font.pixelSize.normal
                         color: screenBlankEnabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
                         Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                     StyledComboBox {
                         enabled: screenBlankEnabled
@@ -330,6 +331,7 @@ ContentPage {
                         font.pixelSize: Appearance.font.pixelSize.normal
                         color: autoSuspendEnabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
                         Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                     StyledComboBox {
                         enabled: autoSuspendEnabled

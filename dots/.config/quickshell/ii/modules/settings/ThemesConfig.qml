@@ -13,7 +13,7 @@ import qs.modules.common.functions
 ContentPage {
     id: root
     forceWidth: true
-    baseWidth: 720
+    baseWidth: 720 * Appearance.font.roomGrowth
 
     // ── Paths ────────────────────────────────────────────────────────────────
     readonly property string homePath: FileUtils.trimFileProtocol(Directories.home)
@@ -2056,7 +2056,7 @@ finally:
                 color: Appearance.colors.colOnLayer1
             }
             StyledComboBox {
-                Layout.preferredWidth: 200
+                Layout.preferredWidth: 200 * Appearance.font.textGrowth
                 // "Follow Night Light" keys on Hyprsunset.shouldBeOn, which is a
                 // clock-in-window test over light.night.from and .to and never
                 // consults light.night.mode, so the schedule keeps time whether

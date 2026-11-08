@@ -1340,7 +1340,10 @@ Singleton {
                 "wght": 550, // Weight (Lowered to compensate for increased grade)
             })
         }
-        property QtObject pixelSize: QtObject {
+        // UI text size scales the shell's text. The bar, Island and their popups keep their
+        // own Size instead, so their code reads basePixelSize and scales it by that.
+        readonly property real uiTextScale: Math.max(0.8, Math.min(1.3, Config.options?.appearance?.uiTextScale ?? 1))
+        property QtObject basePixelSize: QtObject {
             property int smallest: 10
             property int smaller: 12
             property int smallie: 13
@@ -1351,6 +1354,36 @@ Singleton {
             property int huge: 22
             property int hugeass: 23
             property int title: huge
+        }
+        property QtObject pixelSize: QtObject {
+            readonly property int smallest: Math.round(root.font.basePixelSize.smallest * root.font.uiTextScale)
+            readonly property int smaller: Math.round(root.font.basePixelSize.smaller * root.font.uiTextScale)
+            readonly property int smallie: Math.round(root.font.basePixelSize.smallie * root.font.uiTextScale)
+            readonly property int small: Math.round(root.font.basePixelSize.small * root.font.uiTextScale)
+            readonly property int normal: Math.round(root.font.basePixelSize.normal * root.font.uiTextScale)
+            readonly property int large: Math.round(root.font.basePixelSize.large * root.font.uiTextScale)
+            readonly property int larger: Math.round(root.font.basePixelSize.larger * root.font.uiTextScale)
+            readonly property int huge: Math.round(root.font.basePixelSize.huge * root.font.uiTextScale)
+            readonly property int hugeass: Math.round(root.font.basePixelSize.hugeass * root.font.uiTextScale)
+            readonly property int title: huge
+        }
+        // How much body text actually grew once rounded to whole pixels; widths that
+        // hold text, like a label column or a drop-down, grow by this.
+        readonly property real textGrowth: pixelSize.small / basePixelSize.small
+        // A layout built around text, like the Settings window, grows only for the labels in it;
+        // its controls and padding keep their size, so it needs about half as much.
+        readonly property real roomGrowth: 1 + (textGrowth - 1) / 2
+        // The bar, Island and their popups declare uiScale and keep their own Size, so
+        // shared code reads its sizes for the window it is in through these two.
+        function sizesFor(window): QtObject {
+            return window?.uiScale !== undefined ? root.font.basePixelSize : root.font.pixelSize;
+        }
+        // A size with no shared name, grown with UI text size like the shared ones.
+        function scaled(px: real): int {
+            return Math.round(px * root.font.uiTextScale);
+        }
+        function textScaleFor(window): real {
+            return window?.uiScale !== undefined ? 1 : root.font.uiTextScale;
         }
     }
 
@@ -1804,7 +1837,8 @@ Singleton {
         property real mediaControlsWidth: 440
         property real mediaControlsHeight: 160
         property real wavySliderHeight: 24
-        property real notificationPopupWidth: 410
+        // The sidebars and notification popups are built around text, so they get room as it grows.
+        property real notificationPopupWidth: Math.round(410 * root.font.roomGrowth)
         // Where notification popups sit, read by the popup and by the picker in
         // Settings so the spot shown picked is always the one in use. A
         // hand-edited value neither knows lands on the stock corner.
@@ -1813,8 +1847,8 @@ Singleton {
         property real osdWidth: 180
         property real searchWidthCollapsed: 210
         property real searchWidth: 360
-        property real sidebarWidth: 460
-        property real sidebarWidthExtended: 750
+        property real sidebarWidth: Math.round(460 * root.font.roomGrowth)
+        property real sidebarWidthExtended: Math.round(750 * root.font.roomGrowth)
         property real baseVerticalBarWidth: Math.round(46 * barScale)
         property real verticalBarWidth: Config.options.bar.cornerStyle === 1 ? 
             (baseVerticalBarWidth + root.sizes.hyprlandGapsOut * 2) : baseVerticalBarWidth

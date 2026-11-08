@@ -57,7 +57,7 @@ MouseArea {
             Layout.alignment: Qt.AlignVCenter
             fill: 0
             text: reading.iconName
-            iconSize: Appearance.font.pixelSize.normal * root.uiScale
+            iconSize: Appearance.font.basePixelSize.normal * root.uiScale
             color: Appearance.barContent.colOnLayer1
         }
 
@@ -81,7 +81,7 @@ MouseArea {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 color: Appearance.barContent.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small * root.uiScale
+                font.pixelSize: Appearance.font.basePixelSize.small * root.uiScale
                 // Tabular figures: every digit is one width, so no reading
                 // outgrows the slot measured on eights.
                 font.features: ({ "tnum": 1 })

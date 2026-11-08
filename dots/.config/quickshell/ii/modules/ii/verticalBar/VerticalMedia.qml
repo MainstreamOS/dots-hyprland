@@ -74,7 +74,7 @@ MouseArea {
                 anchors.centerIn: parent
                 fill: 1
                 text: activePlayer?.isPlaying ? "pause" : "music_note"
-                iconSize: Appearance.font.pixelSize.normal * root.uiScale
+                iconSize: Appearance.font.basePixelSize.normal * root.uiScale
                 color: Appearance.barContent.m3onSecondaryContainer
             }
         }

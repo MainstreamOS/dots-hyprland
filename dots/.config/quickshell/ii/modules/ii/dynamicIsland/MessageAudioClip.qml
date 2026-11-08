@@ -103,7 +103,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: !root.loading
                     text: root.playing ? "pause" : "play_arrow"
-                    iconSize: Appearance.font.pixelSize.larger * Appearance.sizes.islandScale
+                    iconSize: Appearance.font.basePixelSize.larger * Appearance.sizes.islandScale
                     fill: 1
                     color: root.contentColor
                     horizontalAlignment: Text.AlignHCenter
@@ -155,7 +155,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     visible: !root.saveBusy
                     text: root.saveResult === "done" ? "check" : root.saveResult === "failed" ? "error" : "download"
-                    iconSize: Appearance.font.pixelSize.normal * Appearance.sizes.islandScale
+                    iconSize: Appearance.font.basePixelSize.normal * Appearance.sizes.islandScale
                     color: root.saveResult === "failed" ? Appearance.islandContent.colErrorMark : root.contentColor
                 }
                 MaterialLoadingIndicator {

@@ -60,6 +60,8 @@ Item {
         id: menuLoader
         active: false
         sourceComponent: PopupWindow {
+            // The dock keeps its own size, apart from UI text size (Appearance.font.sizesFor).
+            property real uiScale: 1
             id: contextPopup
             visible: true
 
@@ -339,7 +341,7 @@ Item {
                                         contentItem: StyledText {
                                             anchors.centerIn: parent
                                             text: String(wsButton.workspaceValue)
-                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            font.pixelSize: Appearance.font.basePixelSize.small
                                             font.variableAxes: wsButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
                                             horizontalAlignment: Text.AlignHCenter
                                             color: wsButton.isCurrent ? Appearance.colors.colOnSecondaryContainer : Appearance.m3colors.m3onSurface
@@ -365,7 +367,7 @@ Item {
                                 Layout.leftMargin: 10
                                 Layout.bottomMargin: 2
                                 text: Translation.tr("Named workspaces")
-                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                font.pixelSize: Appearance.font.basePixelSize.smaller
                                 color: Appearance.m3colors.m3outline
                             }
 
@@ -421,7 +423,7 @@ Item {
                                                 id: namedNumber
                                                 anchors.centerIn: parent
                                                 text: String(namedButton.modelData.id)
-                                                font.pixelSize: Appearance.font.pixelSize.small
+                                                font.pixelSize: Appearance.font.basePixelSize.small
                                                 font.variableAxes: namedButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
                                                 color: namedButton.isCurrent ? Appearance.colors.colOnSecondaryContainer
                                                     : Appearance.m3colors.m3onSurface
@@ -431,7 +433,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: namedButton.modelData.name
                                             horizontalAlignment: Text.AlignLeft
-                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            font.pixelSize: Appearance.font.basePixelSize.small
                                             font.variableAxes: namedButton.isCurrent ? Appearance.font.variableAxes.title : Appearance.font.variableAxes.main
                                             color: Appearance.m3colors.m3onSurface
                                             elide: Text.ElideRight
@@ -546,7 +548,7 @@ Item {
                     anchors.right: parent.right
                     text: volRow.streamTitle
                     horizontalAlignment: Text.AlignLeft
-                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    font.pixelSize: Appearance.font.basePixelSize.smaller
                     color: Appearance.m3colors.m3onSurface
                     elide: Text.ElideRight
                 }
@@ -572,7 +574,7 @@ Item {
                         ? "volume_off"
                         : (volRow.aggregateVolume < 0.01 ? "volume_mute"
                             : (volRow.aggregateVolume < 0.5 ? "volume_down" : "volume_up"))
-                    iconSize: Appearance.font.pixelSize.normal
+                    iconSize: Appearance.font.basePixelSize.normal
                     color: volRow.allMuted ? Appearance.m3colors.m3outline : Appearance.m3colors.m3onSurface
                 }
                 StyledToolTip {
@@ -597,7 +599,7 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.preferredWidth: 34
                 horizontalAlignment: Text.AlignRight
-                font.pixelSize: Appearance.font.pixelSize.smaller
+                font.pixelSize: Appearance.font.basePixelSize.smaller
                 color: Appearance.m3colors.m3onSurface
                 text: `${Math.round(volRow.aggregateVolume * 100)}%`
             }

@@ -98,7 +98,7 @@ ContextMenuItem {
         id: submenuChevron
         MaterialSymbol {
             text: "chevron_right"
-            iconSize: Appearance.font.pixelSize.normal * root.uiScale
+            iconSize: Appearance.font.basePixelSize.normal * root.uiScale
             color: Appearance.m3colors.m3onSurface
         }
     }

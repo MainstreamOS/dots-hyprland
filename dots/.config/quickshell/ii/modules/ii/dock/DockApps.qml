@@ -346,6 +346,8 @@ Item {
         id: previewLoader
         active: false
         sourceComponent: PopupWindow {
+            // The dock keeps its own size, apart from UI text size (Appearance.font.sizesFor).
+            property real uiScale: 1
             id: previewPopup
             visible: true
 
@@ -419,7 +421,7 @@ Item {
                                         StyledText {
                                             Layout.margins: 5
                                             Layout.fillWidth: true
-                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            font.pixelSize: Appearance.font.basePixelSize.small
                                             text: windowButton.modelData?.title
                                             elide: Text.ElideRight
                                             color: Appearance.m3colors.m3onSurface
@@ -434,7 +436,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 horizontalAlignment: Text.AlignHCenter
                                                 text: "close"
-                                                iconSize: Appearance.font.pixelSize.normal
+                                                iconSize: Appearance.font.basePixelSize.normal
                                                 color: Appearance.m3colors.m3onSurface
                                             }
                                             onClicked: {
@@ -479,6 +481,7 @@ Item {
         id: folderPopupLoader
         active: false
         sourceComponent: PopupWindow {
+            property real uiScale: 1
             id: folderPopup
             visible: true
 
@@ -555,7 +558,7 @@ Item {
 
                         MaterialSymbol {
                             text: "folder"
-                            iconSize: Appearance.font.pixelSize.larger
+                            iconSize: Appearance.font.basePixelSize.larger
                             color: Appearance.colors.colPrimary
                         }
 
@@ -564,7 +567,7 @@ Item {
                             Layout.fillWidth: true
                             visible: !folderColumn.renaming
                             text: root.folderPopupData ? root.folderPopupData.name : ""
-                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.pixelSize: Appearance.font.basePixelSize.normal
                             font.weight: Font.Medium
                             color: Appearance.m3colors.m3onSurface
                             elide: Text.ElideRight
@@ -578,7 +581,7 @@ Item {
                             padding: 4
                             font {
                                 family: Appearance.font.family.main
-                                pixelSize: Appearance.font.pixelSize.normal
+                                pixelSize: Appearance.font.basePixelSize.normal
                                 weight: Font.Medium
                             }
                             color: Appearance.m3colors.m3onSurface
@@ -632,7 +635,7 @@ Item {
                             contentItem: MaterialSymbol {
                                 anchors.centerIn: parent
                                 text: "check"
-                                iconSize: Appearance.font.pixelSize.small
+                                iconSize: Appearance.font.basePixelSize.small
                                 color: Appearance.m3colors.m3onSurface
                             }
                         }
@@ -700,7 +703,7 @@ Item {
                                         Layout.fillWidth: true
                                         Layout.alignment: Qt.AlignHCenter
                                         text: folderAppBtn.modelData.entry.name
-                                        font.pixelSize: Appearance.font.pixelSize.smaller
+                                        font.pixelSize: Appearance.font.basePixelSize.smaller
                                         color: Appearance.m3colors.m3onSurface
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
