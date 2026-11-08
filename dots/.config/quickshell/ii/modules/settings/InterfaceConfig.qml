@@ -303,7 +303,7 @@ ContentPage {
             }
             Item { Layout.fillWidth: true }
             RippleButtonWithIcon {
-                materialIcon: "restart_alt"
+                materialIcon: "settings_backup_restore"
                 mainText: Translation.tr("Reset")
                 enabled: GreeterAppearance.available && GreeterAppearance.clockSize !== 100
                 onClicked: GreeterAppearance.setClockSize(100)
