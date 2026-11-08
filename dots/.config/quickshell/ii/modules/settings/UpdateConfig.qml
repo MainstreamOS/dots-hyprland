@@ -16,6 +16,18 @@ ContentPage {
     property bool isRunning: false
     property bool userStopped: false
 
+    // Opening this page counts as having seen the waiting release, as it does from the Island.
+    // Settings runs in its own process and only the shell keeps that record, so it is asked to.
+    function markReleaseSeen() {
+        if (ReleaseUpdates.latest)
+            Quickshell.execDetached(["qs", "-c", "ii", "ipc", "call", "updates", "acknowledgeRelease"]);
+    }
+    Component.onCompleted: root.markReleaseSeen()
+    Connections {
+        target: ReleaseUpdates
+        function onLatestChanged() { root.markReleaseSeen(); }
+    }
+
     // The update runs in its own session and writes here; this page only views it.
     // A result stays on disk until it has been seen and the window closed.
     readonly property string stateDir: Directories.updateStateDir

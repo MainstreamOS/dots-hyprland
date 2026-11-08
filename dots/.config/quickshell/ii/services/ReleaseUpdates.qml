@@ -57,6 +57,21 @@ Singleton {
     }
     readonly property bool wantTray: root.notifyMode === "both" || root.notifyMode === "tray"
     readonly property bool wantNotification: root.notifyMode === "both" || root.notifyMode === "notification"
+    readonly property bool showIndicator: root.updateAvailable && root.wantTray
+    // The Island's title says so until the Update page has been opened for this
+    // release, so a newer one raises it again.
+    readonly property bool islandBanner: root.latest !== null && root.wantTray
+        && notifyState.acknowledged !== String(root.latest.version)
+
+    // Red and yellow stay fixed so urgency never fades into a washed-out theme pink (the red matches
+    // Discord's tray badge); blue and white are the ordinary text colors and follow the theme.
+    function dotColor(tones) {
+        return ({
+            "red": "#ed4646",
+            "yellow": "#fdd835",
+            "blue": tones.m3primary
+        })[root.severity] ?? tones.colOnLayer1;
+    }
 
     // Said in the notification and again in the hover popup; one wording, so
     // translators see it once.
@@ -204,8 +219,19 @@ Singleton {
     }
 
     function openUpdatesPage() {
+        root.acknowledge();
         // One window, so a second update cannot start beside the first.
         Session.openSettings("UpdateConfig.qml");
+    }
+
+    // The page lists what the release brings, so having opened it once is
+    // having seen it. Only the main shell writes the state file.
+    function acknowledge() {
+        if (!root._announceEnabled || !root.latest) return;
+        const version = String(root.latest.version);
+        if (notifyState.acknowledged === version) return;
+        notifyState.acknowledged = version;
+        notifyStateFile.writeAdapter();
     }
 
     function openChangelog() {
@@ -297,6 +323,7 @@ Singleton {
         JsonAdapter {
             id: notifyState
             property string lastNotified: ""
+            property string acknowledged: ""
         }
     }
 

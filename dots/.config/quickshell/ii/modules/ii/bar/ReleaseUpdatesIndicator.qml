@@ -15,18 +15,6 @@ MouseArea {
     // Handed the strip's tones when this sits bare on it rather than in a group.
     property Appearance.SurfaceContent tones: Appearance.barContent
 
-    // Red and yellow are fixed rather than themed: on a cool palette the theme's
-    // own error colour lands as a washed-out pink, and "install this promptly"
-    // is not something the wallpaper should get a say in. The red matches the
-    // badge Discord puts on its own tray icon, so the two read as one kind of
-    // alert. Blue and white are the ordinary text colours and do follow it.
-    readonly property var dotColors: ({
-        "red": "#ed4646",
-        "yellow": "#fdd835",
-        "blue": root.tones.m3primary,
-        "white": root.tones.colOnLayer1
-    })
-
     // CustomIcon is a plain Item and carries no implicit size of its own. The
     // extra width on the right is the gutter the dot sits in — the M is solid
     // to all four corners, so a badge laid over it would be unreadable.
@@ -61,7 +49,7 @@ MouseArea {
         colorize: true
         color: root.tones.colOnLayer1
 
-        Rectangle {
+        UpdateDot {
             anchors {
                 left: parent.right
                 leftMargin: 1 * root.uiScale
@@ -70,10 +58,8 @@ MouseArea {
                 // as a badge on the icon instead of part of the artwork.
                 topMargin: -3 * root.uiScale
             }
-            implicitWidth: 6 * root.uiScale
-            implicitHeight: 6 * root.uiScale
-            radius: height / 2
-            color: root.dotColors[ReleaseUpdates.severity] ?? root.tones.colOnLayer1
+            size: 6 * root.uiScale
+            tones: root.tones
         }
     }
 

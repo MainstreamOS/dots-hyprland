@@ -172,11 +172,11 @@ Scope {
             readonly property color surfaceOutline: window.notch
                 ? ColorUtils.applyAlpha(Appearance.colors.colBarBackgroundBorder, 1)
                 : Appearance.colors.colBarBackgroundBorder
-            // Shared widgets read this: the panels' size while open, the Island's own while closed.
-            property real uiScale: expanded ? Appearance.sizes.islandScale : Appearance.sizes.barScale
+            // Shared widgets read this, at the panels' size; the closed clock sets its own.
+            property real uiScale: Appearance.sizes.islandScale
             readonly property real edgeGap: floating ? Appearance.sizes.hyprlandGapsOut : 0
             readonly property real cornerRadius: Appearance.sizes.islandShape === "rect" ? 0 : Appearance.rounding.barFloat
-            readonly property real compactWidth: clock.implicitWidth + 32 * Appearance.sizes.barScale
+            readonly property real compactWidth: compactRow.implicitWidth + 32 * Appearance.sizes.barScale
             readonly property real baseExpandedWidth: Appearance.sizes.mediaControlsWidth + 32
             readonly property real expandedWidth: Math.round(baseExpandedWidth * Appearance.sizes.islandScale)
             readonly property real contentPadding: 16 * Appearance.sizes.islandScale
@@ -387,12 +387,28 @@ Scope {
                         }
                     }
 
-                    ClockWidget {
-                        id: clock
-                        contentColor: Appearance.barStripContent.colOnLayer1
+                    Row {
+                        id: compactRow
                         anchors.centerIn: parent
                         visible: !window.expanded
-                        interactive: false
+                        spacing: 3 * Appearance.sizes.barScale
+
+                        ClockWidget {
+                            uiScale: Appearance.sizes.barScale
+                            contentColor: Appearance.barStripContent.colOnLayer1
+                            interactive: false
+                        }
+                        // Stays until the release is installed. Hovering opens the Island, which says what it is.
+                        // Raised to the time's cap height, like the bar icon's badge, so it never reads as the date's separator.
+                        Rectangle {
+                            visible: ReleaseUpdates.updateAvailable && ReleaseUpdates.wantTray
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: -Appearance.font.pixelSize.large * 0.35 * Appearance.sizes.barScale
+                            width: 6 * Appearance.sizes.barScale
+                            height: width
+                            radius: width / 2
+                            color: ReleaseUpdates.dotColor(Appearance.barStripContent)
+                        }
                     }
                     Item {
                         id: expandedContentContainer
@@ -441,11 +457,26 @@ Scope {
                                     radius: 12 * Appearance.sizes.islandScale
                                     color: Appearance.surfaces.raised
 
+                                    // A waiting release holds the title until it is clicked, so hovering
+                                    // leaves it in place; scrolling still flashes the workspaces.
+                                    readonly property bool updateBanner: ReleaseUpdates.islandBanner
                                     readonly property bool isHovered: navHover.hovered || workspacesWidget.containsMouse
-                                    readonly property bool showWorkspaces: isHovered || workspaceHoldTimer.running
+                                    readonly property bool showWorkspaces: (isHovered && !updateBanner) || workspaceHoldTimer.running
 
                                     function holdWorkspaces(): void {
                                         workspaceHoldTimer.restart();
+                                    }
+
+                                    function dismissIsland(): void {
+                                        workspaceHoldTimer.stop();
+                                        closeTimer.stop();
+                                        window.opened = false;
+                                        IslandState.alertOpen = false;
+                                    }
+
+                                    function openUpdates(): void {
+                                        navigator.dismissIsland();
+                                        ReleaseUpdates.openUpdatesPage();
                                     }
 
                                     Timer {
@@ -454,7 +485,7 @@ Scope {
                                     }
 
                                     onIsHoveredChanged: {
-                                        if (!isHovered)
+                                        if (!isHovered && !updateBanner)
                                             navigator.holdWorkspaces();
                                     }
 
@@ -506,13 +537,20 @@ Scope {
                                                 Behavior on opacity { NumberAnimation { duration: 150 } }
 
                                                 MaterialSymbol {
+                                                    visible: !navigator.updateBanner
                                                     text: IslandPanels.entry(window.displayedPanel)?.icon ?? "tune"
                                                     iconSize: 14 * Appearance.sizes.islandScale
                                                     color: Appearance.islandContent.colPrimary
                                                 }
 
+                                                UpdateDot {
+                                                    visible: navigator.updateBanner
+                                                    size: 8 * Appearance.sizes.islandScale
+                                                    tones: Appearance.islandContent
+                                                }
+
                                                 StyledText {
-                                                    text: IslandPanels.entry(window.displayedPanel)?.name ?? ""
+                                                    text: navigator.updateBanner ? Translation.tr("Update available") : (IslandPanels.entry(window.displayedPanel)?.name ?? "")
                                                     color: Appearance.islandContent.colOnLayer0
                                                     font.pixelSize: 12 * Appearance.sizes.islandScale
                                                     font.weight: Font.DemiBold
@@ -536,16 +574,20 @@ Scope {
                                                 }
                                             }
 
-                                            HoverHandler { id: navHover }
+                                            HoverHandler {
+                                                id: navHover
+                                                cursorShape: navigator.updateBanner ? Qt.PointingHandCursor : undefined
+                                            }
                                             TapHandler {
                                                 acceptedButtons: Qt.RightButton
                                                 onTapped: {
                                                     Hyprland.dispatch('hl.dsp.workspace.toggle_special()');
-                                                    workspaceHoldTimer.stop();
-                                                    closeTimer.stop();
-                                                    window.opened = false;
-                                                    IslandState.alertOpen = false;
+                                                    navigator.dismissIsland();
                                                 }
+                                            }
+                                            TapHandler {
+                                                enabled: navigator.updateBanner && !navigator.showWorkspaces
+                                                onTapped: navigator.openUpdates()
                                             }
                                             WheelHandler {
                                                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -563,6 +605,27 @@ Scope {
                                                     // Use the same workspace order as the Super + wheel binding.
                                                     const workspace = delta < 0 ? "+1" : "-1";
                                                     Hyprland.dispatch(`hl.dsp.focus({workspace = "${workspace}"})`);
+                                                }
+                                            }
+                                        }
+
+                                        // Once the banner has been opened, the way back to the Update page until the release is installed.
+                                        RippleButton {
+                                            visible: ReleaseUpdates.showIndicator && !navigator.updateBanner
+                                            Layout.preferredWidth: 28 * Appearance.sizes.islandScale
+                                            Layout.preferredHeight: 28 * Appearance.sizes.islandScale
+                                            topPadding: 0
+                                            bottomPadding: 0
+                                            buttonRadius: 8 * Appearance.sizes.islandScale
+                                            colBackground: "transparent"
+                                            colBackgroundHover: Appearance.surfaces.row
+                                            Accessible.name: ReleaseUpdates.availableLine(ReleaseUpdates.latest?.version ?? "")
+                                            onClicked: navigator.openUpdates()
+                                            contentItem: Item {
+                                                UpdateDot {
+                                                    anchors.centerIn: parent
+                                                    size: 8 * Appearance.sizes.islandScale
+                                                    tones: Appearance.islandContent
                                                 }
                                             }
                                         }

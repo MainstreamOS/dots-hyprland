@@ -73,7 +73,7 @@ Item { // Bar content region
             && (TrayService.pinnedItems.length > 0 || TrayService.unpinnedItems.length > 0);
         // Nothing to say while you're up to date, and the slot would otherwise
         // hold space for an icon that isn't drawn.
-        case "releaseUpdates": return ReleaseUpdates.updateAvailable && ReleaseUpdates.wantTray;
+        case "releaseUpdates": return ReleaseUpdates.showIndicator;
         default: return true;
         }
     }

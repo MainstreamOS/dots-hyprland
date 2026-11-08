@@ -157,6 +157,11 @@ ShellRoot {
         function held(): bool {
             return !Quickshell.watchFiles
         }
+
+        // Settings' Update page runs in its own process and asks here to mark the release seen.
+        function acknowledgeRelease(): void {
+            ReleaseUpdates.acknowledge()
+        }
     }
 }
 
