@@ -51,9 +51,11 @@ GroupButton {
                 implicitWidth: root.buttonText?.length > 0 ? textItem.implicitWidth : 0
                 implicitHeight: textMetrics.height // Force height to that of regular text
 
+                // Sized like the shell's own text, never the system font that App font size scales.
                 TextMetrics {
                     id: textMetrics
                     font.family: Appearance.font.family.main
+                    font.pixelSize: textItem.fontSizes.normal * textItem.uiScale
                     text: "Abc"
                 }
 

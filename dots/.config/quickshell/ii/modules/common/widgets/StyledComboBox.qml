@@ -11,13 +11,14 @@ import Quickshell.Widgets
 
 ComboBox {
     id: root
+    readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
 
     property string buttonIcon: ""
     property string buttonAppIcon: ""
     property string appIconRole: "appIcon"
     readonly property var currentEntry: currentIndex >= 0 && typeof model?.[currentIndex] === 'object' ? model[currentIndex] : null
     readonly property string currentAppIcon: buttonAppIcon || (currentEntry?.[appIconRole] ?? "")
-    readonly property real appIconSize: Appearance.font.pixelSize.larger + 4
+    readonly property real appIconSize: root.fontSizes.larger + 4
     property real buttonRadius: height / 2
     property color colBackground: Appearance.colors.colSecondaryContainer
     property color colBackgroundHover: Appearance.colors.colSecondaryContainerHover
@@ -106,7 +107,7 @@ ComboBox {
         x: root.width - width - 16
         y: root.height / 2 - height / 2
         text: "keyboard_arrow_down"
-        iconSize: Appearance.font.pixelSize.larger
+        iconSize: root.fontSizes.larger
         color: Appearance.colors.colOnSecondaryContainer
 
         rotation: root.popup.visible ? 180 : 0
@@ -116,7 +117,7 @@ ComboBox {
     }
 
     contentItem: Item {
-        implicitWidth: buttonLayout.implicitWidth
+        implicitWidth: buttonLayout.implicitWidth + root.contentInset + 8
         implicitHeight: buttonLayout.implicitHeight
 
         RowLayout {
@@ -142,7 +143,7 @@ ComboBox {
                 visible: active
                 sourceComponent: MaterialSymbol {
                     text: root.currentEntry?.icon || root.buttonIcon
-                    iconSize: Appearance.font.pixelSize.larger
+                    iconSize: root.fontSizes.larger
                     color: Appearance.colors.colOnSecondaryContainer
                 }
             }
@@ -219,19 +220,19 @@ ComboBox {
 
             Loader {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredHeight: Appearance.font.pixelSize.larger
+                Layout.preferredHeight: root.fontSizes.larger
                 active: !itemDelegate.appIcon && typeof itemDelegate.model === 'object' && itemDelegate.model?.icon?.length > 0
                 visible: active
 
                 sourceComponent: Item {
                     implicitWidth: icon.implicitWidth
-                    implicitHeight: Appearance.font.pixelSize.larger
+                    implicitHeight: root.fontSizes.larger
 
                     MaterialSymbol {
                         id: icon
                         anchors.centerIn: parent
                         text: itemDelegate.model?.icon ?? ""
-                        iconSize: Appearance.font.pixelSize.larger
+                        iconSize: root.fontSizes.larger
                         color: itemDelegate.colText
                     }
                 }

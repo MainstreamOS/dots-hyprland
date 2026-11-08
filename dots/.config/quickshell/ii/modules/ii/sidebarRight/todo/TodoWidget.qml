@@ -204,6 +204,12 @@ Item {
                     Layout.leftMargin: 16
                     Layout.rightMargin: 16
                     padding: 10
+                    // Unset, it would take the system font, which App font size scales.
+                    font {
+                        family: Appearance.font.family.main
+                        pixelSize: Appearance.font.pixelSize.small
+                        variableAxes: Appearance.font.variableAxes.main
+                    }
                     color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
                     renderType: Text.NativeRendering
                     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
@@ -238,6 +244,8 @@ Item {
                     CheckBox {
                         id: addDateEnabled
                         checked: false
+                        // Its empty label still takes the height of the system font.
+                        font.pixelSize: Appearance.font.pixelSize.small
 
                         indicator: Rectangle {
                             implicitWidth: 20
@@ -380,6 +388,12 @@ Item {
                     Layout.leftMargin: 16
                     Layout.rightMargin: 16
                     padding: 10
+                    // Unset, it would take the system font, which App font size scales.
+                    font {
+                        family: Appearance.font.family.main
+                        pixelSize: Appearance.font.pixelSize.small
+                        variableAxes: Appearance.font.variableAxes.main
+                    }
                     color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
                     renderType: Text.NativeRendering
                     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
@@ -414,6 +428,8 @@ Item {
                     CheckBox {
                         id: editDateEnabled
                         checked: false
+                        // Its empty label still takes the height of the system font.
+                        font.pixelSize: Appearance.font.pixelSize.small
 
                         indicator: Rectangle {
                             implicitWidth: 20
