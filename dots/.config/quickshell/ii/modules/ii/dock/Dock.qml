@@ -240,11 +240,14 @@ Scope { // Scope
                     return Appearance.sizes.barEdge === edge && !Config.options.bar.autoHide.enable ? Appearance.sizes.verticalBarWidth : 0;
                 return dockRoot.monitorData?.reserved?.[index] ?? 0;
             }
+            // The Island takes only the middle of its edge, so a Hug strip down a side beside it
+            // runs the whole height instead of stopping at the Island's band.
+            readonly property bool spansIslandSide: dockRoot.dockSpans && dockRoot.dockVertical && Appearance.sizes.barIsIsland
             margins {
                 left: dockRoot.dockVertical ? 0 : dockRoot.axisClearance("left", 0)
                 right: dockRoot.dockVertical ? 0 : dockRoot.axisClearance("right", 2)
-                top: dockRoot.dockVertical ? dockRoot.axisClearance("top", 1) : 0
-                bottom: dockRoot.dockVertical ? dockRoot.axisClearance("bottom", 3) : 0
+                top: dockRoot.dockVertical && !dockRoot.spansIslandSide ? dockRoot.axisClearance("top", 1) : 0
+                bottom: dockRoot.dockVertical && !dockRoot.spansIslandSide ? dockRoot.axisClearance("bottom", 3) : 0
             }
 
             // How much of this screen the row may run along. The surface is
@@ -256,7 +259,9 @@ Scope { // Scope
             readonly property var monitorData: HyprlandData.monitors.find(m => m.name === dockRoot.screen?.name)
             readonly property real axisBudget: {
                 const reserved = dockRoot.monitorData?.reserved ?? [0, 0, 0, 0];
-                const along = dockRoot.dockVertical ? ((reserved[1] ?? 0) + (reserved[3] ?? 0)) : ((reserved[0] ?? 0) + (reserved[2] ?? 0));
+                // A Hug strip beside the Island runs the whole height, past what the Island reserves.
+                const along = dockRoot.spansIslandSide ? 0
+                    : dockRoot.dockVertical ? ((reserved[1] ?? 0) + (reserved[3] ?? 0)) : ((reserved[0] ?? 0) + (reserved[2] ?? 0));
                 const extent = dockRoot.dockVertical ? (dockRoot.screen?.height ?? 0) : (dockRoot.screen?.width ?? 0);
                 return extent - along - Appearance.sizes.hyprlandGapsOut * 2;
             }

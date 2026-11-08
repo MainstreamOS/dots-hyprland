@@ -1574,14 +1574,14 @@ Singleton {
             // negation, so an unrecognised value would anchor the dock to all
             // four edges at once instead of falling back to one.
             const want = ["top", "bottom", "left", "right"].includes(pos) ? pos : "bottom";
-            if (root.sizes.dockSpans)
+            if (root.sizes.dockSpans && !root.sizes.barIsIsland)
                 return root.sizes.barShown ? root.sizes.oppositeEdge(root.sizes.barEdge) : want;
             return want === root.sizes.barEdge ? root.sizes.oppositeEdge(want) : want;
         }
-        // Whether the dock may be set on an edge in the style it has now. The Hug dock
-        // never runs down a side, even with the bar away.
+        // Whether the dock may be set on an edge in the style it has now. Beside the traditional
+        // bar the Hug dock faces it and never runs down a side; the Island leaves it any edge.
         function dockEdgeAllowed(edge) {
-            if (!root.sizes.dockSpans)
+            if (!root.sizes.dockSpans || root.sizes.barIsIsland)
                 return true;
             if (edge === "left" || edge === "right")
                 return false;
@@ -1635,7 +1635,7 @@ Singleton {
             const onScreen = root.sizes.dockEdge;
             const previous = Config.options.dock.cornerStyle;
             Config.options.dock.cornerStyle = style;
-            if (style === "span")
+            if (style === "span" && !root.sizes.barIsIsland)
                 Config.options.dock.position = root.sizes.barShown || onScreen === "left" || onScreen === "right"
                     ? root.sizes.oppositeEdge(root.sizes.barEdge) : onScreen;
             else if (previous === "span")
