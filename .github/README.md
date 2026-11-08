@@ -126,9 +126,9 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 | Component | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **Processor (CPU)** | 64-bit x86-64 dual-core (Intel Core 2 Duo / Core i3+, AMD Athlon 64 X2 / Ryzen 3+) | 64-bit quad-core or faster (Intel 8th Gen Core i5+, AMD Ryzen 5+) |
-| **Memory (RAM)** | **4 GB RAM** (live installer & baseline desktop) | **8 GB RAM** (smooth multi-tab browsing & multitasking) |
+| **Memory (RAM)** | **4 GB RAM** (live installer & everyday use)<br>The desktop alone runs in about 1.5 GB | **8 GB RAM** (smooth multi-tab browsing & multitasking) |
 | **Storage** | **25 GB** available space (SSD or HDD) | **64 GB+** NVMe or SATA SSD |
-| **Graphics (GPU)** | Wayland and OpenGL 3.3 / GLES 3.0 capable:<br>• **Intel**: HD Graphics 4000 or newer (2012+)<br>• **AMD**: Radeon HD 7000 / RX series (GCN 1.0+ with `amdgpu`)<br>• **NVIDIA**: GeForce GTX 900+ (Maxwell) with 535+ driver or modern open kernel modules | • **AMD / Intel**: Radeon RX 500+ / RX 5000+ or Intel Iris Xe / Arc<br>• **NVIDIA**: GeForce GTX 1660 / RTX 2060 or newer |
+| **Graphics (GPU)** | Wayland and OpenGL 3.3 / GLES 3.0 capable:<br>• **Intel**: HD Graphics 4000 or newer (2012+)<br>• **AMD**: Radeon HD 7000 / RX series (GCN 1.0+ with `amdgpu`)<br>• **NVIDIA**: GeForce GTX 900+ (Maxwell) with 535+ driver or modern open kernel modules<br>• **Older NVIDIA** (GTX 400 to 700): the experimental legacy NVIDIA edition | • **AMD / Intel**: Radeon RX 500+ / RX 5000+ or Intel Iris Xe / Arc<br>• **NVIDIA**: GeForce GTX 1660 / RTX 2060 or newer |
 | **Display** | 1280×720 (720p) minimum | 1920×1080 (1080p) or higher (scaling supported) |
 | **Boot & Firmware** | UEFI (64-bit) or Legacy BIOS (Secure Boot disabled) | UEFI (64-bit) |
 | **Network** | Internet connection required for package downloads & mirrors | Broadband internet connection |
@@ -140,13 +140,13 @@ See the [install guides](https://mainstreamos.org/#install-iso) for details.
 
 Mainstream separates **rolling system packages**, **numbered desktop releases**, and **installation media**:
 
-- **System packages (rolling)** — Arch Linux (`core`, `extra`, `multilib`) and the signed [`[mainstream]`](https://github.com/MainstreamOS/packages) repository update continuously. You never need to reinstall when a new release comes out.
-- **Mainstream desktop & tooling (`MAJOR.MINOR.PATCH`)** — The shell, Settings app, and system helpers ship as numbered releases through **Settings → Update** (and the [Changelog](https://mainstreamos.org/#changelog)):
-  - **`MAJOR` (`4.0.0`)** — Major shell redesigns, architectural milestones, or config migrations (applied automatically during update).
-  - **`MINOR` (`4.1.0`)** — New features, settings pages, or visual modes that stay compatible with your existing setup.
-  - **`PATCH` (`4.0.1`)** — Bug fixes, security fixes, and polish.
-- **Install images (ISOs)** — Live ISOs built from [`MainstreamOS/archiso`](https://github.com/MainstreamOS/archiso) are point-in-time snapshots carrying the current kernel, hardware drivers, graphical installer, and newest numbered release so fresh installs work out of the box.
-- **Edge channel (`--edge`)** — An optional switch in **Settings → Update** (or `install.sh --edge`) that tracks the `mainstream` development branch ahead of numbered releases, protected by the same pre-update Btrfs snapshots.
+- **System packages (rolling)**: Arch Linux (`core`, `extra`, `multilib`) and the signed [`[mainstream]`](https://github.com/MainstreamOS/packages) repository update continuously. You never need to reinstall when a new release comes out.
+- **Mainstream desktop & tooling (`MAJOR.MINOR.PATCH`)**: The shell, Settings app, and system helpers ship as numbered releases through **Settings → Update** (and the [Changelog](https://mainstreamos.org/#changelog)):
+  - **`MAJOR` (`4.0.0`)**: Major shell redesigns, architectural milestones, or config migrations (applied automatically during update).
+  - **`MINOR` (`4.1.0`)**: New features, settings pages, or visual modes that stay compatible with your existing setup.
+  - **`PATCH` (`4.0.1`)**: Bug fixes, security fixes, and polish.
+- **Install images (ISOs)**: Live ISOs built from [`MainstreamOS/archiso`](https://github.com/MainstreamOS/archiso) are point-in-time snapshots carrying the current kernel, hardware drivers, graphical installer, and newest numbered release so fresh installs work out of the box.
+- **Edge channel (`--edge`)**: An optional switch in **Settings → Update** (or `install.sh --edge`) that tracks the `mainstream` development branch ahead of numbered releases, protected by the same pre-update Btrfs snapshots.
 
 ## Support
 

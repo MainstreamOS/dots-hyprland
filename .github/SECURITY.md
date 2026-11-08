@@ -8,7 +8,7 @@ Mainstream OS is a rolling-release operating system built on Arch Linux, paired 
 | :--- | :--- | :--- |
 | Mainstream OS System & `[mainstream]` Repo | Rolling | Supported |
 | Mainstream Desktop & Shell (`dots-hyprland`) | `4.x` | Supported |
-| Mainstream Desktop & Shell (`dots-hyprland`) | `< 4.0` | Unsupported — update via **Settings → Update** |
+| Mainstream Desktop & Shell (`dots-hyprland`) | `< 4.0` | Unsupported: update via **Settings → Update** |
 | Installation Media (`archiso`) | Latest published ISO | Point-in-time install media (installs update to current rolling state) |
 
 ## Scope: First-Party vs. Upstream Packages
