@@ -3053,9 +3053,6 @@
   "Hourly forecast unavailable": "Hourly forecast unavailable",
   "Dynamic Island": "Dynamic Island",
   "Panel size": "Panel size",
-  "How large the Island opens. The clock stays the same size.": "How large the Island opens. The clock stays the same size.",
-  "The bar's height, icons and text.": "The bar's height, icons and text.",
-  "The Island's height and clock while it is closed.": "The Island's height and clock while it is closed.",
   "Hover over the clock to expand. Use the arrows beside the panel title to change panels; scrolling there switches workspaces.": "Hover over the clock to expand. Use the arrows beside the panel title to change panels; scrolling there switches workspaces.",
   "Show calls, messages, and phone notifications automatically": "Show calls, messages, and phone notifications automatically",
   "Connect phone services": "Connect phone services",
@@ -3451,5 +3448,7 @@
   "Feature release": "Feature release",
   "Patch release": "Patch release",
   "Support Mainstream": "Support Mainstream",
-  "Clear all notifications": "Clear all notifications"
+  "Clear all notifications": "Clear all notifications",
+  "The Island while it's closed": "The Island while it's closed",
+  "The Island while it's open": "The Island while it's open"
 }
