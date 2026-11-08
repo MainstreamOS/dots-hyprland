@@ -107,21 +107,29 @@ Scope { // Scope
             // The strip's outline overlaps its fill, which only shows through
             // a see-through surface, and there the two are painted opaque and
             // faded together the way the notch's pieces are.
+            // Over the launcher or Alt+Tab a Glass dock takes the launcher's own surface rather
+            // than letting the dim show through it, on the screen the dim is on, as its colors do.
+            readonly property bool glassOverLauncher: BackdropPresets.dockIsGlass
+                && (GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "") || overWindowOverview)
+            property color surfaceColor: glassOverLauncher ? Appearance.drawerSurface : Appearance.colors.colDockBackground
+            Behavior on surfaceColor {
+                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+            }
             readonly property bool spanSeamFix: dockSpans && dockRoot.showBackground
-                && Appearance.colors.colDockBackground.a < 1
+                && dockRoot.surfaceColor.a < 1
             // Only the notch draws pieces beside the body, so only it needs the
             // group flattened before the surface is faded, and only it needs the
             // room outside the body that those pieces occupy.
             // The lap the fix hides only shows through a see-through surface,
             // so a fully opaque one skips the flattening pass and its texture.
             readonly property bool notchSeamFix: dockFlares && dockRoot.showBackground
-                && Appearance.colors.colDockBackground.a < 1
+                && dockRoot.surfaceColor.a < 1
             readonly property real flareBleed: notchSeamFix ? Appearance.rounding.dock : 0
             // The notch and the Hug strip never show together; either way their
             // pieces are painted opaque and faded as one.
             readonly property bool seamFix: notchSeamFix || spanSeamFix
-            readonly property color surfaceFill: seamFix ? Appearance.colors.colDockBackgroundOpaque
-                : Appearance.colors.colDockBackground
+            readonly property color surfaceFill: seamFix ? ColorUtils.applyAlpha(dockRoot.surfaceColor, 1)
+                : dockRoot.surfaceColor
             readonly property color surfaceOutline: seamFix ? content.colBorderOpaque : content.colBorder
             // How far each curve laps over the body. One covers the hairline a
             // fractional scale can leave between them; the body's outline is a
@@ -596,7 +604,7 @@ Scope { // Scope
                             anchors.bottomMargin: dockRoot.dockVertical ? -dockRoot.flareBleed : 0
                             anchors.leftMargin: dockRoot.dockVertical ? 0 : -dockRoot.flareBleed
                             anchors.rightMargin: dockRoot.dockVertical ? 0 : -dockRoot.flareBleed
-                            opacity: dockRoot.notchSeamFix ? Appearance.colors.colDockBackground.a : 1
+                            opacity: dockRoot.notchSeamFix ? dockRoot.surfaceColor.a : 1
                             layer.enabled: dockRoot.notchSeamFix
                             layer.smooth: true
 
@@ -726,7 +734,7 @@ Scope { // Scope
                                     return edge === "top" ? v : edge === "bottom" ? height - v : u;
                                 }
                                 preferredRendererType: Shape.CurveRenderer
-                                opacity: dockRoot.spanSeamFix ? Appearance.colors.colDockBackground.a : 1
+                                opacity: dockRoot.spanSeamFix ? dockRoot.surfaceColor.a : 1
                                 layer.enabled: dockRoot.spanSeamFix
                                 layer.smooth: true
 

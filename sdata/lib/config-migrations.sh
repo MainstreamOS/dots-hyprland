@@ -174,6 +174,8 @@ _cfgmig_window_rounding() {
 # on keeps a preset an earlier build had picked, or else the plain blur it showed.
 # The Hug dock no longer runs down a side, so a bar on one with it moves to the top
 # or bottom (left goes up, right goes down) and the dock faces it there.
+# Glass dropped its lens. A Bar or Dock still on the old Glass values moves to the new
+# ones, or it would no longer read as Glass anywhere.
 _CFGMIG_JQ='
 def dated: (.appearance | type) == "object" and (.appearance | has("roundCornersRestore"));
 def magnify_stock: (.dock == null or (.dock | type) == "object")
@@ -191,6 +193,10 @@ def old_widget_blur: (.background | type) == "object" and (.background.widgets |
   and (.background.widgets.blur | type) == "object" and (.background.widgets.blur | has("enable"));
 def hug_on_side: (.dock | type) == "object" and .dock.cornerStyle == "span"
   and (.bar | type) == "object" and .bar.vertical == true;
+def old_glass: type == "object" and .enable == true and .blur == 4
+  and ((.magnification // 1) | type == "number" and . > 1.25 and . < 1.26)
+  and .offsetX == 200 and .offsetY == 7;
+def raw_glass: .magnification = 1 | .offsetX = 0 | .offsetY = 0;
 # Anything but an object is not a file the shell wrote, and is left as it is.
 if type != "object" then {m: [], d: .} else
 (if dated then [] else
@@ -200,7 +206,8 @@ if type != "object" then {m: [], d: .} else
       and any(.ai.extraModels[]; deepseek) then ["deepseek"] else [] end) as $icon
 | ((if old_launcher then ["dock-launcher"] else [] end)
   + (if old_widget_blur then ["widget-blur"] else [] end)
-  + (if hug_on_side then ["hug-side"] else [] end)) as $desktop
+  + (if hug_on_side then ["hug-side"] else [] end)
+  + (if (.bar.backdrop | old_glass) or (.dock.backdrop | old_glass) then ["raw-glass"] else [] end)) as $desktop
 | ($old + $icon + $desktop) as $steps
 | def has_step($s): $steps | any(. == $s);
   {m: $steps, d: (.
@@ -228,6 +235,10 @@ if type != "object" then {m: [], d: .} else
       else . end
     | if has_step("hug-side") then
         .bar.vertical = false | .dock.position = (if .bar.bottom == true then "top" else "bottom" end)
+      else . end
+    | if has_step("raw-glass") then
+        (if (.bar.backdrop | old_glass) then .bar.backdrop |= raw_glass else . end)
+        | (if (.dock.backdrop | old_glass) then .dock.backdrop |= raw_glass else . end)
       else . end
     | if has_step("deepseek") then
         .ai.extraModels |= map(if deepseek then .icon = "deepseek-symbolic" else . end)
@@ -293,6 +304,7 @@ _cfgmig_config_json() {
       corners) _cfgmig_note "Squared the screen corners, since Rounded Corners is off" ;;
       dock-launcher) _cfgmig_note "Kept your Dock launcher look, which now follows the icon size" ;;
       hug-side) _cfgmig_note "Moved the bar to the top or bottom, since the Hug Dock runs along those edges only" ;;
+      raw-glass) _cfgmig_note "Moved your Glass Bar and Dock to the new Glass, without the lens" ;;
     esac
   done
   return 0

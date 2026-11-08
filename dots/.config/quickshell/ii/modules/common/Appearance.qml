@@ -356,7 +356,7 @@ Singleton {
     // it lies on the dim where the dim frosts the dock's own edge. The
     // launcher keeps its panels clear of the dock's band, so nothing of it
     // lies under the dock.
-    readonly property color dockOverLauncherBackdrop: laidOverDim(colors.colDockBackground, dockOwnShadow,
+    readonly property color dockOverLauncherBackdrop: laidOverDim(BackdropPresets.dockIsGlass ? drawerSurface : colors.colDockBackground, dockOwnShadow,
         root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
     readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockOwnStockShadow,
         root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
