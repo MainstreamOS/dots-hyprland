@@ -238,8 +238,12 @@ Singleton {
         }
     }
     function dismissNotification(entry) {
-        if (entry.notificationId !== undefined) Notifications.discardNotification(entry.notificationId);
-        else dismissedPhoneNotifications = [...dismissedPhoneNotifications, entry.id].slice(-100);
+        root.dismissNotifications([entry]);
+    }
+    function dismissNotifications(entries) {
+        Notifications.discardNotifications(entries.filter(e => e.notificationId !== undefined).map(e => e.notificationId));
+        const phone = entries.filter(e => e.notificationId === undefined).map(e => e.id);
+        if (phone.length > 0) dismissedPhoneNotifications = [...dismissedPhoneNotifications, ...phone].slice(-100);
     }
     function dismissNotificationsForApp(appName) {
         if (!appName) return;

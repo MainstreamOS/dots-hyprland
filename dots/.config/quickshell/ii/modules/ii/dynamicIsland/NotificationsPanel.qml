@@ -138,6 +138,30 @@ ColumnLayout {
                     verticalAlignment: Text.AlignVCenter
                 }
             }
+
+            RippleButton {
+                visible: !!root.entry
+                Layout.preferredWidth: 30 * Appearance.sizes.islandScale
+                Layout.preferredHeight: 30 * Appearance.sizes.islandScale
+                topPadding: 0
+                bottomPadding: 0
+                buttonRadius: 9 * Appearance.sizes.islandScale
+                colBackground: Appearance.surfaces.row
+                colBackgroundHover: Appearance.colors.colLayer2Hover
+                Accessible.name: Translation.tr("Clear all notifications")
+                onClicked: IslandState.dismissNotifications(root.entries)
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "clear_all"
+                    iconSize: 16 * Appearance.sizes.islandScale
+                    color: Appearance.islandContent.colOnLayer1
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                StyledToolTip {
+                    text: Translation.tr("Clear all notifications")
+                }
+            }
         }
     }
 
