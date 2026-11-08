@@ -198,7 +198,7 @@ Singleton {
             "-i", "mainstream-update",
             "-u", root.severity === "red" ? "critical" : "normal",
             "-A", `open=${Translation.tr("Open updates")}`,
-            "-A", `changelog=${Translation.tr("What's new")}`,
+            "-A", `changelog=${Translation.tr("Full changelog")}`,
             root.availableLine(version), body];
         notifier.running = true;
     }

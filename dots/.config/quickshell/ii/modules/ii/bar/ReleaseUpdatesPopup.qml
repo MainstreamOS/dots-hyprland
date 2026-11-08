@@ -41,7 +41,7 @@ StyledPopup {
             Layout.fillWidth: true
             Layout.minimumWidth: 210 * root.uiScale
             materialIcon: "history"
-            mainText: Translation.tr("What's new")
+            mainText: Translation.tr("Full changelog")
             onClicked: {
                 root.open = false;
                 ReleaseUpdates.openChangelog();

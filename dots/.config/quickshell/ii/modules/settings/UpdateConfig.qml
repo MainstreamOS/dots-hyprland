@@ -619,9 +619,123 @@ ContentPage {
         }
     }
 
+    readonly property bool supportAskFits: !root.isRunning && root.outputText.length === 0
+        && !ReleaseUpdates.pending.some(release => release.kind === "security")
+
+    function releaseKind(kind) {
+        switch (String(kind)) {
+        case "security": return Translation.tr("Security release");
+        case "feature": return Translation.tr("Feature release");
+        case "patch": return Translation.tr("Patch release");
+        default: return "";
+        }
+    }
+
+    // What the waiting releases bring, in the tips' place and no taller, so the terminal stays put.
+    // They are release notes, not tips, so turning the tips off leaves them; the advanced options take that place instead.
+    ContentSection {
+        id: whatsNewSection
+        visible: ReleaseUpdates.updateAvailable && !Config.options.updates.showAdvanced
+        icon: "new_releases"
+        title: Translation.tr("What's new")
+
+        headerExtra: [
+            RippleButtonWithIcon {
+                visible: root.supportAskFits
+                materialIcon: "favorite"
+                mainText: Translation.tr("Support Mainstream")
+                onClicked: Qt.openUrlExternally("https://github.com/sponsors/MainstreamOS")
+            },
+            RippleButtonWithIcon {
+                materialIcon: "open_in_new"
+                mainText: Translation.tr("Full changelog")
+                onClicked: ReleaseUpdates.openChangelog()
+            }
+        ]
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: Math.min(releaseNotes.implicitHeight + 20, root.cachedTipsHeight - 48)
+            radius: Appearance.rounding.small
+            color: Appearance.colors.colLayer0
+            clip: true
+
+            Flickable {
+                id: releaseNotesFlickable
+                anchors {
+                    fill: parent
+                    margins: 10
+                }
+                contentHeight: releaseNotes.implicitHeight
+                clip: true
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+
+                ColumnLayout {
+                    id: releaseNotes
+                    width: releaseNotesFlickable.width
+                    spacing: 12
+
+                    Repeater {
+                        model: ReleaseUpdates.pending
+
+                        ColumnLayout {
+                            id: release
+                            required property var modelData
+                            readonly property var day: new Date(`${release.modelData.date}T00:00:00`)
+                            Layout.fillWidth: true
+                            spacing: 4
+
+                            RowLayout {
+                                spacing: 8
+                                StyledText {
+                                    text: String(release.modelData.version)
+                                    font.weight: Font.DemiBold
+                                    color: Appearance.colors.colOnLayer0
+                                }
+                                StyledText {
+                                    text: [root.releaseKind(release.modelData.kind),
+                                        isNaN(release.day) ? "" : release.day.toLocaleDateString(Qt.locale(), Locale.ShortFormat)]
+                                        .filter(part => part.length > 0).join(" · ")
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    color: Appearance.colors.colSubtext
+                                }
+                            }
+                            StyledText {
+                                visible: text.length > 0
+                                Layout.fillWidth: true
+                                text: String(release.modelData.summary ?? "")
+                                textFormat: Text.PlainText
+                                wrapMode: Text.Wrap
+                                color: Appearance.colors.colOnLayer0
+                            }
+                            Repeater {
+                                model: release.modelData.changes ?? []
+                                StyledText {
+                                    required property string modelData
+                                    Layout.fillWidth: true
+                                    text: `• ${modelData}`
+                                    textFormat: Text.PlainText
+                                    wrapMode: Text.Wrap
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    color: Appearance.colors.colSubtext
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Always drawn while more is below, since the box can end cleanly mid-list.
+                ScrollBar.vertical: ScrollBar {
+                    policy: releaseNotesFlickable.contentHeight > releaseNotesFlickable.height ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                }
+            }
+        }
+    }
+
     ContentSection {
         id: tipsSection
-        visible: !Config.options.updates.disableTips && !Config.options.updates.showAdvanced
+        visible: !Config.options.updates.disableTips && !Config.options.updates.showAdvanced && !whatsNewSection.visible
         icon: "lightbulb"
         title: Translation.tr("Tips & Info")
         onImplicitHeightChanged: {
@@ -762,12 +876,12 @@ ContentPage {
         Rectangle {
             id: outputBox
             Layout.fillWidth: true
-            // Give the output the space previously occupied by the tips and gap,
-            // unless the advanced options are expanded and taking that space.
-            // Deduct any visible notice bubbles above so the password row never gets pushed off-screen.
-            implicitHeight: Math.max(80, 200 + ((Config.options.updates.disableTips && !Config.options.updates.showAdvanced)
-                ? Math.max(tipsSection.implicitHeight, root.cachedTipsHeight) + root.sectionSpacing : 0)
-                - root.extraNoticesHeight)
+            // The tips' space (or what the release notes leave of it) unless the advanced options use it,
+            // minus the notices above, so the password row never leaves the screen.
+            implicitHeight: Math.max(80, 200 - root.extraNoticesHeight + (Config.options.updates.showAdvanced ? 0
+                : whatsNewSection.visible ? Math.max(0, root.cachedTipsHeight - whatsNewSection.implicitHeight)
+                : Config.options.updates.disableTips ? Math.max(tipsSection.implicitHeight, root.cachedTipsHeight) + root.sectionSpacing
+                : 0))
             radius: Appearance.rounding.small
             color: Appearance.colors.colLayer0
             clip: true

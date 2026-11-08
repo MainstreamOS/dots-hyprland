@@ -3445,5 +3445,10 @@
   "Expanding EFI partition...": "Expanding EFI partition...",
   "Expand to %1 GB": "Expand to %1 GB",
   "Unavailable": "Unavailable",
-  "AppImages": "AppImages"
+  "AppImages": "AppImages",
+  "Full changelog": "Full changelog",
+  "Security release": "Security release",
+  "Feature release": "Feature release",
+  "Patch release": "Patch release",
+  "Support Mainstream": "Support Mainstream"
 }
