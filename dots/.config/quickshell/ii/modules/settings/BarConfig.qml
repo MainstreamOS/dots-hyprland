@@ -311,7 +311,7 @@ ContentPage {
                             icon: "arrow_forward",
                             value: 3 // bottom: true, vertical: true
                         }
-                    ].filter(option => (option.value & 2) === 0 || (!root.island && Appearance.sizes.barSidesAllowed))
+                    ].map(option => Object.assign({ enabled: (option.value & 2) === 0 || (!root.island && Appearance.sizes.barSidesAllowed) }, option))
                 }
             }
             ContentSubsection {

@@ -504,7 +504,7 @@ ContentPage {
                             icon: "arrow_forward",
                             value: 3 // bottom: true, vertical: true
                         }
-                    ].filter(option => (option.value & 2) === 0 || (!Appearance.sizes.barIsIsland && Appearance.sizes.barSidesAllowed))
+                    ].map(option => Object.assign({ enabled: (option.value & 2) === 0 || (!Appearance.sizes.barIsIsland && Appearance.sizes.barSidesAllowed) }, option))
                 }
             }
 
@@ -555,9 +555,9 @@ ContentPage {
                         { displayName: Translation.tr("Left"), icon: "arrow_back", value: "left" },
                         { displayName: Translation.tr("Bottom"), icon: "arrow_downward", value: "bottom" },
                         { displayName: Translation.tr("Right"), icon: "arrow_forward", value: "right" }
-                    ].filter(option => option.value === "off"
+                    ].map(option => Object.assign({ enabled: option.value === "off"
                         || (Appearance.sizes.dockEdgeAllowed(option.value)
-                            && !(Appearance.sizes.barShown && option.value === Appearance.sizes.barEdge)))
+                            && !(Appearance.sizes.barShown && option.value === Appearance.sizes.barEdge)) }, option))
                 }
             }
 

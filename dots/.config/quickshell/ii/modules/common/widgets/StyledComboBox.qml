@@ -29,6 +29,58 @@ ComboBox {
     rightPadding: indicator.width + root.contentInset
     Layout.fillWidth: true
 
+    function choiceEnabled(index) {
+        const entry = root.model?.[index];
+        return typeof entry !== 'object' || (entry?.enabled ?? true);
+    }
+
+    // The arrow keys, Home, End and typing a letter pass over dimmed choices, as clicks do.
+    Keys.onPressed: event => {
+        if (root.moveChoice(event.key) || root.typeToChoice(event))
+            event.accepted = true;
+    }
+    function moveChoice(key): bool {
+        const dir = (key === Qt.Key_Up || key === Qt.Key_Home) ? -1 : (key === Qt.Key_Down || key === Qt.Key_End) ? 1 : 0;
+        if (!dir) return false;
+        const from = root.popup.visible ? root.highlightedIndex : root.currentIndex;
+        const jump = key === Qt.Key_Home || key === Qt.Key_End;
+        let target = jump ? (dir > 0 ? root.count - 1 : 0) : from + dir;
+        while (target >= 0 && target < root.count && !root.choiceEnabled(target))
+            target += jump ? -dir : dir;
+        if (target >= 0 && target < root.count)
+            root.selectChoice(target);
+        return true;
+    }
+    // In place of the built-in search, which lands on dimmed choices too: the next choice on
+    // offer that starts with the letter, round from the one after the current.
+    function typeToChoice(event): bool {
+        if (root.editable || event.text.length !== 1 || event.text.trim() === ""
+                || (event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)))
+            return false;
+        const letter = event.text.toLowerCase();
+        const from = root.popup.visible ? root.highlightedIndex : root.currentIndex;
+        for (let step = 1; step <= root.count; step++) {
+            const i = (from + step + root.count) % root.count;
+            if (root.choiceEnabled(i) && root.textAt(i).toLowerCase().startsWith(letter)) {
+                root.selectChoice(i);
+                break;
+            }
+        }
+        return true;
+    }
+    function selectChoice(target) {
+        const from = root.popup.visible ? root.highlightedIndex : root.currentIndex;
+        if (target === from) return;
+        if (root.popup.visible) {
+            // Moving the highlight one step at a time is all the popup offers.
+            for (let i = from; i !== target; i += target > from ? 1 : -1)
+                target > from ? root.incrementCurrentIndex() : root.decrementCurrentIndex();
+        } else {
+            root.currentIndex = target;
+            root.activated(target);
+        }
+    }
+
     function iconSource(icon) {
         if (!icon) return "";
         return (icon.startsWith("/") || icon.startsWith("file://")) ? icon : Quickshell.iconPath(icon, "multimedia-audio-player");
@@ -118,6 +170,9 @@ ComboBox {
 
         required property var model
         required property int index
+        // A choice can be shown without being on offer: dimmed, and not picked by a click.
+        enabled: (typeof model === 'object' ? model?.enabled : undefined) ?? true
+        opacity: enabled ? 1 : 0.5
         readonly property string appIcon: typeof model === 'object' ? (model?.[root.appIconRole] ?? "") : ""
         property color color: {
             if (root.currentIndex === itemDelegate.index) {

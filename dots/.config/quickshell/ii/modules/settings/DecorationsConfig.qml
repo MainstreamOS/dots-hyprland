@@ -205,7 +205,7 @@ ContentPage {
         { displayName: Translation.tr("Acrylic"), value: 8 },
         { displayName: Translation.tr("Aurora"), value: 9 },
         { displayName: Translation.tr("Haze"), value: 10 },
-    ].filter(style => root.supportedBlurVariants.includes(style.value))
+    ].map(style => Object.assign({ enabled: root.supportedBlurVariants.includes(style.value) }, style))
 
     readonly property var shippedBlurPresets: BackdropPresets.windowShipped
     readonly property var blurPresets: root.shippedBlurPresets.concat(Array.from(Config.options.appearance.windowBlurPresets))
@@ -1148,7 +1148,7 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
         ConfigRow {
             Layout.leftMargin: 8
             Layout.rightMargin: 8
-            visible: root.blurStyles.length > 0
+            visible: root.supportedBlurVariants.length > 0
             enabled: root.blurEnabled
             opacity: root.blurEnabled ? 1 : 0.5
 
@@ -1171,7 +1171,8 @@ print(json.dumps({"gtk":sorted(gtk),"icons":sorted(icons),"cursors":sorted(curso
                 currentIndex: root.blurStyles.findIndex(style => style.value === root.blurVariantValue)
                 onActivated: index => {
                     const chosen = root.blurStyles[index].value;
-                    if (chosen === root.blurVariantValue) return;
+                    // A style this Hyprland lacks is never sent, however it was reached.
+                    if (chosen === root.blurVariantValue || !root.supportedBlurVariants.includes(chosen)) return;
                     root.blurVariantValue = chosen;
                     root.setDecoration([`blurVariant=${chosen}`]);
                 }

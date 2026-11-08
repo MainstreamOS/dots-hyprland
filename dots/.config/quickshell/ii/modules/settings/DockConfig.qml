@@ -42,7 +42,7 @@ ContentPage {
                     { displayName: Translation.tr("Bottom"), icon: "keyboard_arrow_down", value: "bottom" },
                     { displayName: Translation.tr("Left"), icon: "keyboard_arrow_left", value: "left" },
                     { displayName: Translation.tr("Right"), icon: "keyboard_arrow_right", value: "right" }
-                ].filter(item => item.value === "disabled" || Appearance.sizes.dockEdgeAllowed(item.value))
+                ].map(item => Object.assign({ enabled: item.value === "disabled" || Appearance.sizes.dockEdgeAllowed(item.value) }, item))
                 currentIndex: {
                     // Name the edge the dock actually occupies, not the saved
                     // one: the resolver already flips an edge the bar holds and
