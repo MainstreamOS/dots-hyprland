@@ -56,6 +56,13 @@ Item {
     // ---- art ----
 
     readonly property string artUrl: root.player?.trackArtUrl ?? ""
+    readonly property string directArtUrl: {
+        if (root.artUrl.startsWith("/"))
+            return FileUtils.fileUrl(root.artUrl);
+        if (root.artUrl.startsWith("file:/") || root.artUrl.startsWith("data:image/"))
+            return root.artUrl;
+        return "";
+    }
     readonly property string artFilePath: `${Directories.coverArt}/${Qt.md5(root.artUrl)}`
     // Only ever given art while the page is shown, so a hidden page neither
     // downloads nor decodes anything.
@@ -80,7 +87,7 @@ Item {
         id: staleArtTimer
         interval: 400
         onTriggered: {
-            if (root.displayedArt !== "" && root.displayedArt !== `file://${root.artFilePath}` && root.displayedArt !== root.artUrl)
+            if (root.displayedArt !== "" && root.displayedArt !== `file://${root.artFilePath}` && root.displayedArt !== root.directArtUrl)
                 root.displayedArt = "";
         }
     }
@@ -109,8 +116,8 @@ Item {
             root.displayedArt = "";
             return;
         }
-        if (root.artUrl.startsWith("file://")) {
-            root.displayedArt = root.artUrl;
+        if (root.directArtUrl !== "") {
+            root.displayedArt = root.directArtUrl;
             return;
         }
         // Art fetched before shows straight away instead of after the
@@ -731,24 +738,15 @@ Item {
                     }
                 }
 
-                UtilityButton {
+                StyledSlider {
                     Layout.fillWidth: true
-                    iconName: "remove"
-                    enabled: root.canChangeVolume && root.volume > 0
-                    downAction: () => root.setVolume(root.volume - 0.1)
-                    StyledToolTip {
-                        text: Translation.tr("Lower volume")
-                    }
-                }
-
-                UtilityButton {
-                    Layout.fillWidth: true
-                    iconName: "add"
-                    enabled: root.canChangeVolume && root.volume < 1
-                    downAction: () => root.setVolume(root.volume + 0.1)
-                    StyledToolTip {
-                        text: Translation.tr("Raise volume")
-                    }
+                    enabled: root.canChangeVolume
+                    Accessible.name: Translation.tr("Volume")
+                    highlightColor: root.blendedColors.colPrimary
+                    trackColor: root.blendedColors.colSecondaryContainer
+                    handleColor: root.blendedColors.colPrimary
+                    value: root.volume
+                    onMoved: root.setVolume(value)
                 }
 
                 UtilityButton {
