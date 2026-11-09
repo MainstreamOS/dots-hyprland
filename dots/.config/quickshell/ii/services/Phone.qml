@@ -191,7 +191,7 @@ Singleton {
         if (device === root.deviceId) for (const messages of Object.values(root.threadCache)) keepAttachments(messages);
         // Remove cache references only; outgoing attachments may be the user's
         // original files, and are never unlinked by the shell.
-        const withoutAttachments = map => Object.fromEntries(Object.entries(map ?? {})
+        const withoutAttachments = map => ObjectUtils.fromEntries(Object.entries(map ?? {})
             .filter(([uid]) => !removedAttachments.has(uid)));
         saved._deviceAttachments = Object.assign({}, saved._deviceAttachments, {
             [device]: withoutAttachments(saved._deviceAttachments?.[device])
@@ -199,12 +199,12 @@ Singleton {
         root.savedLocalSent = saved;
         saveSentTimer.restart();
         root.recentMessages = root.recentMessages.filter(message => message.deviceId !== device || keep(message));
-        root.attachmentActions = Object.fromEntries(Object.entries(root.attachmentActions).filter(([, action]) =>
+        root.attachmentActions = ObjectUtils.fromEntries(Object.entries(root.attachmentActions).filter(([, action]) =>
             action.device !== device || !removedAttachments.has(String(action.uid))));
         if (device === root.deviceId) {
             root.localSent = saved[device];
             root.conversations = root.conversations.filter(keep);
-            root.threadCache = Object.fromEntries(Object.entries(root.threadCache)
+            root.threadCache = ObjectUtils.fromEntries(Object.entries(root.threadCache)
                 .map(([thread, messages]) => [thread, messages.filter(keep)]).filter(([, messages]) => messages.length));
             root.threadMessages = root.threadMessages.filter(keep);
             root.attachmentFiles = withoutAttachments(root.attachmentFiles);

@@ -4,6 +4,14 @@ import Quickshell
 Singleton {
     id: root
 
+    // QML's JavaScript has no Object.fromEntries.
+    function fromEntries(entries) {
+        const result = {};
+        for (const [key, value] of entries)
+            result[key] = value;
+        return result;
+    }
+
     // One group of a model-driven bar layout, read as { id, enabled } entries.
     // Tolerant of the legacy string / items group forms.
     function layoutGroupWidgets(g) {
