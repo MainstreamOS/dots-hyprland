@@ -54,7 +54,7 @@ def appimage_type(path):
             head = file.read(11)
     except OSError:
         return 0
-    if head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10] in (1, 2):
+    if len(head) == 11 and head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10] in (1, 2):
         return head[10]
     return 0
 
