@@ -76,7 +76,6 @@ Item {
                 color: root.textColor
                 elide: Text.ElideRight
                 text: root.text
-                animateChange: true
             }
 
             MaterialSymbol {
