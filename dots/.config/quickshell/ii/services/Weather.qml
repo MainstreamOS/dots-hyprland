@@ -43,6 +43,7 @@ Singleton {
     // network.
     property var lastReply: null
     readonly property var hourlyForecast: WeatherForecast.upcoming(lastReply, useUSCS)
+    readonly property var dailyForecast: WeatherForecast.nextDays(lastReply, useUSCS)
     // WeatherForecast.condition() names, written out so the translation scanner sees them.
     readonly property var conditionNames: ({
         "Clear sky": Translation.tr("Clear sky"),
@@ -272,7 +273,7 @@ Singleton {
         // does nothing, so one request left hanging would swallow every one
         // behind it until the shell restarts.
         function fetch() {
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${root.latitude}&longitude=${root.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,uv_index,visibility&daily=sunrise,sunset&hourly=temperature_2m,weather_code,precipitation_probability,is_day&timezone=auto&forecast_days=2`;
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${root.latitude}&longitude=${root.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,uv_index,visibility&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,weather_code,precipitation_probability,is_day&timezone=auto&forecast_days=5`;
             command = ["curl", "-s", "--max-time", "15", url];
             running = true;
         }

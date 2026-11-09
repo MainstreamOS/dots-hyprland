@@ -117,6 +117,7 @@ ColumnLayout {
     }
 
     Rectangle {
+        id: forecastCard
         Layout.fillWidth: true
         implicitHeight: 94 * Appearance.sizes.islandScale
         topLeftRadius: 5 * Appearance.sizes.islandScale
@@ -124,55 +125,48 @@ ColumnLayout {
         bottomLeftRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         bottomRightRadius: (Appearance?.rounding?.normal ?? 17) * Appearance.sizes.islandScale
         color: Appearance.surfaces.raised
+        clip: true
+
+        // The coming hours and days take turns every eight seconds while the panel is open. A turn of
+        // the wheel picks one at once and starts the count again from there.
+        property int page: 0
+        property real offset: page * height
+        Behavior on offset {
+            animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
+        }
+
+        Timer {
+            id: dwell
+            running: true
+            repeat: true
+            interval: 8000
+            onTriggered: forecastCard.page = forecastCard.page === 0 && Weather.dailyForecast.length ? 1 : 0
+        }
+
+        ControlWheel {
+            onStepped: direction => {
+                forecastCard.page = direction < 0 ? 1 : 0;
+                dwell.restart();
+            }
+        }
 
         RowLayout {
-            anchors.fill: parent
-            anchors.margins: 10 * Appearance.sizes.islandScale
+            x: 10 * Appearance.sizes.islandScale
+            y: 10 * Appearance.sizes.islandScale - forecastCard.offset
+            width: forecastCard.width - 20 * Appearance.sizes.islandScale
+            height: forecastCard.height - 20 * Appearance.sizes.islandScale
             spacing: 4 * Appearance.sizes.islandScale
 
             Repeater {
                 model: Weather.hourlyForecast
-                Item {
-                    id: forecastHour
+                WeatherForecastColumn {
                     required property var modelData
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 1 * Appearance.sizes.islandScale
-                    Layout.fillHeight: true
-
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: 3 * Appearance.sizes.islandScale
-
-                        StyledText {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: DateTime.formatTimeOfDay(forecastHour.modelData.time)
-                            color: root.contentColors.colSubtext
-                            font.pixelSize: 11 * Appearance.sizes.islandScale
-                        }
-
-                        MaterialSymbol {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: !forecastHour.modelData.isDay && forecastHour.modelData.code <= 1
-                                ? "bedtime" : Icons.getWeatherIcon(Weather.wmoToWwo(forecastHour.modelData.code)) || "cloud"
-                            iconSize: 20 * Appearance.sizes.islandScale
-                            color: root.contentColors.colOnLayer0
-                        }
-
-                        StyledText {
-                            Layout.alignment: Qt.AlignHCenter
-                            text: forecastHour.modelData.temperature
-                            color: root.contentColors.colOnLayer0
-                            font.pixelSize: 13 * Appearance.sizes.islandScale
-                            font.weight: Font.Medium
-                        }
-
-                        RowLayout {
-                            Layout.alignment: Qt.AlignHCenter
-                            spacing: 2 * Appearance.sizes.islandScale
-                            MaterialSymbol { text: "water_drop"; iconSize: 10 * Appearance.sizes.islandScale; color: root.contentColors.colPrimary }
-                            StyledText { text: forecastHour.modelData.rain; color: root.contentColors.colSubtext; font.pixelSize: 10 * Appearance.sizes.islandScale }
-                        }
-                    }
+                    contentColors: root.contentColors
+                    label: DateTime.formatTimeOfDay(modelData.time)
+                    icon: !modelData.isDay && modelData.code <= 1
+                        ? "bedtime" : Icons.getWeatherIcon(Weather.wmoToWwo(modelData.code)) || "cloud"
+                    temperature: modelData.temperature
+                    rain: modelData.rain
                 }
             }
 
@@ -182,6 +176,38 @@ ColumnLayout {
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 text: Weather.refreshing ? Translation.tr("Loading forecast…") : Translation.tr("Hourly forecast unavailable")
+                font.pixelSize: 12 * Appearance.sizes.islandScale
+                color: root.contentColors.colOnSurfaceVariant
+            }
+        }
+
+        RowLayout {
+            x: 10 * Appearance.sizes.islandScale
+            y: 10 * Appearance.sizes.islandScale + forecastCard.height - forecastCard.offset
+            width: forecastCard.width - 20 * Appearance.sizes.islandScale
+            height: forecastCard.height - 20 * Appearance.sizes.islandScale
+            spacing: 4 * Appearance.sizes.islandScale
+
+            Repeater {
+                model: Weather.dailyForecast
+                WeatherForecastColumn {
+                    required property var modelData
+                    contentColors: root.contentColors
+                    // Midday, so no time zone can move the date onto the day before.
+                    label: new Date(modelData.date + "T12:00:00").toLocaleDateString(Qt.locale(), "ddd")
+                    icon: Icons.getWeatherIcon(Weather.wmoToWwo(modelData.code)) || "cloud"
+                    temperature: modelData.high
+                    low: modelData.low
+                    rain: modelData.rain
+                }
+            }
+
+            StyledText {
+                visible: !Weather.dailyForecast.length
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: Weather.refreshing ? Translation.tr("Loading forecast…") : Translation.tr("Daily forecast unavailable")
                 font.pixelSize: 12 * Appearance.sizes.islandScale
                 color: root.contentColors.colOnSurfaceVariant
             }

@@ -1,3 +1,11 @@
+function degrees(celsius, useUSCS) {
+    return Math.round(useUSCS ? celsius * 9 / 5 + 32 : celsius) + "°";
+}
+
+function chance(percent) {
+    return typeof percent === "number" ? Math.round(percent) + "%" : "-";
+}
+
 // Compare the provider's local ISO times, so a pinned city's timezone does
 // not get confused with the desktop's timezone when choosing upcoming hours.
 function upcoming(reply, useUSCS) {
@@ -6,16 +14,37 @@ function upcoming(reply, useUSCS) {
     if (!hourly?.time || !now) return [];
     const result = [];
     for (let i = 0; i < hourly.time.length && result.length < 4; i++) {
-        const degrees = hourly.temperature_2m?.[i];
+        const celsius = hourly.temperature_2m?.[i];
         const code = hourly.weather_code?.[i];
-        if (hourly.time[i] <= now || typeof degrees !== "number" || typeof code !== "number") continue;
-        const rain = hourly.precipitation_probability?.[i];
+        if (hourly.time[i] <= now || typeof celsius !== "number" || typeof code !== "number") continue;
         result.push({
             time: hourly.time[i].split("T")[1].slice(0, 5),
-            temperature: Math.round(useUSCS ? degrees * 9 / 5 + 32 : degrees) + "°",
+            temperature: degrees(celsius, useUSCS),
             code,
             isDay: hourly.is_day?.[i] !== 0,
-            rain: typeof rain === "number" ? Math.round(rain) + "%" : "-"
+            rain: chance(hourly.precipitation_probability?.[i])
+        });
+    }
+    return result;
+}
+
+// The four days after the provider's own today, read in its local dates for the same reason.
+function nextDays(reply, useUSCS) {
+    const daily = reply?.daily;
+    const today = reply?.current?.time?.split("T")[0];
+    if (!daily?.time || !today) return [];
+    const result = [];
+    for (let i = 0; i < daily.time.length && result.length < 4; i++) {
+        const high = daily.temperature_2m_max?.[i];
+        const low = daily.temperature_2m_min?.[i];
+        const code = daily.weather_code?.[i];
+        if (daily.time[i] <= today || typeof high !== "number" || typeof low !== "number" || typeof code !== "number") continue;
+        result.push({
+            date: daily.time[i],
+            high: degrees(high, useUSCS),
+            low: degrees(low, useUSCS),
+            code,
+            rain: chance(daily.precipitation_probability_max?.[i])
         });
     }
     return result;
