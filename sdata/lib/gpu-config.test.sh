@@ -180,6 +180,11 @@ chk_str cmdline-amdgpu-added "$( [[ "$g" == *"amdgpu.modeset=1"* ]] && echo yes 
 cmdline_upsert rd.udev.log_level=0; CASES=$((CASES + 1)); g="$(cat "$KERNEL_CMDLINE")"
 chk_str cmdline-key-once "$(count 'rd\.udev\.log_level=' "$g")" "1"
 chk_str cmdline-new-value "$( [[ "$g" == *"rd.udev.log_level=0"* ]] && echo yes || echo no )" "yes"
+
+ENC_CMDLINE='cryptdevice=PARTUUID=abcd:root:allow-discards root=/dev/mapper/root console=ttyS0,115200n8'
+printf '  cmdline: %s\n' "$ENC_CMDLINE" > "$CMDTMP/limine.conf"
+KERNEL_CMDLINE="$CMDTMP/limine-seeded" LIMINE_CONF="$CMDTMP/limine.conf" cmdline_upsert splash
+chk_str cmdline-encrypted-limine-seed "$(cat "$CMDTMP/limine-seeded")" "$ENC_CMDLINE splash"
 rm -rf "$CMDTMP"
 
 # ── modprobe / mkinitcpio MODULES + HOOKS / hypr env writers ────────────────

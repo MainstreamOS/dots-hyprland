@@ -253,10 +253,15 @@ gpu_base_cmdline_tokens() {
 # key is already set reads the same line this writer would build on.
 _gpu_cmdline_current() {
     local kc="${KERNEL_CMDLINE:-/etc/kernel/cmdline}"
+    local limine_conf="${LIMINE_CONF:-/boot/limine.conf}"
     if [[ -f "$kc" ]]; then
         cat "$kc"
-    elif [[ -f /boot/limine.conf ]]; then
-        awk -F': *' 'tolower($1) ~ /(kernel_)?cmdline$/ {print $2; exit}' /boot/limine.conf 2>/dev/null || true
+    elif [[ -f "$limine_conf" ]]; then
+        # Remove just the option prefix. Arguments like cryptdevice keep
+        # their colon-separated mapper name and options.
+        awk 'tolower($0) ~ /^[[:space:]]*(kernel_)?cmdline[[:space:]]*:/ {
+            sub(/^[^:]*:[[:space:]]*/, ""); print; exit
+        }' "$limine_conf" 2>/dev/null || true
     elif [[ -r /proc/cmdline ]]; then
         sed -E 's/\bBOOT_IMAGE=[^ ]*//g; s/\binitrd=[^ ]*//g' /proc/cmdline
     fi

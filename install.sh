@@ -15,6 +15,7 @@
 # Anything passed after a `--` is forwarded to ./setup install, e.g.:
 #   bash <(curl -fsSL ...) -- --verbose
 #   bash <(curl -fsSL ...) --edge -- --console
+# On the stock Arch USB, use -- --fresh to set up a new system.
 
 set -euo pipefail
 
@@ -48,13 +49,21 @@ ok()   { printf '%s✓%s   %s\n' "$_c_green" "$_c_rst" "$*"; }
 die()  { printf '%s✗ %s%s\n'  "$_c_red"   "$*"      "$_c_rst" >&2; exit 1; }
 
 # --- preflight --------------------------------------------------------------
-[[ $EUID -ne 0 ]] || die "Don't run as root — Mainstream installs into your user account."
+FRESH=false
+if [[ ${SETUP_ARGS[0]:-} == --fresh ]]; then
+    [[ $EUID -eq 0 ]] && mountpoint -q /run/archiso/bootmnt \
+        || die "Run --fresh from the root console on the stock Arch USB."
+    FRESH=true
+else
+    [[ $EUID -ne 0 ]] || die "Don't run as root — Mainstream installs into your user account."
+fi
 
 if ! command -v pacman >/dev/null 2>&1; then
     die "pacman not found. Mainstream OS targets Arch Linux / Arch-based distros."
 fi
 
 if ! command -v git >/dev/null 2>&1; then
+    [[ $FRESH == false ]] || die "git is missing. Boot a current Arch USB and try again."
     say "git not found, installing via pacman..."
     sudo pacman -Sy --needed --noconfirm git
 fi
@@ -110,6 +119,7 @@ say "Launching ./setup install ${SETUP_ARGS[*]:-}"
 RC=0
 ./setup install "${SETUP_ARGS[@]}" || RC=$?
 [[ $RC -eq 0 ]] || die "./setup install exited with rc=$RC"
+[[ $FRESH == false ]] || exit 0
 
 # Both the desktop's release indicator and updatems read this marker to learn
 # which release is installed. Without it they see an unversioned install: the

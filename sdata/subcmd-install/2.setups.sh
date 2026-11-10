@@ -281,8 +281,17 @@ function detect_gpu_vendors(){
 
 function install_optional_gpu_packages(){
   local pkg
-  if ! sudo pacman -S --needed --noconfirm "$@"; then
-    for pkg in "$@"; do
+  local available=()
+  for pkg in "$@"; do
+    if [[ $pkg == lib32-* ]] && ! pacman -Si "$pkg" >/dev/null 2>&1 &&
+        ! pacman-conf --repo-list | grep -Fxq multilib; then
+      continue
+    fi
+    available+=("$pkg")
+  done
+  (( ${#available[@]} > 0 )) || return 0
+  if ! sudo pacman -S --needed --noconfirm "${available[@]}"; then
+    for pkg in "${available[@]}"; do
       if ! pacman -T "$pkg" >/dev/null 2>&1; then
         MS_INSTALL_MISSING_PACKAGES+=("$pkg")
         note_failure "GPU package $pkg could not be installed; check repository versions and retry setup."

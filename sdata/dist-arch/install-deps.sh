@@ -39,6 +39,23 @@ setup-mainstream-repo(){
   retry x sudo pacman -Sy
 }
 
+enable-multilib-for-steam(){
+  local app wants_steam=false
+  case ${MS_INSTALL_PROFILE:-default} in
+    default|gaming) wants_steam=true ;;
+    custom)
+      for app in "${MS_SELECTED_APPS[@]}"; do
+        [[ $app != steam ]] || wants_steam=true
+      done ;;
+  esac
+  if [[ $wants_steam != true || ! -r /etc/pacman.d/mirrorlist ]] ||
+      pacman-conf --repo-list | grep -Fxq multilib || pacman -Si steam >/dev/null 2>&1; then
+    return 0
+  fi
+  printf '%s\n' 'Enabling the Arch multilib repository for Steam.'
+  printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' | sudo tee -a /etc/pacman.conf >/dev/null
+}
+
 remove_deprecated_dependencies(){
   printf "${STY_CYAN}[$0]: Removing deprecated dependencies:${STY_RST}\n"
   local list=()
@@ -154,7 +171,8 @@ v remove_deprecated_dependencies
 # Issue #363
 case $SKIP_SYSUPDATE in
   true) true;;
-  *) v sudo env MAINSTREAM_UPDATE_PACMAN=1 pacman -Syu --noconfirm;;
+  *) v enable-multilib-for-steam
+     v sudo env MAINSTREAM_UPDATE_PACMAN=1 pacman -Syu --noconfirm;;
 esac
 
 # Set up the [mainstream] signed pacman repo (replaces the AUR helper) so the
@@ -325,7 +343,7 @@ install-local-pkgbuild() {
     if ! pacman -T vulkan-driver >/dev/null 2>&1; then
       sudo pacman -S --needed --noconfirm vulkan-swrast || true
     fi
-    if ! pacman -T lib32-vulkan-driver >/dev/null 2>&1; then
+    if ! pacman -T lib32-vulkan-driver >/dev/null 2>&1 && pacman -Si lib32-vulkan-swrast >/dev/null 2>&1; then
       sudo pacman -S --needed --noconfirm lib32-vulkan-swrast || true
     fi
 
@@ -333,6 +351,9 @@ install-local-pkgbuild() {
     if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then
       printf "${STY_CYAN}[$0]: OS-only install — skipping default apps (mainstream-extras optdepends).${STY_RST}\n"
       optdepends=()
+    elif [[ ${MS_INSTALL_PROFILE:-} == custom ]]; then
+      printf '%s\n' 'Installing selected apps...'
+      optdepends=("${MS_SELECTED_APPS[@]}")
     else
       printf "${STY_CYAN}[$0]: Installing default apps from mainstream-extras optdepends...${STY_RST}\n"
     fi

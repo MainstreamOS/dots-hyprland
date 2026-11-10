@@ -873,9 +873,9 @@ PYEOF
   x ln -sfnT "$steam_store" "$HOME/.steam/root"
 }
 
-function apply_os_only_prune(){
-  # Mirror of the ISO's OS-only install method: the default apps are not
-  # installed, so drop the shipped .desktop overrides that would point at
+function prune_missing_app_entries(){
+  # Custom and OS-only installs can leave out default apps, so drop the
+  # shipped .desktop overrides that would point at
   # nothing and prune the dock's pinned defaults down to apps that actually
   # resolve. Presence is only checked — nothing is ever uninstalled, so apps
   # the user already has keep their entries and pins.
@@ -906,7 +906,7 @@ function apply_os_only_prune(){
       for df in "${_parts[@]:1}"; do
         if [[ -f "$desktop_dir/$df" ]]; then
           try rm -f "$desktop_dir/$df"
-          echo -e "${STY_BLUE}[$0]: OS-only: removed $df ($pkg not installed)${STY_RST}"
+          echo -e "${STY_BLUE}[$0]: Removed $df ($pkg not installed)${STY_RST}"
         fi
       done
     fi
@@ -1025,9 +1025,9 @@ if [[ -d dots/Pictures/Wallpapers ]]; then
   v rsync_dir__ignore_existing dots/Pictures/Wallpapers "$HOME/Pictures/Wallpapers"
 fi
 
-if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then
-  showfun apply_os_only_prune
-  v apply_os_only_prune
+if [[ "${OS_ONLY_INSTALL:-false}" == true || ${MS_INSTALL_PROFILE:-} == custom ]]; then
+  showfun prune_missing_app_entries
+  v prune_missing_app_entries
 fi
 
 if [[ ! "$OS_GROUP_ID" == "fedora" ]]; then

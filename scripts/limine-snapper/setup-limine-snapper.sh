@@ -131,7 +131,6 @@ print_limine_header() {
     cat <<'EOF'
 timeout: 5
 remember_last_entry: yes
-default_entry: 1/1
 hash_mismatch_panic: no
 
 # ── Mainstream OS brand palette (see brand.html) ──────────────────────────
@@ -161,6 +160,37 @@ backdrop:              191A1F
 EOF
 }
 
+limine_default_path() {
+    awk '
+        function escape_title(title, result, i, c) {
+            for (i = 1; i <= length(title); i++) {
+                c = substr(title, i, 1)
+                if (c == "\\" || c == "/" || c == "#") result = result "\\"
+                result = result c
+            }
+            return result
+        }
+        /^[[:space:]]*\// {
+            entry = $0
+            sub(/^[[:space:]]*/, "", entry)
+            match(entry, /^\/+/)
+            depth = RLENGTH
+            title[depth] = substr(entry, depth + 1)
+            sub(/^\+/, "", title[depth])
+        }
+        depth && tolower($0) ~ /^[[:space:]]*protocol[[:space:]]*:/ {
+            path = escape_title(title[1])
+            for (i = 2; i <= depth; i++) path = path "/" escape_title(title[i])
+            if (fallback == "") fallback = path
+            if (index(title[1], "Mainstream OS") == 1) { preferred = path; exit }
+        }
+        END {
+            if (preferred != "") print preferred
+            else if (fallback != "") print fallback
+        }
+    ' "$1"
+}
+
 write_limine_header() {
     # Only seed a fresh header when there is no limine.conf yet. If one already
     # exists (a re-run, or Windows/limine-update wrote one), refresh the header
@@ -176,11 +206,13 @@ write_limine_header() {
 
 ensure_limine_header() {
     local limine_conf="$ESP/limine.conf"
-    local tmpfile
+    local tmpfile default_path
 
     [[ -f "$limine_conf" ]] || return 0
     tmpfile=$(mktemp)
     print_limine_header > "$tmpfile"
+    default_path=$(limine_default_path "$limine_conf")
+    [[ -z "$default_path" ]] || printf 'default_entry: %s\n' "$default_path" >> "$tmpfile"
     printf '\n' >> "$tmpfile"
     awk '
         BEGIN { in_header = 1 }
@@ -314,7 +346,8 @@ ROOT_FSTYPE=$(findmnt -n -o FSTYPE /)
 ROOT_DEV=$(findmnt -n -o SOURCE /)
 ROOT_PART=$(findmnt -n -o SOURCE -T / | sed 's/\[.*\]//')
 ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART")
-ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART")
+# A LUKS mapper has a filesystem UUID but no partition UUID of its own.
+ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART" || true)
 ROOT_SUBVOL=$(findmnt -n -o OPTIONS / | grep -oP 'subvol=\K[^,]+')
 
 info "Root device: $ROOT_PART"
@@ -373,7 +406,7 @@ fi
 # loglevel=0 / systemd.show_status silencing (splash covers it) and adds the
 # locked zswap.enabled=0.
 read -r -a _base_cmdline <<< "$(gpu_base_cmdline_tokens "$ROOT_TOKEN" "$ROOT_SUBVOL")"
-cmdline_upsert "${_base_cmdline[@]}"
+LIMINE_CONF="$ESP/limine.conf" cmdline_upsert "${_base_cmdline[@]}"
 
 info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
 limine-update
@@ -452,15 +485,18 @@ if [[ -d "$ESP/EFI/systemd" ]]; then
 fi
 
 # The NVRAM entry outlives the files it points at, and the firmware keeps
-# offering it. "Linux Boot Manager" is the name systemd-boot registers itself
-# under, so nothing else answers to it.
+# offering it. Match the entry to this ESP since other installations can
+# register the same "Linux Boot Manager" label on their own EFI partitions.
 if [[ $_sdb_removed -eq 1 ]] && command -v efibootmgr >/dev/null 2>&1; then
-    while read -r _bootnum; do
-        [[ -n "$_bootnum" ]] || continue
-        efibootmgr -b "$_bootnum" -B >/dev/null 2>&1 || true
-        info "Removed the systemd-boot NVRAM entry (Boot$_bootnum)"
-    done < <(efibootmgr 2>/dev/null \
-        | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]*$/\1/p')
+    _esp_partuuid=$(findmnt -n -o PARTUUID "$ESP" 2>/dev/null || true)
+    if [[ -n "$_esp_partuuid" ]]; then
+        while read -r _bootnum; do
+            efibootmgr -b "$_bootnum" -B >/dev/null 2>&1 || true
+            info "Removed the systemd-boot NVRAM entry (Boot$_bootnum)"
+        done < <(efibootmgr -v 2>/dev/null \
+            | grep -Fi ",GPT,${_esp_partuuid}," \
+            | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]+HD\(.*/\1/p')
+    fi
 fi
 
 # Say the menu over again now that the old loader is gone, then take out the
