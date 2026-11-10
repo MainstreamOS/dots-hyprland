@@ -288,7 +288,8 @@ Item {
                     HdrScreencopyView {
                         id: preview
                         anchors.fill: parent
-                        captureSource: !tile.captureSuppressed && root.controller.opened && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
+                        captureSource: root.controller.captureReady && !tile.captureSuppressed && root.controller.opened
+                            && (tile.visible || root.controller.dragItem === tile) ? tile.modelData : null
                         live: !root.controller.searching && !root.controller.activationPending
                         constraintSize: Qt.size(Math.ceil(tile.width * root.controller.monitorData.scale),
                             Math.ceil(tile.height * root.controller.monitorData.scale))

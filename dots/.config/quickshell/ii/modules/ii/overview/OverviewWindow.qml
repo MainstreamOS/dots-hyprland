@@ -22,11 +22,13 @@ Item { // Window
     property var scale
     property bool restrictToWorkspace: true
     property real widthRatio: {
+        if (!widgetMonitor || !monitorData) return 1;
         const widgetWidth = widgetMonitor.transform & 1 ? widgetMonitor.height : widgetMonitor.width;
         const monitorWidth = monitorData.transform & 1 ? monitorData.height : monitorData.width;
         return (widgetWidth * monitorData.scale) / (monitorWidth * widgetMonitor.scale);
     }
     property real heightRatio: {
+        if (!widgetMonitor || !monitorData) return 1;
         const widgetHeight = widgetMonitor.transform & 1 ? widgetMonitor.width : widgetMonitor.height;
         const monitorHeight = monitorData.transform & 1 ? monitorData.width : monitorData.height;
         return (widgetHeight * monitorData.scale) / (monitorHeight * widgetMonitor.scale);
@@ -43,7 +45,7 @@ Item { // Window
     property real xOffset: 0
     property real yOffset: 0
     property var widgetMonitor
-    property int widgetMonitorId: widgetMonitor.id
+    property int widgetMonitorId: widgetMonitor?.id ?? -1
 
     property var targetWindowWidth: windowData?.size[0] * scale * widthRatio
     property var targetWindowHeight: windowData?.size[1] * scale * heightRatio
@@ -73,7 +75,7 @@ Item { // Window
     y: initY
     width: targetWindowWidth
     height: targetWindowHeight
-    opacity: windowData.monitor == widgetMonitorId ? 1 : 0.4
+    opacity: !windowData ? 0 : windowData.monitor == widgetMonitorId ? 1 : 0.4
 
     property real topLeftRadius
     property real topRightRadius

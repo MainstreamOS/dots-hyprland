@@ -77,7 +77,7 @@ Scope {
                 // Reserving nothing, the bar also ignores the zones others
                 // reserve (-1), so a pinned sidebar cannot push it aside.
                 exclusiveZone: (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) ? -1 :
-                    Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
+                    Appearance.sizes.horizontalBarExclusiveZone
                 WlrLayershell.namespace: "quickshell:bar"
                 // The compositor subtracts Top-layer exclusive zones before it
                 // arranges the Overlay layer, so a pinned side dock or a pinned

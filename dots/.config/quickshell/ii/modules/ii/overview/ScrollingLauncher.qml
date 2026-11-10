@@ -4,7 +4,6 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.models.hyprland
 import QtQuick
 import Quickshell
 import Quickshell.Widgets
@@ -23,29 +22,19 @@ Item {
     property real screenCenterY: height / 2
     required property real screenScale
     required property var workspaceLayout
+    required property QtObject viewState
+    required property bool preload
+    required property bool framePresented
+    required property bool fitColumns
+    required property var gapsIn
+    required property var gapsOut
+    required property real windowBorder
     readonly property bool opened: GlobalStates.overviewOpen && visible
-    property bool revealReady: false
-    property real revealProgress: 0
-    onOpenedChanged: if (revealReady) revealProgress = opened ? 1 : 0
-    Component.onCompleted: {
-        revealReady = true;
-        if (opened) revealProgress = 1;
-    }
-    Behavior on revealProgress {
-        NumberAnimation {
-            duration: Appearance.animation.elementResize.duration
-            easing.type: Appearance.animation.elementResize.type
-            easing.bezierCurve: Appearance.animation.elementResize.bezierCurve
-        }
-    }
-    transform: Translate { y: -40 * root.screenScale * (1 - root.revealProgress) }
     property bool rendering: opened
     readonly property var monitor: Hyprland.monitorFor(screen)
     readonly property int monitorId: monitor?.id ?? -1
     readonly property var monitorData: HyprlandData.monitors.find(m => m.id === monitorId)
         ?? ({ x: 0, y: 0, width: screen.width, height: screen.height, scale: 1 })
-    // Keep geometry ready while closed; captureSource below is still detached
-    // while idle. Clearing geometry makes every tile relayout on the first frame.
     readonly property var clients: activationPending ? activationClients
         : HyprlandData.windowList.filter(w => w.mapped && !w.hidden && w.monitor === monitorId)
     readonly property bool searching: search.searchingText.length > 0
@@ -80,17 +69,17 @@ Item {
     }
     property int selectedWorkspace: 1
     property int workspaceTransitionDirection: 0
-    property var selectedByWorkspace: ({})
-    property var pannedByWorkspace: ({})
-    property var monocleOrder: ({})
-    readonly property bool fitColumns: (scrollFit.value ?? 0) === 1
-    HyprlandConfigOption { id: scrollFit; key: "scrolling:focus_fit_method" }
-    HyprlandConfigOption { id: innerGaps; key: "general:gaps_in" }
-    HyprlandConfigOption { id: outerGaps; key: "general:gaps_out" }
-    HyprlandConfigOption { id: borderSize; key: "general:border_size" }
-    readonly property var gapsIn: Scrolling.gaps(innerGaps.value)
-    readonly property var gapsOut: Scrolling.gaps(outerGaps.value)
-    readonly property real windowBorder: Number(borderSize.value ?? 0)
+    readonly property var selectedByWorkspace: viewState.selectedByWorkspace
+    readonly property var pannedByWorkspace: viewState.pannedByWorkspace
+    readonly property var monocleOrder: viewState.monocleOrder
+    property int previewStage: 0
+    readonly property bool captureReady: previewStage >= 3
+    // Draw the search and panel chrome first. Populate the grids, workspace
+    // tiles and their captures over subsequent frames.
+    FrameAnimation {
+        running: root.opened && root.framePresented && !root.captureReady
+        onTriggered: root.previewStage++
+    }
     readonly property bool showRecentApps: Config.options.overview.scrollingShowRecentApps
     property string dragAddress: ""
     property int dropWorkspace: 0
@@ -109,6 +98,7 @@ Item {
     }
     readonly property var geometry: LauncherLayout.scrolling({
         unit: screenScale, width, height, screenWidth: screen.width, screenHeight: screen.height, reserved: workspaceLayout.reserved,
+        layoutReserved: workspaceLayout.layoutReserved,
         centerX: screenCenterX, centerY: screenCenterY,
         searchHeight: search.visible ? search.collapsedHeight + (20 + Appearance.sizes.elevationMargin) * screenScale : 0,
         workspacesOnly: GlobalStates.overviewWorkspacesOnly, count: visibleCount, shown: shownCount,
@@ -132,10 +122,6 @@ Item {
         onClosed: if (root.opened) root.focusSearchInput()
     }
 
-    function prepare() {
-        drawer.prepareGrid();
-        recentApps.prepareGrid();
-    }
     function begin(resetQuery = true) {
         activationStart.stop();
         activationPending = false;
@@ -158,9 +144,9 @@ Item {
             order[id] = previous.concat(windows.filter(w => !previous.includes(w.address))
                 .sort((a, b) => (a.focusHistoryID ?? 0) - (b.focusHistoryID ?? 0)).map(w => w.address));
         }
-        selectedByWorkspace = selections;
-        pannedByWorkspace = pans;
-        monocleOrder = order;
+        viewState.selectedByWorkspace = selections;
+        viewState.pannedByWorkspace = pans;
+        viewState.monocleOrder = order;
         cancelDrag();
         const active = HyprlandData.clientForToplevel(ToplevelManager.activeToplevel);
         if (active && !pannedByWorkspace[active.workspace.id]) selectWindow(active.workspace.id, active.address);
@@ -175,11 +161,11 @@ Item {
     function setSearchingText(text) { search.setSearchingText(text); }
     function focusSearchInput() { search.focusSearchInput(); }
     function selectWindow(workspace, address) {
-        selectedByWorkspace = Object.assign({}, selectedByWorkspace, { [workspace]: address });
+        viewState.selectedByWorkspace = Object.assign({}, selectedByWorkspace, { [workspace]: address });
         selectedWorkspace = workspace;
     }
     function panWorkspace(workspace, address) {
-        pannedByWorkspace = Object.assign({}, pannedByWorkspace, { [workspace]: true });
+        viewState.pannedByWorkspace = Object.assign({}, pannedByWorkspace, { [workspace]: true });
         selectWindow(workspace, address);
     }
     function setWorkspaceIds(ids, animate = false) {
@@ -469,7 +455,7 @@ Item {
             Repeater {
                 id: cards
                 // Retain workspace captures while whole cards slide between rows.
-                model: ScriptModel { values: root.workspaceIds }
+                model: ScriptModel { values: root.preload || root.previewStage >= 2 ? root.workspaceIds : [] }
                 delegate: ScrollingWorkspace {
                     id: workspaceCard
                     required property int index
@@ -590,15 +576,9 @@ Item {
             id: appPanel
             anchors.fill: parent
             radius: root.workspaceRadius(width, height)
-            color: !Appearance.sizes.dockShowBackground ? "transparent"
-                : appBackdrop.shown ? Appearance.colors.colDockBackground : Appearance.launcherDrawerBackground
+            color: Appearance.sizes.dockShowBackground ? Appearance.launcherDrawerBackground : "transparent"
             border.width: Appearance.sizes.dockShowBackground ? 1.5 * root.uiScale : 0
             border.color: Appearance.colors.colDockBackgroundBorder
-            LauncherWallpaperBackdrop {
-                id: appBackdrop
-                wanted: Appearance.sizes.dockShowBackground
-                radius: parent.radius
-            }
         }
         Rectangle {
             visible: root.showRecentApps
@@ -611,6 +591,7 @@ Item {
         ScrollingLauncherApps {
             launcher: root
             id: recentApps
+            populateGrid: root.showRecentApps && (root.preload || root.previewStage >= 2)
             width: parent.width
             collapsedHeight: root.geometry.recentHeight
             visibleRows: 2
@@ -622,6 +603,7 @@ Item {
         ScrollingLauncherApps {
             launcher: root
             id: drawer
+            populateGrid: root.preload || root.previewStage >= 1
             y: root.geometry.drawerOffset
             width: parent.width
             collapsedHeight: root.geometry.drawerHeight

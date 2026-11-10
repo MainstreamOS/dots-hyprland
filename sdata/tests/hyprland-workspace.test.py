@@ -102,6 +102,44 @@ assert.equal(isSpecialWorkspace({address:'',id:0,name:''}),false);
 assert.equal(isSpecialWorkspace(null),false);
 ''')
 
+    def test_launcher_geometry_stays_in_place_in_fullscreen(self):
+        source = (CONFIG / 'quickshell/ii/modules/ii/overview/launcher-layout.js').read_text().replace('.pragma library', '')
+        run(['node', '-'], source + """
+const assert = require('node:assert/strict');
+function close(a, b) { assert.ok(Math.abs(a - b) < 0.00001, [a, b]); }
+for (const edge of [1, 3]) {
+    for (const scale of [1, 1.5, 2]) {
+        const reserved = [0, 0, 0, 0];
+        reserved[edge] = 60;
+        const normal = {
+            monitor: { width: 2560 * scale, height: 1440 * scale, scale, transform: 0 },
+            reserved, rows: 2, columns: 5, size: 100, unit: 1, elevation: 10
+        };
+        const full = { ...normal, reserved: [0, 0, 0, 0], layoutReserved: reserved };
+        const a = workspaceGrid(normal), b = workspaceGrid(full);
+        for (const key of ['cellWidth', 'cellHeight', 'bodyHeight']) close(a[key], b[key]);
+        assert.deepEqual(b.reserved, [0, 0, 0, 0]);
+        assert.ok(1440 * b.previewScale <= b.cellHeight + 0.00001);
+        for (const swapped of [false, true]) {
+            const options = {
+                unit: 1, width: 2400, height: 1200, screenWidth: 2560, screenHeight: 1440,
+                centerX: 1200, centerY: 600, searchHeight: 80, count: 3, shown: 3,
+                swapped, recentApps: true
+            };
+            const windowed = scrolling({ ...options, reserved });
+            const fullscreen = scrolling({ ...options, reserved: full.reserved, layoutReserved: reserved });
+            for (const key of ['totalWidth', 'panelHeight', 'slotHeight', 'drawerHeight'])
+                close(windowed[key], fullscreen[key]);
+            for (const panel of ['workspace', 'apps']) {
+                for (const key of ['x', 'y', 'width', 'height'])
+                    close(windowed[panel][key], fullscreen[panel][key]);
+            }
+            close(fullscreen.previewWidth * 1440 / 2560, fullscreen.slotHeight);
+        }
+    }
+}
+""")
+
     def test_fullscreen_membership_uses_addresses(self):
         source = (CONFIG / 'quickshell/ii/services/HyprlandData.qml').read_text()
         functions = source[source.index('    function isSpecialWorkspace('):source.index('    function toplevelsForWorkspace(')]

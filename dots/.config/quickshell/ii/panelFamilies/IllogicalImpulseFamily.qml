@@ -46,7 +46,6 @@ Scope {
     PanelLoader { component: OnScreenKeyboard {} }
     PanelLoader { component: Overlay {} }
     PanelLoader { component: Overview {} }
-    PanelLoader { component: OverviewDim {} }
     PanelLoader { component: WindowOverview {} }
     PanelLoader { component: Polkit {} }
     PanelLoader { component: RegionSelector {} }

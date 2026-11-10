@@ -35,7 +35,7 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             // -1 ignores the zones others reserve, so a pinned sidebar cannot
             // pull the island off the screen's center.
-            exclusiveZone: (Config.options.bar.autoHide.enable && (concealed || !Config.options.bar.autoHide.pushWindows)) ? -1 : Appearance.sizes.barHeight
+            exclusiveZone: (Config.options.bar.autoHide.enable && (concealed || !Config.options.bar.autoHide.pushWindows)) ? -1 : Appearance.sizes.horizontalBarExclusiveZone
             // Allocate the Wayland buffer once; only the items inside it morph.
             implicitWidth: Math.min(screen.width, Math.ceil(Math.max(compactWidth, expandedWidth) + Math.max(48, 2 * cornerRadius + 2)))
             implicitHeight: Math.ceil(Math.max(Appearance.sizes.baseBarHeight, expandedChromeHeight + 258 * Appearance.sizes.islandScale) + 24 + edgeGap * 2)

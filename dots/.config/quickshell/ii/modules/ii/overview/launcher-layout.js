@@ -3,21 +3,27 @@
 function workspaceGrid(o) {
     const monitor = o.monitor;
     const reserved = o.reserved;
+    const layoutReserved = o.layoutReserved ?? reserved;
     const rotated = monitor.transform % 2 === 1;
-    const desktopWidth = ((rotated ? monitor.height : monitor.width) - reserved[0] - reserved[2]) / monitor.scale;
-    const desktopHeight = Math.max(1, ((rotated ? monitor.width : monitor.height) - reserved[1] - reserved[3]) / monitor.scale);
+    const screenWidth = rotated ? monitor.height : monitor.width;
+    const screenHeight = rotated ? monitor.width : monitor.height;
+    const desktopWidth = Math.max(1, (screenWidth - reserved[0] - reserved[2]) / monitor.scale);
+    const desktopHeight = Math.max(1, (screenHeight - reserved[1] - reserved[3]) / monitor.scale);
+    const layoutWidth = Math.max(1, (screenWidth - layoutReserved[0] - layoutReserved[2]) / monitor.scale);
+    const layoutHeight = Math.max(1, (screenHeight - layoutReserved[1] - layoutReserved[3]) / monitor.scale);
     const rows = Math.max(1, o.rows), columns = Math.max(1, o.columns);
     const gap = 5 * o.unit;
     // The default 5x2 grid defines the height ceiling. Fewer rows may use
     // taller cells; the Size setting scales the fitted cells, not the gaps.
     const cellHeight = o.size / 100 * Math.max(0, Math.min(
-        (desktopHeight * 0.36 + gap * (2 - rows)) / rows,
-        desktopHeight * 0.9 / columns, desktopHeight * 0.9 / rows));
-    const previewScale = cellHeight / desktopHeight;
+        (layoutHeight * 0.36 + gap * (2 - rows)) / rows,
+        layoutHeight * 0.9 / columns, layoutHeight * 0.9 / rows));
+    const cellWidth = layoutWidth * cellHeight / layoutHeight;
+    const previewScale = Math.min(cellWidth / desktopWidth, cellHeight / desktopHeight);
     const height = rows * cellHeight + (rows - 1) * gap;
     return {
-        reserved, gap, previewScale,
-        cellWidth: desktopWidth * previewScale, cellHeight,
+        reserved, layoutReserved, gap, previewScale,
+        cellWidth, cellHeight,
         // Shared height budget from the workspace grid through the drawer.
         bodyHeight: height + (400 + 40 + o.elevation) * o.unit
     };
@@ -29,8 +35,9 @@ function scrolling(o) {
     // window to either side, which makes it five thirds of a screen wide.
     const unit = o.unit;
     const reserved = o.reserved ?? [0, 0, 0, 0];
-    const usableWidth = Math.max(1, o.screenWidth - reserved[0] - reserved[2]);
-    const usableHeight = Math.max(1, o.screenHeight - reserved[1] - reserved[3]);
+    const layoutReserved = o.layoutReserved ?? reserved;
+    const usableWidth = Math.max(1, o.screenWidth - layoutReserved[0] - layoutReserved[2]);
+    const usableHeight = Math.max(1, o.screenHeight - layoutReserved[1] - layoutReserved[3]);
     const padding = 10 * unit, rowGap = 5 * unit;
     const count = Math.max(1, o.count), shown = Math.max(1, o.shown);
     const fit = k => {
@@ -54,14 +61,15 @@ function scrolling(o) {
     const panelX = swapped ? left + size.total - size.panelWidth : left;
     const appsX = swapped ? left : left + size.panelWidth + size.panelGap;
     const rowHeight = usableHeight * size.previewScale;
+    const previewScale = rowHeight / Math.max(1, o.screenHeight - reserved[1] - reserved[3]);
     const panelHeight = padding * 2 + shown * rowHeight + (shown - 1) * rowGap;
     const panelY = trayY + (trayHeight - panelHeight) / 2;
     const plusHeight = 56 * k;
     const drawerOffset = o.recentApps ? 236 * k : 0;
     return {
         scale: k, gap: rowGap, padding, panelGap: size.panelGap, plusHeight,
-        totalWidth: size.total, panelHeight, previewScale: size.previewScale,
-        slotHeight: rowHeight, previewWidth: o.screenWidth * size.previewScale,
+        totalWidth: size.total, panelHeight, previewScale,
+        slotHeight: rowHeight, previewWidth: o.screenWidth * previewScale,
         workspace: { x: panelX + padding, y: panelY + padding, width: size.rowWidth,
             height: panelHeight - padding + size.panelGap + plusHeight },
         apps: { x: appsX, y: trayY, width: size.appsWidth, height: trayHeight },

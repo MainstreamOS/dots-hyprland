@@ -1,6 +1,7 @@
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.models.hyprland
 import qs.modules.common.widgets
 import Qt.labs.synchronizer
 import Qt5Compat.GraphicalEffects
@@ -18,6 +19,10 @@ import "launcher-layout.js" as LauncherLayout
 Scope {
     id: overviewScope
     property bool dontAutoCancelSearch: false
+    HyprlandConfigOption { id: scrollFit; key: "scrolling:focus_fit_method" }
+    HyprlandConfigOption { id: innerGaps; key: "general:gaps_in" }
+    HyprlandConfigOption { id: outerGaps; key: "general:gaps_out" }
+    HyprlandConfigOption { id: borderSize; key: "general:border_size" }
     // Keep app-use history even before the scrolling launcher is first opened.
     Component.onCompleted: RecentApps.rememberActive()
 
@@ -97,14 +102,25 @@ Scope {
         required property ShellScreen modelData
         screen: modelData
         property string searchingText: ""
-        property bool useScrollingLauncher: false
-        property string launcherLayout: "scrolling"
+        property string launcherLayout: ""
+        readonly property bool useScrollingLauncher: Config.options.overview.enable
+            && Config.options.overview.useScrollingLauncher && Scrolling.usesLayout(launcherLayout)
+        property bool scrollingActivationPending: false
+        property bool scrollingPlacementPending: false
         readonly property var scrollingLauncherItem: scrollingLauncher.item
+        QtObject {
+            id: scrollingViewState
+            property var selectedByWorkspace: ({})
+            property var pannedByWorkspace: ({})
+            property var monocleOrder: ({})
+        }
         readonly property string currentWorkspaceLayout: HyprlandData.workspaceById[
             panelWindow.monitorData?.activeWorkspace?.id ?? panelWindow.monitor?.activeWorkspace?.id]?.tiledLayout ?? ""
-        readonly property bool preloadScrollingLauncher: (Config.options.overview.keepSurfaceAlive ?? true)
-            && Config.options.overview.enable && Config.options.overview.useScrollingLauncher
-            && Scrolling.usesLayout(currentWorkspaceLayout)
+        onCurrentWorkspaceLayoutChanged: {
+            if (!GlobalStates.overviewOpen && contentFade.opacity === 0) launcherLayout = currentWorkspaceLayout;
+        }
+        readonly property bool preloadSurface: Config.options.overview.keepSurfaceAlive
+        readonly property bool preloadScrollingLauncher: panelWindow.preloadSurface && panelWindow.useScrollingLauncher
         // What the drawer opens as. Without the workspace previews the
         // short list would sit alone under the search box, so it starts
         // on the full list instead unless that was turned off.
@@ -118,24 +134,9 @@ Scope {
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: ((Hyprland.focusedMonitor?.id ?? monitor?.id) === monitor?.id)
 
-        // ── Surface lifecycle ────────────────────────────────────────────
-        // When Config.options.overview.keepSurfaceAlive is true (default),
-        // the wlr-layer-shell surface is permanently allocated. This makes
-        // every overview-open instant, even when Hyprland is busy
-        // compositing a game at 4K@144Hz on another workspace (otherwise
-        // the configure roundtrip takes 1-1.5s and pegs qs's main thread).
-        //
-        // Users who want direct scanout for exclusive-fullscreen games can
-        // turn the option off — surface becomes visible only while open,
-        // which restores scanout but reintroduces the open-stall whenever
-        // the compositor is busy.
-        //
-        // When the surface is alive but the overview is closed,
-        // contentFade.opacity=0 hides the contents visually and an empty
-        // mask Region routes all pointer input through to apps below.
-        visible: (Config.options.overview.keepSurfaceAlive ?? true)
-            || GlobalStates.overviewOpen
-            || contentFade.opacity > 0
+        readonly property bool requested: GlobalStates.overviewOpen && monitorIsFocused
+        // A preloaded surface stays mapped with an empty input region when closed.
+        visible: panelWindow.preloadSurface || requested || contentFade.opacity > 0
 
         // null mask = capture (open), empty Region = click-through (closed).
         // Gate on overviewOpen only, NOT the fade-out opacity — capturing while
@@ -156,6 +157,18 @@ Scope {
         // Exclusive brings keyboard focus to search; yield to OnDemand once focused,
         // since Hyprland routes all pointer input to exclusive surfaces (dock unclickable).
         property bool keyboardPrimed: false
+        // FrameAnimation can advance before a new layer surface presents its
+        // first frame. Leave preview captures and app icons out of that frame.
+        property bool framePresented: false
+        Connections {
+            target: panelWindow.contentItem.Window.window
+            enabled: !panelWindow.framePresented && GlobalStates.overviewOpen && panelWindow.monitorIsFocused
+            function onFrameSwapped() {
+                if (contentFade.opacity > 0 && panelWindow.width > 1 && panelWindow.height > 1)
+                    panelWindow.framePresented = true;
+            }
+        }
+
         WlrLayershell.keyboardFocus: (GlobalStates.overviewOpen && monitorIsFocused && !((scrollingLauncher.item?.placementPending ?? false) || (scrollingLauncher.item?.activationPending ?? false)
                 || (overviewLoader.item?.placementPending ?? false)))
             ? (keyboardPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive) : WlrKeyboardFocus.None
@@ -166,6 +179,31 @@ Scope {
             }
         }
         color: "transparent"
+        readonly property bool dimShown: requested && width > 1 && height > 1
+        readonly property bool surfaceShown: visible && contentFade.opacity > 0
+        property string registeredScreen: ""
+        onDimShownChanged: if (registeredScreen) GlobalStates.setLauncherDim(registeredScreen, dimShown)
+        Component.onCompleted: {
+            launcherLayout = currentWorkspaceLayout;
+            registeredScreen = modelData.name;
+            GlobalStates.launcherWindows = Object.assign({}, GlobalStates.launcherWindows, {[registeredScreen]: panelWindow});
+            if (dimShown) GlobalStates.setLauncherDim(registeredScreen, true);
+        }
+        Component.onDestruction: {
+            if (GlobalStates.launcherWindows[registeredScreen] !== panelWindow) return;
+            const windows = Object.assign({}, GlobalStates.launcherWindows);
+            delete windows[registeredScreen];
+            GlobalStates.launcherWindows = windows;
+            GlobalStates.setLauncherDim(registeredScreen, false);
+        }
+
+        // Draw the dim in the same buffer as the controls so the compositor
+        // cannot present a fullscreen wallpaper blur while the launcher loads.
+        Rectangle {
+            anchors.fill: parent
+            color: Appearance.launcherDimColor
+            opacity: contentFade.opacity * Appearance.launcherDimOpacity
+        }
 
         // Full-screen so the dim overlay covers app windows behind the overview.
         anchors {
@@ -191,28 +229,38 @@ Scope {
         // with neither the dock nor the bar on top, the content starts a
         // dock's thickness down, as it does under a top dock.
         readonly property var monitorData: HyprlandData.monitors.find(m => m.id === panelWindow.monitor?.id)
-        // Both layouts consume one workspace sizing result, including the
-        // sidebar reservation that belongs inside the miniature desktop.
-        readonly property var workspaceLayout: {
+        readonly property var workspaceReserved: {
             const reserved = (monitorData?.reserved ?? [0, 0, 0, 0]).slice();
             if (GlobalStates.sidebarLeftScreen === screen.name) {
                 const edge = Appearance.sizes.sidebarLeftEdge === "right" ? 2 : 0;
                 reserved[edge] = Math.max(0, reserved[edge] - GlobalStates.sidebarLeftZone);
             }
-            return LauncherLayout.workspaceGrid({
-                monitor: monitorData ?? { width: screen.width, height: screen.height, scale: 1, transform: 0 },
-                reserved, rows: Config.options.overview.rows, columns: Config.options.overview.columns,
-                size: Config.options.overview.size, unit: launcherUiScale, elevation: Appearance.sizes.elevationMargin
-            });
+            return reserved;
         }
+        readonly property var launcherReserved: {
+            const reserved = workspaceReserved.slice();
+            const edge = Appearance.sizes.barEdge === "top" ? 1 : 3;
+            reserved[edge] = Math.max(reserved[edge], fullscreenBarClearance);
+            return reserved;
+        }
+        // Keep the panels' size and position in fullscreen while fitting
+        // window captures to the desktop's actual available area.
+        readonly property var workspaceLayout: LauncherLayout.workspaceGrid({
+            monitor: monitorData ?? { width: screen.width, height: screen.height, scale: 1, transform: 0 },
+            reserved: workspaceReserved, layoutReserved: launcherReserved,
+            rows: Config.options.overview.rows, columns: Config.options.overview.columns,
+            size: Config.options.overview.size, unit: launcherUiScale, elevation: Appearance.sizes.elevationMargin
+        })
+        // A horizontal bar unmaps in fullscreen. Keep its usual space in
+        // the launcher on screens where it would have reserved an edge.
+        readonly property real fullscreenBarClearance: !Config.options.bar.vertical && GlobalStates.barOpen
+            && !Config.options.bar.autoHide.enable
+            && (!Config.options.bar.screenList.length || Config.options.bar.screenList.includes(screen.name))
+            && HyprlandData.activeWorkspaceHasFullscreen(screen.name) ? Appearance.sizes.horizontalBarExclusiveZone : 0
+
         function edgeClearance(edge) {
             const index = { left: 0, top: 1, right: 2, bottom: 3 }[edge];
-            let c = panelWindow.monitorData?.reserved?.[index] ?? 0;
-            // A pinned left sidebar keeps its strip reserved, but the overview
-            // draws over it, so the content centers on the whole screen.
-            if (edge === Appearance.sizes.sidebarLeftEdge
-                    && GlobalStates.sidebarLeftScreen === (panelWindow.screen?.name ?? ""))
-                c = Math.max(0, c - GlobalStates.sidebarLeftZone);
+            let c = panelWindow.launcherReserved[index];
             if (Config.options.dock.enable && Appearance.sizes.dockEdge === edge)
                 c += GlobalStates.dockPinned ? Appearance.sizes.elevationMargin : Appearance.sizes.dockExtent;
             if (edge === "top" && Config.options.dock.enable
@@ -234,25 +282,27 @@ Scope {
                 } else {
                     panelWindow.keyboardPrimed = panelWindow.contentItem.Window.active;
                     panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
-                    panelWindow.useScrollingLauncher = Config.options.overview.enable
-                        && Config.options.overview.useScrollingLauncher && Scrolling.usesLayout(panelWindow.launcherLayout);
                     if (!overviewScope.dontAutoCancelSearch) {
                         searchWidget.cancelSearch();
                     }
                     // Reset drawer state on open.
                     panelWindow.resetDrawer();
                     // Focus the search box as the surface takes keyboard focus.
-                    Qt.callLater(() => {
-                        if (panelWindow.useScrollingLauncher && panelWindow.monitorIsFocused) scrollingLauncher.item?.begin(!overviewScope.dontAutoCancelSearch);
-                        else searchWidget.focusSearchInput();
-                    });
+                    if (panelWindow.useScrollingLauncher)
+                        Qt.callLater(panelWindow.beginScrollingLauncher);
+                    else
+                        Qt.callLater(searchWidget.focusSearchInput);
                 }
             }
         }
 
         onMonitorIsFocusedChanged: {
+            if (monitorIsFocused) Qt.callLater(panelWindow.beginScrollingLauncher);
+        }
+
+        function beginScrollingLauncher() {
             if (GlobalStates.overviewOpen && monitorIsFocused && useScrollingLauncher)
-                Qt.callLater(() => scrollingLauncher.item?.begin(!overviewScope.dontAutoCancelSearch));
+                scrollingLauncher.item?.begin(!overviewScope.dontAutoCancelSearch);
         }
 
         function closeScrollingLauncher() {
@@ -274,7 +324,8 @@ Scope {
 
         function setSearchingText(text) {
             if (panelWindow.useScrollingLauncher) {
-                scrollingLauncher.item?.setSearchingText(text);
+                if (scrollingLauncher.item) scrollingLauncher.item.setSearchingText(text);
+                else LauncherSearch.query = text;
                 return;
             }
             searchWidget.setSearchingText(text);
@@ -307,6 +358,11 @@ Scope {
             anchors.fill: parent
             opacity: (GlobalStates.overviewOpen && panelWindow.monitorIsFocused) ? 1 : 0
             property bool appDragging: false
+            onOpacityChanged: {
+                if (opacity !== 0) return;
+                panelWindow.framePresented = false;
+                if (!GlobalStates.overviewOpen) panelWindow.launcherLayout = panelWindow.currentWorkspaceLayout;
+            }
             Behavior on opacity {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
             }
@@ -461,26 +517,38 @@ Scope {
             anchors.bottomMargin: panelWindow.edgeClearance("bottom") + 16
             anchors.leftMargin: panelWindow.edgeClearance("left") + 24
             anchors.rightMargin: panelWindow.edgeClearance("right") + 24
-            // Stays alive between opens (captures detach while closed) and is built
-            // when layout information arrives rather than inside its first open.
-            active: panelWindow.useScrollingLauncher || panelWindow.preloadScrollingLauncher
-            // An idle launcher is hidden by its parent's zero opacity but stays visible
-            // to Qt, so its app grid is populated before the first open.
-            visible: (panelWindow.useScrollingLauncher || panelWindow.preloadScrollingLauncher)
-                && panelWindow.monitorIsFocused
-            onLoaded: Qt.callLater(() => {
-                item?.prepare();
-                if (GlobalStates.overviewOpen && panelWindow.monitorIsFocused)
-                    item?.begin(!overviewScope.dontAutoCancelSearch);
-            })
+            active: (panelWindow.monitorIsFocused && (panelWindow.preloadScrollingLauncher
+                || (panelWindow.useScrollingLauncher && GlobalStates.overviewOpen)))
+                || (panelWindow.useScrollingLauncher && contentFade.opacity > 0)
+                || panelWindow.scrollingActivationPending || panelWindow.scrollingPlacementPending
+            visible: panelWindow.monitorIsFocused && panelWindow.useScrollingLauncher
+            // Begin after the first frame so the slide is visible on a cold open too.
+            transform: Translate {
+                y: panelWindow.framePresented ? 0 : -40 * panelWindow.launcherUiScale
+                Behavior on y {
+                    enabled: panelWindow.requested
+                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
+                }
+            }
+            onLoaded: Qt.callLater(panelWindow.beginScrollingLauncher)
             sourceComponent: ScrollingLauncher {
                 screen: panelWindow.screen
-                layout: panelWindow.launcherLayout
+                layout: GlobalStates.overviewOpen || contentFade.opacity > 0
+                    ? panelWindow.launcherLayout : panelWindow.currentWorkspaceLayout
+                viewState: scrollingViewState
+                preload: panelWindow.preloadScrollingLauncher
+                framePresented: panelWindow.framePresented
+                fitColumns: (scrollFit.value ?? 0) === 1
+                gapsIn: Scrolling.gaps(innerGaps.value)
+                gapsOut: Scrolling.gaps(outerGaps.value)
+                windowBorder: Number(borderSize.value ?? 0)
                 screenCenterX: panelWindow.width / 2 - scrollingLauncher.x
                 screenCenterY: panelWindow.height / 2 - scrollingLauncher.y
                 screenScale: panelWindow.launcherUiScale
                 workspaceLayout: panelWindow.workspaceLayout
                 rendering: opened || contentFade.opacity > 0
+                onActivationPendingChanged: panelWindow.scrollingActivationPending = activationPending
+                onPlacementPendingChanged: panelWindow.scrollingPlacementPending = placementPending
                 onAppDropped: (app, workspace) => panelWindow.launchAppOnWorkspace(app, workspace)
             }
         }
@@ -591,13 +659,15 @@ Scope {
                 Loader {
                     id: overviewLoader
                     Layout.alignment: Qt.AlignHCenter
-                    active: GlobalStates.overviewOpen && !panelWindow.useScrollingLauncher && panelWindow.monitorIsFocused && (Config?.options.overview.enable ?? true) && !appDrawer.expanded
+                    active: panelWindow.monitorIsFocused && !panelWindow.useScrollingLauncher && Config.options.overview.enable
+                        && !appDrawer.expanded && (panelWindow.preloadSurface || panelWindow.requested || contentFade.opacity > 0)
                     Layout.maximumHeight: appDrawer.expanded ? 0 : (item ? item.implicitHeight : 0)
                     opacity: appDrawer.expanded ? 0 : 1
                     Behavior on opacity {
                         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     Behavior on Layout.maximumHeight {
+                        enabled: panelWindow.framePresented
                         animation: Appearance.animation.elementResize.numberAnimation.createObject(this, { alwaysRunToEnd: false })
                     }
                     // Cache width so the drawer can match it after this loader deactivates
@@ -606,6 +676,7 @@ Scope {
                         screen: panelWindow.screen
                         uiScale: panelWindow.launcherUiScale
                         workspaceLayout: panelWindow.workspaceLayout
+                        previewsReady: panelWindow.preloadSurface || panelWindow.framePresented
                         visible: (panelWindow.searchingText == "")
                         onFocusSearchRequested: searchWidget.focusSearchInput()
                     }
@@ -613,6 +684,8 @@ Scope {
                     
                 ApplicationDrawer {
                     id: appDrawer
+                    populateGrid: !panelWindow.useScrollingLauncher
+                        && ((panelWindow.preloadSurface && panelWindow.monitorIsFocused) || panelWindow.framePresented)
                     ownSearchField: panelWindow.drawerOwnsSearch
                     collapsible: !panelWindow.drawerStartsExpanded
                     workspaceStyle: false
@@ -620,7 +693,6 @@ Scope {
                     collapsedHeight: 400 * uiScale
                     wallpaper: ""
                     colBackground: Appearance.sizes.dockShowBackground ? Appearance.launcherDrawerBackground : "transparent"
-                    samplesWallpaper: Appearance.sizes.dockShowBackground
                     contentColors: Appearance.drawerContent
                     surfaceRadius: Appearance.rounding.dockBody * uiScale
                     // The app-only view uses naturally sized rows instead of

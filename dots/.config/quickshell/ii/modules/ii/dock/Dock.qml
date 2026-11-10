@@ -71,7 +71,7 @@ Scope { // Scope
                     id: dockRoot
                     // Window
                     screen: perScreen.modelData
-                    visible: !GlobalStates.screenLocked
+                    visible: !GlobalStates.screenLocked && (!dockRoot.workspaceFullscreen || dockRoot.overlayRequested)
                     contentItem.visible: !GlobalStates.scrollOverviewOpen
 
             // The dock never shares an edge with the bar: a dock stacked on
@@ -110,11 +110,12 @@ Scope { // Scope
             // The strip's outline overlaps its fill, which only shows through
             // a see-through surface, and there the two are painted opaque and
             // faded together the way the notch's pieces are.
-            // Over the launcher or Alt+Tab a Glass dock takes the launcher's own surface rather
-            // than letting the dim show through it, on the screen the dim is on, as its colors do.
-            readonly property bool glassOverLauncher: BackdropPresets.dockIsGlass
-                && (GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "") || overWindowOverview)
-            property color surfaceColor: glassOverLauncher ? Appearance.drawerSurface : Appearance.colors.colDockBackground
+            // Frost and Glass share the launcher's blurred backdrop on the screen showing it.
+            readonly property bool launcherDimmed: GlobalStates.launcherDimScreens.includes(perScreen.modelData?.name ?? "")
+            readonly property bool frostOverLauncher: BackdropPresets.dockIsFrost && launcherDimmed
+            readonly property bool glassOverLauncher: BackdropPresets.dockIsGlass && (launcherDimmed || overWindowOverview)
+            property color surfaceColor: frostOverLauncher || glassOverLauncher
+                ? Appearance.dockOverLauncherSurface : Appearance.colors.colDockBackground
             Behavior on surfaceColor {
                 animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
             }
@@ -169,21 +170,22 @@ Scope { // Scope
                 : dockEdge === "top" ? Edges.Bottom
                 : dockEdge === "left" ? Edges.Right : Edges.Left
 
-            // Closing the launcher leaves its blurred surface mapped through
-            // the fade and shrink. Stay above it until its configured size lands.
-            readonly property bool overLauncher: GlobalStates.overviewOpen
-                || (GlobalStates.launcherDimWindows[dockRoot.screen?.name ?? ""]?.surfaceShown ?? false)
-            readonly property bool overWindowOverview: GlobalStates.windowOverviewScreen === (dockRoot.screen?.name ?? "")
+            // Raise the Dock on the output showing the launcher, including in
+            // fullscreen, and keep it there through the launcher's closing fade.
+            readonly property var launcher: GlobalStates.launcherWindows[perScreen.modelData.name]
+            readonly property bool overLauncher: (launcher?.requested ?? false) || (launcher?.surfaceShown ?? false)
+            readonly property bool overWindowOverview: GlobalStates.windowOverviewScreen === perScreen.modelData.name
+            readonly property bool overlayRequested: overLauncher || overWindowOverview
+            // An occluded Top surface can stop receiving frame callbacks,
+            // leaving a layer promotion uncommitted. Map directly at Overlay
+            // when a launcher opens over fullscreen.
+            readonly property bool workspaceFullscreen: HyprlandData.activeWorkspaceHasFullscreen(perScreen.modelData.name)
+
             property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || overLauncher || overWindowOverview || revealGrace.running
 
-            // The dock is raised above the launcher's dim while the launcher
-            // is open, and there it takes the colors that read over the dim.
-            // Only on the screen the dim is shown on: a dock on another screen
-            // keeps its own. A Frost dock looks the same over the dim as anywhere
-            // else, so it keeps its own too.
             readonly property DockContent content: DockContent {
-                dimmed: GlobalStates.launcherDimScreens.includes(dockRoot.screen?.name ?? "")
-                    && (!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass || !(backdropSource.item?.available ?? false))
+                dimmed: dockRoot.launcherDimmed && (dockRoot.frostOverLauncher || dockRoot.glassOverLauncher
+                    || !Config.options.dock.backdrop.enable || !(backdropSource.item?.available ?? false))
             }
             // The content colors as this dock draws them. A button's fill
             // already eases to a new color on the curve the dim fades on, so
@@ -352,7 +354,7 @@ Scope { // Scope
             implicitHeight: dockRoot.dockVertical ? dockBackground.implicitHeight : dockRoot.dockExtent + dockRoot.magnifyHeadroom
             WlrLayershell.namespace: "quickshell:dock" + (dockRoot.dockEdge === "bottom" ? ""
                 : dockRoot.dockEdge.charAt(0).toUpperCase() + dockRoot.dockEdge.slice(1))
-            WlrLayershell.layer: dockRoot.overLauncher || dockRoot.overWindowOverview ? WlrLayer.Overlay : WlrLayer.Top
+            WlrLayershell.layer: dockRoot.overlayRequested ? WlrLayer.Overlay : WlrLayer.Top
             color: "transparent"
 
             mask: Region {
@@ -577,15 +579,13 @@ Scope { // Scope
                             active: dockRoot.showBackground && (Config.options.dock.backdrop.enable || Appearance.colors.colDockBackground.a < 1)
                             sourceComponent: ScreenWallpaperSource {}
                         }
-                        // Over the launcher's dim, Solid and Glass fade to their plain see-through
-                        // surface, which the dim's own colors are worked out for. The backdrop stays
-                        // loaded, since a new one shows a frame of unplaced wallpaper before its sample.
+                        // Keep the wallpaper sample ready to fade back in when the launcher closes.
                         SurfaceBackdrop {
                             id: dockBackdrop
                             settings: Config.options.dock.backdrop
                             source: backdropSource.item
-                            opacity: (!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)
-                                && (dockRoot.overLauncher || dockRoot.overWindowOverview) ? 0 : 1
+                            opacity: dockRoot.frostOverLauncher || ((!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)
+                                && (dockRoot.overLauncher || dockRoot.overWindowOverview)) ? 0 : 1
                             Behavior on opacity {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                             }

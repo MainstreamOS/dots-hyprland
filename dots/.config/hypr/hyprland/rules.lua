@@ -521,13 +521,10 @@ hl.layer_rule({ match = { namespace = "quickshell:(background|screenCorners|hotC
 -- Sidebars keep blur below their stock alpha but above their shadows, so the room around
 -- them never turns into a frosted halo. Panels a custom rule blurs share this floor.
 hl.layer_rule({ match = { namespace = "quickshell:(bar|dynamicIsland|verticalBar|dock[A-Za-z]*|sidebarLeft|sidebarRight)" }, ignore_alpha = 0.35})
--- The app list sits above the overview's dim. Read what is actually behind it
--- so its blur edge blends with the dim instead of revealing a wallpaper outline.
-hl.layer_rule({ match = { namespace = "quickshell:(dock[A-Za-z]*|overview[A-Za-z]*)" }, xray = false})
--- The dim is what the launcher stands on, and it shows the wallpaper past the
--- windows. Its blur is computed once and reused until the wallpaper changes.
--- The surface is all but clear, so no alpha floor: it is blurred wherever it spans.
-hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, xray = true, ignore_alpha = 0})
+-- The launcher and its dim share one surface. Read the cached wallpaper blur
+-- wherever the surface has alpha, including during the fade.
+hl.layer_rule({ match = { namespace = "quickshell:dock[A-Za-z]*" }, xray = false})
+hl.layer_rule({ match = { namespace = "quickshell:overview" }, xray = true, ignore_alpha = 0})
 -- The island's antialiased edge must blend with the surface beneath it.
 -- X-ray blur injects wallpaper color there even when the body is fully opaque.
 hl.layer_rule({ match = { namespace = "quickshell:dynamicIsland" }, xray = false})
@@ -557,15 +554,12 @@ hl.layer_rule({ match = { namespace = "quickshell:lockWindowPusher" }, no_anim =
 hl.layer_rule({ match = { namespace = "quickshell:notificationPopup" }, animation = "fade"})
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:overlay" }, ignore_alpha = 1})
--- Higher arrangement orders are painted first. Keep the launcher and its
--- backdrop before the dock so its visible buttons stay above both surfaces.
+-- Higher arrangement orders are painted first. Paint the launcher before
+-- the dock so the dock's buttons stay above it.
 -- The dock still reserves its edge before the pinned sidebar below.
 hl.layer_rule({ match = { namespace = "quickshell:dock.*" }, order = 1})
 hl.layer_rule({ match = { namespace = "quickshell:overview" }, order = 2, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:windowOverview" }, order = 2, no_anim = true})
--- The dim grows from a pixel to the screen on every open; animated, that
--- reads as blur spreading outward. It appears in one step, like the launcher.
-hl.layer_rule({ match = { namespace = "quickshell:overviewDim" }, order = 3, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:osk" }, animation = "slide bottom"})
 hl.layer_rule({ match = { namespace = "quickshell:polkit" }, no_anim = true})
 hl.layer_rule({ match = { namespace = "quickshell:popup" }, xray = false}) -- No weird color for bar tooltips (this in theory should suffice)

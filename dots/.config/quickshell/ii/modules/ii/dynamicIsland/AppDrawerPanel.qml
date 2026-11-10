@@ -66,7 +66,6 @@ Item {
             searchHeight: searchBar.implicitHeight
             uiScale: Appearance.sizes.islandScale
             // The Island is its own surface, with no desktop behind this one.
-            samplesWallpaper: false
             Layout.preferredHeight: implicitHeight
 
             SearchBar {

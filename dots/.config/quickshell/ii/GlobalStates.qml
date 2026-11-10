@@ -88,14 +88,11 @@ Singleton {
     property string windowOverviewScreen: ""
     // A dock app clicked over the Alt+Tab overview, which picks among its windows there.
     signal windowOverviewAppClicked(var app)
-    // Live dim surfaces by output; the dock stays above them until the
-    // compositor has finished shrinking the closing surface.
-    property var launcherDimWindows: ({})
+    // Live launcher surfaces by output. The Dock stays above their closing fade.
+    property var launcherWindows: ({})
     // The screens the launcher's dim is shown on, by name, as the dim sets
-    // them when it starts to fade in or out. It covers the focused screen
-    // alone, and only once its surface spans that screen, which can land a
-    // configure after the launcher opens. What is drawn over the dim reads
-    // this rather than the launcher being open, so it changes with the dim.
+    // them when its surface covers the focused screen. The dock reads this
+    // so its tint follows the launcher on the same output.
     property list<string> launcherDimScreens: []
     function setLauncherDim(screenName, shown) {
         const others = root.launcherDimScreens.filter(name => name !== screenName);

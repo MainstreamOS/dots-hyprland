@@ -18,6 +18,7 @@ Item {
     required property var screen
     property real uiScale: 1
     required property var workspaceLayout
+    property bool previewsReady: true
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     readonly property var toplevels: ToplevelManager.toplevels
     // Clamp to avoid lock-screen temp workspace (2147483647 - N) leaking into UI
@@ -302,7 +303,7 @@ Item {
                 id: windowRepeater
                 model: ScriptModel {
                     values: {
-                        // console.log(JSON.stringify(ToplevelManager.toplevels.values.map(t => t), null, 2))
+                        if (!root.previewsReady || !root.monitorData) return [];
                         return ToplevelManager.toplevels.values.filter((toplevel) => {
                             const address = `0x${toplevel.HyprlandToplevel?.address}`
                             var win = windowByAddress[address]
@@ -321,7 +322,7 @@ Item {
                     uiScale: root.uiScale
                     monitorData: this.monitor
                     scale: root.scale
-                    widgetMonitor: HyprlandData.monitors.find(m => m.id == root.monitor.id)
+                    widgetMonitor: root.monitorData
                     windowData: windowByAddress[address]
 
                     property bool atInitPosition: (initX == x && initY == y)

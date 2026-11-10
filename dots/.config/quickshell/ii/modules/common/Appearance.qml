@@ -356,7 +356,9 @@ Singleton {
     // it lies on the dim where the dim frosts the dock's own edge. The
     // launcher keeps its panels clear of the dock's band, so nothing of it
     // lies under the dock.
-    readonly property color dockOverLauncherBackdrop: laidOverDim(BackdropPresets.dockIsGlass ? drawerSurface : colors.colDockBackground, dockOwnShadow,
+    readonly property color dockOverLauncherSurface: BackdropPresets.dockIsFrost || BackdropPresets.dockIsGlass
+        ? launcherDrawerBackground : colors.colDockBackground
+    readonly property color dockOverLauncherBackdrop: laidOverDim(dockOverLauncherSurface, dockOwnShadow,
         root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
     readonly property color dockOverLauncherStockBackdrop: laidOverDim(dockStockSurface, dockOwnStockShadow,
         root.sizes.dockShowBackground, wallpaperEdge(sizes.dockEdge))
@@ -371,18 +373,9 @@ Singleton {
         adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         flipped: root.contentFlipped(backdrops, backdrops)
     }
-    // Under Frost the launcher's surfaces sample the wallpaper as the dock does, under its
-    // color. A video wallpaper has no still picture, so there they keep a flat color.
-    readonly property bool launcherSamplesWallpaper: BackdropPresets.dockIsFrost && !_wallpaperIsVideo
-    readonly property color launcherFrostBackdrop: ColorUtils.composite(colors.colDockBackground,
-        ColorUtils.composite(ColorUtils.applyAlpha("white", Config.options.dock.backdrop.haze), wallpaperAverage))
-    readonly property color launcherBackdrop: launcherSamplesWallpaper ? launcherFrostBackdrop
-        : laidOverDim(launcherSearchBackground, colors.colLauncherShadow, true)
-    // The app list is part of the launcher, so it takes the dock's color but not
-    // the see-through a dock preset or slider sets.
+    readonly property color launcherBackdrop: laidOverDim(launcherSearchBackground, colors.colLauncherShadow, true)
     readonly property color drawerSurface: ColorUtils.applyAlpha(colors.colDockBackground, colors.dockStockAlpha)
-    readonly property color drawerBackdrop: launcherSamplesWallpaper && root.sizes.dockShowBackground ? launcherFrostBackdrop
-        : laidOverDim(launcherDrawerBackground, dockStockShadow, root.sizes.dockShowBackground)
+    readonly property color drawerBackdrop: laidOverDim(launcherDrawerBackground, dockStockShadow, root.sizes.dockShowBackground)
     readonly property color launcherStockBackdrop: laidOverDim(ColorUtils.applyAlpha(m3colors.m3surfaceContainer, colors.layer0StockAlpha),
         colors.colShadow, true)
     readonly property color drawerStockBackdrop: laidOverDim(dockStockSurface, dockStockShadow,
@@ -402,11 +395,10 @@ Singleton {
         return ColorUtils.contrastRatio(ColorUtils.composite(colors.surfaceBorder(outline, surface), under),
             ColorUtils.composite(surface, under))
     }
-    function dockBorderOverDim(content, picture, shadow, stockShadow) {
+    function dockBorderOverDim(content, picture, shadow, stockShadow, surface = colors.colDockBackground) {
         const outline = content.colOutlineVariant
         if (!content.adaptive || !root.sizes.dockShowBackground)
-            return colors.dockBorder(outline)
-        const surface = colors.colDockBackground
+            return colors.surfaceBorder(outline, surface)
         const under = ColorUtils.composite(shadow, picture)
         const stockUnder = ColorUtils.composite(stockShadow, picture)
         const need = Math.min(content.markContrast,
@@ -414,13 +406,13 @@ Singleton {
         const stands = o => borderStanding(o, surface, under)
         const reaches = o => ColorUtils.meets(stands(o), need)
         if (reaches(outline))
-            return colors.dockBorder(outline)
+            return colors.surfaceBorder(outline, surface)
         const line = ColorUtils.composite(colors.surfaceBorder(outline, surface), under)
         const away = ColorUtils.relativeLuminance(line) > ColorUtils.relativeLuminance(ColorUtils.composite(surface, under))
             ? "white" : "black"
         const back = away === "white" ? "black" : "white"
         const toward = reaches(away) || (!reaches(back) && stands(away) >= stands(back)) ? away : back
-        return colors.dockBorder(ColorUtils.mixUntil(outline, toward, reaches))
+        return colors.surfaceBorder(ColorUtils.mixUntil(outline, toward, reaches), surface)
     }
     // The app list wears the dock's surface, but over the dim rather than
     // the screen's edge, so what reads on the dock need not read on it, and
@@ -471,8 +463,7 @@ Singleton {
     readonly property LauncherSurfaceContent launcherWorkspaceContent: LauncherSurfaceContent {
         m3: root.m3colors
         palette: root.colors
-        backdrops: [root.launcherSamplesWallpaper ? root.launcherFrostBackdrop
-            : root.laidOverDim(root.launcherWorkspaceBackground, root.colors.colLauncherShadow, true)]
+        backdrops: [root.laidOverDim(root.launcherWorkspaceBackground, root.colors.colLauncherShadow, true)]
         stockBackdrops: [root.launcherStockBackdrop]
         adaptive: root.autoIconContrast && root._judgeLauncherEnabled
         holdsFills: true
@@ -1106,7 +1097,8 @@ Singleton {
         }
         property color colDockBackgroundBorder: dockBorder(root.dockContent.colOutlineVariant)
         property color colDockOverLauncherBorder: root.dockBorderOverDim(root.dockOverLauncherContent,
-            root.wallpaperEdge(root.sizes.dockEdge), root.dockOwnShadow, root.dockOwnStockShadow)
+            root.wallpaperEdge(root.sizes.dockEdge), root.dockOwnShadow, root.dockOwnStockShadow,
+            BackdropPresets.dockIsFrost ? root.dockOverLauncherSurface : colDockBackground)
         property color colDrawerBorder: root.dockBorderOverDim(root.drawerContent, root.wallpaperAverage,
             colDockShadow, root.dockStockShadow)
         property color colDockShadow: ColorUtils.applyAlpha(colShadow, colShadow.a * colDockBackground.a)
@@ -1812,6 +1804,8 @@ Singleton {
         }
         property real barHeight: (barIsIsland ? islandShape === "float" : Config.options.bar.cornerStyle === 1) ?
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
+        readonly property real horizontalBarExclusiveZone: barIsIsland ? barHeight
+            : baseBarHeight + (Config.options.bar.cornerStyle === 1 ? hyprlandGapsOut : 0)
         property real barCenterSideModuleWidth: (Config.options?.bar.verbose ? 360 : 140) * barScale
         property real barCenterSideModuleWidthShortened: 280 * barScale
         property real barCenterSideModuleWidthHellaShortened: 190 * barScale
