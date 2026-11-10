@@ -143,14 +143,36 @@ def disks():
 
 
 def efi_info():
-    """Read the unprivileged plan from the same helper that performs the resize."""
+    """Use the system planner when available, with read-only usage as a fallback."""
     try:
-        return json.loads(subprocess.check_output(
+        plan = json.loads(subprocess.check_output(
             ["/usr/local/bin/mainstream-efi-resize", "plan"],
             text=True, stderr=subprocess.DEVNULL, timeout=12,
         ))
+        if isinstance(plan, dict) and plan.get("kind") == "efi":
+            return plan
     except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+
+    if not Path("/sys/firmware/efi").is_dir():
         return None
+    mounted = {mount: device for mount, device, fstype in mounts() if fstype == "vfat"}
+    for mount in ("/boot/efi", "/efi", "/boot"):
+        device = mounted.get(mount)
+        if not device:
+            continue
+        fields = run("lsblk", "-bdn", "-o", "PARTTYPE,SIZE", "--", device).split()
+        if len(fields) != 2 or fields[0].lower() != "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" or not fields[1].isdigit():
+            continue
+        try:
+            stat = os.statvfs(mount)
+        except OSError:
+            continue
+        return {"kind": "efi", "mount": mount, "device": device, "fstype": "vfat",
+                "used": (stat.f_blocks - stat.f_bfree) * stat.f_frsize,
+                "free": stat.f_bavail * stat.f_frsize, "total": stat.f_blocks * stat.f_frsize,
+                "part_bytes": int(fields[1]), "resize_plans": [], "planner_available": False}
+    return None
 
 
 def user_folders():

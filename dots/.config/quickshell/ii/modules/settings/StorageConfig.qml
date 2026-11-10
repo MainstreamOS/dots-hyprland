@@ -20,7 +20,7 @@ ContentPage {
     // Below this share free, the page says so at the top.
     readonly property real lowSpaceShare: 0.1
     readonly property real smallestCleanup: 1024 * 1024
-    readonly property int shownEntries: 40
+    readonly property int shownEntries: 15
 
     property var disks: []
     property var efi: null
@@ -915,6 +915,7 @@ ContentPage {
                 Item { Layout.fillWidth: true }
 
                 RippleButtonWithIcon {
+                    visible: root.efi?.planner_available !== false
                     Layout.alignment: Qt.AlignVCenter
                     materialIcon: "aspect_ratio"
                     mainText: Translation.tr("Expand size...")
