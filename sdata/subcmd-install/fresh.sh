@@ -10,8 +10,13 @@ if [[ ${1:-} == --help || ${1:-} == -h ]]; then
 fi
 [[ $# == 0 ]] || { printf '%s\n' 'Use ./setup install --fresh --help.' >&2; exit 1; }
 
-if (( EUID != 0 )) || ! mountpoint -q /run/archiso/bootmnt || ! command -v archinstall >/dev/null; then
+if (( EUID != 0 )) || ! mountpoint -q /run/archiso/airootfs ||
+    [[ $(findmnt -n -t overlay -o SOURCE --mountpoint /) != airootfs ]]; then
   printf '%s\n' 'Run this from the root console on the stock Arch USB. On an installed system, use ./setup install.' >&2
+  exit 1
+fi
+if ! command -v archinstall >/dev/null; then
+  printf '%s\n' 'Archinstall is missing from the live system. Boot a current stock Arch USB and retry.' >&2
   exit 1
 fi
 if [[ ! -d /sys/firmware/efi || ! -t 0 || ! -t 1 ]]; then

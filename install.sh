@@ -52,7 +52,9 @@ die()  { printf '%s✗ %s%s\n'  "$_c_red"   "$*"      "$_c_rst" >&2; exit 1; }
 # --- preflight --------------------------------------------------------------
 FRESH=false
 if [[ ${SETUP_ARGS[0]:-} == --fresh ]]; then
-    [[ $EUID -eq 0 ]] && mountpoint -q /run/archiso/bootmnt \
+    # The Arch USB can copy its root image to RAM and unmount the boot media.
+    [[ $EUID -eq 0 ]] && mountpoint -q /run/archiso/airootfs &&
+        [[ $(findmnt -n -t overlay -o SOURCE --mountpoint /) == airootfs ]] \
         || die "Run --fresh from the root console on the stock Arch USB."
     FRESH=true
 else

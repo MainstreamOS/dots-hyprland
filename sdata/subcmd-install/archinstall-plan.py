@@ -24,12 +24,16 @@ def free_regions(disk):
 
 def disk_layout(disk, mode):
     devices = json.loads(command('lsblk', '--json', '--bytes', '--paths', '--tree',
-                                 '-o', 'NAME,TYPE,RO,MOUNTPOINTS,PTTYPE,LOG-SEC,SIZE', disk))['blockdevices']
+                                 '-o', 'NAME,TYPE,RO,MOUNTPOINTS,PTTYPE,LOG-SEC,SIZE,FSTYPE', disk))['blockdevices']
     if len(devices) != 1 or devices[0]['type'] != 'disk' or devices[0]['ro']:
         raise ValueError('Select a writable whole disk.')
     device = devices[0]
+    partitions = device.get('children', [])
+    # With copy-to-RAM the live ISO's filesystem can be unmounted.
+    if any(volume.get('fstype') == 'iso9660' for volume in [device, *partitions]):
+        raise ValueError('Select a disk other than the installer media.')
     active_partitions = any(part['type'] != 'part' or any(part['mountpoints'] or []) or part.get('children')
-                            for part in device.get('children', []))
+                            for part in partitions)
     if any(device['mountpoints'] or []) or active_partitions:
         raise ValueError('The disk has a mounted or active partition. Unmount it before installing.')
 

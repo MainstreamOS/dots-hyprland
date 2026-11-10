@@ -47,6 +47,13 @@ class DiskLayoutTest(unittest.TestCase):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, 'mounted or active'):
                 self.layout(mode)
 
+    def test_unmounted_installer_media_refuses_both_modes(self):
+        for volume in (self.disk, self.disk['children'][0]):
+            with patch.dict(volume, fstype='iso9660'):
+                for mode in ('alongside', 'erase'):
+                    with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, 'installer media'):
+                        self.layout(mode)
+
     def test_alongside_refuses_mbr_and_too_small_a_gap(self):
         self.disk['pttype'] = 'dos'
         with self.assertRaisesRegex(ValueError, 'GPT'):
