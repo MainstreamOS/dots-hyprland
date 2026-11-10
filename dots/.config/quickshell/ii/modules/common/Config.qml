@@ -333,6 +333,8 @@ Singleton {
         fileWriteTimer.restart();
     }
 
+    property bool _saveFailed: false
+
     Timer {
         id: fileWriteTimer
         interval: root.readWriteDelay
@@ -350,7 +352,22 @@ Singleton {
                 root._reconcileLidAfterSave = false
                 return
             }
-            configFileView.writeAdapter()
+            const applyFonts = root._applyAppFontsAfterSave;
+            const reconcileLid = root._reconcileLidAfterSave;
+            root._saveFailed = false;
+            configFileView.writeAdapter();
+            if (!applyFonts && !reconcileLid) return;
+
+            // The helpers read the file. Wait for this write, including when
+            // writeAdapter flushed an older job or skipped an unchanged file.
+            configFileView.waitForJob();
+            root._applyAppFontsAfterSave = false;
+            root._reconcileLidAfterSave = false;
+            if (root._saveFailed) return;
+            if (applyFonts)
+                Quickshell.execDetached([Quickshell.shellPath("scripts/themes/apply-gtk-font.sh")]);
+            if (reconcileLid)
+                Quickshell.execDetached([Directories.home + "/.config/hypr/hyprland/scripts/clamshell.sh", "reconcile"]);
         }
     }
 
@@ -369,21 +386,8 @@ Singleton {
             if (root._reloading) return
             fileWriteTimer.restart()
         }
-        onSaved: {
-            if (fileWriteTimer.running) return;
-            if (root._applyAppFontsAfterSave) {
-                root._applyAppFontsAfterSave = false;
-                Quickshell.execDetached([Quickshell.shellPath("scripts/themes/apply-gtk-font.sh")]);
-            }
-            if (root._reconcileLidAfterSave) {
-                root._reconcileLidAfterSave = false;
-                Quickshell.execDetached([Directories.home + "/.config/hypr/hyprland/scripts/clamshell.sh", "reconcile"]);
-            }
-        }
-        onSaveFailed: {
-            root._applyAppFontsAfterSave = false;
-            root._reconcileLidAfterSave = false;
-        }
+        onSaved: root._saveFailed = false
+        onSaveFailed: root._saveFailed = true
         onLoaded: {
             root.ready = true
             // Memory matches disk again, so later writes are not stale.
