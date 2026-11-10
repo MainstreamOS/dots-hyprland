@@ -28,7 +28,15 @@ REPO_ROOT=$(pwd)
 source "$REPO_ROOT/sdata/subcmd-install/profiles.sh"
 staging=$(mktemp -d /run/mainstream-install.XXXXXXXX)
 target="$staging/target"
+saved_font="$staging/console-font.psf"
+restore_wizard_font() {
+  if [[ -s $saved_font ]]; then
+    setfont "$saved_font" 2>/dev/null || :
+  fi
+  rm -f -- "$saved_font"
+}
 cleanup() {
+  restore_wizard_font
   rm -f -- "$staging/credentials.json" "$staging/config.json" "$staging/source.bundle" "$staging/bin/systemd-run" \
     "$staging/catalog" "$staging/options" "$staging/username"
   if mountpoint -q "$target"; then
@@ -46,7 +54,15 @@ shopt -u nullglob
 network=nm
 if (( ${#wifi_profiles[@]} )); then network=nm_iwd; fi
 install_app_catalog --groups > "$staging/catalog"
+# Use the larger font shipped on the Arch USB when the local console has
+# room for it. Keep terminal emulators and serial consoles as they are.
+if [[ ${TERM:-} == linux && $(tty) =~ ^/dev/tty[0-9]+$ &&
+      -r /usr/share/kbd/consolefonts/ter-132n.psf.gz ]] &&
+    read -r rows columns < <(stty size) && (( rows >= 80 && columns >= 160 )); then
+  setfont -O "$saved_font" ter-132n 2>/dev/null || :
+fi
 (umask 077; python "$REPO_ROOT/sdata/subcmd-install/fresh-wizard.py" "$staging" "$network")
+restore_wizard_font
 [[ -s "$staging/config.json" ]] || exit 0
 install -Dm755 "$REPO_ROOT/sdata/subcmd-install/archinstall-systemd-run" "$staging/bin/systemd-run"
 git -c safe.directory="$REPO_ROOT" bundle create "$staging/source.bundle" HEAD --branches --tags

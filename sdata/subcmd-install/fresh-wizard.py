@@ -51,22 +51,19 @@ class Wizard:
             screen.addnstr(0, 0, 'Make the terminal larger, or press Esc to go back.', max(0, columns - 1))
             return 0, 0
 
-        panel_height = min(height, 28)
-        top = (height - panel_height) // 2
-        width = min(columns - 6, 76)
-        self.left = (columns - width) // 2
-        self.bottom = top + panel_height - 3
+        self.left = 3
+        self.bottom = height - 3
+        width = columns - 2 * self.left
 
-        def line(row, text, style=0):
-            screen.addnstr(top + row, self.left, text, width, style)
-
-        line(1, '  MAINSTREAM OS    /    INSTALLER'.ljust(width), self.header)
-        line(3, title, curses.A_BOLD)
-        notes = textwrap.wrap(details, width)
-        for row, note in enumerate(notes[:3], 4):
-            line(row, note)
-        line(panel_height - 2, footer, self.accent)
-        return top + 5 + min(3, len(notes)), width
+        screen.hline(0, 0, ' ', columns, self.header)
+        screen.addnstr(0, self.left, 'MAINSTREAM OS    /    INSTALLER', width, self.header)
+        screen.addnstr(2, self.left, title, width, curses.A_BOLD)
+        notes = textwrap.wrap(details, min(width, 90))
+        for row, note in enumerate(notes[:3], 3):
+            screen.addnstr(row, self.left, note, width)
+        screen.hline(height - 2, 0, curses.ACS_HLINE, columns, self.accent)
+        screen.addnstr(height - 1, self.left, footer, width, self.accent)
+        return 4 + min(3, len(notes)), width
 
     def key(self):
         key = self.screen.get_wch()
@@ -92,7 +89,8 @@ class Wizard:
                 active = index == cursor
                 marked = value in checked if multi else active
                 mark = f'[{"x" if marked else " "}] ' if value is not None else ''
-                self.screen.addnstr(start + index - offset, self.left, f'{"› " if active else "  "}{mark}{label}',
+                line = f'{"› " if active else "  "}{mark}{label}'
+                self.screen.addnstr(start + index - offset, self.left, line.ljust(width) if active else line,
                                     width, curses.A_REVERSE if active else 0)
             if len(rows) > visible:
                 self.screen.addnstr(self.bottom, self.left, f'{cursor + 1} of {len(rows)}', width)
@@ -118,6 +116,7 @@ class Wizard:
             if not start:
                 self.key()
                 continue
+            width = min(width, 76)
             display = '*' * len(value) if secret else value
             self.screen.addnstr(start, self.left, ('> ' + display[-(width - 3):]).ljust(width), width, curses.A_REVERSE)
             key = self.key()
