@@ -1588,8 +1588,8 @@ Singleton {
         }
         // The Hug dock runs the whole length of its edge, so it fits only
         // along the edge facing the bar: on either side of the bar it would
-        // run across the bar's ends. With the bar put away there is nothing
-        // to cross, and any edge will do. Every process goes by the shell's
+        // run across the bar's ends. With the traditional bar put away,
+        // either horizontal edge will do. Every process goes by the shell's
         // word on whether its bar is up (barShownOnFile above).
         readonly property bool dockSpans: Config.options?.dock.cornerStyle === "span"
         readonly property string dockHoverEffect: Config.options?.dock.hoverEffect ?? ""
@@ -1607,8 +1607,10 @@ Singleton {
             // negation, so an unrecognised value would anchor the dock to all
             // four edges at once instead of falling back to one.
             const want = ["top", "bottom", "left", "right"].includes(pos) ? pos : "bottom";
-            if (root.sizes.dockSpans && !root.sizes.barIsIsland)
-                return root.sizes.barShown ? root.sizes.oppositeEdge(root.sizes.barEdge) : want;
+            if (root.sizes.dockSpans && !root.sizes.barIsIsland) {
+                const horizontal = want === "top" || want === "bottom";
+                return !root.sizes.barShown && horizontal ? want : root.sizes.oppositeEdge(root.sizes.barEdge);
+            }
             return want === root.sizes.barEdge ? root.sizes.oppositeEdge(want) : want;
         }
         // Whether the dock may be set on an edge in the style it has now. Beside the traditional
