@@ -438,7 +438,7 @@ install-prebuilt() {
   local location=$1
   local installflags=$2
   local bin=$3
-  local pkg
+  local pkg linkage
   pkg=$(basename "$location")
 
   remove-previous-package-name "$location"
@@ -446,7 +446,7 @@ install-prebuilt() {
   if pacman -Si "$pkg" >/dev/null 2>&1; then
     # --ask 4 removes a conflicting package such as another Quickshell, which --noconfirm refuses.
     if retry sudo pacman -S $installflags --ask 4 --ignore "$KDE_IGNORE_ARG" "$pkg"; then
-      if [[ -x "$bin" ]] && ! ldd "$bin" 2>&1 | grep -q "not found"; then
+      if [[ -x "$bin" ]] && linkage="$(LC_ALL=C ldd "$bin" 2>&1)" && [[ "$linkage" != *"not found"* ]]; then
         printf "${STY_CYAN}[$0]: Installed prebuilt $pkg from [mainstream].${STY_RST}\n"
         return 0
       fi
