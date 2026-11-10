@@ -18,12 +18,15 @@ Item { // Player instance
     property real uiScale: QsWindow.window?.uiScale ?? 1
     readonly property QtObject fontSizes: Appearance.font.sizesFor(QsWindow.window)
     required property MprisPlayer player
-    property var artUrl: player?.trackArtUrl
-    property string artDownloadLocation: Directories.coverArt
-    property string artFileName: Qt.md5(artUrl)
-    property string artFilePath: `${artDownloadLocation}/${artFileName}`
-    // A track with no art is part of the binding rather than an assignment in
-    // onArtFilePathChanged, which would break it for every track after.
+    property CoverArtSource prefetchedArt: null
+    readonly property CoverArtSource artwork: prefetchedArt ?? localArt.item
+    readonly property string artUrl: player?.trackArtUrl ?? ""
+    readonly property string artFilePath: artwork?.cachePath ?? ""
+    Loader {
+        id: localArt
+        active: !root.prefetchedArt
+        sourceComponent: CoverArtSource { url: root.artUrl }
+    }
     property color artDominantColor: root.artUrl.length == 0 ? Appearance.m3colors.m3secondaryContainer
         : (ColorUtils.mix((colorQuantizer?.colors[0] ?? (root.savedArtColor || Appearance.colors.colPrimary)), Appearance.colors.colPrimaryContainer, 0.8) || Appearance.m3colors.m3secondaryContainer)
 
@@ -33,7 +36,7 @@ Item { // Player instance
     // the default color until the quantizer has looked at the art again.
     FileView {
         id: artColorFile
-        path: root.artUrl ? `${root.artFilePath}.color` : ""
+        path: root.artUrl && root.artFilePath ? `${root.artFilePath}.color` : ""
         blockLoading: true
         printErrors: false
     }
@@ -73,7 +76,7 @@ Item { // Player instance
     // with the player instead of after the downloader has looked for it. Art
     // that is not there yet fails to load, which shows the placeholder, and
     // comes in once the download lands.
-    property string displayedArtFilePath: root.artUrl && !root.artReloading ? Qt.resolvedUrl(artFilePath) : ""
+    readonly property string displayedArtFilePath: root.artReloading ? "" : (root.artwork?.source ?? "")
 
     component TrackChangeButton: RippleButton {
         implicitWidth: 24 * root.uiScale
@@ -106,30 +109,13 @@ Item { // Player instance
         }
     }
 
-    onArtFilePathChanged: {
-        if (root.artUrl.length == 0)
-            return;
-
-        // Binding does not work in Process
-        coverArtDownloader.targetFile = root.artUrl 
-        coverArtDownloader.artFilePath = root.artFilePath
-        // Download
-        coverArtDownloader.running = true
-    }
-
-    Process { // Cover art downloader
-        id: coverArtDownloader
-        property string targetFile: root.artUrl
-        property string artFilePath: root.artFilePath
-        // Local players such as mpv report their art as a file:// path, and
-        // the panels that take their colors from this folder need that copy
-        // too.
-        command: ["bash", Quickshell.shellPath("scripts/mpris/fetch-cover-art.sh"), artFilePath, targetFile, "http,https,file"]
+    Connections {
+        target: root.artwork
         // A file that was not there when the image looked is loaded again
         // once it has arrived; one that was there needs nothing. A failed
         // download leaves the placeholder, and the next track tries again.
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0 && mediaArt.status === Image.Error) {
+        function onCacheReady() {
+            if (mediaArt.status === Image.Error) {
                 root.artReloading = true
                 Qt.callLater(() => root.artReloading = false)
             }

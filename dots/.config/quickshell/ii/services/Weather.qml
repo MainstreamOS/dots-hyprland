@@ -64,7 +64,15 @@ Singleton {
         const name = WeatherForecast.condition(lastReply?.current?.weather_code);
         return conditionNames[name] ?? name;
     }
-    readonly property bool refreshing: weatherFetcher.running || fallbackFetcher.running || geocoder.running
+    readonly property bool refreshing: !!(weatherFetcher.running || fallbackFetcher.running || geocoder.running)
+    property double lastRequestAt: 0
+
+    function refreshOnOpen() {
+        // Moving across the Island or opening it on another screen can send
+        // several requests in a few seconds. Keep the last forecast visible.
+        if (root.refreshing || Date.now() - root.lastRequestAt < 30000) return;
+        root.getData();
+    }
 
     // Resolved on every read rather than written into the settings file, so a
     // location landing after login writes nothing. "auto" is the shipped value
@@ -75,8 +83,13 @@ Singleton {
     // One key for the whole position, so a coordinate pair arriving as two
     // assignments asks for one fetch rather than two.
     readonly property string fetchKey: root.locationValid ? `${root.latitude},${root.longitude}` : ""
-    onFetchKeyChanged: if (root.fetchKey.length > 0)
-        weatherFetcher.fetch()
+    onFetchKeyChanged: if (root.fetchKey)
+        Qt.callLater(weatherFetcher.fetch)
+
+    function fetchChangedLocation(requestKey) {
+        if (root.fetchKey && root.fetchKey !== requestKey)
+            Qt.callLater(weatherFetcher.fetch);
+    }
 
     // Nothing known yet says so. A zero reads as a reading, and a bar reporting
     // 0 degrees for a machine that has never reached the network is worse than
@@ -157,7 +170,7 @@ Singleton {
         temp.windDir = degToDir(current.wind_direction_10m || 0);
         
         temp.wCode = root.wmoToWwo(current.weather_code);
-        temp.city = root.cityName;
+        temp.city = isRerender ? root.data.city : root.cityName;
 
         // Converted here rather than asked for in the URL. The API's
         // precipitation_unit=inch also restates visibility in feet, which the
@@ -189,6 +202,8 @@ Singleton {
     // missing. A typed name goes through the same wait typing does, so a start
     // and a keystroke cannot both ask for it.
     function getData() {
+        if (root.refreshing || pinnedDebounce.running) return;
+        root.lastRequestAt = Date.now();
         if (root.usePinned) {
             if (root.pinnedValid)
                 weatherFetcher.fetch();
@@ -211,19 +226,27 @@ Singleton {
         id: geocoder
         running: false
         property string pending: ""
+        property string requestedCity: ""
         function fetch(name) {
             // Assigning `running` on a process already running does nothing, so
             // a query issued while one is in flight would be swallowed.
             geocoder.pending = name;
             if (geocoder.running)
                 return;
+            geocoder.requestedCity = name;
             geocoder.command = ["curl", "-s", "--max-time", "10", `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`];
             geocoder.running = true;
         }
+        onExited: {
+            if (root.usePinned && geocoder.pending === root.pinnedCity && geocoder.pending !== geocoder.requestedCity)
+                Qt.callLater(() => {
+                    if (root.usePinned && geocoder.pending === root.pinnedCity) geocoder.fetch(geocoder.pending);
+                });
+        }
         stdout: StdioCollector {
             onStreamFinished: {
-                const asked = geocoder.pending;
-                if (text.length === 0)
+                const asked = geocoder.requestedCity;
+                if (!root.usePinned || asked !== root.pinnedCity || text.length === 0)
                     return;
                 try {
                     // A name matching nothing comes back with no results key at
@@ -272,13 +295,19 @@ Singleton {
         // Capped, because assigning `running` on a process already running
         // does nothing, so one request left hanging would swallow every one
         // behind it until the shell restarts.
+        property string requestedKey: ""
+        onExited: root.fetchChangedLocation(requestedKey)
         function fetch() {
+            if (!root.fetchKey || running || fallbackFetcher.running) return;
+            requestedKey = root.fetchKey;
+            root.lastRequestAt = Date.now();
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${root.latitude}&longitude=${root.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,uv_index,visibility&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,weather_code,precipitation_probability,is_day&timezone=auto&forecast_days=5`;
             command = ["curl", "-s", "--max-time", "15", url];
             running = true;
         }
         stdout: StdioCollector {
             onStreamFinished: {
+                if (weatherFetcher.requestedKey !== root.fetchKey) return;
                 if (text.length === 0) {
                     fallbackFetcher.fetch();
                     return;
@@ -336,8 +365,11 @@ print(json.dumps({"current":{
 
     Process {
         id: fallbackFetcher
+        property string requestedKey: ""
+        onExited: root.fetchChangedLocation(requestedKey)
         function fetch() {
-            if (running) return;
+            if (!root.fetchKey || running) return;
+            requestedKey = root.fetchKey;
             const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${root.latitude}&lon=${root.longitude}`;
             // The service asks callers to identify themselves and turns away
             // those that do not. URL and program arrive as arguments so neither
@@ -349,7 +381,7 @@ print(json.dumps({"current":{
         }
         stdout: StdioCollector {
             onStreamFinished: {
-                if (text.length === 0) return;
+                if (fallbackFetcher.requestedKey !== root.fetchKey || text.length === 0) return;
                 try {
                     const weather = JSON.parse(text);
                     // This forecaster reports no sun times, and the reader

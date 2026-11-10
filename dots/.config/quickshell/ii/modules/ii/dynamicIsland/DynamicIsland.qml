@@ -201,6 +201,10 @@ Scope {
             onExpandedChanged: {
                 if (expanded) {
                     unloadContent.stop();
+                    if (!window.drawerMode) {
+                        if (IslandPanels.enabled("weather")) Weather.refreshOnOpen();
+                        IslandState.mediaCoverArt.prepare();
+                    }
                     displayedPanel = window.validPanel(IslandState.selected);
                     content.active = true;
                 } else {

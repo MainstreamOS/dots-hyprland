@@ -37,7 +37,7 @@ ColumnLayout {
 
                     StyledText {
                         Layout.fillWidth: true
-                        text: Weather.cityName || Translation.tr("Weather")
+                        text: Weather.data.city || Weather.cityName || Translation.tr("Weather")
                         color: root.contentColors.colOnSurfaceVariant
                         font.pixelSize: 13 * Appearance.sizes.islandScale
                         font.weight: Font.DemiBold

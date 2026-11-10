@@ -28,13 +28,14 @@ ColumnLayout {
         active: !!IslandState.player
         sourceComponent: PlayerControl {
             player: IslandState.player
+            prefetchedArt: IslandState.mediaCoverArt
             radius: Appearance.rounding.large * Appearance.sizes.islandScale
         }
     }
     ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: 140 * Appearance.sizes.islandScale
-        visible: !IslandState.player
+        visible: IslandState.mediaDiscoveryComplete && !IslandState.player
         MaterialSymbol { Layout.alignment: Qt.AlignHCenter; text: "music_note"; iconSize: 42 * Appearance.sizes.islandScale; color: Appearance.barStripContent.colPrimary }
         StyledText { Layout.alignment: Qt.AlignHCenter; text: Translation.tr("No media playing"); color: Appearance.barStripContent.colOnLayer0; font.pixelSize: Appearance.font.basePixelSize.large * Appearance.sizes.islandScale }
         StyledText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: Translation.tr("Play music or video in a browser, Spotify, VLC, or an MPRIS-enabled player."); color: Appearance.barStripContent.colOnSurfaceVariant }
