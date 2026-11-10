@@ -34,8 +34,13 @@ class UpgradeTests(unittest.TestCase):
             self.assertNotEqual(check('0.57.0-1'), 0)
 
     def test_gate_precedes_transaction(self):
-        gate = source.index('if ! hyprland_lua_preflight "$_hypr_target"')
-        self.assertLess(gate, source.index('pacman_tx -Syu --noconfirm'))
-        self.assertIn('exit 107', source[gate:gate+250])
+        system = source.index('# ── 1. System +')
+        aur = source.index('# ── 2. AUR')
+        for step, transaction in (
+            (source[system:aur], 'pacman_system_upgrade 2>&1'),
+            (source[aur:], 'user_step 0 env HOME="$ORIG_HOME"'),
+        ):
+            gate = step.index('if ! hyprland_lua_preflight "$_hypr_target"')
+            self.assertIn('exit 107', step[gate:step.index(transaction)])
 
 if __name__ == '__main__': unittest.main()

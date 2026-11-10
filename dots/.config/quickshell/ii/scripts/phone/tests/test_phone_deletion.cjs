@@ -8,6 +8,8 @@ const services = path.resolve(__dirname, '../../../services');
 const helper = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(services, 'PhoneConversationVisibility.js'), 'utf8')
     .replace(/^\.pragma library\s*/, ''), helper);
+const objectUtils = fs.readFileSync(path.join(services, '../modules/common/functions/ObjectUtils.qml'), 'utf8');
+const fromEntries = vm.runInNewContext('(' + objectUtils.match(/function fromEntries\(entries\) \{[\s\S]*?\n    \}/)[0] + ')');
 const plain = value => JSON.parse(JSON.stringify(value));
 const old = {uid: 'old', thread: 2, date: 90, type: 1, attachments: [{uid: 'private'}]};
 const fresh = {uid: 'fresh', thread: 2, date: 101, type: 1};
@@ -40,7 +42,9 @@ function phoneFixture() {
         conversationsDeleted(...args) { signals.push(args); },
         command(fields) { signals.push(plain(fields)); return 'request'; },
     };
-    const context = vm.createContext({root, ConversationVisibility: helper, saveSentTimer: {restart() {}}});
+    const context = vm.createContext({
+        root, ConversationVisibility: helper, ObjectUtils: {fromEntries}, saveSentTimer: {restart() {}},
+    });
     const source = fs.readFileSync(path.join(services, 'Phone.qml'), 'utf8');
     for (const name of ['applyConversationDeletion', 'deleteHiddenConversations', 'keepMessages']) {
         const match = source.match(new RegExp(`    function ${name}\\(([^)]*)\\): (?:void|var) \\{([\\s\\S]*?)\\n    \\}`));
