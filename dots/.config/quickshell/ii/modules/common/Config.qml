@@ -319,11 +319,17 @@ Singleton {
 
     // A window running as its own process waits for this before it quits, or
     // the change that started the countdown below would never reach the file.
-    readonly property bool writePending: fileWriteTimer.running || root._applyAppFontsAfterSave
+    readonly property bool writePending: fileWriteTimer.running || root._applyAppFontsAfterSave || root._reconcileLidAfterSave
 
     property bool _applyAppFontsAfterSave: false
     function queueAppFontApply() {
         root._applyAppFontsAfterSave = true;
+        fileWriteTimer.restart();
+    }
+
+    property bool _reconcileLidAfterSave: false
+    function queueLidReconcile() {
+        root._reconcileLidAfterSave = true;
         fileWriteTimer.restart();
     }
 
@@ -341,6 +347,7 @@ Singleton {
             if (root._writeStale) {
                 root._writeStale = false
                 root._applyAppFontsAfterSave = false
+                root._reconcileLidAfterSave = false
                 return
             }
             configFileView.writeAdapter()
@@ -363,12 +370,20 @@ Singleton {
             fileWriteTimer.restart()
         }
         onSaved: {
-            if (root._applyAppFontsAfterSave && !fileWriteTimer.running) {
+            if (fileWriteTimer.running) return;
+            if (root._applyAppFontsAfterSave) {
                 root._applyAppFontsAfterSave = false;
                 Quickshell.execDetached([Quickshell.shellPath("scripts/themes/apply-gtk-font.sh")]);
             }
+            if (root._reconcileLidAfterSave) {
+                root._reconcileLidAfterSave = false;
+                Quickshell.execDetached([Directories.home + "/.config/hypr/hyprland/scripts/clamshell.sh", "reconcile"]);
+            }
         }
-        onSaveFailed: root._applyAppFontsAfterSave = false
+        onSaveFailed: {
+            root._applyAppFontsAfterSave = false;
+            root._reconcileLidAfterSave = false;
+        }
         onLoaded: {
             root.ready = true
             // Memory matches disk again, so later writes are not stale.

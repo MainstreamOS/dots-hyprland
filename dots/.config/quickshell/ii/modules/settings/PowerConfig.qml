@@ -221,7 +221,7 @@ ContentPage {
             onCheckedChanged: {
                 if (checked === Config.options.display.sleepOnLidClose) return;
                 Config.options.display.sleepOnLidClose = checked;
-                Quickshell.execDetached(["bash", "-c", `"${Directories.home}/.config/hypr/hyprland/scripts/clamshell.sh" reconcile`]);
+                Config.queueLidReconcile();
             }
         }
     }
