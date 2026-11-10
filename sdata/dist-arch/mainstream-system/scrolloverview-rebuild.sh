@@ -121,7 +121,7 @@ NPROC=$(nproc 2>/dev/null || echo 1)
 # while the bare version stays identical, so a stamp without it would compare
 # equal and hand back a stale .so. pkg-config stays as the fallback so a rebuild
 # against a hand-built Hyprland still works.
-HYPR_VER=$(pacman -Q hyprland 2>/dev/null | awk '{print $2}')
+HYPR_VER=$(pacman -Q hyprland 2>/dev/null | awk '{print $2}' || true)
 [[ -n "$HYPR_VER" ]] || HYPR_VER=$(pkg-config --modversion hyprland 2>/dev/null || echo "")
 [[ -n "$HYPR_VER" ]] || { err "could not read Hyprland version"; exit 1; }
 log "Installed Hyprland: $HYPR_VER"
@@ -137,26 +137,6 @@ if command -v hyprctl >/dev/null 2>&1; then
 fi
 
 mkdir -p "$(dirname "$SRC_DIR")"
-
-# Fetch (or fast-update) the source tree with full tag history. Full clone
-# is fine — hyprland-scroll-overview is a tiny repo, and we need history to
-# walk backward when main fails.
-if [[ -d "$SRC_DIR/.git" ]]; then
-    if ! git -C "$SRC_DIR" remote get-url origin 2>/dev/null | grep -qF "$SCROLLOVERVIEW_REPO"; then
-        log "Repo URL changed; re-cloning $SCROLLOVERVIEW_REPO"
-        rm -rf "$SRC_DIR"
-    else
-        git -C "$SRC_DIR" fetch --tags --prune origin >/dev/null 2>&1 || {
-            err "git fetch failed; nuking and re-cloning"
-            rm -rf "$SRC_DIR"
-        }
-    fi
-fi
-if [[ ! -d "$SRC_DIR/.git" ]]; then
-    rm -rf "$SRC_DIR"
-    git clone "$SCROLLOVERVIEW_REPO" "$SRC_DIR" >/dev/null 2>&1 \
-        || { err "git clone $SCROLLOVERVIEW_REPO failed"; exit 1; }
-fi
 
 # ------------------------------------------------------------------
 # Build helpers
@@ -227,6 +207,14 @@ auto_detect_refs() {
 # ------------------------------------------------------------------
 # Status-file helpers (read by /usr/bin/scrolloverview-status-notify)
 # ------------------------------------------------------------------
+# The home is user-owned. Reject targets that are reached through a link
+# inside it, while still accepting a quarantined plugin whose file is absent.
+target_has_local_path() {
+    local target="$1" home="$2" expected
+    expected="$(realpath -e -- "$home" 2>/dev/null)" || return 1
+    [[ "$(realpath -e -- "${target%/*}" 2>/dev/null)" == "$expected/.local/share/hyprland/plugins" && ! -L "$target" ]]
+}
+
 # A stale plugin built for an older Hyprland segfaults the compositor at
 # dlopen — a missing one only produces a load-error banner. When a rebuild
 # fails for a NEW Hyprland version, move version-mismatched plugins aside so
@@ -234,7 +222,7 @@ auto_detect_refs() {
 quarantine_stale_targets() {
     local hypr_ver="$1" target built_for stamp
     for target in "${TARGETS[@]}"; do
-        [[ -f "$target" ]] || continue
+        [[ -f "$target" ]] && target_has_local_path "$target" "${target%/.local/share/hyprland/plugins/scrolloverview.so}" || continue
         stamp="$target.builtfor"
         built_for=""
         # First line only: the stamp gained a second line holding the source
@@ -321,6 +309,28 @@ plugin_is_current() {
     return 0
 }
 
+# A network failure can still leave a usable cache for this version of Hyprland.
+# Only discard it when the configured remote changed or the cache is unreadable.
+if [[ -d "$SRC_DIR/.git" ]]; then
+    origin="$(git -C "$SRC_DIR" config --get remote.origin.url 2>/dev/null || true)"
+    if [[ "${origin%.git}" != "${SCROLLOVERVIEW_REPO%.git}" ]] ||
+       ! git -C "$SRC_DIR" rev-parse --verify 'HEAD^{commit}' >/dev/null 2>&1; then
+        log "Replacing the source cache for $SCROLLOVERVIEW_REPO"
+        rm -rf "$SRC_DIR"
+    elif ! GIT_TERMINAL_PROMPT=0 git -C "$SRC_DIR" fetch --tags --prune origin >/dev/null; then
+        log "Using cached sources because the remote could not be refreshed."
+    fi
+fi
+if [[ ! -d "$SRC_DIR/.git" ]]; then
+    rm -rf "$SRC_DIR"
+    if ! GIT_TERMINAL_PROMPT=0 git clone "$SCROLLOVERVIEW_REPO" "$SRC_DIR" >/dev/null; then
+        err "git clone $SCROLLOVERVIEW_REPO failed"
+        write_status_failed "$HYPR_VER"
+        quarantine_stale_targets "$HYPR_VER"
+        exit 1
+    fi
+fi
+
 if [[ -z "$SCROLLOVERVIEW_REF" ]]; then
     WANT_SHA="$(first_resolvable_sha)"
     if plugin_is_current "$WANT_SHA"; then
@@ -341,7 +351,7 @@ if [[ -n "$SCROLLOVERVIEW_REF" ]]; then
         err "full log: $BUILD_LOG"
         tail -n 20 "$BUILD_LOG" >&2
         write_status_failed "$HYPR_VER"
-    quarantine_stale_targets "$HYPR_VER"
+        quarantine_stale_targets "$HYPR_VER"
         exit 1
     fi
 else
@@ -406,10 +416,7 @@ printf '%s\n' "$BUILT_SHA" > "$LAST_GOOD_FILE"
 STAMP_TMP="$(mktemp)"
 for target in "${TARGETS[@]}"; do
     user_home="${target%/.local/share/hyprland/plugins/scrolloverview.so}"
-    # Everything below runs as root inside folders the user owns, so a link
-    # anywhere under the home would aim these writes at a file of its choosing.
-    plugin_dir="$(realpath -e -- "$user_home" 2>/dev/null)/.local/share/hyprland/plugins"
-    if [[ "$(realpath -e -- "$(dirname -- "$target")" 2>/dev/null)" != "$plugin_dir" || -L "$target" ]]; then
+    if ! target_has_local_path "$target" "$user_home"; then
         log "Skipped $target: its path goes through a link"
         continue
     fi
