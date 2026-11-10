@@ -2,17 +2,25 @@
 
 install_app_catalog() {
   local app id label
+  local grouped=${1:-}
   local -a MAINSTREAM_DEFAULT_APPS=()
   source "$REPO_ROOT/sdata/dist-arch/mainstream-extras/default-apps.list"
   for app in "${MAINSTREAM_DEFAULT_APPS[@]}"; do
     IFS='|' read -r id label _ <<< "$app"
-    printf '%s\t%s\tdefault\n' "$id" "$label"
+    printf '%s\t%s\tdefault' "$id" "$label"
+    [[ $grouped != --groups ]] || printf '\tDefault apps'
+    printf '\n'
   done
-  awk '
+  awk -v grouped="$grouped" '
+    /^    - name: "/ {
+      group = $0; sub(/^    - name: "[^[:alnum:]]*/, "", group); sub(/"$/, "", group)
+    }
     /^          - name: / { id = $3 }
     /^            display: "/ {
       label = $0; sub(/^ +display: "/, "", label); sub(/"$/, "", label)
-      printf "%s\t%s\toptional\n", id, label
+      printf "%s\t%s\toptional", id, label
+      if (grouped == "--groups") printf "\t%s", group
+      print ""
     }
   ' "$REPO_ROOT/sdata/subcmd-install/optional-apps.conf"
 }

@@ -11,6 +11,12 @@ AUTO_YES=false
 if [[ "${1:-}" == "--yes" ]]; then
   AUTO_YES=true
 fi
+snapper_cmd=(snapper)
+timer_args=(--now)
+if systemd-detect-virt --quiet --chroot; then
+    snapper_cmd+=(--no-dbus)
+    timer_args=()
+fi
 
 # --- Configuration ---
 SNAPPER_SPACE_LIMIT="0.2"       # 20% of drive
@@ -514,7 +520,7 @@ pacman -S --needed --noconfirm snapper snap-pac
 
 # Keep an existing snapshot layout mounted and intact when resuming setup.
 if [[ -f /etc/snapper/configs/root ]]; then
-    snapper -c root list >/dev/null || error "The existing root snapshot configuration could not be read."
+    "${snapper_cmd[@]}" -c root list >/dev/null || error "The existing root snapshot configuration could not be read."
     info "Using the existing root snapshot configuration."
 else
     # Only prepare an empty snapshot location when creating a new config.
@@ -534,7 +540,7 @@ else
     if [[ -d /.snapshots ]]; then
         rmdir /.snapshots
     fi
-    snapper -c root create-config /
+    "${snapper_cmd[@]}" -c root create-config /
 fi
 
 # snapper creates its own .snapshots subvolume, but we may want to manage it ourselves
@@ -542,34 +548,28 @@ fi
 
 # Configure snapper limits
 info "Configuring snapper (20% space limit, max 5 snapshots)..."
-snapper -c root set-config "SPACE_LIMIT=$SNAPPER_SPACE_LIMIT"
-snapper -c root set-config "NUMBER_LIMIT=$SNAPPER_NUMBER_LIMIT"
-snapper -c root set-config "NUMBER_LIMIT_IMPORTANT=$SNAPPER_NUMBER_LIMIT"
+"${snapper_cmd[@]}" -c root set-config "SPACE_LIMIT=$SNAPPER_SPACE_LIMIT" "NUMBER_LIMIT=$SNAPPER_NUMBER_LIMIT" \
+    "NUMBER_LIMIT_IMPORTANT=$SNAPPER_NUMBER_LIMIT"
 
 # Timeline snapshots - enable with conservative settings
-snapper -c root set-config "TIMELINE_CREATE=yes"
-snapper -c root set-config "TIMELINE_CLEANUP=yes"
-snapper -c root set-config "TIMELINE_MIN_AGE=1800"
-snapper -c root set-config "TIMELINE_LIMIT_HOURLY=2"
-snapper -c root set-config "TIMELINE_LIMIT_DAILY=3"
-snapper -c root set-config "TIMELINE_LIMIT_WEEKLY=0"
-snapper -c root set-config "TIMELINE_LIMIT_MONTHLY=0"
-snapper -c root set-config "TIMELINE_LIMIT_YEARLY=0"
+"${snapper_cmd[@]}" -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_CLEANUP=yes" "TIMELINE_MIN_AGE=1800" \
+    "TIMELINE_LIMIT_HOURLY=2" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=0" "TIMELINE_LIMIT_MONTHLY=0" "TIMELINE_LIMIT_YEARLY=0"
 
 # Enable snapper timers
-systemctl enable --now snapper-timeline.timer
-systemctl enable --now snapper-cleanup.timer
+systemctl enable "${timer_args[@]}" snapper-timeline.timer snapper-cleanup.timer
 
 info "Snapper configured"
 
 # --- Step 4: Enable snapshot sync now that Limine is generator-managed ---
 limit_snapshot_esp_usage
-systemctl enable --now limine-snapper-sync.service
+systemctl enable "${timer_args[@]}" limine-snapper-sync.service
 
 # --- Step 5: Create initial snapshot ---
 info "Creating initial snapshot..."
-snapper -c root create --description "Fresh install" --type single
-limine-snapper-sync || warn "limine-snapper-sync failed after creating the initial snapshot. You can rerun it manually once the system is up."
+"${snapper_cmd[@]}" -c root create --description "Fresh install" --type single
+if (( ${#timer_args[@]} )); then
+    limine-snapper-sync || warn "limine-snapper-sync failed after creating the initial snapshot. You can rerun it manually once the system is up."
+fi
 
 info "Setup complete!"
 echo ""

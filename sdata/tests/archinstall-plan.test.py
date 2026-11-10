@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 
-PLAN = Path(__file__).resolve().parents[1] / 'subcmd-install' / 'archinstall-plan.py'
+PLAN = Path(__file__).resolve().parents[1] / 'subcmd-install' / 'archinstall_plan.py'
 spec = importlib.util.spec_from_file_location('archinstall_plan', PLAN)
 plan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(plan)

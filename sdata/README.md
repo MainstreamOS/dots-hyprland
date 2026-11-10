@@ -10,9 +10,9 @@ From the stock Arch USB, boot in UEFI mode and connect to the internet. Run this
 bash <(curl -fsSL https://mainstreamos.org/install.sh) --fresh
 ```
 
-Choose an app profile, pick the disk and installation mode, and decide whether to encrypt the system. Create your account and review your choices. Install alongside uses a contiguous unallocated GPT region of at least 32 GiB and creates a separate EFI partition for Mainstream. Prepare free space in the existing operating system first if needed.
+Use the arrow keys to choose a profile, disk layout, and drive. On each Custom apps screen, press Space or Enter to toggle an app. Press Tab and then Enter to continue, or Esc to go back. Choose whether to encrypt the system, create your account, and review the installation before starting. Install alongside uses a contiguous unallocated GPT region of at least 32 GiB and creates a separate EFI partition for Mainstream. Prepare free space in the existing operating system first if needed.
 
-When prompted, press Enter to restart and remove the USB as the screen goes blank. Mainstream finishes setting up the desktop automatically and restarts to the sign-in screen. If you enabled encryption, enter your disk passphrase at each boot. If the network does not reconnect, the installer opens a connection picker.
+The installer sets up the base system and desktop in the same session. When prompted, press Enter to restart and remove the USB as the screen goes blank. If you enabled encryption, enter your disk passphrase to reach the Mainstream sign-in screen.
 
 - TODO: output the logs to a temp file, then show the path of the file so users will be able to read it again or upload it to issue.
 - TODO: unify the message output via functions (for example `log_error`, `log_warning`).

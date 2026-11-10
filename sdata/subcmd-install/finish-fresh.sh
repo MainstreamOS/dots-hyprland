@@ -1,43 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-handoff=/var/log/mainstream-firstboot
+handoff=/var/log/mainstream-install
 if (( EUID == 0 )); then
   IFS= read -r username < "$handoff/username"
   uid=$(id -u "$username")
   (( uid >= 1000 && uid < 65534 )) || exit 1
-  if ! nm-online -q -t 25; then
-    printf '%s\n' 'Connect to the internet to finish setting up Mainstream.'
-    nmtui connect || :
+
+  # Seed Limine with the new root and encryption parameters from Archinstall.
+  # The running kernel is still the USB's kernel.
+  if [[ ! -s /etc/kernel/cmdline ]]; then
+    cmdline=$(awk '$1 == "options" {sub(/^options[[:space:]]+/, ""); print; exit}' /boot/loader/entries/*.conf)
+    [[ -n "$cmdline" ]] || { echo 'Missing the installed system kernel command line.' >&2; exit 1; }
+    install -d /etc/kernel
+    printf '%s\n' "$cmdline" > /etc/kernel/cmdline
   fi
 
-  # The fresh account runs the regular installer. Its unattended sudo rule
-  # lives in /run, so it is lost even if the machine powers off during setup.
-  sudoers=/run/mainstream-firstboot/sudoers
-  install -d -m 750 "$sudoers"
-  trap 'rm -f -- "$sudoers/account"' EXIT
-  (umask 337; printf '%s ALL=(ALL:ALL) NOPASSWD: ALL\n' "$username" > "$sudoers/account")
+  # Only the temporary chroot has the passwordless rule. An interrupted
+  # install leaves no rule in effect after boot because /run is ephemeral.
+  runtime=/run/mainstream-install
+  include=/etc/sudoers.d/zz-mainstream-install
+  install -d -m 750 "$runtime"
+  trap 'rm -f -- "$runtime/account" "$include"; rmdir -- "$runtime" || :' EXIT
+  (umask 337
+    printf '@includedir %s\n' "$runtime" > "$include"
+    printf '%s ALL=(ALL:ALL) NOPASSWD: ALL\n' "$username" > "$runtime/account"
+  )
   visudo -cf /etc/sudoers >/dev/null
 
-  systemctl start "user@$uid.service"
-  printf '\nFinishing Mainstream setup. The computer will restart when it is ready.\n'
-  while ! runuser -u "$username" -- env TERM=linux XDG_RUNTIME_DIR="/run/user/$uid" \
-      DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$handoff/finish-fresh.sh"; do
-    printf '\nSetup is incomplete. Press Enter to retry, N to connect to a network, or Q to exit: '
-    IFS= read -r retry
-    case "$retry" in
-      n|N) nmtui connect || : ;;
-      q|Q) exit 1 ;;
-    esac
-  done
-
-  rm -f -- "$sudoers/account" /etc/sudoers.d/zz-mainstream-firstboot
-  systemctl disable mainstream-firstboot.service
-  rm -f -- /etc/systemd/system/mainstream-firstboot.service "$handoff/"{finish-fresh.sh,options,source.bundle,username}
-  rmdir "$handoff"
-  sync
-  printf '\nMainstream is ready. Restarting…\n'
-  systemctl --no-block reboot
+  runuser -u "$username" -- env MS_INSTALL_OFFLINE=1 TERM=linux "$handoff/finish-fresh.sh"
   exit
 fi
 
