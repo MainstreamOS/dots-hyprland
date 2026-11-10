@@ -63,7 +63,7 @@ if ! command -v pacman >/dev/null 2>&1; then
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-    [[ $FRESH == false ]] || die "git is missing. Boot a current Arch USB and try again."
+    [[ $FRESH == false ]] || die "Git is missing on the live USB. Run 'pacman -Sy --needed git', then retry."
     say "git not found, installing via pacman..."
     sudo pacman -Sy --needed --noconfirm git
 fi
