@@ -67,19 +67,46 @@ def disk_layout(disk, mode):
         {'device': device['name'], 'wipe': mode == 'erase', 'partitions': partitions}]}
 
 
-if __name__ == '__main__':
-    disk, mode = sys.argv[1:]
-    try:
-        if mode not in ('alongside', 'erase'):
-            raise ValueError('Unknown installation mode.')
-        config = {
-            'hostname': 'mainstream',
-            'disk_config': disk_layout(disk, mode),
-            'bootloader_config': {'bootloader': 'Systemd-boot', 'uki': False, 'removable': False},
-            'network_config': {'type': 'nm'},
-            'mirror_config': {'optional_repositories': ['multilib']},
-            'packages': ['git', 'sudo'],
+def install_config(disk, mode, network):
+    if mode not in ('alongside', 'erase'):
+        raise ValueError('Unknown installation mode.')
+    return {
+        'hostname': 'mainstream',
+        'disk_config': disk_layout(disk, mode),
+        'bootloader_config': {'bootloader': 'Systemd-boot', 'uki': False, 'removable': False},
+        'network_config': {'type': network},
+        'mirror_config': {'optional_repositories': ['multilib']},
+        'packages': ['git', 'sudo', 'linux-firmware'],
+    }
+
+
+def add_credentials(config, username, password, passphrase):
+    password_hash = subprocess.check_output(
+        ['openssl', 'passwd', '-6', '-stdin'], input=password + b'\n',
+    ).decode().strip()
+    credentials = {'users': [{'username': username, 'enc_password': password_hash, 'sudo': True}]}
+    if passphrase:
+        disk_config = config['disk_config']
+        root = disk_config['device_modifications'][0]['partitions'][1]
+        disk_config['disk_encryption'] = {
+            'encryption_type': 'luks',
+            'partitions': [root['obj_id']],
+            'lvm_volumes': [],
         }
+        credentials['encryption_password'] = passphrase.decode()
+    return credentials
+
+
+if __name__ == '__main__':
+    disk, mode, *account = sys.argv[1:]
+    try:
+        config = install_config(disk, mode, account[1] if account else 'nm')
+        if account:
+            username, _, credentials_path = account
+            password, passphrase = sys.stdin.buffer.read().split(b'\0', 1)
+            credentials = add_credentials(config, username, password, passphrase)
+            with open(credentials_path, 'x', encoding='utf-8') as output:
+                json.dump(credentials, output)
     except (ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
     print(json.dumps(config))

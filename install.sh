@@ -15,7 +15,7 @@
 # Anything passed after a `--` is forwarded to ./setup install, e.g.:
 #   bash <(curl -fsSL ...) -- --verbose
 #   bash <(curl -fsSL ...) --edge -- --console
-# On the stock Arch USB, use -- --fresh to set up a new system.
+# On the stock Arch USB, use --fresh to set up a new system.
 
 set -euo pipefail
 
@@ -35,7 +35,8 @@ SETUP_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --edge) EDGE=1; shift ;;
-        --)     shift; SETUP_ARGS=("$@"); break ;;
+        --fresh) SETUP_ARGS=(--fresh); shift ;;
+        --)     shift; SETUP_ARGS+=("$@"); break ;;
         *)      printf 'Unknown option: %s\n' "$1" >&2
                 printf 'Flags for the installer itself go after a "--" separator.\n' >&2
                 exit 1 ;;
@@ -63,12 +64,15 @@ if ! command -v pacman >/dev/null 2>&1; then
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-    [[ $FRESH == false ]] || die "Git is missing on the live USB. Run 'pacman -Sy --needed git', then retry."
     say "git not found, installing via pacman..."
-    sudo pacman -Sy --needed --noconfirm git
+    if [[ $FRESH == true ]]; then
+        pacman -Sy --needed --noconfirm git
+    else
+        sudo pacman -Sy --needed --noconfirm git
+    fi
 fi
 
-if ! command -v sudo >/dev/null 2>&1; then
+if [[ $FRESH == false ]] && ! command -v sudo >/dev/null 2>&1; then
     die "sudo is required for the installer."
 fi
 

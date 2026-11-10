@@ -61,6 +61,21 @@ class DiskLayoutTest(unittest.TestCase):
         self.assertTrue(layout['wipe'])
         self.assertEqual(layout['partitions'][0]['start']['value'], 256)
 
+    def test_encryption_targets_only_new_root(self):
+        layout = self.layout('alongside')
+        config = {'disk_config': {'device_modifications': [layout]}}
+        with patch.object(plan.subprocess, 'check_output', return_value=b'$6$example\n') as hash_password:
+            credentials = plan.add_credentials(config, 'tester', b'account password', b'disk passphrase')
+        hash_password.assert_called_once_with(
+            ['openssl', 'passwd', '-6', '-stdin'], input=b'account password\n',
+        )
+        self.assertEqual(config['disk_config']['disk_encryption']['partitions'],
+                         [layout['partitions'][1]['obj_id']])
+        self.assertEqual(credentials, {
+            'users': [{'username': 'tester', 'enc_password': '$6$example', 'sudo': True}],
+            'encryption_password': 'disk passphrase',
+        })
+
 
 if __name__ == '__main__':
     unittest.main()
