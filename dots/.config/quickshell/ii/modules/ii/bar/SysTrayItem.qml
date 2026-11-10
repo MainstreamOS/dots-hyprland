@@ -156,7 +156,8 @@ MouseArea {
     }
 
     signal menuOpened(qsWindow: var)
-    signal menuClosed()
+    signal menuOpening(var window)
+    signal menuClosed(var window)
 
     hoverEnabled: true
     acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -194,6 +195,7 @@ MouseArea {
             anchor {
                 window: root.QsWindow.window
                 item: root
+                adjustment: PopupAdjustment.Flip | PopupAdjustment.Slide
                 gravity: Config.options.bar.vertical
                     ? (Config.options.bar.bottom ? Edges.Left : Edges.Right)
                     : (Config.options.bar.bottom ? Edges.Top : Edges.Bottom)
@@ -201,9 +203,10 @@ MouseArea {
                     ? (Config.options.bar.bottom ? Edges.Left : Edges.Right)
                     : (Config.options.bar.bottom ? Edges.Top : Edges.Bottom)
             }
-            onMenuOpened: (window) => root.menuOpened(window);
-            onMenuClosed: {
-                root.menuClosed();
+            onMenuOpening: window => root.menuOpening(window)
+            onMenuOpened: window => root.menuOpened(window)
+            onMenuClosed: window => {
+                root.menuClosed(window);
                 menu.active = false;
             }
         }
@@ -326,7 +329,7 @@ MouseArea {
 
     PopupToolTip {
         id: tooltip
-        extraVisibleCondition: root.containsMouse
+        extraVisibleCondition: root.containsMouse && !menu.active
         alternativeVisibleCondition: extraVisibleCondition
         anchorEdges: (!Config.options.bar.bottom && !Config.options.bar.vertical) ? Edges.Bottom : Edges.Top
     }

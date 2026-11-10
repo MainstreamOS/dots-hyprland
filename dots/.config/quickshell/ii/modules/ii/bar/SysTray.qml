@@ -34,17 +34,19 @@ Item {
         focusGrab.active = true;
     }
 
-    function setExtraWindowAndGrabFocus(window) {
-        if (root.activeMenu && root.activeMenu !== window) {
-            if (typeof root.activeMenu.close === "function")
-                root.activeMenu.close();
-            root.activeMenu = null;
-        }
+    function beginMenu(window) {
+        const previous = root.activeMenu;
+        focusGrab.active = root.trayOverflowOpen;
         root.activeMenu = window;
-        root.grabFocus();
+        if (previous && previous !== window) previous.close();
     }
 
-    function releaseFocus() {
+    function focusMenu(window) {
+        if (root.activeMenu === window) root.grabFocus();
+    }
+
+    function releaseFocus(window) {
+        if (root.activeMenu !== window) return;
         root.activeMenu = null;
         focusGrab.active = root.trayOverflowOpen;
     }
@@ -62,7 +64,7 @@ Item {
     HyprlandFocusGrab {
         id: focusGrab
         active: false
-        windows: [trayOverflowLayout.QsWindow?.window, root.activeMenu]
+        windows: [trayOverflowLayout.QsWindow?.window, root.activeMenu?.visible ? root.activeMenu : null]
         onCleared: {
             root.trayOverflowOpen = false;
             if (root.activeMenu) {
@@ -133,8 +135,9 @@ Item {
                             backdrop: Appearance.m3colors.m3surfaceContainer
                             Layout.fillHeight: !root.vertical
                             Layout.fillWidth: root.vertical
-                            onMenuClosed: root.releaseFocus();
-                            onMenuOpened: (qsWindow) => root.setExtraWindowAndGrabFocus(qsWindow);
+                            onMenuOpening: window => root.beginMenu(window)
+                            onMenuOpened: window => root.focusMenu(window)
+                            onMenuClosed: window => root.releaseFocus(window)
                         }
                     }
                 }
@@ -152,10 +155,9 @@ Item {
                 contentColors: root.contentColors
                 Layout.fillHeight: !root.vertical
                 Layout.fillWidth: root.vertical
-                onMenuClosed: root.releaseFocus();
-                onMenuOpened: (qsWindow) => {
-                    root.setExtraWindowAndGrabFocus(qsWindow);
-                }
+                onMenuOpening: window => root.beginMenu(window)
+                onMenuOpened: window => root.focusMenu(window)
+                onMenuClosed: window => root.releaseFocus(window)
             }
         }
 

@@ -14,11 +14,14 @@ PopupWindow {
     required property QsMenuHandle trayItemMenuHandle
     property string trayItemId: ""
 
-    signal menuClosed
+    signal menuOpening(var window)
+    signal menuClosed(var window)
     signal menuOpened(qsWindow: var) // Correct type is QsWindow, but QML does not like that
 
     color: "transparent"
     property real padding: Appearance.sizes.elevationMargin
+    property bool opening: false
+    readonly property int entryCount: stackView.currentItem?.entryCount ?? 0
 
     implicitHeight: {
         let result = 0;
@@ -36,15 +39,45 @@ PopupWindow {
     }
 
     function open() {
+        opening = true;
+        openDeadline.restart();
+        settleMenu.restart();
+        root.menuOpening(root);
+    }
+
+    function close() {
+        opening = false;
+        openDeadline.stop();
+        settleMenu.stop();
+        root.visible = false;
+        while (stackView.depth > 1)
+            stackView.pop();
+        root.menuClosed(root);
+    }
+
+    function finishOpening() {
+        if (!root.opening) return;
+        root.opening = false;
+        openDeadline.stop();
+        settleMenu.stop();
         root.visible = true;
         root.menuOpened(root);
     }
 
-    function close() {
-        root.visible = false;
-        while (stackView.depth > 1)
-            stackView.pop();
-        root.menuClosed();
+    // DBusMenu supplies its rows after the opener is created. Map the popup
+    // with its measured size so Wayland positions the full menu on first open.
+    onEntryCountChanged: if (opening) settleMenu.restart()
+    onImplicitWidthChanged: if (opening) settleMenu.restart()
+    onImplicitHeightChanged: if (opening) settleMenu.restart()
+    Timer {
+        id: openDeadline
+        interval: 320
+        onTriggered: root.finishOpening()
+    }
+    Timer {
+        id: settleMenu
+        interval: 45
+        onTriggered: if (root.entryCount) root.finishOpening()
     }
 
     MouseArea {
@@ -75,9 +108,11 @@ PopupWindow {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
             }
             Behavior on implicitHeight {
+                enabled: root.visible
                 animation: Appearance.animation.elementResize.numberAnimation.createObject(this)
             }
             Behavior on implicitWidth {
+                enabled: root.visible
                 animation: Appearance.animation.elementResize.numberAnimation.createObject(this)
             }
 
@@ -115,6 +150,7 @@ PopupWindow {
     component SubMenu: ColumnLayout {
         id: submenu
         required property QsMenuHandle handle
+        readonly property int entryCount: menuEntriesRepeater.count
         property bool isSubMenu: false
         property bool shown: false
         opacity: shown ? 1 : 0
