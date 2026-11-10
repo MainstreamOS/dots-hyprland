@@ -76,7 +76,6 @@ Item {
             if (targetIdx !== -1) {
                 root.showPage(targetIdx);
                 SidebarLeftTabs.targetTab = "";
-                warmupTimer.restart();
                 return;
             }
         }
@@ -84,32 +83,6 @@ Item {
         // A page that is gone gives way to a tab near it, never to the
         // closeted page, which only a swipe is meant to reach.
         root.showPage(kept !== -1 ? kept : Math.max(0, Math.min(previousIndex, root.tabButtonList.length - 1)));
-        warmupTimer.restart();
-    }
-
-    Timer {
-        id: warmupTimer
-        interval: 40
-        repeat: true
-        onTriggered: {
-            for (let i = 0; i < swipeView.count; i++) {
-                const page = swipeView.itemAt(i);
-                // The closeted page is built when someone swipes to it.
-                if (page && !page.built && !(page.pageId === "anime" && SidebarLeftTabs.animeCloset)) {
-                    page.built = true;
-                    return;
-                }
-            }
-            for (let i = 0; i < swipeView.count; i++) {
-                const page = swipeView.itemAt(i);
-                if (page && page.built && !page.sgWarmed && page.item && page.width > 0 && page.height > 0 && GlobalStates.sidebarLeftOpen) {
-                    page.sgWarmed = true;
-                    page.item.grabToImage(() => {}, Qt.size(1, 1));
-                    return;
-                }
-            }
-            warmupTimer.stop();
-        }
     }
 
     Connections {
@@ -118,21 +91,6 @@ Item {
             if (GlobalStates.sidebarLeftOpen) {
                 if (SidebarLeftTabs.targetTab && root.showTab(SidebarLeftTabs.targetTab)) SidebarLeftTabs.targetTab = "";
                 root.realign();
-                warmupTimer.restart();
-            }
-        }
-    }
-
-    Connections {
-        target: Phone
-        function onConversationsLoadedChanged() {
-            if (Phone.conversationsLoaded) {
-                for (let i = 0; i < root.pagePool.length; i++) {
-                    if (root.pagePool[i].pageId === "phone") {
-                        root.pagePool[i].sgWarmed = false;
-                    }
-                }
-                if (GlobalStates.sidebarLeftOpen) warmupTimer.restart();
             }
         }
     }
@@ -188,9 +146,7 @@ Item {
         }
     }
 
-    // A page is built in the background after startup and kept from then on,
-    // so switching tabs never stutters to build a page mid-animation and one
-    // already open keeps its state across tab switches.
+    // Build a tab when it is first shown and keep its state across tab switches.
     component PageLoader: Loader {
         id: pageLoader
         required property string pageId
@@ -198,19 +154,14 @@ Item {
         // item passes through other pages while syncPages moves them.
         readonly property bool onScreen: GlobalStates.sidebarLeftOpen && root.currentPageId === pageLoader.pageId
         property bool built: false
-        property bool sgWarmed: false
-        onBuiltChanged: if (!pageLoader.built) pageLoader.sgWarmed = false
-        onOnScreenChanged: if (pageLoader.onScreen) {
-            pageLoader.built = true;
-            pageLoader.sgWarmed = true;
-        }
+        onOnScreenChanged: if (pageLoader.onScreen) pageLoader.built = true
+        asynchronous: true
         active: pageLoader.built || pageLoader.onScreen
         // Handed over here and in showPage, never from the loader's own focus:
         // a page passing focus to its field sets the loader's focus again on
         // the way up, which would hand it straight back to the page.
         onLoaded: {
             if (pageLoader.onScreen) pageLoader.item.focus = true;
-            else if (GlobalStates.sidebarLeftOpen) warmupTimer.restart();
         }
     }
 

@@ -28,6 +28,7 @@ TELEPHONY_PATH = "/org/pipewire/Telephony"
 ANCS_SOURCE = "9fbf120d-6301-42d9-8c58-25e699a21dbd"
 ANCS_DATA = "22eac6e9-24d6-4bb5-be44-b36ace7c7bfb"
 ANCS_CONTROL = "69d1d8f3-45e1-49a8-9821-9bbdfdaad9d9"
+HFP_GATEWAY = "0000111f-0000-1000-8000-00805f9b34fb"
 ANCS_DEADLINE = 8
 DEVICE_STATE = {"Connected", "Paired", "ServicesResolved"}
 LIVE_STATES = ("incoming", "waiting", "dialing", "alerting", "active", "held")
@@ -52,6 +53,51 @@ ACTION_TIMEOUT = 5000  # ms for the phone to answer or hang up
 def invoke(bus, service, path, interface, method, parameters=None, timeout=1500):
     return unpack(bus.call_sync(service, path, interface, method, parameters,
                                None, Gio.DBusCallFlags.NO_AUTO_START, timeout, None))
+
+
+def ancs_groups(objects):
+    connected = {path for path, interfaces in objects.items()
+                 if interfaces.get("org.bluez.Device1", {}).get("Connected")
+                 and interfaces.get("org.bluez.Device1", {}).get("Paired")
+                 and interfaces.get("org.bluez.Device1", {}).get("ServicesResolved", True)}
+    groups = {}
+    for path, interfaces in objects.items():
+        uuid = interfaces.get("org.bluez.GattCharacteristic1", {}).get("UUID", "").lower()
+        if uuid in (ANCS_SOURCE, ANCS_DATA, ANCS_CONTROL):
+            device = next((d for d in connected if path.startswith(d + "/")), None)
+            if device:
+                groups.setdefault(device, {})[uuid] = path
+    return {device: chars for device, chars in groups.items() if len(chars) == 3}
+
+
+def call_source_available():
+    """Look for a call source without activating services or subscribing to notifications."""
+    session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    system = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    manager = "org.freedesktop.DBus.ObjectManager"
+    try:
+        objects = invoke(session, TELEPHONY, TELEPHONY_PATH, manager, "GetManagedObjects")[0]
+        if any(TELEPHONY + ".AudioGateway1" in interfaces for interfaces in objects.values()):
+            return True
+    except GLib.Error:
+        pass
+    try:
+        modems = invoke(system, "org.ofono", "/", "org.ofono.Manager", "GetModems")[0]
+        if any("org.ofono.VoiceCallManager" in properties.get("Interfaces", []) for _, properties in modems):
+            return True
+    except GLib.Error:
+        pass
+    try:
+        objects = invoke(system, "org.bluez", "/", manager, "GetManagedObjects")[0]
+    except GLib.Error:
+        return False
+    if ancs_groups(objects):
+        return True
+    for interfaces in objects.values():
+        device = interfaces.get("org.bluez.Device1", {})
+        if device.get("Paired") and device.get("Connected") and HFP_GATEWAY in device.get("UUIDs", []):
+            return True
+    return False
 
 
 class AncsDecoder:
@@ -280,26 +326,13 @@ class Watcher:
             objects = invoke(self.system, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects")[0]
         except GLib.Error:
             return
-        connected = {path for path, interfaces in objects.items()
-                     if interfaces.get("org.bluez.Device1", {}).get("Connected")
-                     and interfaces.get("org.bluez.Device1", {}).get("Paired")
-                     and interfaces.get("org.bluez.Device1", {}).get("ServicesResolved", True)}
-        groups = {}
-        for path, interfaces in objects.items():
-            uuid = interfaces.get("org.bluez.GattCharacteristic1", {}).get("UUID", "").lower()
-            if uuid not in (ANCS_SOURCE, ANCS_DATA, ANCS_CONTROL):
-                continue
-            device = next((d for d in connected if path.startswith(d + "/")), None)
-            if device:
-                groups.setdefault(device, {})[uuid] = path
+        groups = ancs_groups(objects)
         for device, chars in groups.items():
-            if len(chars) != 3:
-                continue
             if device not in self.ancs and not self.start_ancs(device, chars):
                 continue
             self.devices.append({"id": device, "backend": "iPhone notification sharing", "callAlerts": True, "messageAlerts": True})
         for device in list(self.ancs):
-            if len(groups.get(device, {})) != 3:
+            if device not in groups:
                 self.remove_ancs(device)
 
     def start_ancs(self, device, chars):
@@ -512,6 +545,8 @@ def direct_dial(number):
 
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
+    if command == "available":
+        sys.exit(0 if call_source_available() else 1)
     if command == "action":
         if len(sys.argv) != 4 or sys.argv[3] not in ("positive", "negative"):
             raise ValueError("Expected action ID positive|negative")
@@ -535,7 +570,7 @@ def main():
         direct_dial(sys.argv[2])
         return
     if command != "watch":
-        raise ValueError("Expected watch, dial NUMBER or action ID positive|negative")
+        raise ValueError("Expected available, watch, dial NUMBER or action ID positive|negative")
     watcher = Watcher()
     loop = GLib.MainLoop()
     parent_pid = os.getppid()

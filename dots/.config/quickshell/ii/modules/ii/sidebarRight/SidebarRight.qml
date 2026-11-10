@@ -11,11 +11,31 @@ import Quickshell.Hyprland
 Scope {
     id: root
     property int sidebarWidth: Appearance.sizes.sidebarWidth
+    property bool loadContent: false
+
+    // Give the opening control a frame to show its active state before
+    // incubation starts on the same GUI thread.
+    Timer {
+        id: openDelay
+        interval: 32
+        onTriggered: root.loadContent = true
+    }
+
+    Connections {
+        target: GlobalStates
+        function onSidebarRightOpenChanged() {
+            if (GlobalStates.sidebarRightOpen) openDelay.restart();
+            else {
+                openDelay.stop();
+                root.loadContent = false;
+            }
+        }
+    }
 
     PanelWindow {
         id: panelWindow
         readonly property bool nativeTextRendering: true
-        visible: GlobalStates.sidebarRightOpen
+        visible: GlobalStates.sidebarRightOpen && sidebarContentLoader.status === Loader.Ready
         contentItem.visible: !GlobalStates.scrollOverviewOpen || GlobalStates.scrollOverviewSidebarPreviews
         mask: Region {
             width: GlobalStates.overviewOpen || GlobalStates.scrollOverviewOpen ? 0 : panelWindow.width
@@ -64,7 +84,9 @@ Scope {
 
         Loader {
             id: sidebarContentLoader
-            active: GlobalStates.sidebarRightOpen || Config?.options.sidebar.keepRightSidebarLoaded
+            // Build across frames so the control opening us can finish its press.
+            asynchronous: true
+            active: GlobalStates.sidebarRightOpen && root.loadContent
             anchors {
                 fill: parent
                 margins: Appearance.sizes.hyprlandGapsOut

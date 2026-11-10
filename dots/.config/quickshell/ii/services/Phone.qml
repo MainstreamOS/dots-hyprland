@@ -16,28 +16,67 @@ import "PhoneSetup.js" as Setup
 /**
  * Paired phones through KDE Connect or rust-connect, for the Phone tab, the
  * Dynamic Island and phone notifications. scripts/phone/kdeconnect-bridge.py
- * is the shell's only client of their D-Bus API, and the main shell keeps it
- * running so no text is missed while the tab is closed.
+ * is the shell's only client of their D-Bus API. Paired phones keep it
+ * running while the tab is closed, so messages still arrive.
  */
 Singleton {
     id: root
 
     // A KDE Connect-compatible backend is installed or available over D-Bus.
     property bool installed: false
-    // Set by the tab once it has been on screen.
+    // Explicit requests from notifications and call controls.
     property bool wanted: false
-    onWantedChanged: if (wanted && bridge.running && !backendAvailable) root.startBackend()
-    // Set by the main shell, and by Settings while a page shows phone status.
+    property bool setupVisible: false
+    readonly property bool userRequested: root.wanted || root.setupVisible
+    onUserRequestedChanged: if (userRequested && bridge.running && !backendAvailable) root.startBackend()
+    // Only the main shell watches for background pairings.
     property bool keepConnected: false
     property bool backendAvailable: false
     // "KDE Connect" or "rust-connect", whichever owns the bus name.
     property string backendName: "KDE Connect"
     readonly property bool connected: bridge.running && backendAvailable
-    readonly property bool bridgeWanted: root.wanted || root.keepConnected
+    readonly property bool bridgeWanted: root.userRequested || (root.keepConnected && (root.rustPaired || root.kdePaired))
+    property bool rustPaired: false
+    property bool kdePaired: false
+
+    FileView {
+        id: rustPairings
+        path: root.keepConnected
+            ? `${Quickshell.env("XDG_DATA_HOME") || FileUtils.trimFileProtocol(Directories.home) + "/.local/share"}/rust-connect/paired.json`
+            : ""
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try { root.rustPaired = Object.keys(JSON.parse(text()) ?? {}).length > 0; }
+            catch (_) { root.rustPaired = false; }
+        }
+        onLoadFailed: root.rustPaired = false
+    }
+    FileView {
+        id: kdePairings
+        path: root.keepConnected ? `${Directories.config}/kdeconnect/trusted_devices` : ""
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.kdePaired = text().length > 0
+        onLoadFailed: root.kdePaired = false
+    }
+    Timer {
+        // A first pairing in an external app may also create its parent
+        // directory, which the file watcher could not subscribe to before.
+        interval: 15000
+        repeat: true
+        running: root.keepConnected && !root.rustPaired && !root.kdePaired
+        onTriggered: {
+            rustPairings.reload();
+            kdePairings.reload();
+        }
+    }
     // The bridge starts the daemon itself once a phone has paired; before that,
     // only opening the tab does, since the daemon announces this computer.
     function startBackend(): void {
-        if (root.wanted) root.command({cmd: "start"});
+        if (root.userRequested) root.command({cmd: "start"});
     }
     property int backendGeneration: -1
     property int restartAttempts: 0

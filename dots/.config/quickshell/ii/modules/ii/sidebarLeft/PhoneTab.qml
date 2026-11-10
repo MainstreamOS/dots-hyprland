@@ -30,10 +30,9 @@ Item {
         property int currentIndex: 0
     }
 
-    // Opening the tab starts the phone daemon for a first pairing; the main
-    // shell keeps the bridge itself running.
+    // Opening the tab starts the daemon for a first pairing.
     property bool onScreen: false
-    onOnScreenChanged: if (onScreen) Phone.wanted = true
+    Binding { target: Phone; property: "setupVisible"; value: root.onScreen }
     Component.onCompleted: {
         if (Phone.openThread >= 0) {
             tabBar.currentIndex = 0;
@@ -41,7 +40,6 @@ Item {
             threadView.snapToBottom();
         }
     }
-    Component.onDestruction: Phone.wanted = false
 
     function postNotice(text): void {
         root.notice = text;

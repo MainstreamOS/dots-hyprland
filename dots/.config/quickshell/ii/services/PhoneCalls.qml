@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Bluetooth
 import Quickshell.Io
 import qs.modules.common
 import "PhoneIdentity.js" as Identity
@@ -18,14 +19,43 @@ Singleton {
     property var messages: []
     property var notifications: []
     property var devices: []
-    // The helper has reported (or stopped), so an empty call list is real.
-    property bool ready: false
+    // A dormant watcher has no live calls. A newly started one reports after
+    // it has queried the backends.
+    readonly property bool ready: root.receivedSnapshot
+        || (!watcher.wanted && (!root.alertsWanted || root.probeCompleted))
+    property bool receivedSnapshot: false
+    property bool probeCompleted: false
     property string error: ""
     property string dialNumber: ""
     property string dialError: ""
     readonly property bool dialing: dialProcess.running || dialConfirmation.running
     readonly property bool canDial: root.devices.some(d => d.backend !== "iPhone notification sharing")
     readonly property string helper: Quickshell.shellPath("scripts/phone/calls.py")
+    readonly property bool pairedBluetoothPhone: Bluetooth.devices.values.some(device =>
+        device.paired && String(device.icon ?? "").startsWith("phone"))
+    readonly property string connectedPeers: Bluetooth.devices.values
+        .filter(device => device.paired && device.connected).map(device => device.dbusPath).sort().join(" ")
+    property bool telephonyAvailable: false
+
+    // Some Bluetooth devices have no phone icon. Ask the actual backends
+    // before starting a resident watcher, and recheck after profiles settle.
+    onConnectedPeersChanged: if (probeTimer.running) probe.running = true
+    Timer {
+        id: probeTimer
+        interval: 20000
+        repeat: true
+        triggeredOnStart: true
+        running: Config.ready && root.alertsWanted && !root.pairedBluetoothPhone && !root.devices.length
+        onTriggered: probe.running = true
+    }
+    Process {
+        id: probe
+        command: ["python3", root.helper, "available"]
+        onExited: exitCode => {
+            root.telephonyAvailable = exitCode === 0;
+            root.probeCompleted = true;
+        }
+    }
 
     function dial(number): bool {
         if (root.dialing || root.calls.length) return false;
@@ -79,8 +109,10 @@ Singleton {
     }
     Process {
         id: watcher
-        readonly property bool wanted: Config.ready && (root.alertsWanted || Phone.wanted || root.dialing || root.calls.length > 0)
+        readonly property bool wanted: Config.ready && ((root.alertsWanted && (root.pairedBluetoothPhone || root.telephonyAvailable))
+            || Phone.userRequested || root.dialing || root.calls.length > 0)
         running: wanted && !restart.running
+        onStarted: root.receivedSnapshot = false
         command: ["python3", root.helper, "watch"]
         stdout: SplitParser {
             onRead: data => {
@@ -92,7 +124,7 @@ Singleton {
                         if (JSON.stringify(next) !== JSON.stringify(root[name])) root[name] = next;
                     }
                     root.error = value.error ?? "";
-                    root.ready = true;
+                    root.receivedSnapshot = true;
                 } catch (error) {
                     console.warn("[Phone calls] Invalid helper data:", error);
                 }
@@ -104,7 +136,7 @@ Singleton {
             root.messages = [];
             root.notifications = [];
             root.devices = [];
-            root.ready = true;
+            root.receivedSnapshot = true;
             if (wanted) {
                 root.error = Translation.tr("Phone connection interrupted. Reconnecting…");
                 restart.restart();
