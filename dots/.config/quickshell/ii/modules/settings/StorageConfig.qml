@@ -13,6 +13,7 @@ import qs.modules.settings.storage
 ContentPage {
     id: root
     forceWidth: true
+    baseWidth: Math.max(0, Math.min(600 * Appearance.font.roomGrowth, width - 40))
 
     readonly property string script: `${FileUtils.trimFileProtocol(Directories.scriptPath)}/storage/storage.py`
     readonly property string homePath: FileUtils.trimFileProtocol(Directories.home)
@@ -268,6 +269,24 @@ ContentPage {
         }
     }
 
+    component DiskUsageLabel: StyledText {
+        id: label
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        Layout.alignment: Qt.AlignBottom
+        horizontalAlignment: Text.AlignRight
+        textFormat: Text.PlainText
+        elide: Text.ElideMiddle
+        font.pixelSize: Appearance.font.pixelSize.small
+        color: Appearance.colors.colSubtext
+
+        HoverHandler { id: hover }
+        StyledToolTip {
+            text: label.text
+            extraVisibleCondition: label.truncated && hover.hovered
+        }
+    }
+
     component RowIconButton: RippleButton {
         id: iconButton
         property string iconName
@@ -491,13 +510,9 @@ ContentPage {
                         font.pixelSize: Appearance.font.pixelSize.title
                         color: Appearance.colors.colOnLayer1
                     }
-                    Item { Layout.fillWidth: true }
-                    StyledText {
-                        Layout.alignment: Qt.AlignBottom
+                    DiskUsageLabel {
                         text: Translation.tr("%1 of %2 used on %3").arg(root.formatSize(diskCard.modelData.used))
                             .arg(root.formatSize(diskCard.modelData.total)).arg(diskCard.modelData.mount)
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.colors.colSubtext
                     }
                 }
 
@@ -859,13 +874,9 @@ ContentPage {
                     font.pixelSize: Appearance.font.pixelSize.title
                     color: Appearance.colors.colOnLayer1
                 }
-                Item { Layout.fillWidth: true }
-                StyledText {
-                    Layout.alignment: Qt.AlignBottom
+                DiskUsageLabel {
                     text: Translation.tr("%1 of %2 used on %3").arg(root.formatSize(root.efi ? root.efi.used : 0))
                         .arg(root.formatSize(root.efi ? (root.efi.part_bytes ?? root.efi.total) : 0)).arg(root.efi ? root.efi.mount : "/boot/efi")
-                    font.pixelSize: Appearance.font.pixelSize.small
-                    color: Appearance.colors.colSubtext
                 }
             }
 
