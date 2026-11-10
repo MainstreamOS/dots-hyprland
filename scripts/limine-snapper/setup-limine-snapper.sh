@@ -11,6 +11,12 @@ AUTO_YES=false
 if [[ "${1:-}" == "--yes" ]]; then
   AUTO_YES=true
 fi
+snapper_cmd=(snapper)
+timer_args=(--now)
+if systemd-detect-virt --quiet --chroot; then
+    snapper_cmd+=(--no-dbus)
+    timer_args=()
+fi
 
 # --- Configuration ---
 SNAPPER_SPACE_LIMIT="0.2"       # 20% of drive
@@ -131,7 +137,6 @@ print_limine_header() {
     cat <<'EOF'
 timeout: 5
 remember_last_entry: yes
-default_entry: 1/1
 hash_mismatch_panic: no
 
 # ── Mainstream OS brand palette (see brand.html) ──────────────────────────
@@ -161,6 +166,37 @@ backdrop:              191A1F
 EOF
 }
 
+limine_default_path() {
+    awk '
+        function escape_title(title, result, i, c) {
+            for (i = 1; i <= length(title); i++) {
+                c = substr(title, i, 1)
+                if (c == "\\" || c == "/" || c == "#") result = result "\\"
+                result = result c
+            }
+            return result
+        }
+        /^[[:space:]]*\// {
+            entry = $0
+            sub(/^[[:space:]]*/, "", entry)
+            match(entry, /^\/+/)
+            depth = RLENGTH
+            title[depth] = substr(entry, depth + 1)
+            sub(/^\+/, "", title[depth])
+        }
+        depth && tolower($0) ~ /^[[:space:]]*protocol[[:space:]]*:/ {
+            path = escape_title(title[1])
+            for (i = 2; i <= depth; i++) path = path "/" escape_title(title[i])
+            if (fallback == "") fallback = path
+            if (index(title[1], "Mainstream OS") == 1) { preferred = path; exit }
+        }
+        END {
+            if (preferred != "") print preferred
+            else if (fallback != "") print fallback
+        }
+    ' "$1"
+}
+
 write_limine_header() {
     # Only seed a fresh header when there is no limine.conf yet. If one already
     # exists (a re-run, or Windows/limine-update wrote one), refresh the header
@@ -176,11 +212,13 @@ write_limine_header() {
 
 ensure_limine_header() {
     local limine_conf="$ESP/limine.conf"
-    local tmpfile
+    local tmpfile default_path
 
     [[ -f "$limine_conf" ]] || return 0
     tmpfile=$(mktemp)
     print_limine_header > "$tmpfile"
+    default_path=$(limine_default_path "$limine_conf")
+    [[ -z "$default_path" ]] || printf 'default_entry: %s\n' "$default_path" >> "$tmpfile"
     printf '\n' >> "$tmpfile"
     awk '
         BEGIN { in_header = 1 }
@@ -314,7 +352,8 @@ ROOT_FSTYPE=$(findmnt -n -o FSTYPE /)
 ROOT_DEV=$(findmnt -n -o SOURCE /)
 ROOT_PART=$(findmnt -n -o SOURCE -T / | sed 's/\[.*\]//')
 ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART")
-ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART")
+# A LUKS mapper has a filesystem UUID but no partition UUID of its own.
+ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$ROOT_PART" || true)
 ROOT_SUBVOL=$(findmnt -n -o OPTIONS / | grep -oP 'subvol=\K[^,]+')
 
 info "Root device: $ROOT_PART"
@@ -373,7 +412,7 @@ fi
 # loglevel=0 / systemd.show_status silencing (splash covers it) and adds the
 # locked zswap.enabled=0.
 read -r -a _base_cmdline <<< "$(gpu_base_cmdline_tokens "$ROOT_TOKEN" "$ROOT_SUBVOL")"
-cmdline_upsert "${_base_cmdline[@]}"
+LIMINE_CONF="$ESP/limine.conf" cmdline_upsert "${_base_cmdline[@]}"
 
 info "Generating Limine boot entries from /etc/default/limine and /etc/kernel/cmdline..."
 limine-update
@@ -452,15 +491,18 @@ if [[ -d "$ESP/EFI/systemd" ]]; then
 fi
 
 # The NVRAM entry outlives the files it points at, and the firmware keeps
-# offering it. "Linux Boot Manager" is the name systemd-boot registers itself
-# under, so nothing else answers to it.
+# offering it. Match the entry to this ESP since other installations can
+# register the same "Linux Boot Manager" label on their own EFI partitions.
 if [[ $_sdb_removed -eq 1 ]] && command -v efibootmgr >/dev/null 2>&1; then
-    while read -r _bootnum; do
-        [[ -n "$_bootnum" ]] || continue
-        efibootmgr -b "$_bootnum" -B >/dev/null 2>&1 || true
-        info "Removed the systemd-boot NVRAM entry (Boot$_bootnum)"
-    done < <(efibootmgr 2>/dev/null \
-        | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]*$/\1/p')
+    _esp_partuuid=$(findmnt -n -o PARTUUID "$ESP" 2>/dev/null || true)
+    if [[ -n "$_esp_partuuid" ]]; then
+        while read -r _bootnum; do
+            efibootmgr -b "$_bootnum" -B >/dev/null 2>&1 || true
+            info "Removed the systemd-boot NVRAM entry (Boot$_bootnum)"
+        done < <(efibootmgr -v 2>/dev/null \
+            | grep -Fi ",GPT,${_esp_partuuid}," \
+            | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+Linux Boot Manager[[:space:]]+HD\(.*/\1/p')
+    fi
 fi
 
 # Say the menu over again now that the old loader is gone, then take out the
@@ -478,7 +520,7 @@ pacman -S --needed --noconfirm snapper snap-pac
 
 # Keep an existing snapshot layout mounted and intact when resuming setup.
 if [[ -f /etc/snapper/configs/root ]]; then
-    snapper -c root list >/dev/null || error "The existing root snapshot configuration could not be read."
+    "${snapper_cmd[@]}" -c root list >/dev/null || error "The existing root snapshot configuration could not be read."
     info "Using the existing root snapshot configuration."
 else
     # Only prepare an empty snapshot location when creating a new config.
@@ -498,7 +540,7 @@ else
     if [[ -d /.snapshots ]]; then
         rmdir /.snapshots
     fi
-    snapper -c root create-config /
+    "${snapper_cmd[@]}" -c root create-config /
 fi
 
 # snapper creates its own .snapshots subvolume, but we may want to manage it ourselves
@@ -506,34 +548,28 @@ fi
 
 # Configure snapper limits
 info "Configuring snapper (20% space limit, max 5 snapshots)..."
-snapper -c root set-config "SPACE_LIMIT=$SNAPPER_SPACE_LIMIT"
-snapper -c root set-config "NUMBER_LIMIT=$SNAPPER_NUMBER_LIMIT"
-snapper -c root set-config "NUMBER_LIMIT_IMPORTANT=$SNAPPER_NUMBER_LIMIT"
+"${snapper_cmd[@]}" -c root set-config "SPACE_LIMIT=$SNAPPER_SPACE_LIMIT" "NUMBER_LIMIT=$SNAPPER_NUMBER_LIMIT" \
+    "NUMBER_LIMIT_IMPORTANT=$SNAPPER_NUMBER_LIMIT"
 
 # Timeline snapshots - enable with conservative settings
-snapper -c root set-config "TIMELINE_CREATE=yes"
-snapper -c root set-config "TIMELINE_CLEANUP=yes"
-snapper -c root set-config "TIMELINE_MIN_AGE=1800"
-snapper -c root set-config "TIMELINE_LIMIT_HOURLY=2"
-snapper -c root set-config "TIMELINE_LIMIT_DAILY=3"
-snapper -c root set-config "TIMELINE_LIMIT_WEEKLY=0"
-snapper -c root set-config "TIMELINE_LIMIT_MONTHLY=0"
-snapper -c root set-config "TIMELINE_LIMIT_YEARLY=0"
+"${snapper_cmd[@]}" -c root set-config "TIMELINE_CREATE=yes" "TIMELINE_CLEANUP=yes" "TIMELINE_MIN_AGE=1800" \
+    "TIMELINE_LIMIT_HOURLY=2" "TIMELINE_LIMIT_DAILY=3" "TIMELINE_LIMIT_WEEKLY=0" "TIMELINE_LIMIT_MONTHLY=0" "TIMELINE_LIMIT_YEARLY=0"
 
 # Enable snapper timers
-systemctl enable --now snapper-timeline.timer
-systemctl enable --now snapper-cleanup.timer
+systemctl enable "${timer_args[@]}" snapper-timeline.timer snapper-cleanup.timer
 
 info "Snapper configured"
 
 # --- Step 4: Enable snapshot sync now that Limine is generator-managed ---
 limit_snapshot_esp_usage
-systemctl enable --now limine-snapper-sync.service
+systemctl enable "${timer_args[@]}" limine-snapper-sync.service
 
 # --- Step 5: Create initial snapshot ---
 info "Creating initial snapshot..."
-snapper -c root create --description "Fresh install" --type single
-limine-snapper-sync || warn "limine-snapper-sync failed after creating the initial snapshot. You can rerun it manually once the system is up."
+"${snapper_cmd[@]}" -c root create --description "Fresh install" --type single
+if (( ${#timer_args[@]} )); then
+    limine-snapper-sync || warn "limine-snapper-sync failed after creating the initial snapshot. You can rerun it manually once the system is up."
+fi
 
 info "Setup complete!"
 echo ""

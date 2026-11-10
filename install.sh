@@ -15,6 +15,7 @@
 # Anything passed after a `--` is forwarded to ./setup install, e.g.:
 #   bash <(curl -fsSL ...) -- --verbose
 #   bash <(curl -fsSL ...) --edge -- --console
+# On the stock Arch USB, use --fresh to set up a new system.
 
 set -euo pipefail
 
@@ -34,7 +35,8 @@ SETUP_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --edge) EDGE=1; shift ;;
-        --)     shift; SETUP_ARGS=("$@"); break ;;
+        --fresh) SETUP_ARGS=(--fresh); shift ;;
+        --)     shift; SETUP_ARGS+=("$@"); break ;;
         *)      printf 'Unknown option: %s\n' "$1" >&2
                 printf 'Flags for the installer itself go after a "--" separator.\n' >&2
                 exit 1 ;;
@@ -48,7 +50,16 @@ ok()   { printf '%s✓%s   %s\n' "$_c_green" "$_c_rst" "$*"; }
 die()  { printf '%s✗ %s%s\n'  "$_c_red"   "$*"      "$_c_rst" >&2; exit 1; }
 
 # --- preflight --------------------------------------------------------------
-[[ $EUID -ne 0 ]] || die "Don't run as root — Mainstream installs into your user account."
+FRESH=false
+if [[ ${SETUP_ARGS[0]:-} == --fresh ]]; then
+    # The Arch USB can copy its root image to RAM and unmount the boot media.
+    [[ $EUID -eq 0 ]] && mountpoint -q /run/archiso/airootfs &&
+        [[ $(findmnt -n -t overlay -o SOURCE --mountpoint /) == airootfs ]] \
+        || die "Run --fresh from the root console on the stock Arch USB."
+    FRESH=true
+else
+    [[ $EUID -ne 0 ]] || die "Don't run as root — Mainstream installs into your user account."
+fi
 
 if ! command -v pacman >/dev/null 2>&1; then
     die "pacman not found. Mainstream OS targets Arch Linux / Arch-based distros."
@@ -56,10 +67,14 @@ fi
 
 if ! command -v git >/dev/null 2>&1; then
     say "git not found, installing via pacman..."
-    sudo pacman -Sy --needed --noconfirm git
+    if [[ $FRESH == true ]]; then
+        pacman -Sy --needed --noconfirm git
+    else
+        sudo pacman -Sy --needed --noconfirm git
+    fi
 fi
 
-if ! command -v sudo >/dev/null 2>&1; then
+if [[ $FRESH == false ]] && ! command -v sudo >/dev/null 2>&1; then
     die "sudo is required for the installer."
 fi
 
@@ -110,6 +125,7 @@ say "Launching ./setup install ${SETUP_ARGS[*]:-}"
 RC=0
 ./setup install "${SETUP_ARGS[@]}" || RC=$?
 [[ $RC -eq 0 ]] || die "./setup install exited with rc=$RC"
+[[ $FRESH == false ]] || exit 0
 
 # Both the desktop's release indicator and updatems read this marker to learn
 # which release is installed. Without it they see an unversioned install: the

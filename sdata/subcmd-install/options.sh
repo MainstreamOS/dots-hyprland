@@ -27,6 +27,10 @@ Options for install:
       --skip-miscconf       Skip copying the dirs and files to \".configs\" except for
                             Quickshell, Fish and Hyprland
       --core                Alias of --skip-{fish,miscconf,fontconfig}
+      --profile <profile>   Choose default, custom, gaming or os-only
+      --apps <IDs>          Set the Custom app selection (comma-separated)
+      --list-apps           List app IDs for Custom installs
+      --fresh               Start a new system install from the stock Arch USB
       --os-only             OS-only install: skip the default apps
                             (Mainstream extras) and prune the dock pins to
                             apps that are actually installed, mirroring the
@@ -57,7 +61,7 @@ cleancache(){
 # `man getopt` to see more
 para=$(getopt \
   -o hfFk:cs \
-  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-limine,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,exp-files,via-nix \
+  -l help,force,firstrun,fontset:,clean,skip-allgreeting,skip-alldeps,skip-allsetups,skip-allfiles,ignore-outdate,skip-sysupdate,skip-gpudrivers,skip-limine,skip-backup,skip-quickshell,skip-fish,skip-hyprland,skip-hyprland-entry,skip-fontconfig,skip-miscconf,core,os-only,console,profile:,apps:,list-apps,exp-files,via-nix \
   -n "$0" -- "$@")
 [ $? != 0 ] && echo "$0: Error when getopt, please recheck parameters." && exit 1
 #####################################################################################
@@ -99,8 +103,11 @@ while true ; do
     --skip-fontconfig) SKIP_FONTCONFIG=true;shift;;
     --skip-miscconf) SKIP_MISCCONF=true;shift;;
     --core) SKIP_FISH=true;SKIP_FONTCONFIG=true;SKIP_MISCCONF=true;shift;;
-    --os-only) OS_ONLY_INSTALL=true;shift;;
-    --console) CONSOLE_MODE_INSTALL=true;shift;;
+    --os-only) MS_INSTALL_PROFILE=os-only;shift;;
+    --console) MS_INSTALL_PROFILE=gaming;shift;;
+    --profile) MS_INSTALL_PROFILE=$2;shift 2;;
+    --apps) MS_INSTALL_APPS=$2; MS_INSTALL_APPS_SET=true; shift 2;;
+    --list-apps) install_app_catalog; exit;;
     --exp-files) EXPERIMENTAL_FILES_SCRIPT=true;shift;;
     --via-nix) INSTALL_VIA_NIX=true;shift;;
     
@@ -117,8 +124,17 @@ while true ; do
   esac
 done
 
-# Run-mode marker appended to the installer headers so the user can see
-# at a glance that the intended install method is the one running.
-MS_MODE_SUFFIX=""
-if [[ "${OS_ONLY_INSTALL:-false}" == true ]]; then MS_MODE_SUFFIX="${MS_MODE_SUFFIX} · --os-only"; fi
-if [[ "${CONSOLE_MODE_INSTALL:-false}" == true ]]; then MS_MODE_SUFFIX="${MS_MODE_SUFFIX} · --console"; fi
+if [[ ${MS_INSTALL_APPS_SET:-false} == true && ${MS_INSTALL_PROFILE:-} != custom ]]; then
+  printf '%s\n' '--apps requires --profile custom.' >&2
+  exit 1
+fi
+
+if [[ $SUBCMD_NAME != install || $OS_GROUP_ID != arch || ${INSTALL_VIA_NIX:-false} == true ]]; then
+  # Individual steps and other distro paths keep their existing defaults.
+  MS_INSTALL_PROFILE=${MS_INSTALL_PROFILE:-default}
+fi
+if [[ $OS_GROUP_ID != arch || ${INSTALL_VIA_NIX:-false} == true ]] && [[ $MS_INSTALL_PROFILE == custom ]]; then
+  printf '%s\n' 'The Custom app picker is available for Arch-based installs.' >&2
+  exit 1
+fi
+prepare_install_profile

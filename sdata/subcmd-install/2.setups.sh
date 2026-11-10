@@ -281,8 +281,17 @@ function detect_gpu_vendors(){
 
 function install_optional_gpu_packages(){
   local pkg
-  if ! sudo pacman -S --needed --noconfirm "$@"; then
-    for pkg in "$@"; do
+  local available=()
+  for pkg in "$@"; do
+    if [[ $pkg == lib32-* ]] && ! pacman -Si "$pkg" >/dev/null 2>&1 &&
+        ! pacman-conf --repo-list | grep -Fxq multilib; then
+      continue
+    fi
+    available+=("$pkg")
+  done
+  (( ${#available[@]} > 0 )) || return 0
+  if ! sudo pacman -S --needed --noconfirm "${available[@]}"; then
+    for pkg in "${available[@]}"; do
       if ! pacman -T "$pkg" >/dev/null 2>&1; then
         MS_INSTALL_MISSING_PACKAGES+=("$pkg")
         note_failure "GPU package $pkg could not be installed; check repository versions and retry setup."
@@ -558,7 +567,9 @@ if command -v systemctl >/dev/null 2>&1; then
       v prepare_systemd_user_service
     fi
     # When $DBUS_SESSION_BUS_ADDRESS and $XDG_RUNTIME_DIR are empty, it commonly means that the current user has been logged in with `su - user` or `ssh user@hostname`. In such case `systemctl --user enable <service>` is not usable. It should be `sudo systemctl --machine=$(whoami)@.host --user enable <service>` instead.
-    if [[ ! -z "${DBUS_SESSION_BUS_ADDRESS}" ]]; then
+    if [[ ${MS_INSTALL_OFFLINE:-0} == 1 ]]; then
+      x sudo systemctl --global enable ydotool.service
+    elif [[ ! -z "${DBUS_SESSION_BUS_ADDRESS}" ]]; then
       v systemctl --user enable ydotool --now
     else
       v sudo systemctl --machine=$(whoami)@.host --user enable ydotool --now
@@ -1485,7 +1496,8 @@ v setup_network_wait
 # Raise the inotify watch limit so Quickshell's file watchers (config + style
 # hot-reload, generated colors, wallpaper) don't hit the kernel default ceiling.
 function setup_inotify_limits(){
-  x sudo bash -c "printf 'fs.inotify.max_user_watches = 524288\nfs.inotify.max_user_instances = 512\n' > /etc/sysctl.d/99-mainstream-inotify.conf && sysctl --system >/dev/null 2>&1 || true"
+  x sudo bash -c "printf 'fs.inotify.max_user_watches = 524288\nfs.inotify.max_user_instances = 512\n' > /etc/sysctl.d/99-mainstream-inotify.conf"
+  [[ ${MS_INSTALL_OFFLINE:-0} == 1 ]] || try sudo sysctl --system >/dev/null 2>&1
 }
 showfun setup_inotify_limits
 v setup_inotify_limits
@@ -1499,9 +1511,12 @@ function setup_zram_swap(){
   if [[ ! -e /etc/systemd/zram-generator.conf && ! -d /etc/systemd/zram-generator.conf.d ]]; then
     x sudo bash -c "printf '[zram0]\nzram-size = min(ram, 32768)\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf"
   fi
-  try sudo systemctl daemon-reload
-  try sudo systemctl start systemd-zram-setup@zram0.service
-  x sudo bash -c "printf 'vm.swappiness = 180\nvm.page-cluster = 0\n' > /etc/sysctl.d/99-mainstream-zram.conf && sysctl --system >/dev/null 2>&1 || true"
+  x sudo bash -c "printf 'vm.swappiness = 180\nvm.page-cluster = 0\n' > /etc/sysctl.d/99-mainstream-zram.conf"
+  if [[ ${MS_INSTALL_OFFLINE:-0} != 1 ]]; then
+    try sudo systemctl daemon-reload
+    try sudo systemctl start systemd-zram-setup@zram0.service
+    try sudo sysctl --system >/dev/null 2>&1
+  fi
 }
 showfun setup_zram_swap
 v setup_zram_swap

@@ -124,7 +124,7 @@ mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/silent.conf <<'GETTY_EOF'
 [Service]
 ExecStart=
-ExecStart=-/usr/bin/agetty --skip-login --nonewline --noissue --noclear --login-options "-f root" %I $TERM
+ExecStart=-/usr/bin/agetty --nonewline --noissue --noclear %I $TERM
 GETTY_EOF
 
 # Suppress fsck messages during boot

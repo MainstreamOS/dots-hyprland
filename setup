@@ -2,6 +2,10 @@
 cd "$(dirname "$0")"
 # Use REPO_ROOT instead of base - when scripts are sourced they do not need export to inherit vars
 REPO_ROOT="$(pwd)"
+if [[ ${1:-} == install && ${2:-} == --fresh ]]; then
+  shift 2
+  exec bash "$REPO_ROOT/sdata/subcmd-install/fresh.sh" "$@"
+fi
 source ./sdata/lib/environment-variables.sh
 source ./sdata/lib/functions.sh
 source ./sdata/lib/package-installers.sh
@@ -89,8 +93,9 @@ case "${SUBCMD_NAME}" in
     ;;
 esac
 #####################################################################################
-if [[ -f "${SUBCMD_DIR}/options.sh" ]];
-  then source "${SUBCMD_DIR}/options.sh"
+if [[ -f "${SUBCMD_DIR}/options.sh" ]]; then
+  if [[ ${SUBCMD_DIR} == ./sdata/subcmd-install ]]; then source "$SUBCMD_DIR/profiles.sh"; fi
+  source "${SUBCMD_DIR}/options.sh"
 fi
 case ${SUBCMD_NAME} in
   install)
@@ -117,6 +122,9 @@ case ${SUBCMD_NAME} in
       source ${SUBCMD_DIR}/3.files.sh
     fi
     ms_visual_end
+    if [[ ${MS_REQUIRE_COMPLETE_INSTALL:-0} == 1 ]] && (( ${#MS_INSTALL_MISSING_PACKAGES[@]} > 0 )); then
+      exit 1
+    fi
     ;;
   install-deps)
     for function in ${print_os_group_id_functions[@]}; do

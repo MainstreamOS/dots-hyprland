@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# Archinstall starts using its temporary machine as soon as the login prompt
+# appears. Wait for its system bus before submitting commands to that machine.
+if [[ ${1:-} == --machine=archinstall ]]; then
+    for ((attempt = 0; attempt < 20; attempt++)); do
+        if timeout 1s /usr/bin/systemctl --machine=archinstall show --property=Version --value >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.25
+    done
+fi
+exec /usr/bin/systemd-run "$@"
