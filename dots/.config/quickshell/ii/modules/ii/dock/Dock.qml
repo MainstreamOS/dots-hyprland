@@ -110,11 +110,11 @@ Scope { // Scope
             // The strip's outline overlaps its fill, which only shows through
             // a see-through surface, and there the two are painted opaque and
             // faded together the way the notch's pieces are.
-            // Frost and Glass share the launcher's blurred backdrop on the screen showing it.
+            // Frost and Glass follow the launcher or Alt+Tab backdrop on this output.
             readonly property bool launcherDimmed: GlobalStates.launcherDimScreens.includes(perScreen.modelData?.name ?? "")
-            readonly property bool frostOverLauncher: BackdropPresets.dockIsFrost && launcherDimmed
-            readonly property bool glassOverLauncher: BackdropPresets.dockIsGlass && (launcherDimmed || overWindowOverview)
-            property color surfaceColor: frostOverLauncher || glassOverLauncher
+            readonly property bool usesOverviewBackdrop: (BackdropPresets.dockIsFrost || BackdropPresets.dockIsGlass)
+                && (launcherDimmed || overWindowOverview)
+            property color surfaceColor: usesOverviewBackdrop
                 ? Appearance.dockOverLauncherSurface : Appearance.colors.colDockBackground
             Behavior on surfaceColor {
                 animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
@@ -184,7 +184,7 @@ Scope { // Scope
             property bool reveal: root.pinned || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse) || dockApps.requestDockShow || (!ToplevelManager.activeToplevel?.activated) || overLauncher || overWindowOverview || revealGrace.running
 
             readonly property DockContent content: DockContent {
-                dimmed: dockRoot.launcherDimmed && (dockRoot.frostOverLauncher || dockRoot.glassOverLauncher
+                dimmed: dockRoot.launcherDimmed && (dockRoot.usesOverviewBackdrop
                     || !Config.options.dock.backdrop.enable || !(backdropSource.item?.available ?? false))
             }
             // The content colors as this dock draws them. A button's fill
@@ -584,7 +584,7 @@ Scope { // Scope
                             id: dockBackdrop
                             settings: Config.options.dock.backdrop
                             source: backdropSource.item
-                            opacity: dockRoot.frostOverLauncher || ((!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)
+                            opacity: dockRoot.usesOverviewBackdrop || ((!Config.options.dock.backdrop.enable || BackdropPresets.dockIsGlass)
                                 && (dockRoot.overLauncher || dockRoot.overWindowOverview)) ? 0 : 1
                             Behavior on opacity {
                                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
