@@ -3,7 +3,7 @@ groups=(mainstream)
 pkgname=mainstream-microtex-git
 _pkgname=MicroTeX
 pkgver=r494.0e3707f
-pkgrel=4
+pkgrel=5
 pkgdesc='MicroTeX for Mainstream OS dotfiles.'
 provides=('illogical-impulse-microtex-git')
 replaces=('illogical-impulse-microtex-git')
@@ -14,10 +14,17 @@ options=(!debug)
 url="https://github.com/end-4/${_pkgname}"
 license=('MIT')
 depends=(
-  tinyxml2
-  gtkmm3
-  gtksourceviewmm
   cairomm
+  libcairomm-1.0.so
+  fontconfig
+  libfontconfig.so
+  gcc-libs
+  glibc
+  gtkmm3
+  libgtkmm-3.0.so
+  gtksourceviewmm
+  'tinyxml2>=11'
+  'tinyxml2<12'
 )
 makedepends=("git" "cmake")
 source=("git+${url}.git")
@@ -26,7 +33,6 @@ sha256sums=("SKIP")
 prepare() {
   cd $_pkgname
   sed -i 's/gtksourceviewmm-3.0/gtksourceviewmm-4.0/' CMakeLists.txt
-  sed -i 's/tinyxml2.so.10/tinyxml2.so.11/' CMakeLists.txt
 }
 
 build() {
