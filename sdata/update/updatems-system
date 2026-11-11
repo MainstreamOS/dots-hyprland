@@ -516,19 +516,6 @@ if systemctl is-active --quiet ipp-usb.service 2>/dev/null; then
     systemctl start --no-block mainstream-printer-setup.service 2>/dev/null || true
 fi
 
-# ── Hardware quirks pass ──────────────────────────────────────────────────
-# mainstream-system owns the engine, so the clone's copy stands in until that package arrives.
-# The packages it names go in first, and its initramfs changes wait for the next kernel update.
-_quirks=/usr/lib/mainstream/mainstream-hardware-quirks
-[[ -x "$_quirks" ]] || _quirks="$REPO_DIR/sdata/dist-arch/mainstream-system/mainstream-hardware-quirks"
-if [[ -x "$_quirks" ]]; then
-    mapfile -t _quirk_packages < <("$_quirks" --packages 2>/dev/null)
-    if (( ${#_quirk_packages[@]} )) && ! _pacman_needed "${_quirk_packages[@]}"; then
-        warn "$(t "Could not install the packages this hardware needs")"
-    fi
-    MAINSTREAM_QUIRKS_DEFER_REBUILD=1 "$_quirks" >/dev/null 2>&1 || true
-fi
-
 # ── pacman keyring + [mainstream] repo self-healing ───────────────────────
 # This lands over git rather than over pacman, which is the only delivery path
 # left on a machine whose [mainstream] signing key never got trusted: there

@@ -2065,7 +2065,6 @@
   "Apple hardware: applying the Mac quirks...": "Apple hardware: applying the Mac quirks...",
   "Broadcom wl driver installed": "Broadcom wl driver installed",
   "Could not install the Broadcom wl driver": "Could not install the Broadcom wl driver",
-  "Could not install the packages this hardware needs": "Could not install the packages this hardware needs",
   "Mac firmware fetch": "Mac firmware fetch",
   "macrecovery": "macrecovery",
   "Mac firmware notice": "Mac firmware notice",
