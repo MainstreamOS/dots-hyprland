@@ -445,5 +445,49 @@
     "changes": [
       "Plugin rebuilds for hyprbars and scrolloverview now reliably reinstall when recovering from a quarantined build after a Hyprland upgrade"
     ]
+  },
+  "4.1.0": {
+    "date": "2026-11-14",
+    "kind": "feature",
+    "name": "Project Ant Man",
+    "summary": "Named Project Ant Man because so many parts of the desktop can now change size. Resize the Bar or Dynamic Island, choose separate text sizes for Mainstream and your apps, and open the launcher faster. Storage in Settings can now help you make room for kernel updates",
+    "changes": [
+      "The traditional Bar and Dynamic Island now have Size settings under Shape",
+      "Open Text size on the Display page to resize text in the desktop and your apps separately without changing your display scale",
+      "UI text size runs from 80% to 130%, and sidebars, menus, notifications and Settings make room as the text grows",
+      "App font size runs from 80% to 200% and works with GTK and Qt apps and Firefox. Electron apps still use their own zoom controls",
+      "The Island's weather panel shows the next four days alongside the next four hours. It alternates between the two while open, or you can scroll over the forecast to switch right away",
+      "The Island gets your forecast and cover art ready as you open its Weather and Media panels",
+      "The Island can now show a badge beside the clock when a release is waiting. Open Update available from the Island to see what's new in each waiting release",
+      "The Update page also now shows what's new and links to the full changelog",
+      "The Island's notifications panel now has a Clear all button",
+      "Use Open link in desktop and Island notifications to open a link in your browser",
+      "The Hug Dock can now run down either side of the screen with the Dynamic Island",
+      "Glass now has a clear look by default, and the Dock follows the launcher and Alt+Tab backdrops in both Frost and Glass",
+      "The launcher opens faster, and workspace previews stay visible as you switch windows or workspaces",
+      "The left sidebar's Media tab gets a volume slider and can show more cover art supplied by your player, including embedded images and local artwork",
+      "The sidebars and some phone features load as you use them to reduce memory use while the desktop is idle",
+      "The Phone tab opens conversations with the latest 100 messages. Scroll to the top to load older messages without losing your place",
+      "Storage now shows how much space your AppImages take up",
+      "Storage now shows how much room is left on your EFI boot partition. On supported layouts, choose Expand size to make room for extra kernels or more room for snapshots",
+      "Fixed system tray menus sometimes opening cut off and the left sidebar extending past the screen",
+      "Fixed recent messages flickering in the Island and conversations getting stuck when you delete them in the Phone tab",
+      "YouTube links in the Phone tab play inline again. If the video can't load, the player stops waiting and you can open it in your browser",
+      "Sent photos, videos and voice notes can load from your phone if the original file on your computer is missing or has changed",
+      "When GitHub is unreachable during an update, Hyprland can rebuild the title bar and scrolling overview plugins from saved sources if they are available",
+      "On laptops, Clamshell mode under Display → Lid Behavior lets you work on an external screen with the lid closed and brings the built-in screen back when you reopen it. Use Sleep on lid close in Display or Power to choose what happens when you're undocked",
+      "On hybrid NVIDIA laptops that use integrated graphics for the display, video decoding now uses the integrated GPU to fix black or stuttering video in browsers and Electron apps",
+      "GPU setup recognizes more older NVIDIA cards and uses the suspend settings for the driver you have installed. On systems sharing an EFI partition, it takes boot options from the running installation",
+      "Hardware fixes for Intel laptops, Apple MacBooks and Broadcom wireless are applied on first boot and during updates, configuring matching drivers, thermal and power management, and Wi-Fi stability options automatically",
+      "New ISO installs include support for compatible fingerprint readers, newer laptop audio profiles and thermal management on Intel systems",
+      "The ISO's graphical installer asks for confirmation before it starts. If you start it without a physical keyboard, it shows an on-screen keyboard",
+      "The setup script uses more prebuilt packages where available and installs dependencies in groups, cutting down on local builds and separate package installs"
+    ],
+    "otherCommits": {
+      "MainstreamOS/rust-connect": [
+        "6346bb889708ee2f1a193a8f7af2770b6ca8767f",
+        "6136518679a9cbdd70e853367ae70440ecd457ed"
+      ]
+    }
   }
 }
