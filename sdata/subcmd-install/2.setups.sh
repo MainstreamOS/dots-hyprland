@@ -1244,6 +1244,13 @@ function setup_gpu_autoconfig(){
     mac_apply_autoconfig
     mac_fetch_firmware_now
   fi
+  # Laptop quirks and the packages they name. The rebuild below covers their initramfs changes.
+  local quirks="${REPO_ROOT}/sdata/dist-arch/mainstream-system/mainstream-hardware-quirks"
+  local quirk_packages
+  quirk_packages="$(bash "$quirks" --packages 2>/dev/null || true)"
+  # shellcheck disable=SC2086
+  [[ -n "$quirk_packages" ]] && x sudo pacman -S --needed --noconfirm $quirk_packages
+  x sudo env MAINSTREAM_QUIRKS_DEFER_REBUILD=1 bash "$quirks"
   # A reason nobody can read is the same as no reason.
   flush_failures
   _initramfs_rebuild

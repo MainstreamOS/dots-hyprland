@@ -2,7 +2,7 @@
 groups=(mainstream)
 pkgname=mainstream-system
 pkgver=1.0
-pkgrel=22
+pkgrel=23
 pkgdesc='Mainstream OS core system machinery — plugin rebuild, system scripts, mainstream-repair'
 arch=(x86_64 aarch64)
 license=(None)
@@ -75,13 +75,14 @@ source=(
   mainstream-file-sharing-keep.service
   50-mainstream-nvpcr.conf
   paccache-uninstalled.conf
+  mainstream-hardware-quirks
 )
 sha256sums=(
   SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
   SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
-  SKIP SKIP SKIP SKIP SKIP SKIP SKIP
+  SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP
 )
 
 build() {
@@ -103,6 +104,8 @@ package() {
   install -d "$pkgdir/etc/boot/hooks/post.d"
   ln -s /usr/bin/mainstream-boot-verify "$pkgdir/etc/boot/hooks/post.d/92-mainstream-boot-verify"
   install -Dm755 "$srcdir/mainstream-repair"            "$pkgdir/usr/bin/mainstream-repair"
+  install -Dm755 "$srcdir/mainstream-hardware-quirks"    "$pkgdir/usr/lib/mainstream/mainstream-hardware-quirks"
+  ln -sf /usr/lib/mainstream/mainstream-hardware-quirks  "$pkgdir/usr/bin/mainstream-hardware-quirks"
   install -Dm644 "$srcdir/hyprbars-rebuild.service"      "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.service"
   install -Dm644 "$srcdir/hyprbars-rebuild.timer"        "$pkgdir/usr/lib/systemd/system/hyprbars-rebuild.timer"
   install -Dm644 "$srcdir/scrolloverview-rebuild.service" "$pkgdir/usr/lib/systemd/system/scrolloverview-rebuild.service"
